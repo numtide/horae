@@ -277,24 +277,14 @@ async fn oauth_callback(
     let dest_ok = "/import/harvest?connected=1";
     let dest_err = "/import/harvest?error=1";
 
-    if params.error.is_some() {
-        tracing::warn!("Harvest OAuth returned error: {:?}", params.error);
-        return Redirect::to(dest_err);
-    }
-
-    // CSRF: the returned `state` must equal the value we stored at start, and we
-    // reject a mismatch **without exchanging the code** (research.md §10).
-    let (Some(returned), Some(stored)) = (params.state.as_deref(), stored.as_deref()) else {
-        tracing::warn!("Harvest callback missing state");
-        return Redirect::to(dest_err);
-    };
-    if returned != stored {
-        tracing::warn!("Harvest callback state mismatch (possible CSRF)");
-        return Redirect::to(dest_err);
-    }
-    let Some(code) = params.code.clone() else {
-        tracing::warn!("Harvest callback missing code");
-        return Redirect::to(dest_err);
+    // Validate `state` and extract the code; a missing/mismatched state or error
+    // yields no code, so we never reach the exchange (research.md §10).
+    let code = match authorized_code(&params, stored.as_deref()) {
+        Ok(code) => code,
+        Err(reason) => {
+            tracing::warn!("Harvest callback rejected before exchange: {reason}");
+            return Redirect::to(dest_err);
+        }
     };
 
     match complete_connect(&session, code).await {
@@ -304,6 +294,25 @@ async fn oauth_callback(
             Redirect::to(dest_err)
         }
     }
+}
+
+/// Decide whether a callback may proceed to the token exchange. Returns the
+/// authorization code only when the provider reported no error, a `state` was
+/// stored for this session, and the returned `state` matches it exactly. A
+/// missing or mismatched `state` is rejected **without** the code (CSRF, FR-022).
+fn authorized_code(
+    params: &CallbackParams,
+    stored_state: Option<&str>,
+) -> Result<String, &'static str> {
+    if params.error.is_some() {
+        return Err("provider returned an error");
+    }
+    let stored = stored_state.ok_or("no state stored for this session")?;
+    let returned = params.state.as_deref().ok_or("callback missing state")?;
+    if returned != stored {
+        return Err("state mismatch (possible CSRF)");
+    }
+    params.code.clone().ok_or("callback missing code")
 }
 
 /// Exchange the code, resolve the account id, and persist the encrypted tokens
@@ -352,4 +361,53 @@ async fn complete_connect(session: &tower_sessions::Session, code: String) -> an
     )
     .await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod oauth_callback_tests {
+    use super::*;
+
+    fn params(error: Option<&str>, state: Option<&str>, code: Option<&str>) -> CallbackParams {
+        CallbackParams {
+            error: error.map(str::to_string),
+            state: state.map(str::to_string),
+            code: code.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn valid_matching_state_yields_the_code() {
+        let p = params(None, Some("nonce"), Some("the-code"));
+        assert_eq!(authorized_code(&p, Some("nonce")).unwrap(), "the-code");
+    }
+
+    #[test]
+    fn mismatched_state_is_rejected_without_a_code() {
+        let p = params(None, Some("attacker"), Some("the-code"));
+        assert!(authorized_code(&p, Some("nonce")).is_err());
+    }
+
+    #[test]
+    fn missing_stored_state_is_rejected() {
+        let p = params(None, Some("nonce"), Some("the-code"));
+        assert!(authorized_code(&p, None).is_err());
+    }
+
+    #[test]
+    fn missing_returned_state_is_rejected() {
+        let p = params(None, None, Some("the-code"));
+        assert!(authorized_code(&p, Some("nonce")).is_err());
+    }
+
+    #[test]
+    fn provider_error_is_rejected_before_exchange() {
+        let p = params(Some("access_denied"), Some("nonce"), Some("the-code"));
+        assert!(authorized_code(&p, Some("nonce")).is_err());
+    }
+
+    #[test]
+    fn valid_state_but_missing_code_is_rejected() {
+        let p = params(None, Some("nonce"), None);
+        assert!(authorized_code(&p, Some("nonce")).is_err());
+    }
 }

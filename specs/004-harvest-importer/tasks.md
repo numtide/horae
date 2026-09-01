@@ -60,7 +60,7 @@ ______________________________________________________________________
 
 ### Tests for User Story 1
 
-- [ ] T015 [P] [US1] Integration test in `crates/horae/tests/harvest_import_connect.rs` (`#[sqlx::test]`, `#[serial]`): the OAuth callback with a valid `state` stores encrypted credentials in `harvest_credentials`; a missing/mismatched `state` is rejected without exchanging the code (FR-022, contracts/importer-api.md).
+- [X] T015 [P] [US1] Integration test in `crates/horae/tests/harvest_import_connect.rs` (`#[sqlx::test]`, `#[serial]`): the OAuth callback with a valid `state` stores encrypted credentials in `harvest_credentials`; a missing/mismatched `state` is rejected without exchanging the code (FR-022, contracts/importer-api.md).
 - [X] T016 [P] [US1] Integration test in `crates/horae/tests/harvest_import_api.rs` (`#[sqlx::test]`, `#[serial]`): against stubbed paged HTTP fixtures, a full API import creates all four entity levels in FK-safe order with `minutes = round(hours*60)` and integer cents + ISO currency, and writes a `harvest_import_map` row per created record (US1 acceptance scenarios, SC-001/SC-003).
 
 ### Implementation for User Story 1

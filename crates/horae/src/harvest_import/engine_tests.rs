@@ -589,10 +589,11 @@ async fn large_run_reuses_parents_and_reconciles_totals(pool: PgPool) {
     assert_eq!(count(&pool, "time_entries").await, n);
 
     // Zero-drift reconciliation: summed minutes equal the source total.
-    let total: i64 = sqlx::query_scalar!("SELECT COALESCE(SUM(minutes), 0)::bigint FROM time_entries")
-        .fetch_one(&pool)
-        .await
-        .unwrap()
-        .unwrap_or(0);
+    let total: i64 =
+        sqlx::query_scalar!("SELECT COALESCE(SUM(minutes), 0)::bigint FROM time_entries")
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+            .unwrap_or(0);
     assert_eq!(total, expected_minutes);
 }
