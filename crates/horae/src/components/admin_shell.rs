@@ -23,49 +23,47 @@ pub fn AdminShell() -> Element {
         && !user.is_admin()
     {
         return rsx! {
-            div { class: "adm-shell",
-                div { class: "card adm-denied",
-                    h1 { class: "page-title", "Admins only" }
-                    p { class: "text-secondary", "You need an admin role to manage the workspace." }
-                    Link {
-                        to: Route::Timesheet { view: ViewMode::Week, date: Anchor::default(), span: CalSpan::default() },
-                        class: "btn btn-secondary",
-                        "Back to Timesheet"
-                    }
+            div { class: "card flex flex-col items-start gap-3 max-w-md",
+                h1 { class: "page-title", "Admins only" }
+                p { class: "text-secondary", "You need an admin role to manage the workspace." }
+                Link {
+                    to: Route::Timesheet { view: ViewMode::Week, date: Anchor::default(), span: CalSpan::default() },
+                    class: "btn btn-secondary",
+                    "Back to Timesheet"
                 }
             }
         };
     }
 
     rsx! {
-        div { class: "adm-shell",
+        div {
             Link {
                 to: Route::Timesheet { view: ViewMode::Week, date: Anchor::default(), span: CalSpan::default() },
-                class: "adm-back",
-                span { class: "adm-back-arrow", "←" }
+                class: "adm-back inline-flex items-center gap-2 text-sm text-secondary mb-5",
+                span { "←" }
                 "Back to Timesheet"
             }
-            div { class: "adm-body",
+            div { class: "flex items-start gap-12",
                 aside { class: "adm-nav",
-                    div { class: "adm-head",
+                    div { class: "flex items-center gap-3 border-b pb-5 mb-4",
                         span { class: "adm-head-mark", NavIcon { name: "settings" } }
-                        div { class: "adm-head-text",
-                            div { class: "adm-head-title", "Administration" }
+                        div {
+                            div { class: "text-sm font-semibold mb-1", "Administration" }
                             span { class: "badge badge-info badge-sm", "Admin" }
                         }
                     }
 
                     div { class: "adm-group-label", "Workspace" }
-                    nav { class: "adm-links",
+                    nav { class: "flex flex-col gap-1 mb-5",
                         AdmLink { to: Route::AdminUsers {}, label: "People" }
                     }
 
                     div { class: "adm-group-label", "Data" }
-                    nav { class: "adm-links",
+                    nav { class: "flex flex-col gap-1 mb-5",
                         AdmLink { to: Route::HarvestImport {}, label: "Importers" }
                     }
                 }
-                div { class: "adm-main",
+                div { class: "adm-main flex-1 min-w-0",
                     Outlet::<Route> {}
                 }
             }

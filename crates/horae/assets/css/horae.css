@@ -525,36 +525,21 @@ h1, h2, h3, h4, h5, h6 {
 /* ── Admin area shell ──────────────────────────────────────────────────────
    A secondary Workspace / Data sub-nav beside the active admin panel, layered
    inside the main content area so the rail stays put (design's settings shell).
-   The outer padding comes from `.app-content`, as with every other page. */
-.adm-back {
-  display: inline-flex; align-items: center; gap: var(--space-2);
-  font-size: var(--font-size-sm); color: var(--color-text-secondary);
-  text-decoration: none; margin-bottom: var(--space-5);
-}
+   Layout/spacing are utility classes in the markup; only the structural bits the
+   utility layer can't express live here. The outer padding comes from
+   `.app-content`, as with every other page. */
 .adm-back:hover { color: var(--color-primary); }
-.adm-back-arrow { font-size: var(--font-size-base); }
-.adm-body { display: flex; gap: var(--space-12); align-items: flex-start; }
 .adm-nav { width: 250px; flex: 0 0 250px; }
-.adm-head {
-  display: flex; align-items: center; gap: var(--space-3);
-  padding: var(--space-1) var(--space-1) var(--space-5);
-  border-bottom: 1px solid var(--color-border); margin-bottom: var(--space-4);
-}
 .adm-head-mark {
   width: 44px; height: 44px; flex: 0 0 44px; border-radius: var(--radius-lg);
   background: var(--color-pine); color: var(--color-pine-fg);
   display: inline-flex; align-items: center; justify-content: center;
-}
-.adm-head-title {
-  font-size: var(--font-size-sm); font-weight: 600;
-  color: var(--color-text); margin-bottom: var(--space-1);
 }
 .adm-group-label {
   text-transform: uppercase; letter-spacing: 0.14em;
   font-size: var(--font-size-xs); color: var(--color-text-muted);
   padding: 0 var(--space-3) var(--space-2);
 }
-.adm-links { display: flex; flex-direction: column; gap: 2px; margin-bottom: var(--space-5); }
 .adm-link {
   padding: var(--space-2) var(--space-3); border-radius: var(--radius-btn);
   font-size: var(--font-size-sm); color: var(--color-text-secondary);
@@ -565,11 +550,7 @@ h1, h2, h3, h4, h5, h6 {
   background: var(--color-bg-tertiary); border-color: var(--color-border);
   color: var(--color-text); font-weight: 600;
 }
-.adm-main { flex: 1; min-width: 0; max-width: 760px; }
-.adm-denied {
-  max-width: 420px; display: flex; flex-direction: column;
-  gap: var(--space-3); align-items: flex-start;
-}
+.adm-main { max-width: 760px; }
 
 /* Collapsed rail (icon strip) */
 .app-shell.collapsed .app-sidebar { width: 68px; padding-left: var(--space-2); padding-right: var(--space-2); }
