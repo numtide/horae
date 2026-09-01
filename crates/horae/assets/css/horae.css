@@ -63,6 +63,8 @@
   --color-border-danger: #6e3634;  /* danger (outline) button border */
   --color-accent-dark: #c48934;    /* accent hover */
   --color-pine-hover: #24705d;     /* solid button hover */
+  --color-harvest: #FA5D00;        /* Harvest brand orange — importer logo mark */
+  --color-harvest-fg: #2a1200;     /* ink on the Harvest mark */
   --ring: 0 0 0 3px rgba(79, 183, 154, 0.35);        /* focus-visible on custom controls */
   --ring-soft: 0 0 0 3px rgba(79, 183, 154, 0.18);   /* input focus glow */
 
@@ -1307,6 +1309,42 @@ tbody tr:hover { background: var(--color-bg-tertiary); }
 .appr-dot { width: 11px; height: 11px; border-radius: var(--radius-sm); flex: 0 0 11px; }
 .appr-dot-billable { background: var(--color-primary); }
 .appr-dot-nonbillable { background: var(--color-pine); }
+
+/* Alert — success / warning tints (complements .alert-danger) */
+.alert-success { background: var(--color-success-bg); color: var(--color-success-fg); border-color: var(--color-success-line); }
+.alert-warning { background: var(--color-warning-bg); color: var(--color-warning-fg); border-color: var(--color-warning-line); }
+
+/* Harvest / CSV importer screen (harvest_import.rs). Layout is composed from
+   utilities in the markup; only what utilities can't express lives here. */
+.himp-logo {
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 48px; height: 48px; border-radius: var(--radius-lg);
+  background: var(--color-harvest); color: var(--color-harvest-fg);
+  font-family: var(--font-family-display); font-weight: 600; font-size: var(--font-size-2xl);
+}
+.himp-logo-sm { width: 26px; height: 26px; border-radius: var(--radius); font-size: var(--font-size-sm); }
+/* Round icon holder for the result banners; glyph colour inherits the alert tint. */
+.himp-badge-icon {
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 28px; height: 28px; border-radius: var(--radius-full);
+  background: rgba(0, 0, 0, 0.18); color: inherit; font-size: var(--font-size-sm);
+}
+/* Entity stat tiles: as many across as fit, min 280px each. */
+.himp-tiles { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.himp-tile-danger { background: var(--color-danger-bg); border: 1px solid var(--color-danger-line); }
+/* CSV dropzone — dashed outline the utility layer can't express. */
+.himp-dropzone {
+  border: 1.5px dashed var(--color-border-input); background: var(--color-bg-secondary);
+  cursor: pointer; transition: background 0.15s, border-color 0.15s;
+}
+.himp-dropzone:hover { background: var(--color-bg); border-color: var(--color-primary); }
+.himp-spinner {
+  display: inline-block; width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid var(--color-border-input); border-top-color: var(--color-primary);
+  animation: himp-spin 0.8s linear infinite;
+}
+.himp-spinner-lg { width: 26px; height: 26px; border-width: 2.5px; }
+@keyframes himp-spin { to { transform: rotate(360deg); } }
 /* The Tailwind-style utility layer + responsive variants live in the GENERATED
    horae-utils.css — regenerated automatically by crates/horae/build.rs on build.
    It is loaded alongside this file (see src/app.rs). */

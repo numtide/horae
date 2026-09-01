@@ -32,6 +32,7 @@ pub async fn harvest_connect_start() -> Result<String, ServerFnError> {
 pub async fn harvest_connection_status() -> Result<ConnectionStatus, ServerFnError> {
     let admin = require_admin().await?;
     let state = crate::state::global_state().await;
+    let configured = state.harvest.is_some();
 
     let row = sqlx::query!(
         r#"SELECT harvest_account_id,
@@ -45,12 +46,34 @@ pub async fn harvest_connection_status() -> Result<ConnectionStatus, ServerFnErr
 
     Ok(match row {
         Some(r) => ConnectionStatus {
+            configured,
             connected: true,
             account_id: Some(r.harvest_account_id),
             token_expired: r.token_expires_at.is_some_and(|e| e <= chrono::Utc::now()),
         },
-        None => ConnectionStatus::default(),
+        None => ConnectionStatus {
+            configured,
+            ..ConnectionStatus::default()
+        },
     })
+}
+
+/// Disconnect Harvest: delete the org's stored OAuth credentials so a fresh
+/// connect can be made (contracts/importer-api.md). Admin-only (FR-001).
+#[server]
+pub async fn harvest_disconnect() -> Result<(), ServerFnError> {
+    let admin = require_admin().await?;
+    let state = crate::state::global_state().await;
+
+    sqlx::query!(
+        "DELETE FROM harvest_credentials WHERE org_id = $1",
+        admin.org_id,
+    )
+    .execute(&state.db)
+    .await
+    .map_err(server_err)?;
+
+    Ok(())
 }
 
 /// Run an import from the Harvest API (primary source). Rejects up front when no

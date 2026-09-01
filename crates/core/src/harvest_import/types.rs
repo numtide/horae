@@ -201,6 +201,9 @@ impl ImportSummary {
 /// carries the tokens themselves (FR-022).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConnectionStatus {
+    /// Whether the Harvest API source is configured on this deployment (OAuth
+    /// credentials present). When false the admin screen offers only CSV import.
+    pub configured: bool,
     pub connected: bool,
     pub account_id: Option<String>,
     /// True when the stored access token is known to be past expiry (a re-sync
