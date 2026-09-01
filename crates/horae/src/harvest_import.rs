@@ -12,6 +12,7 @@
 pub mod api_source;
 pub mod apply;
 pub mod credentials;
+pub mod csv_source;
 pub mod oauth;
 pub mod provenance;
 pub mod report;

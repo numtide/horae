@@ -20,7 +20,6 @@ pub struct HarvestConnection {
     pub access_token: String,
     pub refresh_token: String,
     pub token_expires_at: Option<DateTime<Utc>>,
-    pub scope: Option<String>,
     /// Per-entity `updated_since` high-water marks (RFC3339 strings).
     pub watermark: serde_json::Value,
 }
@@ -82,7 +81,7 @@ pub async fn load(
     let row = sqlx::query!(
         r#"SELECT harvest_account_id, access_token_enc, refresh_token_enc,
                   token_expires_at as "token_expires_at: DateTime<Utc>",
-                  scope, synced_watermark
+                  synced_watermark
            FROM harvest_credentials WHERE org_id = $1"#,
         org_id,
     )
@@ -97,25 +96,14 @@ pub async fn load(
         access_token: decrypt(key_hex, &row.access_token_enc)?,
         refresh_token: decrypt(key_hex, &row.refresh_token_enc)?,
         token_expires_at: row.token_expires_at,
-        scope: row.scope,
         watermark: row.synced_watermark,
     }))
 }
 
-/// Whether the org has a stored Harvest connection (without decrypting tokens).
-pub async fn exists(pool: &sqlx::PgPool, org_id: Uuid) -> anyhow::Result<bool> {
-    let n = sqlx::query_scalar!(
-        "SELECT COUNT(*) FROM harvest_credentials WHERE org_id = $1",
-        org_id,
-    )
-    .fetch_one(pool)
-    .await?
-    .unwrap_or(0);
-    Ok(n > 0)
-}
-
 /// Upsert the org's Harvest connection, encrypting the tokens. One row per org
-/// (v1); reconnecting overwrites the previous credentials.
+/// (v1); reconnecting overwrites the previous credentials. The parameters mirror
+/// the persisted columns one-to-one, hence the count.
+#[allow(clippy::too_many_arguments)]
 pub async fn store(
     pool: &sqlx::PgPool,
     org_id: Uuid,

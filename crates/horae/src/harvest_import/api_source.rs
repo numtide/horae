@@ -27,7 +27,6 @@ pub struct ApiClient {
     pub is_active: bool,
     pub address: Option<String>,
     pub currency: Option<String>,
-    pub updated_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -47,7 +46,6 @@ pub struct ApiProject {
     pub client: ApiRef,
     pub starts_on: Option<NaiveDate>,
     pub ends_on: Option<NaiveDate>,
-    pub updated_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -56,8 +54,6 @@ pub struct ApiTask {
     pub name: String,
     #[serde(default = "yes")]
     pub billable_by_default: bool,
-    pub default_hourly_rate: Option<f64>,
-    pub updated_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

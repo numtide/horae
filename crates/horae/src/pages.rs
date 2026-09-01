@@ -3,6 +3,7 @@ pub mod approvals;
 pub mod auth;
 pub mod clients;
 pub mod gallery;
+pub mod harvest_import;
 pub mod invoices;
 pub mod projects;
 pub mod reports;
