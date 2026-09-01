@@ -48,12 +48,6 @@ pub fn Sidebar(collapsed: Signal<bool>) -> Element {
                 SideLink { to: Route::Reports {}, icon: "reports", label: "Reports" }
             }
 
-            div { class: "sidebar-section", "System" }
-            div { class: "sidebar-group",
-                SideLink { to: Route::AdminUsers {}, icon: "users", label: "Users" }
-                SideLink { to: Route::Settings {}, icon: "settings", label: "Settings" }
-            }
-
             div { class: "sidebar-spacer" }
 
             SidebarUser {}
@@ -62,8 +56,8 @@ pub fn Sidebar(collapsed: Signal<bool>) -> Element {
 }
 
 /// One rail row: a client-side `Link` that auto-marks itself active for its route.
-/// The glyph is shown when inactive; the active route swaps it for a pine dot
-/// (via `.nav-item.active` CSS), matching the design's rail language.
+/// The active route keeps its icon (tinted, over a raised surface) rather than
+/// swapping it out, matching Harvest's rail.
 #[component]
 fn SideLink(to: Route, icon: String, label: String) -> Element {
     // Match by route variant, not the exact URL, so a param-carrying route (the
@@ -72,24 +66,39 @@ fn SideLink(to: Route, icon: String, label: String) -> Element {
     rsx! {
         Link { to, class: if active { "nav-item active" } else { "nav-item" },
             span { class: "nav-item-icon", NavIcon { name: icon } }
-            span { class: "nav-item-dot" }
             span { class: "nav-item-label", "{label}" }
         }
     }
 }
 
 /// The signed-in user: an avatar + name + role row that opens an account popover
-/// (profile, notifications, sign out). Falls back to a placeholder until `get_me`
-/// resolves (or when not authenticated).
+/// (settings, an admin section for admins, and sign out). Falls back to a
+/// placeholder until `get_me` resolves (or when not authenticated).
 #[component]
 fn SidebarUser() -> Element {
     let me = use_resource(|| async move { server_fns::get_me().await });
     let mut open = use_signal(|| false);
 
     let user = me.read();
-    let (name, role, marks) = match &*user {
-        Some(Ok(u)) => (u.name.clone(), u.org_role.to_string(), initials(&u.name)),
-        _ => ("Not signed in".to_string(), String::new(), "·".to_string()),
+    let (name, role, marks, is_admin) = match &*user {
+        Some(Ok(u)) => (
+            u.name.clone(),
+            capitalize(&u.org_role.to_string()),
+            initials(&u.name),
+            u.is_admin(),
+        ),
+        _ => (
+            "Not signed in".to_string(),
+            String::new(),
+            "·".to_string(),
+            false,
+        ),
+    };
+    // Show the role as a status pill; admins get the highlighted (pine) variant.
+    let role_class = if is_admin {
+        "badge badge-info mt-1"
+    } else {
+        "badge badge-neutral mt-1"
     };
 
     rsx! {
@@ -101,13 +110,19 @@ fn SidebarUser() -> Element {
                         div { class: "sidebar-user",
                             div { class: "sidebar-user-name truncate", "{name}" }
                             if !role.is_empty() {
-                                div { class: "sidebar-user-sub", "{role}" }
+                                span { class: "{role_class}", "{role}" }
                             }
                         }
                     }
                     div { class: "sidebar-menu-list",
-                        Link { to: Route::Settings {}, class: "menu-item", onclick: move |_| open.set(false), "My profile" }
-                        Link { to: Route::Settings {}, class: "menu-item", onclick: move |_| open.set(false), "Notifications" }
+                        Link { to: Route::Settings {}, class: "menu-item", onclick: move |_| open.set(false), "Settings" }
+                    }
+                    // Org administration, only for admins.
+                    if is_admin {
+                        div { class: "sidebar-menu-list",
+                            div { class: "menu-group", "Admin" }
+                            Link { to: Route::AdminUsers {}, class: "menu-item", onclick: move |_| open.set(false), "Users" }
+                        }
                     }
                     div { class: "sidebar-menu-foot",
                         form { method: "post", action: "/auth/logout",
@@ -123,15 +138,28 @@ fn SidebarUser() -> Element {
                 "aria-expanded": "{open()}",
                 onclick: move |_| open.set(!open()),
                 Avatar { initials: "{marks}" }
-                div { class: "sidebar-user",
-                    div { class: "sidebar-user-name truncate", "{name}" }
-                    if !role.is_empty() {
-                        div { class: "sidebar-user-sub", "{role}" }
+                // While the popover is open its header carries the identity, so the
+                // footer collapses to just the avatar (no duplicate name/role).
+                if !open() {
+                    div { class: "sidebar-user",
+                        div { class: "sidebar-user-name truncate", "{name}" }
+                        if !role.is_empty() {
+                            div { class: "sidebar-user-sub", "{role}" }
+                        }
                     }
+                    span { class: "sidebar-user-caret", "⌄" }
                 }
-                span { class: "sidebar-user-caret", "⌄" }
             }
         }
+    }
+}
+
+/// Capitalize the first character (roles are stored lower-case: "admin" → "Admin").
+fn capitalize(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+        None => String::new(),
     }
 }
 
