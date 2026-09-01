@@ -1,6 +1,8 @@
-# Contract: Harvest CSV Input Format
+# Contract: Harvest CSV Input Format (secondary source adapter)
 
-The v1 input is Harvest's **detailed time-report CSV** — one row per time entry, denormalized with the parent client/project/task fields on each row. The four Horae entity levels are derived from this single file (research.md §1). Column **header names** are matched case-insensitively with surrounding whitespace trimmed; unknown extra columns are ignored.
+CSV is the **secondary, offline source adapter** — the primary source is the live Harvest REST API pull (see `harvest-api.md`, research.md §1). Use CSV for an offline migration, a one-shot host-side load, or when OAuth access is unavailable. The input is Harvest's **detailed time-report CSV** — one row per time entry, denormalized with the parent client/project/task fields on each row. The four Horae entity levels are derived from this single file, and each parsed row becomes the same `SourceRow` the API adapter produces (data-model.md) so the shared engine handles both identically. Column **header names** are matched case-insensitively with surrounding whitespace trimmed; unknown extra columns are ignored.
+
+**Key difference from the API source**: a CSV carries **no stable Harvest ids**, so a CSV run cannot use provenance matching — every record resolves by the composite **natural key** only, and no `harvest_import_map` rows are written. Re-importing the same file is still idempotent (matched by natural key), but matching is not edit-robust the way the API source is.
 
 ## Expected columns
 
@@ -37,6 +39,6 @@ The v1 input is Harvest's **detailed time-report CSV** — one row per time entr
 - **Booleans**: `Yes`/`No` (case-insensitive) → `true`/`false`.
 - All string keys used for matching are trimmed and case-folded before comparison (natural keys, data-model.md).
 
-## Supplementary files (optional, not required for v1)
+## Supplementary files (optional, not required)
 
-Dedicated Harvest **Clients** and **Projects** CSV exports MAY later enrich attributes the time report omits (client `address`, project `starts_on`/`ends_on`, budget). When absent, those columns take Horae defaults. Accepting them is out of v1 scope but the mapping is designed to allow it without rework.
+Dedicated Harvest **Clients** and **Projects** CSV exports MAY later enrich attributes the time report omits (client `address`, project `starts_on`/`ends_on`, budget). When absent, those columns take Horae defaults. Accepting them is out of v1 scope but the mapping is designed to allow it without rework. (The API source already returns these attributes directly, so this gap is CSV-specific.)
