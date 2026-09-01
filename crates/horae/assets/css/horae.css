@@ -296,6 +296,23 @@ h1, h2, h3, h4, h5, h6 {
   margin: 0;
 }
 
+/* Scrollbars — thin, transparent track, pill thumb inset 2px so it reads as a
+   floating bar. Never the light/native bar on our dark surfaces. Tokens keep it
+   theme-aware; scrolling menus (.combobox-pop) use the pine thumb. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-input) transparent;
+}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-input);
+  border-radius: var(--radius-full);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
+
 /* Layout */
 /* App shell — a full-height sidebar next to scrolling main content. No top bar:
    the brand lives at the top of the sidebar (per the design). */
@@ -459,7 +476,12 @@ h1, h2, h3, h4, h5, h6 {
   font-size: var(--font-size-xs); font-weight: 600; color: var(--color-text-secondary);
 }
 /* Combobox popover: like .menu-pop but wider + scrollable for the search list. */
-.combobox-pop { width: 280px; max-height: 360px; overflow-y: auto; padding: var(--space-2); }
+.combobox-pop {
+  width: 280px; max-height: 360px; overflow-y: auto; padding: var(--space-2);
+  scrollbar-color: var(--color-pine) transparent;   /* pine thumb inside menus */
+}
+.combobox-pop::-webkit-scrollbar-thumb { background: var(--color-pine); }
+.combobox-pop::-webkit-scrollbar-thumb:hover { background: var(--color-primary); }
 
 /* Account popover — positioning only; appearance comes from .menu */
 .sidebar-menu {
