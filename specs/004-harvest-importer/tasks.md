@@ -61,7 +61,7 @@ ______________________________________________________________________
 ### Tests for User Story 1
 
 - [ ] T015 [P] [US1] Integration test in `crates/horae/tests/harvest_import_connect.rs` (`#[sqlx::test]`, `#[serial]`): the OAuth callback with a valid `state` stores encrypted credentials in `harvest_credentials`; a missing/mismatched `state` is rejected without exchanging the code (FR-022, contracts/importer-api.md).
-- [ ] T016 [P] [US1] Integration test in `crates/horae/tests/harvest_import_api.rs` (`#[sqlx::test]`, `#[serial]`): against stubbed paged HTTP fixtures, a full API import creates all four entity levels in FK-safe order with `minutes = round(hours*60)` and integer cents + ISO currency, and writes a `harvest_import_map` row per created record (US1 acceptance scenarios, SC-001/SC-003).
+- [X] T016 [P] [US1] Integration test in `crates/horae/tests/harvest_import_api.rs` (`#[sqlx::test]`, `#[serial]`): against stubbed paged HTTP fixtures, a full API import creates all four entity levels in FK-safe order with `minutes = round(hours*60)` and integer cents + ISO currency, and writes a `harvest_import_map` row per created record (US1 acceptance scenarios, SC-001/SC-003).
 
 ### Implementation for User Story 1
 
@@ -86,7 +86,7 @@ ______________________________________________________________________
 
 ### Tests for User Story 2
 
-- [ ] T025 [P] [US2] Integration test in `crates/horae/tests/harvest_import_idempotent.rs` (`#[sqlx::test]`, `#[serial]`): a second identical API run creates zero clients/projects/tasks/time entries; after editing an imported entry's notes, re-import still matches it by provenance (FR-011/FR-026, SC-002).
+- [X] T025 [P] [US2] Integration test in `crates/horae/tests/harvest_import_idempotent.rs` (`#[sqlx::test]`, `#[serial]`): a second identical API run creates zero clients/projects/tasks/time entries; after editing an imported entry's notes, re-import still matches it by provenance (FR-011/FR-026, SC-002).
 - [ ] T026 [P] [US2] Integration test in `crates/horae/tests/harvest_import_incremental.rs` (`#[sqlx::test]`, `#[serial]`): with a stored watermark, an incremental run sends `updated_since` and applies only the changed fixture records, leaving others intact (FR-025, SC-008).
 
 ### Implementation for User Story 2
@@ -107,7 +107,7 @@ ______________________________________________________________________
 
 ### Tests for User Story 3
 
-- [ ] T030 [P] [US3] Integration test in `crates/horae/tests/harvest_import_dryrun.rs` (`#[sqlx::test]`, `#[serial]`): a `DryRun` API run writes nothing (clients/time_entries/`harvest_import_map`/`synced_watermark` all unchanged) and its counts equal a following `Commit` on the same fixtures (FR-014/FR-015, SC-004).
+- [X] T030 [P] [US3] Integration test in `crates/horae/tests/harvest_import_dryrun.rs` (`#[sqlx::test]`, `#[serial]`): a `DryRun` API run writes nothing (clients/time_entries/`harvest_import_map`/`synced_watermark` all unchanged) and its counts equal a following `Commit` on the same fixtures (FR-014/FR-015, SC-004).
 
 ### Implementation for User Story 3
 
@@ -125,7 +125,7 @@ ______________________________________________________________________
 
 ### Tests for User Story 4
 
-- [ ] T032 [P] [US4] Integration test in `crates/horae/tests/harvest_import_resilience.rs` (`#[sqlx::test]`, `#[serial]`): a mixed valid/invalid source imports all valid records, reports each invalid one with its source location + reason, leaves no partial fragment, and reconciles totals (FR-018/FR-020/FR-021, SC-005).
+- [X] T032 [P] [US4] Integration test in `crates/horae/tests/harvest_import_resilience.rs` (`#[sqlx::test]`, `#[serial]`): a mixed valid/invalid source imports all valid records, reports each invalid one with its source location + reason, leaves no partial fragment, and reconciles totals (FR-018/FR-020/FR-021, SC-005).
 
 ### Implementation for User Story 4
 
@@ -145,7 +145,7 @@ ______________________________________________________________________
 
 ### Tests for User Story 5
 
-- [ ] T036 [P] [US5] Integration test in `crates/horae/tests/harvest_import_csv.rs` (`#[sqlx::test]`, `#[serial]`) with a fixture CSV under `crates/horae/tests/`: import populates the four levels; a re-import creates zero duplicates via the composite natural key; a malformed file is rejected up front with no writes (US5, FR-003).
+- [X] T036 [P] [US5] Integration test in `crates/horae/tests/harvest_import_csv.rs` (`#[sqlx::test]`, `#[serial]`) with a fixture CSV under `crates/horae/tests/`: import populates the four levels; a re-import creates zero duplicates via the composite natural key; a malformed file is rejected up front with no writes (US5, FR-003).
 
 ### Implementation for User Story 5
 
