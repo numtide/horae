@@ -22,8 +22,46 @@
     .hs-content { padding: 36px 24px 80px !important; }
   }
   .hs-table-wrap { overflow-x: auto; }
-  button { transition: filter .14s ease, background .14s ease; }
-  button:hover { filter: brightness(1.13); }
+  input.hf, textarea.hf { width:100%; padding:11px 14px; background:#100F0C; border:1px solid #3d382e; border-radius:8px; font-family:'Instrument Sans',sans-serif; font-size:14px; color:#EFEAE0; outline:none; }
+  input.hf::placeholder, textarea.hf::placeholder { color:#5a5446; }
+  input.hf:focus, textarea.hf:focus { border-color:#4FB79A; box-shadow:0 0 0 3px rgba(79,183,154,.18); }
+  input.hf.mono, textarea.hf.mono { font-family:'IBM Plex Mono',monospace; }
+  /* Scrollbars — Horae spec */
+  * { scrollbar-width: thin; scrollbar-color: #3d382e transparent; }
+  ::-webkit-scrollbar { width:10px; height:10px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:#3d382e; border-radius:999px; border:2px solid transparent; background-clip:content-box; }
+  ::-webkit-scrollbar-thumb:hover { background:#5a5446; background-clip:content-box; }
+  ::-webkit-scrollbar-corner { background:transparent; }
+  .hs-sb-pine { scrollbar-color:#1F5C4D transparent; }
+  .hs-sb-pine::-webkit-scrollbar-thumb { background:#1F5C4D; background-clip:content-box; }
+  .hs-sb-pine::-webkit-scrollbar-thumb:hover { background:#4FB79A; background-clip:content-box; }
+  .hs-sb-overlay { scrollbar-width:none; }
+  .hs-sb-overlay::-webkit-scrollbar { width:0; height:0; }
+  button { transition: filter .14s ease, background .14s ease, transform .08s ease, box-shadow .16s ease, border-color .14s ease, color .14s ease; }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(79,183,154,.35) !important; }
+  button:disabled { cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+  .hb-primary:hover:not(:disabled) { background:#63c9ac !important; box-shadow:0 6px 18px -8px rgba(79,183,154,.65) !important; }
+  .hb-solid:hover:not(:disabled) { background:#27705e !important; box-shadow:0 6px 18px -8px rgba(31,92,77,.7) !important; }
+  .hb-accent:hover:not(:disabled) { background:#e5ab52 !important; box-shadow:0 6px 18px -8px rgba(217,154,60,.6) !important; }
+  .hb-secondary:hover:not(:disabled) { background:#2c2820 !important; border-color:#5a5446 !important; }
+  .hb-ghost:hover:not(:disabled) { background:rgba(79,183,154,.10) !important; color:#6ecab0 !important; }
+  .hb-danger:hover:not(:disabled) { background:rgba(224,102,97,.12) !important; border-color:#8d4441 !important; color:#ec8683 !important; }
+  .hb-icon:hover:not(:disabled) { background:#2c2820 !important; border-color:#5a5446 !important; color:#EFEAE0 !important; }
+  .hb-caret:hover:not(:disabled) { background:#1b5347 !important; }
+  .hb-seg:not(.hb-seg-on):hover:not(:disabled) { background:#232019 !important; color:#EFEAE0 !important; }
+  /* User menu rows */
+  .hm-row { transition: background .12s ease, color .12s ease; }
+  .hm-row:hover { background:#2a2620 !important; }
+  .hm-row:hover .hm-ico { color:#EFEAE0 !important; }
+  .hm-danger:hover { background:rgba(224,102,97,.12) !important; color:#ec8683 !important; }
+  .hm-ws:hover { background:#262218 !important; }
+  .hm-chip:hover { background:#2c2820 !important; }
+  /* Text selection */
+  ::selection { background:#1F5C4D; color:#F6F2E9; }
+  ::-moz-selection { background:#1F5C4D; color:#F6F2E9; }
+  .hs-sel-brass::selection { background:#D99A3C; color:#251804; }
 </style>
 </helmet>
 
@@ -48,10 +86,12 @@
     <a href="#selects" style="padding:7px 10px; border-radius:8px; font-size:13.5px; color:#A29C8D; text-decoration:none;">Selects & menus</a>
     <a href="#text" style="padding:7px 10px; border-radius:8px; font-size:13.5px; color:#A29C8D; text-decoration:none;">Text</a>
     <a href="#nav" style="padding:7px 10px; border-radius:8px; font-size:13.5px; color:#A29C8D; text-decoration:none;">Nav item</a>
+    <a href="#usermenu" style="padding:7px 10px; border-radius:8px; font-size:13.5px; color:#A29C8D; text-decoration:none;">User menu</a>
     <a href="#chips" style="padding:7px 10px; border-radius:8px; font-size:13.5px; color:#A29C8D; text-decoration:none;">Avatar & chips</a>
     <a href="#cards" style="padding:7px 10px; border-radius:8px; font-size:13.5px; color:#A29C8D; text-decoration:none;">Cards</a>
     <a href="#table" style="padding:7px 10px; border-radius:8px; font-size:13.5px; color:#A29C8D; text-decoration:none;">Table & rows</a>
     <a href="#toast" style="padding:7px 10px; border-radius:8px; font-size:13.5px; color:#A29C8D; text-decoration:none;">Toast & empty state</a>
+    <a href="#scrollbars" style="padding:7px 10px; border-radius:8px; font-size:13.5px; color:#A29C8D; text-decoration:none;">Scrollbars</a>
     <div style="flex:1;"></div>
     <a href="../Horae Design System.dc.html" style="padding:7px 10px; font-size:12.5px; color:#8f8676; text-decoration:none;">← Design System</a>
   </div>
@@ -67,18 +107,18 @@
     <!-- BUTTONS -->
     <div id="buttons" style="height:1px; background:#262219; margin:48px 0 32px;"></div>
     <h2 style="font-family:'Newsreader',serif; font-size:27px; font-weight:600; margin:0 0 6px; color:#F6F2E9;">Buttons</h2>
-    <p style="font-size:14px; color:#8f8676; margin:0 0 22px;">Primary uses luminous pine; solid pine for form submits; brass for the billable/send action. Ghost and destructive round out the set.</p>
+    <p style="font-size:14px; color:#8f8676; margin:0 0 22px;">Each variant owns its hover — fills lighten toward their tint with a soft glow; outlined and ghost buttons take a tinted wash and a brighter border. Press to depress; keyboard focus shows a pine ring.</p>
     <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; padding:30px;">
       <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:22px 18px;">
-        <div><div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#7C7565; margin-bottom:10px;">Primary</div><button style="padding:11px 20px; background:#4FB79A; color:#0d211b; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer;">Start timer</button></div>
-        <div><div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#7C7565; margin-bottom:10px;">Solid</div><button style="padding:11px 20px; background:#1F5C4D; color:#F6F2E9; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer;">Submit week</button></div>
-        <div><div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#7C7565; margin-bottom:10px;">Accent</div><button style="padding:11px 20px; background:#D99A3C; color:#251804; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer;">Send invoice</button></div>
-        <div><div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#7C7565; margin-bottom:10px;">Secondary</div><button style="padding:11px 20px; background:#232019; color:#EFEAE0; border:1px solid #3d382e; border-radius:8px; font-family:inherit; font-size:14px; font-weight:500; cursor:pointer;">Re-sync</button></div>
-        <div><div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#7C7565; margin-bottom:10px;">Ghost</div><button style="padding:11px 16px; background:transparent; color:#4FB79A; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer;">Manage source</button></div>
-        <div><div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#7C7565; margin-bottom:10px;">Destructive</div><button style="padding:11px 16px; background:transparent; color:#E06661; border:1px solid #6e3634; border-radius:8px; font-family:inherit; font-size:14px; font-weight:500; cursor:pointer;">Delete</button></div>
-        <div><div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#7C7565; margin-bottom:10px;">Disabled</div><button style="padding:11px 20px; background:#2a4a41; color:#7fae9f; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:600; cursor:not-allowed;">Update</button></div>
-        <div><div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#7C7565; margin-bottom:10px;">Split</div><div style="display:inline-flex; align-items:stretch; border-radius:8px; overflow:hidden;"><button style="padding:11px 18px; background:#1F5C4D; color:#F6F2E9; border:none; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer;">Generate PDF</button><button style="padding:0 11px; background:#164034; color:#bfe0d4; border:none; border-left:1px solid #0f3d33; cursor:pointer; font-size:11px;">▾</button></div></div>
-        <div><div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#7C7565; margin-bottom:10px;">Icon</div><button style="width:42px; height:42px; display:flex; align-items:center; justify-content:center; background:#232019; border:1px solid #3d382e; border-radius:9px; color:#A29C8D; cursor:pointer; font-size:15px;">⌕</button></div>
+        <div><div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#7C7565; margin-bottom:10px;">Primary</div><button class="hb-primary" style="padding:11px 20px; background:#4FB79A; color:#0d211b; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer;">Start timer</button></div>
+        <div><div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#7C7565; margin-bottom:10px;">Solid</div><button class="hb-solid" style="padding:11px 20px; background:#1F5C4D; color:#F6F2E9; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer;">Submit week</button></div>
+        <div><div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#7C7565; margin-bottom:10px;">Accent</div><button class="hb-accent" style="padding:11px 20px; background:#D99A3C; color:#251804; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer;">Send invoice</button></div>
+        <div><div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#7C7565; margin-bottom:10px;">Secondary</div><button class="hb-secondary" style="padding:11px 20px; background:#232019; color:#EFEAE0; border:1px solid #3d382e; border-radius:8px; font-family:inherit; font-size:14px; font-weight:500; cursor:pointer;">Re-sync</button></div>
+        <div><div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#7C7565; margin-bottom:10px;">Ghost</div><button class="hb-ghost" style="padding:11px 16px; background:transparent; color:#4FB79A; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer;">Manage source</button></div>
+        <div><div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#7C7565; margin-bottom:10px;">Destructive</div><button class="hb-danger" style="padding:11px 16px; background:transparent; color:#E06661; border:1px solid #6e3634; border-radius:8px; font-family:inherit; font-size:14px; font-weight:500; cursor:pointer;">Delete</button></div>
+        <div><div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#7C7565; margin-bottom:10px;">Disabled</div><button disabled="{{ yes }}" style="padding:11px 20px; background:#2a4a41; color:#7fae9f; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:600; cursor:not-allowed;">Update</button></div>
+        <div><div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#7C7565; margin-bottom:10px;">Split</div><div style="position:relative; display:inline-block;"><div style="display:inline-flex; align-items:stretch; border-radius:8px; overflow:hidden;"><button class="hb-solid" style="padding:11px 18px; background:#1F5C4D; color:#F6F2E9; border:none; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer;">Generate PDF</button><button onClick="{{ toggleSplit }}" class="hb-caret" style="padding:0 11px; background:#164034; color:#bfe0d4; border:none; border-left:1px solid #0f3d33; cursor:pointer; font-size:11px;">▾</button></div><sc-if value="{{ splitOpen }}" hint-placeholder-val="{{ false }}"><div style="position:absolute; right:0; top:48px; width:190px; background:#201D17; border:1px solid #3d382e; border-radius:11px; box-shadow:0 20px 50px -16px rgba(0,0,0,.75); padding:6px; z-index:30; text-align:left;"><div class="hm-row" style="display:flex; align-items:center; gap:10px; padding:9px 11px; border-radius:7px; font-size:13.5px; color:#EFEAE0; cursor:pointer;"><span class="hm-ico" style="color:#8f8676; width:14px;">▤</span> Generate PDF</div><div class="hm-row" style="display:flex; align-items:center; gap:10px; padding:9px 11px; border-radius:7px; font-size:13.5px; color:#EFEAE0; cursor:pointer;"><span class="hm-ico" style="color:#8f8676; width:14px;">→</span> Send invoice</div><div style="height:1px; background:#322E26; margin:5px 0;"></div><div class="hm-row" style="display:flex; align-items:center; gap:10px; padding:9px 11px; border-radius:7px; font-size:13.5px; color:#A29C8D; cursor:pointer;"><span style="width:14px;">◷</span> Schedule…</div></div></sc-if></div></div>
+        <div><div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#7C7565; margin-bottom:10px;">Icon</div><button class="hb-icon" style="width:42px; height:42px; display:flex; align-items:center; justify-content:center; background:#232019; border:1px solid #3d382e; border-radius:9px; color:#A29C8D; cursor:pointer; font-size:15px;">⌕</button></div>
       </div>
     </div>
 
@@ -104,14 +144,14 @@
       <div style="width:240px;"><div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#8f8676; margin-bottom:7px;">Focus</div><div style="padding:11px 14px; background:#100F0C; border:1px solid #4FB79A; border-radius:8px; font-size:14px; color:#EFEAE0; box-shadow:0 0 0 3px rgba(79,183,154,.18);">mira@fieldstone.studio</div></div>
       <div style="width:130px;"><div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#8f8676; margin-bottom:7px;">Numeric</div><div style="padding:11px 14px; background:#100F0C; border:1px solid #3d382e; border-radius:8px; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">95.00</div></div>
       <div style="width:180px;"><div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#8f8676; margin-bottom:7px;">Disabled</div><div style="padding:11px 14px; background:#161510; border:1px solid #262219; border-radius:8px; font-size:14px; color:#5a5446;">Read only</div></div>
-      <div style="width:200px;"><div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#8f8676; margin-bottom:7px;">Dropdown</div><div style="display:flex; align-items:center; justify-content:space-between; padding:11px 14px; background:#100F0C; border:1px solid #3d382e; border-radius:8px; font-size:14px; color:#EFEAE0;">STARTTLS <span style="color:#8f8676; font-size:12px;">▾</span></div></div>
+      <div style="width:200px;"><div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#8f8676; margin-bottom:7px;">Dropdown</div><div style="position:relative;"><div onClick="{{ toggleEnc }}" style="display:flex; align-items:center; justify-content:space-between; padding:11px 14px; background:#100F0C; border:1px solid #3d382e; border-radius:8px; font-size:14px; color:#EFEAE0; cursor:pointer;">{{ encLabel }} <span style="color:#8f8676; font-size:12px;">▾</span></div><sc-if value="{{ encOpen }}" hint-placeholder-val="{{ false }}"><div style="position:absolute; left:0; top:46px; width:100%; background:#201D17; border:1px solid #3d382e; border-radius:10px; box-shadow:0 20px 50px -16px rgba(0,0,0,.75); padding:6px; z-index:10;"><div onClick="{{ pickEncStart }}" style="{{ encStart }}">STARTTLS</div><div onClick="{{ pickEncSsl }}" style="{{ encSsl }}">SSL · TLS</div><div onClick="{{ pickEncNone }}" style="{{ encNone }}">None</div></div></sc-if></div></div>
     </div>
 
     <!-- CONTROLS -->
     <div id="controls" style="height:1px; background:#262219; margin:48px 0 32px;"></div>
     <h2 style="font-family:'Newsreader',serif; font-size:27px; font-weight:600; margin:0 0 6px; color:#F6F2E9;">Toggles & segments</h2>
     <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; padding:30px; display:flex; gap:34px; flex-wrap:wrap; align-items:center;">
-      <div><div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#7C7565; margin-bottom:12px;">Segmented</div><div style="display:inline-flex; background:#100F0C; border:1px solid #322E26; border-radius:9px; padding:3px;"><button onClick="{{ pickDay }}" style="{{ segDay }}">Day</button><button onClick="{{ pickWeek }}" style="{{ segWeek }}">Week</button><button onClick="{{ pickCal }}" style="{{ segCal }}">Calendar</button></div></div>
+      <div><div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#7C7565; margin-bottom:12px;">Segmented</div><div style="display:inline-flex; background:#100F0C; border:1px solid #322E26; border-radius:9px; padding:3px;"><button onClick="{{ pickDay }}" class="{{ segDayCls }}" style="{{ segDay }}">Day</button><button onClick="{{ pickWeek }}" class="{{ segWeekCls }}" style="{{ segWeek }}">Week</button><button onClick="{{ pickCal }}" class="{{ segCalCls }}" style="{{ segCal }}">Calendar</button></div></div>
       <div><div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#7C7565; margin-bottom:12px;">Switch · on / off</div><div style="display:flex; gap:12px;"><span onClick="{{ toggleSw1 }}" style="{{ sw1 }}"><span style="{{ sw1k }}"></span></span><span onClick="{{ toggleSw2 }}" style="{{ sw2 }}"><span style="{{ sw2k }}"></span></span></div></div>
       <div><div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#7C7565; margin-bottom:12px;">Checkbox</div><div style="display:flex; gap:12px; align-items:center;"><span onClick="{{ toggleCb1 }}" style="{{ cb1 }}">✓</span><span onClick="{{ toggleCb2 }}" style="{{ cb2 }}">✓</span></div></div>
       <div><div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#7C7565; margin-bottom:12px;">Radio</div><div style="display:flex; gap:12px; align-items:center;"><span onClick="{{ pickRadioA }}" style="{{ radioA }}"><sc-if value="{{ radioADot }}" hint-placeholder-val="{{ true }}"><span style="width:9px; height:9px; border-radius:50%; background:#4FB79A;"></span></sc-if></span><span onClick="{{ pickRadioB }}" style="{{ radioB }}"><sc-if value="{{ radioBDot }}" hint-placeholder-val="{{ false }}"><span style="width:9px; height:9px; border-radius:50%; background:#4FB79A;"></span></sc-if></span></div></div>
@@ -127,7 +167,7 @@
       <div>
         <div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#7C7565; margin-bottom:12px;">Trigger · click to open</div>
         <div style="position:relative;">
-          <button onClick="{{ toggleMenu }}" style="display:flex; align-items:center; gap:9px; padding:10px 15px; background:#100F0C; border:1px solid #3d382e; border-radius:9px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer;">{{ pick }} <span style="color:#8f8676; font-size:11px;">▾</span></button>
+          <button onClick="{{ toggleMenu }}" class="hb-secondary" style="display:flex; align-items:center; gap:9px; padding:10px 15px; background:#100F0C; border:1px solid #3d382e; border-radius:9px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer;">{{ pick }} <span style="color:#8f8676; font-size:11px;">▾</span></button>
           <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ true }}">
           <div style="position:absolute; left:0; top:48px; width:210px; background:#201D17; border:1px solid #3d382e; border-radius:11px; box-shadow:0 20px 50px -16px rgba(0,0,0,.75); padding:6px; z-index:10;">
             <div onClick="{{ chooseAll }}" style="{{ rowAll }}">All clients</div>
@@ -200,6 +240,65 @@
       </div>
     </div>
 
+    <!-- USER MENU -->
+    <div id="usermenu" style="height:1px; background:#262219; margin:48px 0 32px;"></div>
+    <h2 style="font-family:'Newsreader',serif; font-size:27px; font-weight:600; margin:0 0 6px; color:#F6F2E9;">User menu</h2>
+    <p style="font-size:14px; color:#8f8676; margin:0 0 22px;">Opens upward from the rail's user chip. Identity header, workspace row, personal links, a theme switch, then account actions below a divider — sign out is the only destructive item. Click the chip to toggle.</p>
+    <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; padding:30px; display:flex; gap:36px; flex-wrap:wrap; align-items:flex-end;">
+
+      <!-- live chip + popover -->
+      <div style="width:264px; min-height:505px; display:flex; flex-direction:column; background:#100F0C; border:1px solid #262219; border-radius:12px; padding:14px;">
+        <div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#7C7565; margin-bottom:12px;">Rail chip · click to open</div>
+        <div style="flex:1;"></div>
+        <div style="position:relative;">
+          <sc-if value="{{ umOpen }}" hint-placeholder-val="{{ true }}">
+          <div style="position:absolute; bottom:58px; left:0; width:252px; background:#201D17; border:1px solid #3d382e; border-radius:14px; overflow:hidden; box-shadow:0 26px 60px -16px rgba(0,0,0,.8); z-index:20;">
+            <!-- identity -->
+            <div style="display:flex; align-items:center; gap:12px; padding:15px 15px 14px; border-bottom:1px solid #322E26;">
+              <div style="width:40px; height:40px; flex:0 0 40px; border-radius:50%; background:#1F5C4D; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:18px; color:#EFEAE0;">M</div>
+              <div style="min-width:0;">
+                <div style="font-size:14.5px; font-weight:600; color:#F6F2E9;">Mira Kovač</div>
+                <div style="font-size:12px; color:#8f8676; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">mira@fieldstone.studio</div>
+              </div>
+              <span style="display:inline-flex; padding:3px 9px; background:#15291f; color:#5fcaa8; border:1px solid #24402f; border-radius:999px; font-size:10.5px; font-weight:600;">Manager</span>
+            </div>
+            <!-- workspace -->
+            <div class="hm-ws" style="display:flex; align-items:center; gap:11px; padding:12px 15px; border-bottom:1px solid #322E26; cursor:pointer;">
+              <span style="width:22px; height:22px; border-radius:6px; background:#1F5C4D; display:inline-flex; align-items:center; justify-content:center; font-size:11px; color:#EFEAE0; font-weight:700;">F</span>
+              <div style="flex:1; min-width:0;"><div style="font-size:13.5px; color:#EFEAE0;">Fieldstone Studio</div><div style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#6a6353;">horae.app/fieldstone</div></div>
+              <span style="color:#6a6353; font-size:12px;">⇄</span>
+            </div>
+            <!-- personal -->
+            <div style="padding:7px;">
+              <div class="hm-row" style="display:flex; align-items:center; gap:11px; padding:9px 10px; border-radius:8px; font-size:13.5px; color:#EFEAE0; cursor:pointer;"><span class="hm-ico" style="color:#8f8676; width:15px;">◔</span> My profile</div>
+              <div class="hm-row" style="display:flex; align-items:center; gap:11px; padding:9px 10px; border-radius:8px; font-size:13.5px; color:#EFEAE0; cursor:pointer;"><span class="hm-ico" style="color:#8f8676; width:15px;">▦</span> My time report</div>
+              <div class="hm-row" style="display:flex; align-items:center; gap:11px; padding:9px 10px; border-radius:8px; font-size:13.5px; color:#EFEAE0; cursor:pointer;"><span class="hm-ico" style="color:#8f8676; width:15px;">◷</span> Notifications</div>
+            </div>
+            <!-- theme -->
+            <div style="display:flex; align-items:center; gap:11px; padding:11px 17px; border-top:1px solid #322E26;">
+              <span style="color:#8f8676; width:15px; font-size:13px;">◑</span>
+              <span style="flex:1; font-size:13.5px; color:#EFEAE0;">Dark theme</span>
+              <div onClick="{{ toggleUmTheme }}" style="{{ umThemeTrack }}"><span style="{{ umThemeKnob }}"></span></div>
+            </div>
+            <!-- account -->
+            <div style="padding:7px; border-top:1px solid #322E26;">
+              <div class="hm-row" style="display:flex; align-items:center; gap:11px; padding:9px 10px; border-radius:8px; font-size:13.5px; color:#A29C8D; cursor:pointer;"><span style="width:15px;">?</span> Need help?</div>
+              <div class="hm-row hm-danger" style="display:flex; align-items:center; gap:11px; padding:9px 10px; border-radius:8px; font-size:13.5px; color:#E06661; cursor:pointer;"><span style="width:15px;">→</span> Sign out</div>
+            </div>
+          </div>
+          </sc-if>
+          <div onClick="{{ toggleUm }}" class="hm-chip" style="{{ umChip }}">
+            <div style="width:34px; height:34px; flex:0 0 34px; border-radius:50%; background:#1F5C4D; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:15px; color:#EFEAE0;">M</div>
+            <div style="min-width:0;"><div style="font-size:13.5px; font-weight:600; color:#F6F2E9;">Mira Kovač</div><div style="font-size:12px; color:#8f8676;">Fieldstone Studio</div></div>
+            <div style="flex:1;"></div>
+            <span style="color:#6a6353; font-size:15px;">◔</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="font-size:13px; color:#8f8676; max-width:260px; line-height:1.6;">Popover: 252px, raised stock <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">#201D17</span>, radius 14, hairline <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">#3d382e</span>, deep shadow. Sections split by hairlines; rows 9×10px with a 15px icon gutter.</div>
+    </div>
+
     <!-- CHIPS -->
     <div id="chips" style="height:1px; background:#262219; margin:48px 0 32px;"></div>
     <h2 style="font-family:'Newsreader',serif; font-size:27px; font-weight:600; margin:0 0 6px; color:#F6F2E9;">Avatar & chips</h2>
@@ -207,8 +306,8 @@
       <div style="width:52px; height:52px; border-radius:50%; background:#1F5C4D; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:22px; color:#EFEAE0;">M</div>
       <div style="width:38px; height:38px; border-radius:50%; background:#1F5C4D; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:16px; color:#EFEAE0;">T</div>
       <div style="width:38px; height:38px; border-radius:50%; background:#232019; border:1px solid #3d382e; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:16px; color:#8f8676;">N</div>
-      <span style="display:inline-flex; align-items:center; gap:8px; padding:6px 12px; background:#232019; border:1px solid #3d382e; border-radius:999px; font-size:12.5px; color:#A29C8D;"><span style="width:14px; height:14px; border-radius:4px; background:#1F5C4D;"></span>Fieldstone Studio</span>
-      <span style="display:inline-flex; align-items:center; gap:6px; padding:5px 11px; background:#232019; border:1px solid #3d382e; border-radius:999px; font-size:11px; color:#A29C8D;">Time &amp; Materials</span>
+      <span style="display:inline-flex; align-items:center; gap:8px; padding:6px 12px; background:#232019; border:1px solid #3d382e; border-radius:999px; font-size:12.5px; color:#A29C8D; white-space:nowrap;"><span style="width:14px; height:14px; border-radius:4px; background:#1F5C4D;"></span>Fieldstone Studio</span>
+      <span style="display:inline-flex; align-items:center; gap:6px; padding:5px 11px; background:#232019; border:1px solid #3d382e; border-radius:999px; font-size:11px; color:#A29C8D; white-space:nowrap;">Time &amp; Materials</span>
       <span style="display:inline-flex; align-items:center; gap:6px; padding:5px 11px; background:#15291f; color:#5fcaa8; border:1px solid #24402f; border-radius:999px; font-size:11px; font-weight:600;">Manager</span>
     </div>
 
@@ -242,8 +341,8 @@
     <div class="hs-table-wrap" style="background:#1A1813; border:1px solid #322E26; border-radius:16px;">
       <div style="min-width:640px;">
       <div style="display:grid; grid-template-columns:1fr 120px 110px 150px; padding:13px 22px; border-bottom:1px solid #322E26; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#6a6353;"><span>Teammate</span><span style="text-align:right;">Hours</span><span style="text-align:center;">Status</span><span style="text-align:right;">Action</span></div>
-      <div style="display:grid; grid-template-columns:1fr 120px 110px 150px; align-items:center; padding:15px 22px; border-bottom:1px solid #262219;"><div style="display:flex; align-items:center; gap:12px;"><div style="width:34px; height:34px; border-radius:50%; background:#1F5C4D; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; color:#EFEAE0;">T</div><div><div style="font-size:14px; font-weight:600; color:#F6F2E9;">Théo Marchand</div><div style="font-size:12px; color:#8f8676;">Engineering</div></div></div><span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#F6F2E9;">42:00</span><div style="text-align:center;"><span style="display:inline-flex; align-items:center; gap:6px; padding:5px 11px; background:#2b2413; color:#e0b45f; border:1px solid #453818; border-radius:999px; font-size:12px; font-weight:600;">Awaiting</span></div><div style="text-align:right;"><button style="padding:7px 14px; background:#1F5C4D; color:#F6F2E9; border:none; border-radius:8px; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;">Approve</button></div></div>
-      <div style="display:grid; grid-template-columns:1fr 120px 110px 150px; align-items:center; padding:15px 22px;"><div style="display:flex; align-items:center; gap:12px;"><div style="width:34px; height:34px; border-radius:50%; background:#1F5C4D; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; color:#EFEAE0;">L</div><div><div style="font-size:14px; font-weight:600; color:#F6F2E9;">Lars Ericsson</div><div style="font-size:12px; color:#8f8676;">Engineering</div></div></div><span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#F6F2E9;">46:00</span><div style="text-align:center;"><span style="display:inline-flex; align-items:center; gap:6px; padding:5px 11px; background:#15291f; color:#5fcaa8; border:1px solid #24402f; border-radius:999px; font-size:12px; font-weight:600;">Approved</span></div><div style="text-align:right;"><button style="padding:7px 12px; background:transparent; color:#A29C8D; border:1px solid #3d382e; border-radius:8px; font-family:inherit; font-size:13px; cursor:pointer;">Reopen</button></div></div>
+      <div style="display:grid; grid-template-columns:1fr 120px 110px 150px; align-items:center; padding:15px 22px; border-bottom:1px solid #262219;"><div style="display:flex; align-items:center; gap:12px;"><div style="width:34px; height:34px; border-radius:50%; background:#1F5C4D; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; color:#EFEAE0;">T</div><div><div style="font-size:14px; font-weight:600; color:#F6F2E9;">Théo Marchand</div><div style="font-size:12px; color:#8f8676;">Engineering</div></div></div><span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#F6F2E9;">42:00</span><div style="text-align:center;"><span style="{{ pill1 }}">{{ pill1Label }}</span></div><div style="text-align:right;"><button onClick="{{ toggleRow1 }}" class="hb-solid" style="{{ act1 }}">{{ act1Label }}</button></div></div>
+      <div style="display:grid; grid-template-columns:1fr 120px 110px 150px; align-items:center; padding:15px 22px;"><div style="display:flex; align-items:center; gap:12px;"><div style="width:34px; height:34px; border-radius:50%; background:#1F5C4D; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; color:#EFEAE0;">L</div><div><div style="font-size:14px; font-weight:600; color:#F6F2E9;">Lars Ericsson</div><div style="font-size:12px; color:#8f8676;">Engineering</div></div></div><span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#F6F2E9;">46:00</span><div style="text-align:center;"><span style="{{ pill2 }}">{{ pill2Label }}</span></div><div style="text-align:right;"><button onClick="{{ toggleRow2 }}" class="hb-secondary" style="{{ act2 }}">{{ act2Label }}</button></div></div>
       </div>
     </div>
 
@@ -255,13 +354,79 @@
         <sc-if value="{{ toast }}" hint-placeholder-val="{{ true }}">
         <div style="background:#000; border:1px solid #322E26; border-radius:11px; padding:12px 16px; max-width:260px; display:flex; align-items:center; gap:12px;"><div style="font-size:13.5px; color:#EFEAE0; line-height:1.45;"><strong style="color:#D99A3C;">Nice job!</strong> You've tracked time on 9 Jul 2026.</div><span onClick="{{ dismissToast }}" style="color:#8f8676; cursor:pointer; font-size:15px;">×</span></div>
         </sc-if>
+        <sc-if value="{{ toastHidden }}" hint-placeholder-val="{{ false }}">
         <button onClick="{{ showToast }}" style="padding:9px 15px; background:#232019; color:#EFEAE0; border:1px solid #3d382e; border-radius:8px; font-family:inherit; font-size:13px; cursor:pointer;">Show toast</button>
+        </sc-if>
       </div>
       <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; padding:22px;">
         <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:30px 20px; background:#161510; border:1px solid #262219; border-radius:12px; text-align:center;">
           <div style="width:46px; height:46px; border-radius:50%; background:#232019; border:1px solid #3d382e; display:flex; align-items:center; justify-content:center; color:#5a5446; font-size:20px;">⌕</div>
           <div style="font-size:14px; color:#A29C8D; max-width:320px; line-height:1.5;">No approval data found matching your current filters.</div>
         </div>
+      </div>
+    </div>
+
+    <!-- SCROLLBARS -->
+    <div id="scrollbars" style="height:1px; background:#262219; margin:48px 0 32px;"></div>
+    <h2 style="font-family:'Newsreader',serif; font-size:27px; font-weight:600; margin:0 0 6px; color:#F6F2E9;">Scrollbars</h2>
+    <p style="font-size:14px; color:#8f8676; margin:0 0 22px;">Thin (10px), transparent track, pill thumb inset by 2px so it reads as a floating bar. Default thumb is hairline <code style="font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:#A29C8D;">#3d382e</code> → <code style="font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:#A29C8D;">#5a5446</code> on hover. Never a light/native bar on dark surfaces.</p>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:16px;">
+
+      <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; padding:22px;">
+        <div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#7C7565; margin-bottom:12px;">Default · neutral</div>
+        <div style="height:170px; overflow:auto; background:#100F0C; border:1px solid #322E26; border-radius:11px; padding:14px;">
+          <div style="display:flex; flex-direction:column; gap:11px;">
+            <div style="display:flex; justify-content:space-between; font-size:13.5px;"><span>Product design</span><span style="font-family:'IBM Plex Mono',monospace; color:#A29C8D;">42.0</span></div>
+            <div style="display:flex; justify-content:space-between; font-size:13.5px;"><span>Frontend engineering</span><span style="font-family:'IBM Plex Mono',monospace; color:#A29C8D;">58.5</span></div>
+            <div style="display:flex; justify-content:space-between; font-size:13.5px;"><span>Design system upkeep</span><span style="font-family:'IBM Plex Mono',monospace; color:#A29C8D;">12.0</span></div>
+            <div style="display:flex; justify-content:space-between; font-size:13.5px;"><span>Project management</span><span style="font-family:'IBM Plex Mono',monospace; color:#A29C8D;">9.0</span></div>
+            <div style="display:flex; justify-content:space-between; font-size:13.5px;"><span>Infrastructure</span><span style="font-family:'IBM Plex Mono',monospace; color:#A29C8D;">16.5</span></div>
+            <div style="display:flex; justify-content:space-between; font-size:13.5px;"><span>QA &amp; review</span><span style="font-family:'IBM Plex Mono',monospace; color:#A29C8D;">7.0</span></div>
+            <div style="display:flex; justify-content:space-between; font-size:13.5px;"><span>Discovery workshop</span><span style="font-family:'IBM Plex Mono',monospace; color:#A29C8D;">6.0</span></div>
+            <div style="display:flex; justify-content:space-between; font-size:13.5px;"><span>Documentation</span><span style="font-family:'IBM Plex Mono',monospace; color:#A29C8D;">4.5</span></div>
+          </div>
+        </div>
+        <div style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:#6a6353; margin-top:10px;">thumb #3d382e · track transparent</div>
+      </div>
+
+      <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; padding:22px;">
+        <div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#7C7565; margin-bottom:12px;">Pine · inside menus &amp; rails</div>
+        <div class="hs-sb-pine" style="height:170px; overflow:auto; background:#201D17; border:1px solid #3d382e; border-radius:11px; padding:8px;">
+          <div style="padding:9px 12px; border-radius:8px; background:#1F5C4D; font-size:14px; font-weight:600; color:#F6F2E9;">All clients</div>
+          <div style="padding:9px 12px; font-size:14px; color:#EFEAE0;">Meridian Health</div>
+          <div style="padding:9px 12px; font-size:14px; color:#EFEAE0;">Rún Collective</div>
+          <div style="padding:9px 12px; font-size:14px; color:#EFEAE0;">Tidewell / HarborDesk</div>
+          <div style="padding:9px 12px; font-size:14px; color:#EFEAE0;">Casa Vireo</div>
+          <div style="padding:9px 12px; font-size:14px; color:#EFEAE0;">Solvind AB — EUR</div>
+          <div style="padding:9px 12px; font-size:14px; color:#EFEAE0;">Northmoor — EUR</div>
+          <div style="padding:9px 12px; font-size:14px; color:#A29C8D;">Pelham &amp; Roe</div>
+        </div>
+        <div style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:#6a6353; margin-top:10px;">thumb #1F5C4D → #4FB79A</div>
+      </div>
+
+      <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; padding:22px;">
+        <div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#7C7565; margin-bottom:12px;">Hidden · thumbnail rails</div>
+        <div class="hs-sb-overlay" style="height:170px; overflow:auto; background:#100F0C; border:1px solid #322E26; border-radius:11px; padding:14px;">
+          <div style="display:flex; flex-direction:column; gap:10px;">
+            <div style="height:34px; border-radius:7px; background:#1F5C4D;"></div>
+            <div style="height:34px; border-radius:7px; background:#232019; border:1px solid #3d382e;"></div>
+            <div style="height:34px; border-radius:7px; background:#232019; border:1px solid #3d382e;"></div>
+            <div style="height:34px; border-radius:7px; background:#232019; border:1px solid #3d382e;"></div>
+            <div style="height:34px; border-radius:7px; background:#232019; border:1px solid #3d382e;"></div>
+            <div style="height:34px; border-radius:7px; background:#232019; border:1px solid #3d382e;"></div>
+          </div>
+        </div>
+        <div style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:#6a6353; margin-top:10px;">scroll retained · bar suppressed</div>
+      </div>
+
+      <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; padding:22px;">
+        <div style="font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#7C7565; margin-bottom:12px;">Horizontal · wide tables</div>
+        <div style="overflow-x:auto; background:#100F0C; border:1px solid #322E26; border-radius:11px; padding:14px;">
+          <div style="min-width:620px; display:grid; grid-template-columns:repeat(6,1fr); gap:12px; font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:#A29C8D;">
+            <span>Mon 8:00</span><span>Tue 8:00</span><span>Wed 10:00</span><span>Thu 8:00</span><span style="color:#D99A3C;">Fri 4:00</span><span style="color:#5a5446;">Sat 0:00</span>
+          </div>
+        </div>
+        <div style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:#6a6353; margin-top:10px;">height 10px · same thumb</div>
       </div>
     </div>
 
@@ -298,6 +463,12 @@ class Component extends DCLogic {
     const encRow = (sel) => sel
       ? 'padding:9px 11px; border-radius:7px; background:#1F5C4D; font-size:13.5px; font-weight:600; color:#F6F2E9; cursor:pointer;'
       : 'padding:9px 11px; border-radius:7px; font-size:13.5px; color:#EFEAE0; cursor:pointer;';
+    const pill = (awaiting) => awaiting
+      ? 'display:inline-flex; align-items:center; gap:6px; padding:5px 11px; background:#2b2413; color:#e0b45f; border:1px solid #453818; border-radius:999px; font-size:12px; font-weight:600;'
+      : 'display:inline-flex; align-items:center; gap:6px; padding:5px 11px; background:#15291f; color:#5fcaa8; border:1px solid #24402f; border-radius:999px; font-size:12px; font-weight:600;';
+    const actBtn = (awaiting) => awaiting
+      ? 'padding:7px 14px; background:#1F5C4D; color:#F6F2E9; border:none; border-radius:8px; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;'
+      : 'padding:7px 12px; background:transparent; color:#A29C8D; border:1px solid #3d382e; border-radius:8px; font-family:inherit; font-size:13px; cursor:pointer;';
     const menuRow = (sel) => sel
       ? 'padding:9px 11px; border-radius:7px; background:#1F5C4D; font-size:13.5px; font-weight:600; color:#F6F2E9; cursor:pointer; margin-bottom:3px;'
       : 'padding:9px 11px; border-radius:7px; font-size:13.5px; color:#EFEAE0; cursor:pointer; margin-bottom:3px;';
@@ -305,6 +476,25 @@ class Component extends DCLogic {
       ? 'padding:9px 12px; border-radius:8px; background:#232019; font-size:14px; color:#F6F2E9; cursor:pointer;'
       : 'padding:9px 12px; border-radius:8px; font-size:14px; color:#EFEAE0; cursor:pointer;';
     return {
+      yes: true,
+      segDayCls: s.seg === 'day' ? 'hb-seg hb-seg-on' : 'hb-seg',
+      segWeekCls: s.seg === 'week' ? 'hb-seg hb-seg-on' : 'hb-seg',
+      segCalCls: s.seg === 'calendar' ? 'hb-seg hb-seg-on' : 'hb-seg',
+      splitOpen: s.splitOpen === true,
+      toggleSplit: () => this.setState(st => ({ splitOpen: !st.splitOpen })),
+      umOpen: s.umOpen !== false,
+      toggleUm: () => this.setState(st => ({ umOpen: st.umOpen === false })),
+      umChipCls: 'hm-chip',
+      umChip: (s.umOpen !== false)
+        ? 'display:flex; align-items:center; gap:11px; padding:9px 10px; border-radius:10px; background:#232019; border:1px solid #3d382e; cursor:pointer; transition:background .12s ease, border-color .12s ease;'
+        : 'display:flex; align-items:center; gap:11px; padding:9px 10px; border-radius:10px; background:transparent; border:1px solid transparent; cursor:pointer; transition:background .12s ease, border-color .12s ease;',
+      toggleUmTheme: () => this.setState(st => ({ umTheme: st.umTheme === false })),
+      umThemeTrack: (s.umTheme !== false)
+        ? 'width:40px; height:22px; border-radius:999px; background:#1F5C4D; position:relative; cursor:pointer; flex:0 0 40px;'
+        : 'width:40px; height:22px; border-radius:999px; background:#322E26; position:relative; cursor:pointer; flex:0 0 40px;',
+      umThemeKnob: (s.umTheme !== false)
+        ? 'position:absolute; right:3px; top:3px; width:16px; height:16px; border-radius:50%; background:#EFEAE0;'
+        : 'position:absolute; left:3px; top:3px; width:16px; height:16px; border-radius:50%; background:#8f8676;',
       menuOpen: s.menuOpen,
       pick: s.pick,
       toggleMenu: () => this.setState(st => ({ menuOpen: !st.menuOpen })),
@@ -336,9 +526,14 @@ class Component extends DCLogic {
       navTime: navRow(s.nav === 'Timesheet'), navAppr: navRow(s.nav === 'Approvals'), navRep: navRow(s.nav === 'Reports'),
       navTimeDot: s.nav === 'Timesheet', navApprDot: s.nav === 'Approvals', navRepDot: s.nav === 'Reports',
       pickNavTime: () => this.setState({ nav: 'Timesheet' }), pickNavAppr: () => this.setState({ nav: 'Approvals' }), pickNavRep: () => this.setState({ nav: 'Reports' }),
-      toast: s.toast, dismissToast: () => this.setState({ toast: false }), showToast: () => this.setState({ toast: true }),
+      toast: s.toast !== false, toastHidden: s.toast === false,
+      dismissToast: () => this.setState({ toast: false }), showToast: () => this.setState({ toast: true }),
       row1Awaiting: s.row1 === 'awaiting', toggleRow1: () => this.setState(st => ({ row1: st.row1 === 'awaiting' ? 'approved' : 'awaiting' })),
       row2Awaiting: s.row2 === 'awaiting', toggleRow2: () => this.setState(st => ({ row2: st.row2 === 'awaiting' ? 'approved' : 'awaiting' })),
+      pill1: pill(s.row1 === 'awaiting'), pill1Label: s.row1 === 'awaiting' ? 'Awaiting' : 'Approved',
+      pill2: pill(s.row2 === 'awaiting'), pill2Label: s.row2 === 'awaiting' ? 'Awaiting' : 'Approved',
+      act1: actBtn(s.row1 === 'awaiting'), act1Label: s.row1 === 'awaiting' ? 'Approve' : 'Reopen',
+      act2: actBtn(s.row2 === 'awaiting'), act2Label: s.row2 === 'awaiting' ? 'Approve' : 'Reopen',
       text: s.text, setText: (e) => this.setState({ text: e.target.value }),
       textEcho: s.text || '—',
     };
@@ -347,3 +542,4 @@ class Component extends DCLogic {
 </script>
 </body>
 </html>
+

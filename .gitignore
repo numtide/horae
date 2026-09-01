@@ -9,3 +9,6 @@ nixos.qcow2
 # direnv
 .direnv/
 .envrc.local
+
+# Design bundle thumbnail/screenshot captures (not source)
+design/**/.thumbnail
