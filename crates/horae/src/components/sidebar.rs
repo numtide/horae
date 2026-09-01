@@ -4,7 +4,7 @@ use crate::components::avatar::Avatar;
 use crate::components::icons::NavIcon;
 use crate::components::logo::HoraeMark;
 use crate::components::timer_widget::TimerWidget;
-use crate::pages::timesheet::{Anchor, ViewMode};
+use crate::pages::timesheet::{Anchor, CalSpan, ViewMode};
 use crate::route::Route;
 use crate::server_fns;
 
@@ -32,7 +32,7 @@ pub fn Sidebar(collapsed: Signal<bool>) -> Element {
 
             div { class: "sidebar-section", "Track" }
             div { class: "sidebar-group",
-                SideLink { to: Route::Timesheet { view: ViewMode::Week, date: Anchor::default() }, icon: "timesheet", label: "Timesheet" }
+                SideLink { to: Route::Timesheet { view: ViewMode::Week, date: Anchor::default(), span: CalSpan::default() }, icon: "timesheet", label: "Timesheet" }
             }
 
             div { class: "sidebar-section", "Organize" }
