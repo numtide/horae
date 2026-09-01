@@ -133,6 +133,10 @@ fn SidebarUser() -> Element {
                                 span { class: "menu-item-icon", NavIcon { name: "users" } }
                                 "Users"
                             }
+                            Link { to: Route::HarvestImport {}, class: "menu-item", onclick: move |_| open.set(false),
+                                span { class: "menu-item-icon", NavIcon { name: "import" } }
+                                "Import from Harvest"
+                            }
                         }
                     }
                     div { class: "sidebar-menu-foot",
