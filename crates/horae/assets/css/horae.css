@@ -1122,6 +1122,8 @@ tbody tr:hover { background: var(--color-bg-tertiary); }
 /* Every block is draggable: timed ones move/resize, untimed ones reorder within
    the day's stack. */
 .ts-cal-event { cursor: grab; }
+/* Locked (submitted/approved/invoiced): not draggable — hover explains why. */
+.ts-cal-event.locked { cursor: not-allowed; }
 .ts-cal-resize { position: absolute; left: 0; right: 0; bottom: 0; height: 8px; cursor: ns-resize; }
 .ts-cal-event:hover .ts-cal-resize { background: rgba(255, 255, 255, 0.18); }
 .ts-cal-col.today .ts-cal-event { background: var(--color-accent); border-color: #e6b45f; }

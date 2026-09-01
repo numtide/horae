@@ -408,6 +408,14 @@ pub fn Timesheet(view: ViewMode, date: Anchor) -> Element {
                 }
             });
         };
+        // A locked (submitted/approved/invoiced) entry can't be moved, resized, or
+        // reordered — open it for viewing instead of silently snapping back.
+        if let Some(entry) = d.entry.clone()
+            && entry.state != horae_core::types::EntryState::Open
+        {
+            open_edit.call(entry);
+            return;
+        }
         match d.kind {
             // Draw a new slot → open the entry form prefilled at that hour. A drag
             // sets the duration to the dragged span; a plain click seeds a default
@@ -1504,7 +1512,7 @@ fn render_calendar_view(
                                     d.kind == DragKind::Reorder
                                         && d.entry.as_ref().map(|e| e.id) == Some(ev.entry.id)
                                 });
-                                let ev_class = if reordering {
+                                let base = if reordering {
                                     "ts-cal-event dragging"
                                 } else if live.is_some() {
                                     "ts-cal-event timed live"
@@ -1513,9 +1521,30 @@ fn render_calendar_view(
                                 } else {
                                     "ts-cal-event"
                                 };
+                                // Locked entries (submitted/approved/invoiced) can't be
+                                // dragged; mark them and explain why on hover.
+                                let locked = ev.entry.state != horae_core::types::EntryState::Open;
+                                let ev_class = if locked {
+                                    format!("{base} locked")
+                                } else {
+                                    base.to_string()
+                                };
+                                let lock_title = match ev.entry.state {
+                                    horae_core::types::EntryState::Submitted => {
+                                        "Submitted for approval — can't be moved"
+                                    }
+                                    horae_core::types::EntryState::Approved => {
+                                        "Approved — can't be moved"
+                                    }
+                                    horae_core::types::EntryState::Invoiced => {
+                                        "Invoiced — can't be moved"
+                                    }
+                                    horae_core::types::EntryState::Open => "",
+                                };
                                 rsx! {
                                 div {
                                     class: "{ev_class}",
+                                    title: "{lock_title}",
                                     style: "top: {top_px}px; height: {height_px}px; left: calc(4px + {ev.lane} * (100% - 8px) / {ev.lanes}); width: calc((100% - 8px) / {ev.lanes} - 2px); right: auto;",
                                     // Over a block there's no free slot — clear the
                                     // "+ Add time" hint (the column's mousemove can't
@@ -1579,7 +1608,7 @@ fn render_calendar_view(
                                     if !ev.client.is_empty() {
                                         div { class: "ts-cal-ev-client", "{ev.client}" }
                                     }
-                                    if ev.timed {
+                                    if ev.timed && !locked {
                                         div {
                                             class: "ts-cal-resize",
                                             onmousedown: {
