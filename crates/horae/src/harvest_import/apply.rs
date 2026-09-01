@@ -9,10 +9,10 @@
 
 use horae_core::harvest_import::convert;
 use horae_core::harvest_import::types::{EntityType, RowOutcome, SourceRow};
-use sqlx::{Postgres, Transaction};
+use sqlx::{Acquire, Postgres, Transaction};
 use uuid::Uuid;
 
-use super::resolve::{self, OrgDefaults, Resolved, RowFailure, RunCache};
+use super::resolve::{self, OrgDefaults, RowFailure, RunCache};
 
 /// The per-entity outcomes of applying one row, ready to fold into the summary.
 pub struct RowResult {
@@ -146,7 +146,7 @@ async fn apply_time_entry(
         user_id,
         project_id,
         task_id,
-        row.spent_date,
+        row.spent_date as chrono::NaiveDate,
         minutes,
         notes,
     )
@@ -178,7 +178,7 @@ async fn apply_time_entry(
         user_id,
         project_id,
         task_id,
-        row.spent_date,
+        row.spent_date as chrono::NaiveDate,
         minutes,
         notes,
         row.billable,

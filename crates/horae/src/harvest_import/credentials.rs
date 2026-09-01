@@ -146,7 +146,7 @@ pub async fn store(
         account_id,
         access_enc,
         refresh_enc,
-        token_expires_at,
+        token_expires_at as Option<chrono::DateTime<chrono::Utc>>,
         scope,
     )
     .execute(pool)
@@ -174,7 +174,7 @@ pub async fn update_tokens(
         org_id,
         access_enc,
         refresh_enc,
-        token_expires_at,
+        token_expires_at as Option<chrono::DateTime<chrono::Utc>>,
     )
     .execute(pool)
     .await?;

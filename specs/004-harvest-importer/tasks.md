@@ -24,9 +24,9 @@ ______________________________________________________________________
 
 **Purpose**: Module scaffolding, dependencies, and configuration shared by every story.
 
-- [ ] T001 Create module roots and register them: `crates/core/src/harvest_import.rs` (+ `crates/core/src/harvest_import/` dir) declared in `crates/core/src/lib.rs`, and `crates/horae/src/harvest_import.rs` (+ `crates/horae/src/harvest_import/` dir) declared `#[cfg(feature = "server")]` in `crates/horae/src/main.rs`, following the `foo.rs` + `foo/` convention.
-- [ ] T002 [P] Confirm/add server-crate dependencies in `crates/horae/Cargo.toml`: an async HTTPS client (reuse `reqwest` if already transitive via the OIDC stack, else add), `serde_json`, and one audited AEAD crate for token encryption; leave `crates/core/Cargo.toml` free of I/O deps (Constitution II).
-- [ ] T003 [P] Add Harvest OAuth + encryption config to `crates/horae/src/config.rs`: client id, client secret, redirect URL (`/auth/harvest/callback`), and the token-encryption key, loaded from env in `AppConfig::from_env` alongside the existing OIDC/session secrets.
+- [X] T001 Create module roots and register them: `crates/core/src/harvest_import.rs` (+ `crates/core/src/harvest_import/` dir) declared in `crates/core/src/lib.rs`, and `crates/horae/src/harvest_import.rs` (+ `crates/horae/src/harvest_import/` dir) declared `#[cfg(feature = "server")]` in `crates/horae/src/main.rs`, following the `foo.rs` + `foo/` convention.
+- [X] T002 [P] Confirm/add server-crate dependencies in `crates/horae/Cargo.toml`: an async HTTPS client (reuse `reqwest` if already transitive via the OIDC stack, else add), `serde_json`, and one audited AEAD crate for token encryption; leave `crates/core/Cargo.toml` free of I/O deps (Constitution II).
+- [X] T003 [P] Add Harvest OAuth + encryption config to `crates/horae/src/config.rs`: client id, client secret, redirect URL (`/auth/harvest/callback`), and the token-encryption key, loaded from env in `AppConfig::from_env` alongside the existing OIDC/session secrets.
 
 ______________________________________________________________________
 
@@ -36,17 +36,17 @@ ______________________________________________________________________
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T004 Create the provenance migration `crates/horae/migrations/0007_harvest_import_map.sql`: a `harvest_entity_type` enum (`client|project|task|time_entry`) and the `harvest_import_map` table `(org_id, harvest_entity_type, harvest_id) PK → horae_id, harvest_updated_at, created_at)` per data-model.md — additive, altering no existing columns.
+- [X] T004 Create the provenance migration `crates/horae/migrations/0007_harvest_import_map.sql`: a `harvest_entity_type` enum (`client|project|task|time_entry`) and the `harvest_import_map` table `(org_id, harvest_entity_type, harvest_id) PK → horae_id, harvest_updated_at, created_at)` per data-model.md — additive, altering no existing columns.
 - [X] T005 [P] Define shared types in `crates/core/src/harvest_import/types.rs`: `SourceRow` (incl. optional Harvest ids), `RowOutcome` (`Created|Updated|Skipped|Errored{source_location, reason}`), `ImportSummary` (per-entity created/updated/skipped/errored), and the `ImportMode { DryRun, Commit }` / `SyncScope { Full, Incremental }` enums (no `Option<bool>`).
 - [X] T006 [P] Implement decimal-safe conversions in `crates/core/src/harvest_import/convert.rs`: `hours_to_minutes` = `round(hours*60)` half-up and `money_to_cents` = `round(amount*100)` half-up, parsing decimals without `f64` boundary error (FR-005/FR-006).
 - [X] T007 [P] Implement natural-key normalization (trim + case-fold) and the composite key builders (client/project/task/time-entry) in `crates/core/src/harvest_import/keys.rs` (FR-012).
 - [X] T008 [P] Unit tests for conversions in `crates/core/src/harvest_import/convert.rs` (`#[cfg(test)]`): round-trip vs the exporter's `minutes/60` and `cents/100`, half-up boundaries, and the sufficient-precision caveat (SC-003/SC-007, research.md §3).
 - [X] T009 [P] Unit tests for key normalization in `crates/core/src/harvest_import/keys.rs`: trim/case-fold equality and composite-key distinctness (research.md §4).
-- [ ] T010 Implement provenance access in `crates/horae/src/harvest_import/provenance.rs`: lookup `(org, entity_type, harvest_id) → horae_id` and persist a mapping row, both taking an executor so they enlist in the caller's transaction (data-model.md).
-- [ ] T011 Implement the resolver in `crates/horae/src/harvest_import/resolve.rs`: provenance-first, composite-natural-key fallback, org-scoped, with an in-run parent cache so each distinct client/project/task resolves once (FR-004, FR-012, research.md §9).
-- [ ] T012 Implement FK-safe per-record application in `crates/horae/src/harvest_import/apply.rs`: create/skip/update client → project → task (+ `project_tasks`) → time entry as an all-or-nothing savepoint unit, writing the provenance row in the same unit on commit (FR-004, FR-020, FR-026).
-- [ ] T013 Implement the report types and reconciliation in `crates/horae/src/harvest_import/report.rs`: `ImportReport { source, mode, summary, row_errors }` with the `processed = created+updated+skipped+errored` invariant per entity (FR-021).
-- [ ] T014 Implement the engine orchestrator in `crates/horae/src/harvest_import.rs`: drive a `SourceRow` stream through resolve → apply → report, source-agnostic, with the `DryRun` path running inside a rolled-back transaction so nothing (data, provenance, watermark) persists (FR-014, research.md §7).
+- [X] T010 Implement provenance access in `crates/horae/src/harvest_import/provenance.rs`: lookup `(org, entity_type, harvest_id) → horae_id` and persist a mapping row, both taking an executor so they enlist in the caller's transaction (data-model.md).
+- [X] T011 Implement the resolver in `crates/horae/src/harvest_import/resolve.rs`: provenance-first, composite-natural-key fallback, org-scoped, with an in-run parent cache so each distinct client/project/task resolves once (FR-004, FR-012, research.md §9).
+- [X] T012 Implement FK-safe per-record application in `crates/horae/src/harvest_import/apply.rs`: create/skip/update client → project → task (+ `project_tasks`) → time entry as an all-or-nothing savepoint unit, writing the provenance row in the same unit on commit (FR-004, FR-020, FR-026).
+- [X] T013 Implement the report types and reconciliation in `crates/horae/src/harvest_import/report.rs`: `ImportReport { source, mode, summary, row_errors }` with the `processed = created+updated+skipped+errored` invariant per entity (FR-021).
+- [X] T014 Implement the engine orchestrator in `crates/horae/src/harvest_import.rs`: drive a `SourceRow` stream through resolve → apply → report, source-agnostic, with the `DryRun` path running inside a rolled-back transaction so nothing (data, provenance, watermark) persists (FR-014, research.md §7).
 
 **Checkpoint**: Pure conversions/keys tested green; the shared engine compiles and can apply a hand-built `SourceRow` stream. Story adapters and surfaces can now be built in parallel.
 
@@ -65,8 +65,8 @@ ______________________________________________________________________
 
 ### Implementation for User Story 1
 
-- [ ] T017 [US1] Create the credentials migration `crates/horae/migrations/0008_harvest_credentials.sql`: `harvest_credentials` (org-unique) with encrypted `access_token_enc`/`refresh_token_enc` (bytea), `harvest_account_id`, `token_expires_at`, `scope`, `synced_watermark` jsonb, timestamps (data-model.md) — additive.
-- [ ] T018 [US1] Implement `crates/horae/src/harvest_import/credentials.rs`: AEAD encrypt/decrypt with the config key, plus load/store/refresh-persist of `harvest_credentials`; tokens never returned to callers as plaintext beyond in-memory use, never logged (FR-022).
+- [X] T017 [US1] Create the credentials migration `crates/horae/migrations/0008_harvest_credentials.sql`: `harvest_credentials` (org-unique) with encrypted `access_token_enc`/`refresh_token_enc` (bytea), `harvest_account_id`, `token_expires_at`, `scope`, `synced_watermark` jsonb, timestamps (data-model.md) — additive.
+- [X] T018 [US1] Implement `crates/horae/src/harvest_import/credentials.rs`: AEAD encrypt/decrypt with the config key, plus load/store/refresh-persist of `harvest_credentials`; tokens never returned to callers as plaintext beyond in-memory use, never logged (FR-022).
 - [ ] T019 [US1] Implement `crates/horae/src/harvest_import/oauth.rs`: build the authorization-code URL with a per-start random `state` nonce bound to the admin session (+ PKCE), exchange the callback `code` for tokens, resolve the Harvest account id, and **validate `state`** on callback, rejecting a mismatch before exchange (research.md §10, contracts/harvest-api.md §A).
 - [ ] T020 [US1] Register the plain Axum OAuth callback route `GET /auth/harvest/callback` beside `auth::router()` in the server wiring (`crates/horae/src/main.rs` / `auth/`), performing the token exchange + credential store then redirecting into the admin screen (Constitution IV note in plan.md).
 - [ ] T021 [US1] Implement the primary source adapter `crates/horae/src/harvest_import/api_source.rs`: fetch `clients`, `projects`, `tasks` + `task_assignments`, `users` (reference), `time_entries` with `Authorization`/`Harvest-Account-Id`/`User-Agent` headers, following pagination to completion, backing off on HTTP 429, and refreshing an expired token mid-run — yielding the shared `SourceRow` stream (FR-023/FR-024, research.md §11).

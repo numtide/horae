@@ -275,8 +275,8 @@ pub async fn resolve_project(
         row.project_code.as_deref().map(str::trim).filter(|c| !c.is_empty()),
         name,
         client_currency,
-        row.project_starts_on,
-        row.project_ends_on,
+        row.project_starts_on as Option<chrono::NaiveDate>,
+        row.project_ends_on as Option<chrono::NaiveDate>,
         row.project_active,
     )
     .execute(&mut *conn)

@@ -59,7 +59,7 @@ where
         entity.as_str() as _,
         harvest_id,
         horae_id,
-        harvest_updated_at,
+        harvest_updated_at as Option<chrono::DateTime<chrono::Utc>>,
     )
     .execute(exec)
     .await?;
