@@ -18,6 +18,9 @@ pub mod provenance;
 pub mod report;
 pub mod resolve;
 
+#[cfg(test)]
+mod engine_tests;
+
 use chrono::{DateTime, Utc};
 use horae_core::harvest_import::types::{EntityType, ImportMode, SourceKind, SourceRow, SyncScope};
 use sqlx::PgPool;
