@@ -163,7 +163,7 @@ ______________________________________________________________________
 - [X] T041 [P] Confirm streaming keeps memory bounded on a ≥100k-record source (paged API stream / streamed CSV + in-run parent cache) — a large-fixture smoke assertion backing SC-006.
 - [X] T042 [P] Add a reconciliation integration check that full-import time and money totals equal the Harvest source totals with zero drift (SC-003/SC-007).
 - [ ] T043 Run `crates/horae/.../quickstart.md` scenarios end-to-end (connect, dry-run, import, re-sync, CSV fallback) and reconcile the counts.
-- [ ] T044 [P] `nix fmt` + `cargo clippy -p horae --features server` clean; `nix flake check` green before merge.
+- [X] T044 [P] `nix fmt` + `cargo clippy -p horae --features server` clean; `nix flake check` green before merge.
 
 ______________________________________________________________________
 
