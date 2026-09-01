@@ -534,6 +534,7 @@ h1, h2, h3, h4, h5, h6 {
   width: 44px; height: 44px; flex: 0 0 44px; border-radius: var(--radius-lg);
   background: var(--color-pine); color: var(--color-pine-fg);
   display: inline-flex; align-items: center; justify-content: center;
+  font-size: var(--font-size-lg); font-weight: 600;
 }
 .adm-group-label {
   text-transform: uppercase; letter-spacing: 0.14em;

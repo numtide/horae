@@ -1,6 +1,5 @@
 use dioxus::prelude::*;
 
-use crate::components::icons::NavIcon;
 use crate::pages::timesheet::{Anchor, CalSpan, ViewMode};
 use crate::route::Route;
 use crate::server_fns;
@@ -35,6 +34,19 @@ pub fn AdminShell() -> Element {
         };
     }
 
+    // The workspace's real name for the header chip (no slug — the schema has no
+    // such field, so we show the name only rather than inventing a URL).
+    let org = use_resource(|| async move { server_fns::get_org_name().await });
+    let org_name = match &*org.read() {
+        Some(Ok(name)) => name.clone(),
+        _ => "Workspace".to_string(),
+    };
+    let org_initial = org_name
+        .chars()
+        .next()
+        .map(|c| c.to_uppercase().collect::<String>())
+        .unwrap_or_else(|| "·".to_string());
+
     rsx! {
         div {
             Link {
@@ -46,9 +58,9 @@ pub fn AdminShell() -> Element {
             div { class: "flex items-start gap-12",
                 aside { class: "adm-nav",
                     div { class: "flex items-center gap-3 border-b pb-5 mb-4",
-                        span { class: "adm-head-mark", NavIcon { name: "settings" } }
-                        div {
-                            div { class: "text-sm font-semibold mb-1", "Administration" }
+                        span { class: "adm-head-mark", "{org_initial}" }
+                        div { class: "min-w-0",
+                            div { class: "text-sm font-semibold truncate mb-1", "{org_name}" }
                             span { class: "badge badge-info badge-sm", "Admin" }
                         }
                     }
