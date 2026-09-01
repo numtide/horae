@@ -441,6 +441,8 @@ h1, h2, h3, h4, h5, h6 {
   border: none; border-top: 1px solid var(--color-border);
   background: none; font: inherit; text-align: left; cursor: pointer;
 }
+.sidebar-footer:hover,
+.sidebar-footer[aria-expanded="true"] { background: var(--color-bg-tertiary); }
 .sidebar-footer:hover .sidebar-user-name { color: var(--color-primary-light); }
 .sidebar-user { min-width: 0; flex: 1; }
 .sidebar-user-name { font-size: var(--font-size-sm); font-weight: 600; color: var(--color-text); }

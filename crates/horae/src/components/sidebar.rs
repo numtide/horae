@@ -153,17 +153,15 @@ fn SidebarUser() -> Element {
                 "aria-expanded": "{open()}",
                 onclick: move |_| open.set(!open()),
                 Avatar { initials: "{marks}" }
-                // While the popover is open its header carries the identity, so the
-                // footer collapses to just the avatar (no duplicate name/role).
-                if !open() {
-                    div { class: "sidebar-user",
-                        div { class: "sidebar-user-name truncate", "{name}" }
-                        if !role.is_empty() {
-                            div { class: "sidebar-user-sub", "{role}" }
-                        }
+                // The chip keeps the identity while the popover is open (the design
+                // shows both); the caret flips to signal the open state.
+                div { class: "sidebar-user",
+                    div { class: "sidebar-user-name truncate", "{name}" }
+                    if !role.is_empty() {
+                        div { class: "sidebar-user-sub", "{role}" }
                     }
-                    span { class: "sidebar-user-caret", "⌄" }
                 }
+                span { class: "sidebar-user-caret", if open() { "⌃" } else { "⌄" } }
             }
         }
     }
