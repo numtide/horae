@@ -410,11 +410,11 @@ pub fn Timesheet(view: ViewMode, date: Anchor) -> Element {
         };
         // A locked (submitted/approved/invoiced) entry can't be moved, resized, or
         // reordered — open it for viewing instead of silently snapping back.
-        if let Some(entry) = d.entry.clone() {
-            if entry.state != horae_core::types::EntryState::Open {
-                open_edit.call(entry);
-                return;
-            }
+        if let Some(entry) = d.entry.clone()
+            && entry.state != horae_core::types::EntryState::Open
+        {
+            open_edit.call(entry);
+            return;
         }
         match d.kind {
             // Draw a new slot → open the entry form prefilled at that hour. A drag
