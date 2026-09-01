@@ -434,15 +434,24 @@ h1, h2, h3, h4, h5, h6 {
 .sidebar-spacer { flex: 1; }
 
 /* Footer: current user (opens an account popover) */
-.sidebar-userbox { position: relative; }
+.sidebar-userbox {
+  position: relative;
+  border-top: 1px solid var(--color-border);
+  margin-top: var(--space-1); padding-top: var(--space-2);
+}
+/* The account chip: a self-contained pill (design spec) that fills on hover and
+   stays raised while its popover is open, not a full-width bar. */
 .sidebar-footer {
   display: flex; align-items: center; gap: var(--space-3); width: 100%;
-  padding: var(--space-3) var(--space-2) var(--space-1);
-  border: none; border-top: 1px solid var(--color-border);
-  background: none; font: inherit; text-align: left; cursor: pointer;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid transparent; border-radius: var(--radius-lg);
+  background: transparent; font: inherit; text-align: left; cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
 }
-.sidebar-footer:hover,
-.sidebar-footer[aria-expanded="true"] { background: var(--color-bg-tertiary); }
+.sidebar-footer:hover { background: var(--color-bg-overlay); }
+.sidebar-footer[aria-expanded="true"] {
+  background: var(--color-bg-tertiary); border-color: var(--color-border-input);
+}
 .sidebar-footer:hover .sidebar-user-name { color: var(--color-primary-light); }
 .sidebar-user { min-width: 0; flex: 1; }
 .sidebar-user-name { font-size: var(--font-size-sm); font-weight: 600; color: var(--color-text); }
