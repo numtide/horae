@@ -236,3 +236,117 @@ async fn advance_all_watermarks(
         EntityType::ALL.iter().map(|&e| (e, mark)).collect();
     credentials::advance_watermark(pool, org_id, &marks).await
 }
+
+// ── OAuth connect: session nonce + callback route ─────────────────────────────
+
+/// Session key holding the per-start `state` nonce between `harvest_connect_start`
+/// and the callback, bound to the initiating admin's session (research.md §10).
+pub const OAUTH_STATE_KEY: &str = "harvest_oauth_state";
+
+/// The plain Axum route the browser is redirected to after authorizing on
+/// Harvest — a redirect target, so it cannot be a `#[server]` fn (Constitution
+/// IV). Registered beside `auth::router()`.
+pub fn callback_router() -> axum::Router {
+    use axum::routing::get;
+    axum::Router::new().route("/auth/harvest/callback", get(oauth_callback))
+}
+
+#[derive(serde::Deserialize)]
+pub struct CallbackParams {
+    code: Option<String>,
+    state: Option<String>,
+    error: Option<String>,
+}
+
+/// `GET /auth/harvest/callback`: validate `state`, exchange the code, resolve the
+/// account id, and store the encrypted credentials (FR-022). Redirects into the
+/// admin "Import from Harvest" screen.
+async fn oauth_callback(
+    session: tower_sessions::Session,
+    axum::extract::Query(params): axum::extract::Query<CallbackParams>,
+) -> axum::response::Redirect {
+    use axum::response::Redirect;
+
+    // The nonce is single-use: consume it regardless of outcome.
+    let stored: Option<String> = session.get(OAUTH_STATE_KEY).await.ok().flatten();
+    let _ = session.remove::<String>(OAUTH_STATE_KEY).await;
+
+    let dest_ok = "/import/harvest?connected=1";
+    let dest_err = "/import/harvest?error=1";
+
+    if params.error.is_some() {
+        tracing::warn!("Harvest OAuth returned error: {:?}", params.error);
+        return Redirect::to(dest_err);
+    }
+
+    // CSRF: the returned `state` must equal the value we stored at start, and we
+    // reject a mismatch **without exchanging the code** (research.md §10).
+    let (Some(returned), Some(stored)) = (params.state.as_deref(), stored.as_deref()) else {
+        tracing::warn!("Harvest callback missing state");
+        return Redirect::to(dest_err);
+    };
+    if returned != stored {
+        tracing::warn!("Harvest callback state mismatch (possible CSRF)");
+        return Redirect::to(dest_err);
+    }
+    let Some(code) = params.code.clone() else {
+        tracing::warn!("Harvest callback missing code");
+        return Redirect::to(dest_err);
+    };
+
+    match complete_connect(&session, code).await {
+        Ok(()) => Redirect::to(dest_ok),
+        Err(e) => {
+            tracing::error!("Harvest connect failed: {e}");
+            Redirect::to(dest_err)
+        }
+    }
+}
+
+/// Exchange the code, resolve the account id, and persist the encrypted tokens
+/// for the acting admin's org. Errors leave no credentials written.
+async fn complete_connect(session: &tower_sessions::Session, code: String) -> anyhow::Result<()> {
+    let state = crate::state::global_state().await;
+    let cfg = state
+        .harvest
+        .clone()
+        .ok_or_else(|| anyhow::anyhow!("Harvest importer is not configured"))?;
+
+    // Only an authenticated admin may land a connection on their org.
+    let user_id = crate::auth::session::get_session_user_id(session)
+        .await
+        .ok_or_else(|| anyhow::anyhow!("no authenticated session"))?;
+    let user = sqlx::query!(
+        r#"SELECT org_id, org_role::text as "role!" FROM users WHERE id = $1 AND active = true"#,
+        user_id,
+    )
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or_else(|| anyhow::anyhow!("user not found"))?;
+    if user.role != "admin" {
+        anyhow::bail!("admin access required to connect Harvest");
+    }
+
+    // Exchange + account lookup off the async runtime (blocking ureq).
+    let cfg_owned = cfg.clone();
+    let (tokens, account_id) = tokio::task::spawn_blocking(move || {
+        let agent = ureq::agent();
+        let tokens = oauth::exchange_code(&agent, &cfg_owned, &code)?;
+        let account_id = oauth::fetch_account_id(&agent, &tokens.access_token)?;
+        anyhow::Ok((tokens, account_id))
+    })
+    .await??;
+
+    credentials::store(
+        &state.db,
+        user.org_id,
+        &cfg.encryption_key_hex,
+        &account_id,
+        &tokens.access_token,
+        &tokens.refresh_token,
+        tokens.expires_at,
+        tokens.scope.as_deref(),
+    )
+    .await?;
+    Ok(())
+}

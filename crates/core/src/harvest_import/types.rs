@@ -197,10 +197,74 @@ impl ImportSummary {
     }
 }
 
+/// Whether the org has a usable Harvest connection, for the admin screen. Never
+/// carries the tokens themselves (FR-022).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConnectionStatus {
+    pub connected: bool,
+    pub account_id: Option<String>,
+    /// True when the stored access token is known to be past expiry (a re-sync
+    /// will refresh it transparently, or ask to reconnect if refresh fails).
+    pub token_expired: bool,
+}
+
 /// A single per-record error for the report (FR-019).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RowError {
     pub source_location: String,
     pub entity: EntityType,
     pub reason: String,
+}
+
+/// The result of an import run, returned by every surface (server fn + CLI). A
+/// pure data type so it crosses the `#[server]` boundary and compiles on the web
+/// target as well as the server.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ImportReport {
+    pub source: SourceKind,
+    pub mode: ImportMode,
+    pub summary: ImportSummary,
+    pub row_errors: Vec<RowError>,
+}
+
+impl ImportReport {
+    pub fn new(source: SourceKind, mode: ImportMode) -> Self {
+        Self {
+            source,
+            mode,
+            summary: ImportSummary::default(),
+            row_errors: Vec::new(),
+        }
+    }
+
+    /// Fold one entity outcome into the summary, collecting the error detail when
+    /// the outcome is `Errored`.
+    pub fn record(&mut self, entity: EntityType, outcome: &RowOutcome) {
+        self.summary.counts_mut(entity).record(outcome);
+        if let RowOutcome::Errored {
+            source_location,
+            reason,
+        } = outcome
+        {
+            self.row_errors.push(RowError {
+                source_location: source_location.clone(),
+                entity,
+                reason: reason.clone(),
+            });
+        }
+    }
+
+    /// True when every entity type reconciles: `processed` equals the sum of its
+    /// four buckets (FR-021, SC-005).
+    pub fn reconciles(&self) -> bool {
+        EntityType::ALL.iter().all(|&e| {
+            let c = self.summary.counts(e);
+            c.processed() == c.created + c.updated + c.skipped + c.errored
+        })
+    }
+
+    /// Total records that errored across all entity types.
+    pub fn error_count(&self) -> usize {
+        self.row_errors.len()
+    }
 }
