@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT harvest_account_id,\n                  token_expires_at as \"token_expires_at: chrono::DateTime<chrono::Utc>\"\n           FROM harvest_credentials WHERE org_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "harvest_account_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "token_expires_at: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "aa1c5d84d337141f9bb12686a82f28cf6fbe7a739dd2786a2b9630183ae41f47"
+}

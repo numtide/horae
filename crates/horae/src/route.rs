@@ -68,6 +68,8 @@ pub enum Route {
     InvoiceDetail { id: Uuid },
     #[route("/admin/users")]
     AdminUsers {},
+    #[route("/import/harvest")]
+    HarvestImport {},
     #[route("/settings")]
     Settings {},
     #[route("/components")]

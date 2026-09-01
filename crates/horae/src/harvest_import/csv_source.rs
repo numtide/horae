@@ -33,6 +33,7 @@ pub enum CsvError {
 
 /// A per-row parse failure (bad date etc.) that becomes a record error, not an
 /// up-front rejection.
+#[derive(Debug)]
 struct ParseErr {
     source_location: String,
     reason: String,
