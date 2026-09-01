@@ -9,18 +9,24 @@
 //! transaction that is rolled back, so nothing persists — not data, not
 //! provenance, not the watermark (FR-014, research.md §7).
 
+pub mod api_source;
 pub mod apply;
 pub mod credentials;
+pub mod oauth;
 pub mod provenance;
 pub mod report;
 pub mod resolve;
 
-use horae_core::harvest_import::types::{ImportMode, SourceKind, SourceRow};
+use chrono::{DateTime, Utc};
+use horae_core::harvest_import::types::{EntityType, ImportMode, SourceKind, SourceRow, SyncScope};
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use api_source::{ApiSource, HarvestData};
 use report::ImportReport;
 use resolve::{OrgDefaults, RunCache};
+
+use crate::config::HarvestConfig;
 
 /// A source of normalized rows the engine consumes lazily (research.md §9). Both
 /// adapters implement it: the CSV adapter walks its parsed records, the API
@@ -83,4 +89,150 @@ impl RowSource for VecSource {
     async fn next_row(&mut self) -> anyhow::Result<Option<SourceRow>> {
         Ok(self.rows.next())
     }
+}
+
+/// Why an API import could not even start (FR-003, FR-024). Distinct from the
+/// per-record errors inside a report — these reject the whole run up front.
+#[derive(Debug, thiserror::Error)]
+pub enum ApiImportError {
+    #[error("no usable Harvest connection — connect Harvest first")]
+    NotConnected,
+    #[error("Harvest connection expired — reconnect Harvest")]
+    ReconnectRequired,
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
+}
+
+/// Run a full/incremental import from the Harvest API through the shared engine
+/// (FR-023–FR-026). Loads the org's stored connection, refreshes an expired token
+/// transparently, pulls every collection, assembles rows, runs the engine, and —
+/// only on a committing run — advances the incremental watermark.
+pub async fn run_api_import(
+    pool: &PgPool,
+    org_id: Uuid,
+    default_currency: &str,
+    cfg: &HarvestConfig,
+    mode: ImportMode,
+    sync: SyncScope,
+) -> Result<ImportReport, ApiImportError> {
+    let key = &cfg.encryption_key_hex;
+    let mut conn = credentials::load(pool, org_id, key)
+        .await?
+        .ok_or(ApiImportError::NotConnected)?;
+
+    // Transparent refresh when the access token is at or past expiry (FR-024).
+    if let Some(expiry) = conn.token_expires_at
+        && expiry <= Utc::now()
+    {
+        let cfg_owned = cfg.clone();
+        let refresh_token = conn.refresh_token.clone();
+        let refreshed = tokio::task::spawn_blocking(move || {
+            let agent = ureq::agent();
+            oauth::refresh(&agent, &cfg_owned, &refresh_token)
+        })
+        .await
+        .map_err(|e| ApiImportError::Other(anyhow::anyhow!("refresh task panicked: {e}")))?
+        .map_err(|_| ApiImportError::ReconnectRequired)?;
+        credentials::update_tokens(
+            pool,
+            org_id,
+            key,
+            &refreshed.access_token,
+            &refreshed.refresh_token,
+            refreshed.expires_at,
+        )
+        .await?;
+        conn.access_token = refreshed.access_token;
+        conn.refresh_token = refreshed.refresh_token;
+        conn.token_expires_at = refreshed.expires_at;
+    }
+
+    // Per-entity `updated_since` for an incremental run (FR-025).
+    let since = match sync {
+        SyncScope::Full => None,
+        SyncScope::Incremental => conn.watermark_for(EntityType::TimeEntry),
+    };
+
+    // Fetch all collections off the async runtime (blocking ureq).
+    let access = conn.access_token.clone();
+    let account = conn.account_id.clone();
+    let data = tokio::task::spawn_blocking(move || fetch_all_collections(&access, &account, since))
+        .await
+        .map_err(|e| ApiImportError::Other(anyhow::anyhow!("fetch task panicked: {e}")))??;
+
+    // The highest `updated_at` we saw drives the next incremental watermark.
+    let high_water = data.time_entries.iter().filter_map(|te| te.updated_at).max();
+
+    let report = run_import(
+        pool,
+        org_id,
+        default_currency,
+        SourceKind::HarvestApi,
+        mode,
+        ApiSource::from_data(&data),
+    )
+    .await?;
+
+    if mode == ImportMode::Commit {
+        let mark = high_water.unwrap_or_else(Utc::now);
+        advance_all_watermarks(pool, org_id, mark).await?;
+    }
+
+    Ok(report)
+}
+
+/// Fetch every Harvest collection into a [`HarvestData`] (blocking). Parents in
+/// full; time entries filtered by `updated_since` on an incremental run.
+fn fetch_all_collections(
+    access_token: &str,
+    account_id: &str,
+    since: Option<DateTime<Utc>>,
+) -> anyhow::Result<HarvestData> {
+    use api_source::*;
+    let agent = ureq::agent();
+    let clients = parse_collection::<ApiClient>(&agent, access_token, account_id, "clients", None)?;
+    let projects =
+        parse_collection::<ApiProject>(&agent, access_token, account_id, "projects", None)?;
+    let tasks = parse_collection::<ApiTask>(&agent, access_token, account_id, "tasks", None)?;
+    let users = parse_collection::<ApiUser>(&agent, access_token, account_id, "users", None)?;
+    let time_entries = parse_collection::<ApiTimeEntry>(
+        &agent,
+        access_token,
+        account_id,
+        "time_entries",
+        since,
+    )?;
+    Ok(HarvestData {
+        clients,
+        projects,
+        tasks,
+        users,
+        time_entries,
+    })
+}
+
+/// Fetch one collection and deserialize each item into `T`.
+fn parse_collection<T: serde::de::DeserializeOwned>(
+    agent: &ureq::Agent,
+    access_token: &str,
+    account_id: &str,
+    collection: &str,
+    since: Option<DateTime<Utc>>,
+) -> anyhow::Result<Vec<T>> {
+    let items = api_source::fetch_all(agent, access_token, account_id, collection, since)?;
+    items
+        .into_iter()
+        .map(|v| serde_json::from_value(v).map_err(Into::into))
+        .collect()
+}
+
+/// Advance every entity's watermark to `mark` after a successful committing run.
+async fn advance_all_watermarks(
+    pool: &PgPool,
+    org_id: Uuid,
+    mark: DateTime<Utc>,
+) -> anyhow::Result<()> {
+    let marks: Vec<(EntityType, DateTime<Utc>)> =
+        EntityType::ALL.iter().map(|&e| (e, mark)).collect();
+    credentials::advance_watermark(pool, org_id, &marks).await
 }
