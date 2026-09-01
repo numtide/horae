@@ -16,7 +16,7 @@ The v1 input is Harvest's **detailed time-report CSV** — one row per time entr
 | `Billable?` | yes | entry/project-task `billable` | `Yes`/`No` → bool |
 | `Invoiced?` | no | informational only (FR-016) | not mapped to Horae invoice state |
 | `First Name` + `Last Name` | see note | user match key | combined for display; email preferred |
-| `Email` / user email | yes* | resolve `users` by email (FR-010) | trim, case-fold |
+| `Email` / user email | yes\* | resolve `users` by email (FR-010) | trim, case-fold |
 | `Billable Rate` | no | project-task / task default rate | `round(amount * 100)` → cents |
 | `Billable Amount` | no | reconciliation | `round(amount * 100)` → cents |
 | `Cost Rate` | no | (user cost rate, informational) | `round(amount * 100)` → cents |

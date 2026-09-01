@@ -53,7 +53,7 @@ A single execution against one source file. Fields: `mode` (`DryRun` | `Commit`)
 Horae keeps an **org-level task catalog** (`tasks`) with **per-project enablement** (`project_tasks`). The importer:
 
 1. Resolves/creates one `tasks` row per distinct `task_name` (org-scoped catalog) — `billable_default` from the row's billable flag on first sight; `default_rate_cents` from `billable_rate` when present.
-2. Ensures a `project_tasks` link `(project_id, task_id)` exists for every project a task's entries reference, carrying `billable` (from the row) and optional `rate_cents` (from `billable_rate`). This satisfies FR-009 so an imported entry's task is always valid for its project.
+1. Ensures a `project_tasks` link `(project_id, task_id)` exists for every project a task's entries reference, carrying `billable` (from the row) and optional `rate_cents` (from `billable_rate`). This satisfies FR-009 so an imported entry's task is always valid for its project.
 
 ### Time Entry → `time_entries`
 
