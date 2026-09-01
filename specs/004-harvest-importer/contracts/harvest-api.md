@@ -44,6 +44,7 @@ Each object carries a stable numeric `id` (→ provenance) and an `updated_at` (
 ### Incremental sync
 
 - Each collection accepts an `updated_since` filter. On a successful committing run the importer stores a per-entity high-water mark in `harvest_credentials.synced_watermark`; the next run sends `updated_since` so only changed records are fetched (FR-025, SC-008). A full re-sync (no `updated_since`) remains available. Provenance (`harvest_import_map`) ensures the changed records land on the right existing Horae rows.
+- **Deletions are not reported (known limitation)**: `updated_since` returns only changed or new records — Harvest never lists deletions this way. Re-sync is therefore **additive/updating only, not a mirror**: a record deleted in Harvest after import stays in Horae. A future "mirror-delete" mode (diffing Harvest's full id set against `harvest_import_map` to remove upstream-deleted records) is deferred (spec.md Out-of-Scope).
 
 ## B. Field mapping — invert the existing `/harvest/v2` exporter
 
@@ -66,6 +67,8 @@ Horae's exporter (`crates/horae/src/harvest/` — `mod.rs`, `types.rs`, `auth.rs
 | `budget = budget_minutes / 60` or `budget_amount_cents / 100` | `budget_minutes` / `budget_amount_cents` from Harvest `budget` + `budget_by` |
 | `client.currency` passthrough | `clients.currency` from the Harvest client `currency` (API) / `Currency` column (CSV) |
 | enabled task → `billable_by_default` | `tasks.billable_default` + `project_tasks.billable` (from Harvest `task_assignments`) |
+
+**Precision caveat**: `minutes = round(hours * 60)` recovers the exact original minutes only when the source supplies sufficient-precision `hours` (Harvest's API `hours` and a well-formed CSV decimal both do — `0.25` → 15, `1.5` → 90). The zero-drift reconciliation (SC-003/SC-007) assumes this; a source that pre-rounded hours to too few decimals could differ by a minute. This is a property of the source data, not the conversion.
 
 ## Boundary
 

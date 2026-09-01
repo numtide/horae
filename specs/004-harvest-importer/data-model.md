@@ -49,6 +49,8 @@ One row per organization (v1 supports a single connected Harvest account). Added
 
 - Tokens are never returned to the browser or logged (FR-022). Decryption happens only server-side when calling Harvest.
 - The `synced_watermark` is updated **only on a successful committing run**, never in a dry-run (FR-014).
+- **Key rotation (operational note)**: `access_token_enc` / `refresh_token_enc` are sealed with the deployment-supplied encryption key. Rotating that key renders the stored tokens undecryptable; recovery is for an admin to **reconnect (re-run OAuth)**, which overwrites this row with a freshly encrypted pair. There is no in-place re-encryption path in v1.
+- **`synced_watermark` is additive-only**: it drives `updated_since`, which never reports deletions, so a Harvest record deleted after import is not removed on re-sync (see below).
 
 ### `harvest_import_map` — provenance (FR-012, FR-026)
 
@@ -150,6 +152,7 @@ Per entity type (clients, projects, tasks, time entries): counts `created`, `upd
 - **Per-record atomicity**: each source record's writes — including its `harvest_import_map` provenance row — apply as an all-or-nothing unit (savepoint/transaction) so a mid-record failure leaves no partial fragment and no dangling mapping (FR-020).
 - **Dry-run**: full resolve/plan against live data (including provenance lookups), zero writes — via a rolled-back transaction or a plan-only path (research.md §7).
 - **Watermark update**: `harvest_credentials.synced_watermark` advances only after a successful committing API run, enabling the next incremental `updated_since` pull (FR-025, SC-008).
+- **Deletions not propagated (known limitation)**: `updated_since` returns only changed/new records, so re-sync is additive/updating only — a record deleted in Harvest after import stays in Horae, and no provenance row is removed. A "mirror-delete" mode is deferred (spec.md Out-of-Scope).
 
 ## Cross-cutting validation
 

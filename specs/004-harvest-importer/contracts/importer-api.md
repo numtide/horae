@@ -9,13 +9,14 @@ harvest_connect_start() -> Result<AuthorizeUrl, ServerFnError>   // returns the 
 ```
 
 - Admin-only; rejects non-administrators with `FORBIDDEN` (FR-001).
-- Builds Harvest's authorization-code URL (configured client id, redirect URL, state/PKCE). The SPA redirects the browser there.
+- Builds Harvest's authorization-code URL (configured client id, redirect URL, `state`, PKCE). The `state` is a **random nonce generated per start, tied to the initiating admin's session** (stored server-side/session-bound) for callback validation. The SPA redirects the browser there.
 
 ```
 GET /auth/harvest/callback?code=…&state=…      (plain Axum route, beside auth::router())
 ```
 
 - The browser redirect target after the admin authorizes on Harvest (cannot be a `#[server]` fn).
+- **Validates `state`** against the value stored at connect-start for this session, rejecting a missing or mismatched `state` **without exchanging the code** — this prevents CSRF / forged or replayed callbacks. Only on a valid `state` does it proceed.
 - Exchanges `code` for `access_token` + `refresh_token`, resolves the Harvest **account id**, and stores all three **encrypted at rest** in `harvest_credentials`, scoped to the org (FR-022). Tokens are never returned to the browser or logged.
 - On success, redirects back into the admin "Import from Harvest" screen showing a connected state.
 
@@ -94,6 +95,7 @@ ImportReport {
 
 ## Out of scope (v1)
 
+- **Propagating Harvest deletions** — a "mirror-delete" re-sync mode that removes records deleted in Harvest. Re-sync is additive/updating only (`updated_since` never reports deletions), so upstream-deleted records remain in Horae until an admin removes them manually (FR-025, harvest-api.md).
 - Scheduled / automatic re-sync jobs — this version re-syncs only when an admin runs `import_harvest_api`.
 - Connecting more than one Harvest account per organization.
 - Importing Harvest entities beyond clients/projects/tasks/time entries (invoices, estimates, expenses, users-as-accounts, roles, teams).
