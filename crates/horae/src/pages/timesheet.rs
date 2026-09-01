@@ -168,15 +168,39 @@ fn iso_week_monday(date: NaiveDate) -> NaiveDate {
 
 const DAY_LABELS: [&str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-/// How many days the Calendar view shows at once.
-#[derive(Clone, Copy, PartialEq)]
-enum CalSpan {
+/// How many days the Calendar view shows at once. Carried in the URL query
+/// (`?span=week|5day|day`) so the chosen span is shareable and survives reload.
+#[derive(Clone, Copy, PartialEq, Debug, Default)]
+pub enum CalSpan {
     /// Mon–Sun.
+    #[default]
     Week,
     /// Mon–Fri.
     WorkWeek,
     /// Just the anchor day.
     Day,
+}
+
+impl std::fmt::Display for CalSpan {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            CalSpan::Week => "week",
+            CalSpan::WorkWeek => "5day",
+            CalSpan::Day => "day",
+        })
+    }
+}
+
+impl std::str::FromStr for CalSpan {
+    type Err = std::convert::Infallible;
+    // Unknown values fall back to the week view so a stray URL never fails to route.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "day" => CalSpan::Day,
+            "5day" => CalSpan::WorkWeek,
+            _ => CalSpan::Week,
+        })
+    }
 }
 
 impl CalSpan {
@@ -200,11 +224,12 @@ impl CalSpan {
 }
 
 #[component]
-pub fn Timesheet(view: ViewMode, date: Anchor) -> Element {
+pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
     let today = chrono::Utc::now().date_naive();
-    // View, week and selected day all derive from the URL path
-    // (/timesheet/<view>/<date>), so switching views or navigating is shareable
-    // and works with the browser's back/forward. Actions push a new route.
+    // View, week, selected day and calendar span all derive from the URL
+    // (/timesheet/<view>/<date>?span=<span>), so switching views, changing the
+    // calendar span or navigating is shareable and works with the browser's
+    // back/forward. Actions push a new route.
     let view_mode = use_memo(use_reactive!(|(view,)| view));
     let week_start = use_memo(use_reactive!(|(date,)| iso_week_monday(date.0)));
     // Which day is selected within the week (0 = Monday .. 6 = Sunday) for Day view.
@@ -213,16 +238,18 @@ pub fn Timesheet(view: ViewMode, date: Anchor) -> Element {
             |(date,)| date.0.weekday().num_days_from_monday() as i64
         ));
 
-    // Push a new view/anchor to the URL.
-    let go = use_callback(move |(v, anchor): (ViewMode, NaiveDate)| {
+    // Push a new view/anchor/span to the URL.
+    let go = use_callback(move |(v, anchor, span): (ViewMode, NaiveDate, CalSpan)| {
         navigator().push(Route::Timesheet {
             view: v,
             date: Anchor(anchor),
+            span,
         });
     });
-    // Selecting a day in the Day-view strip navigates to that day.
+    // Selecting a day in the Day-view strip navigates to that day (span carried
+    // through so returning to the Calendar keeps the chosen span).
     let select_day = use_callback(move |i: i64| {
-        go.call((ViewMode::Day, week_start() + Duration::days(i)));
+        go.call((ViewMode::Day, week_start() + Duration::days(i), span));
     });
 
     let entries = use_resource(move || {
@@ -382,9 +409,6 @@ pub fn Timesheet(view: ViewMode, date: Anchor) -> Element {
         add_error.set(None);
         add_open.set(Some(e.spent_date));
     });
-
-    // How many days the Calendar shows (week / work-week / single day).
-    let mut cal_span = use_signal(|| CalSpan::Week);
 
     // Calendar drag: the slot/entry being manipulated, committed on release.
     let cal_drag = use_signal(|| None::<CalDrag>);
@@ -661,14 +685,17 @@ pub fn Timesheet(view: ViewMode, date: Anchor) -> Element {
 
     let current_mode = *view_mode.read();
     let sel_offset = *selected_day_offset.read();
+    // The pager moves a single day in Day view and in the Calendar's single-day
+    // span; otherwise it moves a whole week (like Harvest).
+    let day_paged = current_mode == ViewMode::Day
+        || (current_mode == ViewMode::Calendar && span == CalSpan::Day);
 
-    // Pager stepping: Day view moves one day, Week/Calendar a whole week. Moving
-    // the anchor date across the week edge rolls the week automatically.
+    // Pager stepping. Moving the anchor date across the week edge rolls the week
+    // automatically.
     let step = use_callback(move |forward: bool| {
-        let mode = *view_mode.read();
-        let days = if mode == ViewMode::Day { 1 } else { 7 };
+        let days = if day_paged { 1 } else { 7 };
         let delta = Duration::days(if forward { days } else { -days });
-        go.call((mode, date.0 + delta));
+        go.call((current_mode, date.0 + delta, span));
     });
     let is_this_week = ws == iso_week_monday(today);
     let range_label = format!("{} – {}", ws.format("%d %b"), week_end.format("%d %b %Y"));
@@ -693,7 +720,7 @@ pub fn Timesheet(view: ViewMode, date: Anchor) -> Element {
                             "Calendar" => ViewMode::Calendar,
                             _ => ViewMode::Week,
                         };
-                        go.call((v, date.0));
+                        go.call((v, date.0, span));
                     },
                 }
             }
@@ -709,13 +736,13 @@ pub fn Timesheet(view: ViewMode, date: Anchor) -> Element {
                 div { class: "ts-pager",
                     button {
                         class: "ts-pager-btn prev",
-                        "aria-label": if current_mode == ViewMode::Day { "Previous day" } else { "Previous week" },
+                        "aria-label": if day_paged { "Previous day" } else { "Previous week" },
                         onclick: move |_| step.call(false),
                         "←"
                     }
                     div { class: "ts-pager-label",
                         span { class: "text-faint", "▦" }
-                        if current_mode == ViewMode::Day {
+                        if day_paged {
                             {
                                 let d = ws + Duration::days((*selected_day_offset.read()).clamp(0, 6));
                                 rsx! {
@@ -730,27 +757,28 @@ pub fn Timesheet(view: ViewMode, date: Anchor) -> Element {
                     }
                     button {
                         class: "ts-pager-btn next",
-                        "aria-label": if current_mode == ViewMode::Day { "Next day" } else { "Next week" },
+                        "aria-label": if day_paged { "Next day" } else { "Next week" },
                         onclick: move |_| step.call(true),
                         "→"
                     }
                 }
                 // Calendar-only: day-range dropdown beside the pager (Harvest-style).
+                // Picking a span pushes it to the URL so it's shareable.
                 if current_mode == ViewMode::Calendar {
-                    Menu { label: cal_span.read().label().to_string(),
+                    Menu { label: span.label().to_string(),
                         MenuItem {
-                            selected: *cal_span.read() == CalSpan::Day,
-                            onclick: move |_| cal_span.set(CalSpan::Day),
+                            selected: span == CalSpan::Day,
+                            onclick: move |_| go.call((ViewMode::Calendar, date.0, CalSpan::Day)),
                             "Day view"
                         }
                         MenuItem {
-                            selected: *cal_span.read() == CalSpan::WorkWeek,
-                            onclick: move |_| cal_span.set(CalSpan::WorkWeek),
+                            selected: span == CalSpan::WorkWeek,
+                            onclick: move |_| go.call((ViewMode::Calendar, date.0, CalSpan::WorkWeek)),
                             "5-day view"
                         }
                         MenuItem {
-                            selected: *cal_span.read() == CalSpan::Week,
-                            onclick: move |_| cal_span.set(CalSpan::Week),
+                            selected: span == CalSpan::Week,
+                            onclick: move |_| go.call((ViewMode::Calendar, date.0, CalSpan::Week)),
                             "Week view"
                         }
                     }
@@ -758,7 +786,7 @@ pub fn Timesheet(view: ViewMode, date: Anchor) -> Element {
                 if !is_this_week {
                     button {
                         class: "btn btn-ghost btn-sm",
-                        onclick: move |_| go.call((current_mode, today)),
+                        onclick: move |_| go.call((current_mode, today, span)),
                         "Today"
                     }
                 }
@@ -814,7 +842,7 @@ pub fn Timesheet(view: ViewMode, date: Anchor) -> Element {
                     },
                     ViewMode::Calendar => rsx! {
                         {
-                            let visible = cal_span.read().visible_days(*selected_day_offset.read() as usize);
+                            let visible = span.visible_days(*selected_day_offset.read() as usize);
                             render_calendar_view(&by_day.read(), &daily_totals.read(), &visible, ws, today, &CalLabels { projects: &project_names.read(), tasks: &task_names.read(), clients: &project_client.read() }, cal_drag, add_hint, drag_commit)
                         }
                     },
@@ -2026,5 +2054,37 @@ mod tests {
     #[test]
     fn value_cell_class_marks_today_when_nonzero() {
         assert_eq!(value_cell_class("v", 30, Some(2), 2), "v today");
+    }
+
+    #[test]
+    fn cal_span_url_roundtrips() {
+        for span in [CalSpan::Week, CalSpan::WorkWeek, CalSpan::Day] {
+            assert_eq!(span.to_string().parse::<CalSpan>().unwrap(), span);
+        }
+    }
+
+    #[test]
+    fn cal_span_defaults_to_week() {
+        assert_eq!(CalSpan::default(), CalSpan::Week);
+    }
+
+    #[test]
+    fn cal_span_unknown_falls_back_to_week() {
+        assert_eq!("nonsense".parse::<CalSpan>().unwrap(), CalSpan::Week);
+    }
+
+    #[test]
+    fn cal_span_day_shows_only_the_anchor_column() {
+        assert_eq!(CalSpan::Day.visible_days(3), vec![3]);
+    }
+
+    #[test]
+    fn cal_span_work_week_shows_monday_to_friday() {
+        assert_eq!(CalSpan::WorkWeek.visible_days(3), vec![0, 1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn cal_span_week_shows_all_seven_days() {
+        assert_eq!(CalSpan::Week.visible_days(3), vec![0, 1, 2, 3, 4, 5, 6]);
     }
 }
