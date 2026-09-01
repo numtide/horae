@@ -29,6 +29,7 @@ server = [
   "dep:extism",
   "dep:toml",
   "dep:ureq",
+  "dep:chacha20poly1305",
 ]
 web = ["dioxus/web", "dep:gloo-timers"]
 
@@ -88,7 +89,14 @@ toml = { version = "0.8", optional = true }
 # Blocking HTTP client for the `horae_http_post` plugin host function. extism host
 # functions are synchronous, so a blocking client avoids bridging to the async
 # runtime. rustls (default) keeps the build free of a system OpenSSL dependency.
+# Also used by the Harvest importer's API + OAuth calls (via spawn_blocking),
+# matching the OIDC stack's blocking-ureq pattern.
 ureq = { version = "2", optional = true }
+# AEAD (XChaCha20-Poly1305) sealing the Harvest OAuth tokens at rest. Audited
+# RustCrypto crate; pinned. `getrandom` gives the OS RNG for per-message nonces.
+chacha20poly1305 = { version = "=0.10.1", features = [
+  "getrandom",
+], optional = true }
 
 # web-only
 gloo-timers = { version = "0.3", features = ["futures"], optional = true }

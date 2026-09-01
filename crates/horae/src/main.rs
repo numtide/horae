@@ -13,6 +13,8 @@ mod db;
 #[cfg(feature = "server")]
 mod harvest;
 #[cfg(feature = "server")]
+mod harvest_import;
+#[cfg(feature = "server")]
 mod plugin;
 #[cfg(feature = "server")]
 mod render;
