@@ -963,6 +963,9 @@ tbody tr:hover { background: var(--color-bg-tertiary); }
 .ts-pager-label { display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-5); font-size: var(--font-size-sm); color: var(--color-text); }
 .ts-pager-label .cur { font-weight: 600; }
 .ts-pager-range { font-family: var(--font-family-mono); font-size: 13px; color: var(--color-text-secondary); }
+/* The calendar's day-span dropdown sits beside the pager; give its trigger the
+   same height and text size as the pager and add button so the row lines up. */
+.ts-toolbar .menu-anchor > .btn { height: 46px; padding: 0 var(--space-4); font-size: var(--font-size-sm); }
 
 .ts-grid-card { background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-panel); overflow: hidden; }
 .ts-grid-scroll { overflow-x: auto; }
