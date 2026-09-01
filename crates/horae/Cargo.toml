@@ -63,6 +63,7 @@ sqlx = { version = "0.8", features = [
   "postgres",
   "uuid",
   "chrono",
+  "json",
   "migrate",
 ], optional = true }
 tower-sessions = { version = "0.14", optional = true }
