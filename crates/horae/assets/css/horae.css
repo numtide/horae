@@ -442,6 +442,7 @@ h1, h2, h3, h4, h5, h6 {
 .sidebar-footer:hover .sidebar-user-name { color: var(--color-primary-light); }
 .sidebar-user { min-width: 0; flex: 1; }
 .sidebar-user-name { font-size: var(--font-size-sm); font-weight: 600; color: var(--color-text); }
+.sidebar-user-email { font-size: var(--font-size-xs); color: var(--color-text-muted); }
 .sidebar-user-sub { font-size: var(--font-size-xs); color: var(--color-text-muted); }
 .sidebar-user-caret { color: var(--color-text-muted); font-size: var(--font-size-sm); flex-shrink: 0; }
 
@@ -458,8 +459,12 @@ h1, h2, h3, h4, h5, h6 {
   font: inherit; font-size: var(--font-size-sm); color: var(--color-text);
   cursor: pointer; text-decoration: none;
 }
-.menu-item:hover { background: var(--color-bg-tertiary); text-decoration: none; }
+/* Hover lifts the row (a shade lighter than the popover) rather than sinking it;
+   text and icon stay light (a Link would otherwise turn pine via a:hover). */
+.menu-item:hover { background: var(--color-border-input); color: var(--color-text); text-decoration: none; }
+.menu-item:hover .menu-item-icon { color: var(--color-text); }
 .menu-item.danger { color: var(--color-danger); }
+.menu-item.danger:hover { background: var(--color-danger-bg); color: var(--color-danger-fg); }
 .menu-item.selected { background: var(--color-pine); color: var(--color-on-pine); }
 .menu-item.disabled { color: var(--color-text-muted); cursor: not-allowed; }
 .menu-item.disabled:hover { background: none; }
@@ -493,6 +498,9 @@ h1, h2, h3, h4, h5, h6 {
   border-bottom: 1px solid var(--color-border);
 }
 .sidebar-menu-list, .sidebar-menu-foot { padding: var(--space-2); }
+/* Account-menu rows carry a leading icon in a fixed gutter (design spec). */
+.sidebar-menu .menu-item { display: flex; align-items: center; gap: var(--space-3); }
+.menu-item-icon { display: inline-flex; width: 15px; flex-shrink: 0; color: var(--color-text-muted); }
 .sidebar-menu-foot { border-top: 1px solid var(--color-border); }
 
 /* Collapsed rail (icon strip) */
@@ -682,6 +690,9 @@ tbody tr:hover { background: var(--color-bg-tertiary); }
 .badge-danger  { color: var(--color-danger-fg);  background: var(--color-danger-bg);  border-color: var(--color-danger-line); }
 .badge-info    { color: var(--color-primary-light); background: var(--color-primary-bg); border-color: var(--color-primary-border); }
 .badge-neutral { color: var(--color-text-secondary); background: var(--color-bg-tertiary); border-color: var(--color-border); }
+/* Compact pill, e.g. the role tag in the account menu header. */
+.badge-sm { gap: 6px; padding: 3px 9px; }
+.badge-sm::before { width: 6px; height: 6px; }
 .badge-success::before,
 .badge-warning::before,
 .badge-danger::before,

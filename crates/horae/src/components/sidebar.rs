@@ -80,9 +80,10 @@ fn SidebarUser() -> Element {
     let mut open = use_signal(|| false);
 
     let user = me.read();
-    let (name, role, marks, is_admin) = match &*user {
+    let (name, email, role, marks, is_admin) = match &*user {
         Some(Ok(u)) => (
             u.name.clone(),
+            u.email.clone(),
             capitalize(&u.org_role.to_string()),
             initials(&u.name),
             u.is_admin(),
@@ -90,15 +91,16 @@ fn SidebarUser() -> Element {
         _ => (
             "Not signed in".to_string(),
             String::new(),
+            String::new(),
             "·".to_string(),
             false,
         ),
     };
-    // Show the role as a status pill; admins get the highlighted (pine) variant.
+    // The role renders as a compact status pill; admins get the pine variant.
     let role_class = if is_admin {
-        "badge badge-info mt-1"
+        "badge badge-info badge-sm"
     } else {
-        "badge badge-neutral mt-1"
+        "badge badge-neutral badge-sm"
     };
 
     rsx! {
@@ -109,19 +111,28 @@ fn SidebarUser() -> Element {
                         Avatar { initials: "{marks}" }
                         div { class: "sidebar-user",
                             div { class: "sidebar-user-name truncate", "{name}" }
-                            if !role.is_empty() {
-                                span { class: "{role_class}", "{role}" }
+                            if !email.is_empty() {
+                                div { class: "sidebar-user-email truncate", "{email}" }
                             }
+                        }
+                        if !role.is_empty() {
+                            span { class: "{role_class}", "{role}" }
                         }
                     }
                     div { class: "sidebar-menu-list",
-                        Link { to: Route::Settings {}, class: "menu-item", onclick: move |_| open.set(false), "Settings" }
+                        Link { to: Route::Settings {}, class: "menu-item", onclick: move |_| open.set(false),
+                            span { class: "menu-item-icon", NavIcon { name: "settings" } }
+                            "Settings"
+                        }
                     }
                     // Org administration, only for admins.
                     if is_admin {
                         div { class: "sidebar-menu-list",
                             div { class: "menu-group", "Admin" }
-                            Link { to: Route::AdminUsers {}, class: "menu-item", onclick: move |_| open.set(false), "Users" }
+                            Link { to: Route::AdminUsers {}, class: "menu-item", onclick: move |_| open.set(false),
+                                span { class: "menu-item-icon", NavIcon { name: "users" } }
+                                "Users"
+                            }
                         }
                     }
                     div { class: "sidebar-menu-foot",
