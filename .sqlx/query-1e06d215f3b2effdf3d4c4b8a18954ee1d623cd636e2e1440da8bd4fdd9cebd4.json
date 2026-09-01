@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id FROM projects\n             WHERE org_id = $1 AND client_id = $2 AND LOWER(TRIM(name)) = $3",
+  "query": "SELECT id FROM users WHERE org_id = $1 AND harvest_norm(email) = $2",
   "describe": {
     "columns": [
       {
@@ -12,7 +12,6 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Uuid",
         "Text"
       ]
     },
@@ -20,5 +19,5 @@
       false
     ]
   },
-  "hash": "b916931fc75094ef22c07a68be7b575a44cad43c1be90cbcc92c1125d0960c18"
+  "hash": "1e06d215f3b2effdf3d4c4b8a18954ee1d623cd636e2e1440da8bd4fdd9cebd4"
 }

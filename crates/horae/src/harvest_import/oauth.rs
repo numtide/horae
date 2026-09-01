@@ -59,7 +59,11 @@ impl TokenBody {
 }
 
 /// Exchange an authorization `code` for tokens (server-side, blocking).
-pub fn exchange_code(agent: &ureq::Agent, cfg: &HarvestConfig, code: &str) -> anyhow::Result<Tokens> {
+pub fn exchange_code(
+    agent: &ureq::Agent,
+    cfg: &HarvestConfig,
+    code: &str,
+) -> anyhow::Result<Tokens> {
     let body = agent
         .post(&format!("{ID_HOST}/api/v2/oauth2/token"))
         .set("Accept", "application/json")
@@ -79,7 +83,11 @@ pub fn exchange_code(agent: &ureq::Agent, cfg: &HarvestConfig, code: &str) -> an
 /// Refresh an expired access token with the stored refresh token (FR-024). A
 /// failure here means the connection is revoked/expired — the caller rejects the
 /// run with "reconnect Harvest".
-pub fn refresh(agent: &ureq::Agent, cfg: &HarvestConfig, refresh_token: &str) -> anyhow::Result<Tokens> {
+pub fn refresh(
+    agent: &ureq::Agent,
+    cfg: &HarvestConfig,
+    refresh_token: &str,
+) -> anyhow::Result<Tokens> {
     let body = agent
         .post(&format!("{ID_HOST}/api/v2/oauth2/token"))
         .set("Accept", "application/json")
@@ -163,7 +171,11 @@ mod tests {
         assert!(url.contains("state=nonce-xyz"));
         assert!(url.contains("response_type=code"));
         // The redirect URL is percent-encoded (":" and "/" escaped).
-        assert!(url.contains("redirect_uri=https%3A%2F%2Fhorae.example.com%2Fauth%2Fharvest%2Fcallback"));
+        assert!(
+            url.contains(
+                "redirect_uri=https%3A%2F%2Fhorae.example.com%2Fauth%2Fharvest%2Fcallback"
+            )
+        );
     }
 
     #[test]

@@ -165,7 +165,11 @@ pub async fn run_api_import(
         .map_err(|e| ApiImportError::Other(anyhow::anyhow!("fetch task panicked: {e}")))??;
 
     // The highest `updated_at` we saw drives the next incremental watermark.
-    let high_water = data.time_entries.iter().filter_map(|te| te.updated_at).max();
+    let high_water = data
+        .time_entries
+        .iter()
+        .filter_map(|te| te.updated_at)
+        .max();
 
     let report = run_import(
         pool,
@@ -199,13 +203,8 @@ fn fetch_all_collections(
         parse_collection::<ApiProject>(&agent, access_token, account_id, "projects", None)?;
     let tasks = parse_collection::<ApiTask>(&agent, access_token, account_id, "tasks", None)?;
     let users = parse_collection::<ApiUser>(&agent, access_token, account_id, "users", None)?;
-    let time_entries = parse_collection::<ApiTimeEntry>(
-        &agent,
-        access_token,
-        account_id,
-        "time_entries",
-        since,
-    )?;
+    let time_entries =
+        parse_collection::<ApiTimeEntry>(&agent, access_token, account_id, "time_entries", since)?;
     Ok(HarvestData {
         clients,
         projects,

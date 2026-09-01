@@ -13,10 +13,23 @@
 
 use chrono::NaiveDate;
 
-/// Trim surrounding whitespace and case-fold a natural-key component so that
-/// `"  Acme Corp "` and `"acme corp"` compare equal.
+/// The exact whitespace set trimmed on both the Rust and SQL sides. It MUST match
+/// the `btrim` character set in migration 0009's `harvest_norm`, or a re-import
+/// could fail to match a record and create a duplicate. (Rust's default `trim`
+/// strips the full Unicode White_Space set; SQL `btrim` strips only the listed
+/// characters — so we trim an explicit, shared set on both sides.)
+pub const TRIM_CHARS: [char; 7] = [' ', '\t', '\n', '\u{0b}', '\u{0c}', '\r', '\u{a0}'];
+
+/// Trim the shared whitespace set from both ends without case-folding.
+pub fn trim_ws(value: &str) -> &str {
+    value.trim_matches(|c| TRIM_CHARS.contains(&c))
+}
+
+/// Canonical natural-key normalization: trim the shared whitespace set, then fold
+/// ASCII `A`–`Z` to lowercase — byte-for-byte identical to the SQL `harvest_norm`
+/// function (migration 0009) so Rust-side keys and DB lookups always agree.
 pub fn normalize(value: &str) -> String {
-    value.trim().to_lowercase()
+    trim_ws(value).to_ascii_lowercase()
 }
 
 /// Join normalized components into one canonical key string. Each component is
@@ -80,6 +93,18 @@ mod tests {
         assert_eq!(normalize("  Acme Corp "), "acme corp");
         assert_eq!(normalize("ACME"), "acme");
         assert_eq!(normalize("acme"), "acme");
+    }
+
+    #[test]
+    fn normalize_matches_sql_harvest_norm_contract() {
+        // Trims the shared whitespace set (tab, NBSP, VT, FF, CR), not just spaces.
+        assert_eq!(normalize("\t\u{a0}Acme\u{0b}\u{0c}\r"), "acme");
+        // Folds ONLY ASCII A-Z; non-ASCII letters pass through unchanged — exactly
+        // what the SQL `translate(...,'A-Z','a-z')` does, so the two never diverge.
+        assert_eq!(normalize("CAFé"), "café");
+        assert_eq!(normalize("Wébsite"), "wébsite");
+        // An interior NBSP is preserved (only leading/trailing are trimmed).
+        assert_eq!(normalize("a\u{a0}b"), "a\u{a0}b");
     }
 
     #[test]

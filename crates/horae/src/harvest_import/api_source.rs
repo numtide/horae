@@ -167,7 +167,11 @@ pub fn assemble_rows(data: &HarvestData) -> Vec<SourceRow> {
             task_billable_default: task.map(|t| t.billable_by_default).unwrap_or(true),
 
             user_email: user.map(|u| u.email.clone()),
-            user_name: user.map(|u| format!("{} {}", u.first_name, u.last_name).trim().to_string()),
+            user_name: user.map(|u| {
+                format!("{} {}", u.first_name, u.last_name)
+                    .trim()
+                    .to_string()
+            }),
 
             spent_date: te.spent_date,
             hours: decimal(te.hours),

@@ -3,7 +3,7 @@
 
 use dioxus::prelude::*;
 use horae_core::harvest_import::types::{
-    EntityType, EntityCounts, ImportMode, ImportReport, SyncScope,
+    EntityCounts, EntityType, ImportMode, ImportReport, SyncScope,
 };
 
 use crate::server_fns;
@@ -19,7 +19,10 @@ pub fn HarvestImport() -> Element {
     let connect = move |_| async move {
         match server_fns::harvest_connect_start().await {
             Ok(url) => {
-                let js = format!("window.location.href = {};", serde_json::to_string(&url).unwrap_or_default());
+                let js = format!(
+                    "window.location.href = {};",
+                    serde_json::to_string(&url).unwrap_or_default()
+                );
                 let _ = document::eval(&js).await;
             }
             Err(e) => report.set(Some(Err(format!("Could not start Harvest connect: {e}")))),

@@ -47,9 +47,7 @@ pub async fn harvest_connection_status() -> Result<ConnectionStatus, ServerFnErr
         Some(r) => ConnectionStatus {
             connected: true,
             account_id: Some(r.harvest_account_id),
-            token_expired: r
-                .token_expires_at
-                .is_some_and(|e| e <= chrono::Utc::now()),
+            token_expired: r.token_expires_at.is_some_and(|e| e <= chrono::Utc::now()),
         },
         None => ConnectionStatus::default(),
     })
@@ -110,7 +108,12 @@ async fn harvest_config() -> Result<crate::config::HarvestConfig, ServerFnError>
         .await
         .harvest
         .clone()
-        .ok_or_else(|| err(NOT_FOUND, "Harvest importer is not configured on this server"))
+        .ok_or_else(|| {
+            err(
+                NOT_FOUND,
+                "Harvest importer is not configured on this server",
+            )
+        })
 }
 
 #[cfg(feature = "server")]

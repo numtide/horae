@@ -89,6 +89,63 @@ fn api_row(
     }
 }
 
+/// A natural-key (CSV-style) row: no Harvest ids, so matching falls back to the
+/// composite natural key and exercises `harvest_norm` (FIX #1).
+fn nk_row(
+    client: &str,
+    project: &str,
+    task: &str,
+    email: &str,
+    date: (i32, u32, u32),
+    hours: &str,
+    notes: Option<&str>,
+) -> SourceRow {
+    SourceRow {
+        harvest_client_id: None,
+        harvest_project_id: None,
+        harvest_task_id: None,
+        harvest_time_entry_id: None,
+        harvest_user_id: None,
+        client_name: client.to_string(),
+        client_address: None,
+        client_active: true,
+        project_name: project.to_string(),
+        project_code: None,
+        project_active: true,
+        project_starts_on: None,
+        project_ends_on: None,
+        task_name: task.to_string(),
+        task_billable_default: true,
+        user_email: Some(email.to_string()),
+        user_name: None,
+        spent_date: NaiveDate::from_ymd_opt(date.0, date.1, date.2).unwrap(),
+        hours: hours.to_string(),
+        notes: notes.map(str::to_string),
+        billable: true,
+        invoiced: false,
+        billable_rate: None,
+        billable_amount: None,
+        cost_rate: None,
+        cost_amount: None,
+        currency: Some("USD".to_string()),
+        harvest_updated_at: None,
+        source_location: "row".to_string(),
+    }
+}
+
+async fn commit_csv(pool: &PgPool, org: Uuid, rows: Vec<SourceRow>) -> super::report::ImportReport {
+    run_import(
+        pool,
+        org,
+        "USD",
+        SourceKind::Csv,
+        ImportMode::Commit,
+        VecSource::new(rows),
+    )
+    .await
+    .unwrap()
+}
+
 async fn count(pool: &PgPool, table: &str) -> i64 {
     // `table` is a hard-coded literal from tests, never user input.
     let sql = format!("SELECT COUNT(*) FROM {table}");
@@ -119,8 +176,26 @@ async fn full_import_creates_all_levels_with_exact_minutes(pool: PgPool) {
     seed_user(&pool, org, "dev@acme.com").await;
 
     let rows = vec![
-        api_row((1, 10, 100, 5000, 1000), "Acme", "Website", "Design", "dev@acme.com", (2026, 1, 15), "1.5", Some("kickoff")),
-        api_row((1, 10, 100, 5001, 1000), "Acme", "Website", "Design", "dev@acme.com", (2026, 1, 16), "0.25", None),
+        api_row(
+            (1, 10, 100, 5000, 1000),
+            "Acme",
+            "Website",
+            "Design",
+            "dev@acme.com",
+            (2026, 1, 15),
+            "1.5",
+            Some("kickoff"),
+        ),
+        api_row(
+            (1, 10, 100, 5001, 1000),
+            "Acme",
+            "Website",
+            "Design",
+            "dev@acme.com",
+            (2026, 1, 16),
+            "0.25",
+            None,
+        ),
     ];
     let report = commit(&pool, org, rows).await;
 
@@ -136,10 +211,11 @@ async fn full_import_creates_all_levels_with_exact_minutes(pool: PgPool) {
     assert_eq!(count(&pool, "time_entries").await, 2);
 
     // Exact minutes: 1.5h → 90, 0.25h → 15.
-    let minutes: Vec<i32> = sqlx::query_scalar!("SELECT minutes FROM time_entries ORDER BY spent_date")
-        .fetch_all(&pool)
-        .await
-        .unwrap();
+    let minutes: Vec<i32> =
+        sqlx::query_scalar!("SELECT minutes FROM time_entries ORDER BY spent_date")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
     assert_eq!(minutes, vec![90, 15]);
 
     // A provenance row per created record: 1 client + 1 project + 1 task + 2 entries.
@@ -149,6 +225,67 @@ async fn full_import_creates_all_levels_with_exact_minutes(pool: PgPool) {
     assert_eq!(count(&pool, "project_tasks").await, 1);
 }
 
+// ── FIX #1: natural-key re-import with whitespace/case variance is duplicate-free
+
+#[sqlx::test(migrations = "./migrations")]
+async fn natural_key_reimport_normalizes_whitespace_and_ascii_case(pool: PgPool) {
+    let org = seed_org(&pool).await;
+    seed_user(&pool, org, "dev@acme.com").await;
+
+    // First import with clean, non-ASCII names via the natural-key (CSV) path.
+    let first = commit_csv(
+        &pool,
+        org,
+        vec![nk_row(
+            "Café",
+            "Wébsite",
+            "Design",
+            "dev@acme.com",
+            (2026, 1, 15),
+            "1.5",
+            Some("note"),
+        )],
+    )
+    .await;
+    assert_eq!(first.summary.clients.created, 1);
+    assert_eq!(first.summary.projects.created, 1);
+    assert_eq!(first.summary.tasks.created, 1);
+    assert_eq!(first.summary.time_entries.created, 1);
+
+    // Re-import the SAME records with a leading tab + NBSP, flipped ASCII case, and
+    // the non-ASCII letters unchanged. Rust `normalize` and SQL `harvest_norm` must
+    // agree, so every record is matched (Skipped) — zero creations, no duplicates.
+    let second = commit_csv(
+        &pool,
+        org,
+        vec![nk_row(
+            "\t\u{a0}CAFé",
+            "  wébSITE ",
+            " design\t",
+            "DEV@acme.com",
+            (2026, 1, 15),
+            "1.5",
+            Some("note"),
+        )],
+    )
+    .await;
+    assert_eq!(second.summary.clients.created, 0, "client duplicated");
+    assert_eq!(second.summary.projects.created, 0, "project duplicated");
+    assert_eq!(second.summary.tasks.created, 0, "task duplicated");
+    assert_eq!(
+        second.summary.time_entries.created, 0,
+        "time entry duplicated"
+    );
+    assert_eq!(second.summary.clients.skipped, 1);
+    assert_eq!(second.summary.time_entries.skipped, 1);
+
+    // No duplicate rows exist.
+    assert_eq!(count(&pool, "clients").await, 1);
+    assert_eq!(count(&pool, "projects").await, 1);
+    assert_eq!(count(&pool, "tasks").await, 1);
+    assert_eq!(count(&pool, "time_entries").await, 1);
+}
+
 // ── US2: idempotent + edit-robust re-sync ─────────────────────────────────────
 
 #[sqlx::test(migrations = "./migrations")]
@@ -156,7 +293,16 @@ async fn second_identical_run_creates_nothing(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@acme.com").await;
     let rows = || {
-        vec![api_row((1, 10, 100, 5000, 1000), "Acme", "Website", "Design", "dev@acme.com", (2026, 1, 15), "1.5", Some("kickoff"))]
+        vec![api_row(
+            (1, 10, 100, 5000, 1000),
+            "Acme",
+            "Website",
+            "Design",
+            "dev@acme.com",
+            (2026, 1, 15),
+            "1.5",
+            Some("kickoff"),
+        )]
     };
 
     commit(&pool, org, rows()).await;
@@ -179,7 +325,16 @@ async fn edited_entry_still_matched_by_provenance(pool: PgPool) {
     commit(
         &pool,
         org,
-        vec![api_row((1, 10, 100, 5000, 1000), "Acme", "Website", "Design", "dev@acme.com", (2026, 1, 15), "1.5", Some("kickoff"))],
+        vec![api_row(
+            (1, 10, 100, 5000, 1000),
+            "Acme",
+            "Website",
+            "Design",
+            "dev@acme.com",
+            (2026, 1, 15),
+            "1.5",
+            Some("kickoff"),
+        )],
     )
     .await;
 
@@ -193,7 +348,16 @@ async fn edited_entry_still_matched_by_provenance(pool: PgPool) {
     let second = commit(
         &pool,
         org,
-        vec![api_row((1, 10, 100, 5000, 1000), "Acme", "Website", "Design", "dev@acme.com", (2026, 1, 15), "1.5", Some("kickoff"))],
+        vec![api_row(
+            (1, 10, 100, 5000, 1000),
+            "Acme",
+            "Website",
+            "Design",
+            "dev@acme.com",
+            (2026, 1, 15),
+            "1.5",
+            Some("kickoff"),
+        )],
     )
     .await;
     assert_eq!(second.summary.time_entries.created, 0);
@@ -237,14 +401,39 @@ async fn dry_run_writes_nothing_and_matches_commit(pool: PgPool) {
     seed_user(&pool, org, "dev@acme.com").await;
     let rows = || {
         vec![
-            api_row((1, 10, 100, 5000, 1000), "Acme", "Website", "Design", "dev@acme.com", (2026, 1, 15), "1.5", Some("kickoff")),
-            api_row((1, 10, 100, 5001, 1000), "Acme", "Website", "Design", "dev@acme.com", (2026, 1, 16), "2", None),
+            api_row(
+                (1, 10, 100, 5000, 1000),
+                "Acme",
+                "Website",
+                "Design",
+                "dev@acme.com",
+                (2026, 1, 15),
+                "1.5",
+                Some("kickoff"),
+            ),
+            api_row(
+                (1, 10, 100, 5001, 1000),
+                "Acme",
+                "Website",
+                "Design",
+                "dev@acme.com",
+                (2026, 1, 16),
+                "2",
+                None,
+            ),
         ]
     };
 
-    let dry = run_import(&pool, org, "USD", SourceKind::HarvestApi, ImportMode::DryRun, VecSource::new(rows()))
-        .await
-        .unwrap();
+    let dry = run_import(
+        &pool,
+        org,
+        "USD",
+        SourceKind::HarvestApi,
+        ImportMode::DryRun,
+        VecSource::new(rows()),
+    )
+    .await
+    .unwrap();
 
     // Nothing persisted — no data, no provenance, no watermark.
     assert_eq!(count(&pool, "clients").await, 0);
@@ -267,11 +456,38 @@ async fn bad_records_are_reported_and_run_continues(pool: PgPool) {
 
     let rows = vec![
         // Good.
-        api_row((1, 10, 100, 5000, 1000), "Acme", "Website", "Design", "dev@acme.com", (2026, 1, 15), "1.5", Some("ok")),
+        api_row(
+            (1, 10, 100, 5000, 1000),
+            "Acme",
+            "Website",
+            "Design",
+            "dev@acme.com",
+            (2026, 1, 15),
+            "1.5",
+            Some("ok"),
+        ),
         // Unknown user → errored (FR-010).
-        api_row((1, 10, 100, 5001, 2000), "Acme", "Website", "Design", "ghost@acme.com", (2026, 1, 16), "1", None),
+        api_row(
+            (1, 10, 100, 5001, 2000),
+            "Acme",
+            "Website",
+            "Design",
+            "ghost@acme.com",
+            (2026, 1, 16),
+            "1",
+            None,
+        ),
         // Unparseable hours → errored (FR-005).
-        api_row((1, 10, 100, 5002, 1000), "Acme", "Website", "Design", "dev@acme.com", (2026, 1, 17), "not-a-number", None),
+        api_row(
+            (1, 10, 100, 5002, 1000),
+            "Acme",
+            "Website",
+            "Design",
+            "dev@acme.com",
+            (2026, 1, 17),
+            "not-a-number",
+            None,
+        ),
     ];
     let report = commit(&pool, org, rows).await;
 
@@ -297,9 +513,10 @@ async fn csv_import_populates_and_is_idempotent(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@acme.com").await;
 
-    let first = super::csv_source::import_csv(&pool, org, "USD", CSV.as_bytes(), ImportMode::Commit)
-        .await
-        .unwrap();
+    let first =
+        super::csv_source::import_csv(&pool, org, "USD", CSV.as_bytes(), ImportMode::Commit)
+            .await
+            .unwrap();
     assert!(first.reconciles());
     assert_eq!(first.summary.time_entries.created, 2);
     assert_eq!(count(&pool, "clients").await, 1);
@@ -308,9 +525,10 @@ async fn csv_import_populates_and_is_idempotent(pool: PgPool) {
     assert_eq!(count(&pool, "harvest_import_map").await, 0);
 
     // Re-import the same file: zero duplicates via the composite natural key.
-    let second = super::csv_source::import_csv(&pool, org, "USD", CSV.as_bytes(), ImportMode::Commit)
-        .await
-        .unwrap();
+    let second =
+        super::csv_source::import_csv(&pool, org, "USD", CSV.as_bytes(), ImportMode::Commit)
+            .await
+            .unwrap();
     assert_eq!(second.summary.time_entries.created, 0);
     assert_eq!(second.summary.time_entries.skipped, 2);
     assert_eq!(count(&pool, "time_entries").await, 2);
@@ -320,7 +538,8 @@ async fn csv_import_populates_and_is_idempotent(pool: PgPool) {
 async fn csv_malformed_file_is_rejected_with_no_writes(pool: PgPool) {
     let org = seed_org(&pool).await;
     let result =
-        super::csv_source::import_csv(&pool, org, "USD", b"Foo,Bar\n1,2\n", ImportMode::Commit).await;
+        super::csv_source::import_csv(&pool, org, "USD", b"Foo,Bar\n1,2\n", ImportMode::Commit)
+            .await;
     assert!(result.is_err());
     assert_eq!(count(&pool, "clients").await, 0);
     assert_eq!(count(&pool, "time_entries").await, 0);

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id FROM time_entries\n         WHERE org_id = $1 AND user_id = $2 AND project_id = $3 AND task_id = $4\n           AND spent_date = $5 AND minutes = $6\n           AND COALESCE(TRIM(notes), '') = COALESCE($7, '')",
+  "query": "SELECT id FROM time_entries\n         WHERE org_id = $1 AND user_id = $2 AND project_id = $3 AND task_id = $4\n           AND spent_date = $5 AND minutes = $6\n           AND COALESCE(notes, '') = COALESCE($7, '')",
   "describe": {
     "columns": [
       {
@@ -24,5 +24,5 @@
       false
     ]
   },
-  "hash": "177b24d925d74f138277b58d667ae15ea53838fb9bb5353a7682dc2e07a7863f"
+  "hash": "0b74fc864717e5ab79907258ffa2663133575e5600e48b5e56386bf8ba09503c"
 }

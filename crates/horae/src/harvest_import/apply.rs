@@ -7,12 +7,12 @@
 //! so the run continues (FR-018). Only on a clean commit are the row's newly
 //! resolved parents promoted into the run cache.
 
-use horae_core::harvest_import::convert;
 use horae_core::harvest_import::types::{EntityType, RowOutcome, SourceRow};
+use horae_core::harvest_import::{convert, keys};
 use sqlx::{Acquire, Postgres, Transaction};
 use uuid::Uuid;
 
-use super::resolve::{self, OrgDefaults, RowFailure, RunCache};
+use super::resolve::{self, OrgDefaults, ParentKind, RowFailure, RunCache};
 
 /// The per-entity outcomes of applying one row, ready to fold into the summary.
 pub struct RowResult {
@@ -31,7 +31,11 @@ pub async fn apply_row(
     let mut sp = match outer.begin().await {
         Ok(sp) => sp,
         Err(e) => {
-            return errored(EntityType::TimeEntry, row, format!("cannot open savepoint: {e}"));
+            return errored(
+                EntityType::TimeEntry,
+                row,
+                format!("cannot open savepoint: {e}"),
+            );
         }
     };
 
@@ -61,7 +65,7 @@ async fn apply_within(
 ) -> Result<
     (
         Vec<(EntityType, RowOutcome)>,
-        Vec<(EntityType, String, Uuid)>,
+        Vec<(ParentKind, String, Uuid)>,
     ),
     (EntityType, RowFailure),
 > {
@@ -71,23 +75,20 @@ async fn apply_within(
     let client = resolve::resolve_client(sp, cache, org, row)
         .await
         .map_err(|e| (EntityType::Client, e))?;
-    let client_entry = client.cache_entry.clone();
-    fold(&mut outcomes, &mut pending, EntityType::Client, client.outcome, &client_entry);
     let client_id = client.id;
+    fold(&mut outcomes, &mut pending, EntityType::Client, client);
 
     let project = resolve::resolve_project(sp, cache, org, client_id, row)
         .await
         .map_err(|e| (EntityType::Project, e))?;
-    let project_entry = project.cache_entry.clone();
-    fold(&mut outcomes, &mut pending, EntityType::Project, project.outcome.clone(), &project_entry);
     let project_id = project.id;
+    fold(&mut outcomes, &mut pending, EntityType::Project, project);
 
     let task = resolve::resolve_task(sp, cache, org, row)
         .await
         .map_err(|e| (EntityType::Task, e))?;
-    let task_entry = task.cache_entry.clone();
-    fold(&mut outcomes, &mut pending, EntityType::Task, task.outcome.clone(), &task_entry);
     let task_id = task.id;
+    fold(&mut outcomes, &mut pending, EntityType::Task, task);
 
     resolve::ensure_project_task(sp, project_id, task_id, row)
         .await
@@ -116,7 +117,13 @@ async fn apply_time_entry(
     let minutes_i64 = convert::hours_to_minutes(&row.hours)?;
     let minutes = i32::try_from(minutes_i64)
         .map_err(|_| RowFailure::new(format!("duration {minutes_i64} minutes out of range")))?;
-    let notes = row.notes.as_deref().map(str::trim).filter(|n| !n.is_empty());
+    // Notes are stored trimmed with the shared whitespace set, so an exact
+    // re-import matches without any SQL-side trimming (both sides are trim_ws).
+    let notes = row
+        .notes
+        .as_deref()
+        .map(keys::trim_ws)
+        .filter(|n| !n.is_empty());
 
     // Provenance first.
     if let Some(hid) = row.harvest_time_entry_id
@@ -141,7 +148,7 @@ async fn apply_time_entry(
         "SELECT id FROM time_entries
          WHERE org_id = $1 AND user_id = $2 AND project_id = $3 AND task_id = $4
            AND spent_date = $5 AND minutes = $6
-           AND COALESCE(TRIM(notes), '') = COALESCE($7, '')",
+           AND COALESCE(notes, '') = COALESCE($7, '')",
         org.org_id,
         user_id,
         project_id,
@@ -203,16 +210,15 @@ async fn apply_time_entry(
 /// entry for promotion on commit.
 fn fold(
     outcomes: &mut Vec<(EntityType, RowOutcome)>,
-    pending: &mut Vec<(EntityType, String, Uuid)>,
+    pending: &mut Vec<(ParentKind, String, Uuid)>,
     entity: EntityType,
-    outcome: Option<RowOutcome>,
-    cache_entry: &Option<(EntityType, String, Uuid)>,
+    resolved: resolve::Resolved,
 ) {
-    if let Some(o) = outcome {
+    if let Some(o) = resolved.outcome {
         outcomes.push((entity, o));
     }
-    if let Some(e) = cache_entry {
-        pending.push(e.clone());
+    if let Some(e) = resolved.cache_entry {
+        pending.push(e);
     }
 }
 

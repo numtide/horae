@@ -170,7 +170,8 @@ fn parse_csv(bytes: &[u8]) -> Result<(Vec<SourceRow>, Vec<ParseErr>), CsvError> 
 
 /// Parse a `YYYY-MM-DD` date, returning a human reason on failure.
 fn parse_date(s: &str) -> Result<NaiveDate, String> {
-    NaiveDate::parse_from_str(s, "%Y-%m-%d").map_err(|_| format!("invalid date {s:?} (expected YYYY-MM-DD)"))
+    NaiveDate::parse_from_str(s, "%Y-%m-%d")
+        .map_err(|_| format!("invalid date {s:?} (expected YYYY-MM-DD)"))
 }
 
 /// `Yes`/`No`/`true`/`1` (case-insensitive) → bool; anything else is `false`.

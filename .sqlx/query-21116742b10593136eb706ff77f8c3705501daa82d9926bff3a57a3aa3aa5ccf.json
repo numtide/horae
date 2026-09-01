@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id FROM tasks WHERE org_id = $1 AND LOWER(TRIM(name)) = $2",
+  "query": "SELECT id FROM tasks WHERE org_id = $1 AND harvest_norm(name) = $2",
   "describe": {
     "columns": [
       {
@@ -19,5 +19,5 @@
       false
     ]
   },
-  "hash": "5584f55e5bc110ba7697ce1ca3aaf0db95640e49497fa2007d0c28b55455c887"
+  "hash": "21116742b10593136eb706ff77f8c3705501daa82d9926bff3a57a3aa3aa5ccf"
 }
