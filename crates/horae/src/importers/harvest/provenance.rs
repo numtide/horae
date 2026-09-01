@@ -5,7 +5,7 @@
 //! own per-record savepoint — the mapping row is written in the same all-or-
 //! nothing unit that creates the record it points at.
 
-use horae_core::harvest_import::types::EntityType;
+use horae_core::importers::harvest::types::EntityType;
 use uuid::Uuid;
 
 use chrono::{DateTime, Utc};

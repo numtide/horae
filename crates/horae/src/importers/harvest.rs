@@ -22,7 +22,7 @@ pub mod resolve;
 mod engine_tests;
 
 use chrono::{DateTime, Utc};
-use horae_core::harvest_import::types::{EntityType, ImportMode, SourceKind, SourceRow, SyncScope};
+use horae_core::importers::harvest::types::{EntityType, ImportMode, SourceKind, SourceRow, SyncScope};
 use sqlx::PgPool;
 use uuid::Uuid;
 

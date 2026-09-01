@@ -14,9 +14,9 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
-use horae_core::harvest_import::convert;
-use horae_core::harvest_import::keys;
-use horae_core::harvest_import::types::{EntityType, RowOutcome, SourceRow};
+use horae_core::importers::harvest::convert;
+use horae_core::importers::harvest::keys;
+use horae_core::importers::harvest::types::{EntityType, RowOutcome, SourceRow};
 use uuid::Uuid;
 
 /// A per-record failure that errors the row and continues the run (FR-018).

@@ -8,7 +8,7 @@
 //! trimmed; an unrecognized or empty file is rejected up front with no writes.
 
 use chrono::NaiveDate;
-use horae_core::harvest_import::types::{
+use horae_core::importers::harvest::types::{
     EntityType, ImportMode, RowOutcome, SourceKind, SourceRow,
 };
 use std::collections::HashMap;

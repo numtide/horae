@@ -425,7 +425,7 @@ pub(crate) async fn check_project_budget(
 mod approvals;
 mod auth;
 mod clients;
-mod harvest_import;
+mod importers;
 mod invoices;
 mod organization;
 mod projects;
@@ -436,7 +436,7 @@ mod users;
 pub use approvals::*;
 pub use auth::*;
 pub use clients::*;
-pub use harvest_import::*;
+pub use importers::*;
 pub use invoices::*;
 // Org-branding endpoints exist but no page consumes them yet.
 #[allow(unused_imports)]

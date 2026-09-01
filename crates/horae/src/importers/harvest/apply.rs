@@ -7,8 +7,8 @@
 //! so the run continues (FR-018). Only on a clean commit are the row's newly
 //! resolved parents promoted into the run cache.
 
-use horae_core::harvest_import::types::{EntityType, RowOutcome, SourceRow};
-use horae_core::harvest_import::{convert, keys};
+use horae_core::importers::harvest::types::{EntityType, RowOutcome, SourceRow};
+use horae_core::importers::harvest::{convert, keys};
 use sqlx::{Acquire, Postgres, Transaction};
 use uuid::Uuid;
 

@@ -13,7 +13,7 @@ mod db;
 #[cfg(feature = "server")]
 mod harvest;
 #[cfg(feature = "server")]
-mod harvest_import;
+mod importers;
 #[cfg(feature = "server")]
 mod plugin;
 #[cfg(feature = "server")]
@@ -213,7 +213,7 @@ fn main() -> anyhow::Result<()> {
                         get(reports::export_invoice_pdf),
                     )
                     .merge(auth::router(cfg.dev_login))
-                    .merge(harvest_import::callback_router())
+                    .merge(importers::harvest::callback_router())
                     .merge(harvest::router())
                     // Redirect signed-out page loads to /auth/login. Layered inside
                     // the session layer so the session is populated; the session

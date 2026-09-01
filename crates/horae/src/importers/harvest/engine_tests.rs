@@ -8,7 +8,7 @@
 //! than `tests/` (an integration test cannot import a binary's modules).
 
 use chrono::{NaiveDate, TimeZone, Utc};
-use horae_core::harvest_import::types::{EntityType, ImportMode, SourceKind, SourceRow};
+use horae_core::importers::harvest::types::{EntityType, ImportMode, SourceKind, SourceRow};
 use sqlx::PgPool;
 use uuid::Uuid;
 

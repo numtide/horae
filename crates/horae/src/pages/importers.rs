@@ -3,7 +3,7 @@
 //! (contracts/importer-api.md).
 
 use dioxus::prelude::*;
-use horae_core::harvest_import::types::{
+use horae_core::importers::harvest::types::{
     ConnectionStatus, EntityCounts, EntityType, ImportMode, ImportReport, SyncScope,
 };
 

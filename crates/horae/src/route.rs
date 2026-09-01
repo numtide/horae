@@ -8,7 +8,7 @@ use crate::pages::{
     approvals::Approvals,
     clients::{ClientDetail, ClientList},
     gallery::Gallery,
-    harvest_import::HarvestImport,
+    importers::HarvestImport,
     invoices::{InvoiceDetail, InvoiceList},
     projects::{ProjectDetail, ProjectList},
     reports::Reports,

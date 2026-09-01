@@ -10,7 +10,7 @@
 use chacha20poly1305::aead::{Aead, AeadCore, KeyInit, OsRng};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
 use chrono::{DateTime, Utc};
-use horae_core::harvest_import::types::EntityType;
+use horae_core::importers::harvest::types::EntityType;
 use uuid::Uuid;
 
 /// A decrypted Harvest connection for one org (in-memory only).

@@ -12,7 +12,7 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, NaiveDate, Utc};
-use horae_core::harvest_import::types::SourceRow;
+use horae_core::importers::harvest::types::SourceRow;
 use serde::Deserialize;
 
 use super::RowSource;
@@ -103,7 +103,7 @@ pub struct HarvestData {
 }
 
 /// Render a Harvest JSON number back to a decimal string for the exact
-/// [`horae_core::harvest_import::convert`] helpers — never an `f64` in the
+/// [`horae_core::importers::harvest::convert`] helpers — never an `f64` in the
 /// conversion path. Harvest sends at most 2 decimals for hours and money; six
 /// digits is more than enough to reproduce the source value.
 fn decimal(n: f64) -> String {
@@ -354,7 +354,7 @@ mod tests {
 
     #[test]
     fn assembled_rows_convert_to_exact_minutes() {
-        use horae_core::harvest_import::convert::hours_to_minutes;
+        use horae_core::importers::harvest::convert::hours_to_minutes;
         let rows = assemble_rows(&fixture());
         assert_eq!(hours_to_minutes(&rows[0].hours).unwrap(), 90);
         assert_eq!(hours_to_minutes(&rows[1].hours).unwrap(), 15);

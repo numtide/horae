@@ -5,7 +5,7 @@
 //! non-admins with `FORBIDDEN` (FR-001) and use named status codes.
 
 use super::*;
-use horae_core::harvest_import::types::{ConnectionStatus, ImportMode, ImportReport, SyncScope};
+use horae_core::importers::harvest::types::{ConnectionStatus, ImportMode, ImportReport, SyncScope};
 
 /// Begin the Harvest OAuth2 connect: generate a per-start `state` nonce bound to
 /// the admin's session and return the authorization URL for the SPA to redirect
@@ -20,11 +20,11 @@ pub async fn harvest_connect_start() -> Result<String, ServerFnError> {
     let session: tower_sessions::Session =
         dioxus_fullstack::FullstackContext::extract::<tower_sessions::Session, _>().await?;
     session
-        .insert(crate::harvest_import::OAUTH_STATE_KEY, &nonce)
+        .insert(crate::importers::harvest::OAUTH_STATE_KEY, &nonce)
         .await
         .map_err(server_err)?;
 
-    Ok(crate::harvest_import::oauth::authorize_url(&cfg, &nonce))
+    Ok(crate::importers::harvest::oauth::authorize_url(&cfg, &nonce))
 }
 
 /// Report whether the org has a usable Harvest connection (never the tokens).
@@ -89,7 +89,7 @@ pub async fn import_harvest_api(
     let state = crate::state::global_state().await;
     let default_currency = org_default_currency(admin.org_id).await?;
 
-    crate::harvest_import::run_api_import(
+    crate::importers::harvest::run_api_import(
         &state.db,
         admin.org_id,
         &default_currency,
@@ -112,7 +112,7 @@ pub async fn import_harvest_csv(
     let state = crate::state::global_state().await;
     let default_currency = org_default_currency(admin.org_id).await?;
 
-    crate::harvest_import::csv_source::import_csv(
+    crate::importers::harvest::csv_source::import_csv(
         &state.db,
         admin.org_id,
         &default_currency,
@@ -154,8 +154,8 @@ async fn org_default_currency(org_id: uuid::Uuid) -> Result<String, ServerFnErro
 
 /// Map a run-level API import failure onto a named server error.
 #[cfg(feature = "server")]
-fn map_api_error(e: crate::harvest_import::ApiImportError) -> ServerFnError {
-    use crate::harvest_import::ApiImportError;
+fn map_api_error(e: crate::importers::harvest::ApiImportError) -> ServerFnError {
+    use crate::importers::harvest::ApiImportError;
     match e {
         ApiImportError::NotConnected => err(NOT_FOUND, e),
         ApiImportError::ReconnectRequired => err(CONFLICT, e),

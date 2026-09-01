@@ -1362,7 +1362,7 @@ tbody tr:hover { background: var(--color-bg-tertiary); }
 .alert-success { background: var(--color-success-bg); color: var(--color-success-fg); border-color: var(--color-success-line); }
 .alert-warning { background: var(--color-warning-bg); color: var(--color-warning-fg); border-color: var(--color-warning-line); }
 
-/* Harvest / CSV importer screen (harvest_import.rs). Layout is composed from
+/* Harvest / CSV importer screen (importers/harvest.rs). Layout is composed from
    utilities in the markup; only what utilities can't express lives here. */
 .himp-logo {
   display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
