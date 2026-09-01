@@ -274,8 +274,8 @@ async fn oauth_callback(
     let stored: Option<String> = session.get(OAUTH_STATE_KEY).await.ok().flatten();
     let _ = session.remove::<String>(OAUTH_STATE_KEY).await;
 
-    let dest_ok = "/import/harvest?connected=1";
-    let dest_err = "/import/harvest?error=1";
+    let dest_ok = "/admin/importers?connected=1";
+    let dest_err = "/admin/importers?error=1";
 
     // Validate `state` and extract the code; a missing/mismatched state or error
     // yields no code, so we never reach the exchange (research.md §10).

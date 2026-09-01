@@ -131,11 +131,11 @@ fn SidebarUser() -> Element {
                             div { class: "menu-group", "Admin" }
                             Link { to: Route::AdminUsers {}, class: "menu-item", onclick: move |_| open.set(false),
                                 span { class: "menu-item-icon", NavIcon { name: "users" } }
-                                "Users"
+                                "People"
                             }
                             Link { to: Route::HarvestImport {}, class: "menu-item", onclick: move |_| open.set(false),
                                 span { class: "menu-item-icon", NavIcon { name: "import" } }
-                                "Import from Harvest"
+                                "Importers"
                             }
                         }
                     }
