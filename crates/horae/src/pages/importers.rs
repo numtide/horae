@@ -10,9 +10,11 @@ use horae_core::importers::harvest::types::{
 use crate::components::toast::{Toast, ToastContainer};
 use crate::server_fns;
 
-/// Which import source the admin is working with.
+/// Which import source the admin is working with. `Picker` is the landing list;
+/// choosing a source drills into its flow.
 #[derive(Clone, Copy, PartialEq)]
 enum Source {
+    Picker,
     Api,
     Csv,
 }
@@ -35,7 +37,7 @@ enum Run {
 #[component]
 pub fn HarvestImport() -> Element {
     let mut status = use_resource(|| async move { server_fns::harvest_connection_status().await });
-    let mut source = use_signal(|| Source::Api);
+    let mut source = use_signal(|| Source::Picker);
     let mut report = use_signal(|| None::<Result<ImportReport, String>>);
     let mut running = use_signal(|| false);
     let mut manage_open = use_signal(|| false);
@@ -121,45 +123,119 @@ pub fn HarvestImport() -> Element {
         Conn::Ready(s) => s.configured,
         _ => true,
     };
-    // The API source is unusable without OAuth config; force CSV then.
-    let src = if configured { source() } else { Source::Csv };
+    let connected = matches!(&conn, Conn::Ready(s) if s.connected);
+    let src = source();
     let has_report = report.read().is_some();
+    let (title, subtitle) = match src {
+        Source::Picker => (
+            "Importers",
+            "Bring data in from another tracker. Every import is reversible until you commit — start with a dry-run.",
+        ),
+        Source::Api => ("Import from Harvest", IMPORT_SUB),
+        Source::Csv => ("Import from CSV", IMPORT_SUB),
+    };
 
     rsx! {
         div {
             div { class: "page-header",
-                h1 { class: "page-title", "Import from Harvest" }
+                h1 { class: "page-title", "{title}" }
             }
-            p { class: "text-secondary text-sm mb-6",
-                "Bring your clients, projects, tasks and time entries across. "
-                "Every import is reversible until you commit — start with a dry-run."
-            }
+            p { class: "text-secondary text-sm mb-6", "{subtitle}" }
 
-            // ── Source selector ─────────────────────────────────────────
-            div { class: "flex items-center gap-3 flex-wrap mb-6",
-                div { class: "segmented",
+            // Back to the landing list (and a shortcut to switch source), from any
+            // source flow.
+            if src != Source::Picker {
+                div { class: "flex items-center gap-3 flex-wrap mb-6",
                     button {
                         r#type: "button",
-                        class: if !configured { "segmented-item opacity-60" } else if src == Source::Api { "segmented-item active" } else { "segmented-item" },
-                        disabled: !configured,
+                        class: "imp-back text-primary text-sm",
                         onclick: move |_| {
-                            source.set(Source::Api);
+                            source.set(Source::Picker);
                             report.set(None);
                         },
-                        "Harvest API"
+                        "← All importers"
                     }
+                    if src == Source::Api {
+                        span { class: "text-faint text-sm", "·" }
+                        button {
+                            r#type: "button",
+                            class: "imp-back text-secondary text-sm",
+                            onclick: move |_| {
+                                source.set(Source::Csv);
+                                report.set(None);
+                            },
+                            "Use a CSV instead"
+                        }
+                    } else if configured {
+                        span { class: "text-faint text-sm", "·" }
+                        button {
+                            r#type: "button",
+                            class: "imp-back text-secondary text-sm",
+                            onclick: move |_| {
+                                source.set(Source::Api);
+                                report.set(None);
+                            },
+                            "Use the Harvest API instead"
+                        }
+                    }
+                }
+            }
+
+            // ── Importer list (landing) ─────────────────────────────────
+            if src == Source::Picker {
+                div { class: "flex flex-col gap-3",
+                    if configured {
+                        button {
+                            r#type: "button",
+                            class: "imp-source",
+                            onclick: move |_| {
+                                source.set(Source::Api);
+                                report.set(None);
+                            },
+                            span { class: "imp-source-icon imp-icon-harvest", "h" }
+                            div { class: "flex-1 min-w-0",
+                                div { class: "flex items-center gap-2 flex-wrap",
+                                    span { class: "text-sm font-semibold", "Harvest" }
+                                    if connected {
+                                        span { class: "badge badge-success badge-sm", "Connected" }
+                                    }
+                                }
+                                div { class: "text-faint text-sm", "Read-only sync via the Harvest API." }
+                            }
+                            span { class: "text-faint", "›" }
+                        }
+                    } else {
+                        div { class: "imp-source imp-source-off",
+                            span { class: "imp-source-icon imp-icon-harvest", "h" }
+                            div { class: "flex-1 min-w-0",
+                                div { class: "flex items-center gap-2 flex-wrap",
+                                    span { class: "text-sm font-semibold text-faint", "Harvest" }
+                                    span { class: "badge badge-neutral badge-sm", "Unavailable" }
+                                }
+                                div { class: "text-faint text-sm", "API not configured — use CSV." }
+                            }
+                        }
+                    }
+
                     button {
                         r#type: "button",
-                        class: if src == Source::Csv { "segmented-item active" } else { "segmented-item" },
+                        class: "imp-source",
                         onclick: move |_| {
                             source.set(Source::Csv);
                             report.set(None);
                         },
-                        "CSV file"
+                        span { class: "imp-source-icon imp-icon-csv text-mono text-xs", "CSV" }
+                        div { class: "flex-1 min-w-0",
+                            div { class: "text-sm font-semibold", "CSV file" }
+                            div { class: "text-faint text-sm",
+                                "Upload a Detailed time report exported from Harvest or any tracker."
+                            }
+                        }
+                        span { class: "text-faint", "›" }
                     }
-                }
-                if !configured {
-                    span { class: "text-faint text-sm", "API not configured — use CSV." }
+
+                    PlannedSource { icon: "t", name: "Toggl Track" }
+                    PlannedSource { icon: "c", name: "Clockify" }
                 }
             }
 
@@ -306,6 +382,8 @@ pub fn HarvestImport() -> Element {
                                         Some(f) => Run::Csv(ImportMode::Commit, f.bytes.clone()),
                                         None => return,
                                     },
+                                    // No report exists on the landing list.
+                                    Source::Picker => return,
                                 };
                                 spawn(execute(job));
                             },
@@ -562,6 +640,27 @@ fn StatCell(value: u64, label: String, tone: String) -> Element {
         }
     }
 }
+
+/// A not-yet-available import source: a dimmed, non-interactive card with a
+/// "Planned" pill (design: Importers.dc.html).
+#[component]
+fn PlannedSource(icon: String, name: String) -> Element {
+    rsx! {
+        div { class: "imp-source imp-source-off",
+            span { class: "imp-source-icon imp-icon-muted", "{icon}" }
+            div { class: "flex-1 min-w-0",
+                div { class: "flex items-center gap-2 flex-wrap",
+                    span { class: "text-sm font-semibold text-faint", "{name}" }
+                    span { class: "badge badge-neutral badge-sm", "Planned" }
+                }
+                div { class: "text-faint text-sm", "Not available yet." }
+            }
+        }
+    }
+}
+
+/// The subtitle shared by both source flows once a source is chosen.
+const IMPORT_SUB: &str = "Bring your clients, projects, tasks and time entries across. Every import is reversible until you commit — start with a dry-run.";
 
 /// Cap the inline error table; the full set is available in the run record.
 const ERROR_ROW_LIMIT: usize = 50;
