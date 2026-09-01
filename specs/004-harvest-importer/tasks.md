@@ -87,7 +87,7 @@ ______________________________________________________________________
 ### Tests for User Story 2
 
 - [X] T025 [P] [US2] Integration test in `crates/horae/tests/harvest_import_idempotent.rs` (`#[sqlx::test]`, `#[serial]`): a second identical API run creates zero clients/projects/tasks/time entries; after editing an imported entry's notes, re-import still matches it by provenance (FR-011/FR-026, SC-002).
-- [ ] T026 [P] [US2] Integration test in `crates/horae/tests/harvest_import_incremental.rs` (`#[sqlx::test]`, `#[serial]`): with a stored watermark, an incremental run sends `updated_since` and applies only the changed fixture records, leaving others intact (FR-025, SC-008).
+- [X] T026 [P] [US2] Integration test in `crates/horae/tests/harvest_import_incremental.rs` (`#[sqlx::test]`, `#[serial]`): with a stored watermark, an incremental run sends `updated_since` and applies only the changed fixture records, leaving others intact (FR-025, SC-008).
 
 ### Implementation for User Story 2
 
@@ -160,8 +160,8 @@ ______________________________________________________________________
 ## Phase 8: Polish & Cross-Cutting Concerns
 
 - [X] T040 [P] Regenerate and commit the sqlx query cache for the new tables/queries: `cargo sqlx prepare --workspace -- --features server --all-targets` then `git add .sqlx/`.
-- [ ] T041 [P] Confirm streaming keeps memory bounded on a ≥100k-record source (paged API stream / streamed CSV + in-run parent cache) — a large-fixture smoke assertion backing SC-006.
-- [ ] T042 [P] Add a reconciliation integration check that full-import time and money totals equal the Harvest source totals with zero drift (SC-003/SC-007).
+- [X] T041 [P] Confirm streaming keeps memory bounded on a ≥100k-record source (paged API stream / streamed CSV + in-run parent cache) — a large-fixture smoke assertion backing SC-006.
+- [X] T042 [P] Add a reconciliation integration check that full-import time and money totals equal the Harvest source totals with zero drift (SC-003/SC-007).
 - [ ] T043 Run `crates/horae/.../quickstart.md` scenarios end-to-end (connect, dry-run, import, re-sync, CSV fallback) and reconcile the counts.
 - [ ] T044 [P] `nix fmt` + `cargo clippy -p horae --features server` clean; `nix flake check` green before merge.
 

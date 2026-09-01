@@ -544,3 +544,55 @@ async fn csv_malformed_file_is_rejected_with_no_writes(pool: PgPool) {
     assert_eq!(count(&pool, "clients").await, 0);
     assert_eq!(count(&pool, "time_entries").await, 0);
 }
+
+// ── Polish: scale (SC-006) and reconciliation (SC-003/SC-007) ─────────────────
+
+#[sqlx::test(migrations = "./migrations")]
+async fn large_run_reuses_parents_and_reconciles_totals(pool: PgPool) {
+    let org = seed_org(&pool).await;
+    seed_user(&pool, org, "dev@acme.com").await;
+
+    // Many entries sharing one client/project/task: the in-run cache must create
+    // each parent once (SC-006), and the stored minutes must sum to the source
+    // total with zero drift (SC-003/SC-007).
+    let n = 2_000i64;
+    let mut rows = Vec::with_capacity(n as usize);
+    let mut expected_minutes = 0i64;
+    for i in 0..n {
+        let day = (i % 27 + 1) as u32;
+        // Alternate durations so several distinct natural keys exist per day.
+        let hours = if i % 2 == 0 { "1.5" } else { "0.25" };
+        expected_minutes += if i % 2 == 0 { 90 } else { 15 };
+        rows.push(api_row(
+            (1, 10, 100, 6000 + i, 1000),
+            "Acme",
+            "Website",
+            "Design",
+            "dev@acme.com",
+            (2026, 1, day),
+            hours,
+            Some(&format!("entry {i}")),
+        ));
+    }
+
+    let report = commit(&pool, org, rows).await;
+    assert!(report.reconciles());
+
+    // Parents created exactly once despite thousands of references.
+    assert_eq!(report.summary.clients.created, 1);
+    assert_eq!(report.summary.projects.created, 1);
+    assert_eq!(report.summary.tasks.created, 1);
+    assert_eq!(count(&pool, "clients").await, 1);
+    assert_eq!(count(&pool, "projects").await, 1);
+    assert_eq!(count(&pool, "tasks").await, 1);
+    assert_eq!(report.summary.time_entries.created as i64, n);
+    assert_eq!(count(&pool, "time_entries").await, n);
+
+    // Zero-drift reconciliation: summed minutes equal the source total.
+    let total: i64 = sqlx::query_scalar!("SELECT COALESCE(SUM(minutes), 0)::bigint FROM time_entries")
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+        .unwrap_or(0);
+    assert_eq!(total, expected_minutes);
+}
