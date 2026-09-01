@@ -10,9 +10,9 @@ End-to-end validation for the two capabilities. Assumes the standard dev setup (
 ## Scenario 1 — Filtered detailed export (US2)
 
 1. Open the Reports page. Set a date range covering seeded entries.
-2. Click **Export CSV** with no client/project selected. Save the file.
-3. Select a **client** (the project selector narrows to that client). Click **Export CSV** again.
-4. Additionally select a **project**. Click **Export XLSX**.
+1. Click **Export CSV** with no client/project selected. Save the file.
+1. Select a **client** (the project selector narrows to that client). Click **Export CSV** again.
+1. Additionally select a **project**. Click **Export XLSX**.
 
 **Expected**
 
@@ -32,8 +32,8 @@ returns 200 with a CSV scoped to that client+project+range.
 ## Scenario 2 — Invoice timesheet backup, PDF (US1 + US3)
 
 1. Open an invoice's detail page.
-2. In the actions area, confirm a **Timesheet backup** control distinct from the existing **Download PDF** (the invoice document).
-3. Download the backup as **PDF**.
+1. In the actions area, confirm a **Timesheet backup** control distinct from the existing **Download PDF** (the invoice document).
+1. Download the backup as **PDF**.
 
 **Expected**
 
@@ -54,7 +54,7 @@ returns 200 with a CSV scoped to that client+project+range.
 ## Scenario 4 — Empty / edge cases
 
 1. Backup an invoice with **no lines** (or construct one): every format returns a valid, empty document — headers/grouping present, zero rows, zero totals — not an error (FR-010, SC-006).
-2. Request a backup for an unknown invoice id: 404.
+1. Request a backup for an unknown invoice id: 404.
 
 ## Automated coverage
 
