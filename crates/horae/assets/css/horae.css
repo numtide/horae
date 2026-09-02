@@ -336,7 +336,7 @@ a:hover { text-decoration: underline; color: var(--color-primary-light); }
    Every control animates the same way: colour and elevation ease, and a press
    dips it 1px so the click has weight. Applied to the element rather than a
    class so the rail, pager, and timer buttons behave like `.btn` too. */
-button, .hm-row, .chip, .nav-item, .menu-item {
+button, .chip, .nav-item, .menu-item {
   transition:
     background 0.14s ease,
     transform 0.08s ease,
