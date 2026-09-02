@@ -242,7 +242,135 @@ pub fn Gallery() -> Element {
                 div { class: "empty-state max-w-md",
                     div { class: "empty-state-icon", "🗂" }
                     div { class: "empty-state-title", "No time entries yet" }
-                    p { class: "text-muted text-sm", "Start a timer or add an entry to see it here." }
+                    p { class: "empty-state-text", "Start a timer or add an entry to see it here." }
+                }
+            }
+
+            section { class: "gallery-section",
+                h2 { class: "gallery-heading", "Inline banners" }
+                div { class: "flex flex-col gap-3 max-w-lg",
+                    div { class: "banner banner-info",
+                        span { class: "banner-icon", "ⓘ" }
+                        div { class: "banner-body",
+                            div { class: "banner-title", "Read-only connection" }
+                            div { class: "banner-detail", "Horae only ever reads from Harvest — nothing is written back." }
+                        }
+                    }
+                    div { class: "banner banner-warning",
+                        span { class: "banner-icon", "⚠" }
+                        div { class: "banner-body",
+                            div { class: "banner-title", "Submit by Sunday 23:00" }
+                            div { class: "banner-detail", "Timesheets not submitted for approval are flagged to your manager." }
+                        }
+                        div { class: "banner-action", button { class: "btn btn-secondary btn-sm", "Dismiss" } }
+                    }
+                    div { class: "banner banner-success",
+                        span { class: "banner-icon", "✓" }
+                        div { class: "banner-body",
+                            div { class: "banner-title", "Import committed" }
+                            div { class: "banner-detail", "6,940 entries added to Fieldstone Studio." }
+                        }
+                    }
+                    div { class: "banner banner-danger",
+                        span { class: "banner-icon", "✕" }
+                        div { class: "banner-body",
+                            div { class: "banner-title", "Sync failed" }
+                            div { class: "banner-detail", "Check the Harvest token and try again." }
+                        }
+                    }
+                }
+            }
+
+            section { class: "gallery-section",
+                h2 { class: "gallery-heading", "Collapsible" }
+                div { class: "collapse open max-w-md",
+                    button { class: "collapse-head",
+                        span { class: "collapse-caret", "›" }
+                        span { class: "collapse-label", "Engineering" }
+                        span { class: "collapse-count", "12" }
+                    }
+                    div { class: "collapse-body text-sm text-secondary", "Twelve entries grouped under this client." }
+                }
+            }
+
+            section { class: "gallery-section",
+                h2 { class: "gallery-heading", "Dropzone & files" }
+                div { class: "flex flex-col gap-3 max-w-md",
+                    div { class: "dropzone",
+                        div { class: "text-2xl", "↥" }
+                        div { class: "text-sm", "Drop a CSV here or click to choose" }
+                        div { class: "text-xs text-faint", "Detailed time report · up to 20 MB" }
+                    }
+                    div { class: "file-chip",
+                        span { class: "file-chip-icon", "▤" }
+                        span { "harvest-export.csv" }
+                        span { class: "file-chip-size", "1.2 MB" }
+                        button { class: "file-chip-remove", "✕" }
+                    }
+                }
+            }
+
+            section { class: "gallery-section",
+                h2 { class: "gallery-heading", "Integration" }
+                div { class: "integration max-w-md",
+                    div { class: "integration-logo harvest", "H" }
+                    div { class: "integration-body",
+                        div { class: "integration-name", "Harvest" }
+                        div { class: "integration-meta", "Connected · read-only" }
+                    }
+                    span { class: "badge badge-success", "Active" }
+                    button { class: "btn btn-secondary btn-sm", "Manage" }
+                }
+            }
+
+            section { class: "gallery-section",
+                h2 { class: "gallery-heading", "Input group & chip input" }
+                div { class: "flex flex-col gap-3 max-w-md",
+                    div { class: "input-group",
+                        span { class: "input-group-addon prefix", "horae.app/" }
+                        input { class: "input-group-field", value: "fieldstone" }
+                    }
+                    div { class: "input-group",
+                        input { class: "input-group-field", value: "95.00" }
+                        span { class: "input-group-addon suffix", "EUR / h" }
+                    }
+                    div { class: "chip-input",
+                        span { class: "chip",
+                            "design"
+                            button { class: "chip-input-x", "✕" }
+                        }
+                        span { class: "chip",
+                            "billable"
+                            button { class: "chip-input-x", "✕" }
+                        }
+                        input { class: "chip-input-field", placeholder: "Add tag…" }
+                    }
+                }
+            }
+
+            section { class: "gallery-section",
+                h2 { class: "gallery-heading", "Counter tile" }
+                div { class: "counter-tile max-w-md",
+                    div { class: "counter-total", "6,940" }
+                    div { class: "counter-total-label", "Records imported" }
+                    div { class: "counter-breakdown",
+                        div { class: "counter-stat created",
+                            div { class: "counter-stat-value", "6,904" }
+                            div { class: "counter-stat-label", "Created" }
+                        }
+                        div { class: "counter-stat",
+                            div { class: "counter-stat-value", "24" }
+                            div { class: "counter-stat-label", "Updated" }
+                        }
+                        div { class: "counter-stat",
+                            div { class: "counter-stat-value", "12" }
+                            div { class: "counter-stat-label", "Skipped" }
+                        }
+                        div { class: "counter-stat errored",
+                            div { class: "counter-stat-value", "0" }
+                            div { class: "counter-stat-label", "Errored" }
+                        }
+                    }
                 }
             }
         }

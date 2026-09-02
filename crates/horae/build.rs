@@ -158,10 +158,12 @@ fn families() -> Vec<Family> {
         fixed(
             "Text color",
             &[
+                ("text-strong", "color: var(--color-text-strong)"),
                 ("text-default", "color: var(--color-text)"),
                 ("text-secondary", "color: var(--color-text-secondary)"),
                 ("text-muted", "color: var(--color-text-secondary)"),
                 ("text-faint", "color: var(--color-text-muted)"),
+                ("text-label", "color: var(--color-label)"),
                 ("text-primary", "color: var(--color-primary)"),
                 ("text-accent", "color: var(--color-accent)"),
                 ("text-success", "color: var(--color-success)"),
@@ -176,6 +178,7 @@ fn families() -> Vec<Family> {
                 ("bg-secondary", "background: var(--color-bg-secondary)"),
                 ("bg-tertiary", "background: var(--color-bg-tertiary)"),
                 ("bg-overlay", "background: var(--color-bg-overlay)"),
+                ("bg-menu", "background: var(--color-menu)"),
                 ("bg-primary", "background: var(--color-primary)"),
                 ("bg-primary-soft", "background: var(--color-primary-bg)"),
             ],
@@ -192,6 +195,7 @@ fn families() -> Vec<Family> {
                 ("rounded-sm", "border-radius: var(--radius-sm)"),
                 ("rounded", "border-radius: var(--radius)"),
                 ("rounded-lg", "border-radius: var(--radius-lg)"),
+                ("rounded-panel", "border-radius: var(--radius-panel)"),
                 ("rounded-full", "border-radius: var(--radius-full)"),
             ],
         ),
@@ -201,6 +205,8 @@ fn families() -> Vec<Family> {
                 ("shadow-sm", "box-shadow: var(--shadow-sm)"),
                 ("shadow", "box-shadow: var(--shadow)"),
                 ("shadow-md", "box-shadow: var(--shadow-md)"),
+                ("shadow-menu", "box-shadow: var(--shadow-menu)"),
+                ("shadow-modal", "box-shadow: var(--shadow-modal)"),
                 ("relative", "position: relative"),
                 ("absolute", "position: absolute"),
                 ("overflow-hidden", "overflow: hidden"),
@@ -224,6 +230,10 @@ fn spacing_family() -> Family {
             format!("py-{n}"),
             format!("padding-top: {v}; padding-bottom: {v}"),
         ));
+        rules.push((format!("pt-{n}"), format!("padding-top: {v}")));
+        rules.push((format!("pb-{n}"), format!("padding-bottom: {v}")));
+        rules.push((format!("pl-{n}"), format!("padding-left: {v}")));
+        rules.push((format!("pr-{n}"), format!("padding-right: {v}")));
         rules.push((format!("gap-{n}"), format!("gap: {v}")));
         rules.push((format!("m-{n}"), format!("margin: {v}")));
         rules.push((format!("mt-{n}"), format!("margin-top: {v}")));
@@ -244,7 +254,7 @@ fn spacing_family() -> Family {
 
 fn type_family() -> Family {
     let mut rules = Vec::new();
-    for size in ["xs", "sm", "base", "lg", "xl", "2xl", "3xl"] {
+    for size in ["xs", "sm", "base", "lg", "xl", "2xl", "3xl", "display"] {
         rules.push((
             format!("text-{size}"),
             format!("font-size: var(--font-size-{size})"),
