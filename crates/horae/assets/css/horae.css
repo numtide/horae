@@ -72,6 +72,8 @@
   --color-harvest: #FA5D00;        /* Harvest brand orange — importer logo mark */
   --color-harvest-fg: #2a1200;     /* ink on the Harvest mark */
   --ring: 0 0 0 3px rgba(79, 183, 154, 0.35);        /* focus-visible on custom controls */
+  /* Same ring drawn inside the border box, for controls whose shell clips. */
+  --ring-inset: inset 0 0 0 2px var(--color-primary);
   --ring-soft: 0 0 0 3px rgba(79, 183, 154, 0.18);   /* input focus glow */
 
   /* Horae mark — inline SVG fills (see components/logo.rs) */
@@ -344,11 +346,37 @@ button, .hm-row, .chip, .nav-item, .menu-item {
 }
 button:active:not(:disabled) { transform: translateY(1px); }
 button:focus-visible { outline: none; box-shadow: var(--ring); }
+/* An outset ring is painted outside the border box, so an ancestor with
+   `overflow: hidden` clips it away — and an `outline` is clipped just the same.
+   Controls that sit flush inside such a shell (the pager, the submit split, menu
+   rows, a collapse header) take the ring on the inside instead, where nothing
+   can crop it. */
+.menu-item:focus-visible,
+.ts-pager-btn:focus-visible,
+.ts-submit-main:focus-visible,
+.ts-submit-caret:focus-visible,
+.collapse-head:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-inset);
+}
 /* A disabled control neither dips nor glows, whatever its variant set. */
 button:disabled {
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
+}
+
+/* Honour a reduced-motion preference: keep the state changes, drop the
+   movement — including the importer's infinite spinner. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-family-display);
