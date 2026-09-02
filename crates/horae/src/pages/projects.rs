@@ -102,6 +102,8 @@ pub fn ProjectList() -> Element {
     let mut project_type = use_signal(|| "time_and_materials".to_string());
     let mut currency = use_signal(|| "USD".to_string());
     let mut budget_kind = use_signal(|| "none".to_string());
+    // The figure that goes with the kind — an amount or a number of hours.
+    let mut budget_value = use_signal(String::new);
     let mut error = use_signal(|| None::<String>);
 
     // Filters over the loaded list (client-side; the design's status/client
@@ -174,6 +176,7 @@ pub fn ProjectList() -> Element {
         project_type.set("time_and_materials".to_string());
         currency.set("USD".to_string());
         budget_kind.set("none".to_string());
+        budget_value.set(String::new());
         error.set(None);
         show_form.set(false);
     };
@@ -322,6 +325,30 @@ pub fn ProjectList() -> Element {
                                 option { value: "hours", "Hours" }
                             }
                         }
+                        // The figure only means something once a kind is chosen,
+                        // and what it means differs, so the field follows the kind.
+                        if budget_kind() != "none" {
+                            div { class: "form-group",
+                                label { class: "form-label", r#for: "proj-budget-value",
+                                    if budget_kind() == "hours" { "Budget hours" } else { "Budget amount" }
+                                }
+                                input {
+                                    class: "form-input",
+                                    id: "proj-budget-value",
+                                    r#type: "text",
+                                    placeholder: if budget_kind() == "hours" { "120 or 7:30" } else { "12000 or 12,000.50" },
+                                    value: "{budget_value}",
+                                    oninput: move |e| budget_value.set(e.value()),
+                                }
+                                div { class: "form-hint",
+                                    if budget_kind() == "hours" {
+                                        "Total hours for this project. Leave blank to set it later."
+                                    } else {
+                                        "Total fees in the project's currency. Leave blank to set it later."
+                                    }
+                                }
+                            }
+                        }
                         button {
                             class: "btn btn-primary",
                             onclick: move |_| {
@@ -331,12 +358,13 @@ pub fn ProjectList() -> Element {
                                 let pt = project_type();
                                 let c = currency();
                                 let bk = budget_kind();
+                                let bv = budget_value();
                                 spawn(async move {
                                     let result = match editing {
                                         Some(id) => {
-                                            server_fns::update_project(id.to_string(), n, pt, c, bk).await
+                                            server_fns::update_project(id.to_string(), n, pt, c, bk, bv).await
                                         }
-                                        None => server_fns::create_project(cid, n, pt, c, bk).await,
+                                        None => server_fns::create_project(cid, n, pt, c, bk, bv).await,
                                     };
                                     match result {
                                         Ok(_) => {
@@ -472,6 +500,22 @@ pub fn ProjectList() -> Element {
                                                                     project_type.set(p.project_type.to_string());
                                                                     currency.set(p.currency.clone());
                                                                     budget_kind.set(p.budget_kind.to_string());
+                                                                    // Seed the figure so saving an untouched
+                                                                    // form doesn't clear the budget.
+                                                                    budget_value
+                                                                        .set(match p.budget_kind {
+                                                                            BudgetKind::Amount => p
+                                                                                .budget_amount_cents
+                                                                                .map(|c| format!("{}.{:02}", c / 100, (c % 100).abs()))
+                                                                                .unwrap_or_default(),
+                                                                            BudgetKind::Hours => p
+                                                                                .budget_minutes
+                                                                                .map(|m| {
+                                                                                    horae_core::duration::format_hhmm(m.max(0) as u32)
+                                                                                })
+                                                                                .unwrap_or_default(),
+                                                                            BudgetKind::None => String::new(),
+                                                                        });
                                                                     error.set(None);
                                                                     show_form.set(true);
                                                                 }
