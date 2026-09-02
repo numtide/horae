@@ -157,9 +157,11 @@
   --color-bg: #EFEAE0;
   --color-bg-secondary: #F8F5EE;
   --color-bg-tertiary: #F1ECE1;
-  --color-bg-overlay: #FFFFFF;
+  /* On paper a hover has to deepen: white would be invisible against the
+     popover and the card, both of which are already at or near white. */
+  --color-bg-overlay: #E7E0D2;
   --color-menu: #FFFFFF;         /* popover lifts off the paper */
-  --color-row-hover: #F1ECE1;    /* row hover sinks a shade */
+  --color-row-hover: #E9E3D6;    /* distinct from bg-tertiary, or table hover vanishes */
   --color-scrim: rgba(34, 32, 27, 0.35);
 
   /* Text — warm ink */
@@ -208,7 +210,10 @@
   --ring: 0 0 0 3px rgba(31, 92, 77, 0.35);
   --ring-soft: 0 0 0 3px rgba(31, 92, 77, 0.18);
 
-  /* Elevation & glow — softer, warmer shadows on paper */
+  /* Elevation & glow — softer, warmer shadows on paper (pure black bruises it) */
+  --shadow-sm: 0 1px 2px rgba(60, 50, 35, 0.12);
+  --shadow: 0 1px 3px rgba(60, 50, 35, 0.14), 0 1px 2px rgba(60, 50, 35, 0.1);
+  --shadow-md: 0 4px 12px rgba(60, 50, 35, 0.16), 0 2px 6px rgba(60, 50, 35, 0.1);
   --shadow-menu: 0 20px 50px -16px rgba(60, 50, 35, 0.28);
   --shadow-modal: 0 40px 90px -30px rgba(60, 50, 35, 0.35);
   --glow-primary: 0 6px 18px -8px rgba(31, 92, 77, 0.5);
@@ -737,8 +742,8 @@ h1, h2, h3, h4, h5, h6 {
 .btn-accent { background: var(--color-accent); color: var(--color-on-accent); border-color: transparent; font-weight: 700; }
 .btn-accent:hover { background: var(--color-accent-hover); color: var(--color-on-accent); box-shadow: var(--glow-accent); text-decoration: none; }
 /* Solid — deep pine fill, for form submits (distinct from the luminous primary) */
-.btn-solid { background: var(--color-pine); color: var(--color-text-strong); border-color: transparent; }
-.btn-solid:hover { background: var(--color-pine-hover); color: var(--color-text-strong); box-shadow: var(--glow-pine); text-decoration: none; }
+.btn-solid { background: var(--color-pine); color: var(--color-on-pine); border-color: transparent; }
+.btn-solid:hover { background: var(--color-pine-hover); color: var(--color-on-pine); box-shadow: var(--glow-pine); text-decoration: none; }
 .btn-sm { padding: var(--space-2) var(--space-3); font-size: var(--font-size-xs); }
 
 /* Forms */
@@ -763,7 +768,10 @@ h1, h2, h3, h4, h5, h6 {
   background: var(--color-cell-empty-bg);
 }
 .form-input::placeholder, .form-textarea::placeholder { color: var(--color-border-strong); }
+/* The native glyph ships dark, so it needs inverting on dark surfaces only —
+   on paper the un-inverted glyph is already correct. */
 .form-input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.8); cursor: pointer; }
+[data-theme="light"] .form-input[type="date"]::-webkit-calendar-picker-indicator { filter: none; }
 .form-input:focus, .form-select:focus, .form-textarea:focus {
   outline: none;
   border-color: var(--color-primary);
@@ -1004,7 +1012,7 @@ tbody tr:hover { background: var(--color-row-hover); }
   font-family: var(--font-family);
 }
 .segmented-item:hover { color: var(--color-text); }
-.segmented-item.active { background: var(--color-pine); color: var(--color-text-strong); }
+.segmented-item.active { background: var(--color-pine); color: var(--color-on-pine); }
 
 /* Toggle switch */
 .toggle {
@@ -1022,7 +1030,7 @@ tbody tr:hover { background: var(--color-row-hover); }
   background: var(--color-text-muted); transition: transform 0.15s, background 0.15s;
 }
 .toggle.on .toggle-track { background: var(--color-pine); }
-.toggle.on .toggle-thumb { transform: translateX(20px); background: var(--color-text); }
+.toggle.on .toggle-thumb { transform: translateX(20px); background: var(--color-on-pine); }
 
 /* Checkbox & radio (custom) */
 .choice {
@@ -1052,7 +1060,7 @@ tbody tr:hover { background: var(--color-row-hover); }
 .avatar {
   display: inline-flex; align-items: center; justify-content: center;
   width: 34px; height: 34px; border-radius: 50%;
-  background: var(--color-pine); color: var(--color-text);
+  background: var(--color-pine); color: var(--color-on-pine);
   font-family: var(--font-family-display); font-size: var(--font-size-sm); font-weight: 500;
   line-height: 1; flex-shrink: 0; overflow: hidden;
 }
@@ -1218,7 +1226,7 @@ tbody tr:hover { background: var(--color-row-hover); }
   background: var(--color-bg);
 }
 .chip-input:focus-within { border-color: var(--color-primary); box-shadow: var(--ring-soft); }
-.chip-input .chip { background: var(--color-pine); border-color: transparent; color: var(--color-text-strong); }
+.chip-input .chip { background: var(--color-pine); border-color: transparent; color: var(--color-on-pine); }
 .chip-input-x { background: none; border: none; color: inherit; opacity: 0.7; cursor: pointer; padding: 0; line-height: 1; }
 .chip-input-x:hover { opacity: 1; }
 .chip-input-field {
@@ -1429,7 +1437,7 @@ tbody tr:hover { background: var(--color-row-hover); }
   box-shadow: 0 8px 24px -10px rgba(31, 92, 77, 0.6);
 }
 .ts-submit-main {
-  padding: 13px var(--space-6); background: var(--color-pine); color: var(--color-text);
+  padding: 13px var(--space-6); background: var(--color-pine); color: var(--color-on-pine);
   border: none; font: inherit; font-size: 14.5px; font-weight: 600; cursor: pointer;
 }
 .ts-submit-main:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -1462,11 +1470,13 @@ tbody tr:hover { background: var(--color-row-hover); }
 
 .ts-cal-rail { position: relative; }
 .ts-cal-hour { position: relative; height: 48px; }
-.ts-cal-hour-label { position: absolute; top: 50%; transform: translateY(-50%); right: var(--space-2); font-family: var(--font-family-mono); font-size: 11px; color: #5a5446; }
+.ts-cal-hour-label { position: absolute; top: 50%; transform: translateY(-50%); right: var(--space-2); font-family: var(--font-family-mono); font-size: 11px; color: var(--color-text-muted); }
 /* Striped hour bands (47px band + 1px line = 48px). Design-exact darks, not tokens. */
-.ts-cal-col { position: relative; cursor: pointer; border-left: 1px solid var(--color-border-light); background: repeating-linear-gradient(var(--color-bg) 0 47px, #1c1a15 47px 48px); }
-.ts-cal-col.today { background: repeating-linear-gradient(#151109 0 47px, #1c150c 47px 48px); }
-.ts-cal-col.weekend { background: repeating-linear-gradient(#0d0c0a 0 47px, #151410 47px 48px); }
+/* Striped hour bands (47px band + 1px hairline = 48px). Tokenised so the bands
+   follow the theme — hardcoded darks painted black columns onto light paper. */
+.ts-cal-col { position: relative; cursor: pointer; border-left: 1px solid var(--color-border-light); background: repeating-linear-gradient(var(--color-bg) 0 47px, var(--color-border-light) 47px 48px); }
+.ts-cal-col.today { background: repeating-linear-gradient(var(--color-cell-today-bg) 0 47px, var(--color-border-light) 47px 48px); }
+.ts-cal-col.weekend { background: repeating-linear-gradient(var(--color-cell-empty-bg) 0 47px, var(--color-border-light) 47px 48px); }
 .ts-cal-tail { border-left: 1px solid var(--color-border-light); }
 
 .ts-cal-event {
