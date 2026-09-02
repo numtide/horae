@@ -257,17 +257,62 @@ impl ImportReport {
         }
     }
 
-    /// True when every entity type reconciles: `processed` equals the sum of its
-    /// four buckets (FR-021, SC-005).
+    /// True when the report's two independent error tallies agree: the per-entity
+    /// `errored` counts sum to the number of collected [`RowError`] details.
+    ///
+    /// [`Self::record`] writes both from the same outcome — it bumps the entity's
+    /// `errored` bucket and pushes a `RowError`. A mismatch therefore means a row
+    /// was counted as errored without being reported, or reported without being
+    /// counted, which would corrupt the run report (FR-019, FR-021, SC-005).
     pub fn reconciles(&self) -> bool {
-        EntityType::ALL.iter().all(|&e| {
-            let c = self.summary.counts(e);
-            c.processed() == c.created + c.updated + c.skipped + c.errored
-        })
+        let errored: u64 = EntityType::ALL
+            .iter()
+            .map(|&e| self.summary.counts(e).errored)
+            .sum();
+        errored == self.row_errors.len() as u64
     }
 
     /// Total records that errored across all entity types.
     pub fn error_count(&self) -> usize {
         self.row_errors.len()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn errored(entity: EntityType) -> (EntityType, RowOutcome) {
+        (
+            entity,
+            RowOutcome::Errored {
+                source_location: format!("{}:1", entity.as_str()),
+                reason: "bad row".into(),
+            },
+        )
+    }
+
+    #[test]
+    fn reconciles_when_errored_counts_match_collected_errors() {
+        let mut report = ImportReport::new(SourceKind::Csv, ImportMode::Commit);
+        report.record(EntityType::Client, &RowOutcome::Created);
+        report.record(EntityType::Project, &RowOutcome::Skipped);
+        let (e, o) = errored(EntityType::TimeEntry);
+        report.record(e, &o);
+        let (e, o) = errored(EntityType::Task);
+        report.record(e, &o);
+
+        assert!(report.reconciles());
+        assert_eq!(report.error_count(), 2);
+    }
+
+    #[test]
+    fn does_not_reconcile_when_an_errored_count_has_no_reported_error() {
+        // A bucket incremented without a matching `RowError` (the drift the
+        // invariant is meant to catch) must fail reconciliation.
+        let mut report = ImportReport::new(SourceKind::Csv, ImportMode::Commit);
+        report.summary.time_entries.errored = 1;
+
+        assert!(!report.reconciles());
     }
 }

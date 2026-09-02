@@ -76,32 +76,34 @@ pub async fn update_client(
     let state = crate::state::global_state().await;
     let client_id = parse_uuid(&client_id, "client_id")?;
     // Detect a real change so a no-op update emits nothing (FR-012).
-    let changed: Option<bool> = sqlx::query_scalar::<_, bool>(
-        "SELECT (name IS DISTINCT FROM $3 OR currency IS DISTINCT FROM $4
-                 OR address IS DISTINCT FROM $5 OR tax_id IS DISTINCT FROM $6)
-         FROM clients WHERE id = $1 AND org_id = $2",
+    let changed: Option<bool> = sqlx::query_scalar!(
+        r#"SELECT (name IS DISTINCT FROM $3 OR currency IS DISTINCT FROM $4
+                 OR address IS DISTINCT FROM $5 OR tax_id IS DISTINCT FROM $6) as "changed!"
+         FROM clients WHERE id = $1 AND org_id = $2"#,
+        client_id,
+        manager.org_id,
+        name,
+        currency,
+        address,
+        tax_id,
     )
-    .bind(client_id)
-    .bind(manager.org_id)
-    .bind(&name)
-    .bind(&currency)
-    .bind(&address)
-    .bind(&tax_id)
     .fetch_optional(&state.db)
     .await
     .map_err(server_err)?;
 
-    let client = sqlx::query_as::<_, Client>(
-        "UPDATE clients SET name = $3, currency = $4, address = $5, tax_id = $6
+    let client = sqlx::query_as!(
+        Client,
+        r#"UPDATE clients SET name = $3, currency = $4, address = $5, tax_id = $6
          WHERE id = $1 AND org_id = $2
-         RETURNING id, org_id, name, currency, address, tax_id, active, created_at",
+         RETURNING id, org_id, name, currency, address, tax_id, active,
+                   created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
+        client_id,
+        manager.org_id,
+        name,
+        currency,
+        address,
+        tax_id,
     )
-    .bind(client_id)
-    .bind(manager.org_id)
-    .bind(&name)
-    .bind(&currency)
-    .bind(&address)
-    .bind(&tax_id)
     .fetch_optional(&state.db)
     .await
     .map_err(server_err)?
@@ -127,22 +129,25 @@ pub async fn set_client_active(client_id: String, active: bool) -> Result<Client
     let state = crate::state::global_state().await;
     let client_id = parse_uuid(&client_id, "client_id")?;
     // Detect a real flip so a no-op set emits nothing (FR-012).
-    let was_active: Option<bool> =
-        sqlx::query_scalar::<_, bool>("SELECT active FROM clients WHERE id = $1 AND org_id = $2")
-            .bind(client_id)
-            .bind(manager.org_id)
-            .fetch_optional(&state.db)
-            .await
-            .map_err(server_err)?;
-
-    let client = sqlx::query_as::<_, Client>(
-        "UPDATE clients SET active = $3
-         WHERE id = $1 AND org_id = $2
-         RETURNING id, org_id, name, currency, address, tax_id, active, created_at",
+    let was_active: Option<bool> = sqlx::query_scalar!(
+        "SELECT active FROM clients WHERE id = $1 AND org_id = $2",
+        client_id,
+        manager.org_id,
     )
-    .bind(client_id)
-    .bind(manager.org_id)
-    .bind(active)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(server_err)?;
+
+    let client = sqlx::query_as!(
+        Client,
+        r#"UPDATE clients SET active = $3
+         WHERE id = $1 AND org_id = $2
+         RETURNING id, org_id, name, currency, address, tax_id, active,
+                   created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
+        client_id,
+        manager.org_id,
+        active,
+    )
     .fetch_optional(&state.db)
     .await
     .map_err(server_err)?

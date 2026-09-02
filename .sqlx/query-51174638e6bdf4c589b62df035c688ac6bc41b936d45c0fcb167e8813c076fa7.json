@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (name IS DISTINCT FROM $3\n                 OR project_type::text IS DISTINCT FROM $4\n                 OR currency IS DISTINCT FROM $5\n                 OR budget_kind::text IS DISTINCT FROM $6) as \"changed!\"\n         FROM projects WHERE id = $1 AND org_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "changed!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Bpchar",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "51174638e6bdf4c589b62df035c688ac6bc41b936d45c0fcb167e8813c076fa7"
+}

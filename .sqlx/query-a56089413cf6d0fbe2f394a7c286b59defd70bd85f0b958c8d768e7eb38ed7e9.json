@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (name IS DISTINCT FROM $3\n                 OR billable_default IS DISTINCT FROM $4\n                 OR default_rate_cents IS DISTINCT FROM $5) as \"changed!\"\n         FROM tasks WHERE id = $1 AND org_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "changed!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Bool",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a56089413cf6d0fbe2f394a7c286b59defd70bd85f0b958c8d768e7eb38ed7e9"
+}

@@ -87,7 +87,7 @@ pub fn AdminShell() -> Element {
 /// variant (matching the rail's `SideLink` behaviour).
 #[component]
 fn AdmLink(to: Route, label: String) -> Element {
-    let active = std::mem::discriminant(&use_route::<Route>()) == std::mem::discriminant(&to);
+    let active = crate::route::route_is_active(&to);
     rsx! {
         Link { to, class: if active { "adm-link active" } else { "adm-link" }, "{label}" }
     }
