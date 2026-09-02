@@ -530,6 +530,12 @@ h1, h2, h3, h4, h5, h6 {
    `.app-content`, as with every other page. */
 .adm-back:hover { color: var(--color-primary); }
 .adm-nav { width: 250px; flex: 0 0 250px; }
+/* Header hairline + a roomy bottom gap so the Admin pill clears the divider.
+   The utility layer has no directional `pb-`, so this lives here. */
+.adm-head {
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: var(--space-5); margin-bottom: var(--space-4);
+}
 .adm-head-mark {
   width: 44px; height: 44px; flex: 0 0 44px; border-radius: var(--radius-lg);
   background: var(--color-pine); color: var(--color-pine-fg);

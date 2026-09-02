@@ -57,7 +57,7 @@ pub fn AdminShell() -> Element {
             }
             div { class: "flex items-start gap-12",
                 aside { class: "adm-nav",
-                    div { class: "flex items-center gap-3 border-b pb-5 mb-4",
+                    div { class: "adm-head flex items-center gap-3",
                         span { class: "adm-head-mark", "{org_initial}" }
                         div { class: "min-w-0",
                             div { class: "text-sm font-semibold truncate mb-1", "{org_name}" }
