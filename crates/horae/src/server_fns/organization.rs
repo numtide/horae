@@ -2,6 +2,27 @@
 
 use super::*;
 
+/// The organization's display name — for the admin shell's workspace header.
+/// Any signed-in user may read it (it is not sensitive).
+#[server]
+pub async fn get_org_name() -> Result<String, ServerFnError> {
+    let user_id = session_user_id().await?;
+    let state = crate::state::global_state().await;
+
+    let name = sqlx::query_scalar!(
+        r#"SELECT o.name
+             FROM organizations o
+             JOIN users u ON u.org_id = o.id
+            WHERE u.id = $1"#,
+        user_id,
+    )
+    .fetch_one(&state.db)
+    .await
+    .map_err(server_err)?;
+
+    Ok(name)
+}
+
 // ── Organization branding ─────────────────────────────────────────────────────
 
 #[server]

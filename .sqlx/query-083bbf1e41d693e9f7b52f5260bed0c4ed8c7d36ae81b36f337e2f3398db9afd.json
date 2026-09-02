@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT harvest_account_id, access_token_enc, refresh_token_enc,\n                  token_expires_at as \"token_expires_at: DateTime<Utc>\",\n                  synced_watermark\n           FROM harvest_credentials WHERE org_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "harvest_account_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "access_token_enc",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 2,
+        "name": "refresh_token_enc",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 3,
+        "name": "token_expires_at: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "synced_watermark",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "083bbf1e41d693e9f7b52f5260bed0c4ed8c7d36ae81b36f337e2f3398db9afd"
+}

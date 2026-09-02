@@ -63,6 +63,8 @@
   --color-border-danger: #6e3634;  /* danger (outline) button border */
   --color-accent-dark: #c48934;    /* accent hover */
   --color-pine-hover: #24705d;     /* solid button hover */
+  --color-harvest: #FA5D00;        /* Harvest brand orange — importer logo mark */
+  --color-harvest-fg: #2a1200;     /* ink on the Harvest mark */
   --ring: 0 0 0 3px rgba(79, 183, 154, 0.35);        /* focus-visible on custom controls */
   --ring-soft: 0 0 0 3px rgba(79, 183, 154, 0.18);   /* input focus glow */
 
@@ -432,12 +434,23 @@ h1, h2, h3, h4, h5, h6 {
 .sidebar-spacer { flex: 1; }
 
 /* Footer: current user (opens an account popover) */
-.sidebar-userbox { position: relative; }
+.sidebar-userbox {
+  position: relative;
+  border-top: 1px solid var(--color-border);
+  margin-top: var(--space-1); padding-top: var(--space-2);
+}
+/* The account chip: a self-contained pill (design spec) that fills on hover and
+   stays raised while its popover is open, not a full-width bar. */
 .sidebar-footer {
   display: flex; align-items: center; gap: var(--space-3); width: 100%;
-  padding: var(--space-3) var(--space-2) var(--space-1);
-  border: none; border-top: 1px solid var(--color-border);
-  background: none; font: inherit; text-align: left; cursor: pointer;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid transparent; border-radius: var(--radius-lg);
+  background: transparent; font: inherit; text-align: left; cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.sidebar-footer:hover { background: var(--color-bg-overlay); }
+.sidebar-footer[aria-expanded="true"] {
+  background: var(--color-bg-tertiary); border-color: var(--color-border-input);
 }
 .sidebar-footer:hover .sidebar-user-name { color: var(--color-primary-light); }
 .sidebar-user { min-width: 0; flex: 1; }
@@ -502,6 +515,49 @@ h1, h2, h3, h4, h5, h6 {
 .sidebar-menu .menu-item { display: flex; align-items: center; gap: var(--space-3); }
 .menu-item-icon { display: inline-flex; width: 15px; flex-shrink: 0; color: var(--color-text-muted); }
 .sidebar-menu-foot { border-top: 1px solid var(--color-border); }
+/* Account popover: section labels are uppercase micro-headers (design spec).
+   Scoped so the shared combobox group label keeps its own casing. */
+.sidebar-menu .menu-group {
+  text-transform: uppercase; letter-spacing: 0.12em;
+  color: var(--color-text-muted); font-size: var(--font-size-xs);
+}
+
+/* ── Admin area shell ──────────────────────────────────────────────────────
+   A secondary Workspace / Data sub-nav beside the active admin panel, layered
+   inside the main content area so the rail stays put (design's settings shell).
+   Layout/spacing are utility classes in the markup; only the structural bits the
+   utility layer can't express live here. The outer padding comes from
+   `.app-content`, as with every other page. */
+.adm-back:hover { color: var(--color-primary); }
+.adm-nav { width: 250px; flex: 0 0 250px; }
+/* Header hairline + a roomy bottom gap so the Admin pill clears the divider.
+   The utility layer has no directional `pb-`, so this lives here. */
+.adm-head {
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: var(--space-5); margin-bottom: var(--space-4);
+}
+.adm-head-mark {
+  width: 44px; height: 44px; flex: 0 0 44px; border-radius: var(--radius-lg);
+  background: var(--color-pine); color: var(--color-pine-fg);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: var(--font-size-lg); font-weight: 600;
+}
+.adm-group-label {
+  text-transform: uppercase; letter-spacing: 0.14em;
+  font-size: var(--font-size-xs); color: var(--color-text-muted);
+  padding: 0 var(--space-3) var(--space-2);
+}
+.adm-link {
+  padding: var(--space-2) var(--space-3); border-radius: var(--radius-btn);
+  font-size: var(--font-size-sm); color: var(--color-text-secondary);
+  text-decoration: none; border: 1px solid transparent;
+}
+.adm-link:hover { background: var(--color-bg-secondary); color: var(--color-text); }
+.adm-link.active {
+  background: var(--color-bg-tertiary); border-color: var(--color-border);
+  color: var(--color-text); font-weight: 600;
+}
+.adm-main { max-width: 760px; }
 
 /* Collapsed rail (icon strip) */
 .app-shell.collapsed .app-sidebar { width: 68px; padding-left: var(--space-2); padding-right: var(--space-2); }
@@ -1307,6 +1363,71 @@ tbody tr:hover { background: var(--color-bg-tertiary); }
 .appr-dot { width: 11px; height: 11px; border-radius: var(--radius-sm); flex: 0 0 11px; }
 .appr-dot-billable { background: var(--color-primary); }
 .appr-dot-nonbillable { background: var(--color-pine); }
+
+/* Alert — success / warning tints (complements .alert-danger) */
+.alert-success { background: var(--color-success-bg); color: var(--color-success-fg); border-color: var(--color-success-line); }
+.alert-warning { background: var(--color-warning-bg); color: var(--color-warning-fg); border-color: var(--color-warning-line); }
+
+/* Harvest / CSV importer screen (importers/harvest.rs). Layout is composed from
+   utilities in the markup; only what utilities can't express lives here. */
+.himp-logo {
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 48px; height: 48px; border-radius: var(--radius-lg);
+  background: var(--color-harvest); color: var(--color-harvest-fg);
+  font-family: var(--font-family-display); font-weight: 600; font-size: var(--font-size-2xl);
+}
+.himp-logo-sm { width: 26px; height: 26px; border-radius: var(--radius); font-size: var(--font-size-sm); }
+/* Round icon holder for the result banners; glyph colour inherits the alert tint. */
+.himp-badge-icon {
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 28px; height: 28px; border-radius: var(--radius-full);
+  background: rgba(0, 0, 0, 0.18); color: inherit; font-size: var(--font-size-sm);
+}
+/* Entity stat tiles: as many across as fit, min 280px each. */
+.himp-tiles { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.himp-tile-danger { background: var(--color-danger-bg); border: 1px solid var(--color-danger-line); }
+/* CSV dropzone — dashed outline the utility layer can't express. */
+.himp-dropzone {
+  border: 1.5px dashed var(--color-border-input); background: var(--color-bg-secondary);
+  cursor: pointer; transition: background 0.15s, border-color 0.15s;
+}
+.himp-dropzone:hover { background: var(--color-bg); border-color: var(--color-primary); }
+.himp-spinner {
+  display: inline-block; width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid var(--color-border-input); border-top-color: var(--color-primary);
+  animation: himp-spin 0.8s linear infinite;
+}
+.himp-spinner-lg { width: 26px; height: 26px; border-width: 2.5px; }
+@keyframes himp-spin { to { transform: rotate(360deg); } }
+
+/* Importer landing: one selectable source per row. Clickable rows lift on hover;
+   planned sources are dimmed and inert. */
+.imp-back {
+  background: none; border: none; padding: 0; font: inherit; cursor: pointer;
+}
+.imp-back:hover { text-decoration: underline; }
+.imp-source {
+  display: flex; align-items: center; gap: var(--space-4); width: 100%;
+  padding: var(--space-4) var(--space-5); text-align: left; font: inherit;
+  color: inherit; cursor: pointer;
+  background: var(--color-bg-secondary); border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  transition: background 0.14s ease, border-color 0.14s ease;
+}
+.imp-source:hover { background: var(--color-bg-tertiary); border-color: var(--color-border-input); }
+.imp-source-off { opacity: 0.55; cursor: default; }
+.imp-source-off:hover { background: var(--color-bg-secondary); border-color: var(--color-border); }
+.imp-source-icon {
+  width: 38px; height: 38px; flex: 0 0 38px; border-radius: var(--radius-btn);
+  display: inline-flex; align-items: center; justify-content: center; font-weight: 600;
+}
+.imp-icon-harvest { background: var(--color-harvest); color: var(--color-harvest-fg); }
+.imp-icon-csv,
+.imp-icon-muted {
+  background: var(--color-bg-tertiary); border: 1px solid var(--color-border-input);
+}
+.imp-icon-csv { color: var(--color-text-secondary); }
+.imp-icon-muted { color: var(--color-text-muted); }
 /* The Tailwind-style utility layer + responsive variants live in the GENERATED
    horae-utils.css — regenerated automatically by crates/horae/build.rs on build.
    It is loaded alongside this file (see src/app.rs). */

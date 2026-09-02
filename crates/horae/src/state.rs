@@ -11,6 +11,9 @@ pub struct AppState {
     pub plugins: Arc<PluginRegistry>,
     /// OIDC provider settings, `None` when running with `DEV_LOGIN` / no OIDC.
     pub oidc: Option<crate::config::OidcConfig>,
+    /// Harvest importer settings, `None` when the importer's API source is not
+    /// configured.
+    pub harvest: Option<crate::config::HarvestConfig>,
 }
 
 impl AppState {
@@ -19,11 +22,17 @@ impl AppState {
             db,
             plugins,
             oidc: None,
+            harvest: None,
         }
     }
 
     pub fn with_oidc(mut self, oidc: Option<crate::config::OidcConfig>) -> Self {
         self.oidc = oidc;
+        self
+    }
+
+    pub fn with_harvest(mut self, harvest: Option<crate::config::HarvestConfig>) -> Self {
+        self.harvest = harvest;
         self
     }
 }
@@ -38,9 +47,14 @@ pub async fn init_state(
     pool: sqlx::PgPool,
     plugins: Arc<PluginRegistry>,
     oidc: Option<crate::config::OidcConfig>,
+    harvest: Option<crate::config::HarvestConfig>,
 ) {
     GLOBAL_STATE
-        .get_or_init(|| async { AppState::new(pool, plugins).with_oidc(oidc) })
+        .get_or_init(|| async {
+            AppState::new(pool, plugins)
+                .with_oidc(oidc)
+                .with_harvest(harvest)
+        })
         .await;
 }
 

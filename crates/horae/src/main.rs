@@ -13,6 +13,8 @@ mod db;
 #[cfg(feature = "server")]
 mod harvest;
 #[cfg(feature = "server")]
+mod importers;
+#[cfg(feature = "server")]
 mod plugin;
 #[cfg(feature = "server")]
 mod render;
@@ -165,7 +167,13 @@ fn main() -> anyhow::Result<()> {
                 // Load plugins from the configured directory (FR-018).
                 let plugins_dir = std::path::Path::new(&cfg.plugins_dir);
                 let registry = std::sync::Arc::new(plugin::PluginRegistry::load(plugins_dir));
-                state::init_state(pool.clone(), registry, cfg.oidc.clone()).await;
+                state::init_state(
+                    pool.clone(),
+                    registry,
+                    cfg.oidc.clone(),
+                    cfg.harvest.clone(),
+                )
+                .await;
 
                 // Start the background poller for forgotten timers (US3).
                 scheduler::spawn(state::global_state().await);
@@ -205,6 +213,7 @@ fn main() -> anyhow::Result<()> {
                         get(reports::export_invoice_pdf),
                     )
                     .merge(auth::router(cfg.dev_login))
+                    .merge(importers::harvest::callback_router())
                     .merge(harvest::router())
                     // Redirect signed-out page loads to /auth/login. Layered inside
                     // the session layer so the session is populated; the session

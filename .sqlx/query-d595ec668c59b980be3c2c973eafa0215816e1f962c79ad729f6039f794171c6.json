@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO harvest_import_map\n             (org_id, harvest_entity_type, harvest_id, horae_id, harvest_updated_at)\n           VALUES ($1, $2::harvest_entity_type, $3, $4, $5)\n           ON CONFLICT (org_id, harvest_entity_type, harvest_id)\n           DO UPDATE SET horae_id = EXCLUDED.horae_id,\n                         harvest_updated_at = EXCLUDED.harvest_updated_at",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "harvest_entity_type",
+            "kind": {
+              "Enum": [
+                "client",
+                "project",
+                "task",
+                "time_entry"
+              ]
+            }
+          }
+        },
+        "Int8",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d595ec668c59b980be3c2c973eafa0215816e1f962c79ad729f6039f794171c6"
+}
