@@ -8,17 +8,22 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use serde::Deserialize;
 
+/// Mirrors the Reports page filters, so a download matches what is on screen.
+/// Absent client/project/user means "all", as on the page.
 #[derive(Deserialize)]
 pub struct ExportParams {
     pub from: String,
     pub to: String,
+    pub client_id: Option<uuid::Uuid>,
+    pub project_id: Option<uuid::Uuid>,
+    pub user_id: Option<uuid::Uuid>,
 }
 
 async fn fetch_entries(
-    from: &str,
-    to: &str,
+    params: &ExportParams,
 ) -> Result<Vec<crate::models::DetailedReportRow>, sqlx::Error> {
     let state = crate::state::global_state().await;
+    let (from, to) = (params.from.as_str(), params.to.as_str());
     sqlx::query_as!(
         crate::models::DetailedReportRow,
         r#"SELECT te.spent_date as "spent_date: chrono::NaiveDate",
@@ -29,9 +34,15 @@ async fn fetch_entries(
          JOIN tasks t ON te.task_id = t.id
          JOIN users u ON te.user_id = u.id
          WHERE te.spent_date BETWEEN $1::date AND $2::date
+           AND ($3::uuid IS NULL OR p.client_id = $3)
+           AND ($4::uuid IS NULL OR te.project_id = $4)
+           AND ($5::uuid IS NULL OR te.user_id = $5)
          ORDER BY te.spent_date, p.name, t.name"#,
         from as &str,
         to as &str,
+        params.client_id,
+        params.project_id,
+        params.user_id,
     )
     .fetch_all(&state.db)
     .await
@@ -40,7 +51,7 @@ async fn fetch_entries(
 pub async fn export_csv(
     Query(params): Query<ExportParams>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let entries = fetch_entries(&params.from, &params.to)
+    let entries = fetch_entries(&params)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -93,7 +104,7 @@ pub async fn export_csv(
 pub async fn export_xlsx(
     Query(params): Query<ExportParams>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let entries = fetch_entries(&params.from, &params.to)
+    let entries = fetch_entries(&params)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 

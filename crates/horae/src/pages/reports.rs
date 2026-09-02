@@ -95,16 +95,23 @@ pub fn Reports() -> Element {
         async move { server_fns::report_detailed(f, t, cl, pr, us).await }
     });
 
-    let export_csv_url = format!(
-        "/api/reports/export/csv?from={}&to={}",
-        from_date.read(),
-        to_date.read()
-    );
-    let export_xlsx_url = format!(
-        "/api/reports/export/xlsx?from={}&to={}",
-        from_date.read(),
-        to_date.read()
-    );
+    // The export must match what the tables show, so the active filters ride
+    // along in the query string; unset ones are left out and mean "all".
+    let export_query = {
+        let mut q = format!("from={}&to={}", from_date.read(), to_date.read());
+        for (name, value) in [
+            ("client_id", client_filter.read().clone()),
+            ("project_id", project_filter.read().clone()),
+            ("user_id", user_filter.read().clone()),
+        ] {
+            if !value.is_empty() {
+                q.push_str(&format!("&{name}={value}"));
+            }
+        }
+        q
+    };
+    let export_csv_url = format!("/api/reports/export/csv?{export_query}");
+    let export_xlsx_url = format!("/api/reports/export/xlsx?{export_query}");
 
     let client_opts: Vec<(String, String)> = clients
         .read()
