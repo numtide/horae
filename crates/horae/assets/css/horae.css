@@ -504,7 +504,7 @@ h1, h2, h3, h4, h5, h6 {
   padding: var(--space-2) var(--space-3);
   border: 1px solid transparent; border-radius: var(--radius-lg);
   background: transparent; font: inherit; text-align: left; cursor: pointer;
-  transition: background 0.12s ease, border-color 0.12s ease;
+  transition: background 0.12s ease, border-color 0.12s ease, transform 0.08s ease;
 }
 .sidebar-footer:hover { background: var(--color-bg-overlay); }
 .sidebar-footer[aria-expanded="true"] {
@@ -972,7 +972,7 @@ tbody tr:hover { background: var(--color-row-hover); }
   color: var(--color-text-secondary);
   background: transparent; border: none; cursor: pointer;
   border-radius: var(--radius);
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s, transform 0.08s ease;
   font-family: var(--font-family);
 }
 .segmented-item:hover { color: var(--color-text); }
@@ -1226,7 +1226,7 @@ tbody tr:hover { background: var(--color-row-hover); }
   background: none; border: 1px solid transparent; border-radius: var(--radius-btn);
   color: var(--color-text-secondary); font: inherit; font-size: var(--font-size-sm);
   text-align: left; text-decoration: none; cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s, transform 0.08s ease;
 }
 .nav-item:hover { background: var(--color-bg-tertiary); color: var(--color-text); text-decoration: none; }
 .nav-item.active {
@@ -1641,7 +1641,7 @@ tbody tr:hover { background: var(--color-row-hover); }
   color: inherit; cursor: pointer;
   background: var(--color-bg-secondary); border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  transition: background 0.14s ease, border-color 0.14s ease;
+  transition: background 0.14s ease, border-color 0.14s ease, transform 0.08s ease;
 }
 .imp-source:hover { background: var(--color-bg-tertiary); border-color: var(--color-border-input); }
 .imp-source-off { opacity: 0.55; cursor: default; }
