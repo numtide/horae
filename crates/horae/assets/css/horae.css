@@ -1059,6 +1059,7 @@ tbody tr:hover { background: var(--color-row-hover); }
   font-size: var(--font-size-sm);
 }
 .banner-body { flex: 1; min-width: 0; }
+.banner-action { flex-shrink: 0; align-self: center; }
 .banner-title { font-size: var(--font-size-sm); font-weight: 600; color: var(--color-text); }
 .banner-detail { font-size: var(--font-size-sm); color: var(--color-text-secondary); margin-top: 2px; line-height: 1.5; }
 .banner-info { background: var(--color-primary-bg); border-color: var(--color-primary-border); }
@@ -1125,6 +1126,8 @@ tbody tr:hover { background: var(--color-row-hover); }
   width: 40px; height: 40px; flex-shrink: 0; border-radius: var(--radius-btn);
   display: inline-flex; align-items: center; justify-content: center; font-weight: 700;
 }
+/* Per-integration brand tile — the one place a foreign brand colour belongs. */
+.integration-logo.harvest { background: var(--color-harvest); color: var(--color-harvest-fg); }
 .integration-body { flex: 1; min-width: 0; }
 .integration-name { font-size: var(--font-size-sm); font-weight: 600; color: var(--color-text); }
 .integration-meta { font-size: var(--font-size-xs); color: var(--color-text-secondary); margin-top: 2px; }
@@ -1171,7 +1174,13 @@ tbody tr:hover { background: var(--color-row-hover); }
 }
 .counter-total { font-family: var(--font-family-mono); font-size: var(--font-size-3xl); font-weight: 600; color: var(--color-text-strong); line-height: 1; }
 .counter-total-label { font-size: var(--font-size-xs); text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-label); margin-top: var(--space-2); }
-.counter-breakdown { display: flex; flex-wrap: wrap; gap: var(--space-6); margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--color-border-light); }
+/* Compact header variant: a name beside its total, for per-entity tiles. */
+.counter-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); }
+.counter-head-name { font-size: var(--font-size-sm); font-weight: 600; color: var(--color-text); }
+.counter-head-total { font-family: var(--font-family-mono); font-size: var(--font-size-lg); color: var(--color-text-strong); }
+.counter-breakdown { display: grid; grid-template-columns: repeat(auto-fit, minmax(64px, 1fr)); gap: var(--space-4); margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--color-border-light); }
+/* An entity that failed rows tints the whole tile. */
+.counter-tile.has-errors { background: var(--color-danger-bg); border-color: var(--color-danger-line); }
 .counter-stat { display: flex; flex-direction: column; gap: 2px; }
 .counter-stat-value { font-family: var(--font-family-mono); font-size: var(--font-size-lg); font-weight: 600; color: var(--color-text); }
 .counter-stat-label { font-size: var(--font-size-xs); color: var(--color-text-secondary); }
@@ -1578,22 +1587,9 @@ tbody tr:hover { background: var(--color-row-hover); }
   background: var(--color-harvest); color: var(--color-harvest-fg);
   font-family: var(--font-family-display); font-weight: 600; font-size: var(--font-size-2xl);
 }
-.himp-logo-sm { width: 26px; height: 26px; border-radius: var(--radius); font-size: var(--font-size-sm); }
-/* Round icon holder for the result banners; glyph colour inherits the alert tint. */
-.himp-badge-icon {
-  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
-  width: 28px; height: 28px; border-radius: var(--radius-full);
-  background: rgba(0, 0, 0, 0.18); color: inherit; font-size: var(--font-size-sm);
-}
-/* Entity stat tiles: as many across as fit, min 280px each. */
+/* Entity stat tiles: as many across as fit, min 280px each. The tiles
+   themselves are the shared `.counter-tile`. */
 .himp-tiles { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
-.himp-tile-danger { background: var(--color-danger-bg); border: 1px solid var(--color-danger-line); }
-/* CSV dropzone — dashed outline the utility layer can't express. */
-.himp-dropzone {
-  border: 1.5px dashed var(--color-border-input); background: var(--color-bg-secondary);
-  cursor: pointer; transition: background 0.15s, border-color 0.15s;
-}
-.himp-dropzone:hover { background: var(--color-bg); border-color: var(--color-primary); }
 .himp-spinner {
   display: inline-block; width: 16px; height: 16px; border-radius: 50%;
   border: 2px solid var(--color-border-input); border-top-color: var(--color-primary);

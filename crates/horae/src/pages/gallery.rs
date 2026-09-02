@@ -313,7 +313,7 @@ pub fn Gallery() -> Element {
             section { class: "gallery-section",
                 h2 { class: "gallery-heading", "Integration" }
                 div { class: "integration max-w-md",
-                    div { class: "integration-logo", style: "background:#FA5D00;color:#2a1200;", "H" }
+                    div { class: "integration-logo harvest", "H" }
                     div { class: "integration-body",
                         div { class: "integration-name", "Harvest" }
                         div { class: "integration-meta", "Connected · read-only" }

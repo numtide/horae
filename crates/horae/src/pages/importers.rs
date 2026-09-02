@@ -256,10 +256,13 @@ pub fn HarvestImport() -> Element {
                             ondisconnect: disconnect,
                         }
                         if s.token_expired {
-                            div { class: "alert alert-warning mt-4 flex items-center gap-3",
-                                span { "◔" }
-                                span { class: "text-sm",
-                                    "Imports are paused while the token refreshes. This usually resolves itself within a minute."
+                            div { class: "banner banner-warning mt-4",
+                                span { class: "banner-icon", "◔" }
+                                div { class: "banner-body",
+                                    div { class: "banner-title", "Imports paused while the token refreshes" }
+                                    div { class: "banner-detail",
+                                        "This usually resolves itself within a minute."
+                                    }
                                 }
                             }
                         }
@@ -306,13 +309,14 @@ pub fn HarvestImport() -> Element {
             if src == Source::Csv {
                 match csv_file.read().as_ref() {
                     None => rsx! {
-                        label { class: "himp-dropzone flex flex-col items-center text-center gap-3 p-10 rounded-lg",
+                        label { class: "dropzone",
                             input {
                                 r#type: "file",
                                 accept: ".csv,text/csv",
                                 class: "hidden",
                                 onchange: on_file,
                             }
+                            div { class: "text-2xl", "↥" }
                             div { class: "text-base max-w-md",
                                 "Export your Detailed time report from Harvest and choose the .csv here, or "
                                 span { class: "text-primary font-semibold", "browse" }
@@ -322,11 +326,11 @@ pub fn HarvestImport() -> Element {
                         }
                     },
                     Some(file) => rsx! {
-                        div { class: "flex items-center gap-3 flex-wrap p-4 bg-secondary border rounded-lg",
-                            span { class: "avatar avatar-sm text-mono", "CSV" }
+                        div { class: "file-chip flex-wrap",
+                            span { class: "file-chip-icon text-mono text-xs", "CSV" }
                             div { class: "min-w-0",
-                                div { class: "text-sm truncate", "{file.name}" }
-                                div { class: "text-mono text-xs text-faint", "{format_size(file.size)}" }
+                                div { class: "truncate", "{file.name}" }
+                                div { class: "file-chip-size", "{format_size(file.size)}" }
                             }
                             span { class: "badge badge-success badge-sm", "Ready" }
                             div { class: "flex-1" }
@@ -432,15 +436,16 @@ fn ConnectionChip(
     rsx! {
         div { class: "card",
             div { class: "flex items-center gap-3 flex-wrap",
-                span { class: "himp-logo himp-logo-sm", "h" }
-                span { class: "text-sm font-semibold", "Harvest" }
+                span { class: "integration-logo harvest", "h" }
+                div { class: "integration-body",
+                    div { class: "integration-name", "Harvest" }
+                    div { class: "integration-meta truncate", "{account} · Read-only" }
+                }
                 if token_expired {
                     span { class: "badge badge-warning badge-sm", "Token expired" }
                 } else {
                     span { class: "badge badge-success badge-sm", "Connected" }
                 }
-                span { class: "text-faint text-sm truncate", "{account} · Read-only" }
-                div { class: "flex-1" }
                 button {
                     r#type: "button",
                     class: "btn btn-ghost btn-sm",
@@ -503,34 +508,36 @@ fn ReportView(
 
             // Status banner
             if is_dry {
-                div { class: "alert alert-warning flex items-center gap-3 flex-wrap",
-                    span { class: "himp-badge-icon", "◔" }
-                    div { class: "flex-1 min-w-0",
-                        div { class: "text-sm font-semibold", "Preview only — nothing was written" }
-                        div { class: "text-faint text-sm", "Review the numbers, then commit." }
+                div { class: "banner banner-warning",
+                    span { class: "banner-icon", "◔" }
+                    div { class: "banner-body",
+                        div { class: "banner-title", "Preview only — nothing was written" }
+                        div { class: "banner-detail", "Review the numbers, then commit." }
                     }
-                    button {
-                        r#type: "button",
-                        class: "btn btn-primary btn-sm",
-                        disabled: busy,
-                        onclick: move |e| oncommit.call(e),
-                        "Commit this import"
+                    div { class: "banner-action",
+                        button {
+                            r#type: "button",
+                            class: "btn btn-primary btn-sm",
+                            disabled: busy,
+                            onclick: move |e| oncommit.call(e),
+                            "Commit this import"
+                        }
                     }
                 }
             } else if error_count > 0 {
-                div { class: "alert alert-danger flex items-center gap-3 flex-wrap",
-                    span { class: "himp-badge-icon", "▲" }
-                    div { class: "flex-1 min-w-0",
-                        div { class: "text-sm font-semibold", "Import complete with {error_count} errors" }
-                        div { class: "text-faint text-sm", "The records below could not be applied." }
+                div { class: "banner banner-danger",
+                    span { class: "banner-icon", "▲" }
+                    div { class: "banner-body",
+                        div { class: "banner-title", "Import complete with {error_count} errors" }
+                        div { class: "banner-detail", "The records below could not be applied." }
                     }
                 }
             } else {
-                div { class: "alert alert-success flex items-center gap-3 flex-wrap",
-                    span { class: "himp-badge-icon", "✓" }
-                    div { class: "flex-1 min-w-0",
-                        div { class: "text-sm font-semibold", "Import complete" }
-                        div { class: "text-faint text-sm", "Every record was written." }
+                div { class: "banner banner-success",
+                    span { class: "banner-icon", "✓" }
+                    div { class: "banner-body",
+                        div { class: "banner-title", "Import complete" }
+                        div { class: "banner-detail", "Every record was written." }
                     }
                 }
             }
@@ -607,24 +614,24 @@ fn ReportView(
 fn StatTile(entity: EntityType, counts: EntityCounts) -> Element {
     let has_errors = counts.errored > 0;
     let tile_class = if has_errors {
-        "himp-tile-danger rounded-lg p-4"
+        "counter-tile has-errors"
     } else {
-        "bg-secondary border rounded-lg p-4"
+        "counter-tile"
     };
     rsx! {
         div { class: "{tile_class}",
-            div { class: "flex items-baseline justify-between mb-4",
-                span { class: "text-sm font-semibold", "{entity_label(entity)}" }
-                span { class: "text-mono text-lg", "{counts.processed()}" }
+            div { class: "counter-head",
+                span { class: "counter-head-name", "{entity_label(entity)}" }
+                span { class: "counter-head-total", "{counts.processed()}" }
             }
-            div { class: "grid grid-cols-4 gap-2",
-                StatCell { value: counts.created, label: "Created", tone: "text-success" }
-                StatCell { value: counts.updated, label: "Updated", tone: "text-accent" }
-                StatCell { value: counts.skipped, label: "Skipped", tone: "text-faint" }
+            div { class: "counter-breakdown",
+                StatCell { value: counts.created, label: "Created", tone: "created" }
+                StatCell { value: counts.updated, label: "Updated", tone: "" }
+                StatCell { value: counts.skipped, label: "Skipped", tone: "" }
                 StatCell {
                     value: counts.errored,
                     label: "Errored",
-                    tone: if has_errors { "text-danger" } else { "text-faint" },
+                    tone: if has_errors { "errored" } else { "" },
                 }
             }
         }
@@ -634,9 +641,9 @@ fn StatTile(entity: EntityType, counts: EntityCounts) -> Element {
 #[component]
 fn StatCell(value: u64, label: String, tone: String) -> Element {
     rsx! {
-        div { class: "flex flex-col gap-1",
-            span { class: "text-mono text-lg font-semibold {tone}", "{value}" }
-            span { class: "text-xs uppercase tracking-wide text-faint", "{label}" }
+        div { class: "counter-stat {tone}",
+            span { class: "counter-stat-value", "{value}" }
+            span { class: "counter-stat-label", "{label}" }
         }
     }
 }
