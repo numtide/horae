@@ -69,8 +69,7 @@ pub async fn submit_week(week_start: String) -> Result<Approval, ServerFnError> 
     let result = sqlx::query!(
         "UPDATE time_entries
          SET state = $4,
-             rounded_minutes = COALESCE(rounded_minutes, minutes),
-             updated_at = now()
+             rounded_minutes = COALESCE(rounded_minutes, minutes)
          WHERE user_id = $1
            AND spent_date BETWEEN $2 AND $3
            AND state = $5",
@@ -222,7 +221,7 @@ async fn approve_ids(manager: &User, ids: &[uuid::Uuid]) -> Result<Vec<Approval>
     let approved_ids: Vec<uuid::Uuid> = approvals.iter().map(|a| a.id).collect();
     sqlx::query!(
         r#"UPDATE time_entries te
-              SET state = $2, updated_at = now()
+              SET state = $2
              FROM approvals a
             WHERE a.id = ANY($1)
               AND te.user_id = a.user_id
@@ -331,7 +330,7 @@ pub async fn reject_submission(approval_id: String) -> Result<(), ServerFnError>
     // Reopen entries
     sqlx::query!(
         "UPDATE time_entries
-         SET state = $4, rounded_minutes = NULL, updated_at = now()
+         SET state = $4, rounded_minutes = NULL
          WHERE user_id = $1
            AND spent_date BETWEEN $2 AND $3
            AND state = $5",

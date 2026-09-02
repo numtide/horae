@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE harvest_credentials\n           SET access_token_enc = $2, refresh_token_enc = $3,\n               token_expires_at = $4\n           WHERE org_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bytea",
+        "Bytea",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5f6219dd2acb91ab95125880660f905578dd8ae3078a4fa5e019a3bb6e06cf3b"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE harvest_credentials\n           SET synced_watermark = synced_watermark || $2\n           WHERE org_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "83d0e2c5e44cc3aca5d8493d3fff89a5c1127fc3a112c340068d7c62bebb9a56"
+}
