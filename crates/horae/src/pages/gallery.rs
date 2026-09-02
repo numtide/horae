@@ -6,6 +6,7 @@ use crate::components::button::{Button, IconButton, SplitButton};
 use crate::components::card::{Card, MetricCard};
 use crate::components::combobox::{ComboOption, Combobox};
 use crate::components::controls::{Checkbox, Radio, Segmented, Toggle};
+use crate::components::date_picker::DatePicker;
 use crate::components::form::{FormGroup, Input, Select, Textarea};
 use crate::components::menu::{Menu, MenuDivider, MenuItem};
 use crate::components::nav::NavItem;
@@ -21,6 +22,7 @@ pub fn Gallery() -> Element {
     let mut agreed = use_signal(|| false);
     let mut plan = use_signal(|| "Manager".to_string());
     let mut combo = use_signal(String::new);
+    let mut picked = use_signal(|| chrono::Utc::now().date_naive());
 
     rsx! {
         div {
@@ -152,6 +154,22 @@ pub fn Gallery() -> Element {
                         placeholder: "Filter by client",
                         all_label: "All clients",
                         onselect: move |v| combo.set(v),
+                    }
+                }
+            }
+
+            // ── Date picker ──────────────────────────────────────────────
+            section { class: "gallery-section",
+                h2 { class: "gallery-heading", "Date picker" }
+                div { class: "gallery-row",
+                    DatePicker {
+                        selected: picked(),
+                        week: true,
+                        onpick: move |d| picked.set(d),
+                    }
+                    DatePicker {
+                        selected: picked(),
+                        onpick: move |d| picked.set(d),
                     }
                 }
             }
