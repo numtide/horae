@@ -72,6 +72,8 @@
   --color-harvest: #FA5D00;        /* Harvest brand orange — importer logo mark */
   --color-harvest-fg: #2a1200;     /* ink on the Harvest mark */
   --ring: 0 0 0 3px rgba(79, 183, 154, 0.35);        /* focus-visible on custom controls */
+  /* Same ring drawn inside the border box, for controls whose shell clips. */
+  --ring-inset: inset 0 0 0 2px var(--color-primary);
   --ring-soft: 0 0 0 3px rgba(79, 183, 154, 0.18);   /* input focus glow */
 
   /* Horae mark — inline SVG fills (see components/logo.rs) */
@@ -329,6 +331,53 @@ body {
 }
 a { color: var(--color-primary); text-decoration: none; }
 a:hover { text-decoration: underline; color: var(--color-primary-light); }
+
+/* ── Control interactions ─────────────────────────────────────────────────
+   Every control animates the same way: colour and elevation ease, and a press
+   dips it 1px so the click has weight. Applied to the element rather than a
+   class so the rail, pager, and timer buttons behave like `.btn` too. */
+button, .chip, .nav-item, .menu-item {
+  transition:
+    background 0.14s ease,
+    transform 0.08s ease,
+    box-shadow 0.16s ease,
+    border-color 0.14s ease,
+    color 0.14s ease;
+}
+button:active:not(:disabled) { transform: translateY(1px); }
+button:focus-visible { outline: none; box-shadow: var(--ring); }
+/* An outset ring is painted outside the border box, so an ancestor with
+   `overflow: hidden` clips it away — and an `outline` is clipped just the same.
+   Controls that sit flush inside such a shell (the pager, the submit split, menu
+   rows, a collapse header) take the ring on the inside instead, where nothing
+   can crop it. */
+.menu-item:focus-visible,
+.ts-pager-btn:focus-visible,
+.ts-submit-main:focus-visible,
+.ts-submit-caret:focus-visible,
+.collapse-head:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-inset);
+}
+/* A disabled control neither dips nor glows, whatever its variant set. */
+button:disabled {
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Honour a reduced-motion preference: keep the state changes, drop the
+   movement — including the importer's infinite spinner. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-family-display);
   color: var(--color-text-strong);
@@ -483,7 +532,7 @@ h1, h2, h3, h4, h5, h6 {
   padding: var(--space-2) var(--space-3);
   border: 1px solid transparent; border-radius: var(--radius-lg);
   background: transparent; font: inherit; text-align: left; cursor: pointer;
-  transition: background 0.12s ease, border-color 0.12s ease;
+  transition: background 0.12s ease, border-color 0.12s ease, transform 0.08s ease;
 }
 .sidebar-footer:hover { background: var(--color-bg-overlay); }
 .sidebar-footer[aria-expanded="true"] {
@@ -658,7 +707,12 @@ h1, h2, h3, h4, h5, h6 {
   border: 1px solid transparent;
   cursor: pointer;
   text-decoration: none;
-  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+  transition:
+    background 0.14s ease,
+    transform 0.08s ease,
+    box-shadow 0.16s ease,
+    border-color 0.14s ease,
+    color 0.14s ease;
   /* 12px padding + 18px line + 2px border = the kit's 44px control-lg. */
   line-height: 1.25;
 }
@@ -878,10 +932,15 @@ tbody tr:hover { background: var(--color-row-hover); }
 .alert-danger  { background: var(--color-danger-bg);  color: var(--color-danger-fg);  border-color: var(--color-danger-line); }
 
 /* Buttons — extra shapes */
+/* `.btn` also rides on links, which the element-level rules above don't reach. */
+.btn:active:not(:disabled):not(.is-disabled) { transform: translateY(1px); }
+.btn:focus-visible { outline: none; box-shadow: var(--ring); }
 .btn:disabled, .btn.is-disabled {
   opacity: 0.5;
   cursor: not-allowed;
   pointer-events: none;
+  transform: none;
+  box-shadow: none;
 }
 .btn-icon {
   padding: var(--space-3);
@@ -941,7 +1000,7 @@ tbody tr:hover { background: var(--color-row-hover); }
   color: var(--color-text-secondary);
   background: transparent; border: none; cursor: pointer;
   border-radius: var(--radius);
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s, transform 0.08s ease;
   font-family: var(--font-family);
 }
 .segmented-item:hover { color: var(--color-text); }
@@ -1195,7 +1254,7 @@ tbody tr:hover { background: var(--color-row-hover); }
   background: none; border: 1px solid transparent; border-radius: var(--radius-btn);
   color: var(--color-text-secondary); font: inherit; font-size: var(--font-size-sm);
   text-align: left; text-decoration: none; cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s, transform 0.08s ease;
 }
 .nav-item:hover { background: var(--color-bg-tertiary); color: var(--color-text); text-decoration: none; }
 .nav-item.active {
@@ -1610,7 +1669,7 @@ tbody tr:hover { background: var(--color-row-hover); }
   color: inherit; cursor: pointer;
   background: var(--color-bg-secondary); border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  transition: background 0.14s ease, border-color 0.14s ease;
+  transition: background 0.14s ease, border-color 0.14s ease, transform 0.08s ease;
 }
 .imp-source:hover { background: var(--color-bg-tertiary); border-color: var(--color-border-input); }
 .imp-source-off { opacity: 0.55; cursor: default; }
