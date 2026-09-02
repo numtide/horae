@@ -36,6 +36,59 @@ pub fn add(a: Money, b: Money) -> Result<Money, CurrencyMismatch> {
     })
 }
 
+#[derive(Debug, Error)]
+#[error("invalid amount: {0}")]
+pub struct AmountError(pub String);
+
+/// Parse a typed amount into minor units — `"1200"` and `"1,200.00"` both give
+/// `120_000`. Digits are read as text rather than through a float so a value
+/// like `12000.10` cannot land a cent off, and at most two decimal places are
+/// accepted so a silently truncated third digit can't change the amount.
+pub fn parse_cents(s: &str) -> Result<i64, AmountError> {
+    let cleaned: String = s
+        .chars()
+        .filter(|c| !c.is_whitespace() && *c != ',')
+        .collect();
+    let cleaned = cleaned.trim_start_matches('+');
+    let err = || AmountError(s.to_owned());
+    if cleaned.is_empty() {
+        return Err(err());
+    }
+    let (neg, digits) = match cleaned.strip_prefix('-') {
+        Some(rest) => (true, rest),
+        None => (false, cleaned),
+    };
+    let (whole, frac) = match digits.split_once('.') {
+        Some((w, f)) => (w, f),
+        None => (digits, ""),
+    };
+    if frac.len() > 2
+        || !whole.chars().all(|c| c.is_ascii_digit())
+        || !frac.chars().all(|c| c.is_ascii_digit())
+    {
+        return Err(err());
+    }
+    // An empty whole part ("​.50") is fine; an empty amount overall is not.
+    if whole.is_empty() && frac.is_empty() {
+        return Err(err());
+    }
+    let units: i64 = if whole.is_empty() {
+        0
+    } else {
+        whole.parse().map_err(|_| err())?
+    };
+    let cents: i64 = match frac.len() {
+        0 => 0,
+        1 => frac.parse::<i64>().map_err(|_| err())? * 10,
+        _ => frac.parse().map_err(|_| err())?,
+    };
+    let total = units
+        .checked_mul(100)
+        .and_then(|u| u.checked_add(cents))
+        .ok_or_else(err)?;
+    Ok(if neg { -total } else { total })
+}
+
 /// Format minor units for display: currency code + thousands-grouped decimal,
 /// e.g. `format_cents(1_000_000, "USD")` → `"USD 10,000.00"`. A negative amount
 /// keeps its sign after the code (`"USD -500.00"`).
@@ -91,5 +144,44 @@ mod tests {
         assert_eq!(format_cents(99, "USD"), "USD 0.99");
         assert_eq!(format_cents(0, "EUR"), "EUR 0.00");
         assert_eq!(format_cents(-50_000, "USD"), "USD -500.00");
+    }
+
+    #[test]
+    fn parse_cents_reads_whole_and_fractional_amounts() {
+        assert_eq!(parse_cents("1200").unwrap(), 120_000);
+        assert_eq!(parse_cents("1200.5").unwrap(), 120_050);
+        assert_eq!(parse_cents("1200.05").unwrap(), 120_005);
+        assert_eq!(parse_cents("0.99").unwrap(), 99);
+        assert_eq!(parse_cents(".5").unwrap(), 50);
+        assert_eq!(parse_cents("0").unwrap(), 0);
+    }
+
+    #[test]
+    fn parse_cents_tolerates_grouping_spaces_and_signs() {
+        assert_eq!(parse_cents(" 1,200.00 ").unwrap(), 120_000);
+        assert_eq!(parse_cents("12 000").unwrap(), 1_200_000);
+        assert_eq!(parse_cents("+50").unwrap(), 5_000);
+        assert_eq!(parse_cents("-500").unwrap(), -50_000);
+    }
+
+    #[test]
+    fn parse_cents_is_exact_where_a_float_would_drift() {
+        // 12000.10 is not representable in binary floating point; going through
+        // f64 here rounds to 1_200_009 cents.
+        assert_eq!(parse_cents("12000.10").unwrap(), 1_200_010);
+        assert_eq!(parse_cents("1.15").unwrap(), 115);
+        assert_eq!(parse_cents("8.20").unwrap(), 820);
+    }
+
+    #[test]
+    fn parse_cents_rejects_what_it_cannot_represent() {
+        // A third decimal would have to be dropped, changing the amount.
+        assert!(parse_cents("1.005").is_err());
+        assert!(parse_cents("").is_err());
+        assert!(parse_cents("   ").is_err());
+        assert!(parse_cents("abc").is_err());
+        assert!(parse_cents("1.2.3").is_err());
+        assert!(parse_cents("1e3").is_err());
+        assert!(parse_cents("-").is_err());
     }
 }

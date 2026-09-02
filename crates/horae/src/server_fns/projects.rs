@@ -4,6 +4,37 @@ use super::*;
 
 // ── Projects ─────────────────────────────────────────────────────────────────
 
+/// Read a typed budget into the column its kind belongs in: money budgets store
+/// minor units, hours budgets store minutes, and the other column stays NULL so
+/// the two can never disagree. A blank value clears the budget, which is how a
+/// project keeps its kind while its figure is still unknown.
+#[cfg(feature = "server")]
+fn parse_budget(
+    kind: BudgetKind,
+    value: &str,
+) -> Result<(Option<i64>, Option<i64>), ServerFnError> {
+    let value = value.trim();
+    if matches!(kind, BudgetKind::None) || value.is_empty() {
+        return Ok((None, None));
+    }
+    match kind {
+        BudgetKind::Amount => {
+            let cents = horae_core::money::parse_cents(value)
+                .map_err(|_| server_err("Budget must be an amount, e.g. 12000 or 12,000.50"))?;
+            if cents < 0 {
+                return Err(server_err("Budget cannot be negative"));
+            }
+            Ok((Some(cents), None))
+        }
+        BudgetKind::Hours => {
+            let minutes = horae_core::duration::parse(value)
+                .map_err(|_| server_err("Budget must be hours, e.g. 120 or 7:30"))?;
+            Ok((None, Some(i64::from(minutes))))
+        }
+        BudgetKind::None => unreachable!("handled above"),
+    }
+}
+
 #[server]
 pub async fn list_projects(
     client_id: Option<String>,
@@ -102,6 +133,7 @@ pub async fn create_project(
     project_type: String,
     currency: String,
     budget_kind: String,
+    budget_value: String,
 ) -> Result<Project, ServerFnError> {
     let manager = require_manager().await?;
     let state = crate::state::global_state().await;
@@ -113,10 +145,13 @@ pub async fn create_project(
     let bk = budget_kind
         .parse::<BudgetKind>()
         .map_err(|_| server_err("Invalid budget_kind"))?;
+    let (budget_amount_cents, budget_minutes) = parse_budget(bk, &budget_value)?;
     let project = sqlx::query_as!(
         Project,
-        r#"INSERT INTO projects (id, org_id, client_id, name, project_type, currency, budget_kind)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+        r#"INSERT INTO projects
+             (id, org_id, client_id, name, project_type, currency,
+              budget_kind, budget_amount_cents, budget_minutes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          RETURNING id, org_id, client_id, code, name,
                    project_type as "project_type: ProjectType", currency,
                    starts_on as "starts_on: chrono::NaiveDate",
@@ -131,6 +166,8 @@ pub async fn create_project(
         pt as ProjectType,
         currency,
         bk as BudgetKind,
+        budget_amount_cents,
+        budget_minutes,
     )
     .fetch_one(&state.db)
     .await
@@ -153,6 +190,7 @@ pub async fn update_project(
     project_type: String,
     currency: String,
     budget_kind: String,
+    budget_value: String,
 ) -> Result<Project, ServerFnError> {
     let manager = require_manager().await?;
     let state = crate::state::global_state().await;
@@ -163,12 +201,15 @@ pub async fn update_project(
     let bk = budget_kind
         .parse::<BudgetKind>()
         .map_err(|_| server_err("Invalid budget_kind"))?;
+    let (budget_amount_cents, budget_minutes) = parse_budget(bk, &budget_value)?;
     // Detect a real change so a no-op update emits nothing (FR-012).
     let changed: Option<bool> = sqlx::query_scalar!(
         r#"SELECT (name IS DISTINCT FROM $3
                  OR project_type::text IS DISTINCT FROM $4
                  OR currency IS DISTINCT FROM $5
-                 OR budget_kind::text IS DISTINCT FROM $6) as "changed!"
+                 OR budget_kind::text IS DISTINCT FROM $6
+                 OR budget_amount_cents IS DISTINCT FROM $7
+                 OR budget_minutes IS DISTINCT FROM $8) as "changed!"
          FROM projects WHERE id = $1 AND org_id = $2"#,
         project_id,
         manager.org_id,
@@ -176,6 +217,8 @@ pub async fn update_project(
         project_type,
         currency,
         budget_kind,
+        budget_amount_cents,
+        budget_minutes,
     )
     .fetch_optional(&state.db)
     .await
@@ -184,7 +227,8 @@ pub async fn update_project(
     let project = sqlx::query_as!(
         Project,
         r#"UPDATE projects
-            SET name = $3, project_type = $4, currency = $5, budget_kind = $6
+            SET name = $3, project_type = $4, currency = $5, budget_kind = $6,
+                budget_amount_cents = $7, budget_minutes = $8
           WHERE id = $1 AND org_id = $2
          RETURNING id, org_id, client_id, code, name,
                    project_type as "project_type: ProjectType", currency,
@@ -199,6 +243,8 @@ pub async fn update_project(
         pt as ProjectType,
         currency,
         bk as BudgetKind,
+        budget_amount_cents,
+        budget_minutes,
     )
     .fetch_optional(&state.db)
     .await
