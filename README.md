@@ -217,8 +217,4 @@ guidelines, and [SPEC.md](SPEC.md) for the current build plan.
 
 ## License
 
-<!-- TODO: No LICENSE file is present in the repository yet. Add one and update this section
-     with the chosen license before publishing. -->
-
-A license has not yet been chosen for Horae. Until one is added, no open-source license is
-granted — please contact the maintainer before reusing this code.
+Horae is licensed under the MIT License. See [LICENSE](LICENSE) for the full text.
