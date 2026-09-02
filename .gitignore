@@ -12,3 +12,6 @@ nixos.qcow2
 
 # Design bundle thumbnail/screenshot captures (not source)
 design/**/.thumbnail
+
+# Local scratch space (analysis notes, references — not versioned)
+.scratch/
