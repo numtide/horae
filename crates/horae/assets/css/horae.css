@@ -65,6 +65,7 @@
   --color-cell-empty-bg: #161510;      /* week-grid empty cell fill */
   --color-cell-empty-border: #2a271f;  /* week-grid empty cell border */
   --color-cell-today-bg: #1c1a12;      /* week-grid today cell fill */
+  --color-date-band: rgba(31, 92, 77, 0.28);   /* date-picker wash behind a picked week */
   --color-border-danger: #6e3634;  /* danger (outline) button border */
   --color-border-danger-hover: #8D4441;   /* danger button border on hover */
   --color-accent-hover: #E5AB52;   /* accent (brass) button brightens on hover */
@@ -199,6 +200,8 @@
   --color-cell-empty-bg: #F8F5EE;
   --color-cell-empty-border: #EAE4D6;
   --color-cell-today-bg: #FBF3DE;
+  /* Lighter than dark mode's: on paper the day numerals stay ink-on-tint. */
+  --color-date-band: rgba(31, 92, 77, 0.14);
   --color-border-danger: #D99490;
   --color-border-danger-hover: #C4726D;
   --color-accent-hover: #A66B22;
@@ -278,6 +281,8 @@
   --color-cell-empty-bg: #173427;
   --color-cell-empty-border: #26543f;
   --color-cell-today-bg: #1f4a3a;
+  /* Mint, not pine — a pine wash would vanish into this theme's surfaces. */
+  --color-date-band: rgba(110, 200, 181, 0.18);
   --color-border-danger: #6e3634;
   --color-border-danger-hover: #8d4441;
   --color-accent-hover: #CE9F3B;
@@ -537,6 +542,34 @@ h1, h2, h3, h4, h5, h6 {
 }
 .combobox-pop::-webkit-scrollbar-thumb { background: var(--color-pine); }
 .combobox-pop::-webkit-scrollbar-thumb:hover { background: var(--color-primary); }
+
+/* Date picker — a month grid on the shared .menu surface (components/date_picker.rs).
+   `.dp-pop` is the popover placement a caller opts into; the panel itself is a
+   plain block, so the gallery can show it inline. */
+.dp { width: 308px; padding: var(--space-4); }
+.dp-pop { position: absolute; top: calc(100% + var(--space-1)); left: 0; z-index: 21; }
+.dp-nav {
+  width: 30px; height: 30px; flex: none;
+  background: transparent; border: 1px solid var(--color-border); border-radius: var(--radius);
+  color: var(--color-text-secondary); font: inherit; cursor: pointer;
+}
+.dp-nav:hover { background: var(--color-bg-tertiary); color: var(--color-text); }
+.dp-day {
+  height: 36px; display: flex; align-items: center; justify-content: center;
+  background: none; border: none;
+  font-family: var(--font-family-mono); font-size: var(--font-size-sm);
+  color: var(--color-text); cursor: pointer;
+}
+/* Days from the neighbouring months stay in place, dimmed, so the grid holds
+   its shape; a banded week re-lights them below. */
+.dp-day.outside { color: var(--color-text-muted); }
+.dp-day.band { background: var(--color-date-band); color: var(--color-text); }
+.dp-day.today { box-shadow: inset 0 0 0 1px var(--color-primary); color: var(--color-text-strong); }
+/* Last, so a picked day that is also today keeps the ring but takes the fill. */
+.dp-day.picked { background: var(--color-pine); color: var(--color-on-pine); font-weight: 600; }
+/* A brand tint rather than a neutral lift: --color-bg-overlay is the popover's
+   own colour in the light theme, which would leave the hover invisible. */
+.dp-day:not(.picked):hover { background: var(--color-primary-bg); }
 
 /* Account popover — positioning only; appearance comes from .menu */
 .sidebar-menu {
@@ -1249,7 +1282,15 @@ tbody tr:hover { background: var(--color-row-hover); }
 .ts-pager-btn:hover { color: var(--color-text); background: var(--color-bg-tertiary); }
 .ts-pager-btn.prev { border-right: 1px solid var(--color-border); }
 .ts-pager-btn.next { border-left: 1px solid var(--color-border); }
-.ts-pager-label { display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-5); font-size: var(--font-size-sm); color: var(--color-text); }
+/* The label doubles as the date picker's trigger, so it is a button wearing the
+   pager's own chrome rather than a control of its own. */
+.ts-pager-label {
+  display: flex; align-items: center; gap: var(--space-2);
+  height: 44px; padding: 0 var(--space-5);
+  background: transparent; border: none;
+  font: inherit; font-size: var(--font-size-sm); color: var(--color-text); cursor: pointer;
+}
+.ts-pager-label:hover { background: var(--color-bg-tertiary); }
 .ts-pager-label .cur { font-weight: 600; }
 .ts-pager-range { font-family: var(--font-family-mono); font-size: 13px; color: var(--color-text-secondary); }
 /* The calendar's day-span dropdown sits beside the pager; give its trigger the

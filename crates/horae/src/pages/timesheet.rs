@@ -7,6 +7,7 @@ use tracing::error;
 use uuid::Uuid;
 
 use crate::components::controls::Segmented;
+use crate::components::date_picker::DatePicker;
 use crate::components::menu::{Menu, MenuItem};
 use crate::models::time_entry::TimeEntry;
 use crate::route::Route;
@@ -690,6 +691,7 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
     let day_paged = current_mode == ViewMode::Day
         || (current_mode == ViewMode::Calendar && span == CalSpan::Day);
 
+    let mut picker_open = use_signal(|| false);
     // Pager stepping. Moving the anchor date across the week edge rolls the week
     // automatically.
     let step = use_callback(move |forward: bool| {
@@ -733,33 +735,59 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                     onclick: move |_| open_add.call(add_default_date),
                     "+"
                 }
-                div { class: "ts-pager",
-                    button {
-                        class: "ts-pager-btn prev",
-                        "aria-label": if day_paged { "Previous day" } else { "Previous week" },
-                        onclick: move |_| step.call(false),
-                        "←"
-                    }
-                    div { class: "ts-pager-label",
-                        span { class: "text-faint", "▦" }
-                        if day_paged {
-                            {
-                                let d = ws + Duration::days((*selected_day_offset.read()).clamp(0, 6));
-                                rsx! {
-                                    span { class: "cur", if d == today { "Today" } else { "{d.format(\"%A\")}" } }
-                                    span { class: "ts-pager-range", "{d.format(\"%d %b %Y\")}" }
+                // The pager's own label is the date picker's trigger. The popover
+                // is a sibling of .ts-pager, which clips its children to keep the
+                // arrows inside its rounded border.
+                div { class: "menu-anchor",
+                    div { class: "ts-pager",
+                        button {
+                            class: "ts-pager-btn prev",
+                            "aria-label": if day_paged { "Previous day" } else { "Previous week" },
+                            onclick: move |_| step.call(false),
+                            "←"
+                        }
+                        button {
+                            r#type: "button",
+                            class: "ts-pager-label",
+                            "aria-haspopup": "dialog",
+                            "aria-expanded": "{picker_open}",
+                            onclick: move |_| {
+                                let next = !picker_open();
+                                picker_open.set(next);
+                            },
+                            span { class: "text-faint", "▦" }
+                            if day_paged {
+                                {
+                                    let d = ws + Duration::days((*selected_day_offset.read()).clamp(0, 6));
+                                    rsx! {
+                                        span { class: "cur", if d == today { "Today" } else { "{d.format(\"%A\")}" } }
+                                        span { class: "ts-pager-range", "{d.format(\"%d %b %Y\")}" }
+                                    }
                                 }
+                            } else {
+                                span { class: "cur", if is_this_week { "This week" } else { "Week" } }
+                                span { class: "ts-pager-range", "{range_label}" }
                             }
-                        } else {
-                            span { class: "cur", if is_this_week { "This week" } else { "Week" } }
-                            span { class: "ts-pager-range", "{range_label}" }
+                        }
+                        button {
+                            class: "ts-pager-btn next",
+                            "aria-label": if day_paged { "Next day" } else { "Next week" },
+                            onclick: move |_| step.call(true),
+                            "→"
                         }
                     }
-                    button {
-                        class: "ts-pager-btn next",
-                        "aria-label": if day_paged { "Next day" } else { "Next week" },
-                        onclick: move |_| step.call(true),
-                        "→"
+                    if picker_open() {
+                        div { class: "menu-overlay", onclick: move |_| picker_open.set(false) }
+                        div { class: "dp-pop",
+                            DatePicker {
+                                selected: date.0,
+                                week: !day_paged,
+                                onpick: move |d| {
+                                    picker_open.set(false);
+                                    go.call((current_mode, d, span));
+                                },
+                            }
+                        }
                     }
                 }
                 // Calendar-only: day-range dropdown beside the pager (Harvest-style).
