@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#100F0C; }
+  * { box-sizing:border-box; }
+  button, .hm-row, .hm-chip, .hm-ws { transition: background .14s ease, transform .08s ease, box-shadow .16s ease, border-color .14s ease, color .14s ease; }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(79,183,154,.35) !important; }
+  button:disabled { cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+  .hb-primary:hover:not(:disabled) { background:#63c9ac !important; box-shadow:0 6px 18px -8px rgba(79,183,154,.65) !important; }
+  .hb-solid:hover:not(:disabled) { background:#27705e !important; box-shadow:0 6px 18px -8px rgba(31,92,77,.7) !important; }
+  .hb-accent:hover:not(:disabled) { background:#e5ab52 !important; box-shadow:0 6px 18px -8px rgba(217,154,60,.6) !important; }
+  .hb-secondary:hover:not(:disabled) { background:#2c2820 !important; border-color:#5a5446 !important; }
+  .hb-ghost:hover:not(:disabled) { background:rgba(79,183,154,.10) !important; color:#6ecab0 !important; }
+  .hb-danger:hover:not(:disabled) { background:rgba(224,102,97,.12) !important; border-color:#8d4441 !important; color:#ec8683 !important; }
+  .hb-icon:hover:not(:disabled) { background:#2c2820 !important; border-color:#5a5446 !important; color:#EFEAE0 !important; }
+  .hb-caret:hover:not(:disabled) { background:#1b5347 !important; }
+  .hb-seg:not(.hb-seg-on):hover:not(:disabled) { background:#232019 !important; color:#EFEAE0 !important; }
+  .hm-row:hover { background:#2A2620 !important; }
+  .hm-row:hover .hm-ico { color:#EFEAE0 !important; }
+  .hm-danger:hover { background:rgba(224,102,97,.12) !important; color:#ec8683 !important; }
+  .hm-ws:hover { background:#2A2620 !important; }
+  .hm-chip:hover { background:#2c2820 !important; }
+  ::selection { background:#1F5C4D; color:#F6F2E9; }
+  ::-moz-selection { background:#1F5C4D; color:#F6F2E9; }
+  * { scrollbar-width: thin; scrollbar-color: #3d382e transparent; }
+  ::-webkit-scrollbar { width:10px; height:10px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:#3d382e; border-radius:999px; border:2px solid transparent; background-clip:content-box; }
+  ::-webkit-scrollbar-thumb:hover { background:#5a5446; background-clip:content-box; }
+  ::-webkit-scrollbar-corner { background:transparent; }
+  .hb-seg:hover { background:#232019; color:#EFEAE0; }
+  .hz-bulk:hover { background:#2A2620; }
+  .hf { transition: border-color .14s ease, background .14s ease, box-shadow .16s ease; width:100%; padding:12px 12px; background:#100F0C; border:1px solid #3d382e; border-radius:8px; color:#EFEAE0; font-family:'Instrument Sans',sans-serif; font-size:14px; }
+  .hf::placeholder { color:#6a6353; }
+  .hf:hover:not(:focus) { border-color:#5a5446; background:#161510; }
+  .hf:focus { outline:none; border-color:#4FB79A; box-shadow:0 0 0 3px rgba(79,183,154,.18); }
+  a { color:#4FB79A; text-decoration:none; }
+  a:hover { color:#6ecab0; }
+  @media (max-width: 1320px) {
+    .hz-rail { width:216px !important; flex-basis:216px !important; }
+    .hz-split { gap:32px !important; padding-left:24px !important; padding-right:24px !important; }
+    .hz-pad { padding-left:24px !important; padding-right:24px !important; }
+  }
+  @media (max-width: 1180px) {
+    .hz-split { flex-direction:column !important; gap:24px !important; }
+    .hz-subnav { width:100% !important; flex:none !important; }
+    .hz-subnav > div:first-child { max-width:420px; }
+    .hz-subnav > div:not(:first-child) { flex-direction:row !important; flex-wrap:wrap !important; gap:8px !important; }
+  }
+  @media (max-width: 900px) {
+    .hz-rail { display:none !important; }
+    .hz-shell { height:auto !important; min-height:100vh !important; }
+    .hz-pad { padding-left:20px !important; padding-right:20px !important; }
+  }
+</style>
+</helmet>
+
+<div class="hz-shell" style="display:flex; height:100vh; min-height:820px; font-family:'Instrument Sans',sans-serif; color:#EFEAE0; background:#100F0C;">
+
+  <!-- ================= COMPACT RAIL ================= -->
+  <sc-if value="{{ collapsed }}" hint-placeholder-val="{{ false }}">
+  <div style="width:76px; flex:0 0 76px; background:#1A1813; border-right:1px solid #322E26; display:flex; flex-direction:column; align-items:center; padding:20px 12px;">
+    <div style="position:relative; width:34px; height:34px; flex:0 0 34px; border-radius:8px; background:#1F5C4D; overflow:hidden; margin-bottom:8px;">
+      <div style="position:absolute; left:50%; top:5px; width:1.5px; height:6px; background:#E7C079; transform:translateX(-50%);"></div>
+      <div style="position:absolute; left:50%; bottom:8px; width:16px; height:16px; border-radius:50%; background:#D99A3C; transform:translateX(-50%);"></div>
+      <div style="position:absolute; left:0; right:0; bottom:0; height:10px; background:#164034;"></div>
+      <div style="position:absolute; left:0; right:0; bottom:10px; height:1px; background:#0F3D33;"></div>
+    </div>
+    <button class="hb-icon" onClick="{{ toggleRail }}" title="Expand" style="width:34px; height:30px; background:#232019; border:1px solid #3d382e; border-radius:8px; color:#A29C8D; cursor:pointer; margin-bottom:20px; font-size:14px;">»</button>
+    <button class="hb-primary" title="Start timer" style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; background:#4FB79A; color:#0d211b; border:none; border-radius:11px; cursor:pointer; margin-bottom:20px;"><span style="width:16px; height:16px; border-radius:50%; border:2px solid #0d211b; position:relative; display:inline-block;"><span style="position:absolute; left:50%; top:3px; width:1.5px; height:5px; background:#0d211b; transform:translateX(-50%);"></span></span></button>
+    <div style="display:flex; flex-direction:column; gap:8px; align-items:center;">
+      <a href="04_Timesheet.dc.html" title="Timesheet" style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; border-radius:11px; color:#8f8676; font-size:16px;">◷</a>
+      <div title="Projects" style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; border-radius:11px; background:#232019; border:1px solid #322E26; color:#4FB79A; font-size:16px;">▤</div>
+      <a href="06_Approvals.dc.html" title="Approvals" style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; border-radius:11px; color:#8f8676; font-size:16px;">✓</a>
+      <a href="07_Reports.dc.html" title="Reports" style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; border-radius:11px; color:#8f8676; font-size:16px;">▦</a>
+    </div>
+    <div style="flex:1;"></div>
+    <div title="Mira Kovač" style="width:38px; height:38px; border-radius:50%; background:#1F5C4D; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:16px; line-height:1; padding-top:2px; color:#EFEAE0;">M</div>
+  </div>
+  </sc-if>
+
+  <!-- ================= LEFT RAIL ================= -->
+  <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}">
+  <div class="hz-rail" style="width:264px; flex:0 0 264px; background:#1A1813; border-right:1px solid #322E26; display:flex; flex-direction:column; padding:20px 16px;">
+    <div style="display:flex; align-items:center; gap:12px; padding:4px 8px 20px;">
+      <div style="position:relative; width:34px; height:34px; flex:0 0 34px; border-radius:8px; background:#1F5C4D; overflow:hidden;">
+        <div style="position:absolute; left:50%; top:5px; width:1.5px; height:6px; background:#E7C079; transform:translateX(-50%);"></div>
+        <div style="position:absolute; left:50%; bottom:8px; width:16px; height:16px; border-radius:50%; background:#D99A3C; transform:translateX(-50%);"></div>
+        <div style="position:absolute; left:0; right:0; bottom:0; height:10px; background:#164034;"></div>
+        <div style="position:absolute; left:0; right:0; bottom:10px; height:1px; background:#0F3D33;"></div>
+      </div>
+      <div style="display:flex; align-items:baseline;">
+        <span style="font-family:'Newsreader',serif; font-size:24px; font-weight:600; letter-spacing:-.01em; color:#F6F2E9;">Horae</span>
+        <span style="width:5px; height:5px; border-radius:50%; background:#D99A3C; margin-left:4px; align-self:flex-end; margin-bottom:4px;"></span>
+      </div>
+      <div style="flex:1;"></div>
+      <button class="hb-secondary" onClick="{{ toggleRail }}" title="Collapse" style="width:30px; height:30px; background:transparent; border:1px solid #322E26; border-radius:8px; color:#8f8676; cursor:pointer; font-size:14px;">«</button>
+    </div>
+
+    <div style="margin-bottom:24px;">
+      <button class="hb-primary" style="width:100%; display:flex; align-items:center; justify-content:center; gap:8px; padding:8px 12px; background:#4FB79A; color:#0d211b; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer;">
+        <span style="width:14px; height:14px; border-radius:50%; border:2px solid #0d211b; position:relative; display:inline-block;"><span style="position:absolute; left:50%; top:2px; width:1.5px; height:4px; background:#0d211b; transform:translateX(-50%);"></span></span>
+        Start timer
+      </button>
+    </div>
+
+    <div style="font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353; padding:0 8px 8px;">Track</div>
+    <div style="display:flex; flex-direction:column; gap:4px; margin-bottom:20px;">
+      <a href="04_Timesheet.dc.html" style="display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; color:#A29C8D;"><span style="width:8px; height:8px; border-radius:50%; border:1.5px solid #5a5446;"></span><span style="font-size:14px;">Timesheet</span></a>
+    </div>
+    <div style="font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353; padding:0 8px 8px;">Organize</div>
+    <div style="display:flex; flex-direction:column; gap:4px; margin-bottom:20px;">
+      <div style="display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; background:#232019; border:1px solid #322E26;"><span style="width:9px; height:8px; border-radius:4px; background:#4FB79A;"></span><span style="font-size:14px; font-weight:600; color:#F6F2E9;">Projects</span></div>
+    </div>
+    <div style="font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353; padding:0 8px 8px;">Review</div>
+    <div style="display:flex; flex-direction:column; gap:4px;">
+      <a href="06_Approvals.dc.html" style="display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; color:#A29C8D;"><span style="width:8px; height:8px; border-radius:50%; border:1.5px solid #5a5446;"></span><span style="font-size:14px;">Approvals</span></a>
+      <a href="07_Reports.dc.html" style="display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; color:#A29C8D;"><span style="display:inline-flex; align-items:flex-end; gap:2px; height:11px;"><span style="width:2.5px; height:6px; background:#5a5446;"></span><span style="width:2.5px; height:11px; background:#5a5446;"></span><span style="width:2.5px; height:8px; background:#5a5446;"></span></span><span style="font-size:14px;">Reports</span></a>
+    </div>
+
+    <div style="flex:1;"></div>
+
+    <div style="position:relative;">
+      <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
+      <div style="position:absolute; bottom:56px; left:0; width:252px; background:#201D17; border:1px solid #3d382e; border-radius:11px; overflow:hidden; box-shadow:0 26px 60px -16px rgba(0,0,0,.8); z-index:40;">
+        <div style="display:flex; align-items:center; gap:12px; padding:16px 16px 12px; border-bottom:1px solid #322E26;">
+          <div style="width:38px; height:38px; flex:0 0 38px; border-radius:50%; background:#1F5C4D; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:18px; color:#EFEAE0;">M</div>
+          <div style="min-width:0;"><div style="font-size:14px; font-weight:600; color:#F6F2E9;">Mira Kovač</div><div style="font-size:12px; color:#8f8676; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">mira@fieldstone.studio</div></div>
+          <span style="display:inline-flex; padding:4px 8px; background:#15291f; color:#5fcaa8; border:1px solid #24402f; border-radius:999px; font-size:12px; font-weight:600; white-space:nowrap;">Admin</span>
+        </div>
+        <div class="hm-ws" style="display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid #322E26; cursor:pointer;">
+          <span style="width:22px; height:22px; border-radius:6px; background:#1F5C4D; display:inline-flex; align-items:center; justify-content:center; font-size:12px; color:#EFEAE0; font-weight:700;">F</span>
+          <div style="flex:1; min-width:0;"><div style="font-size:14px; color:#EFEAE0;">Fieldstone Studio</div><div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6a6353;">horae.app/fieldstone</div></div>
+          <span style="color:#6a6353; font-size:12px;">⇄</span>
+        </div>
+        <div style="padding:8px;">
+          <a href="08_Settings.dc.html" class="hm-row" style="display:flex; align-items:center; gap:12px; padding:8px 8px; border-radius:8px; font-size:14px; color:#EFEAE0; text-decoration:none;"><span class="hm-ico" style="color:#8f8676; width:15px;">◔</span> My profile</a>
+          <a href="07_Reports.dc.html" class="hm-row" style="display:flex; align-items:center; gap:12px; padding:8px 8px; border-radius:8px; font-size:14px; color:#EFEAE0; text-decoration:none;"><span class="hm-ico" style="color:#8f8676; width:15px;">▦</span> My time report</a>
+        </div>
+        <div style="padding:8px; border-top:1px solid #322E26;">
+          <div style="padding:4px 8px 8px; font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353;">Admin</div>
+          <a href="09_Workspace.dc.html" class="hm-row" style="display:flex; align-items:center; gap:12px; padding:8px 8px; border-radius:8px; font-size:14px; color:#EFEAE0; text-decoration:none;"><span class="hm-ico" style="color:#8f8676; width:15px;">◍</span> Workspace settings</a>
+        </div>
+        <div style="display:flex; align-items:center; gap:12px; padding:12px 16px; border-top:1px solid #322E26;">
+          <span style="color:#8f8676; width:15px; font-size:12px;">◑</span>
+          <span style="flex:1; font-size:14px; color:#EFEAE0;">Dark theme</span>
+          <span style="width:40px; height:22px; border-radius:999px; background:#1F5C4D; position:relative; display:inline-block; flex:0 0 40px;"><span style="position:absolute; right:3px; top:3px; width:16px; height:16px; border-radius:50%; background:#EFEAE0;"></span></span>
+        </div>
+        <div style="padding:8px; border-top:1px solid #322E26;">
+          <div class="hm-row" style="display:flex; align-items:center; gap:12px; padding:8px 8px; border-radius:8px; font-size:14px; color:#A29C8D; cursor:pointer;"><span style="width:15px;">?</span> Need help?</div>
+          <a href="01_Sign In.dc.html" class="hm-row hm-danger" style="display:flex; align-items:center; gap:12px; padding:8px 8px; border-radius:8px; font-size:14px; color:#E06661; text-decoration:none;"><span style="width:15px;">→</span> Sign out</a>
+        </div>
+      </div>
+      </sc-if>
+      <div onClick="{{ toggleMenu }}" style="display:flex; align-items:center; gap:12px; padding:8px; border-top:1px solid #322E26; padding-top:12px; cursor:pointer;">
+      <div style="width:30px; height:30px; border-radius:50%; background:#1F5C4D; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; color:#EFEAE0; flex:0 0 30px;">M</div>
+      <div style="min-width:0;"><div style="font-size:14px; font-weight:600; color:#F6F2E9;">Mira Kovač</div><div style="font-size:12px; color:#8f8676;">Fieldstone Studio</div></div>
+      <div style="flex:1;"></div>
+      <span style="color:#6a6353; font-size:14px;">◔</span>
+    </div>
+  </div>
+  </div>
+  </sc-if>
+
+  <!-- ================= MAIN ================= -->
+  <div style="flex:1; display:flex; flex-direction:column; min-width:0;">
+
+    <!-- prototype page controls -->
+    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:12px 44px; background:#161510; border-bottom:1px solid #262219;">
+      <span style="display:inline-flex; align-items:center; gap:8px; padding:4px 8px; background:#2b2413; color:#e0b45f; border:1px solid #453818; border-radius:999px; font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.1em; text-transform:uppercase; font-weight:600;"><span style="width:6px; height:6px; border-radius:999px; background:#D6A24A;"></span>Dev mode</span>
+      <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353;">Page state</span>
+      <div style="display:inline-flex; background:#100F0C; border:1px solid #322E26; border-radius:8px; padding:4px;">
+        <button onClick="{{ showFilled }}" class="hb-seg" style="{{ segFilled }}">Project list</button>
+        <button onClick="{{ showEmptyState }}" class="hb-seg" style="{{ segEmpty }}">No projects yet</button>
+      </div>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:16px; padding:24px 40px 0;">
+      <h1 style="font-family:'Newsreader',serif; font-size:34px; font-weight:600; color:#F6F2E9; margin:0; letter-spacing:-.015em;">Projects</h1>
+      <div style="flex:1;"></div>
+      <button class="hb-primary" onClick="{{ openAdd }}" style="padding:8px 16px; background:#4FB79A; color:#0d211b; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer;">New project</button>
+      <div style="position:relative;">
+        <button class="hb-secondary" onClick="{{ toggleBulk }}" style="display:flex; align-items:center; gap:8px; padding:8px 16px; background:#232019; border:1px solid #3d382e; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer;"><span style="color:#E7C079;">⚡</span> Actions <span style="color:#8f8676; font-size:12px;">▾</span></button>
+        <sc-if value="{{ bulkOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute; right:0; top:48px; width:236px; background:#201D17; border:1px solid #3d382e; border-radius:11px; box-shadow:0 24px 60px -18px rgba(0,0,0,.75); z-index:50; padding:8px;">
+          <div style="padding:4px 12px 8px; font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:#6a6353;">{{ bulkCountLabel }}</div>
+          <div class="hz-bulk" style="{{ bulkRow }}">Add tasks</div>
+          <div class="hz-bulk" style="{{ bulkRow }}">Remove tasks</div>
+          <div class="hz-bulk" style="{{ bulkRow }}">Add tags</div>
+          <div class="hz-bulk" style="{{ bulkRow }}">Remove tags</div>
+          <div class="hz-bulk" style="{{ bulkRow }}">Set tasks billable</div>
+          <div style="height:1px; background:#322E26; margin:4px 0;"></div>
+          <div class="hz-bulk" style="{{ bulkRow }}">Archive projects</div>
+          <div class="hz-bulk" style="{{ bulkRow }}">Reactivate projects</div>
+          <div class="hz-bulk" style="{{ bulkRow }}">Update projects</div>
+          <div style="height:1px; background:#322E26; margin:4px 0;"></div>
+          <div class="hz-bulk" style="padding:8px 12px; border-radius:6px; font-size:14px; font-weight:600; color:#4FB79A; cursor:pointer;">View all bulk actions →</div>
+        </div>
+        </sc-if>
+      </div>
+      <a href="10_Importers.dc.html" class="hb-secondary" style="padding:8px 16px; background:#232019; border:1px solid #3d382e; border-radius:8px; color:#EFEAE0; font-size:14px;">Import</a>
+      <button class="hb-secondary" onClick="{{ openExport }}" style="padding:8px 16px; background:#232019; border:1px solid #3d382e; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer;">Export</button>
+      <div style="display:flex; align-items:center; gap:8px; width:300px; padding:8px 12px; background:#1A1813; border:1px solid #322E26; border-radius:8px;">
+        <span style="color:#6a6353; font-size:14px;">⌕</span>
+        <span style="font-size:14px; color:#5a5446;">Search by project or client</span>
+      </div>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:16px; padding:20px 40px 0;">
+            <div style="position:relative;">
+        <button class="hb-secondary" onClick="{{ toggleScope }}" style="display:flex; align-items:center; gap:8px; padding:8px 16px; background:#1A1813; border:1px solid #322E26; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer;">{{ scopeLabel }} <span style="color:#8f8676; font-size:12px;">▾</span></button>
+        <sc-if value="{{ scopeOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute; left:0; top:48px; width:260px; background:#201D17; border:1px solid #3d382e; border-radius:11px; box-shadow:0 24px 60px -18px rgba(0,0,0,.75); z-index:40; padding:8px;">
+          <div onClick="{{ pickScopeActive }}" style="padding:12px 12px; border-radius:8px; background:#1F5C4D; font-size:14px; font-weight:600; color:#F6F2E9; cursor:pointer; margin-bottom:4px;">Active projects (2)</div>
+          <div onClick="{{ pickScopeBudgeted }}" style="padding:12px 12px; border-radius:8px; font-size:14px; color:#EFEAE0; cursor:pointer; margin-bottom:4px;">Budgeted projects (2)</div>
+          <div onClick="{{ pickScopeArchived }}" style="padding:12px 12px; border-radius:8px; font-size:14px; color:#EFEAE0; cursor:pointer;">Archived projects (13)</div>
+        </div>
+        </sc-if>
+      </div>
+      <div style="flex:1;"></div>
+      <div style="position:relative;">
+        <button class="hb-secondary" onClick="{{ toggleClient }}" style="display:flex; align-items:center; gap:8px; padding:8px 16px; background:#1A1813; border:1px solid #322E26; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer;">{{ clientLabel }} <span style="color:#8f8676; font-size:12px;">▾</span></button>
+        <sc-if value="{{ clientOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute; right:0; top:48px; width:300px; background:#201D17; border:1px solid #3d382e; border-radius:11px; box-shadow:0 24px 60px -18px rgba(0,0,0,.75); z-index:40; overflow:hidden;">
+          <div style="padding:12px;">
+            <div style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:#100F0C; border:1px solid #3d382e; border-radius:8px;"><span style="color:#6a6353; font-size:14px;">⌕</span><span style="font-size:14px; color:#5a5446;">Search…</span></div>
+          </div>
+          <div style="max-height:340px; overflow:auto; padding:0 8px 8px;">
+            <div onClick="{{ pickClientAll }}" style="{{ cliAllRow }}">All clients</div>
+            <div style="padding:8px 12px 4px; font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6a6353;">Active clients</div>
+            <div onClick="{{ pickClientMeridian }}" style="{{ cliMeridianRow }}">Meridian Health — CHF</div>
+            <div onClick="{{ pickClientRun }}" style="{{ cliRunRow }}">Rún Collective</div>
+            <div onClick="{{ pickClientTidewell }}" style="{{ cliTidewellRow }}">Tidewell / HarborDesk</div>
+            <div onClick="{{ pickClientCasa }}" style="{{ cliCasaRow }}">Casa Vireo / Larkfield / Guild</div>
+            <div onClick="{{ pickClientSolvindUsd }}" style="{{ cliSolvindUsdRow }}">Solvind AB — USD</div>
+            <div onClick="{{ pickClientSolvindEur }}" style="{{ cliSolvindEurRow }}">Solvind AB — EUR</div>
+            <div onClick="{{ pickClientNorthmoor }}" style="{{ cliNorthmoorRow }}">Northmoor — EUR</div>
+            <div style="padding:12px 12px 4px; font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6a6353;">Archived clients</div>
+            <div onClick="{{ pickClientPelham }}" style="{{ cliPelhamRow }}">Pelham &amp; Roe</div>
+          </div>
+        </div>
+        </sc-if>
+      </div>
+      <div style="position:relative;">
+        <button class="hb-secondary" onClick="{{ toggleManager }}" style="display:flex; align-items:center; gap:8px; padding:8px 16px; background:#1A1813; border:1px solid #322E26; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer;">{{ managerLabel }} <span style="color:#8f8676; font-size:12px;">▾</span></button>
+        <sc-if value="{{ managerOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute; right:0; top:48px; width:260px; background:#201D17; border:1px solid #3d382e; border-radius:11px; box-shadow:0 24px 60px -18px rgba(0,0,0,.75); z-index:40; overflow:hidden;">
+          <div style="padding:12px;">
+            <div style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:#100F0C; border:1px solid #3d382e; border-radius:8px;"><span style="color:#6a6353; font-size:14px;">⌕</span><span style="font-size:14px; color:#5a5446;">Search…</span></div>
+          </div>
+          <div style="padding:0 8px 8px;">
+            <div onClick="{{ pickMgrAll }}" style="{{ mgrAllRow }}">All managers</div>
+            <div style="padding:8px 12px 4px; font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6a6353;">Active managers</div>
+            <div onClick="{{ pickMgrMira }}" style="{{ mgrMiraRow }}">Mira Kovač</div>
+            <div onClick="{{ pickMgrTomas }}" style="{{ mgrTomasRow }}">Tomas Lindqvist</div>
+          </div>
+        </div>
+        </sc-if>
+      </div>
+    </div>
+
+    <div style="padding:20px 40px 40px; flex:1; overflow:auto; min-height:0;">
+      <sc-if value="{{ hasProjects }}" hint-placeholder-val="{{ true }}">
+      <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; position:relative; overflow-x:auto;">
+        <div style="width:max-content; min-width:100%;">
+        <!-- header -->
+        <div style="display:grid; grid-template-columns:34px minmax(340px,1fr) 130px 130px 96px 200px 220px 120px; align-items:center; padding:12px 20px; border-bottom:1px solid #322E26; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:#6a6353;">
+          <span onClick="{{ toggleAll }}" style="{{ allBox }}">{{ allMark }}</span><span>Client</span><span style="text-align:right;">Budget</span><span style="text-align:right;">⚑ Scheduled</span><span style="text-align:right;">Delta</span><span style="text-align:right;">Spent</span><span style="text-align:right;">Budget remaining</span><span></span>
+        </div>
+
+        <!-- Company group A -->
+        <div style="padding:12px 20px; background:#161510; border-bottom:1px solid #262219;"><a href="#" style="font-size:14px; font-weight:600; text-decoration:underline; text-underline-offset:3px;">Meridian Health</a></div>
+        <div style="display:grid; grid-template-columns:34px minmax(340px,1fr) 130px 130px 96px 200px 220px 120px; align-items:center; padding:16px 20px; border-bottom:1px solid #262219;">
+          <span onClick="{{ toggleRowA }}" style="{{ boxA }}">{{ markA }}</span>
+          <div style="display:flex; align-items:center; gap:12px; min-width:0;"><a href="11_Project Detail.dc.html" style="font-size:14px; font-weight:600; color:#F6F2E9;">[4192] T&amp;M · Atlas Platform</a><span style="padding:4px 8px; background:#232019; border:1px solid #3d382e; border-radius:999px; font-size:12px; color:#A29C8D; white-space:nowrap;">Time &amp; Materials</span></div>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">7,200.00</span>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#A29C8D;">4,180.50</span>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#A29C8D;">118.24</span>
+          <div style="display:flex; align-items:center; justify-content:flex-end; gap:12px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">3,842.60</span><span style="width:96px; height:7px; border-radius:999px; background:#262219; overflow:hidden;"><span style="display:block; width:53%; height:100%; background:#4FB79A;"></span></span></div>
+          <div style="display:flex; align-items:baseline; justify-content:flex-end; gap:8px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">3,357.40</span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8f8676;">(47%)</span></div>
+          <div style="text-align:right; position:relative;"><button class="hb-secondary" onClick="{{ toggleActionsA }}" style="padding:8px 12px; background:#232019; border:1px solid #3d382e; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:12px; cursor:pointer;">Actions ▾</button>
+            <sc-if value="{{ actionsA }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute; right:0; top:40px; width:170px; background:#201D17; border:1px solid #3d382e; border-radius:11px; box-shadow:0 20px 50px -16px rgba(0,0,0,.75); z-index:40; padding:4px; text-align:left;">
+              <div style="padding:8px 12px; border-radius:6px; font-size:14px; color:#5a5446; cursor:not-allowed;">Edit</div>
+              <div style="padding:8px 12px; border-radius:6px; font-size:14px; color:#EFEAE0; cursor:pointer;">Pin</div>
+              <div style="height:1px; background:#322E26; margin:4px 0;"></div>
+              <div style="padding:8px 12px; border-radius:6px; font-size:14px; color:#5a5446; cursor:not-allowed;">Archive</div>
+              <div style="padding:8px 12px; border-radius:6px; font-size:14px; color:#5a5446; cursor:not-allowed;">Delete</div>
+            </div>
+            </sc-if>
+          </div>
+        </div>
+
+        <!-- Company group B -->
+        <div style="padding:12px 20px; background:#161510; border-bottom:1px solid #262219;"><a href="#" style="font-size:14px; font-weight:600; text-decoration:underline; text-underline-offset:3px;">Rún Collective</a></div>
+        <div style="display:grid; grid-template-columns:34px minmax(340px,1fr) 130px 130px 96px 200px 220px 120px; align-items:center; padding:16px 20px;">
+          <span onClick="{{ toggleRowB }}" style="{{ boxB }}">{{ markB }}</span>
+          <div style="display:flex; align-items:center; gap:12px; min-width:0;"><a href="11_Project Detail.dc.html" style="font-size:14px; font-weight:600; color:#F6F2E9;">T&amp;M · Open-source self-hosting fund</a><span style="padding:4px 8px; background:#232019; border:1px solid #3d382e; border-radius:999px; font-size:12px; color:#A29C8D; white-space:nowrap;">Time &amp; Materials</span></div>
+          <div style="display:flex; align-items:center; justify-content:flex-end; gap:8px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">€12,000.00</span><span style="color:#8f8676; font-size:12px;">⟳</span></div>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#A29C8D;">96.40</span>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#5a5446;">–</span>
+          <div style="display:flex; align-items:center; justify-content:flex-end; gap:12px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">€0.00</span><span style="width:96px; height:7px; border-radius:999px; background:#262219; overflow:hidden;"><span style="display:block; width:2%; height:100%; background:#4FB79A;"></span></span></div>
+          <div style="display:flex; align-items:baseline; justify-content:flex-end; gap:8px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">€12,000.00</span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8f8676;">(100%)</span></div>
+          <div style="text-align:right; position:relative;"><button class="hb-secondary" onClick="{{ toggleActionsB }}" style="padding:8px 12px; background:#232019; border:1px solid #3d382e; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:12px; cursor:pointer;">Actions ▾</button>
+            <sc-if value="{{ actionsB }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute; right:0; bottom:40px; width:170px; background:#201D17; border:1px solid #3d382e; border-radius:11px; box-shadow:0 20px 50px -16px rgba(0,0,0,.75); z-index:40; padding:4px; text-align:left;">
+              <div style="padding:8px 12px; border-radius:6px; font-size:14px; color:#5a5446; cursor:not-allowed;">Edit</div>
+              <div style="padding:8px 12px; border-radius:6px; font-size:14px; color:#EFEAE0; cursor:pointer;">Pin</div>
+              <div style="height:1px; background:#322E26; margin:4px 0;"></div>
+              <div style="padding:8px 12px; border-radius:6px; font-size:14px; color:#5a5446; cursor:not-allowed;">Archive</div>
+              <div style="padding:8px 12px; border-radius:6px; font-size:14px; color:#5a5446; cursor:not-allowed;">Delete</div>
+            </div>
+            </sc-if>
+          </div>
+        </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ noProjects }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:64px 24px; background:#1A1813; border:1px solid #322E26; border-radius:20px; text-align:center;">
+        <div style="width:52px; height:52px; border-radius:11px; background:#232019; border:1px solid #3d382e; display:flex; align-items:center; justify-content:center; color:#5a5446; font-size:20px;">▤</div>
+        <div style="font-family:'Newsreader',serif; font-size:20px; font-weight:600; color:#F6F2E9;">No projects yet</div>
+        <div style="font-size:14px; color:#8f8676; max-width:380px; line-height:1.55;">Projects hold the tasks your team tracks against. Create one, or bring your existing work across.</div>
+        <div style="display:flex; align-items:center; gap:12px; margin-top:4px; flex-wrap:wrap; justify-content:center;">
+          <button onClick="{{ openAdd }}" class="hb-primary" style="padding:12px 20px; background:#4FB79A; color:#0d211b; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer;">New project</button>
+          <a href="10_Importers.dc.html" style="font-size:14px; font-weight:600;">Import from Harvest →</a>
+        </div>
+      </div>
+      </sc-if>
+    </div>
+  </div>
+
+  <!-- ADD PROJECT MODAL -->
+  <sc-if value="{{ addOpen }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ closeAdd }}" style="position:fixed; inset:0; background:rgba(8,7,5,.68); display:flex; align-items:flex-start; justify-content:center; padding-top:64px; z-index:60;">
+    <div style="width:520px; max-width:92vw; background:#1A1813; border:1px solid #3d382e; border-radius:20px; overflow:hidden; box-shadow:0 40px 90px -30px rgba(0,0,0,.8);">
+      <div style="padding:16px 24px; border-bottom:1px solid #322E26; text-align:center; font-family:'Newsreader',serif; font-size:18px; font-weight:600; color:#F6F2E9;">New project</div>
+      <div style="padding:24px 24px 24px; display:flex; flex-direction:column; gap:16px;">
+        <div>
+          <div style="font-size:12px; color:#8f8676; margin-bottom:8px;">Client</div>
+          <input class="hf" placeholder="Search or create a client" />
+        </div>
+        <div>
+          <div style="font-size:12px; color:#8f8676; margin-bottom:8px;">Project name</div>
+          <input class="hf" placeholder="e.g. Website relaunch" />
+        </div>
+        <div style="display:flex; gap:12px; flex-wrap:wrap;">
+          <div style="flex:1; min-width:150px;">
+            <div style="font-size:12px; color:#8f8676; margin-bottom:8px;">Project code</div>
+            <input class="hf" placeholder="FS-024" style="font-family:'IBM Plex Mono',monospace; font-size:14px;" />
+          </div>
+          <div style="flex:1; min-width:150px;">
+            <div style="font-size:12px; color:#8f8676; margin-bottom:8px;">Budget (hours)</div>
+            <input class="hf" placeholder="120" style="font-family:'IBM Plex Mono',monospace; font-size:14px;" />
+          </div>
+        </div>
+        <label style="display:flex; align-items:center; gap:12px; font-size:14px; color:#EFEAE0; cursor:pointer;">
+          <span onClick="{{ toggleBillable }}" style="{{ billableTrack }}"><span style="{{ billableKnob }}"></span></span>
+          <span>Billable by default</span>
+        </label>
+      </div>
+      <div style="padding:16px 24px; border-top:1px solid #322E26; display:flex; align-items:center; gap:12px;">
+        <button class="hb-ghost" onClick="{{ closeAdd }}" style="padding:8px 12px; background:transparent; color:#4FB79A; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer;">Cancel</button>
+        <div style="flex:1;"></div>
+        <button class="hb-primary" onClick="{{ closeAdd }}" style="padding:8px 20px; background:#4FB79A; color:#0d211b; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer;">Create project</button>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- EXPORT MODAL -->
+  <sc-if value="{{ exportOpen }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ closeExport }}" style="position:fixed; inset:0; background:rgba(8,7,5,.68); display:flex; align-items:flex-start; justify-content:center; padding-top:64px; z-index:60;">
+    <div style="width:560px; max-width:92vw; background:#1A1813; border:1px solid #322E26; border-radius:20px; overflow:hidden; box-shadow:0 40px 90px -30px rgba(0,0,0,.8);">
+      <div style="padding:16px 24px; border-bottom:1px solid #322E26; text-align:center; font-family:'Newsreader',serif; font-size:18px; font-weight:600; color:#F6F2E9;">Export projects</div>
+      <div style="padding:24px 24px 24px;">
+        <div style="font-size:14px; font-weight:600; color:#EFEAE0; margin-bottom:12px;">Which projects would you like to export?</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:24px;">
+          <button onClick="{{ setScopeActive }}" class="{{ clsScopeActive }}" style="{{ stActive }}">Active (2)</button>
+          <button onClick="{{ setScopeBudgeted }}" class="{{ clsScopeBudgeted }}" style="{{ stBudgeted }}">Budgeted (2)</button>
+          <button onClick="{{ setScopeArchived }}" class="{{ clsScopeArchived }}" style="{{ stArchived }}">Archived (13)</button>
+        </div>
+        <div style="font-size:14px; font-weight:600; color:#EFEAE0; margin-bottom:12px;">Choose a format:</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:24px;">
+          <button onClick="{{ setFmtCsv }}" class="{{ clsFmtCsv }}" style="{{ stCsv }}">CSV</button>
+          <button onClick="{{ setFmtExcel }}" class="{{ clsFmtExcel }}" style="{{ stExcel }}">Excel</button>
+        </div>
+        <div style="display:flex; align-items:center; gap:12px;">
+          <button class="hb-solid" onClick="{{ closeExport }}" style="padding:12px 20px; background:#1F5C4D; color:#F6F2E9; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer; box-shadow:0 8px 24px -10px rgba(31,92,77,.6);">Export projects</button>
+          <button class="hb-secondary" onClick="{{ closeExport }}" style="padding:12px 20px; background:#232019; color:#EFEAE0; border:1px solid #3d382e; border-radius:8px; font-family:inherit; font-size:14px; cursor:pointer;">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:1000}}">
+class Component extends DCLogic {
+  state = { clientLabel: 'Filter by client', bulkOpen: false, managerOpen: false, managerLabel: 'Filter by manager', rowA: false, rowB: false, addOpen: false, billable: true, empty: false, menuOpen: false, collapsed: false, clientOpen: false, exportOpen: false, exportScope: 'active', exportFmt: 'csv', actionsRow: null };
+  renderVals() {
+    const s = this.state;
+    const isEmpty = s.empty === true;
+    const pseg = (on) => on
+      ? 'padding:8px 12px; background:#1F5C4D; color:#F6F2E9; border:none; border-radius:6px; font-family:inherit; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;'
+      : 'padding:8px 12px; background:transparent; color:#8f8676; border:none; border-radius:6px; font-family:inherit; font-size:12px; cursor:pointer; white-space:nowrap;';
+    const box = (on) => 'width:18px; height:18px; border-radius:4px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; ' + (on ? 'background:#4FB79A; color:#0d211b; border:none;' : 'border:1.5px solid #5a5446; color:transparent;');
+    const mgrRow = (on) => on
+      ? 'padding:8px 12px; border-radius:8px; background:#1F5C4D; font-size:14px; font-weight:600; color:#F6F2E9; cursor:pointer; margin-bottom:4px;'
+      : 'padding:8px 12px; border-radius:8px; font-size:14px; color:#EFEAE0; cursor:pointer; margin-bottom:4px;';
+    const seg = (active) => active
+      ? 'padding:12px 16px; background:#15291f; border:1px solid #4FB79A; border-radius:8px; color:#F6F2E9; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer;'
+      : 'padding:12px 16px; background:#100F0C; border:1px solid #3d382e; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer;';
+    return {
+      menuOpen: this.state.menuOpen === true,
+      toggleMenu: () => this.setState(s => ({ menuOpen: !s.menuOpen })),
+      hasProjects: !isEmpty,
+      noProjects: isEmpty,
+
+      expanded: !this.state.collapsed,
+      collapsed: this.state.collapsed,
+      toggleRail: () => this.setState(s => ({ collapsed: !s.collapsed, menuOpen: false })),
+      clientOpen: this.state.clientOpen,
+      toggleClient: () => this.setState(s => ({ clientOpen: !s.clientOpen, bulkOpen: false, managerOpen: false, scopeOpen: false })),
+      closeClient: () => this.setState({ clientOpen: false }),
+      exportOpen: this.state.exportOpen,
+      addOpen: s.addOpen === true,
+      openAdd: () => this.setState({ addOpen: true, menuOpen: false }),
+      closeAdd: () => this.setState({ addOpen: false }),
+      toggleBillable: () => this.setState(x => ({ billable: !x.billable })),
+      billableTrack: 'width:40px; height:22px; border-radius:999px; background:' + (s.billable ? '#1F5C4D' : '#2c2820') + '; border:1px solid ' + (s.billable ? '#2a6d5c' : '#3d382e') + '; position:relative; display:inline-block; flex:0 0 40px; cursor:pointer;',
+      billableKnob: 'position:absolute; ' + (s.billable ? 'right:3px' : 'left:3px') + '; top:2px; width:16px; height:16px; border-radius:50%; background:' + (s.billable ? '#EFEAE0' : '#8f8676') + ';',
+      pickClientAll: () => this.setState({ clientLabel: "Filter by client", clientOpen: false }),
+      cliAllRow: mgrRow(s.clientLabel === "Filter by client"),
+      pickClientMeridian: () => this.setState({ clientLabel: "Meridian Health — CHF", clientOpen: false }),
+      cliMeridianRow: mgrRow(s.clientLabel === "Meridian Health — CHF"),
+      pickClientRun: () => this.setState({ clientLabel: "Rún Collective", clientOpen: false }),
+      cliRunRow: mgrRow(s.clientLabel === "Rún Collective"),
+      pickClientTidewell: () => this.setState({ clientLabel: "Tidewell / HarborDesk", clientOpen: false }),
+      cliTidewellRow: mgrRow(s.clientLabel === "Tidewell / HarborDesk"),
+      pickClientCasa: () => this.setState({ clientLabel: "Casa Vireo / Larkfield / Guild", clientOpen: false }),
+      cliCasaRow: mgrRow(s.clientLabel === "Casa Vireo / Larkfield / Guild"),
+      pickClientSolvindUsd: () => this.setState({ clientLabel: "Solvind AB — USD", clientOpen: false }),
+      cliSolvindUsdRow: mgrRow(s.clientLabel === "Solvind AB — USD"),
+      pickClientSolvindEur: () => this.setState({ clientLabel: "Solvind AB — EUR", clientOpen: false }),
+      cliSolvindEurRow: mgrRow(s.clientLabel === "Solvind AB — EUR"),
+      pickClientNorthmoor: () => this.setState({ clientLabel: "Northmoor — EUR", clientOpen: false }),
+      cliNorthmoorRow: mgrRow(s.clientLabel === "Northmoor — EUR"),
+      pickClientPelham: () => this.setState({ clientLabel: "Pelham & Roe", clientOpen: false }),
+      cliPelhamRow: mgrRow(s.clientLabel === "Pelham & Roe"),
+      showFilled: () => this.setState({ empty: false }),
+      showEmptyState: () => this.setState({ empty: true }),
+      segFilled: pseg(!isEmpty),
+      segEmpty: pseg(isEmpty),
+      clientLabel: s.clientLabel,
+      bulkOpen: s.bulkOpen === true,
+      toggleBulk: () => this.setState(x => ({ bulkOpen: !x.bulkOpen, managerOpen: false, clientOpen: false, scopeOpen: false })),
+      bulkRow: 'padding:8px 12px; border-radius:6px; font-size:14px; color:' + (s.rowA || s.rowB ? '#EFEAE0' : '#5a5446') + '; cursor:' + (s.rowA || s.rowB ? 'pointer' : 'not-allowed') + ';',
+      bulkCountLabel: (s.rowA || s.rowB) ? ((s.rowA ? 1 : 0) + (s.rowB ? 1 : 0)) + ' project selected' : 'Select projects first',
+      managerOpen: s.managerOpen === true,
+      managerLabel: s.managerLabel,
+      toggleManager: () => this.setState(x => ({ managerOpen: !x.managerOpen, bulkOpen: false, clientOpen: false })),
+      pickMgrAll: () => this.setState({ managerLabel: 'Filter by manager', managerOpen: false }),
+      pickMgrMira: () => this.setState({ managerLabel: 'Mira Kovač', managerOpen: false }),
+      pickMgrTomas: () => this.setState({ managerLabel: 'Tomas Lindqvist', managerOpen: false }),
+      mgrAllRow: mgrRow(s.managerLabel === 'Filter by manager'),
+      mgrMiraRow: mgrRow(s.managerLabel === 'Mira Kovač'),
+      mgrTomasRow: mgrRow(s.managerLabel === 'Tomas Lindqvist'),
+      toggleRowA: () => this.setState(x => ({ rowA: !x.rowA })),
+      toggleRowB: () => this.setState(x => ({ rowB: !x.rowB })),
+      toggleAll: () => this.setState(x => ({ rowA: !(x.rowA && x.rowB), rowB: !(x.rowA && x.rowB) })),
+      boxA: box(s.rowA), markA: s.rowA ? '✓' : '',
+      boxB: box(s.rowB), markB: s.rowB ? '✓' : '',
+      allBox: box(s.rowA && s.rowB), allMark: (s.rowA && s.rowB) ? '✓' : '',
+      openExport: () => this.setState({ exportOpen: true }),
+      closeExport: () => this.setState({ exportOpen: false }),
+      scope: this.state.exportScope,
+      fmt: this.state.exportFmt,
+      setScopeActive: () => this.setState({ exportScope: 'active' }),
+      setScopeBudgeted: () => this.setState({ exportScope: 'budgeted' }),
+      setScopeArchived: () => this.setState({ exportScope: 'archived' }),
+      setFmtCsv: () => this.setState({ exportFmt: 'csv' }),
+      setFmtExcel: () => this.setState({ exportFmt: 'excel' }),
+      clsScopeActive: s.exportScope === 'active' ? 'hb-seg hb-seg-on' : 'hb-seg',
+      clsScopeBudgeted: s.exportScope === 'budgeted' ? 'hb-seg hb-seg-on' : 'hb-seg',
+      clsScopeArchived: s.exportScope === 'archived' ? 'hb-seg hb-seg-on' : 'hb-seg',
+      clsFmtCsv: s.exportFmt === 'csv' ? 'hb-seg hb-seg-on' : 'hb-seg',
+      clsFmtExcel: s.exportFmt === 'excel' ? 'hb-seg hb-seg-on' : 'hb-seg',
+      stActive: seg(s.exportScope === 'active'),
+      stBudgeted: seg(s.exportScope === 'budgeted'),
+      stArchived: seg(s.exportScope === 'archived'),
+      stCsv: seg(s.exportFmt === 'csv'),
+      stExcel: seg(s.exportFmt === 'excel'),
+      scopeOpen: s.scopeOpen,
+      scopeLabel: s.scopeLabel || 'Active projects (2)',
+      toggleScope: () => this.setState(st => ({ scopeOpen: !st.scopeOpen })),
+      pickScopeActive: () => this.setState({ scopeLabel: 'Active projects (2)', scopeOpen: false }),
+      pickScopeBudgeted: () => this.setState({ scopeLabel: 'Budgeted projects (2)', scopeOpen: false }),
+      pickScopeArchived: () => this.setState({ scopeLabel: 'Archived projects (13)', scopeOpen: false }),
+      actionsA: s.actionsRow === 'a',
+      actionsB: s.actionsRow === 'b',
+      toggleActionsA: () => this.setState(st => ({ actionsRow: st.actionsRow === 'a' ? null : 'a' })),
+      toggleActionsB: () => this.setState(st => ({ actionsRow: st.actionsRow === 'b' ? null : 'b' })),
+    };
+  }
+}
+</script>
+</body>
+</html>
+

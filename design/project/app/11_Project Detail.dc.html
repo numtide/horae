@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#100F0C; }
+  * { box-sizing:border-box; }
+  button, .hm-row, .hz-nav, .hm-chip, .hz-row, .hz-tab { transition: background .14s ease, transform .08s ease, box-shadow .16s ease, border-color .14s ease, color .14s ease; }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(79,183,154,.35) !important; }
+  button:disabled { cursor: not-allowed; transform: none !important; }
+  .hb-primary:hover:not(:disabled) { background:#63c9ac !important; box-shadow:0 6px 18px -8px rgba(79,183,154,.65) !important; }
+  .hb-secondary:hover:not(:disabled) { background:#2A2620 !important; border-color:#5a5446 !important; }
+  .hb-ghost:hover:not(:disabled) { background:rgba(79,183,154,.10) !important; color:#6ecab0 !important; }
+  .hb-danger:hover:not(:disabled) { background:rgba(224,102,97,.12) !important; border-color:#8d4441 !important; color:#ec8683 !important; }
+  .hb-icon:hover:not(:disabled) { background:#2A2620 !important; border-color:#5a5446 !important; color:#EFEAE0 !important; }
+  .hb-seg:not(.hb-seg-on):hover:not(:disabled) { background:#232019 !important; color:#EFEAE0 !important; }
+  .hm-row:hover { background:#2A2620 !important; }
+  .hm-row:hover .hm-ico { color:#EFEAE0 !important; }
+  .hm-danger:hover { background:rgba(224,102,97,.12) !important; color:#ec8683 !important; }
+  .hm-ws:hover { background:#2A2620 !important; }
+  .hm-chip:hover { background:#2A2620 !important; }
+  .hz-nav:hover { background:#161510 !important; color:#EFEAE0 !important; }
+  .hz-row:hover { background:#161510 !important; }
+  .hz-tab:hover { color:#EFEAE0 !important; }
+  input.hf, textarea.hf { transition: border-color .14s ease, background .14s ease, box-shadow .16s ease; width:100%; padding:12px 12px; background:#100F0C; border:1px solid #3d382e; border-radius:8px; font-family:'Instrument Sans',sans-serif; font-size:14px; color:#EFEAE0; outline:none; }
+  input.hf::placeholder, textarea.hf::placeholder { color:#5a5446; }
+  input.hf:hover:not(:focus), textarea.hf:hover:not(:focus) { border-color:#5a5446; background:#161510; }
+  input.hf:focus, textarea.hf:focus { border-color:#4FB79A; box-shadow:0 0 0 3px rgba(79,183,154,.18); }
+  input.hf.mono { font-family:'IBM Plex Mono',monospace; }
+  input.hf:disabled { background:#161510; color:#8f8676; cursor:not-allowed; }
+  ::selection { background:#1F5C4D; color:#F6F2E9; }
+  * { scrollbar-width: thin; scrollbar-color: #3d382e transparent; }
+  ::-webkit-scrollbar { width:10px; height:10px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:#3d382e; border-radius:999px; border:2px solid transparent; background-clip:content-box; }
+  ::-webkit-scrollbar-thumb:hover { background:#5a5446; background-clip:content-box; }
+  a { color:#4FB79A; text-decoration:none; }
+  a:hover { color:#6ecab0; }
+</style>
+</helmet>
+
+<div style="display:flex; height:100vh; min-height:820px; font-family:'Instrument Sans',sans-serif; color:#EFEAE0; background:#100F0C;">
+
+  <!-- ================= COMPACT RAIL ================= -->
+  <sc-if value="{{ collapsed }}" hint-placeholder-val="{{ false }}">
+  <div style="width:76px; flex:0 0 76px; background:#1A1813; border-right:1px solid #322E26; display:flex; flex-direction:column; align-items:center; padding:20px 12px;">
+    <div style="position:relative; width:34px; height:34px; flex:0 0 34px; border-radius:8px; background:#1F5C4D; overflow:hidden; margin-bottom:8px;">
+      <div style="position:absolute; left:50%; top:5px; width:1.5px; height:6px; background:#E7C079; transform:translateX(-50%);"></div>
+      <div style="position:absolute; left:50%; bottom:8px; width:16px; height:16px; border-radius:50%; background:#D99A3C; transform:translateX(-50%);"></div>
+      <div style="position:absolute; left:0; right:0; bottom:0; height:11px; background:#164034;"></div>
+    </div>
+    <button class="hb-icon" onClick="{{ toggleRail }}" title="Expand" style="width:30px; height:30px; background:#232019; border:1px solid #3d382e; border-radius:8px; color:#A29C8D; cursor:pointer; margin-bottom:20px; font-size:14px;">»</button>
+    <button class="hb-primary" title="Start timer" style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; background:#4FB79A; color:#0d211b; border:none; border-radius:11px; cursor:pointer; margin-bottom:20px;"><span style="width:16px; height:16px; border-radius:50%; border:2px solid #0d211b; position:relative; display:inline-block;"><span style="position:absolute; left:50%; top:3px; width:1.5px; height:5px; background:#0d211b; transform:translateX(-50%);"></span></span></button>
+    <div style="display:flex; flex-direction:column; gap:8px; align-items:center;">
+      <a href="04_Timesheet.dc.html" title="Timesheet" style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; border-radius:11px; color:#8f8676; font-size:16px;">◷</a>
+      <div title="Projects" style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; border-radius:11px; background:#232019; border:1px solid #322E26; color:#4FB79A; font-size:16px;">▤</div>
+      <a href="06_Approvals.dc.html" title="Approvals" style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; border-radius:11px; color:#8f8676; font-size:16px;">✓</a>
+      <a href="07_Reports.dc.html" title="Reports" style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; border-radius:11px; color:#8f8676; font-size:16px;">▦</a>
+    </div>
+    <div style="flex:1;"></div>
+    <div title="Mira Kovač" style="width:38px; height:38px; flex:0 0 38px; border-radius:50%; background:#1F5C4D; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:16px; color:#EFEAE0;">M</div>
+  </div>
+  </sc-if>
+
+  <!-- ================= LEFT RAIL ================= -->
+  <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}">
+  <div style="width:264px; flex:0 0 264px; background:#1A1813; border-right:1px solid #322E26; display:flex; flex-direction:column; padding:20px 16px;">
+    <div style="display:flex; align-items:center; gap:12px; padding:4px 8px 20px;">
+      <div style="position:relative; width:34px; height:34px; flex:0 0 34px; border-radius:8px; background:#1F5C4D; overflow:hidden;">
+        <div style="position:absolute; left:50%; top:5px; width:1.5px; height:6px; background:#E7C079; transform:translateX(-50%);"></div>
+        <div style="position:absolute; left:50%; bottom:8px; width:16px; height:16px; border-radius:50%; background:#D99A3C; transform:translateX(-50%);"></div>
+        <div style="position:absolute; left:0; right:0; bottom:0; height:11px; background:#164034;"></div>
+      </div>
+      <div style="display:flex; align-items:baseline;">
+        <span style="font-family:'Newsreader',serif; font-size:24px; font-weight:600; letter-spacing:-.01em; color:#F6F2E9;">Horae</span>
+        <span style="width:4px; height:4px; border-radius:50%; background:#D99A3C; margin-left:4px; align-self:flex-end; margin-bottom:4px;"></span>
+      </div>
+      <div style="flex:1;"></div>
+      <button class="hb-icon" onClick="{{ toggleRail }}" title="Collapse" style="width:30px; height:30px; background:transparent; border:1px solid #322E26; border-radius:8px; color:#8f8676; cursor:pointer; font-size:14px;">«</button>
+    </div>
+
+    <button class="hb-primary" style="display:flex; align-items:center; justify-content:center; gap:8px; padding:12px 16px; background:#4FB79A; color:#0d211b; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer; margin-bottom:24px;">
+      <span style="width:16px; height:16px; border-radius:50%; border:2px solid #0d211b; position:relative; display:inline-block;"><span style="position:absolute; left:50%; top:2px; width:1.5px; height:4px; background:#0d211b; transform:translateX(-50%);"></span></span>
+      Start timer
+    </button>
+
+    <div style="font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353; padding:0 8px 8px;">Track</div>
+    <div style="display:flex; flex-direction:column; gap:4px; margin-bottom:20px;">
+      <a href="04_Timesheet.dc.html" class="hz-nav" style="display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; color:#A29C8D;"><span style="width:8px; height:8px; border-radius:50%; border:1.5px solid #5a5446;"></span><span style="font-size:14px;">Timesheet</span></a>
+    </div>
+    <div style="font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353; padding:0 8px 8px;">Organize</div>
+    <div style="display:flex; flex-direction:column; gap:4px; margin-bottom:20px;">
+      <a href="05_Projects.dc.html" style="display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; background:#232019; border:1px solid #322E26;"><span style="width:8px; height:8px; border-radius:2px; background:#4FB79A;"></span><span style="font-size:14px; font-weight:600; color:#F6F2E9;">Projects</span></a>
+    </div>
+    <div style="font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353; padding:0 8px 8px;">Review</div>
+    <div style="display:flex; flex-direction:column; gap:4px;">
+      <a href="06_Approvals.dc.html" class="hz-nav" style="display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; color:#A29C8D;"><span style="width:8px; height:8px; border-radius:50%; border:1.5px solid #5a5446;"></span><span style="font-size:14px;">Approvals</span></a>
+      <a href="07_Reports.dc.html" class="hz-nav" style="display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; color:#A29C8D;"><span style="display:inline-flex; align-items:flex-end; gap:2px; height:12px;"><span style="width:2.5px; height:6px; background:#5a5446;"></span><span style="width:2.5px; height:12px; background:#5a5446;"></span><span style="width:2.5px; height:8px; background:#5a5446;"></span></span><span style="font-size:14px;">Reports</span></a>
+    </div>
+
+    <div style="flex:1;"></div>
+
+    <div style="position:relative;">
+      <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
+      <div style="position:absolute; bottom:56px; left:0; width:252px; background:#201D17; border:1px solid #3d382e; border-radius:11px; overflow:hidden; box-shadow:0 24px 60px -18px rgba(0,0,0,.8); z-index:40;">
+        <div style="display:flex; align-items:center; gap:12px; padding:16px 16px 12px; border-bottom:1px solid #322E26;">
+          <div style="width:40px; height:40px; flex:0 0 40px; border-radius:50%; background:#1F5C4D; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:18px; color:#EFEAE0;">M</div>
+          <div style="min-width:0;"><div style="font-size:14px; font-weight:600; color:#F6F2E9;">Mira Kovač</div><div style="font-size:12px; color:#8f8676;">mira@fieldstone.studio</div></div>
+        </div>
+        <div style="padding:8px;">
+          <a href="08_Settings.dc.html" class="hm-row" style="display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; font-size:14px; color:#EFEAE0;"><span class="hm-ico" style="color:#8f8676; width:15px;">◔</span> My profile</a>
+          <a href="09_Workspace.dc.html" class="hm-row" style="display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; font-size:14px; color:#EFEAE0;"><span class="hm-ico" style="color:#8f8676; width:15px;">◍</span> Workspace settings</a>
+          <a href="10_Importers.dc.html" class="hm-row" style="display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; font-size:14px; color:#EFEAE0;"><span class="hm-ico" style="color:#8f8676; width:15px;">↧</span> Importers</a>
+        </div>
+        <div style="padding:8px; border-top:1px solid #322E26;">
+          <a href="01_Sign In.dc.html" class="hm-row hm-danger" style="display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; font-size:14px; color:#E06661;"><span style="width:15px;">→</span> Sign out</a>
+        </div>
+      </div>
+      </sc-if>
+      <div onClick="{{ toggleMenu }}" class="hm-chip" style="display:flex; align-items:center; gap:12px; padding:8px; border-radius:11px; background:#232019; border:1px solid #3d382e; cursor:pointer;">
+        <div style="width:34px; height:34px; flex:0 0 34px; border-radius:50%; background:#1F5C4D; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; color:#EFEAE0;">M</div>
+        <div style="min-width:0;"><div style="font-size:14px; font-weight:600; color:#F6F2E9;">Mira Kovač</div><div style="font-size:12px; color:#8f8676;">Fieldstone Studio</div></div>
+        <div style="flex:1;"></div>
+        <span style="color:#6a6353; font-size:14px;">◔</span>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ================= MAIN ================= -->
+  <div style="flex:1; min-width:0; display:flex; flex-direction:column; overflow:hidden;">
+
+    <!-- prototype page controls -->
+    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:12px 44px; background:#161510; border-bottom:1px solid #262219;">
+      <span style="display:inline-flex; align-items:center; gap:8px; padding:4px 8px; background:#2b2413; color:#e0b45f; border:1px solid #453818; border-radius:999px; font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.1em; text-transform:uppercase; font-weight:600;"><span style="width:6px; height:6px; border-radius:999px; background:#D6A24A;"></span>Dev mode</span>
+      <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353;">Page state</span>
+      <div style="display:inline-flex; background:#100F0C; border:1px solid #322E26; border-radius:8px; padding:4px;">
+        <button onClick="{{ showDetail }}" class="hb-seg" style="{{ segDetail }}">Project detail</button>
+        <button onClick="{{ showEdit }}" class="hb-seg" style="{{ segEdit }}">Edit project</button>
+      </div>
+    </div>
+
+    <div style="flex:1; overflow-y:auto; min-height:0;">
+
+    <!-- ============================ DETAIL ============================ -->
+    <sc-if value="{{ isDetail }}" hint-placeholder-val="{{ true }}">
+    <div style="padding:24px 44px 64px;">
+      <a href="05_Projects.dc.html" style="display:inline-flex; align-items:center; gap:8px; font-size:14px; color:#A29C8D;"><span style="font-size:16px;">←</span> Back to Projects</a>
+
+      <div style="display:flex; align-items:flex-end; gap:16px; flex-wrap:wrap; margin-top:20px; padding-bottom:24px; border-bottom:1px solid #262219;">
+        <div style="min-width:280px;">
+          <a href="#" style="font-size:14px; font-weight:600; text-decoration:underline; text-underline-offset:3px;">Rún Collective</a>
+          <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:8px;">
+            <h1 style="font-family:'Newsreader',serif; font-size:34px; font-weight:600; color:#F6F2E9; margin:0; letter-spacing:-.015em;">[OSS] Self-hosting fund</h1>
+            <span style="display:inline-flex; padding:4px 8px; background:#232019; border:1px solid #3d382e; border-radius:999px; font-size:12px; color:#A29C8D; white-space:nowrap;">Fixed Fee</span>
+          </div>
+        </div>
+        <div style="flex:1;"></div>
+        <button onClick="{{ showEdit }}" class="hb-secondary" style="display:flex; align-items:center; gap:8px; padding:8px 16px; background:#232019; border:1px solid #3d382e; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer;">✎ Edit project</button>
+        <div style="position:relative;">
+          <button onClick="{{ toggleActions }}" class="hb-secondary" style="display:flex; align-items:center; gap:8px; padding:8px 16px; background:#232019; border:1px solid #3d382e; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer;">Actions <span style="color:#8f8676; font-size:12px;">▾</span></button>
+          <sc-if value="{{ actionsOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute; right:0; top:48px; width:180px; background:#201D17; border:1px solid #3d382e; border-radius:11px; box-shadow:0 24px 60px -18px rgba(0,0,0,.75); padding:8px; z-index:40;">
+            <div class="hm-row" style="padding:8px 12px; border-radius:6px; font-size:14px; color:#EFEAE0; cursor:pointer;">Pin</div>
+            <div class="hm-row" style="padding:8px 12px; border-radius:6px; font-size:14px; color:#EFEAE0; cursor:pointer;">Duplicate</div>
+            <div style="height:1px; background:#322E26; margin:8px 0;"></div>
+            <div class="hm-row" style="padding:8px 12px; border-radius:6px; font-size:14px; color:#EFEAE0; cursor:pointer;">Archive</div>
+            <div class="hm-row hm-danger" style="padding:8px 12px; border-radius:6px; font-size:14px; color:#E06661; cursor:pointer;">Delete</div>
+          </div>
+          </sc-if>
+        </div>
+      </div>
+
+      <!-- chart -->
+      <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; padding:20px; margin-top:24px;">
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:20px;">
+          <div style="display:inline-flex; background:#100F0C; border:1px solid #322E26; border-radius:8px; padding:4px;">
+            <button onClick="{{ showProgress }}" class="hb-seg" style="{{ segProgress }}">Project progress</button>
+            <button onClick="{{ showWeekly }}" class="hb-seg" style="{{ segWeekly }}">Hours per week</button>
+          </div>
+          <div style="flex:1;"></div>
+          <div style="display:flex; align-items:center; background:#100F0C; border:1px solid #322E26; border-radius:11px; overflow:hidden;">
+            <button class="hb-secondary" style="width:44px; height:44px; background:transparent; border:none; border-right:1px solid #322E26; color:#A29C8D; cursor:pointer; font-size:16px;">←</button>
+            <div style="display:flex; align-items:center; gap:8px; padding:0 16px; font-size:14px; color:#EFEAE0;"><span style="color:#8f8676;">▦</span><span style="font-weight:600;">This week</span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">06 – 12 Jul 2026</span></div>
+            <button class="hb-secondary" style="width:44px; height:44px; background:transparent; border:none; border-left:1px solid #322E26; color:#5a5446; cursor:not-allowed; font-size:16px;">→</button>
+          </div>
+        </div>
+        <div style="display:flex; gap:16px;">
+          <div style="display:flex; flex-direction:column; justify-content:space-between; padding:4px 0 24px; font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6a6353;">
+            <span>150</span><span>100</span><span>50</span><span>0</span>
+          </div>
+          <div style="flex:1; min-width:0;">
+            <div style="position:relative; height:220px; border-bottom:1px solid #322E26;">
+              <div style="position:absolute; left:0; right:0; top:0; height:1px; background:#201d17;"></div>
+              <div style="position:absolute; left:0; right:0; top:33%; height:1px; background:#201d17;"></div>
+              <div style="position:absolute; left:0; right:0; top:66%; height:1px; background:#201d17;"></div>
+              <div style="position:absolute; left:0; right:0; bottom:0; top:0; display:flex; align-items:flex-end; gap:4px;">
+                <sc-for list="{{ bars }}" as="bar" hint-placeholder-count="24">
+                  <div style="flex:1; display:flex; flex-direction:column; justify-content:flex-end; height:100%;">
+                    <div style="{{ bar.style }}"></div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-top:8px; font-size:12px; color:#6a6353;">
+              <span>Apr 2026</span><span>May 2026</span><span>Jun 2026</span><span>Jul 2026</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- stat tiles -->
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; margin-top:16px;">
+        <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; padding:20px;">
+          <div style="font-size:14px; color:#A29C8D;">Total hours</div>
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:30px; font-weight:600; color:#F6F2E9; margin:8px 0 16px;">119.85</div>
+          <div style="display:flex; justify-content:space-between; font-size:14px; padding:4px 0;"><span style="color:#EFEAE0;">Billable</span><span style="font-family:'IBM Plex Mono',monospace; color:#A29C8D;">119.85</span></div>
+          <div style="display:flex; justify-content:space-between; font-size:14px; padding:4px 0;"><span style="color:#EFEAE0;">Non-billable</span><span style="font-family:'IBM Plex Mono',monospace; color:#A29C8D;">0.00</span></div>
+        </div>
+        <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; padding:20px;">
+          <div style="font-size:14px; color:#A29C8D;">Budget remaining</div>
+          <div style="font-size:14px; color:#8f8676; margin:8px 0 12px; line-height:1.5;">No budget is set on this project.</div>
+          <span onClick="{{ showEdit }}" style="font-size:14px; font-weight:600; color:#4FB79A; cursor:pointer;">Set up a budget</span>
+        </div>
+        <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; padding:20px;">
+          <div style="font-size:14px; color:#A29C8D;">Internal costs</div>
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:30px; font-weight:600; color:#5a5446; margin-top:8px;">N/A</div>
+          <div style="font-size:12px; color:#7C7565; margin-top:12px;">No cost rates set for this team.</div>
+        </div>
+        <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; padding:20px;">
+          <div style="font-size:14px; color:#A29C8D;">Invoiced</div>
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:30px; font-weight:600; color:#F6F2E9; margin-top:8px;">€5,350.00</div>
+          <div style="font-size:12px; color:#7C7565; margin-top:12px;">Across 3 invoices.</div>
+        </div>
+        <div style="background:rgba(224,102,97,.06); border:1px solid #4d2523; border-radius:20px; padding:20px;">
+          <div style="font-size:14px; color:#A29C8D;">Uninvoiced</div>
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:30px; font-weight:600; color:#ec8683; margin-top:8px;">−€5,300.00</div>
+          <div style="display:flex; align-items:baseline; justify-content:space-between; margin-top:12px;"><span style="font-size:12px; color:#7C7565;">Total project fees</span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">€50.00</span></div>
+          <a href="#" style="display:inline-block; font-size:14px; font-weight:600; margin-top:12px;">New invoice →</a>
+        </div>
+      </div>
+
+      <!-- tabs -->
+      <div style="display:flex; align-items:center; gap:24px; margin-top:32px; border-bottom:1px solid #262219;">
+        <span onClick="{{ tabTasks }}" class="hz-tab" style="{{ tabTasksStyle }}">Tasks</span>
+        <span onClick="{{ tabTeam }}" class="hz-tab" style="{{ tabTeamStyle }}">Team</span>
+        <span onClick="{{ tabInvoices }}" class="hz-tab" style="{{ tabInvoicesStyle }}">Invoices</span>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:24px 0 16px;">
+        <span style="font-family:'Newsreader',serif; font-size:24px; font-weight:600; color:#F6F2E9;">All time</span>
+        <div style="flex:1;"></div>
+        <button class="hb-secondary" style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:#1A1813; border:1px solid #322E26; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer;">All time <span style="color:#8f8676; font-size:12px;">▾</span></button>
+        <button class="hb-secondary" style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:#1A1813; border:1px solid #322E26; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer;">Export <span style="color:#8f8676; font-size:12px;">▾</span></button>
+      </div>
+
+      <sc-if value="{{ isTasks }}" hint-placeholder-val="{{ true }}">
+      <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; overflow:hidden;">
+        <div style="display:grid; grid-template-columns:1fr 120px 120px; padding:12px 20px; background:#161510; border-bottom:1px solid #262219; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:#6a6353;">
+          <span>Billable tasks</span><span style="text-align:right;">Hours</span><span style="text-align:right;">Costs</span>
+        </div>
+        <sc-for list="{{ tasks }}" as="task" hint-placeholder-count="6">
+          <div class="hz-row" style="display:grid; grid-template-columns:1fr 120px 120px; align-items:center; padding:12px 20px; border-bottom:1px solid #201d17;">
+            <div style="display:flex; align-items:center; gap:12px;"><span style="color:#6a6353; font-size:12px;">{{ task.caret }}</span><span style="font-size:14px; color:#EFEAE0;">{{ task.name }}</span></div>
+            <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:{{ task.hoursColor }};">{{ task.hours }}</span>
+            <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#A29C8D;">€0.00</span>
+          </div>
+        </sc-for>
+        <div style="display:grid; grid-template-columns:1fr 120px 120px; align-items:center; padding:12px 20px; background:#161510; font-size:14px; font-weight:600;">
+          <span style="color:#F6F2E9;">Total</span>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; color:#F6F2E9;">119.85</span>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; color:#A29C8D;">€0.00</span>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ isTeam }}" hint-placeholder-val="{{ false }}">
+      <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; overflow:hidden;">
+        <div style="display:grid; grid-template-columns:1fr 140px 120px; padding:12px 20px; background:#161510; border-bottom:1px solid #262219; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:#6a6353;">
+          <span>Member</span><span>Cost rate</span><span style="text-align:right;">Hours</span>
+        </div>
+        <div class="hz-row" style="display:grid; grid-template-columns:1fr 140px 120px; align-items:center; padding:12px 20px; border-bottom:1px solid #201d17;">
+          <div style="display:flex; align-items:center; gap:12px;"><span style="width:34px; height:34px; flex:0 0 34px; border-radius:50%; background:#1F5C4D; display:inline-flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; color:#EFEAE0;">M</span><span style="font-size:14px; color:#F6F2E9;">Mira Kovač</span></div>
+          <span style="font-size:14px; color:#8f8676;">Missing rate</span>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">96.40</span>
+        </div>
+        <div class="hz-row" style="display:grid; grid-template-columns:1fr 140px 120px; align-items:center; padding:12px 20px;">
+          <div style="display:flex; align-items:center; gap:12px;"><span style="width:34px; height:34px; flex:0 0 34px; border-radius:50%; background:#6b4a1a; display:inline-flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; color:#EFEAE0;">A</span><span style="font-size:14px; color:#F6F2E9;">Aisha Rahmani</span></div>
+          <span style="font-family:'IBM Plex Mono',monospace; font-size:14px; color:#A29C8D;">€65.00 / h</span>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">23.45</span>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ isInvoices }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:64px 24px; background:#1A1813; border:1px solid #322E26; border-radius:20px; text-align:center;">
+        <div style="width:52px; height:52px; border-radius:50%; background:#232019; border:1px solid #3d382e; display:flex; align-items:center; justify-content:center; color:#5a5446; font-size:20px;">▤</div>
+        <div style="font-family:'Newsreader',serif; font-size:20px; font-weight:600; color:#F6F2E9;">No invoices yet</div>
+        <div style="font-size:14px; color:#8f8676; max-width:360px; line-height:1.55;">€5,300.00 of tracked work is waiting to be billed.</div>
+        <button class="hb-primary" style="margin-top:4px; padding:12px 20px; background:#4FB79A; color:#0d211b; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer;">New invoice</button>
+      </div>
+      </sc-if>
+    </div>
+    </sc-if>
+
+    <!-- ============================ EDIT ============================ -->
+    <sc-if value="{{ isEdit }}" hint-placeholder-val="{{ false }}">
+    <div style="padding:24px 44px 64px; max-width:960px;">
+      <span onClick="{{ showDetail }}" style="display:inline-flex; align-items:center; gap:8px; font-size:14px; color:#A29C8D; cursor:pointer;"><span style="font-size:16px;">←</span> Back to project</span>
+      <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin:20px 0 32px;">
+        <h1 style="font-family:'Newsreader',serif; font-size:34px; font-weight:600; color:#F6F2E9; margin:0; letter-spacing:-.015em;">Edit project</h1>
+        <sc-if value="{{ dirty }}" hint-placeholder-val="{{ false }}">
+        <span style="display:inline-flex; align-items:center; gap:8px; padding:4px 8px; background:#2b2413; color:#e0b45f; border:1px solid #453818; border-radius:999px; font-size:12px; font-weight:600;"><span style="width:6px; height:6px; border-radius:999px; background:#D6A24A;"></span>Unsaved changes</span>
+        </sc-if>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:24px;">
+        <div style="display:grid; grid-template-columns:160px 1fr; gap:20px; align-items:start;">
+          <label style="font-size:14px; color:#EFEAE0; padding-top:12px;">Client</label>
+          <div>
+            <input class="hf" value="Rún Collective" disabled="disabled" />
+            <div style="font-size:12px; color:#7C7565; margin-top:8px; line-height:1.5;">Locked while invoices are linked. Unlink them from the Invoices tab to change it.</div>
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:160px 1fr; gap:20px; align-items:center;">
+          <label style="font-size:14px; color:#EFEAE0;">Project name</label>
+          <input class="hf" value="Self-hosting fund" />
+        </div>
+        <div style="display:grid; grid-template-columns:160px 1fr; gap:20px; align-items:start;">
+          <label style="font-size:14px; color:#EFEAE0; padding-top:12px;">Project code</label>
+          <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+            <input class="hf mono" value="OSS" style="max-width:160px;" />
+            <span style="font-size:12px; color:#7C7565;">Last code for this client: OSS</span>
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:160px 1fr; gap:20px; align-items:start;">
+          <label style="font-size:14px; color:#EFEAE0; padding-top:12px;">Dates</label>
+          <div>
+            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+              <input class="hf mono" placeholder="Starts on" style="max-width:180px;" />
+              <span style="font-size:14px; color:#8f8676;">to</span>
+              <input class="hf mono" placeholder="Ends on" style="max-width:180px;" />
+            </div>
+            <div style="font-size:12px; color:#7C7565; margin-top:8px;">Optional — time can still be tracked outside this range.</div>
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:160px 1fr; gap:20px; align-items:start;">
+          <label style="font-size:14px; color:#EFEAE0; padding-top:12px;">Tags</label>
+          <div>
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:8px; background:#100F0C; border:1px solid #3d382e; border-radius:8px;">
+              <sc-for list="{{ tags }}" as="tag" hint-placeholder-count="2">
+                <span style="display:inline-flex; align-items:center; gap:8px; padding:4px 8px; background:#232019; border:1px solid #3d382e; border-radius:999px; font-size:12px; color:#EFEAE0; white-space:nowrap;">{{ tag.name }}<span onClick="{{ tag.remove }}" style="color:#8f8676; cursor:pointer;">×</span></span>
+              </sc-for>
+              <input value="{{ tagDraft }}" onChange="{{ setTagDraft }}" onKeyDown="{{ addTag }}" placeholder="Add a tag…" style="flex:1; min-width:120px; padding:4px; background:transparent; border:none; color:#EFEAE0; font-family:inherit; font-size:14px; outline:none;" />
+            </div>
+            <div style="font-size:12px; color:#7C7565; margin-top:8px;">Your own labels — filter and report by them later.</div>
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:160px 1fr; gap:20px; align-items:center;">
+          <label style="font-size:14px; color:#EFEAE0;">Billing currency</label>
+          <input class="hf" value="Same as client — EUR" style="max-width:320px;" />
+        </div>
+        <div style="display:grid; grid-template-columns:160px 1fr; gap:20px; align-items:start;">
+          <label style="font-size:14px; color:#EFEAE0; padding-top:12px;">Notes</label>
+          <div>
+            <textarea class="hf" rows="3" value="{{ notes }}" onChange="{{ setNotes }}"></textarea>
+            <div style="font-size:12px; color:#7C7565; margin-top:8px;">Visible to admins only.</div>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:160px 1fr; gap:20px; align-items:start;">
+          <label style="font-size:14px; color:#EFEAE0;">Report access</label>
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <div onClick="{{ pickPermAdmin }}" style="display:grid; grid-template-columns:20px 1fr; gap:12px; cursor:pointer;">
+              <span style="{{ radioAdmin }}"><span style="{{ radioAdminDot }}"></span></span>
+              <span style="font-size:14px; color:#EFEAE0;">Admins and whoever manages this project</span>
+            </div>
+            <div onClick="{{ pickPermAll }}" style="display:grid; grid-template-columns:20px 1fr; gap:12px; cursor:pointer;">
+              <span style="{{ radioAll }}"><span style="{{ radioAllDot }}"></span></span>
+              <span style="font-size:14px; color:#EFEAE0;">Everyone on this project</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:160px 1fr; gap:20px; align-items:start;">
+          <label style="font-size:14px; color:#EFEAE0;">Project type</label>
+          <div>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px;">
+              <div onClick="{{ pickTM }}" style="{{ typeTM }}">
+                <div style="font-size:14px; font-weight:600; color:#F6F2E9;">Time &amp; Materials</div>
+                <div style="font-size:12px; color:#8f8676; margin-top:4px; line-height:1.5;">Bill by the hour, at billable rates.</div>
+              </div>
+              <div onClick="{{ pickFixed }}" style="{{ typeFixed }}">
+                <div style="font-size:14px; font-weight:600; color:#F6F2E9;">Fixed Fee</div>
+                <div style="font-size:12px; color:#8f8676; margin-top:4px; line-height:1.5;">A set price, whatever the hours.</div>
+              </div>
+              <div onClick="{{ pickNonBill }}" style="{{ typeNonBill }}">
+                <div style="font-size:14px; font-weight:600; color:#F6F2E9;">Non-billable</div>
+                <div style="font-size:12px; color:#8f8676; margin-top:4px; line-height:1.5;">Internal work, never invoiced.</div>
+              </div>
+            </div>
+
+            <sc-if value="{{ isFixed }}" hint-placeholder-val="{{ true }}">
+            <div style="margin-top:16px; padding:20px; background:rgba(31,92,77,.14); border:1px solid #24402f; border-radius:11px;">
+              <div style="font-size:14px; font-weight:600; color:#F6F2E9;">Project fees</div>
+              <div style="font-size:12px; color:#8f8676; margin:4px 0 16px;">How this fee gets invoiced.</div>
+              <div style="display:inline-flex; background:#100F0C; border:1px solid #322E26; border-radius:8px; padding:4px;">
+                <button onClick="{{ pickSingle }}" class="hb-seg" style="{{ feeSingle }}">Single fee</button>
+                <button onClick="{{ pickMilestone }}" class="hb-seg" style="{{ feeMilestone }}">Milestones</button>
+                <button onClick="{{ pickMonthly }}" class="hb-seg" style="{{ feeMonthly }}">Monthly</button>
+              </div>
+              <div style="display:flex; align-items:stretch; border:1px solid #3d382e; border-radius:8px; overflow:hidden; max-width:220px; margin-top:16px;">
+                <span style="display:flex; align-items:center; padding:0 12px; background:#161510; border-right:1px solid #3d382e; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#8f8676;">€</span>
+                <input value="12,000.00" style="flex:1; min-width:0; padding:12px 12px; background:#100F0C; border:none; color:#EFEAE0; font-family:'IBM Plex Mono',monospace; font-size:14px; outline:none;" />
+              </div>
+            </div>
+            </sc-if>
+            <div style="margin-top:16px; padding:20px; background:#1A1813; border:1px solid #322E26; border-radius:11px;">
+              <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                <div style="flex:1; min-width:200px;">
+                  <div style="font-size:14px; font-weight:600; color:#F6F2E9;">Budget</div>
+                  <div style="font-size:12px; color:#8f8676; margin-top:4px;">Track progress and warn before the project runs over.</div>
+                </div>
+                <span onClick="{{ toggleBudget }}" style="{{ budgetTrack }}"><span style="{{ budgetKnob }}"></span></span>
+              </div>
+              <sc-if value="{{ budgetOn }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:16px; padding-top:16px; border-top:1px solid #262219; display:flex; flex-direction:column; gap:16px;">
+                <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                  <button onClick="{{ bTotalHours }}" class="hb-seg" style="{{ bsTotalHours }}">Total hours</button>
+                  <button onClick="{{ bTotalFees }}" class="hb-seg" style="{{ bsTotalFees }}">Total fees</button>
+                  <button onClick="{{ bPerTask }}" class="hb-seg" style="{{ bsPerTask }}">Hours per task</button>
+                  <button onClick="{{ bPerPerson }}" class="hb-seg" style="{{ bsPerPerson }}">Hours per person</button>
+                </div>
+                <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+                  <div style="display:flex; align-items:stretch; border:1px solid #3d382e; border-radius:8px; overflow:hidden; max-width:200px;">
+                    <span style="display:flex; align-items:center; padding:0 12px; background:#161510; border-right:1px solid #3d382e; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#8f8676;">{{ budgetUnit }}</span>
+                    <input value="160" style="flex:1; min-width:0; padding:12px 12px; background:#100F0C; border:none; color:#EFEAE0; font-family:'IBM Plex Mono',monospace; font-size:14px; outline:none;" />
+                  </div>
+                  <span style="font-size:12px; color:#7C7565;">{{ budgetHint }}</span>
+                </div>
+                <label style="display:flex; align-items:center; gap:12px; font-size:14px; color:#EFEAE0; cursor:pointer;">
+                  <span onClick="{{ toggleWarn }}" style="{{ warnBox }}">{{ warnMark }}</span>
+                  Email the project manager at 80% of budget
+                </label>
+              </div>
+              </sc-if>
+            </div>
+          </div>
+        </div>
+
+        <!-- tasks -->
+        <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; overflow:hidden;">
+          <div style="display:flex; align-items:center; gap:12px; padding:16px 20px; border-bottom:1px solid #262219;">
+            <span style="font-family:'Newsreader',serif; font-size:20px; font-weight:600; color:#F6F2E9;">Tasks</span>
+            <div style="flex:1;"></div>
+            <div style="display:flex; align-items:center; gap:8px; font-size:12px; color:#7C7565;">Billable<span style="color:#4FB79A; cursor:pointer;">all</span><span style="color:#3d382e;">/</span><span style="color:#4FB79A; cursor:pointer;">none</span></div>
+          </div>
+          <sc-for list="{{ editTasks }}" as="row" hint-placeholder-count="5">
+            <div class="hz-row" style="display:flex; align-items:center; gap:12px; padding:12px 20px; border-bottom:1px solid #201d17;">
+              <span style="width:20px; height:20px; flex:0 0 20px; border-radius:4px; border:1px solid #3d382e; display:inline-flex; align-items:center; justify-content:center; color:#8f8676; font-size:12px; cursor:pointer;">×</span>
+              <span style="flex:1; font-size:14px; color:#EFEAE0;">{{ row.name }}</span>
+              <span style="width:18px; height:18px; border-radius:4px; background:#4FB79A; display:inline-flex; align-items:center; justify-content:center; color:#0d211b; font-size:12px; font-weight:700; cursor:pointer;">✓</span>
+            </div>
+          </sc-for>
+          <div style="padding:16px 20px;">
+            <input class="hf" placeholder="Add a task…" style="max-width:320px;" />
+          </div>
+        </div>
+
+        <!-- team -->
+        <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; overflow:hidden;">
+          <div style="display:flex; align-items:center; gap:12px; padding:16px 20px; border-bottom:1px solid #262219;">
+            <span style="font-family:'Newsreader',serif; font-size:20px; font-weight:600; color:#F6F2E9;">Team</span>
+            <div style="flex:1;"></div>
+            <span style="font-size:12px; color:#7C7565;">Manages this project</span>
+          </div>
+          <div class="hz-row" style="display:flex; align-items:center; gap:12px; padding:12px 20px; border-bottom:1px solid #201d17; flex-wrap:wrap;">
+            <span style="width:20px; height:20px; flex:0 0 20px; border-radius:4px; border:1px solid #3d382e; display:inline-flex; align-items:center; justify-content:center; color:#8f8676; font-size:12px; cursor:pointer;">×</span>
+            <span style="width:34px; height:34px; flex:0 0 34px; border-radius:50%; background:#1F5C4D; display:inline-flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; color:#EFEAE0;">M</span>
+            <span style="flex:1; min-width:120px; font-size:14px; color:#EFEAE0;">Mira Kovač</span>
+            <sc-if value="{{ rateOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex; align-items:stretch; border:1px solid #3d382e; border-radius:8px; overflow:hidden; max-width:160px;">
+              <span style="display:flex; align-items:center; padding:0 8px; background:#161510; border-right:1px solid #3d382e; font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8f8676;">€</span>
+              <input value="85.00" style="flex:1; min-width:0; padding:8px; background:#100F0C; border:none; color:#EFEAE0; font-family:'IBM Plex Mono',monospace; font-size:14px; outline:none;" />
+              <span style="display:flex; align-items:center; padding:0 8px; background:#161510; border-left:1px solid #3d382e; font-size:12px; color:#8f8676;">/ h</span>
+            </div>
+            </sc-if>
+            <sc-if value="{{ rateClosed }}" hint-placeholder-val="{{ true }}">
+            <span style="font-size:14px; color:#8f8676;">Missing rate</span>
+            <span onClick="{{ openRate }}" style="font-size:14px; font-weight:600; color:#4FB79A; cursor:pointer;">Apply custom rate</span>
+            </sc-if>
+            <span style="width:18px; height:18px; border-radius:4px; background:#4FB79A; display:inline-flex; align-items:center; justify-content:center; color:#0d211b; font-size:12px; font-weight:700; cursor:pointer;">✓</span>
+          </div>
+          <div style="padding:16px 20px;">
+            <input class="hf" placeholder="Add a teammate…" style="max-width:320px;" />
+          </div>
+        </div>
+
+        <!-- invoice values -->
+        <div>
+          <div style="font-family:'Newsreader',serif; font-size:20px; font-weight:600; color:#F6F2E9; margin-bottom:16px;">Invoice values</div>
+          <div style="display:flex; flex-direction:column; gap:16px;">
+            <div style="display:grid; grid-template-columns:160px 1fr; gap:20px; align-items:center;">
+              <label style="font-size:14px; color:#EFEAE0;">Due date</label>
+              <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                <input class="hf" value="Net 30" style="max-width:180px;" />
+                <span style="font-size:14px; color:#8f8676;">days after issue</span>
+              </div>
+            </div>
+            <div style="display:grid; grid-template-columns:160px 1fr; gap:20px; align-items:center;">
+              <label style="font-size:14px; color:#EFEAE0;">PO number</label>
+              <input class="hf mono" placeholder="—" style="max-width:220px;" />
+            </div>
+            <div style="display:grid; grid-template-columns:160px 1fr; gap:20px; align-items:center;">
+              <label style="font-size:14px; color:#EFEAE0;">Tax</label>
+              <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                <div style="display:flex; align-items:stretch; border:1px solid #3d382e; border-radius:8px; overflow:hidden; max-width:120px;">
+                  <input value="21" style="flex:1; min-width:0; padding:12px 12px; background:#100F0C; border:none; color:#EFEAE0; font-family:'IBM Plex Mono',monospace; font-size:14px; outline:none;" />
+                  <span style="display:flex; align-items:center; padding:0 12px; background:#161510; border-left:1px solid #3d382e; font-size:14px; color:#8f8676;">%</span>
+                </div>
+                <span style="font-size:14px; font-weight:600; color:#4FB79A; cursor:pointer;">Add second tax</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:12px; padding-top:8px; flex-wrap:wrap;">
+          <button onClick="{{ saveProject }}" class="hb-primary" style="{{ saveStyle }}">{{ saveLabel }}</button>
+          <button onClick="{{ showDetail }}" class="hb-secondary" style="padding:12px 16px; background:#232019; color:#EFEAE0; border:1px solid #3d382e; border-radius:8px; font-family:inherit; font-size:14px; cursor:pointer;">{{ cancelLabel }}</button>
+          <div style="flex:1;"></div>
+          <button class="hb-danger" style="padding:12px 16px; background:transparent; color:#E06661; border:1px solid #6e3634; border-radius:8px; font-family:inherit; font-size:14px; cursor:pointer;">Archive project</button>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+    </div>
+  </div>
+
+  <sc-if value="{{ savedToast }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed; left:50%; bottom:24px; transform:translateX(-50%); display:flex; align-items:center; gap:12px; background:#000; border:1px solid #322E26; border-radius:11px; padding:12px 16px; box-shadow:0 24px 60px -18px rgba(0,0,0,.9); z-index:60;">
+    <span style="color:#4FB79A; font-size:14px;">✓</span>
+    <span style="font-size:14px; color:#EFEAE0;">Project updated</span>
+  </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:1000}}">
+class Component extends DCLogic {
+  state = { page: 'detail', collapsed: false, menuOpen: false, actionsOpen: false, chart: 'progress',
+            tab: 'tasks', perm: 'admin', type: 'fixed', fee: 'single', notes: '',
+            tags: ['open-source', 'infra'], tagDraft: '', budget: false, budgetKind: 'hours',
+            warn: true, rate: false, dirty: false, savedToast: false };
+
+  touch() { this.setState({ dirty: true }); }
+
+  renderVals() {
+    const s = this.state;
+    const pseg = (on) => on
+      ? 'padding:8px 12px; background:#1F5C4D; color:#F6F2E9; border:none; border-radius:6px; font-family:inherit; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;'
+      : 'padding:8px 12px; background:transparent; color:#8f8676; border:none; border-radius:6px; font-family:inherit; font-size:12px; cursor:pointer; white-space:nowrap;';
+    const seg = (on) => on
+      ? 'display:flex; align-items:center; gap:8px; padding:8px 12px; background:#1F5C4D; color:#F6F2E9; border:none; border-radius:6px; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer; white-space:nowrap;'
+      : 'display:flex; align-items:center; gap:8px; padding:8px 12px; background:transparent; color:#8f8676; border:none; border-radius:6px; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap;';
+    const tab = (on) => on
+      ? 'padding-bottom:12px; font-size:14px; font-weight:600; color:#F6F2E9; border-bottom:2px solid #4FB79A; cursor:pointer;'
+      : 'padding-bottom:12px; font-size:14px; color:#A29C8D; cursor:pointer;';
+    const radio = (on) => 'width:18px; height:18px; border-radius:50%; border:1.5px solid ' + (on ? '#4FB79A' : '#5a5446') + '; display:inline-flex; align-items:center; justify-content:center; margin-top:2px;';
+    const dot = (on) => on ? 'width:8px; height:8px; border-radius:50%; background:#4FB79A; display:block;' : 'display:none;';
+    const track = (on) => 'width:40px; height:22px; border-radius:999px; background:' + (on ? '#1F5C4D' : '#2A2620') + '; border:1px solid ' + (on ? '#2a6d5c' : '#3d382e') + '; position:relative; display:inline-block; flex:0 0 40px; cursor:pointer;';
+    const knob = (on) => 'position:absolute; ' + (on ? 'right:3px' : 'left:3px') + '; top:2px; width:16px; height:16px; border-radius:50%; background:' + (on ? '#EFEAE0' : '#8f8676') + ';';
+    const card = (on) => 'padding:16px; border-radius:11px; cursor:pointer; background:' + (on ? 'rgba(31,92,77,.18)' : '#1A1813') + '; border:1px solid ' + (on ? '#2a6d5c' : '#322E26') + ';';
+
+    // cumulative progress vs weekly hours, same 24 slots
+    const weekly = [2.5,4,3,5.5,6,4.5,7,3.5,5,6.5,4,8,5.5,3,6,7.5,4.5,5,6,3.5,7,5.5,4,6.5];
+    let acc = 0;
+    const bars = weekly.map((h, i) => {
+      acc += h;
+      const isProgress = s.chart === 'progress';
+      const pct = isProgress ? (acc / 130) * 100 : (h / 9) * 100;
+      const last = i === weekly.length - 1;
+      return { style: 'height:' + pct.toFixed(1) + '%; border-radius:2px 2px 0 0; background:' + (last ? '#4FB79A' : isProgress ? '#2a6d5c' : '#1F5C4D') + ';' };
+    });
+
+    const tasks = [
+      { name: 'DevOps', hours: '94.37', caret: '›', hoursColor: '#4FB79A' },
+      { name: 'Research', hours: '9.18', caret: '›', hoursColor: '#4FB79A' },
+      { name: 'Programming', hours: '6.08', caret: '›', hoursColor: '#4FB79A' },
+      { name: 'Project management', hours: '5.33', caret: '›', hoursColor: '#4FB79A' },
+      { name: 'QA', hours: '4.89', caret: '›', hoursColor: '#4FB79A' },
+      { name: 'Graphic design', hours: '0.00', caret: '', hoursColor: '#5a5446' },
+    ];
+
+    return {
+      expanded: !s.collapsed,
+      collapsed: s.collapsed,
+      toggleRail: () => this.setState(x => ({ collapsed: !x.collapsed, menuOpen: false })),
+      menuOpen: s.menuOpen === true,
+      toggleMenu: () => this.setState(x => ({ menuOpen: !x.menuOpen })),
+
+      isDetail: s.page === 'detail',
+      isEdit: s.page === 'edit',
+      showDetail: () => this.setState({ page: 'detail', actionsOpen: false, dirty: false, rate: false }),
+      showEdit: () => this.setState({ page: 'edit', actionsOpen: false }),
+      segDetail: pseg(s.page === 'detail'),
+      segEdit: pseg(s.page === 'edit'),
+
+      actionsOpen: s.actionsOpen === true,
+      toggleActions: () => this.setState(x => ({ actionsOpen: !x.actionsOpen })),
+
+      bars,
+      showProgress: () => this.setState({ chart: 'progress' }),
+      showWeekly: () => this.setState({ chart: 'weekly' }),
+      segProgress: seg(s.chart === 'progress'),
+      segWeekly: seg(s.chart === 'weekly'),
+
+      tasks,
+      isTasks: s.tab === 'tasks', isTeam: s.tab === 'team', isInvoices: s.tab === 'invoices',
+      tabTasks: () => this.setState({ tab: 'tasks' }),
+      tabTeam: () => this.setState({ tab: 'team' }),
+      tabInvoices: () => this.setState({ tab: 'invoices' }),
+      tabTasksStyle: tab(s.tab === 'tasks'),
+      tabTeamStyle: tab(s.tab === 'team'),
+      tabInvoicesStyle: tab(s.tab === 'invoices'),
+
+      notes: s.notes,
+      setNotes: (e) => this.setState({ notes: e.target.value, dirty: true }),
+      pickPermAdmin: () => this.setState({ perm: 'admin', dirty: true }),
+      pickPermAll: () => this.setState({ perm: 'all', dirty: true }),
+      radioAdmin: radio(s.perm === 'admin'), radioAdminDot: dot(s.perm === 'admin'),
+      radioAll: radio(s.perm === 'all'), radioAllDot: dot(s.perm === 'all'),
+
+      pickTM: () => this.setState({ type: 'tm', dirty: true }),
+      pickFixed: () => this.setState({ type: 'fixed', dirty: true }),
+      pickNonBill: () => this.setState({ type: 'nonbill', dirty: true }),
+      typeTM: card(s.type === 'tm'), typeFixed: card(s.type === 'fixed'), typeNonBill: card(s.type === 'nonbill'),
+      isFixed: s.type === 'fixed',
+      pickSingle: () => this.setState({ fee: 'single', dirty: true }),
+      pickMilestone: () => this.setState({ fee: 'milestone', dirty: true }),
+      pickMonthly: () => this.setState({ fee: 'monthly', dirty: true }),
+      feeSingle: pseg(s.fee === 'single'),
+      feeMilestone: pseg(s.fee === 'milestone'),
+      feeMonthly: pseg(s.fee === 'monthly'),
+
+      editTasks: [{ name: 'DevOps' }, { name: 'Research' }, { name: 'Programming' }, { name: 'Project management' }, { name: 'QA' }],
+
+      tags: s.tags.map((name, i) => ({ name, remove: () => this.setState(x => ({ tags: x.tags.filter((_, j) => j !== i), dirty: true })) })),
+      tagDraft: s.tagDraft,
+      setTagDraft: (e) => this.setState({ tagDraft: e.target.value }),
+      addTag: (e) => {
+        if (e.key !== 'Enter' || !this.state.tagDraft.trim()) return;
+        e.preventDefault();
+        this.setState(x => ({ tags: x.tags.concat(x.tagDraft.trim()), tagDraft: '', dirty: true }));
+      },
+
+      budgetOn: s.budget === true,
+      toggleBudget: () => this.setState(x => ({ budget: !x.budget, dirty: true })),
+      budgetTrack: track(s.budget),
+      budgetKnob: knob(s.budget),
+      bTotalHours: () => this.setState({ budgetKind: 'hours', dirty: true }),
+      bTotalFees: () => this.setState({ budgetKind: 'fees', dirty: true }),
+      bPerTask: () => this.setState({ budgetKind: 'task', dirty: true }),
+      bPerPerson: () => this.setState({ budgetKind: 'person', dirty: true }),
+      bsTotalHours: pseg(s.budgetKind === 'hours'),
+      bsTotalFees: pseg(s.budgetKind === 'fees'),
+      bsPerTask: pseg(s.budgetKind === 'task'),
+      bsPerPerson: pseg(s.budgetKind === 'person'),
+      budgetUnit: s.budgetKind === 'fees' ? '€' : 'h',
+      budgetHint: s.budgetKind === 'hours' ? 'Across the whole project.'
+        : s.budgetKind === 'fees' ? 'Billable fees, not internal cost.'
+        : s.budgetKind === 'task' ? 'Applied to every task on the project.'
+        : 'Applied to every teammate on the project.',
+      toggleWarn: () => this.setState(x => ({ warn: !x.warn, dirty: true })),
+      warnBox: 'width:18px; height:18px; flex:0 0 18px; border-radius:4px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; '
+        + (s.warn ? 'background:#4FB79A; color:#0d211b; border:none;' : 'border:1.5px solid #5a5446; color:transparent;'),
+      warnMark: s.warn ? '✓' : '',
+
+      rateOpen: s.rate === true,
+      rateClosed: s.rate !== true,
+      openRate: () => this.setState({ rate: true, dirty: true }),
+
+      dirty: s.dirty === true,
+      cancelLabel: s.dirty ? 'Discard changes' : 'Cancel',
+      saveLabel: s.dirty ? 'Update project' : 'No changes yet',
+      saveStyle: s.dirty
+        ? 'padding:12px 20px; background:#4FB79A; color:#0d211b; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer;'
+        : 'padding:12px 20px; background:#232019; color:#5a5446; border:1px solid #322E26; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:not-allowed;',
+      saveProject: () => {
+        if (!this.state.dirty) return;
+        this.setState({ dirty: false, savedToast: true, page: 'detail' });
+        setTimeout(() => this.setState({ savedToast: false }), 3200);
+      },
+      savedToast: s.savedToast === true,
+    };
+  }
+}
+</script>
+</body>
+</html>
+
