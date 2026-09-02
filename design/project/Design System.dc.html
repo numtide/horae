@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,500&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#100F0C; }
+  * { box-sizing:border-box; }
+  button, .hm-row, .hm-chip, .hm-ws { transition: background .14s ease, transform .08s ease, box-shadow .16s ease, border-color .14s ease, color .14s ease; }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(79,183,154,.35) !important; }
+  button:disabled { cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+  .hb-primary:hover:not(:disabled) { background:#63c9ac !important; box-shadow:0 6px 18px -8px rgba(79,183,154,.65) !important; }
+  .hb-solid:hover:not(:disabled) { background:#27705e !important; box-shadow:0 6px 18px -8px rgba(31,92,77,.7) !important; }
+  .hb-accent:hover:not(:disabled) { background:#e5ab52 !important; box-shadow:0 6px 18px -8px rgba(217,154,60,.6) !important; }
+  .hb-secondary:hover:not(:disabled) { background:#2c2820 !important; border-color:#5a5446 !important; }
+  .hb-ghost:hover:not(:disabled) { background:rgba(79,183,154,.10) !important; color:#6ecab0 !important; }
+  .hb-danger:hover:not(:disabled) { background:rgba(224,102,97,.12) !important; border-color:#8d4441 !important; color:#ec8683 !important; }
+  .hb-icon:hover:not(:disabled) { background:#2c2820 !important; border-color:#5a5446 !important; color:#EFEAE0 !important; }
+  .hb-caret:hover:not(:disabled) { background:#1b5347 !important; }
+  .hm-row:hover { background:#2a2620 !important; }
+  .hm-row:hover .hm-ico { color:#EFEAE0 !important; }
+  .hm-danger:hover { background:rgba(224,102,97,.12) !important; color:#ec8683 !important; }
+  .hm-ws:hover { background:#262218 !important; }
+  .hm-chip:hover { background:#2c2820 !important; }
+  ::selection { background:#1F5C4D; color:#F6F2E9; }
+  ::-moz-selection { background:#1F5C4D; color:#F6F2E9; }
+  * { scrollbar-width: thin; scrollbar-color: #3d382e transparent; }
+  ::-webkit-scrollbar { width:10px; height:10px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:#3d382e; border-radius:999px; border:2px solid transparent; background-clip:content-box; }
+  ::-webkit-scrollbar-thumb:hover { background:#5a5446; background-clip:content-box; }
+  ::-webkit-scrollbar-corner { background:transparent; }
+  a { color:#4FB79A; }
+  .hz-card:hover { background:#201D17; border-color:#3d382e; }
+  a:hover { color:#6ecab0; }
+</style>
+</helmet>
+
+<div style="font-family:'Instrument Sans',sans-serif; color:#EFEAE0; background:#100F0C; display:flex;">
+
+  <!-- ============ CONTENTS RAIL ============ -->
+  <div style="width:240px; flex:0 0 240px; position:sticky; top:0; align-self:flex-start; height:100vh; border-right:1px solid #322E26; background:#1A1813; padding:24px 20px; display:flex; flex-direction:column; gap:4px;">
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:24px;">
+      <div style="position:relative; width:32px; height:32px; border-radius:8px; background:#1F5C4D; overflow:hidden; flex:0 0 32px;">
+        <div style="position:absolute; left:50%; top:5px; width:1.5px; height:5px; background:#E7C079; transform:translateX(-50%);"></div>
+        <div style="position:absolute; left:50%; bottom:8px; width:16px; height:16px; border-radius:50%; background:#D99A3C; transform:translateX(-50%);"></div>
+        <div style="position:absolute; left:0; right:0; bottom:0; height:9px; background:#164034;"></div>
+        <div style="position:absolute; left:0; right:0; bottom:9px; height:1px; background:#0F3D33;"></div>
+      </div>
+      <div style="display:flex; align-items:baseline;"><span style="font-family:'Newsreader',serif; font-size:20px; font-weight:600; color:#F6F2E9;">Horae</span><span style="width:4px; height:4px; border-radius:50%; background:#D99A3C; margin-left:4px; align-self:flex-end; margin-bottom:4px;"></span></div>
+    </div>
+    <div style="font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353; padding:0 8px 8px;">Design System</div>
+    <a href="#brand" style="padding:8px 8px; border-radius:8px; font-size:14px; color:#A29C8D; text-decoration:none;">Brand</a>
+    <a href="#color" style="padding:8px 8px; border-radius:8px; font-size:14px; color:#A29C8D; text-decoration:none;">Color</a>
+    <a href="#type" style="padding:8px 8px; border-radius:8px; font-size:14px; color:#A29C8D; text-decoration:none;">Typography</a>
+    <a href="#tokens" style="padding:8px 8px; border-radius:8px; font-size:14px; color:#A29C8D; text-decoration:none;">Tokens</a>
+    <a href="#components" style="padding:8px 8px; border-radius:8px; font-size:14px; color:#A29C8D; text-decoration:none;">Components</a>
+    <a href="foundations/Components.dc.html" style="padding:8px 8px 8px 20px; border-radius:8px; font-size:12px; color:#8f8676; text-decoration:none;">↳ Full kit</a>
+    <a href="#patterns" style="padding:8px 8px; border-radius:8px; font-size:14px; color:#A29C8D; text-decoration:none;">App patterns</a>
+    <a href="#screens" style="padding:8px 8px; border-radius:8px; font-size:14px; color:#A29C8D; text-decoration:none;">Screens</a>
+    <div style="flex:1;"></div>
+    <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#5a5446;">v1.0 · Jul 2026</div>
+  </div>
+
+  <!-- ============ CONTENT ============ -->
+  <div style="flex:1; min-width:0;">
+  <div style="max-width:1000px; margin:0 auto; padding:64px 48px 64px;">
+
+    <!-- HERO -->
+    <div style="margin-bottom:12px; font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.2em; text-transform:uppercase; color:#7C7565;">Open-source time tracking</div>
+    <h1 style="font-family:'Newsreader',serif; font-size:56px; font-weight:600; letter-spacing:-.015em; margin:0 0 16px; color:#F6F2E9;">The Horae design system</h1>
+    <p style="font-size:16px; line-height:1.6; color:#B4AD9D; max-width:620px; margin:0 0 20px;">One editorial, low-light language across the whole suite — timesheet, approvals, reports, and invoicing. Warm-black surfaces, a grounded pine-and-brass palette, serif display, and mono numerals that keep every hour and total in rhythm.</p>
+    <div style="font-family:'Newsreader',serif; font-style:italic; font-size:20px; color:#8f8676;">Horae — goddesses of the hours and the seasons. Time, turned into paper.</div>
+
+    <!-- ================= BRAND ================= -->
+    <div id="brand" style="height:1px; background:#262219; margin:48px 0 40px;"></div>
+    <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:24px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#D99A3C;">01</span><h2 style="font-family:'Newsreader',serif; font-size:32px; font-weight:600; margin:0; color:#F6F2E9;">Brand</h2></div>
+
+    <div style="display:grid; grid-template-columns:1.2fr 1fr; gap:20px; margin-bottom:20px;">
+      <!-- lockup -->
+      <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; padding:40px; display:flex; align-items:center; justify-content:center; gap:20px;">
+        <div style="position:relative; width:72px; height:72px; border-radius:20px; background:#1F5C4D; overflow:hidden; box-shadow:0 0 0 1px rgba(255,255,255,.05), 0 12px 30px -8px rgba(31,92,77,.7);">
+          <div style="position:absolute; left:50%; top:11px; width:2px; height:12px; background:#E7C079; border-radius:4px; transform:translateX(-50%);"></div>
+          <div style="position:absolute; left:50%; top:14px; width:2px; height:11px; background:#E4B061; border-radius:4px; transform:translateX(-50%) rotate(-38deg); transform-origin:bottom center;"></div>
+          <div style="position:absolute; left:50%; top:14px; width:2px; height:11px; background:#E4B061; border-radius:4px; transform:translateX(-50%) rotate(38deg); transform-origin:bottom center;"></div>
+          <div style="position:absolute; left:50%; bottom:20px; width:34px; height:34px; border-radius:50%; background:#D99A3C; transform:translateX(-50%); box-shadow:0 0 18px -2px rgba(217,154,60,.55);"></div>
+          <div style="position:absolute; left:0; right:0; bottom:23px; height:1.5px; background:#0F3D33;"></div>
+          <div style="position:absolute; left:0; right:0; bottom:0; height:23px; background:#164034;"></div>
+        </div>
+        <div style="display:flex; align-items:baseline;"><span style="font-family:'Newsreader',serif; font-size:52px; font-weight:500; letter-spacing:-.01em; color:#F6F2E9;">Horae</span><span style="width:7px; height:7px; border-radius:50%; background:#D99A3C; margin-left:4px; align-self:flex-end; margin-bottom:8px;"></span></div>
+      </div>
+      <!-- meaning -->
+      <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; padding:24px;">
+        <div style="font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:#7C7565; margin-bottom:12px;">The mark</div>
+        <div style="font-size:14px; line-height:1.6; color:#C8C2B4;">A <strong style="color:#EFEAE0;">sundial at dawn</strong> — sun cresting a pine horizon, hour-ticks fanning above. It carries both ideas the Horae governed: the passage of <em>hours</em> and the turning <em>seasons</em>. Rays drop away below 24px; the rising sun still reads. The wordmark keeps its brass period.</div>
+      </div>
+    </div>
+
+    <!-- ================= COLOR ================= -->
+    <div id="color" style="height:1px; background:#262219; margin:48px 0 40px;"></div>
+    <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:24px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#D99A3C;">02</span><h2 style="font-family:'Newsreader',serif; font-size:32px; font-weight:600; margin:0; color:#F6F2E9;">Color</h2></div>
+
+    <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; padding:32px; margin-bottom:20px;">
+      <div style="font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:#7C7565; margin-bottom:16px;">Brand — luminous on dark</div>
+      <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:24px;">
+        <div><div style="height:80px; border-radius:11px; background:#4FB79A;"></div><div style="margin-top:8px; font-size:14px; font-weight:600;">Pine 300</div><div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8f8676;">#4FB79A</div><div style="font-size:12px; color:#8f8676;">Primary · links</div></div>
+        <div><div style="height:80px; border-radius:11px; background:#1F5C4D;"></div><div style="margin-top:8px; font-size:14px; font-weight:600;">Pine</div><div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8f8676;">#1F5C4D</div><div style="font-size:12px; color:#8f8676;">Solid fills · mark</div></div>
+        <div><div style="height:80px; border-radius:11px; background:#D99A3C;"></div><div style="margin-top:8px; font-size:14px; font-weight:600;">Brass</div><div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8f8676;">#D99A3C</div><div style="font-size:12px; color:#8f8676;">Accent · the billable</div></div>
+        <div><div style="height:80px; border-radius:11px; background:#100F0C; border:1px solid #322E26;"></div><div style="margin-top:8px; font-size:14px; font-weight:600;">Void</div><div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8f8676;">#100F0C</div><div style="font-size:12px; color:#8f8676;">App background</div></div>
+      </div>
+      <div style="font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:#7C7565; margin-bottom:16px;">Surfaces & ink</div>
+      <div style="display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:24px;">
+        <div><div style="height:64px; border-radius:11px; background:#1A1813; border:1px solid #322E26;"></div><div style="margin-top:8px; font-size:12px; font-weight:600;">Surface</div><div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8f8676;">#1A1813</div></div>
+        <div><div style="height:64px; border-radius:11px; background:#232019; border:1px solid #322E26;"></div><div style="margin-top:8px; font-size:12px; font-weight:600;">Raised</div><div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8f8676;">#232019</div></div>
+        <div><div style="height:64px; border-radius:11px; background:#322E26;"></div><div style="margin-top:8px; font-size:12px; font-weight:600;">Hairline</div><div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8f8676;">#322E26</div></div>
+        <div><div style="height:64px; border-radius:11px; background:#A29C8D;"></div><div style="margin-top:8px; font-size:12px; font-weight:600;">Muted</div><div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8f8676;">#A29C8D</div></div>
+        <div><div style="height:64px; border-radius:11px; background:#EFEAE0;"></div><div style="margin-top:8px; font-size:12px; font-weight:600;">Text</div><div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8f8676;">#EFEAE0</div></div>
+      </div>
+      <div style="font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:#7C7565; margin-bottom:16px;">Status</div>
+      <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px;">
+        <div style="display:flex; align-items:center; gap:12px;"><div style="width:40px; height:40px; border-radius:8px; background:#3FB489;"></div><div><div style="font-size:12px; font-weight:600;">Success</div><div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8f8676;">#3FB489</div></div></div>
+        <div style="display:flex; align-items:center; gap:12px;"><div style="width:40px; height:40px; border-radius:8px; background:#E06661;"></div><div><div style="font-size:12px; font-weight:600;">Danger</div><div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8f8676;">#E06661</div></div></div>
+        <div style="display:flex; align-items:center; gap:12px;"><div style="width:40px; height:40px; border-radius:8px; background:#D6A24A;"></div><div><div style="font-size:12px; font-weight:600;">Attention</div><div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8f8676;">#D6A24A</div></div></div>
+      </div>
+    </div>
+
+    <!-- ================= TYPE ================= -->
+    <div id="type" style="height:1px; background:#262219; margin:48px 0 40px;"></div>
+    <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:24px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#D99A3C;">03</span><h2 style="font-family:'Newsreader',serif; font-size:32px; font-weight:600; margin:0; color:#F6F2E9;">Typography</h2></div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; margin-bottom:20px;">
+      <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; padding:24px; border-top:2px solid #4FB79A;">
+        <div style="font-family:'Newsreader',serif; font-size:46px; line-height:1; color:#F6F2E9;">Aa</div>
+        <div style="font-size:14px; font-weight:600; margin-top:12px;">Newsreader</div>
+        <div style="font-size:12px; color:#8f8676; margin-top:4px;">Display & wordmark. Headings, invoice title, totals.</div>
+      </div>
+      <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; padding:24px; border-top:2px solid #D99A3C;">
+        <div style="font-family:'Instrument Sans',sans-serif; font-size:46px; line-height:1; font-weight:600; color:#F6F2E9;">Aa</div>
+        <div style="font-size:14px; font-weight:600; margin-top:12px;">Instrument Sans</div>
+        <div style="font-size:12px; color:#8f8676; margin-top:4px;">UI & body. Labels, buttons, nav, paragraphs.</div>
+      </div>
+      <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; padding:24px; border-top:2px solid #EFEAE0;">
+        <div style="font-family:'IBM Plex Mono',monospace; font-size:42px; line-height:1.1; color:#F6F2E9;">01</div>
+        <div style="font-size:14px; font-weight:600; margin-top:12px;">IBM Plex Mono</div>
+        <div style="font-size:12px; color:#8f8676; margin-top:4px;">Numerals only — hours, rates, amounts, dates. Tabular.</div>
+      </div>
+    </div>
+    <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; padding:24px 32px; display:flex; flex-direction:column; gap:8px;">
+      <div style="display:flex; align-items:baseline; gap:20px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6a6353; width:130px;">Display / 44</span><span style="font-family:'Newsreader',serif; font-size:44px; color:#F6F2E9; line-height:1.15;">Total due</span></div>
+      <div style="display:flex; align-items:baseline; gap:20px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6a6353; width:130px;">H1 / 30</span><span style="font-family:'Newsreader',serif; font-size:30px; color:#F6F2E9;">Timesheet</span></div>
+      <div style="display:flex; align-items:baseline; gap:20px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6a6353; width:130px;">H2 / 19</span><span style="font-size:18px; font-weight:600; color:#F6F2E9;">Line items</span></div>
+      <div style="display:flex; align-items:baseline; gap:20px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6a6353; width:130px;">Body / 15</span><span style="font-size:14px; color:#EFEAE0;">Editable in place, saved to your ledger.</span></div>
+      <div style="display:flex; align-items:baseline; gap:20px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6a6353; width:130px;">Label / 11 caps</span><span style="font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:#A29C8D;">Billed to</span></div>
+      <div style="display:flex; align-items:baseline; gap:20px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6a6353; width:130px;">Numeral / 15</span><span style="font-family:'IBM Plex Mono',monospace; font-size:14px; color:#F6F2E9;">14,919.30</span></div>
+    </div>
+
+    <!-- ================= TOKENS ================= -->
+    <div id="tokens" style="height:1px; background:#262219; margin:48px 0 40px;"></div>
+    <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:24px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#D99A3C;">04</span><h2 style="font-family:'Newsreader',serif; font-size:32px; font-weight:600; margin:0; color:#F6F2E9;">Tokens</h2></div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+      <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; padding:24px;">
+        <div style="font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:#7C7565; margin-bottom:16px;">Spacing · 4px base</div>
+        <div style="display:flex; align-items:flex-end; gap:12px;">
+          <div style="text-align:center;"><div style="width:4px; height:4px; background:#4FB79A; margin:0 auto;"></div><div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8f8676; margin-top:8px;">4</div></div>
+          <div style="text-align:center;"><div style="width:8px; height:8px; background:#4FB79A; margin:0 auto;"></div><div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8f8676; margin-top:8px;">8</div></div>
+          <div style="text-align:center;"><div style="width:12px; height:12px; background:#4FB79A; margin:0 auto;"></div><div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8f8676; margin-top:8px;">12</div></div>
+          <div style="text-align:center;"><div style="width:16px; height:16px; background:#4FB79A; margin:0 auto;"></div><div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8f8676; margin-top:8px;">16</div></div>
+          <div style="text-align:center;"><div style="width:24px; height:24px; background:#4FB79A; margin:0 auto;"></div><div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8f8676; margin-top:8px;">24</div></div>
+          <div style="text-align:center;"><div style="width:32px; height:32px; background:#4FB79A; margin:0 auto;"></div><div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8f8676; margin-top:8px;">32</div></div>
+          <div style="text-align:center;"><div style="width:40px; height:40px; background:#4FB79A; margin:0 auto;"></div><div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8f8676; margin-top:8px;">40</div></div>
+        </div>
+      </div>
+      <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; padding:24px;">
+        <div style="font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:#7C7565; margin-bottom:16px;">Radii</div>
+        <div style="display:flex; align-items:flex-end; gap:16px;">
+          <div style="text-align:center;"><div style="width:52px; height:52px; background:#232019; border:1px solid #3d382e; border-radius:6px;"></div><div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8f8676; margin-top:8px;">6 control</div></div>
+          <div style="text-align:center;"><div style="width:52px; height:52px; background:#232019; border:1px solid #3d382e; border-radius:11px;"></div><div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8f8676; margin-top:8px;">11 card</div></div>
+          <div style="text-align:center;"><div style="width:52px; height:52px; background:#232019; border:1px solid #3d382e; border-radius:20px;"></div><div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8f8676; margin-top:8px;">16 panel</div></div>
+          <div style="text-align:center;"><div style="width:52px; height:52px; background:#232019; border:1px solid #3d382e; border-radius:999px;"></div><div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8f8676; margin-top:8px;">pill</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= COMPONENTS ================= -->
+    <div id="components" style="height:1px; background:#262219; margin:48px 0 40px;"></div>
+    <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:24px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#D99A3C;">05</span><h2 style="font-family:'Newsreader',serif; font-size:32px; font-weight:600; margin:0; color:#F6F2E9;">Components</h2></div>
+
+    <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; padding:32px; margin-bottom:20px;">
+      <div style="font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:#7C7565; margin-bottom:16px;">Buttons</div>
+      <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:24px;">
+        <button class="hb-primary" style="padding:12px 20px; background:#4FB79A; color:#0d211b; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer;">Start timer</button>
+        <button class="hb-solid" style="padding:12px 20px; background:#1F5C4D; color:#F6F2E9; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer;">Submit week</button>
+        <button class="hb-secondary" style="padding:12px 20px; background:#232019; color:#EFEAE0; border:1px solid #3d382e; border-radius:8px; font-family:inherit; font-size:14px; font-weight:500; cursor:pointer;">Secondary</button>
+        <button class="hb-accent" style="padding:12px 20px; background:#D99A3C; color:#251804; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer;">Send invoice</button>
+        <button class="hb-danger" style="padding:12px 16px; background:transparent; color:#E06661; border:1px solid #6e3634; border-radius:8px; font-family:inherit; font-size:14px; font-weight:500; cursor:pointer;">Delete</button>
+      </div>
+      <div style="font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:#7C7565; margin-bottom:16px;">Status pills</div>
+      <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:24px;">
+        <span style="display:inline-flex; align-items:center; gap:8px; padding:4px 12px; background:#15291f; color:#5fcaa8; border:1px solid #24402f; border-radius:999px; font-size:12px; font-weight:600;"><span style="width:7px; height:7px; border-radius:50%; background:#3FB489;"></span>Approved</span>
+        <span style="display:inline-flex; align-items:center; gap:8px; padding:4px 12px; background:#2b2413; color:#e0b45f; border:1px solid #453818; border-radius:999px; font-size:12px; font-weight:600;"><span style="width:7px; height:7px; border-radius:50%; background:#D6A24A;"></span>Awaiting</span>
+        <span style="display:inline-flex; align-items:center; gap:8px; padding:4px 12px; background:#2e1817; color:#ec8683; border:1px solid #4d2523; border-radius:999px; font-size:12px; font-weight:600;"><span style="width:7px; height:7px; border-radius:50%; background:#E06661;"></span>Overdue</span>
+        <span style="display:inline-flex; align-items:center; gap:8px; padding:4px 12px; background:#201d17; color:#A29C8D; border:1px solid #322E26; border-radius:999px; font-size:12px; font-weight:600;"><span style="width:7px; height:7px; border-radius:50%; background:#5a5446;"></span>Not submitted</span>
+      </div>
+      <div style="font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:#7C7565; margin-bottom:16px;">Inputs & controls</div>
+      <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
+        <div style="width:240px;"><div style="font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:#8f8676; margin-bottom:8px;">Client</div><div style="padding:12px 12px; background:#100F0C; border:1px solid #3d382e; border-radius:8px; font-size:14px; color:#EFEAE0;">Larkfield, S.L.</div></div>
+        <div style="width:130px;"><div style="font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:#8f8676; margin-bottom:8px;">Rate</div><div style="padding:12px 12px; background:#100F0C; border:1px solid #4FB79A; border-radius:8px; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0; box-shadow:0 0 0 3px rgba(79,183,154,.18);">95.00</div></div>
+        <div style="display:flex; background:#100F0C; border:1px solid #322E26; border-radius:8px; padding:4px;"><button class="hb-solid" style="padding:8px 16px; background:#1F5C4D; color:#F6F2E9; border:none; border-radius:6px; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer;">Week</button><button class="hb-secondary" style="padding:8px 16px; background:transparent; color:#A29C8D; border:none; border-radius:6px; font-family:inherit; font-size:14px; cursor:pointer;">Day</button></div>
+        <span style="width:44px; height:24px; border-radius:999px; background:#1F5C4D; position:relative; display:inline-block;"><span style="position:absolute; right:3px; top:3px; width:18px; height:18px; border-radius:50%; background:#EFEAE0;"></span></span>
+      </div>
+    </div>
+
+    <!-- ================= APP PATTERNS ================= -->
+    <div id="patterns" style="height:1px; background:#262219; margin:48px 0 40px;"></div>
+    <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:24px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#D99A3C;">06</span><h2 style="font-family:'Newsreader',serif; font-size:32px; font-weight:600; margin:0; color:#F6F2E9;">App patterns</h2></div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+      <!-- ledger row + totals -->
+      <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; padding:24px;">
+        <div style="font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:#7C7565; margin-bottom:12px;">Ledger row & totals</div>
+        <div style="background:#100F0C; border:1px solid #322E26; border-radius:11px; overflow:hidden;">
+          <div style="display:grid; grid-template-columns:1fr 60px 84px 96px; padding:12px 16px; align-items:baseline; border-bottom:1px solid #262219;">
+            <span style="font-size:14px;">Frontend engineering</span>
+            <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">58.5</span>
+            <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">110.00</span>
+            <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">6,435.00</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:baseline; padding:12px 16px; background:#000;">
+            <span style="font-family:'Newsreader',serif; font-size:16px; color:#F6F2E9;">Total due</span>
+            <span style="font-family:'IBM Plex Mono',monospace; font-size:18px; font-weight:600; color:#D99A3C;">€14,919.30</span>
+          </div>
+        </div>
+      </div>
+      <!-- summary card w/ breakdown -->
+      <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; padding:24px;">
+        <div style="font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:#7C7565; margin-bottom:12px;">Summary card</div>
+        <div style="display:flex; align-items:center; gap:24px; background:#100F0C; border:1px solid #322E26; border-radius:11px; padding:16px 20px;">
+          <div><div style="font-size:12px; color:#A29C8D;">Total time</div><div style="font-family:'IBM Plex Mono',monospace; font-size:24px; font-weight:600; color:#F6F2E9; margin-top:2px;">80:30</div></div>
+          <div style="flex:1; display:flex; flex-direction:column; gap:8px;">
+            <div style="display:flex; align-items:center; gap:8px;"><span style="width:10px; height:10px; border-radius:4px; background:#4FB79A;"></span><span style="font-size:12px; flex:1;">Billable</span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px;">72:00</span></div>
+            <div style="display:flex; align-items:center; gap:8px;"><span style="width:10px; height:10px; border-radius:4px; background:#2a6d5c;"></span><span style="font-size:12px; flex:1;">Non-billable</span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px;">8:30</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; padding:24px; margin-top:16px;">
+      <div style="font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:#7C7565; margin-bottom:12px;">Left rail — the spine of every screen</div>
+      <div style="font-size:14px; line-height:1.6; color:#C8C2B4;">A 264px pine-on-void rail with the wordmark, a full-width <strong style="color:#EFEAE0;">Start timer</strong>, and three nav groups — <strong style="color:#EFEAE0;">Track</strong> (Timesheet), <strong style="color:#EFEAE0;">Organize</strong> (Projects), <strong style="color:#EFEAE0;">Review</strong> (Approvals, Reports). Collapses to a 76px icon strip. The active item gets a raised surface + brass/pine dot; the user chip sits at the foot with a popover menu.</div>
+    </div>
+
+    <!-- ================= SCREENS ================= -->
+    <div id="screens" style="height:1px; background:#262219; margin:48px 0 40px;"></div>
+    <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:24px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#D99A3C;">07</span><h2 style="font-family:'Newsreader',serif; font-size:32px; font-weight:600; margin:0; color:#F6F2E9;">Screens</h2></div>
+    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px;">
+      <div style="grid-column:1 / -1; display:flex; align-items:baseline; gap:12px; margin-top:8px;"><span style="font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353;">Getting in</span><span style="flex:1; height:1px; background:#262219;"></span><span style="font-size:12px; color:#5a5446;">first run, once</span></div>
+      <a href="app/01_Sign In.dc.html" class="hz-card" style="display:block; background:#1A1813; border:1px solid #322E26; border-radius:11px; padding:20px; text-decoration:none;"><div style="display:flex; align-items:center; justify-content:space-between;"><div style="font-size:20px; color:#4FB79A;">→</div><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#5a5446;">01</span></div><div style="font-size:16px; font-weight:600; color:#F6F2E9; margin-top:12px;">Sign in</div><div style="font-size:12px; color:#8f8676; margin-top:4px;">Email and password, split layout.</div></a>
+      <a href="app/02_Create Workspace.dc.html" class="hz-card" style="display:block; background:#1A1813; border:1px solid #322E26; border-radius:11px; padding:20px; text-decoration:none;"><div style="display:flex; align-items:center; justify-content:space-between;"><div style="font-size:20px; color:#4FB79A;">＋</div><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#5a5446;">02</span></div><div style="font-size:16px; font-weight:600; color:#F6F2E9; margin-top:12px;">Create workspace</div><div style="font-size:12px; color:#8f8676; margin-top:4px;">Onboarding step one.</div></a>
+      <a href="app/03_Invite Team.dc.html" class="hz-card" style="display:block; background:#1A1813; border:1px solid #322E26; border-radius:11px; padding:20px; text-decoration:none;"><div style="display:flex; align-items:center; justify-content:space-between;"><div style="font-size:20px; color:#4FB79A;">◍</div><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#5a5446;">03</span></div><div style="font-size:16px; font-weight:600; color:#F6F2E9; margin-top:12px;">Invite team</div><div style="font-size:12px; color:#8f8676; margin-top:4px;">Onboarding step two.</div></a>
+      <div style="grid-column:1 / -1; display:flex; align-items:baseline; gap:12px; margin-top:8px;"><span style="font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353;">Daily work</span><span style="flex:1; height:1px; background:#262219;"></span><span style="font-size:12px; color:#5a5446;">where the hours land</span></div>
+      <a href="app/04_Timesheet.dc.html" class="hz-card" style="display:block; background:#1A1813; border:1px solid #322E26; border-radius:11px; padding:20px; text-decoration:none;"><div style="display:flex; align-items:center; justify-content:space-between;"><div style="font-size:20px; color:#4FB79A;">◷</div><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#5a5446;">04</span></div><div style="font-size:16px; font-weight:600; color:#F6F2E9; margin-top:12px;">Timesheet</div><div style="font-size:12px; color:#8f8676; margin-top:4px;">Day · Week · Calendar, timer, entry modal.</div></a>
+      <a href="app/05_Projects.dc.html" class="hz-card" style="display:block; background:#1A1813; border:1px solid #322E26; border-radius:11px; padding:20px; text-decoration:none;"><div style="display:flex; align-items:center; justify-content:space-between;"><div style="font-size:20px; color:#4FB79A;">▤</div><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#5a5446;">05</span></div><div style="font-size:16px; font-weight:600; color:#F6F2E9; margin-top:12px;">Projects</div><div style="font-size:12px; color:#8f8676; margin-top:4px;">Budget, scheduled, spent by client.</div></a>
+      <a href="app/11_Project Detail.dc.html" class="hz-card" style="display:block; background:#1A1813; border:1px solid #322E26; border-radius:11px; padding:20px; text-decoration:none;"><div style="display:flex; align-items:center; justify-content:space-between;"><div style="font-size:20px; color:#4FB79A;">▤</div><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#5a5446;">11</span></div><div style="font-size:16px; font-weight:600; color:#F6F2E9; margin-top:12px;">Project detail</div><div style="font-size:12px; color:#8f8676; margin-top:4px;">Overview, tasks, team, invoices — plus edit.</div></a>
+      <div style="grid-column:1 / -1; display:flex; align-items:baseline; gap:12px; margin-top:8px;"><span style="font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353;">Review</span><span style="flex:1; height:1px; background:#262219;"></span><span style="font-size:12px; color:#5a5446;">weekly ritual</span></div>
+      <a href="app/06_Approvals.dc.html" class="hz-card" style="display:block; background:#1A1813; border:1px solid #322E26; border-radius:11px; padding:20px; text-decoration:none;"><div style="display:flex; align-items:center; justify-content:space-between;"><div style="font-size:20px; color:#4FB79A;">✓</div><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#5a5446;">06</span></div><div style="font-size:16px; font-weight:600; color:#F6F2E9; margin-top:12px;">Approvals</div><div style="font-size:12px; color:#8f8676; margin-top:4px;">Pending review, totals, approve flow.</div></a>
+      <a href="app/07_Reports.dc.html" class="hz-card" style="display:block; background:#1A1813; border:1px solid #322E26; border-radius:11px; padding:20px; text-decoration:none;"><div style="display:flex; align-items:center; justify-content:space-between;"><div style="font-size:20px; color:#4FB79A;">▦</div><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#5a5446;">07</span></div><div style="font-size:16px; font-weight:600; color:#F6F2E9; margin-top:12px;">Reports</div><div style="font-size:12px; color:#8f8676; margin-top:4px;">Fields + metrics report builder.</div></a>
+      <div style="grid-column:1 / -1; display:flex; align-items:baseline; gap:12px; margin-top:8px;"><span style="font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353;">Admin</span><span style="flex:1; height:1px; background:#262219;"></span><span style="font-size:12px; color:#5a5446;">account and workspace</span></div>
+      <a href="app/08_Settings.dc.html" class="hz-card" style="display:block; background:#1A1813; border:1px solid #322E26; border-radius:11px; padding:20px; text-decoration:none;"><div style="display:flex; align-items:center; justify-content:space-between;"><div style="font-size:20px; color:#4FB79A;">◔</div><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#5a5446;">08</span></div><div style="font-size:16px; font-weight:600; color:#F6F2E9; margin-top:12px;">Settings</div><div style="font-size:12px; color:#8f8676; margin-top:4px;">Profile, permissions, notifications.</div></a>
+      <a href="app/09_Workspace.dc.html" class="hz-card" style="display:block; background:#1A1813; border:1px solid #322E26; border-radius:11px; padding:20px; text-decoration:none;"><div style="display:flex; align-items:center; justify-content:space-between;"><div style="font-size:20px; color:#4FB79A;">◍</div><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#5a5446;">09</span></div><div style="font-size:16px; font-weight:600; color:#F6F2E9; margin-top:12px;">Workspace settings</div><div style="font-size:12px; color:#8f8676; margin-top:4px;">Admin · people, roles, general, exports, audit.</div></a>
+      <a href="app/10_Importers.dc.html" class="hz-card" style="display:block; background:#1A1813; border:1px solid #322E26; border-radius:11px; padding:20px; text-decoration:none;"><div style="display:flex; align-items:center; justify-content:space-between;"><div style="font-size:20px; color:#4FB79A;">↧</div><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#5a5446;">10</span></div><div style="font-size:16px; font-weight:600; color:#F6F2E9; margin-top:12px;">Importers</div><div style="font-size:12px; color:#8f8676; margin-top:4px;">Admin · Harvest API and CSV import flow.</div></a>
+      <div style="grid-column:1 / -1; display:flex; align-items:baseline; gap:12px; margin-top:8px;"><span style="font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353;">Foundations</span><span style="flex:1; height:1px; background:#262219;"></span><span style="font-size:12px; color:#5a5446;">the system itself</span></div>
+      <a href="foundations/Logo.dc.html" class="hz-card" style="display:block; background:#1A1813; border:1px solid #322E26; border-radius:11px; padding:20px; text-decoration:none;"><div style="display:flex; align-items:center; justify-content:space-between;"><div style="font-size:20px; color:#D99A3C;">☀</div><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#5a5446;">—</span></div><div style="font-size:16px; font-weight:600; color:#F6F2E9; margin-top:12px;">Logo</div><div style="font-size:12px; color:#8f8676; margin-top:4px;">Mark construction &amp; usage.</div></a>
+      <a href="foundations/Components.dc.html" class="hz-card" style="display:block; background:#1A1813; border:1px solid #322E26; border-radius:11px; padding:20px; text-decoration:none;"><div style="display:flex; align-items:center; justify-content:space-between;"><div style="font-size:20px; color:#D99A3C;">▣</div><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#5a5446;">—</span></div><div style="font-size:16px; font-weight:600; color:#F6F2E9; margin-top:12px;">Component kit</div><div style="font-size:12px; color:#8f8676; margin-top:4px;">Every component, all states.</div></a>
+    </div>
+
+  </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

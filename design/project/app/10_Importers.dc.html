@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#100F0C; }
+  * { box-sizing:border-box; }
+  button, .hm-row, .hz-nav { transition: background .14s ease, transform .08s ease, box-shadow .16s ease, border-color .14s ease, color .14s ease; }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(79,183,154,.35) !important; }
+  button:disabled { cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+  .hb-primary:hover:not(:disabled) { background:#63c9ac !important; box-shadow:0 6px 18px -8px rgba(79,183,154,.65) !important; }
+  .hb-secondary:hover:not(:disabled) { background:#2c2820 !important; border-color:#5a5446 !important; }
+  .hb-ghost:hover:not(:disabled) { background:rgba(79,183,154,.10) !important; color:#6ecab0 !important; }
+  .hb-danger:hover:not(:disabled) { background:rgba(224,102,97,.12) !important; border-color:#8d4441 !important; color:#ec8683 !important; }
+  .hb-seg:not(.hb-seg-on):hover:not(:disabled) { background:#232019 !important; color:#EFEAE0 !important; }
+  .hz-nav:hover { background:#161510 !important; color:#EFEAE0 !important; }
+  .hz-imp:hover { background:#161510 !important; border-color:#5a5446 !important; }
+  .hz-drop:hover { background:#161510 !important; border-color:#4FB79A !important; }
+  .hz-err:hover { background:#161510 !important; }
+  ::selection { background:#1F5C4D; color:#F6F2E9; }
+  ::-moz-selection { background:#1F5C4D; color:#F6F2E9; }
+  * { scrollbar-width: thin; scrollbar-color: #3d382e transparent; }
+  ::-webkit-scrollbar { width:10px; height:10px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:#3d382e; border-radius:999px; border:2px solid transparent; background-clip:content-box; }
+  ::-webkit-scrollbar-thumb:hover { background:#5a5446; background-clip:content-box; }
+  input.hf { transition: border-color .14s ease, background .14s ease, box-shadow .16s ease; width:100%; padding:12px 12px; background:#100F0C; border:1px solid #3d382e; border-radius:8px; font-family:'Instrument Sans',sans-serif; font-size:14px; color:#EFEAE0; outline:none; }
+  input.hf::placeholder { color:#5a5446; }
+  input.hf:hover:not(:focus) { border-color:#5a5446; background:#161510; }
+  input.hf:focus { border-color:#4FB79A; box-shadow:0 0 0 3px rgba(79,183,154,.18); }
+  input.hf.mono { font-family:'IBM Plex Mono',monospace; }
+  a { color:#4FB79A; text-decoration:none; }
+  a:hover { color:#6ecab0; }
+  @media (max-width: 1320px) {
+    .hz-rail { width:216px !important; flex-basis:216px !important; }
+    .hz-split { gap:32px !important; padding-left:24px !important; padding-right:24px !important; }
+    .hz-pad { padding-left:24px !important; padding-right:24px !important; }
+  }
+  @media (max-width: 1180px) {
+    .hz-split { flex-direction:column !important; gap:24px !important; }
+    .hz-subnav { width:100% !important; flex:none !important; }
+    .hz-subnav > div:first-child { max-width:420px; }
+    .hz-subnav > div:not(:first-child) { flex-direction:row !important; flex-wrap:wrap !important; gap:8px !important; }
+  }
+  @media (max-width: 900px) {
+    .hz-rail { display:none !important; }
+    .hz-shell { height:auto !important; min-height:100vh !important; }
+    .hz-pad { padding-left:20px !important; padding-right:20px !important; }
+  }
+  @keyframes hzspin { to { transform: rotate(360deg); } }
+</style>
+</helmet>
+
+<div class="hz-shell" style="display:flex; height:100vh; min-height:820px; font-family:'Instrument Sans',sans-serif; color:#EFEAE0; background:#100F0C;">
+
+  <!-- ================= COMPACT RAIL ================= -->
+  <sc-if value="{{ collapsed }}" hint-placeholder-val="{{ false }}">
+  <div style="width:76px; flex:0 0 76px; background:#1A1813; border-right:1px solid #322E26; display:flex; flex-direction:column; align-items:center; padding:20px 12px;">
+    <div style="position:relative; width:34px; height:34px; flex:0 0 34px; border-radius:8px; background:#1F5C4D; overflow:hidden; margin-bottom:8px;">
+      <div style="position:absolute; left:50%; top:5px; width:1.5px; height:6px; background:#E7C079; transform:translateX(-50%);"></div>
+      <div style="position:absolute; left:50%; bottom:8px; width:16px; height:16px; border-radius:50%; background:#D99A3C; transform:translateX(-50%);"></div>
+      <div style="position:absolute; left:0; right:0; bottom:0; height:10px; background:#164034;"></div>
+      <div style="position:absolute; left:0; right:0; bottom:10px; height:1px; background:#0F3D33;"></div>
+    </div>
+    <button class="hb-icon" onClick="{{ toggleRail }}" title="Expand" style="width:34px; height:30px; background:#232019; border:1px solid #3d382e; border-radius:8px; color:#A29C8D; cursor:pointer; margin-bottom:20px; font-size:14px;">»</button>
+    <button class="hb-primary" title="Start timer" style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; background:#4FB79A; color:#0d211b; border:none; border-radius:11px; cursor:pointer; margin-bottom:20px;"><span style="width:16px; height:16px; border-radius:50%; border:2px solid #0d211b; position:relative; display:inline-block;"><span style="position:absolute; left:50%; top:3px; width:1.5px; height:5px; background:#0d211b; transform:translateX(-50%);"></span></span></button>
+    <div style="display:flex; flex-direction:column; gap:8px; align-items:center;">
+      <a href="04_Timesheet.dc.html" title="Timesheet" style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; border-radius:11px; color:#8f8676; font-size:16px;">◷</a>
+      <a href="05_Projects.dc.html" title="Projects" style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; border-radius:11px; color:#8f8676; font-size:16px;">▤</a>
+      <a href="06_Approvals.dc.html" title="Approvals" style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; border-radius:11px; color:#8f8676; font-size:16px;">✓</a>
+      <a href="07_Reports.dc.html" title="Reports" style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; border-radius:11px; color:#8f8676; font-size:16px;">▦</a>
+    </div>
+    <div style="flex:1;"></div>
+    <div title="Mira Kovač" style="width:38px; height:38px; border-radius:50%; background:#1F5C4D; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:16px; line-height:1; padding-top:2px; color:#EFEAE0;">M</div>
+  </div>
+  </sc-if>
+
+  <!-- ================= LEFT RAIL ================= -->
+  <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}">
+  <div class="hz-rail" style="width:264px; flex:0 0 264px; background:#1A1813; border-right:1px solid #322E26; display:flex; flex-direction:column; padding:20px 16px;">
+    <div style="display:flex; align-items:center; gap:12px; padding:4px 8px 20px;">
+      <div style="position:relative; width:34px; height:34px; flex:0 0 34px; border-radius:8px; background:#1F5C4D; overflow:hidden;">
+        <div style="position:absolute; left:50%; top:5px; width:1.5px; height:6px; background:#E7C079; transform:translateX(-50%);"></div>
+        <div style="position:absolute; left:50%; bottom:8px; width:16px; height:16px; border-radius:50%; background:#D99A3C; transform:translateX(-50%);"></div>
+        <div style="position:absolute; left:0; right:0; bottom:0; height:10px; background:#164034;"></div>
+        <div style="position:absolute; left:0; right:0; bottom:10px; height:1px; background:#0F3D33;"></div>
+      </div>
+      <div style="display:flex; align-items:baseline;">
+        <span style="font-family:'Newsreader',serif; font-size:24px; font-weight:600; letter-spacing:-.01em; color:#F6F2E9;">Horae</span>
+        <span style="width:5px; height:5px; border-radius:50%; background:#D99A3C; margin-left:4px; align-self:flex-end; margin-bottom:4px;"></span>
+      </div>
+      <div style="flex:1;"></div>
+      <button class="hb-secondary" onClick="{{ toggleRail }}" title="Collapse" style="width:30px; height:30px; background:transparent; border:1px solid #322E26; border-radius:8px; color:#8f8676; cursor:pointer; font-size:14px;">«</button>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:24px;">
+      <button class="hb-primary" style="flex:1; display:flex; align-items:center; justify-content:center; gap:8px; padding:8px 12px; background:#4FB79A; color:#0d211b; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer;">
+        <span style="width:14px; height:14px; border-radius:50%; border:2px solid #0d211b; position:relative; display:inline-block;"><span style="position:absolute; left:50%; top:2px; width:1.5px; height:4px; background:#0d211b; transform:translateX(-50%);"></span></span>
+        Start timer
+      </button>
+    </div>
+
+    <div style="font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353; padding:0 8px 8px;">Track</div>
+    <div style="display:flex; flex-direction:column; gap:4px; margin-bottom:20px;">
+      <a href="04_Timesheet.dc.html" style="display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; color:#A29C8D;">
+        <span style="width:8px; height:8px; border-radius:50%; border:1.5px solid #5a5446;"></span>
+        <span style="font-size:14px;">Timesheet</span>
+      </a>
+    </div>
+
+    <div style="font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353; padding:0 8px 8px;">Organize</div>
+    <div style="display:flex; flex-direction:column; gap:4px; margin-bottom:20px;">
+      <a href="05_Projects.dc.html" style="display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; color:#A29C8D;">
+        <span style="width:9px; height:8px; border-radius:4px; border:1.5px solid #5a5446;"></span>
+        <span style="font-size:14px;">Projects</span>
+      </a>
+    </div>
+
+    <div style="font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353; padding:0 8px 8px;">Review</div>
+    <div style="display:flex; flex-direction:column; gap:4px;">
+      <a href="06_Approvals.dc.html" style="display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; color:#A29C8D;">
+        <span style="width:8px; height:8px; border-radius:50%; border:1.5px solid #5a5446;"></span>
+        <span style="font-size:14px;">Approvals</span>
+      </a>
+      <a href="07_Reports.dc.html" style="display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; color:#A29C8D;">
+        <span style="display:inline-flex; align-items:flex-end; gap:2px; height:11px;"><span style="width:2.5px; height:6px; background:#5a5446;"></span><span style="width:2.5px; height:11px; background:#5a5446;"></span><span style="width:2.5px; height:8px; background:#5a5446;"></span></span>
+        <span style="font-size:14px;">Reports</span>
+      </a>
+    </div>
+
+    <div style="flex:1; min-height:30px;"></div>
+
+    <!-- user chip + account menu: the Admin group is the only entry point -->
+    <div style="position:relative;">
+      <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
+      <div style="position:absolute; bottom:56px; left:0; width:252px; background:#201D17; border:1px solid #3d382e; border-radius:11px; overflow:hidden; box-shadow:0 26px 60px -16px rgba(0,0,0,.8); z-index:40;">
+        <div style="display:flex; align-items:center; gap:12px; padding:16px 16px 12px; border-bottom:1px solid #322E26;">
+          <div style="width:38px; height:38px; flex:0 0 38px; border-radius:50%; background:#1F5C4D; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:18px; color:#EFEAE0;">M</div>
+          <div style="min-width:0;"><div style="font-size:14px; font-weight:600; color:#F6F2E9;">Mira Kovač</div><div style="font-size:12px; color:#8f8676; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">mira@fieldstone.studio</div></div>
+          <span style="display:inline-flex; padding:4px 8px; background:#15291f; color:#5fcaa8; border:1px solid #24402f; border-radius:999px; font-size:12px; font-weight:600; white-space:nowrap;">Admin</span>
+        </div>
+        <div class="hm-ws" style="display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid #322E26; cursor:pointer;">
+          <span style="width:22px; height:22px; border-radius:6px; background:#1F5C4D; display:inline-flex; align-items:center; justify-content:center; font-size:12px; color:#EFEAE0; font-weight:700;">F</span>
+          <div style="flex:1; min-width:0;"><div style="font-size:14px; color:#EFEAE0;">Fieldstone Studio</div><div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6a6353;">horae.app/fieldstone</div></div>
+          <span style="color:#6a6353; font-size:12px;">⇄</span>
+        </div>
+        <div style="padding:8px;">
+          <a href="08_Settings.dc.html" class="hm-row" style="display:flex; align-items:center; gap:12px; padding:8px 8px; border-radius:8px; font-size:14px; color:#EFEAE0; text-decoration:none;"><span class="hm-ico" style="color:#8f8676; width:15px;">◔</span> My profile</a>
+          <a href="07_Reports.dc.html" class="hm-row" style="display:flex; align-items:center; gap:12px; padding:8px 8px; border-radius:8px; font-size:14px; color:#EFEAE0; text-decoration:none;"><span class="hm-ico" style="color:#8f8676; width:15px;">▦</span> My time report</a>
+        </div>
+        <div style="padding:8px; border-top:1px solid #322E26;">
+          <div style="padding:4px 8px 8px; font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353;">Admin</div>
+          <a href="09_Workspace.dc.html" class="hm-row" style="display:flex; align-items:center; gap:12px; padding:8px 8px; border-radius:8px; font-size:14px; color:#EFEAE0; text-decoration:none;"><span class="hm-ico" style="color:#8f8676; width:15px;">◍</span> Workspace settings</a>
+        </div>
+        <div style="display:flex; align-items:center; gap:12px; padding:12px 16px; border-top:1px solid #322E26;">
+          <span style="color:#8f8676; width:15px; font-size:12px;">◑</span>
+          <span style="flex:1; font-size:14px; color:#EFEAE0;">Dark theme</span>
+          <span style="width:40px; height:22px; border-radius:999px; background:#1F5C4D; position:relative; display:inline-block; flex:0 0 40px;"><span style="position:absolute; right:3px; top:3px; width:16px; height:16px; border-radius:50%; background:#EFEAE0;"></span></span>
+        </div>
+        <div style="padding:8px; border-top:1px solid #322E26;">
+          <div class="hm-row" style="display:flex; align-items:center; gap:12px; padding:8px 8px; border-radius:8px; font-size:14px; color:#A29C8D; cursor:pointer;"><span style="width:15px;">?</span> Need help?</div>
+          <a href="01_Sign In.dc.html" class="hm-row hm-danger" style="display:flex; align-items:center; gap:12px; padding:8px 8px; border-radius:8px; font-size:14px; color:#E06661; text-decoration:none;"><span style="width:15px;">→</span> Sign out</a>
+        </div>
+      </div>
+      </sc-if>
+      <div onClick="{{ toggleMenu }}" class="hm-chip" style="display:flex; align-items:center; gap:12px; padding:8px 8px; border-radius:11px; background:#232019; border:1px solid #3d382e; cursor:pointer;">
+        <div style="width:30px; height:30px; flex:0 0 30px; border-radius:50%; background:#1F5C4D; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; color:#EFEAE0;">M</div>
+        <div style="min-width:0;"><div style="font-size:14px; font-weight:600; color:#F6F2E9;">Mira Kovač</div><div style="font-size:12px; color:#8f8676;">Fieldstone Studio</div></div>
+        <div style="flex:1;"></div>
+        <span style="color:#6a6353; font-size:14px;">◔</span>
+      </div>
+    </div>
+  </div>
+
+  </sc-if>
+
+  <!-- ================= MAIN ================= -->
+  <div style="flex:1; min-width:0; display:flex; flex-direction:column; overflow:hidden;">
+
+    <!-- prototype page controls -->
+    <div style="padding:12px 44px; background:#161510; border-bottom:1px solid #262219; display:flex; flex-direction:column; gap:8px;">
+      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        <span style="display:inline-flex; align-items:center; gap:8px; padding:4px 8px; background:#2b2413; color:#e0b45f; border:1px solid #453818; border-radius:999px; font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.1em; text-transform:uppercase; font-weight:600;"><span style="width:6px; height:6px; border-radius:999px; background:#D6A24A;"></span>Dev mode</span>
+        <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353;">Importer</span>
+        <div style="display:inline-flex; background:#100F0C; border:1px solid #322E26; border-radius:8px; padding:4px;">
+        <button onClick="{{ srcPicker }}" class="hb-seg" style="{{ sSrcPicker }}">All importers</button>
+        <button onClick="{{ srcApi }}" class="hb-seg" style="{{ sSrcApi }}">Harvest API</button>
+        <button onClick="{{ srcCsv }}" class="hb-seg" style="{{ sSrcCsv }}">CSV file</button>
+        </div>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353;">Page state</span>
+        <div style="display:inline-flex; background:#100F0C; border:1px solid #322E26; border-radius:8px; padding:4px; flex-wrap:wrap; gap:4px;">
+          <sc-if value="{{ srcIsPicker }}" hint-placeholder-val="{{ false }}">
+        <button onClick="{{ stOk }}" class="hb-seg" style="{{ sStOk }}">Both available</button>
+        <button onClick="{{ stNoApi }}" class="hb-seg" style="{{ sStNoApi }}">API not configured</button>
+        <button onClick="{{ stOauth }}" class="hb-seg" style="{{ sStOauth }}">OAuth app setup</button>
+          </sc-if>
+          <sc-if value="{{ srcIsApi }}" hint-placeholder-val="{{ true }}">
+        <button onClick="{{ stNotConn }}" class="hb-seg" style="{{ sStNotConn }}">Not connected</button>
+        <button onClick="{{ stConnecting }}" class="hb-seg" style="{{ sStConnecting }}">Connecting</button>
+        <button onClick="{{ stConnError }}" class="hb-seg" style="{{ sStConnError }}">Connection error</button>
+        <button onClick="{{ stConnected }}" class="hb-seg" style="{{ sStConnected }}">Connected</button>
+        <button onClick="{{ stExpired }}" class="hb-seg" style="{{ sStExpired }}">Token expired</button>
+        <button onClick="{{ stRunning }}" class="hb-seg" style="{{ sStRunning }}">Running</button>
+        <button onClick="{{ stDry }}" class="hb-seg" style="{{ sStDry }}">Dry-run done</button>
+        <button onClick="{{ stCommit }}" class="hb-seg" style="{{ sStCommit }}">Commit done</button>
+        <button onClick="{{ stErrors }}" class="hb-seg" style="{{ sStErrors }}">With errors</button>
+        <button onClick="{{ stOauth }}" class="hb-seg" style="{{ sStOauth }}">OAuth app</button>
+          </sc-if>
+          <sc-if value="{{ srcIsCsv }}" hint-placeholder-val="{{ false }}">
+        <button onClick="{{ stEmpty }}" class="hb-seg" style="{{ sStEmpty }}">No file yet</button>
+        <button onClick="{{ stReady }}" class="hb-seg" style="{{ sStReady }}">File ready</button>
+        <button onClick="{{ stRunning }}" class="hb-seg" style="{{ sStRunning }}">Running</button>
+        <button onClick="{{ stDry }}" class="hb-seg" style="{{ sStDry }}">Dry-run done</button>
+        <button onClick="{{ stCommit }}" class="hb-seg" style="{{ sStCommit }}">Commit done</button>
+        <button onClick="{{ stErrors }}" class="hb-seg" style="{{ sStErrors }}">With errors</button>
+          </sc-if>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding:24px 40px 0;">
+      <a href="04_Timesheet.dc.html" style="display:inline-flex; align-items:center; gap:8px; font-size:14px; color:#A29C8D;"><span style="font-size:16px;">←</span> Back to Timesheet</a>
+    </div>
+
+    <div class="hz-split" style="display:flex; gap:48px; padding:20px 40px 64px; flex:1; align-items:flex-start; overflow-y:auto; min-height:0;">
+
+      <!-- ============ ADMIN SUB-NAV (mirrors the profile settings shell) ============ -->
+      <div class="hz-subnav" style="width:250px; flex:0 0 250px;">
+        <div style="display:flex; align-items:center; gap:12px; padding:4px 4px 20px; border-bottom:1px solid #322E26; margin-bottom:16px;">
+          <div style="width:52px; height:52px; flex:0 0 52px; border-radius:50%; background:#1F5C4D; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:24px; line-height:1; padding-top:3px; font-weight:600; color:#EFEAE0;">F</div>
+          <div style="min-width:0;">
+            <div style="font-size:14px; font-weight:600; color:#F6F2E9;">Fieldstone Studio</div>
+            <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6a6353; margin-top:2px;">horae.app/fieldstone</div>
+            <span style="display:inline-flex; margin-top:8px; padding:4px 8px; background:#15291f; color:#5fcaa8; border:1px solid #24402f; border-radius:999px; font-size:12px; font-weight:600;">Admin</span>
+          </div>
+        </div>
+        
+        <div style="font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353; padding:0 12px 8px;">Workspace</div>
+        <div style="display:flex; flex-direction:column; gap:2px; margin-bottom:16px;">
+          <a href="09_Workspace.dc.html" class="hz-nav" style="padding:8px 12px; border-radius:8px; font-size:14px; color:#A29C8D;">People</a>
+          <a href="09_Workspace.dc.html" class="hz-nav" style="padding:8px 12px; border-radius:8px; font-size:14px; color:#A29C8D;">Roles &amp; permissions</a>
+          <a href="09_Workspace.dc.html" class="hz-nav" style="padding:8px 12px; border-radius:8px; font-size:14px; color:#A29C8D;">General</a>
+        </div>
+        <div style="font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353; padding:0 12px 8px;">Data</div>
+        <div style="display:flex; flex-direction:column; gap:2px;">
+          <div style="padding:8px 12px; border-radius:8px; background:#232019; border:1px solid #322E26; font-size:14px; font-weight:600; color:#F6F2E9;">Importers</div>
+          <a href="09_Workspace.dc.html" class="hz-nav" style="padding:8px 12px; border-radius:8px; font-size:14px; color:#A29C8D;">Export &amp; backups</a>
+          <a href="09_Workspace.dc.html" class="hz-nav" style="padding:8px 12px; border-radius:8px; font-size:14px; color:#A29C8D;">Audit log</a>
+        </div>
+      </div>
+
+      <!-- ============ CONTENT ============ -->
+      <div style="flex:1; min-width:0; max-width:720px; display:flex; flex-direction:column; gap:20px;">
+
+        <div>
+          <h1 style="font-family:'Newsreader',serif; font-size:34px; font-weight:600; letter-spacing:-.015em; margin:0; color:#F6F2E9;">{{ pageTitle }}</h1>
+          <p style="font-size:14px; line-height:1.6; color:#8f8676; margin:12px 0 0;">{{ pageSub }}</p>
+        </div>
+
+        <!-- ===== OAUTH APP CREDENTIALS (deployment config) ===== -->
+        <sc-if value="{{ showOauth }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column; gap:20px;">
+          <span onClick="{{ exitOauth }}" style="font-size:14px; color:#4FB79A; cursor:pointer; align-self:flex-start;">{{ exitLabel }}</span>
+          <div style="display:flex; align-items:center; gap:12px; padding:16px 20px; background:rgba(217,154,60,.09); border:1px solid #453818; border-radius:11px; flex-wrap:wrap;">
+            <span style="width:24px; height:24px; flex:0 0 24px; border-radius:999px; background:#2b2413; border:1px solid #453818; display:flex; align-items:center; justify-content:center; color:#E7C079; font-size:12px;">◔</span>
+            <div style="min-width:200px; flex:1;"><div style="font-size:14px; font-weight:600; color:#E7C079;">One-time setup, per deployment</div><div style="font-size:12px; color:#8f8676; margin-top:4px;">Register Horae once as an OAuth2 app in Harvest. Everyone in this workspace then connects with their own account.</div></div>
+          </div>
+
+          <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; overflow:hidden;">
+            <div style="display:flex; align-items:center; gap:12px; padding:16px 20px; border-bottom:1px solid #262219;">
+              <div style="width:26px; height:26px; flex:0 0 26px; border-radius:6px; background:#FA5D00; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; font-weight:600; color:#2a1200;">h</div>
+              <span style="font-size:14px; font-weight:600; color:#F6F2E9;">Harvest OAuth2 app</span>
+              <span style="{{ credPill }}"><span style="width:6px; height:6px; border-radius:999px; background:{{ credDot }};"></span>{{ credLabel }}</span>
+            </div>
+
+            <div style="padding:24px 20px; display:flex; flex-direction:column; gap:20px;">
+              <div>
+                <div style="font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:#7C7565; margin-bottom:8px;">Redirect URI</div>
+                <div style="display:flex; align-items:stretch; border:1px solid #3d382e; border-radius:8px; overflow:hidden;">
+                  <span style="flex:1; min-width:0; display:flex; align-items:center; padding:12px 12px; background:#161510; font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">https://horae.app/fieldstone/oauth/harvest/callback</span>
+                  <button onClick="{{ copyUri }}" class="hb-secondary" style="padding:0 16px; background:#232019; border:none; border-left:1px solid #3d382e; color:#EFEAE0; font-family:inherit; font-size:12px; cursor:pointer; white-space:nowrap;">{{ copyLabel }}</button>
+                </div>
+                <div style="font-size:12px; color:#7C7565; margin-top:8px;">Paste this into Harvest first — it must match exactly, or the callback is rejected.</div>
+              </div>
+
+              <div>
+                <div style="font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:#7C7565; margin-bottom:8px;">Client ID</div>
+                <input class="hf mono" placeholder="1234567.pt.abcdEFGH…" />
+              </div>
+
+              <div>
+                <div style="font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:#7C7565; margin-bottom:8px;">Client secret</div>
+                <sc-if value="{{ secretStored }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex; align-items:center; gap:12px; padding:12px 16px; background:#161510; border:1px solid #3d382e; border-radius:8px; flex-wrap:wrap;">
+                  <span style="font-family:'IBM Plex Mono',monospace; font-size:14px; color:#A29C8D; letter-spacing:.14em;">••••••••••••••••••••</span>
+                  <span style="font-size:12px; color:#7C7565;">stored 14 Jul 2026</span>
+                  <span style="flex:1; min-width:8px;"></span>
+                  <button onClick="{{ replaceSecret }}" class="hb-ghost" style="padding:8px 12px; background:transparent; color:#4FB79A; border:none; border-radius:8px; font-family:inherit; font-size:12px; font-weight:600; cursor:pointer;">Replace secret</button>
+                </div>
+                </sc-if>
+                <sc-if value="{{ secretEmpty }}" hint-placeholder-val="{{ true }}">
+                <input class="hf mono" type="password" placeholder="Paste the secret — shown only once by Harvest" />
+                </sc-if>
+                <div style="font-size:12px; color:#7C7565; margin-top:8px;">Encrypted at rest and never returned by the API. Horae can overwrite it, never read it back.</div>
+              </div>
+
+              <div style="display:flex; align-items:center; gap:12px; padding-top:4px; flex-wrap:wrap;">
+                <button onClick="{{ saveCreds }}" class="hb-primary" style="padding:12px 20px; background:#4FB79A; color:#0d211b; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer;">Save credentials</button>
+                <button class="hb-secondary" style="padding:12px 16px; background:#232019; color:#EFEAE0; border:1px solid #3d382e; border-radius:8px; font-family:inherit; font-size:14px; cursor:pointer;">Test handshake</button>
+                <span style="flex:1; min-width:8px;"></span>
+                <span style="font-size:12px; color:#7C7565;">Scope requested: <span style="font-family:'IBM Plex Mono',monospace; color:#A29C8D;">harvest:read</span></span>
+              </div>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:12px; padding:16px 20px; background:#161510; border-top:1px solid #262219; flex-wrap:wrap;">
+              <span style="font-size:12px; color:#7C7565;">Prefer not to keep secrets in the database? Set <span style="font-family:'IBM Plex Mono',monospace; color:#A29C8D;">HORAE_HARVEST_CLIENT_ID</span> and <span style="font-family:'IBM Plex Mono',monospace; color:#A29C8D;">…_SECRET</span> in the environment — this panel then reads as locked.</span>
+            </div>
+          </div>
+        </div>
+        </sc-if>
+
+        <!-- ===== IMPORTER LIST ===== -->
+        <sc-if value="{{ showPicker }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          <div onClick="{{ pickApi }}" class="{{ apiEntryCls }}" style="{{ apiEntry }}">
+            <div style="width:38px; height:38px; flex:0 0 38px; border-radius:11px; background:{{ hlogoBg }}; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:18px; font-weight:600; color:{{ hlogoInk }};">h</div>
+            <div style="min-width:0; flex:1;">
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;"><span style="font-size:14px; font-weight:600; color:{{ apiInk }};">Harvest</span><span style="{{ apiStatePill }}">{{ apiStateLabel }}</span></div>
+              <div style="font-size:12px; color:#8f8676; margin-top:4px; line-height:1.5;">{{ apiHint }}</div>
+            </div>
+            <sc-if value="{{ isNoApi }}" hint-placeholder-val="{{ false }}">
+            <button onClick="{{ stOauth }}" class="hb-secondary" style="padding:8px 12px; background:#232019; color:#EFEAE0; border:1px solid #3d382e; border-radius:8px; font-family:inherit; font-size:12px; cursor:pointer; white-space:nowrap;">Set up OAuth app</button>
+            </sc-if>
+            <span style="color:#6a6353; font-size:14px;">{{ apiChevron }}</span>
+          </div>
+          <div onClick="{{ pickCsv }}" class="hz-imp" style="display:flex; align-items:center; gap:12px; padding:16px 16px; background:#1A1813; border:1px solid #322E26; border-radius:11px; cursor:pointer;">
+            <div style="width:38px; height:38px; flex:0 0 38px; border-radius:11px; background:#232019; border:1px solid #3d382e; display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">CSV</div>
+            <div style="min-width:0; flex:1;">
+              <div style="font-size:14px; font-weight:600; color:#F6F2E9;">CSV file</div>
+              <div style="font-size:12px; color:#8f8676; margin-top:4px; line-height:1.5;">Upload a Detailed time report exported from Harvest or any tracker.</div>
+            </div>
+            <span style="color:#6a6353; font-size:14px;">›</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:12px; padding:16px 16px; background:#161510; border:1px solid #262219; border-radius:11px; opacity:.55;">
+            <div style="width:38px; height:38px; flex:0 0 38px; border-radius:11px; background:#232019; border:1px solid #3d382e; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:18px; color:#8f8676;">t</div>
+            <div style="min-width:0; flex:1;">
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;"><span style="font-size:14px; font-weight:600; color:#8f8676;">Toggl Track</span><span style="display:inline-flex; padding:4px 8px; background:#201d17; color:#8f8676; border:1px solid #322E26; border-radius:999px; font-size:12px; font-weight:600;">Planned</span></div>
+              <div style="font-size:12px; color:#6a6353; margin-top:4px;">Not available yet.</div>
+            </div>
+          </div>
+          <div style="display:flex; align-items:center; gap:12px; padding:16px 16px; background:#161510; border:1px solid #262219; border-radius:11px; opacity:.55;">
+            <div style="width:38px; height:38px; flex:0 0 38px; border-radius:11px; background:#232019; border:1px solid #3d382e; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:18px; color:#8f8676;">c</div>
+            <div style="min-width:0; flex:1;">
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;"><span style="font-size:14px; font-weight:600; color:#8f8676;">Clockify</span><span style="display:inline-flex; padding:4px 8px; background:#201d17; color:#8f8676; border:1px solid #322E26; border-radius:999px; font-size:12px; font-weight:600;">Planned</span></div>
+              <div style="font-size:12px; color:#6a6353; margin-top:4px;">Not available yet.</div>
+            </div>
+          </div>
+        </div>
+        </sc-if>
+
+        <!-- ===== BACK TO LIST ===== -->
+        <sc-if value="{{ showSourceLine }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+          <span onClick="{{ srcPicker }}" style="font-size:14px; color:#4FB79A; cursor:pointer;">← All importers</span>
+          <span style="color:#3d382e;">·</span>
+          <span onClick="{{ switchSrc }}" style="font-size:14px; color:#8f8676; cursor:pointer;">{{ switchLabel }}</span>
+        </div>
+        </sc-if>
+
+        <!-- ===== API · NOT CONNECTED ===== -->
+        <sc-if value="{{ isNotConn }}" hint-placeholder-val="{{ false }}">
+        <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; padding:40px 24px; display:flex; flex-direction:column; align-items:center; gap:16px; text-align:center;">
+          <div style="width:52px; height:52px; border-radius:11px; background:#FA5D00; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:24px; line-height:1; padding-top:3px; font-weight:600; color:#2a1200;">h</div>
+          <div style="font-size:16px; font-weight:600; color:#F6F2E9;">Connect your Harvest account</div>
+          <div style="font-size:14px; color:#8f8676; max-width:380px; line-height:1.55;">Read-only access. Horae never writes anything back to Harvest.</div>
+          <button onClick="{{ goConnecting }}" class="hb-primary" style="margin-top:4px; padding:12px 20px; background:#4FB79A; color:#0d211b; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer;">Connect Harvest</button>
+        </div>
+        </sc-if>
+
+        <!-- ===== API · CONNECTING ===== -->
+        <sc-if value="{{ isConnecting }}" hint-placeholder-val="{{ false }}">
+        <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; padding:40px 24px; display:flex; flex-direction:column; align-items:center; gap:16px; text-align:center;">
+          <span style="width:26px; height:26px; border-radius:50%; border:2.5px solid #3d382e; border-top-color:#4FB79A; animation:hzspin .8s linear infinite; display:inline-block;"></span>
+          <div style="font-size:16px; font-weight:600; color:#F6F2E9;">Waiting for Harvest…</div>
+          <div style="font-size:14px; color:#8f8676; max-width:400px; line-height:1.55;">Authorise Horae in the window that just opened. This page updates on its own.</div>
+          <button onClick="{{ goNotConn }}" class="hb-ghost" style="padding:8px 16px; background:transparent; color:#4FB79A; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer;">Cancel</button>
+        </div>
+        </sc-if>
+
+        <!-- ===== API · CONNECTION CHIP ===== -->
+        <sc-if value="{{ showChip }}" hint-placeholder-val="{{ true }}">
+        <div style="{{ chipWrap }}">
+          <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+            <div style="width:26px; height:26px; flex:0 0 26px; border-radius:6px; background:#FA5D00; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; line-height:1; padding-top:1px; font-weight:600; color:#2a1200;">h</div>
+            <span style="font-size:14px; font-weight:600; color:#F6F2E9;">Harvest</span>
+            <span style="{{ statusPill }}"><span style="width:6px; height:6px; border-radius:50%; background:{{ statusDot }};"></span>{{ statusLabel }}</span>
+            <span style="font-size:12px; color:#8f8676;">{{ chipMeta }}</span>
+            <div style="flex:1; min-width:10px;"></div>
+            <sc-if value="{{ isExpired }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ goConnected }}" class="hb-secondary" style="padding:8px 16px; background:#232019; color:#EFEAE0; border:1px solid #3d382e; border-radius:8px; font-family:inherit; font-size:12px; cursor:pointer; white-space:nowrap;">Reconnect</button>
+            </sc-if>
+            <button onClick="{{ toggleManage }}" class="hb-ghost" style="padding:8px 12px; background:transparent; color:#4FB79A; border:none; border-radius:8px; font-family:inherit; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">Manage connection</button>
+          </div>
+          <sc-if value="{{ manageOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:12px; padding-top:12px; border-top:1px solid #262219; display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:16px;">
+            <div><div style="font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:#6a6353; margin-bottom:4px;">Account</div><div style="font-size:12px; color:#EFEAE0;">Fieldstone Studio</div></div>
+            <div><div style="font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:#6a6353; margin-bottom:4px;">Token</div><div style="font-size:12px; color:{{ tokenColor }};">{{ tokenLabel }}</div></div>
+            <div><div style="font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:#6a6353; margin-bottom:4px;">Scope</div><div style="font-size:12px; color:#EFEAE0;">Read-only</div></div>
+            <div style="display:flex; align-items:flex-end;"><button onClick="{{ stOauth }}" class="hb-secondary" style="padding:8px 12px; background:#232019; color:#EFEAE0; border:1px solid #3d382e; border-radius:8px; font-family:inherit; font-size:12px; cursor:pointer; white-space:nowrap;">OAuth app credentials</button></div>
+            <div style="display:flex; align-items:flex-end;"><button class="hb-danger" style="padding:8px 12px; background:transparent; color:#E06661; border:1px solid #6e3634; border-radius:8px; font-family:inherit; font-size:12px; cursor:pointer;">Disconnect</button></div>
+          </div>
+          </sc-if>
+        </div>
+        </sc-if>
+
+        <!-- ===== API · CONNECTION ERROR ===== -->
+        <sc-if value="{{ isConnError }}" hint-placeholder-val="{{ false }}">
+        <div style="background:#1A1813; border:1px solid #4d2523; border-radius:20px; padding:20px 24px;">
+          <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+            <div style="width:26px; height:26px; flex:0 0 26px; border-radius:6px; background:#FA5D00; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; line-height:1; padding-top:1px; font-weight:600; color:#2a1200;">h</div>
+            <span style="font-size:14px; font-weight:600; color:#F6F2E9;">Harvest</span>
+            <span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#2e1817; color:#ec8683; border:1px solid #4d2523; border-radius:999px; font-size:12px; font-weight:600; white-space:nowrap;"><span style="width:6px; height:6px; border-radius:50%; background:#E06661;"></span>Connection failed</span>
+            <div style="flex:1; min-width:10px;"></div>
+            <button onClick="{{ goConnecting }}" class="hb-secondary" style="padding:8px 16px; background:#232019; color:#EFEAE0; border:1px solid #3d382e; border-radius:8px; font-family:inherit; font-size:12px; cursor:pointer; white-space:nowrap;">Try again</button>
+          </div>
+          <div style="margin-top:12px; padding-top:12px; border-top:1px solid #262219;">
+            <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">401 unauthorized · account_id mismatch</div>
+            <div style="font-size:12px; color:#8f8676; margin-top:4px; line-height:1.55;">The account you authorised doesn't own this workspace's data. Sign in again with the right Harvest account.</div>
+          </div>
+        </div>
+        </sc-if>
+
+        <!-- ===== CSV · DROPZONE ===== -->
+        <sc-if value="{{ showDrop }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ goCsvReady }}" class="hz-drop" style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:48px 24px; background:#1A1813; border:1.5px dashed #3d382e; border-radius:20px; text-align:center; cursor:pointer;">
+          <div style="width:44px; height:44px; border-radius:11px; background:#232019; border:1px solid #3d382e; display:flex; align-items:center; justify-content:center; color:#A29C8D; font-size:18px;">↥</div>
+          <div style="font-size:14px; color:#EFEAE0; max-width:420px; line-height:1.5;">Export your Detailed time report from Harvest and drop the .csv here, or <span style="color:#4FB79A; font-weight:600;">browse</span></div>
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6a6353;">max 25 MB · UTF-8 · comma-separated</div>
+        </div>
+        </sc-if>
+
+        <!-- ===== CSV · FILE CHIP ===== -->
+        <sc-if value="{{ showFileChip }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; align-items:center; gap:12px; padding:16px 16px; background:#1A1813; border:1px solid #322E26; border-radius:11px; flex-wrap:wrap;">
+          <span style="width:30px; height:30px; flex:0 0 30px; border-radius:8px; background:#232019; border:1px solid #3d382e; display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">CSV</span>
+          <div style="min-width:0;"><div style="font-size:14px; color:#EFEAE0;">harvest_time_report_2026.csv</div><div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6a6353; margin-top:2px;">6 831 rows · 4.2 MB</div></div>
+          <span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#15291f; color:#5fcaa8; border:1px solid #24402f; border-radius:999px; font-size:12px; font-weight:600; white-space:nowrap;">Ready</span>
+          <div style="flex:1; min-width:10px;"></div>
+          <button onClick="{{ goCsv }}" class="hb-ghost" style="padding:8px 12px; background:transparent; color:#4FB79A; border:none; border-radius:8px; font-family:inherit; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">Replace file</button>
+        </div>
+        </sc-if>
+
+        <!-- ===== ONE PRIMARY ACTION ===== -->
+        <sc-if value="{{ showAction }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+          <button onClick="{{ goDryFor }}" class="hb-primary" style="padding:12px 20px; background:#4FB79A; color:#0d211b; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer;">{{ actionLabel }}</button>
+          <span style="font-size:12px; color:#8f8676;">A dry-run previews everything without writing a single row.</span>
+        </div>
+        </sc-if>
+
+        <!-- ===== RUNNING ===== -->
+        <sc-if value="{{ isRunning }}" hint-placeholder-val="{{ false }}">
+        <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; padding:20px 24px;">
+          <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+            <span style="width:16px; height:16px; border-radius:50%; border:2px solid #3d382e; border-top-color:#4FB79A; animation:hzspin .8s linear infinite; display:inline-block;"></span>
+            <span style="font-size:14px; font-weight:600; color:#F6F2E9;">Dry-run in progress</span>
+            <div style="flex:1; min-width:10px;"></div>
+            <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">4 812 / 6 940</span>
+            <button class="hb-danger" style="padding:8px 12px; background:transparent; color:#E06661; border:1px solid #6e3634; border-radius:8px; font-family:inherit; font-size:12px; cursor:pointer;">Cancel</button>
+          </div>
+          <div style="height:7px; border-radius:999px; background:#232019; overflow:hidden; margin-top:16px;"><div style="width:69%; height:100%; background:#4FB79A; border-radius:999px;"></div></div>
+          <div style="font-size:12px; color:#8f8676; margin-top:12px;">Reading time entries · nothing has been written</div>
+        </div>
+        </sc-if>
+
+        <!-- ===== SHARED RESULT ===== -->
+        <sc-if value="{{ showReport }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex; flex-direction:column; gap:16px;">
+
+          <sc-if value="{{ isDry }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex; align-items:center; gap:12px; padding:16px 20px; background:rgba(217,154,60,.09); border:1px solid #453818; border-radius:11px; flex-wrap:wrap;">
+            <span style="width:26px; height:26px; flex:0 0 26px; border-radius:50%; background:#2b2413; border:1px solid #453818; display:flex; align-items:center; justify-content:center; color:#E7C079; font-size:12px;">◔</span>
+            <div style="min-width:200px; flex:1;"><div style="font-size:14px; font-weight:600; color:#E7C079;">Preview only — nothing was written</div><div style="font-size:12px; color:#8f8676; margin-top:4px;">Review the numbers, then commit.</div></div>
+            <button onClick="{{ goCommit }}" class="hb-primary" style="padding:8px 16px; background:#4FB79A; color:#0d211b; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap;">Commit this import</button>
+          </div>
+          </sc-if>
+
+          <sc-if value="{{ isCommit }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; align-items:center; gap:12px; padding:16px 20px; background:rgba(63,180,137,.08); border:1px solid #24402f; border-radius:11px; flex-wrap:wrap;">
+            <span style="width:26px; height:26px; flex:0 0 26px; border-radius:50%; background:#15291f; border:1px solid #24402f; display:flex; align-items:center; justify-content:center; color:#5fcaa8; font-size:12px;">✓</span>
+            <div style="min-width:200px; flex:1;"><div style="font-size:14px; font-weight:600; color:#5fcaa8;">Import complete</div><div style="font-size:12px; color:#8f8676; margin-top:4px;">6 940 records written · took 38s</div></div>
+            <a href="05_Projects.dc.html" style="font-size:14px; font-weight:600; white-space:nowrap;">Open Projects →</a>
+          </div>
+          </sc-if>
+
+          <sc-if value="{{ isErrors }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; align-items:center; gap:12px; padding:16px 20px; background:rgba(224,102,97,.08); border:1px solid #4d2523; border-radius:11px; flex-wrap:wrap;">
+            <span style="width:26px; height:26px; flex:0 0 26px; border-radius:50%; background:#2e1817; border:1px solid #4d2523; display:flex; align-items:center; justify-content:center; color:#ec8683; font-size:12px;">▲</span>
+            <div style="min-width:200px; flex:1;"><div style="font-size:14px; font-weight:600; color:#ec8683;">Import complete with 14 errors</div><div style="font-size:12px; color:#8f8676; margin-top:4px;">6 926 of 6 940 records written.</div></div>
+          </div>
+          </sc-if>
+
+          <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:12px;">
+            <div style="background:#1A1813; border:1px solid #322E26; border-radius:11px; padding:16px;">
+              <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:12px;"><span style="font-size:14px; font-weight:600; color:#F6F2E9;">Clients</span><span style="font-family:'IBM Plex Mono',monospace; font-size:16px; color:#EFEAE0;">18</span></div>
+              <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px;">
+                <div style="display:flex; flex-direction:column; gap:4px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:16px; font-weight:600; color:#5fcaa8;">18</span><span style="font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:#6a6353;">Created</span></div>
+                <div style="display:flex; flex-direction:column; gap:4px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:16px; font-weight:600; color:#e0b45f;">0</span><span style="font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:#6a6353;">Updated</span></div>
+                <div style="display:flex; flex-direction:column; gap:4px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:16px; font-weight:600; color:#8f8676;">0</span><span style="font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:#6a6353;">Skipped</span></div>
+                <div style="display:flex; flex-direction:column; gap:4px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:16px; font-weight:600; color:#5a5446;">0</span><span style="font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:#6a6353;">Errored</span></div>
+              </div>
+            </div>
+            <div style="background:#1A1813; border:1px solid #322E26; border-radius:11px; padding:16px;">
+              <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:12px;"><span style="font-size:14px; font-weight:600; color:#F6F2E9;">Projects</span><span style="font-family:'IBM Plex Mono',monospace; font-size:16px; color:#EFEAE0;">64</span></div>
+              <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px;">
+                <div style="display:flex; flex-direction:column; gap:4px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:16px; font-weight:600; color:#5fcaa8;">61</span><span style="font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:#6a6353;">Created</span></div>
+                <div style="display:flex; flex-direction:column; gap:4px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:16px; font-weight:600; color:#e0b45f;">2</span><span style="font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:#6a6353;">Updated</span></div>
+                <div style="display:flex; flex-direction:column; gap:4px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:16px; font-weight:600; color:#8f8676;">1</span><span style="font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:#6a6353;">Skipped</span></div>
+                <div style="display:flex; flex-direction:column; gap:4px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:16px; font-weight:600; color:#5a5446;">0</span><span style="font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:#6a6353;">Errored</span></div>
+              </div>
+            </div>
+            <div style="background:#1A1813; border:1px solid #322E26; border-radius:11px; padding:16px;">
+              <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:12px;"><span style="font-size:14px; font-weight:600; color:#F6F2E9;">Tasks</span><span style="font-family:'IBM Plex Mono',monospace; font-size:16px; color:#EFEAE0;">27</span></div>
+              <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px;">
+                <div style="display:flex; flex-direction:column; gap:4px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:16px; font-weight:600; color:#5fcaa8;">25</span><span style="font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:#6a6353;">Created</span></div>
+                <div style="display:flex; flex-direction:column; gap:4px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:16px; font-weight:600; color:#e0b45f;">0</span><span style="font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:#6a6353;">Updated</span></div>
+                <div style="display:flex; flex-direction:column; gap:4px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:16px; font-weight:600; color:#8f8676;">2</span><span style="font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:#6a6353;">Skipped</span></div>
+                <div style="display:flex; flex-direction:column; gap:4px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:16px; font-weight:600; color:#5a5446;">0</span><span style="font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:#6a6353;">Errored</span></div>
+              </div>
+            </div>
+            <div style="{{ teTile }}">
+              <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:12px;"><span style="font-size:14px; font-weight:600; color:#F6F2E9;">Time entries</span><span style="font-family:'IBM Plex Mono',monospace; font-size:16px; color:#EFEAE0;">6 831</span></div>
+              <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px;">
+                <div style="display:flex; flex-direction:column; gap:4px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:16px; font-weight:600; color:#5fcaa8;">{{ teCreated }}</span><span style="font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:#6a6353;">Created</span></div>
+                <div style="display:flex; flex-direction:column; gap:4px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:16px; font-weight:600; color:#e0b45f;">104</span><span style="font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:#6a6353;">Updated</span></div>
+                <div style="display:flex; flex-direction:column; gap:4px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:16px; font-weight:600; color:#8f8676;">31</span><span style="font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:#6a6353;">Skipped</span></div>
+                <div style="display:flex; flex-direction:column; gap:4px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:16px; font-weight:700; color:{{ teErrColor }};">{{ teErrored }}</span><span style="font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:{{ teErrLabel }};">Errored</span></div>
+              </div>
+            </div>
+          </div>
+
+          <sc-if value="{{ isErrors }}" hint-placeholder-val="{{ false }}">
+          <div style="background:#1A1813; border:1px solid #322E26; border-radius:11px; overflow:hidden;">
+            <div onClick="{{ toggleErrs }}" class="hz-err" style="display:flex; align-items:center; gap:12px; padding:16px 20px; cursor:pointer;">
+              <span style="color:#6a6353; font-size:12px; width:12px;">{{ errCaret }}</span>
+              <span style="font-size:14px; font-weight:600; color:#F6F2E9;">Record errors</span>
+              <span style="display:inline-flex; align-items:center; padding:4px 8px; background:#2e1817; color:#ec8683; border:1px solid #4d2523; border-radius:999px; font-size:12px; font-weight:600;">14</span>
+              <div style="flex:1;"></div>
+              <button class="hb-secondary" style="padding:8px 12px; background:#232019; color:#A29C8D; border:1px solid #3d382e; border-radius:8px; font-family:inherit; font-size:12px; cursor:pointer; white-space:nowrap;">Download CSV</button>
+            </div>
+            <sc-if value="{{ errOpen }}" hint-placeholder-val="{{ true }}">
+            <div style="overflow-x:auto; border-top:1px solid #262219;">
+              <div style="width:max-content; min-width:100%;">
+                <div style="display:grid; grid-template-columns:minmax(280px,1fr) minmax(320px,1fr); padding:12px 20px; background:#161510; border-bottom:1px solid #262219; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:#6a6353;"><span>Source location</span><span>Reason</span></div>
+                <div style="display:grid; grid-template-columns:minmax(280px,1fr) minmax(320px,1fr); padding:12px 20px; border-bottom:1px solid #201d17; align-items:center;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">time_entries/id=90 214 771</span><span style="font-size:12px; color:#EFEAE0;">Project 3 021 not found — archived in source</span></div>
+                <div style="display:grid; grid-template-columns:minmax(280px,1fr) minmax(320px,1fr); padding:12px 20px; border-bottom:1px solid #201d17; align-items:center;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">time_entries/id=90 214 802</span><span style="font-size:12px; color:#EFEAE0;">Duration 0.00 — a positive duration is required</span></div>
+                <div style="display:grid; grid-template-columns:minmax(280px,1fr) minmax(320px,1fr); padding:12px 20px; border-bottom:1px solid #201d17; align-items:center;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">time_entries/id=90 215 118</span><span style="font-size:12px; color:#EFEAE0;">User h.laurent@ has no Horae account — invite first</span></div>
+                <div style="display:grid; grid-template-columns:minmax(280px,1fr) minmax(320px,1fr); padding:12px 20px; border-bottom:1px solid #201d17; align-items:center;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">time_entries/id=90 217 449</span><span style="font-size:12px; color:#EFEAE0;">Spent date 2019-02-30 is not a valid date</span></div>
+                <div style="display:grid; grid-template-columns:minmax(280px,1fr) minmax(320px,1fr); padding:12px 20px; align-items:center;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">time_entries/id=90 219 003</span><span style="font-size:12px; color:#EFEAE0;">Notes exceed 4 000 characters</span></div>
+                <div style="padding:12px 20px; border-top:1px solid #262219; background:#161510; font-size:12px; color:#8f8676;">Showing 5 of 14 · <a href="#">show all</a></div>
+              </div>
+            </div>
+            </sc-if>
+          </div>
+          </sc-if>
+
+          <sc-if value="{{ showResync }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+            <button onClick="{{ goRunning }}" class="hb-secondary" style="padding:8px 16px; background:#232019; color:#EFEAE0; border:1px solid #3d382e; border-radius:8px; font-family:inherit; font-size:14px; cursor:pointer;">Re-sync changes</button>
+            <span style="font-size:12px; color:#8f8676;">Incremental — only what changed since the last sync. Local edits are never overwritten.</span>
+          </div>
+          </sc-if>
+        </div>
+        </sc-if>
+
+        <!-- ===== CONNECTED · EMPTY ===== -->
+        <sc-if value="{{ showEmpty }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:40px 20px; background:#161510; border:1px solid #262219; border-radius:11px; text-align:center;">
+          <div style="width:44px; height:44px; border-radius:50%; background:#232019; border:1px solid #3d382e; display:flex; align-items:center; justify-content:center; color:#5a5446; font-size:18px;">↧</div>
+          <div style="font-size:14px; color:#EFEAE0;">Nothing imported yet</div>
+          <div style="font-size:12px; color:#8f8676; max-width:360px; line-height:1.55;">Your account is linked. A dry-run is free and reversible — start there.</div>
+        </div>
+        </sc-if>
+
+        <!-- ===== TOKEN EXPIRED NOTE ===== -->
+        <sc-if value="{{ isExpired }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; align-items:center; gap:12px; padding:16px 16px; background:rgba(217,154,60,.07); border:1px solid #453818; border-radius:11px;">
+          <span style="color:#E7C079; font-size:12px;">◔</span>
+          <span style="font-size:14px; color:#8f8676; line-height:1.5;">Imports are paused while the token refreshes. This usually resolves itself within a minute.</span>
+        </div>
+        </sc-if>
+
+      </div>
+    </div>
+  </div>
+
+  <sc-if value="{{ showToast }}" hint-placeholder-val="{{ true }}">
+  <div style="position:fixed; left:50%; bottom:28px; transform:translateX(-50%); display:flex; align-items:center; gap:12px; background:#000; border:1px solid #322E26; border-radius:11px; padding:12px 16px; box-shadow:0 24px 60px -18px rgba(0,0,0,.9); z-index:60;">
+    <span style="color:#4FB79A; font-size:14px;">✓</span>
+    <span style="font-size:14px; color:#EFEAE0;">{{ toastMsg }}</span>
+    <span onClick="{{ hideToast }}" style="color:#8f8676; cursor:pointer; font-size:14px; margin-left:4px;">×</span>
+  </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:1000},&quot;importer&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;picker&quot;,&quot;api&quot;,&quot;csv&quot;],&quot;default&quot;:&quot;api&quot;,&quot;tsType&quot;:&quot;'picker' | 'api' | 'csv'&quot;,&quot;section&quot;:&quot;Prototype state&quot;},&quot;importState&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;ok&quot;,&quot;noapi&quot;,&quot;notconn&quot;,&quot;connecting&quot;,&quot;connerror&quot;,&quot;connected&quot;,&quot;expired&quot;,&quot;oauth&quot;,&quot;running&quot;,&quot;dry&quot;,&quot;commit&quot;,&quot;errors&quot;,&quot;empty&quot;,&quot;ready&quot;],&quot;default&quot;:&quot;dry&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Prototype state&quot;}}">
+class Component extends DCLogic {
+  state = { prevSrc: null, prevStage: null, secretStored: false, copied: false, src: null, stage: null, collapsed: false, menuOpen: false, errOpen: true, manageOpen: false, toast: true };
+
+  renderVals() {
+    const s = this.state, p = this.props;
+    const src = s.src ?? (p.importer || 'api');
+    let stage = s.stage ?? (p.importState || 'dry');
+    const seg = (on) => on
+      ? 'padding:4px 12px; background:#1F5C4D; color:#F6F2E9; border:none; border-radius:6px; font-family:inherit; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;'
+      : 'padding:4px 12px; background:transparent; color:#8f8676; border:none; border-radius:6px; font-family:inherit; font-size:12px; cursor:pointer; white-space:nowrap;';
+    const cls = (on) => on ? 'hb-seg hb-seg-on' : 'hb-seg';
+    const setStage = (v) => () => this.setState({ stage: v, toast: true });
+    const setSrc = (v, first) => () => this.setState({ src: v, stage: first, toast: true });
+
+    const PICKER_ONLY = ['ok','noapi'];
+    if (src !== 'picker' && PICKER_ONLY.indexOf(stage) !== -1) stage = src === 'csv' ? 'empty' : 'notconn';
+    const srcIsPicker = src === 'picker', srcIsApi = src === 'api', srcIsCsv = src === 'csv';
+    const isNoApi = srcIsPicker && stage === 'noapi';
+    const isNotConn = srcIsApi && stage === 'notconn';
+    const isConnecting = srcIsApi && stage === 'connecting';
+    const isConnError = srcIsApi && stage === 'connerror';
+    const isConnected = srcIsApi && stage === 'connected';
+    const isExpired = srcIsApi && stage === 'expired';
+    const isRunning = !srcIsPicker && stage === 'running';
+    const isDry = !srcIsPicker && stage === 'dry';
+    const isCommit = !srcIsPicker && stage === 'commit';
+    const isErrors = !srcIsPicker && stage === 'errors';
+    const csvEmpty = srcIsCsv && stage === 'empty';
+    const csvReady = srcIsCsv && stage === 'ready';
+
+    return {
+      expanded: !s.collapsed,
+      collapsed: s.collapsed,
+      toggleRail: () => this.setState(x => ({ collapsed: !x.collapsed, menuOpen: false })),
+      menuOpen: s.menuOpen === true,
+      toggleMenu: () => this.setState(x => ({ menuOpen: !x.menuOpen })),
+      srcIsPicker, srcIsApi, srcIsCsv,
+      srcPicker: setSrc('picker', 'ok'), srcApi: setSrc('api', 'notconn'), srcCsv: setSrc('csv', 'empty'),
+      sSrcPicker: seg(srcIsPicker), cSrcPicker: cls(srcIsPicker),
+      sSrcApi: seg(srcIsApi), cSrcApi: cls(srcIsApi),
+      sSrcCsv: seg(srcIsCsv), cSrcCsv: cls(srcIsCsv),
+
+      sStOauth: seg(stage === 'oauth'), cStOauth: cls(stage === 'oauth'),
+      stOauth: () => this.setState(x => ({ prevSrc: x.src ?? (p.importer || 'api'), prevStage: x.stage ?? (p.importState || 'dry'), stage: 'oauth' })),
+      exitOauth: () => this.setState(x => ({ src: x.prevSrc || 'api', stage: x.prevStage || 'dry' })),
+      exitLabel: (s.prevSrc || 'api') === 'csv' ? '← Back to CSV import' : (s.prevSrc || 'api') === 'picker' ? '← All importers' : '← Back to Harvest',
+      showOauth: stage === 'oauth',
+      secretStored: s.secretStored === true,
+      secretEmpty: s.secretStored !== true,
+      replaceSecret: () => this.setState({ secretStored: false }),
+      saveCreds: () => this.setState({ secretStored: true }),
+      credPill: s.secretStored
+        ? 'display:inline-flex; align-items:center; gap:8px; padding:4px 8px; background:#15291f; color:#5fcaa8; border:1px solid #24402f; border-radius:999px; font-size:12px; font-weight:600; white-space:nowrap;'
+        : 'display:inline-flex; align-items:center; gap:8px; padding:4px 8px; background:#201d17; color:#8f8676; border:1px solid #322E26; border-radius:999px; font-size:12px; font-weight:600; white-space:nowrap;',
+      credDot: s.secretStored ? '#3FB489' : '#5a5446',
+      credLabel: s.secretStored ? 'Configured' : 'Not configured',
+      copyLabel: s.copied ? 'Copied' : 'Copy',
+      copyUri: () => { this.setState({ copied: true }); setTimeout(() => this.setState({ copied: false }), 1600); },
+      stOk: setStage('ok'), stNoApi: setStage('noapi'), stNotConn: setStage('notconn'),
+      stConnecting: setStage('connecting'), stConnError: setStage('connerror'),
+      stConnected: setStage('connected'), stExpired: setStage('expired'),
+      stRunning: setStage('running'), stDry: setStage('dry'), stCommit: setStage('commit'),
+      stErrors: setStage('errors'), stEmpty: setStage('empty'), stReady: setStage('ready'),
+      sStOk: seg(stage === 'ok'), cStOk: cls(stage === 'ok'),
+      sStNoApi: seg(stage === 'noapi'), cStNoApi: cls(stage === 'noapi'),
+      sStNotConn: seg(isNotConn), cStNotConn: cls(isNotConn),
+      sStConnecting: seg(isConnecting), cStConnecting: cls(isConnecting),
+      sStConnError: seg(isConnError), cStConnError: cls(isConnError),
+      sStConnected: seg(isConnected), cStConnected: cls(isConnected),
+      sStExpired: seg(isExpired), cStExpired: cls(isExpired),
+      sStRunning: seg(isRunning), cStRunning: cls(isRunning),
+      sStDry: seg(isDry), cStDry: cls(isDry),
+      sStCommit: seg(isCommit), cStCommit: cls(isCommit),
+      sStErrors: seg(isErrors), cStErrors: cls(isErrors),
+      sStEmpty: seg(csvEmpty), cStEmpty: cls(csvEmpty),
+      sStReady: seg(csvReady), cStReady: cls(csvReady),
+
+      pageTitle: stage === 'oauth' ? 'Harvest OAuth app' : srcIsPicker ? 'Importers' : srcIsCsv ? 'Import from CSV' : 'Import from Harvest',
+      pageSub: stage === 'oauth'
+        ? 'Credentials for the Harvest app this deployment authenticates against. Stored once, used by everyone.'
+        : srcIsPicker
+        ? 'Bring data in from another tracker. Every import is reversible until you commit — start with a dry-run.'
+        : 'Bring your clients, projects, tasks and time entries across. Every import is reversible until you commit — start with a dry-run.',
+
+      isNotConn, isConnecting, isConnError, isExpired, isRunning, isDry, isCommit, isErrors,
+      goNotConn: setStage('notconn'), goConnecting: setStage('connecting'), goConnected: setStage('connected'),
+      goRunning: setStage('running'), goCommit: setStage('commit'),
+      goCsv: setStage('empty'), goCsvReady: setStage('ready'), goDryFor: setStage('dry'),
+
+      showPicker: srcIsPicker && stage !== 'oauth',
+      hideFlow: stage === 'oauth',
+      showSourceLine: stage !== 'oauth' && (!srcIsPicker),
+      switchLabel: srcIsCsv ? 'Use the Harvest API instead' : 'Use a CSV instead',
+      switchSrc: srcIsCsv ? setSrc('api', 'notconn') : setSrc('csv', 'empty'),
+
+      pickApi: isNoApi ? () => {} : setSrc('api', 'notconn'),
+      pickCsv: setSrc('csv', 'empty'),
+      apiEntry: isNoApi
+        ? 'display:flex; align-items:center; gap:12px; padding:16px 16px; background:#161510; border:1px solid #262219; border-radius:11px; cursor:not-allowed; opacity:.6;'
+        : 'display:flex; align-items:center; gap:12px; padding:16px 16px; background:#1A1813; border:1px solid #322E26; border-radius:11px; cursor:pointer;',
+      apiEntryCls: isNoApi ? '' : 'hz-imp',
+      apiInk: isNoApi ? '#8f8676' : '#F6F2E9',
+      apiHint: isNoApi
+        ? 'API not configured — use CSV'
+        : 'Read-only OAuth. Pulls clients, projects, tasks and hours automatically.',
+      apiChevron: isNoApi ? '' : '›',
+      apiStatePill: isNoApi
+        ? 'display:inline-flex; padding:4px 8px; background:#201d17; color:#8f8676; border:1px solid #322E26; border-radius:999px; font-size:12px; font-weight:600;'
+        : 'display:inline-flex; padding:4px 8px; background:#15291f; color:#5fcaa8; border:1px solid #24402f; border-radius:999px; font-size:12px; font-weight:600;',
+      apiStateLabel: isNoApi ? 'Unavailable' : 'Connected',
+      hlogoBg: isNoApi ? '#3d2a1a' : '#FA5D00',
+      hlogoInk: isNoApi ? '#8f7a5f' : '#2a1200',
+
+      showChip: stage !== 'oauth' && (srcIsApi && (isConnected || isExpired || isRunning || isDry || isCommit || isErrors)),
+      chipWrap: isExpired
+        ? 'background:#1A1813; border:1px solid #453818; border-radius:11px; padding:16px 16px;'
+        : 'background:#1A1813; border:1px solid #322E26; border-radius:11px; padding:16px 16px;',
+      statusPill: isExpired
+        ? 'display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#2b2413; color:#e0b45f; border:1px solid #453818; border-radius:999px; font-size:12px; font-weight:600; white-space:nowrap;'
+        : 'display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#15291f; color:#5fcaa8; border:1px solid #24402f; border-radius:999px; font-size:12px; font-weight:600; white-space:nowrap;',
+      statusDot: isExpired ? '#D6A24A' : '#3FB489',
+      statusLabel: isExpired ? 'Token expired' : 'Connected',
+      chipMeta: isExpired
+        ? 'Fieldstone Studio · refreshing automatically'
+        : (isCommit || isErrors) ? 'Fieldstone Studio · Read-only · synced just now'
+        : 'Fieldstone Studio · Read-only · synced 2h ago',
+      tokenLabel: isExpired ? 'Expired · refreshes automatically' : 'Valid · renews in 58 days',
+      tokenColor: isExpired ? '#e0b45f' : '#EFEAE0',
+      manageOpen: s.manageOpen === true,
+      toggleManage: () => this.setState(x => ({ manageOpen: !x.manageOpen })),
+
+      showDrop: stage !== 'oauth' && (csvEmpty),
+      showFileChip: srcIsCsv && (csvReady || isRunning || isDry || isCommit || isErrors),
+      showAction: stage !== 'oauth' && (isConnected || csvReady),
+      actionLabel: csvReady ? 'Preview file (dry-run)' : 'Preview import (dry-run)',
+      showEmpty: stage !== 'oauth' && (isConnected),
+      showReport: stage !== 'oauth' && (isDry || isCommit || isErrors),
+      showResync: stage !== 'oauth' && (srcIsApi && (isCommit || isErrors)),
+
+      teCreated: isErrors ? '6 682' : '6 696',
+      teErrored: isErrors ? '14' : '0',
+      teErrColor: isErrors ? '#ec8683' : '#5a5446',
+      teErrLabel: isErrors ? '#ec8683' : '#6a6353',
+      teTile: isErrors
+        ? 'background:rgba(224,102,97,.06); border:1px solid #4d2523; border-radius:11px; padding:16px;'
+        : 'background:#1A1813; border:1px solid #322E26; border-radius:11px; padding:16px;',
+
+      errOpen: s.errOpen !== false,
+      errCaret: s.errOpen !== false ? '▾' : '▸',
+      toggleErrs: () => this.setState(x => ({ errOpen: x.errOpen === false })),
+
+      showToast: s.toast !== false && (isDry || isCommit),
+      toastMsg: isCommit ? 'Import complete' : 'Dry-run finished · nothing written',
+      hideToast: () => this.setState({ toast: false }),
+    };
+  }
+}
+</script>
+</body>
+</html>
+

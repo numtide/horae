@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#100F0C; }
+  * { box-sizing:border-box; }
+  button, .hm-row, .hm-chip, .hm-ws { transition: background .14s ease, transform .08s ease, box-shadow .16s ease, border-color .14s ease, color .14s ease; }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(79,183,154,.35) !important; }
+  button:disabled { cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+  .hb-primary:hover:not(:disabled) { background:#63c9ac !important; box-shadow:0 6px 18px -8px rgba(79,183,154,.65) !important; }
+  .hb-solid:hover:not(:disabled) { background:#27705e !important; box-shadow:0 6px 18px -8px rgba(31,92,77,.7) !important; }
+  .hb-accent:hover:not(:disabled) { background:#e5ab52 !important; box-shadow:0 6px 18px -8px rgba(217,154,60,.6) !important; }
+  .hb-secondary:hover:not(:disabled) { background:#2c2820 !important; border-color:#5a5446 !important; }
+  .hb-ghost:hover:not(:disabled) { background:rgba(79,183,154,.10) !important; color:#6ecab0 !important; }
+  .hb-danger:hover:not(:disabled) { background:rgba(224,102,97,.12) !important; border-color:#8d4441 !important; color:#ec8683 !important; }
+  .hb-icon:hover:not(:disabled) { background:#2c2820 !important; border-color:#5a5446 !important; color:#EFEAE0 !important; }
+  .hb-caret:hover:not(:disabled) { background:#1b5347 !important; }
+  .hm-row:hover { background:#2A2620 !important; }
+  .hm-row:hover .hm-ico { color:#EFEAE0 !important; }
+  .hm-danger:hover { background:rgba(224,102,97,.12) !important; color:#ec8683 !important; }
+  .hm-ws:hover { background:#2A2620 !important; }
+  .hm-chip:hover { background:#2c2820 !important; }
+  ::selection { background:#1F5C4D; color:#F6F2E9; }
+  ::-moz-selection { background:#1F5C4D; color:#F6F2E9; }
+  * { scrollbar-width: thin; scrollbar-color: #3d382e transparent; }
+  ::-webkit-scrollbar { width:10px; height:10px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:#3d382e; border-radius:999px; border:2px solid transparent; background-clip:content-box; }
+  ::-webkit-scrollbar-thumb:hover { background:#5a5446; background-clip:content-box; }
+  ::-webkit-scrollbar-corner { background:transparent; }
+  a { color:#4FB79A; text-decoration:none; }
+  a:hover { color:#6ecab0; }
+  @media (max-width: 1320px) {
+    .hz-rail { width:216px !important; flex-basis:216px !important; }
+    .hz-split { gap:32px !important; padding-left:24px !important; padding-right:24px !important; }
+    .hz-pad { padding-left:24px !important; padding-right:24px !important; }
+  }
+  @media (max-width: 1180px) {
+    .hz-split { flex-direction:column !important; gap:24px !important; }
+    .hz-subnav { width:100% !important; flex:none !important; }
+    .hz-subnav > div:first-child { max-width:420px; }
+    .hz-subnav > div:not(:first-child) { flex-direction:row !important; flex-wrap:wrap !important; gap:8px !important; }
+  }
+  @media (max-width: 900px) {
+    .hz-rail { display:none !important; }
+    .hz-shell { height:auto !important; min-height:100vh !important; }
+    .hz-pad { padding-left:20px !important; padding-right:20px !important; }
+  }
+</style>
+</helmet>
+
+<div class="hz-shell" style="display:flex; height:100vh; min-height:820px; font-family:'Instrument Sans',sans-serif; color:#EFEAE0; background:#100F0C;">
+
+  <!-- ================= COMPACT RAIL ================= -->
+  <sc-if value="{{ collapsed }}" hint-placeholder-val="{{ false }}">
+  <div style="width:76px; flex:0 0 76px; background:#1A1813; border-right:1px solid #322E26; display:flex; flex-direction:column; align-items:center; padding:20px 12px;">
+    <div style="position:relative; width:34px; height:34px; flex:0 0 34px; border-radius:8px; background:#1F5C4D; overflow:hidden; margin-bottom:8px;">
+      <div style="position:absolute; left:50%; top:5px; width:1.5px; height:6px; background:#E7C079; transform:translateX(-50%);"></div>
+      <div style="position:absolute; left:50%; bottom:8px; width:16px; height:16px; border-radius:50%; background:#D99A3C; transform:translateX(-50%);"></div>
+      <div style="position:absolute; left:0; right:0; bottom:0; height:10px; background:#164034;"></div>
+      <div style="position:absolute; left:0; right:0; bottom:10px; height:1px; background:#0F3D33;"></div>
+    </div>
+    <button class="hb-icon" onClick="{{ toggleRail }}" title="Expand" style="width:34px; height:30px; background:#232019; border:1px solid #3d382e; border-radius:8px; color:#A29C8D; cursor:pointer; margin-bottom:20px; font-size:14px;">»</button>
+    <button class="hb-primary" title="Start timer" style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; background:#4FB79A; color:#0d211b; border:none; border-radius:11px; cursor:pointer; margin-bottom:20px;"><span style="width:16px; height:16px; border-radius:50%; border:2px solid #0d211b; position:relative; display:inline-block;"><span style="position:absolute; left:50%; top:3px; width:1.5px; height:5px; background:#0d211b; transform:translateX(-50%);"></span></span></button>
+    <div style="display:flex; flex-direction:column; gap:8px; align-items:center;">
+      <a href="04_Timesheet.dc.html" title="Timesheet" style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; border-radius:11px; color:#8f8676; font-size:16px;">◷</a>
+      <a href="05_Projects.dc.html" title="Projects" style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; border-radius:11px; color:#8f8676; font-size:16px;">▤</a>
+      <a href="06_Approvals.dc.html" title="Approvals" style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; border-radius:11px; color:#8f8676; font-size:16px;">✓</a>
+      <div title="Reports" style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; border-radius:11px; background:#232019; border:1px solid #322E26; color:#4FB79A; font-size:16px;">▦</div>
+    </div>
+    <div style="flex:1;"></div>
+    <div title="Mira Kovač" style="width:38px; height:38px; border-radius:50%; background:#1F5C4D; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:16px; line-height:1; padding-top:2px; color:#EFEAE0;">M</div>
+  </div>
+  </sc-if>
+
+  <!-- ================= LEFT RAIL ================= -->
+  <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}">
+  <div class="hz-rail" style="width:264px; flex:0 0 264px; background:#1A1813; border-right:1px solid #322E26; display:flex; flex-direction:column; padding:20px 16px;">
+    <div style="display:flex; align-items:center; gap:12px; padding:4px 8px 20px;">
+      <div style="position:relative; width:34px; height:34px; flex:0 0 34px; border-radius:8px; background:#1F5C4D; overflow:hidden;">
+        <div style="position:absolute; left:50%; top:5px; width:1.5px; height:6px; background:#E7C079; transform:translateX(-50%);"></div>
+        <div style="position:absolute; left:50%; bottom:8px; width:16px; height:16px; border-radius:50%; background:#D99A3C; transform:translateX(-50%);"></div>
+        <div style="position:absolute; left:0; right:0; bottom:0; height:10px; background:#164034;"></div>
+        <div style="position:absolute; left:0; right:0; bottom:10px; height:1px; background:#0F3D33;"></div>
+      </div>
+      <div style="display:flex; align-items:baseline;">
+        <span style="font-family:'Newsreader',serif; font-size:24px; font-weight:600; letter-spacing:-.01em; color:#F6F2E9;">Horae</span>
+        <span style="width:5px; height:5px; border-radius:50%; background:#D99A3C; margin-left:4px; align-self:flex-end; margin-bottom:4px;"></span>
+      </div>
+      <div style="flex:1;"></div>
+      <button class="hb-secondary" onClick="{{ toggleRail }}" title="Collapse" style="width:30px; height:30px; background:transparent; border:1px solid #322E26; border-radius:8px; color:#8f8676; cursor:pointer; font-size:14px;">«</button>
+    </div>
+
+    <div style="margin-bottom:24px;">
+      <button class="hb-primary" style="width:100%; display:flex; align-items:center; justify-content:center; gap:8px; padding:8px 12px; background:#4FB79A; color:#0d211b; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer;">
+        <span style="width:14px; height:14px; border-radius:50%; border:2px solid #0d211b; position:relative; display:inline-block;"><span style="position:absolute; left:50%; top:2px; width:1.5px; height:4px; background:#0d211b; transform:translateX(-50%);"></span></span>
+        Start timer
+      </button>
+    </div>
+
+    <div style="font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353; padding:0 8px 8px;">Track</div>
+    <div style="display:flex; flex-direction:column; gap:4px; margin-bottom:20px;">
+      <a href="04_Timesheet.dc.html" style="display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; color:#A29C8D;"><span style="width:8px; height:8px; border-radius:50%; border:1.5px solid #5a5446;"></span><span style="font-size:14px;">Timesheet</span></a>
+    </div>
+    <div style="font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353; padding:0 8px 8px;">Organize</div>
+    <div style="display:flex; flex-direction:column; gap:4px; margin-bottom:20px;">
+      <a href="05_Projects.dc.html" style="display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; color:#A29C8D;"><span style="width:9px; height:8px; border-radius:4px; border:1.5px solid #5a5446;"></span><span style="font-size:14px;">Projects</span></a>
+    </div>
+    <div style="font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353; padding:0 8px 8px;">Review</div>
+    <div style="display:flex; flex-direction:column; gap:4px;">
+      <div style="display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; color:#A29C8D;"><span style="width:8px; height:8px; border-radius:50%; border:1.5px solid #5a5446;"></span><span style="font-size:14px;">Approvals</span></div>
+      <div style="display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; background:#232019; border:1px solid #322E26;"><span style="display:inline-flex; align-items:flex-end; gap:2px; height:11px;"><span style="width:2.5px; height:6px; background:#4FB79A;"></span><span style="width:2.5px; height:11px; background:#4FB79A;"></span><span style="width:2.5px; height:8px; background:#4FB79A;"></span></span><span style="font-size:14px; font-weight:600; color:#F6F2E9;">Reports</span></div>
+    </div>
+
+    <div style="flex:1;"></div>
+
+    <div style="position:relative;">
+      <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
+      <div style="position:absolute; bottom:56px; left:0; width:252px; background:#201D17; border:1px solid #3d382e; border-radius:11px; overflow:hidden; box-shadow:0 26px 60px -16px rgba(0,0,0,.8); z-index:40;">
+        <div style="display:flex; align-items:center; gap:12px; padding:16px 16px 12px; border-bottom:1px solid #322E26;">
+          <div style="width:38px; height:38px; flex:0 0 38px; border-radius:50%; background:#1F5C4D; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:18px; color:#EFEAE0;">M</div>
+          <div style="min-width:0;"><div style="font-size:14px; font-weight:600; color:#F6F2E9;">Mira Kovač</div><div style="font-size:12px; color:#8f8676; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">mira@fieldstone.studio</div></div>
+          <span style="display:inline-flex; padding:4px 8px; background:#15291f; color:#5fcaa8; border:1px solid #24402f; border-radius:999px; font-size:12px; font-weight:600; white-space:nowrap;">Admin</span>
+        </div>
+        <div class="hm-ws" style="display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid #322E26; cursor:pointer;">
+          <span style="width:22px; height:22px; border-radius:6px; background:#1F5C4D; display:inline-flex; align-items:center; justify-content:center; font-size:12px; color:#EFEAE0; font-weight:700;">F</span>
+          <div style="flex:1; min-width:0;"><div style="font-size:14px; color:#EFEAE0;">Fieldstone Studio</div><div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6a6353;">horae.app/fieldstone</div></div>
+          <span style="color:#6a6353; font-size:12px;">⇄</span>
+        </div>
+        <div style="padding:8px;">
+          <a href="08_Settings.dc.html" class="hm-row" style="display:flex; align-items:center; gap:12px; padding:8px 8px; border-radius:8px; font-size:14px; color:#EFEAE0; text-decoration:none;"><span class="hm-ico" style="color:#8f8676; width:15px;">◔</span> My profile</a>
+          <a href="07_Reports.dc.html" class="hm-row" style="display:flex; align-items:center; gap:12px; padding:8px 8px; border-radius:8px; font-size:14px; color:#EFEAE0; text-decoration:none;"><span class="hm-ico" style="color:#8f8676; width:15px;">▦</span> My time report</a>
+        </div>
+        <div style="padding:8px; border-top:1px solid #322E26;">
+          <div style="padding:4px 8px 8px; font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353;">Admin</div>
+          <a href="09_Workspace.dc.html" class="hm-row" style="display:flex; align-items:center; gap:12px; padding:8px 8px; border-radius:8px; font-size:14px; color:#EFEAE0; text-decoration:none;"><span class="hm-ico" style="color:#8f8676; width:15px;">◍</span> Workspace settings</a>
+        </div>
+        <div style="display:flex; align-items:center; gap:12px; padding:12px 16px; border-top:1px solid #322E26;">
+          <span style="color:#8f8676; width:15px; font-size:12px;">◑</span>
+          <span style="flex:1; font-size:14px; color:#EFEAE0;">Dark theme</span>
+          <span style="width:40px; height:22px; border-radius:999px; background:#1F5C4D; position:relative; display:inline-block; flex:0 0 40px;"><span style="position:absolute; right:3px; top:3px; width:16px; height:16px; border-radius:50%; background:#EFEAE0;"></span></span>
+        </div>
+        <div style="padding:8px; border-top:1px solid #322E26;">
+          <div class="hm-row" style="display:flex; align-items:center; gap:12px; padding:8px 8px; border-radius:8px; font-size:14px; color:#A29C8D; cursor:pointer;"><span style="width:15px;">?</span> Need help?</div>
+          <a href="01_Sign In.dc.html" class="hm-row hm-danger" style="display:flex; align-items:center; gap:12px; padding:8px 8px; border-radius:8px; font-size:14px; color:#E06661; text-decoration:none;"><span style="width:15px;">→</span> Sign out</a>
+        </div>
+      </div>
+      </sc-if>
+      <div onClick="{{ toggleMenu }}" style="display:flex; align-items:center; gap:12px; padding:8px; border-top:1px solid #322E26; padding-top:12px; cursor:pointer;">
+      <div style="width:30px; height:30px; border-radius:50%; background:#1F5C4D; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; color:#EFEAE0; flex:0 0 30px;">M</div>
+      <div style="min-width:0;"><div style="font-size:14px; font-weight:600; color:#F6F2E9;">Mira Kovač</div><div style="font-size:12px; color:#8f8676;">Fieldstone Studio</div></div>
+      <div style="flex:1;"></div>
+      <span style="color:#6a6353; font-size:14px;">◔</span>
+    </div>
+  </div>
+  </div>
+  </sc-if>
+
+  <!-- ================= MAIN ================= -->
+  <div style="flex:1; display:flex; flex-direction:column; min-width:0;">
+
+    <div style="display:flex; align-items:center; padding:24px 40px 0;">
+      <h1 style="font-family:'Newsreader',serif; font-size:34px; font-weight:600; color:#F6F2E9; margin:0; letter-spacing:-.015em;">Reports</h1>
+    </div>
+
+    <!-- report tabs -->
+    <div style="display:flex; align-items:center; gap:24px; padding:16px 40px 0; border-bottom:1px solid #262219;">
+      <span style="padding-bottom:12px; font-size:14px; font-weight:600; color:#F6F2E9; border-bottom:2px solid #4FB79A;">Create a report</span>
+      <span style="padding-bottom:12px; font-size:14px; color:#A29C8D; cursor:pointer;">Time</span>
+      <span style="padding-bottom:12px; font-size:14px; color:#A29C8D; cursor:pointer;">Detailed time</span>
+      <span style="padding-bottom:12px; font-size:14px; color:#A29C8D; cursor:pointer;">Saved reports</span>
+    </div>
+
+    <div style="padding:24px 40px 40px; flex:1; overflow:auto; min-height:0;">
+
+      <!-- title row -->
+      <div style="display:flex; align-items:center; margin-bottom:20px;">
+        <div style="display:flex; align-items:center; gap:8px;"><span style="font-family:'Newsreader',serif; font-size:24px; color:#EFEAE0;">Untitled report</span><span style="color:#6a6353; font-size:14px;">✎</span></div>
+        <div style="flex:1;"></div>
+        <button class="hb-solid" style="padding:12px 24px; background:#1F5C4D; color:#F6F2E9; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer; box-shadow:0 8px 24px -10px rgba(31,92,77,.6);">Save</button>
+      </div>
+
+      <!-- filter bar -->
+      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:24px;">
+        <button class="hb-secondary" style="display:flex; align-items:center; gap:8px; padding:8px 16px; background:#1A1813; border:1px solid #322E26; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer;">Month <span style="color:#8f8676; font-size:12px;">▾</span></button>
+        <div style="display:flex; align-items:center; background:#1A1813; border:1px solid #322E26; border-radius:11px; overflow:hidden;">
+          <button class="hb-secondary" style="width:44px; height:44px; background:transparent; border:none; border-right:1px solid #322E26; color:#A29C8D; cursor:pointer;">←</button>
+          <div style="display:flex; align-items:center; gap:8px; padding:0 16px; font-size:14px;"><span style="color:#8f8676;">▦</span><span style="color:#EFEAE0;">This month</span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">01 – 31 Jul 2026</span></div>
+          <button class="hb-secondary" style="width:44px; height:44px; background:transparent; border:none; border-left:1px solid #322E26; color:#A29C8D; cursor:pointer;">→</button>
+        </div>
+        <button class="hb-secondary" style="display:flex; align-items:center; gap:8px; padding:8px 16px; background:#1A1813; border:1px solid #322E26; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer;">Client <span style="color:#8f8676; font-size:12px;">▾</span></button>
+        <button class="hb-secondary" style="display:flex; align-items:center; gap:8px; padding:8px 16px; background:#1A1813; border:1px solid #322E26; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer;">Project <span style="color:#8f8676; font-size:12px;">▾</span></button>
+        <button class="hb-secondary" style="display:flex; align-items:center; gap:8px; padding:8px 16px; background:#1A1813; border:1px solid #322E26; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer;">Role <span style="color:#8f8676; font-size:12px;">▾</span></button>
+        <button class="hb-secondary" style="display:flex; align-items:center; gap:8px; padding:8px 16px; background:#1A1813; border:1px solid #322E26; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer;">Department <span style="color:#8f8676; font-size:12px;">▾</span></button>
+        <button class="hb-secondary" style="display:flex; align-items:center; gap:8px; padding:8px 16px; background:#1A1813; border:1px solid #322E26; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer;">Teammate <span style="color:#8f8676; font-size:12px;">▾</span></button>
+        <button class="hb-secondary" style="display:flex; align-items:center; gap:8px; padding:8px 16px; background:#1A1813; border:1px solid #322E26; border-radius:8px; color:#A29C8D; font-family:inherit; font-size:14px; cursor:pointer;">⊾ Advanced</button>
+      </div>
+
+      <!-- builder: inputs + canvas -->
+      <div style="display:flex; gap:24px; align-items:stretch;">
+
+        <!-- inputs -->
+        <div style="width:320px; flex:0 0 320px; background:#1A1813; border:1px solid #322E26; border-radius:20px; padding:20px;">
+          <div style="display:flex; align-items:center; margin-bottom:20px;">
+            <span style="display:flex; align-items:center; gap:8px; font-size:14px; font-weight:600; color:#F6F2E9;"><span style="color:#8f8676;">▦</span> Inputs</span>
+            <div style="flex:1;"></div>
+            <span style="color:#8f8676; font-size:12px; cursor:pointer;">‹</span>
+          </div>
+
+          <div style="display:flex; align-items:center; margin-bottom:8px;">
+            <span style="font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:#8f8676;">Fields</span>
+            <div style="flex:1;"></div>
+            <button class="hb-secondary" style="display:flex; align-items:center; gap:4px; padding:4px 12px; background:#232019; border:1px solid #3d382e; border-radius:6px; color:#EFEAE0; font-family:inherit; font-size:12px; cursor:pointer;"><span style="color:#4FB79A;">＋</span> Add</button>
+          </div>
+          <div style="font-size:12px; color:#8f8676; margin-bottom:8px;">Variables for grouping</div>
+          <div style="padding:12px; background:#100F0C; border:1px dashed #3d382e; border-radius:8px; font-size:14px; color:#5a5446; margin-bottom:24px;">Add a row to group entries.</div>
+
+          <div style="display:flex; align-items:center; margin-bottom:8px;">
+            <span style="font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:#8f8676;">Metrics</span>
+            <div style="flex:1;"></div>
+            <button class="hb-secondary" style="display:flex; align-items:center; gap:4px; padding:4px 12px; background:#232019; border:1px solid #3d382e; border-radius:6px; color:#EFEAE0; font-family:inherit; font-size:12px; cursor:pointer;"><span style="color:#4FB79A;">＋</span> Add</button>
+          </div>
+          <div style="padding:12px; background:#100F0C; border:1px dashed #3d382e; border-radius:8px; font-size:14px; color:#5a5446;">Add a column to see values.</div>
+        </div>
+
+        <!-- canvas -->
+        <div style="flex:1; background:#1A1813; border:1px solid #322E26; border-radius:20px; padding:20px 24px; min-height:560px;">
+          <!-- toggles -->
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div style="display:flex; background:#100F0C; border:1px solid #322E26; border-radius:8px; padding:4px;">
+              <button class="hb-solid" style="padding:8px 16px; background:#1F5C4D; color:#F6F2E9; border:none; border-radius:6px; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer;">Summary</button>
+              <button class="hb-secondary" style="padding:8px 16px; background:transparent; color:#A29C8D; border:none; border-radius:6px; font-family:inherit; font-size:14px; cursor:pointer;">Detailed</button>
+            </div>
+            <div style="display:flex; background:#100F0C; border:1px solid #322E26; border-radius:8px; padding:4px;">
+              <button class="hb-solid" style="padding:8px 16px; background:#1F5C4D; color:#F6F2E9; border:none; border-radius:6px; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer;">Grouped</button>
+              <button class="hb-secondary" style="padding:8px 16px; background:transparent; color:#A29C8D; border:none; border-radius:6px; font-family:inherit; font-size:14px; cursor:pointer;">Ungrouped</button>
+            </div>
+            <div style="flex:1;"></div>
+            <span style="font-size:14px; color:#A29C8D;">Include zero values</span>
+            <span style="width:40px; height:22px; border-radius:999px; background:#322E26; position:relative; display:inline-block;"><span style="position:absolute; left:3px; top:3px; width:16px; height:16px; border-radius:50%; background:#8f8676;"></span></span>
+          </div>
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6a6353; margin-top:12px;">0 groups · 0 columns · Grouped</div>
+
+          <!-- empty state -->
+          <div style="display:flex; flex-direction:column; align-items:center; padding:48px 20px 20px;">
+            <div style="font-family:'Newsreader',serif; font-size:24px; font-weight:600; color:#F6F2E9; margin-bottom:24px;">Build your first report</div>
+            <div style="display:flex; flex-direction:column; gap:20px; max-width:560px;">
+              <div style="display:flex; gap:16px;">
+                <span style="width:26px; height:26px; flex:0 0 26px; border-radius:50%; background:#2b2413; color:#D6A24A; display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600;">1</span>
+                <div><div style="font-size:14px; font-weight:600; color:#F6F2E9;">Pick your fields</div><div style="font-size:14px; color:#A29C8D; margin-top:4px; line-height:1.55;">Add Fields on the left to choose how rows are grouped — by Project, Client, Date, Teammate, and more.</div></div>
+              </div>
+              <div style="display:flex; gap:16px;">
+                <span style="width:26px; height:26px; flex:0 0 26px; border-radius:50%; background:#2b2413; color:#D6A24A; display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600;">2</span>
+                <div><div style="font-size:14px; font-weight:600; color:#F6F2E9;">Add metrics</div><div style="font-size:14px; color:#A29C8D; margin-top:4px; line-height:1.55;">Pick the Metrics that matter — Hours, Billable amount, Cost, Utilization — they become the columns of your report.</div></div>
+              </div>
+              <div style="display:flex; gap:16px;">
+                <span style="width:26px; height:26px; flex:0 0 26px; border-radius:50%; background:#2b2413; color:#D6A24A; display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600;">3</span>
+                <div><div style="font-size:14px; font-weight:600; color:#F6F2E9;">Narrow the data</div><div style="font-size:14px; color:#A29C8D; margin-top:4px; line-height:1.55;">Set a date range and add quick or advanced filters to slice the report down to what you want to see.</div></div>
+              </div>
+              <div style="display:flex; gap:16px;">
+                <span style="width:26px; height:26px; flex:0 0 26px; border-radius:50%; background:#2b2413; color:#D6A24A; display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600;">4</span>
+                <div><div style="font-size:14px; font-weight:600; color:#F6F2E9;">Save the template</div><div style="font-size:14px; color:#A29C8D; margin-top:4px; line-height:1.55;">Save to come back and re-run the report any time with up-to-date data.</div></div>
+              </div>
+            </div>
+            <button class="hb-solid" style="margin-top:32px; padding:12px 24px; background:#1F5C4D; color:#F6F2E9; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer; box-shadow:0 8px 24px -10px rgba(31,92,77,.6);">Show me a tutorial</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { menuOpen: false, collapsed: false };
+  renderVals() {
+    return {
+      menuOpen: this.state.menuOpen === true,
+      toggleMenu: () => this.setState(s => ({ menuOpen: !s.menuOpen })),
+      expanded: !this.state.collapsed,
+      collapsed: this.state.collapsed,
+      toggleRail: () => this.setState(s => ({ collapsed: !s.collapsed, menuOpen: false })),
+    };
+  }
+}
+</script>
+</body>
+</html>
