@@ -1227,6 +1227,13 @@ tbody tr:hover { background: var(--color-row-hover); }
 /* Active keeps its icon, tinted to the primary over the raised surface. */
 .nav-item.active .nav-item-icon { color: var(--color-primary); }
 .nav-item-label { flex: 1; }
+/* Trailing marker on the active row (design: a pine dot closes the row). The
+   markup has always rendered it; it had no rule, so it never appeared. */
+.nav-item-dot {
+  width: 6px; height: 6px; flex-shrink: 0;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+}
 
 /* Component gallery */
 .gallery-section { margin-bottom: var(--space-12); }
@@ -1523,10 +1530,15 @@ tbody tr:hover { background: var(--color-row-hover); }
   background: var(--color-bg-secondary); border: 1px solid var(--color-border);
   border-radius: var(--radius-panel); overflow: hidden;
 }
+/* The row's tracks add up to ~1000px, so on a narrower viewport they have to
+   scroll rather than be clipped by the card — the Actions menu is the last
+   column and would otherwise be unreachable. Same shape as `.ts-grid-scroll`. */
+.proj-scroll { overflow-x: auto; }
 .proj-head,
 .proj-row {
   display: grid;
   grid-template-columns: 1fr 130px 130px 96px 210px 220px 120px;
+  min-width: 1000px;
   align-items: center; gap: var(--space-2);
   padding: var(--space-4) var(--space-5);
 }

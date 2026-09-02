@@ -33,12 +33,15 @@ struct RowSpend {
 fn row_spend(p: &Project, spent_minutes: i64, spent_cents: i64) -> RowSpend {
     let cur = p.currency.trim();
     let recurring = matches!(p.project_type, ProjectType::Retainer);
+    // The bar fills with what has been consumed; the label beside "Budget
+    // remaining" states what is left, so the two read as complements.
     let pct_of = |spent: i64, budget: i64| -> (Option<u8>, Option<String>) {
         if budget > 0 {
-            let raw = (spent as f64 / budget as f64 * 100.0).round() as i64;
+            let consumed = (spent as f64 / budget as f64 * 100.0).round() as i64;
+            let left = ((budget - spent) as f64 / budget as f64 * 100.0).round() as i64;
             (
-                Some(raw.clamp(0, 100) as u8),
-                Some(format!("({}%)", raw.max(0))),
+                Some(consumed.clamp(0, 100) as u8),
+                Some(format!("({}%)", left.max(0))),
             )
         } else {
             (None, None)
@@ -402,6 +405,7 @@ pub fn ProjectList() -> Element {
                     } else {
                         rsx! {
                             div { class: "proj-card",
+                                div { class: "proj-scroll",
                                 div { class: "proj-head",
                                     span { "Client" }
                                     span { class: "text-right", "Budget" }
@@ -503,6 +507,7 @@ pub fn ProjectList() -> Element {
                                             }
                                         }
                                     }
+                                }
                                 }
                             }
                         }
