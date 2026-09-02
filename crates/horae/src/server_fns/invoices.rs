@@ -218,6 +218,11 @@ pub async fn generate_invoice(
         });
     }
 
+    // Persist the header, line items, and entry links atomically so a mid-way
+    // failure can never leave a half-created invoice or entries flipped to
+    // 'invoiced' without a complete invoice behind them.
+    let mut tx = state.db.begin().await.map_err(server_err)?;
+
     // Insert invoice.
     sqlx::query!(
         r#"INSERT INTO invoices (id, org_id, client_id, number, status, issued_on, due_on, currency, total_cents)
@@ -231,7 +236,7 @@ pub async fn generate_invoice(
         client.currency.trim(),
         total_cents,
     )
-    .execute(&state.db)
+    .execute(&mut *tx)
     .await
     .map_err(server_err)?;
 
@@ -248,7 +253,7 @@ pub async fn generate_invoice(
             line.rate_cents,
             line.amount_cents,
         )
-        .execute(&state.db)
+        .execute(&mut *tx)
         .await
         .map_err(server_err)?;
     }
@@ -263,9 +268,11 @@ pub async fn generate_invoice(
         invoice_id,
         &entry_ids,
     )
-    .execute(&state.db)
+    .execute(&mut *tx)
     .await
     .map_err(server_err)?;
+
+    tx.commit().await.map_err(server_err)?;
 
     let invoice = Invoice {
         id: invoice_id,
@@ -341,6 +348,11 @@ pub async fn update_invoice_status(
         )));
     }
 
+    // Voiding both un-invoices the covered entries and flips the invoice status,
+    // so run them in one transaction: entries must never be released without the
+    // invoice actually reaching 'void'.
+    let mut tx = state.db.begin().await.map_err(server_err)?;
+
     // On void: restore entries to open, un-invoiced state.
     if target == InvoiceStatus::Void {
         sqlx::query!(
@@ -349,7 +361,7 @@ pub async fn update_invoice_status(
                WHERE invoice_id = $1"#,
             id,
         )
-        .execute(&state.db)
+        .execute(&mut *tx)
         .await
         .map_err(server_err)?;
     }
@@ -368,9 +380,11 @@ pub async fn update_invoice_status(
         manager.org_id,
         target as InvoiceStatus,
     )
-    .fetch_one(&state.db)
+    .fetch_one(&mut *tx)
     .await
     .map_err(server_err)?;
+
+    tx.commit().await.map_err(server_err)?;
 
     // Dispatch invoice_sent event when transitioning to Sent (FR-019).
     if target == InvoiceStatus::Sent {

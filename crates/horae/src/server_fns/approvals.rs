@@ -237,10 +237,29 @@ async fn approve_ids(manager: &User, ids: &[uuid::Uuid]) -> Result<Vec<Approval>
 
     tx.commit().await.map_err(server_err)?;
 
+    // Sum every approved period's tracked minutes in one grouped query instead of
+    // a round-trip per approval. This matches `week_total_minutes` exactly: all of
+    // the user's entries in the period, unfiltered by state.
+    let total_rows = sqlx::query!(
+        r#"SELECT a.id as "id!",
+                  COALESCE(SUM(te.minutes), 0)::int as "total!"
+           FROM approvals a
+           LEFT JOIN time_entries te
+             ON te.user_id = a.user_id
+            AND te.spent_date BETWEEN a.period_start AND a.period_end
+           WHERE a.id = ANY($1)
+           GROUP BY a.id"#,
+        &approved_ids,
+    )
+    .fetch_all(&state.db)
+    .await
+    .map_err(server_err)?;
+    let totals: std::collections::HashMap<uuid::Uuid, i32> =
+        total_rows.into_iter().map(|r| (r.id, r.total)).collect();
+
     // Announce each approval (FR-019) once the transition is durably committed.
     for a in &approvals {
-        let total_minutes =
-            week_total_minutes(&state.db, a.user_id, a.period_start, a.period_end).await?;
+        let total_minutes = totals.get(&a.id).copied().unwrap_or(0);
         state
             .plugins
             .dispatch(crate::plugin::AppEvent::SubmissionApproved {

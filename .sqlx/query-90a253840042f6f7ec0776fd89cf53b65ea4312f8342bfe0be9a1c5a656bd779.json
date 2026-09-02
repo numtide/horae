@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.id as \"id!\",\n                  COALESCE(SUM(te.minutes), 0)::int as \"total!\"\n           FROM approvals a\n           LEFT JOIN time_entries te\n             ON te.user_id = a.user_id\n            AND te.spent_date BETWEEN a.period_start AND a.period_end\n           WHERE a.id = ANY($1)\n           GROUP BY a.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "total!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "90a253840042f6f7ec0776fd89cf53b65ea4312f8342bfe0be9a1c5a656bd779"
+}
