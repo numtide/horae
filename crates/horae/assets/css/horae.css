@@ -329,6 +329,27 @@ body {
 }
 a { color: var(--color-primary); text-decoration: none; }
 a:hover { text-decoration: underline; color: var(--color-primary-light); }
+
+/* ── Control interactions ─────────────────────────────────────────────────
+   Every control animates the same way: colour and elevation ease, and a press
+   dips it 1px so the click has weight. Applied to the element rather than a
+   class so the rail, pager, and timer buttons behave like `.btn` too. */
+button, .hm-row, .chip, .nav-item, .menu-item {
+  transition:
+    background 0.14s ease,
+    transform 0.08s ease,
+    box-shadow 0.16s ease,
+    border-color 0.14s ease,
+    color 0.14s ease;
+}
+button:active:not(:disabled) { transform: translateY(1px); }
+button:focus-visible { outline: none; box-shadow: var(--ring); }
+/* A disabled control neither dips nor glows, whatever its variant set. */
+button:disabled {
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-family-display);
   color: var(--color-text-strong);
@@ -658,7 +679,12 @@ h1, h2, h3, h4, h5, h6 {
   border: 1px solid transparent;
   cursor: pointer;
   text-decoration: none;
-  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+  transition:
+    background 0.14s ease,
+    transform 0.08s ease,
+    box-shadow 0.16s ease,
+    border-color 0.14s ease,
+    color 0.14s ease;
   /* 12px padding + 18px line + 2px border = the kit's 44px control-lg. */
   line-height: 1.25;
 }
@@ -878,10 +904,15 @@ tbody tr:hover { background: var(--color-row-hover); }
 .alert-danger  { background: var(--color-danger-bg);  color: var(--color-danger-fg);  border-color: var(--color-danger-line); }
 
 /* Buttons — extra shapes */
+/* `.btn` also rides on links, which the element-level rules above don't reach. */
+.btn:active:not(:disabled):not(.is-disabled) { transform: translateY(1px); }
+.btn:focus-visible { outline: none; box-shadow: var(--ring); }
 .btn:disabled, .btn.is-disabled {
   opacity: 0.5;
   cursor: not-allowed;
   pointer-events: none;
+  transform: none;
+  box-shadow: none;
 }
 .btn-icon {
   padding: var(--space-3);
