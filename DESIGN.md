@@ -82,7 +82,7 @@ Sizes are `--font-size-*` tokens with matching `text-*` utilities: `xs` 12 · `s
 | Token | Value | Usage |
 |---|---|---|
 | `--radius-sm` | `4px` | Micro elements |
-| `--radius` | `6px` | Inputs shared with menus items |
+| `--radius` | `6px` | Menu items, segmented inner, small controls |
 | `--radius-btn` | `8px` | Buttons, inputs |
 | `--radius-lg` | `11px` | Small cards, menus / popovers, toasts |
 | `--radius-panel` | `20px` | Tables, modals, large panels, auth card |
