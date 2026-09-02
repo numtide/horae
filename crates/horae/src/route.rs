@@ -1,12 +1,14 @@
 use dioxus::prelude::*;
 use uuid::Uuid;
 
+use crate::components::admin_shell::AdminShell;
 use crate::components::layout::AppLayout;
 use crate::pages::{
     admin::AdminUsers,
     approvals::Approvals,
     clients::{ClientDetail, ClientList},
     gallery::Gallery,
+    importers::HarvestImport,
     invoices::{InvoiceDetail, InvoiceList},
     projects::{ProjectDetail, ProjectList},
     reports::Reports,
@@ -65,8 +67,12 @@ pub enum Route {
     InvoiceList {},
     #[route("/invoices/:id")]
     InvoiceDetail { id: Uuid },
+    #[layout(AdminShell)]
     #[route("/admin/users")]
     AdminUsers {},
+    #[route("/admin/importers")]
+    HarvestImport {},
+    #[end_layout]
     #[route("/settings")]
     Settings {},
     #[route("/components")]

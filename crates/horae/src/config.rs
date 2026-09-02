@@ -19,6 +19,26 @@ pub struct AppConfig {
     /// Mark session cookies `Secure` (send only over HTTPS). Set `SECURE_COOKIES=1`
     /// in production, where TLS is terminated in front of (or by) the app.
     pub secure_cookies: bool,
+    /// Harvest OAuth2 + token-encryption settings. `Some` only when the client id,
+    /// secret, redirect URL, and encryption key are all set; the importer's API
+    /// source is available exactly when this is present.
+    pub harvest: Option<HarvestConfig>,
+}
+
+/// Harvest importer configuration, read from `HORAE_HARVEST_CLIENT_ID`,
+/// `HORAE_HARVEST_CLIENT_SECRET`, `HORAE_HARVEST_REDIRECT_URL`, and
+/// `HORAE_HARVEST_ENC_KEY`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HarvestConfig {
+    pub client_id: String,
+    pub client_secret: String,
+    /// Where Harvest redirects back after authorization — must match the value
+    /// registered on the Harvest OAuth2 app and end in `/auth/harvest/callback`.
+    pub redirect_url: String,
+    /// 32-byte AEAD key (hex-encoded, 64 hex chars) that seals the stored OAuth
+    /// tokens at rest. Rotating it makes existing tokens undecryptable — recovery
+    /// is to reconnect (data-model.md).
+    pub encryption_key_hex: String,
 }
 
 /// OIDC provider configuration, read from `HORAE_OIDC_ISSUER`,
@@ -65,6 +85,21 @@ impl AppConfig {
             secure_cookies: std::env::var("HORAE_SECURE_COOKIES")
                 .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
                 .unwrap_or(false),
+            harvest: HarvestConfig::from_env(),
+        })
+    }
+}
+
+impl HarvestConfig {
+    /// Returns `Some` only when all four Harvest env vars are present; a partial
+    /// configuration is treated as "Harvest not configured" so deployments that
+    /// do not use the importer need set none of them.
+    fn from_env() -> Option<Self> {
+        Some(Self {
+            client_id: non_empty("HORAE_HARVEST_CLIENT_ID")?,
+            client_secret: non_empty("HORAE_HARVEST_CLIENT_SECRET")?,
+            redirect_url: non_empty("HORAE_HARVEST_REDIRECT_URL")?,
+            encryption_key_hex: non_empty("HORAE_HARVEST_ENC_KEY")?,
         })
     }
 }

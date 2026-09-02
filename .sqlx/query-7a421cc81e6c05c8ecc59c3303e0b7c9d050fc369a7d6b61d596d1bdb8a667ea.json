@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id FROM projects\n             WHERE org_id = $1 AND client_id = $2 AND harvest_norm(name) = $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7a421cc81e6c05c8ecc59c3303e0b7c9d050fc369a7d6b61d596d1bdb8a667ea"
+}

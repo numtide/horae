@@ -1,3 +1,4 @@
+pub mod admin_shell;
 pub mod avatar;
 pub mod badge;
 pub mod button;
