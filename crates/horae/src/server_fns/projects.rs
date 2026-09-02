@@ -157,47 +157,48 @@ pub async fn update_project(
     let manager = require_manager().await?;
     let state = crate::state::global_state().await;
     let project_id = parse_uuid(&project_id, "project_id")?;
+    let pt = project_type
+        .parse::<ProjectType>()
+        .map_err(|_| server_err("Invalid project_type"))?;
+    let bk = budget_kind
+        .parse::<BudgetKind>()
+        .map_err(|_| server_err("Invalid budget_kind"))?;
     // Detect a real change so a no-op update emits nothing (FR-012).
-    let changed: Option<bool> = sqlx::query_scalar::<_, bool>(
-        "SELECT (name IS DISTINCT FROM $3
+    let changed: Option<bool> = sqlx::query_scalar!(
+        r#"SELECT (name IS DISTINCT FROM $3
                  OR project_type::text IS DISTINCT FROM $4
                  OR currency IS DISTINCT FROM $5
-                 OR budget_kind::text IS DISTINCT FROM $6)
-         FROM projects WHERE id = $1 AND org_id = $2",
+                 OR budget_kind::text IS DISTINCT FROM $6) as "changed!"
+         FROM projects WHERE id = $1 AND org_id = $2"#,
+        project_id,
+        manager.org_id,
+        name,
+        project_type,
+        currency,
+        budget_kind,
     )
-    .bind(project_id)
-    .bind(manager.org_id)
-    .bind(&name)
-    .bind(&project_type)
-    .bind(&currency)
-    .bind(&budget_kind)
     .fetch_optional(&state.db)
     .await
     .map_err(server_err)?;
 
-    let project = sqlx::query_as::<_, Project>(
-        "UPDATE projects
+    let project = sqlx::query_as!(
+        Project,
+        r#"UPDATE projects
             SET name = $3, project_type = $4, currency = $5, budget_kind = $6
           WHERE id = $1 AND org_id = $2
          RETURNING id, org_id, client_id, code, name,
-                   project_type, currency,
-                   starts_on, ends_on,
-                   budget_kind,
-                   budget_amount_cents, budget_minutes, active, created_at",
-    )
-    .bind(project_id)
-    .bind(manager.org_id)
-    .bind(&name)
-    .bind(
-        project_type
-            .parse::<horae_core::types::ProjectType>()
-            .map_err(|_| server_err("Invalid project_type"))?,
-    )
-    .bind(&currency)
-    .bind(
-        budget_kind
-            .parse::<horae_core::types::BudgetKind>()
-            .map_err(|_| server_err("Invalid budget_kind"))?,
+                   project_type as "project_type: ProjectType", currency,
+                   starts_on as "starts_on: chrono::NaiveDate",
+                   ends_on as "ends_on: chrono::NaiveDate",
+                   budget_kind as "budget_kind: BudgetKind",
+                   budget_amount_cents, budget_minutes, active,
+                   created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
+        project_id,
+        manager.org_id,
+        name,
+        pt as ProjectType,
+        currency,
+        bk as BudgetKind,
     )
     .fetch_optional(&state.db)
     .await
@@ -227,26 +228,30 @@ pub async fn set_project_active(
     let state = crate::state::global_state().await;
     let project_id = parse_uuid(&project_id, "project_id")?;
     // Detect a real flip so a no-op set emits nothing (FR-012).
-    let was_active: Option<bool> =
-        sqlx::query_scalar::<_, bool>("SELECT active FROM projects WHERE id = $1 AND org_id = $2")
-            .bind(project_id)
-            .bind(manager.org_id)
-            .fetch_optional(&state.db)
-            .await
-            .map_err(server_err)?;
+    let was_active: Option<bool> = sqlx::query_scalar!(
+        "SELECT active FROM projects WHERE id = $1 AND org_id = $2",
+        project_id,
+        manager.org_id,
+    )
+    .fetch_optional(&state.db)
+    .await
+    .map_err(server_err)?;
 
-    let project = sqlx::query_as::<_, Project>(
-        "UPDATE projects SET active = $3
+    let project = sqlx::query_as!(
+        Project,
+        r#"UPDATE projects SET active = $3
           WHERE id = $1 AND org_id = $2
          RETURNING id, org_id, client_id, code, name,
-                   project_type, currency,
-                   starts_on, ends_on,
-                   budget_kind,
-                   budget_amount_cents, budget_minutes, active, created_at",
+                   project_type as "project_type: ProjectType", currency,
+                   starts_on as "starts_on: chrono::NaiveDate",
+                   ends_on as "ends_on: chrono::NaiveDate",
+                   budget_kind as "budget_kind: BudgetKind",
+                   budget_amount_cents, budget_minutes, active,
+                   created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
+        project_id,
+        manager.org_id,
+        active,
     )
-    .bind(project_id)
-    .bind(manager.org_id)
-    .bind(active)
     .fetch_optional(&state.db)
     .await
     .map_err(server_err)?
@@ -357,32 +362,33 @@ pub async fn update_task(
     let state = crate::state::global_state().await;
     let task_id = parse_uuid(&task_id, "task_id")?;
     // Detect a real change so a no-op update emits nothing (FR-012).
-    let changed: Option<bool> = sqlx::query_scalar::<_, bool>(
-        "SELECT (name IS DISTINCT FROM $3
+    let changed: Option<bool> = sqlx::query_scalar!(
+        r#"SELECT (name IS DISTINCT FROM $3
                  OR billable_default IS DISTINCT FROM $4
-                 OR default_rate_cents IS DISTINCT FROM $5)
-         FROM tasks WHERE id = $1 AND org_id = $2",
+                 OR default_rate_cents IS DISTINCT FROM $5) as "changed!"
+         FROM tasks WHERE id = $1 AND org_id = $2"#,
+        task_id,
+        manager.org_id,
+        name,
+        billable_default,
+        default_rate_cents,
     )
-    .bind(task_id)
-    .bind(manager.org_id)
-    .bind(&name)
-    .bind(billable_default)
-    .bind(default_rate_cents)
     .fetch_optional(&state.db)
     .await
     .map_err(server_err)?;
 
-    let task = sqlx::query_as::<_, Task>(
+    let task = sqlx::query_as!(
+        Task,
         "UPDATE tasks
             SET name = $3, billable_default = $4, default_rate_cents = $5
           WHERE id = $1 AND org_id = $2
          RETURNING id, org_id, name, billable_default, default_rate_cents, active",
+        task_id,
+        manager.org_id,
+        name,
+        billable_default,
+        default_rate_cents,
     )
-    .bind(task_id)
-    .bind(manager.org_id)
-    .bind(&name)
-    .bind(billable_default)
-    .bind(default_rate_cents)
     .fetch_optional(&state.db)
     .await
     .map_err(server_err)?
@@ -408,22 +414,24 @@ pub async fn set_task_active(task_id: String, active: bool) -> Result<Task, Serv
     let state = crate::state::global_state().await;
     let task_id = parse_uuid(&task_id, "task_id")?;
     // Detect a real flip so a no-op set emits nothing (FR-012).
-    let was_active: Option<bool> =
-        sqlx::query_scalar::<_, bool>("SELECT active FROM tasks WHERE id = $1 AND org_id = $2")
-            .bind(task_id)
-            .bind(manager.org_id)
-            .fetch_optional(&state.db)
-            .await
-            .map_err(server_err)?;
+    let was_active: Option<bool> = sqlx::query_scalar!(
+        "SELECT active FROM tasks WHERE id = $1 AND org_id = $2",
+        task_id,
+        manager.org_id,
+    )
+    .fetch_optional(&state.db)
+    .await
+    .map_err(server_err)?;
 
-    let task = sqlx::query_as::<_, Task>(
+    let task = sqlx::query_as!(
+        Task,
         "UPDATE tasks SET active = $3
           WHERE id = $1 AND org_id = $2
          RETURNING id, org_id, name, billable_default, default_rate_cents, active",
+        task_id,
+        manager.org_id,
+        active,
     )
-    .bind(task_id)
-    .bind(manager.org_id)
-    .bind(active)
     .fetch_optional(&state.db)
     .await
     .map_err(server_err)?
@@ -462,17 +470,17 @@ pub async fn link_project_task(project_id: String, task_id: String) -> Result<()
     let project_id = parse_uuid(&project_id, "project_id")?;
     let task_id = parse_uuid(&task_id, "task_id")?;
 
-    let result = sqlx::query(
+    let result = sqlx::query!(
         "INSERT INTO project_tasks (project_id, task_id, billable, rate_cents)
          SELECT p.id, t.id, t.billable_default, t.default_rate_cents
            FROM projects p
            JOIN tasks t ON t.org_id = p.org_id
           WHERE p.id = $1 AND t.id = $2 AND p.org_id = $3
          ON CONFLICT (project_id, task_id) DO NOTHING",
+        project_id,
+        task_id,
+        manager.org_id,
     )
-    .bind(project_id)
-    .bind(task_id)
-    .bind(manager.org_id)
     .execute(&state.db)
     .await
     .map_err(server_err)?;
@@ -480,14 +488,15 @@ pub async fn link_project_task(project_id: String, task_id: String) -> Result<()
     // No row inserted and no existing link means the project/task pair was not
     // found in this org (the SELECT matched nothing).
     if result.rows_affected() == 0 {
-        let linked = sqlx::query_scalar::<_, bool>(
+        let linked = sqlx::query_scalar!(
             "SELECT EXISTS(SELECT 1 FROM project_tasks WHERE project_id = $1 AND task_id = $2)",
+            project_id,
+            task_id,
         )
-        .bind(project_id)
-        .bind(task_id)
         .fetch_one(&state.db)
         .await
-        .map_err(server_err)?;
+        .map_err(server_err)?
+        .unwrap_or(false);
         if !linked {
             return Err(not_found("Project or task not found in this organization"));
         }
@@ -560,11 +569,13 @@ pub async fn delete_assignment(assignment_id: String) -> Result<(), ServerFnErro
     let id = parse_uuid(&assignment_id, "assignment_id")?;
     // Delete and capture the row atomically so the event carries its details
     // and a concurrent delete cannot double-notify.
-    let removed = sqlx::query_as::<_, crate::models::Assignment>(
-        "DELETE FROM assignments WHERE id = $1
-         RETURNING id, project_id, user_id, role, rate_cents, created_at",
+    let removed = sqlx::query_as!(
+        Assignment,
+        r#"DELETE FROM assignments WHERE id = $1
+         RETURNING id, project_id, user_id, role as "role: ProjectRole", rate_cents,
+                   created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
+        id,
     )
-    .bind(id)
     .fetch_optional(&state.db)
     .await
     .map_err(server_err)?;

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO project_tasks (project_id, task_id, billable, rate_cents)\n         SELECT p.id, t.id, t.billable_default, t.default_rate_cents\n           FROM projects p\n           JOIN tasks t ON t.org_id = p.org_id\n          WHERE p.id = $1 AND t.id = $2 AND p.org_id = $3\n         ON CONFLICT (project_id, task_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1ce030840bf6f5b0b6ffd5334e6dc930d0241ee8eb5feb6f019eeece075f08b8"
+}
