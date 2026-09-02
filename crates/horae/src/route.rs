@@ -81,3 +81,11 @@ pub enum Route {
     #[route("/:..route")]
     NotFound { route: Vec<String> },
 }
+
+/// Whether `to` names the route the user is currently on, compared by variant
+/// only so a parameterized route (e.g. the dated timesheet) stays active across
+/// all its parameter values. Call from a component to highlight the current nav
+/// link. Runs on both the server and web targets.
+pub fn route_is_active(to: &Route) -> bool {
+    std::mem::discriminant(&use_route::<Route>()) == std::mem::discriminant(to)
+}
