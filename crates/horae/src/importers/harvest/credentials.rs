@@ -127,8 +127,7 @@ pub async fn store(
              access_token_enc   = EXCLUDED.access_token_enc,
              refresh_token_enc  = EXCLUDED.refresh_token_enc,
              token_expires_at   = EXCLUDED.token_expires_at,
-             scope              = EXCLUDED.scope,
-             updated_at         = now()"#,
+             scope              = EXCLUDED.scope"#,
         id,
         org_id,
         account_id,
@@ -157,7 +156,7 @@ pub async fn update_tokens(
     sqlx::query!(
         r#"UPDATE harvest_credentials
            SET access_token_enc = $2, refresh_token_enc = $3,
-               token_expires_at = $4, updated_at = now()
+               token_expires_at = $4
            WHERE org_id = $1"#,
         org_id,
         access_enc,
@@ -189,7 +188,7 @@ pub async fn advance_watermark(
     let patch = serde_json::Value::Object(obj);
     sqlx::query!(
         r#"UPDATE harvest_credentials
-           SET synced_watermark = synced_watermark || $2, updated_at = now()
+           SET synced_watermark = synced_watermark || $2
            WHERE org_id = $1"#,
         org_id,
         patch,

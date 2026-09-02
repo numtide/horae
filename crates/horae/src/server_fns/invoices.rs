@@ -258,8 +258,7 @@ pub async fn generate_invoice(
     sqlx::query!(
         r#"UPDATE time_entries
            SET invoice_id = $1,
-               state = 'invoiced',
-               updated_at = now()
+               state = 'invoiced'
            WHERE id = ANY($2)"#,
         invoice_id,
         &entry_ids,
@@ -346,7 +345,7 @@ pub async fn update_invoice_status(
     if target == InvoiceStatus::Void {
         sqlx::query!(
             r#"UPDATE time_entries
-               SET invoice_id = NULL, state = 'open', updated_at = now()
+               SET invoice_id = NULL, state = 'open'
                WHERE invoice_id = $1"#,
             id,
         )

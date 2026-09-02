@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE time_entries\n         SET state = $4, rounded_minutes = NULL, updated_at = now()\n         WHERE user_id = $1\n           AND spent_date BETWEEN $2 AND $3\n           AND state = $5",
+  "query": "UPDATE time_entries\n         SET state = $4, rounded_minutes = NULL\n         WHERE user_id = $1\n           AND spent_date BETWEEN $2 AND $3\n           AND state = $5",
   "describe": {
     "columns": [],
     "parameters": {
@@ -38,5 +38,5 @@
     },
     "nullable": []
   },
-  "hash": "5ad40c624883d3632f98c8ac63db8e930ee1bb7401d0328fa58253d84c234f99"
+  "hash": "344cdffdf6ec4ade860e246eb26b61b06eda16871651b43b0c6a50ac1c2f1f88"
 }

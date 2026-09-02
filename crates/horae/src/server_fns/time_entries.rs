@@ -203,8 +203,7 @@ pub async fn stop_timer(entry_id: String) -> Result<TimeEntry, ServerFnError> {
              minutes = $3,
              start_minute = $4,
              started_at = NULL,
-             notified_long_running_at = NULL,
-             updated_at = now()
+             notified_long_running_at = NULL
          WHERE id = $1 AND user_id = $2 AND is_running = true
          RETURNING id, org_id, user_id, project_id, task_id,
                    spent_date as "spent_date: chrono::NaiveDate",
@@ -363,7 +362,7 @@ pub async fn update_time_entry(
     let entry = sqlx::query_as!(
         TimeEntry,
         r#"UPDATE time_entries
-         SET minutes = $3, notes = $4, billable = $5, start_minute = $7, updated_at = now()
+         SET minutes = $3, notes = $4, billable = $5, start_minute = $7
          WHERE id = $1 AND user_id = $2 AND state = $6
          RETURNING id, org_id, user_id, project_id, task_id,
                    spent_date as "spent_date: chrono::NaiveDate",
@@ -468,7 +467,7 @@ pub async fn reschedule_time_entry(
     let entry = sqlx::query_as!(
         TimeEntry,
         r#"UPDATE time_entries
-         SET spent_date = $3, start_minute = $4, minutes = $5, updated_at = now()
+         SET spent_date = $3, start_minute = $4, minutes = $5
          WHERE id = $1 AND user_id = $2 AND state = $6
          RETURNING id, org_id, user_id, project_id, task_id,
                    spent_date as "spent_date: chrono::NaiveDate",

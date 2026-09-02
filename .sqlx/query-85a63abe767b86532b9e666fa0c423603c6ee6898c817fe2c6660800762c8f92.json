@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE time_entries te\n              SET state = $2, updated_at = now()\n             FROM approvals a\n            WHERE a.id = ANY($1)\n              AND te.user_id = a.user_id\n              AND te.spent_date BETWEEN a.period_start AND a.period_end\n              AND te.state = $3",
+  "query": "UPDATE time_entries te\n              SET state = $2\n             FROM approvals a\n            WHERE a.id = ANY($1)\n              AND te.user_id = a.user_id\n              AND te.spent_date BETWEEN a.period_start AND a.period_end\n              AND te.state = $3",
   "describe": {
     "columns": [],
     "parameters": {
@@ -36,5 +36,5 @@
     },
     "nullable": []
   },
-  "hash": "f524cdcddc486b481f8d68d2648b9fa1a670dca0a8aea13504adafdedc8e27d6"
+  "hash": "85a63abe767b86532b9e666fa0c423603c6ee6898c817fe2c6660800762c8f92"
 }
