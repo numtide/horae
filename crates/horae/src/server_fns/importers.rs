@@ -5,7 +5,9 @@
 //! non-admins with `FORBIDDEN` (FR-001) and use named status codes.
 
 use super::*;
-use horae_core::importers::harvest::types::{ConnectionStatus, ImportMode, ImportReport, SyncScope};
+use horae_core::importers::harvest::types::{
+    ConnectionStatus, ImportMode, ImportReport, SyncScope,
+};
 
 /// Begin the Harvest OAuth2 connect: generate a per-start `state` nonce bound to
 /// the admin's session and return the authorization URL for the SPA to redirect
@@ -24,7 +26,9 @@ pub async fn harvest_connect_start() -> Result<String, ServerFnError> {
         .await
         .map_err(server_err)?;
 
-    Ok(crate::importers::harvest::oauth::authorize_url(&cfg, &nonce))
+    Ok(crate::importers::harvest::oauth::authorize_url(
+        &cfg, &nonce,
+    ))
 }
 
 /// Report whether the org has a usable Harvest connection (never the tokens).
