@@ -1,20 +1,29 @@
-# Local development stack: Postgres, migrations, the app, and a one-shot seed.
+# Local development stack: Postgres, migrations, the app, a database browser,
+# and a one-shot seed.
 #
 #   nix develop        # or direnv
 #   process-compose up
 #
-# The dev shell sets PC_PORT_NUM=8088: process-compose's own REST API otherwise
-# defaults to :8080 and collides with the app.
+# Or `nix run .#dev` to skip entering the shell first.
+#
+# Connection details live in the `environment` block below and nowhere else —
+# change the port or user there and every process follows.
 #
 # Database state lives in .data/postgres (gitignored) and survives restarts;
 # `rm -rf .data` is the reset button. This replaces `nix run .#postgres` for
 # day-to-day work — that VM is still the way to exercise the NixOS module.
+#
+# To start only part of the stack, name the processes you want:
+#
+#   process-compose up postgres migrate   # just a database, for `cargo test`
+#                                         # or for running dx yourself
 version: "0.5"
 
 environment:
   - "PGHOST=127.0.0.1"
   - "PGPORT=5432"
   - "PGUSER=horae"
+  - "PGDATABASE=horae"
   - "DATABASE_URL=postgres://horae@127.0.0.1:5432/horae"
   - "DEV_LOGIN=1"
 
@@ -23,15 +32,16 @@ processes:
     command: |
       set -euo pipefail
       if [ ! -d .data/postgres ]; then
-        initdb --username=horae --auth=trust --encoding=UTF8 --no-locale -D .data/postgres
-        echo "CREATE DATABASE horae OWNER horae;" | postgres --single -D .data/postgres postgres
+        initdb --username="$PGUSER" --auth=trust --encoding=UTF8 --no-locale -D .data/postgres
+        echo "CREATE DATABASE $PGDATABASE OWNER $PGUSER;" |
+          postgres --single -D .data/postgres postgres
       fi
       # -k "" disables the Unix socket: everything here connects over TCP, and a
       # deep checkout path would otherwise blow Postgres' 107-byte socket limit.
-      exec postgres -D .data/postgres -k "" -h 127.0.0.1 -p 5432
+      exec postgres -D .data/postgres -k "" -h "$PGHOST" -p "$PGPORT"
     readiness_probe:
       exec:
-        command: pg_isready -h 127.0.0.1 -p 5432 -U horae -q
+        command: pg_isready -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -q
       period_seconds: 1
       failure_threshold: 30
     shutdown:
@@ -51,8 +61,6 @@ processes:
   app:
     # dx has to run from the directory holding Dioxus.toml.
     working_dir: crates/horae
-    # Port pinned so the readiness probe below is right by construction, rather
-    # than by relying on dx's default.
     command: dx serve --interactive false --port 8080
     depends_on:
       migrate:
@@ -60,11 +68,20 @@ processes:
     readiness_probe:
       http_get:
         host: 127.0.0.1
+        # These are structured fields, so they cannot read the environment:
+        # keep them in step with --port above.
         port: 8080
         path: /health
       initial_delay_seconds: 15
       period_seconds: 5
       failure_threshold: 120 # a cold WASM + server build takes minutes
+
+  pgweb:
+    # Browse and query the database at http://localhost:8081 while the stack runs.
+    command: pgweb --bind 127.0.0.1 --listen 8081 --url "$DATABASE_URL" --skip-open
+    depends_on:
+      postgres:
+        condition: process_healthy
 
   seed:
     # Waits on the app because dx will have finished building by then, and its

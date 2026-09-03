@@ -14,7 +14,9 @@ nix develop            # enter the dev shell
 process-compose up     # postgres + the app, on http://localhost:8080
 ```
 
-Migrations and seed data are applied for you, so there is nothing else to run.
+Or `nix run .#dev` to do both at once. Migrations and seed data are applied for you, so there
+is nothing else to run. pgweb is at http://localhost:8081 for browsing the database, and
+`process-compose up postgres migrate` starts just a database when that is all you need.
 Open <http://localhost:8080/auth/login> and click **Sign in as Admin**.
 
 > `DATABASE_URL` is exported automatically by the dev shell. Database state

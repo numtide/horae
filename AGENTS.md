@@ -18,6 +18,7 @@ Work inside the Nix dev shell; a running PostgreSQL is required for anything tou
 ```sh
 nix develop            # dev shell: rust toolchain, dx (dioxus-cli), sqlx-cli, postgres, process-compose
 process-compose up     # the dev stack: postgres + the app on :8080, migrated and seeded
+nix run .#dev          # the same thing without entering the shell first
 ```
 
 `process-compose up` is the normal way to run things locally. It starts PostgreSQL as a plain
@@ -26,6 +27,13 @@ process, waits for it to accept connections, then runs `dx serve`. Database stat
 Migrations are applied before the app is built — sqlx checks its query macros against the
 live database at compile time, so an unmigrated database fails to compile, not to run — and
 the demo seed runs once on an empty database. The TUI shows per-process logs; `process-compose down` stops everything.
+
+pgweb runs alongside it at http://localhost:8081 for browsing and querying the database.
+To start only part of the stack, name the processes: `process-compose up postgres migrate`
+gives you a database on its own, for `cargo test` or for running `dx serve` yourself.
+
+Connection details live in the `environment` block of `process-compose.yaml` and nowhere
+else — change the port or user there and every process follows.
 
 `nix run .#postgres` still boots a NixOS VM running PostgreSQL (forwards host :5432, :2222).
 Use it to exercise the NixOS module — not for day-to-day work.

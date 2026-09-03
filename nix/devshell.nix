@@ -6,6 +6,7 @@ pkgs.mkShell {
     sqlx-cli
     postgresql
     process-compose
+    pgweb
     nil
     typst
   ];

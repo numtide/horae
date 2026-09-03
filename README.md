@@ -65,12 +65,19 @@ nix develop            # enter the dev shell
 process-compose up     # postgres + the app, on http://localhost:8080
 ```
 
-That is the whole loop. `process-compose up` starts PostgreSQL as a plain process, waits for it,
-applies migrations, then runs the hot-reloading dev server. Demo data is seeded the first time,
+Or `nix run .#dev` to do both at once.
+
+That is the whole loop. `process-compose up` starts PostgreSQL as a plain process, waits for
+it, applies migrations, then runs the hot-reloading dev server. Demo data is seeded the first time,
 so there is nothing to run by hand.
 
 Database state lives in `.data/postgres` and survives restarts; `rm -rf .data` starts over.
 `process-compose down` stops everything.
+
+[pgweb](https://github.com/sosedoff/pgweb) runs alongside the app at http://localhost:8081 for
+browsing and querying the database. To start only part of the stack, name the processes you
+want — `process-compose up postgres migrate` gives you a database on its own, which is what the
+integration tests need.
 
 Open http://localhost:8080/auth/login and choose **Sign in as Admin**. The admin bypass is
 only available when `DEV_LOGIN=1` is set, which the dev stack does for you.
