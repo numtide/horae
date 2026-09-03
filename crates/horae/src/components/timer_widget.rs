@@ -10,33 +10,35 @@ use crate::server_fns;
 /// reads the same state: the rail renders from it, and a page that starts a
 /// timer refreshes it without knowing the rail exists.
 #[derive(Clone, Copy)]
-pub struct RunningTimer(Resource<Result<Option<crate::models::TimeEntry>, ServerFnError>>);
+pub struct RunningTimer {
+    entry: Resource<Result<Option<crate::models::TimeEntry>, ServerFnError>>,
+    changes: Signal<u64>,
+}
 
 impl RunningTimer {
     /// Re-read the timer after starting or stopping one.
     pub fn refresh(&mut self) {
-        self.0.restart();
+        self.entry.restart();
+        *self.changes.write() += 1;
     }
 
-    /// The running entry's id, or `None` when nothing is running.
+    /// A counter bumped only when a timer actually starts or stops.
     ///
-    /// Reading this subscribes the caller, so a resource that reads it re-runs
-    /// when a timer starts or stops. That is how a page's entry list follows a
-    /// timer started from the rail, which knows nothing about the page.
-    pub fn entry_id(&self) -> Option<Uuid> {
-        self.0
-            .read()
-            .as_ref()
-            .and_then(|r| r.as_ref().ok())
-            .and_then(|entry| entry.as_ref())
-            .map(|entry| entry.id)
+    /// Reading it subscribes the caller, so a resource that reads it re-runs on
+    /// those events — which is how a page's entry list follows a timer started
+    /// from the rail, which knows nothing about the page. Pages track this
+    /// rather than the timer resource itself, whose pending-to-resolved step on
+    /// mount would cost them a second fetch of data that has not changed.
+    pub fn changes(&self) -> u64 {
+        *self.changes.read()
     }
 }
 
 /// Call once, above every component that reads or changes the timer.
 pub fn use_running_timer_provider() {
-    let resource = use_resource(|| async move { server_fns::get_current_timer().await });
-    use_context_provider(|| RunningTimer(resource));
+    let entry = use_resource(|| async move { server_fns::get_current_timer().await });
+    let changes = use_signal(|| 0u64);
+    use_context_provider(|| RunningTimer { entry, changes });
 }
 
 /// The shared timer. Panics if no provider is above the caller, which would
@@ -66,8 +68,8 @@ pub fn TimerWidget() -> Element {
         });
     });
 
-    let timer = use_running_timer();
-    let mut timer_resource = timer.0;
+    let mut timer = use_running_timer();
+    let timer_resource = timer.entry;
     let projects = use_resource(|| async move { server_fns::list_projects(None, false).await });
 
     let mut picking = use_signal(|| false);
@@ -153,7 +155,7 @@ pub fn TimerWidget() -> Element {
                     notes.set(String::new());
                     selected_project.set(String::new());
                     selected_task.set(String::new());
-                    timer_resource.restart();
+                    timer.refresh();
                 }
                 Err(e) => error!("Start timer error: {e}"),
             }
@@ -165,7 +167,7 @@ pub fn TimerWidget() -> Element {
         if let Some(eid) = entry_id_for_stop.clone() {
             spawn(async move {
                 match server_fns::stop_timer(eid).await {
-                    Ok(_) => timer_resource.restart(),
+                    Ok(_) => timer.refresh(),
                     Err(e) => error!("Stop timer error: {e}"),
                 }
             });

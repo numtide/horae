@@ -264,7 +264,7 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
         // Starting or stopping a timer adds or closes an entry in this week, so
         // subscribe to the shared timer: the rail can start one without knowing
         // this page exists.
-        let _running = running_timer.entry_id();
+        let _changes = running_timer.changes();
         async move {
             let we = ws + chrono::Duration::days(6);
             server_fns::list_time_entries(
