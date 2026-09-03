@@ -13,6 +13,9 @@
 # `rm -rf .data` is the reset button. This replaces `nix run .#postgres` for
 # day-to-day work — that VM is still the way to exercise the NixOS module.
 #
+# Migrations run on every `up` (only the pending ones). To apply one without restarting,
+# run `horae-migrate` from the dev shell.
+#
 # To start only part of the stack, name the processes you want:
 #
 #   process-compose up postgres migrate   # just a database, for `cargo test`

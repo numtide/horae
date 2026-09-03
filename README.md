@@ -74,6 +74,10 @@ so there is nothing to run by hand.
 Database state lives in `.data/postgres` and survives restarts; `rm -rf .data` starts over.
 `process-compose down` stops everything.
 
+Migrations run on every `process-compose up`, and only the pending ones are executed. To apply
+a new one without restarting the stack, run `horae-migrate` — it migrates and rebuilds the app,
+which is needed because sqlx checks its queries at compile time.
+
 [pgweb](https://github.com/sosedoff/pgweb) runs alongside the app at http://localhost:8081 for
 browsing and querying the database. To start only part of the stack, name the processes you
 want — `process-compose up postgres migrate` gives you a database on its own, which is what the

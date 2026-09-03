@@ -32,6 +32,11 @@ pgweb runs alongside it at http://localhost:8081 for browsing and querying the d
 To start only part of the stack, name the processes: `process-compose up postgres migrate`
 gives you a database on its own, for `cargo test` or for running `dx serve` yourself.
 
+Migrations are applied on every `process-compose up`, and `sqlx migrate run` only executes the
+pending ones — so the first run and every later one are both covered. To apply one without
+restarting the stack, run `horae-migrate`: it migrates and then rebuilds the app, which a new
+migration requires because the query macros are checked at compile time.
+
 Connection details live in the `environment` block of `process-compose.yaml` and nowhere
 else — change the port or user there and every process follows.
 
