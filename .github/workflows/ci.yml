@@ -6,6 +6,9 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
+  # A merge queue builds a temporary commit and reports on it via merge_group.
+  # Without this the required checks never run there and the queue stalls.
+  merge_group:
 
 jobs:
   check:
