@@ -75,21 +75,22 @@ pub fn TimerWidget() -> Element {
     let mut selected_task = use_signal(String::new);
     let mut notes = use_signal(String::new);
 
-    // Tasks narrow to the picked project, falling back to all tasks.
+    // The full list, used to name the running entry's task. The picker below
+    // reads it too while no project is chosen, so this is fetched once rather
+    // than once per purpose.
+    let all_tasks = use_resource(|| async move { server_fns::list_tasks().await });
+
+    // Tasks narrow to the picked project.
     let tasks = use_resource(move || {
         let proj = selected_project.read().clone();
         async move {
             if proj.is_empty() {
-                server_fns::list_tasks().await
+                None
             } else {
-                server_fns::list_project_tasks(proj).await
+                Some(server_fns::list_project_tasks(proj).await)
             }
         }
     });
-
-    // `tasks` above narrows to whatever the picker has selected, so the running
-    // entry's task is named from the full list instead.
-    let all_tasks = use_resource(|| async move { server_fns::list_tasks().await });
 
     let project_names: HashMap<Uuid, String> = projects
         .read()
@@ -232,7 +233,18 @@ pub fn TimerWidget() -> Element {
                                 value: "{selected_task}",
                                 oninput: move |e| selected_task.set(e.value()),
                                 option { value: "", "Select task…" }
-                                {tasks.read().as_ref().and_then(|r| r.as_ref().ok()).map(|ts| rsx! {
+                                // Narrowed to the project once one is chosen,
+                                // otherwise the full list already loaded above.
+                                {match tasks.read().as_ref() {
+                                    Some(Some(Ok(ts))) => Some(ts.clone()),
+                                    Some(None) => all_tasks
+                                        .read()
+                                        .as_ref()
+                                        .and_then(|r| r.as_ref().ok())
+                                        .cloned(),
+                                    _ => None,
+                                }
+                                .map(|ts| rsx! {
                                     for t in ts.iter() {
                                         option { value: "{t.id}", "{t.name}" }
                                     }
