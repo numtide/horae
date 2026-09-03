@@ -1211,9 +1211,12 @@ fn timed_lanes(day: &[TimeEntry]) -> (Vec<i32>, Vec<i32>) {
     // stay the same width and none is hidden.
     let mut k = 0;
     while k < timed.len() {
-        let mut j = k;
         let mut cluster_end = timed[k].2;
-        let mut max_lane = 0i32;
+        let mut max_lane = lane_of[timed[k].0];
+        // Start the scan past k. A zero-length entry — a timer stopped inside
+        // the same minute it started — does not start before its own end, so
+        // scanning from k would leave j at k and spin here forever.
+        let mut j = k + 1;
         while j < timed.len() && timed[j].1 < cluster_end {
             cluster_end = cluster_end.max(timed[j].2);
             max_lane = max_lane.max(lane_of[timed[j].0]);
@@ -2130,5 +2133,47 @@ mod tests {
     #[test]
     fn cal_span_week_shows_all_seven_days() {
         assert_eq!(CalSpan::Week.visible_days(3), vec![0, 1, 2, 3, 4, 5, 6]);
+    }
+
+    fn timed_entry(start_minute: i32, minutes: i32) -> TimeEntry {
+        TimeEntry {
+            id: Uuid::nil(),
+            org_id: Uuid::nil(),
+            user_id: Uuid::nil(),
+            project_id: Uuid::nil(),
+            task_id: Uuid::nil(),
+            spent_date: ymd(2026, 9, 3),
+            minutes,
+            rounded_minutes: None,
+            notes: None,
+            billable: true,
+            is_running: false,
+            started_at: None,
+            start_minute: Some(start_minute),
+            sort_order: 0,
+            state: horae_core::types::EntryState::Open,
+            invoice_id: None,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        }
+    }
+
+    /// Stopping a timer inside the minute it started leaves an entry of zero
+    /// length, which does not begin before its own end. The cluster scan used to
+    /// make no progress on one and spin forever, freezing the Calendar view.
+    #[test]
+    fn timed_lanes_terminates_on_a_zero_length_entry() {
+        let day = vec![timed_entry(540, 0), timed_entry(600, 30)];
+        let (lane_of, lanes_of) = timed_lanes(&day);
+        assert_eq!(lane_of.len(), 2);
+        assert_eq!(lanes_of, vec![1, 1]);
+    }
+
+    #[test]
+    fn timed_lanes_still_widens_overlapping_entries() {
+        let day = vec![timed_entry(540, 60), timed_entry(570, 60)];
+        let (lane_of, lanes_of) = timed_lanes(&day);
+        assert_eq!(lane_of, vec![0, 1]);
+        assert_eq!(lanes_of, vec![2, 2]);
     }
 }
