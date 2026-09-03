@@ -62,11 +62,26 @@ Then open http://localhost:3000/auth/login and choose **Sign in as Admin**.
 
 ```sh
 nix develop            # enter the dev shell
-nix run .#postgres     # boot a NixOS VM running PostgreSQL (forwards host :5432 and :2222)
+process-compose up     # postgres + the app, on http://localhost:8080
 ```
 
-`DATABASE_URL` defaults to `postgres://localhost/horae`, which matches the forwarded VM port.
-On first run, apply migrations and seed demo data, then start the hot-reloading dev server:
+That is the whole loop. `process-compose up` starts PostgreSQL as a plain process, waits for it,
+applies migrations, then runs the hot-reloading dev server. Demo data is seeded the first time,
+so there is nothing to run by hand.
+
+Database state lives in `.data/postgres` and survives restarts; `rm -rf .data` starts over.
+`process-compose down` stops everything.
+
+Open http://localhost:8080/auth/login and choose **Sign in as Admin**. The admin bypass is
+only available when `DEV_LOGIN=1` is set, which the dev stack does for you.
+
+<details>
+<summary>Running PostgreSQL in a VM instead</summary>
+
+`nix run .#postgres` boots a NixOS VM running PostgreSQL (forwarding host `:5432` and `:2222`).
+It exercises the same NixOS module used for self-hosting, which makes it useful for checking
+packaging changes, but it is slower to start and needs KVM. With it running, drive the app by
+hand:
 
 ```sh
 cargo run -p horae --features server -- migrate run   # apply pending migrations
@@ -75,8 +90,7 @@ cargo run -p horae --features server -- seed          # insert demo data (idempo
 cd crates/horae && DEV_LOGIN=1 dx serve               # dev server on :8080, hot reload
 ```
 
-Open http://localhost:8080/auth/login and choose **Sign in as Admin**. The admin bypass is
-only available when `DEV_LOGIN=1` is set.
+</details>
 
 ## Configuration
 

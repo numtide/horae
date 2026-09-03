@@ -7,21 +7,21 @@ ______________________________________________________________________
 
 ## Getting started
 
-**Requirements:** Nix with flakes enabled, and a running PostgreSQL instance
-(the dev VM provides one).
+**Requirements:** Nix with flakes enabled.
 
 ```sh
-nix develop                                      # enter the dev shell
-nix run .#postgres                               # boot the dev VM (PostgreSQL on :5432)
-cargo run --features server -- migrate run       # apply DB migrations
-cargo run --features server -- seed              # load seed data
-DEV_LOGIN=1 dx serve                             # start the dev server on :8080
+nix develop            # enter the dev shell
+process-compose up     # postgres + the app, on http://localhost:8080
 ```
 
+Migrations and seed data are applied for you, so there is nothing else to run.
 Open <http://localhost:8080/auth/login> and click **Sign in as Admin**.
 
-> `DATABASE_URL` defaults to `postgres://localhost/horae` and is exported
-> automatically by the dev shell.
+> `DATABASE_URL` is exported automatically by the dev shell. Database state
+> lives in `.data/postgres`; `rm -rf .data` starts from scratch.
+>
+> `nix run .#postgres` boots a PostgreSQL VM instead — slower, but it exercises
+> the NixOS module used for self-hosting. See the README for that flow.
 
 ______________________________________________________________________
 
@@ -79,11 +79,8 @@ ______________________________________________________________________
 ## Development workflow
 
 ```sh
-nix develop                                  # enter the dev shell
-nix run .#postgres                           # start the dev VM (PostgreSQL)
-cargo run --features server -- migrate run   # apply DB migrations
-cargo run --features server -- seed          # load seed data
-DEV_LOGIN=1 dx serve                         # dev server with hot reload on :8080
+nix develop            # enter the dev shell
+process-compose up     # postgres + hot-reloading dev server on :8080
 ```
 
 **Tests:**

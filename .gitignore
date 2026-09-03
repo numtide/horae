@@ -3,8 +3,11 @@ target/
 nixos.qcow2
 *result*
 
+# Local dev stack state (process-compose: postgres data dir)
+/.data/
+
 # git worktrees
-/worktrees/
+/.worktrees/
 
 # direnv
 .direnv/

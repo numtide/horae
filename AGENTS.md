@@ -16,11 +16,22 @@ Horae is a self-hostable time tracker (a Harvest/Kimai alternative) built as a R
 Work inside the Nix dev shell; a running PostgreSQL is required for anything touching the database.
 
 ```sh
-nix develop            # dev shell: rust toolchain, dx (dioxus-cli), sqlx-cli, postgres, wasm-pack
-nix run .#postgres     # boot a NixOS VM running PostgreSQL (forwards host :5432, :2222)
+nix develop            # dev shell: rust toolchain, dx (dioxus-cli), sqlx-cli, postgres, process-compose
+process-compose up     # the dev stack: postgres + the app on :8080, migrated and seeded
 ```
 
-`DATABASE_URL` defaults to `postgres://localhost/horae`.
+`process-compose up` is the normal way to run things locally. It starts PostgreSQL as a plain
+process, waits for it to accept connections, then runs `dx serve`. Database state lives in
+`.data/postgres` (gitignored) and persists across restarts — `rm -rf .data` is the reset button.
+Migrations are applied before the app is built — sqlx checks its query macros against the
+live database at compile time, so an unmigrated database fails to compile, not to run — and
+the demo seed runs once on an empty database. The TUI shows per-process logs; `process-compose down` stops everything.
+
+`nix run .#postgres` still boots a NixOS VM running PostgreSQL (forwards host :5432, :2222).
+Use it to exercise the NixOS module — not for day-to-day work.
+
+`DATABASE_URL` defaults to `postgres://localhost/horae`; the dev shell exports
+`postgres://horae@127.0.0.1:5432/horae`, which both options above serve.
 
 ### Build & run
 
@@ -34,7 +45,8 @@ cargo run -p horae --features server -- <subcommand>     # run the server binary
 
 CLI subcommands: `serve`, `migrate run`, `migrate reset --confirm`, `seed`, `user list`, `user create --email … --name … --role …`.
 
-First run: `… -- migrate run`, then `… -- seed`, then `dx serve`; open http://localhost:8080/auth/login and "Sign in as Admin" (needs `DEV_LOGIN=1`).
+These are for one-off tasks; `process-compose up` covers the normal run loop. Open
+http://localhost:8080/auth/login and "Sign in as Admin" (needs `DEV_LOGIN=1`, which the stack sets).
 
 ### Test & lint
 
