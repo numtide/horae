@@ -17,6 +17,20 @@ impl RunningTimer {
     pub fn refresh(&mut self) {
         self.0.restart();
     }
+
+    /// The running entry's id, or `None` when nothing is running.
+    ///
+    /// Reading this subscribes the caller, so a resource that reads it re-runs
+    /// when a timer starts or stops. That is how a page's entry list follows a
+    /// timer started from the rail, which knows nothing about the page.
+    pub fn entry_id(&self) -> Option<Uuid> {
+        self.0
+            .read()
+            .as_ref()
+            .and_then(|r| r.as_ref().ok())
+            .and_then(|entry| entry.as_ref())
+            .map(|entry| entry.id)
+    }
 }
 
 /// Call once, above every component that reads or changes the timer.

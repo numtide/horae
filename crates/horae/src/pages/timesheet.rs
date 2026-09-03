@@ -254,8 +254,17 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
         go.call((ViewMode::Day, week_start() + Duration::days(i), span));
     });
 
+    // The rail owns the running-timer display, and it is shared: starting a timer
+    // here refreshes the rail, and a timer started from the rail invalidates the
+    // entries below.
+    let running_timer = use_running_timer();
+
     let entries = use_resource(move || {
         let ws = *week_start.read();
+        // Starting or stopping a timer adds or closes an entry in this week, so
+        // subscribe to the shared timer: the rail can start one without knowing
+        // this page exists.
+        let _running = running_timer.entry_id();
         async move {
             let we = ws + chrono::Duration::days(6);
             server_fns::list_time_entries(
@@ -544,9 +553,6 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
             }
         }
     });
-
-    // The rail owns the running-timer display; starting one here has to refresh it.
-    let running_timer = use_running_timer();
 
     // Start a timer for an existing entry's project/task (the Day-view "Start"
     // action, Harvest-style resume).
