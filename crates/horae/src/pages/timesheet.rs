@@ -272,7 +272,9 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                 None,
                 Some(ws.to_string()),
                 Some(we.to_string()),
-                Some(200),
+                // The whole window: every view here sums these rows, so a
+                // truncated fetch would quietly under-report the week's hours.
+                None,
             )
             .await
         }

@@ -28,6 +28,11 @@ fn normalize_start(
 
 // ── Time Entries ─────────────────────────────────────────────────────────────
 
+/// The session user's entries, newest first.
+///
+/// `limit` of `None` returns every match, which callers that aggregate — the
+/// timesheet sums its own rows — need for their totals to be right. Always pair
+/// it with a date window: without one this walks the user's whole history.
 #[server]
 pub async fn list_time_entries(
     _user_id: Option<String>,
@@ -38,7 +43,6 @@ pub async fn list_time_entries(
 ) -> Result<Vec<TimeEntry>, ServerFnError> {
     let session_uid = session_user_id().await?;
     let state = crate::state::global_state().await;
-    let limit = limit.unwrap_or(50);
 
     let project_filter: Option<uuid::Uuid> = match project_id {
         Some(ref s) => Some(s.parse().map_err(|_| server_err("Invalid project_id"))?),
@@ -74,7 +78,7 @@ pub async fn list_time_entries(
            AND ($3::date IS NULL OR spent_date >= $3)
            AND ($4::date IS NULL OR spent_date <= $4)
          ORDER BY spent_date DESC, created_at DESC
-         LIMIT $5"#,
+         LIMIT $5::bigint"#,
         session_uid,
         project_filter,
         date_filter as Option<chrono::NaiveDate>,
