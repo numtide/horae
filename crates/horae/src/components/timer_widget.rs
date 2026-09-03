@@ -16,7 +16,13 @@ pub struct RunningTimer {
 }
 
 impl RunningTimer {
-    /// Re-read the timer after starting or stopping one.
+    /// Invalidate after any change to time entries.
+    ///
+    /// This is the single call sites make: it re-reads the timer and, through
+    /// [`Self::changes`], the entry lists that follow it. Pages must not restart
+    /// their own entry resource instead — a mutation can delete or alter the
+    /// running entry, and refreshing only the page leaves the rail counting
+    /// against a row that is gone.
     pub fn refresh(&mut self) {
         self.entry.restart();
         *self.changes.write() += 1;

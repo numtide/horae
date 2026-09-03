@@ -358,6 +358,7 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
     let all_submitted_or_approved = !week_entries.read().is_empty() && !has_open;
 
     let submit_status = use_signal(|| None::<String>);
+    let mut grid_error = use_signal(|| None::<String>);
 
     // Add–entry modal state. `add_open` holds the date the new entry is for
     // (None = closed); the rest back the form fields.
@@ -438,10 +439,10 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
         // Run a mutation and refresh the week's entries when it succeeds. Shared
         // by every drag that writes (move, resize, reorder).
         let commit = move |fut: std::pin::Pin<Box<dyn std::future::Future<Output = bool>>>| {
-            let mut entries = entries;
+            let mut timer = running_timer;
             spawn(async move {
                 if fut.await {
-                    entries.restart();
+                    timer.refresh();
                 }
             });
         };
@@ -559,7 +560,6 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
     // Start a timer for an existing entry's project/task (the Day-view "Start"
     // action, Harvest-style resume).
     let start_entry = use_callback(move |e: TimeEntry| {
-        let mut entries = entries;
         let mut timer = running_timer;
         spawn(async move {
             match server_fns::start_timer(
@@ -570,7 +570,6 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
             .await
             {
                 Ok(_) => {
-                    entries.restart();
                     timer.refresh();
                 }
                 Err(err) => error!("Start timer error: {err}"),
@@ -598,7 +597,7 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                     .map(|e| (e.notes.clone(), e.billable))
             })
             .unwrap_or((None, true));
-        let mut entries = entries;
+        let mut timer = running_timer;
         spawn(async move {
             let res = persist_entry(
                 edit.existing,
@@ -611,8 +610,17 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                 None, // Week-grid cells are untimed (no time of day)
             )
             .await;
-            if res.is_ok() {
-                entries.restart();
+            match res {
+                Ok(()) => {
+                    grid_error.set(None);
+                    timer.refresh();
+                }
+                // Refresh on failure too: the cell still shows what was typed,
+                // and only a re-read puts the saved value back on screen.
+                Err(e) => {
+                    grid_error.set(Some(format!("Could not save: {e}")));
+                    timer.refresh();
+                }
             }
         });
     });
@@ -629,12 +637,12 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
         if ids.is_empty() {
             return;
         }
-        let mut entries = entries;
+        let mut timer = running_timer;
         spawn(async move {
             for id in ids {
                 let _ = server_fns::delete_time_entry(id.to_string()).await;
             }
-            entries.restart();
+            timer.refresh();
         });
     });
 
@@ -836,6 +844,13 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                 }
             }
 
+            // A cell edit that the server refused: shown here because the grid
+            // has no per-cell place to put it, and staying silent would leave
+            // the typed value on screen looking saved.
+            if let Some(msg) = grid_error() {
+                div { class: "alert alert-danger", "{msg}" }
+            }
+
             // Content
             match &*entries.read() {
                 None => rsx! {
@@ -857,13 +872,13 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                                         disabled: has_non_open,
                                         onclick: move |_| {
                                             let ws_str = ws.to_string();
-                                            let mut entries = entries;
+                                            let mut timer = running_timer;
                                             let mut submit_status = submit_status;
                                             spawn(async move {
                                                 match server_fns::submit_week(ws_str).await {
                                                     Ok(_) => {
                                                         submit_status.set(None);
-                                                        entries.restart();
+                                                        timer.refresh();
                                                     }
                                                     Err(e) => submit_status.set(Some(format!("{e}"))),
                                                 }
@@ -969,7 +984,6 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                                         let Some((project_id, task_id, notes)) = read_pt_notes.call(()) else {
                                             return;
                                         };
-                                        let mut entries = entries;
                                         let mut running_timer = running_timer;
                                         if timer_mode() {
                                             add_saving.set(true);
@@ -978,7 +992,6 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                                                 match server_fns::start_timer(project_id, task_id, notes).await {
                                                     Ok(_) => {
                                                         add_open.set(None);
-                                                        entries.restart();
                                                         running_timer.refresh();
                                                     }
                                                     Err(e) => add_error
@@ -1016,6 +1029,7 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                                         } else {
                                             true
                                         };
+                                        let mut modal_timer = running_timer;
                                         add_saving.set(true);
                                         add_error.set(None);
                                         spawn(async move {
@@ -1027,7 +1041,7 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                                             match result {
                                                 Ok(()) => {
                                                     add_open.set(None);
-                                                    entries.restart();
+                                                    modal_timer.refresh();
                                                 }
                                                 Err(e) => add_error.set(Some(format!("Could not save: {e}"))),
                                             }
@@ -1050,14 +1064,14 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                                             let Some(id) = *editing.read() else {
                                                 return;
                                             };
-                                            let mut entries = entries;
+                                            let mut modal_timer = running_timer;
                                             add_saving.set(true);
                                             add_error.set(None);
                                             spawn(async move {
                                                 match server_fns::delete_time_entry(id.to_string()).await {
                                                     Ok(()) => {
                                                         add_open.set(None);
-                                                        entries.restart();
+                                                        modal_timer.refresh();
                                                     }
                                                     Err(e) => {
                                                         add_error.set(Some(format!("Could not delete: {e}")))
