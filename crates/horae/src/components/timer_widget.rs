@@ -73,11 +73,22 @@ pub fn TimerWidget() -> Element {
         }
     });
 
+    // `tasks` above narrows to whatever the picker has selected, so the running
+    // entry's task is named from the full list instead.
+    let all_tasks = use_resource(|| async move { server_fns::list_tasks().await });
+
     let project_names: HashMap<Uuid, String> = projects
         .read()
         .as_ref()
         .and_then(|r| r.as_ref().ok())
         .map(|ps| ps.iter().map(|p| (p.id, p.name.clone())).collect())
+        .unwrap_or_default();
+
+    let task_names: HashMap<Uuid, String> = all_tasks
+        .read()
+        .as_ref()
+        .and_then(|r| r.as_ref().ok())
+        .map(|ts| ts.iter().map(|t| (t.id, t.name.clone())).collect())
         .unwrap_or_default();
 
     let current_timer = timer_resource
@@ -101,10 +112,16 @@ pub fn TimerWidget() -> Element {
         None => (0, 0, 0),
     };
 
-    let running_project_name = current_timer
-        .as_ref()
-        .and_then(|e| project_names.get(&e.project_id))
-        .cloned();
+    // The kit labels the running pill "Project · Task"; fall back to whichever
+    // half resolves.
+    let running_label = current_timer.as_ref().map(|e| {
+        match (project_names.get(&e.project_id), task_names.get(&e.task_id)) {
+            (Some(project), Some(task)) => format!("{project} · {task}"),
+            (Some(project), None) => project.clone(),
+            (None, Some(task)) => task.clone(),
+            (None, None) => "Running".to_string(),
+        }
+    });
 
     let handle_start = move |_| {
         let proj = selected_project.read().clone();
@@ -146,9 +163,11 @@ pub fn TimerWidget() -> Element {
                 div { class: "sidebar-timer-live",
                     span { class: "sidebar-timer-dot", "aria-hidden": "true" }
                     div { class: "sidebar-timer-info",
-                        div { class: "sidebar-timer-time", "{hours:02}:{minutes:02}:{seconds:02}" }
+                        div { class: "sidebar-timer-time", "{hours}:{minutes:02}:{seconds:02}" }
+                        // The collapsed rail's 44px chip has no room for seconds.
+                        div { class: "sidebar-timer-time-short", "{hours}:{minutes:02}" }
                         div { class: "sidebar-timer-proj",
-                            {running_project_name.unwrap_or_else(|| "Running".into())}
+                            {running_label.unwrap_or_else(|| "Running".into())}
                         }
                     }
                     button {

@@ -396,7 +396,7 @@ h1, h2, h3, h4, h5, h6 {
    worded button changes the pill's whole silhouette. */
 .sidebar-timer-live {
   display: flex; align-items: center; gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3);
   background: var(--color-primary-bg); border: 1px solid var(--color-primary-border);
   border-radius: var(--radius-btn);
 }
@@ -409,6 +409,7 @@ h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-family-mono); font-size: var(--font-size-lg); font-weight: 600;
   color: var(--color-text-strong); letter-spacing: 0.02em;
 }
+.sidebar-timer-time-short { display: none; }
 .sidebar-timer-proj {
   font-size: var(--font-size-xs); color: var(--color-text-muted);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -624,16 +625,37 @@ h1, h2, h3, h4, h5, h6 {
 .app-shell.collapsed .sidebar-collapse { margin-left: 0; }
 .app-shell.collapsed .nav-item,
 .app-shell.collapsed .sidebar-timer { justify-content: center; padding: var(--space-2); }
-/* Collapsed: the running pill has no room for a project name or a row layout,
-   so it stacks into a chip — the elapsed time over the stop square. Without
-   these the full-width pill was squeezed into the 68px strip. */
+/* Collapsed: the kit's 44px chip — stop square above the elapsed time, with the
+   live dot in the corner. Seconds are dropped because h:mm:ss does not fit 44px
+   and was overflowing the rail. */
 .app-shell.collapsed .sidebar-timer-live {
-  flex-direction: column; gap: var(--space-2);
-  padding: var(--space-2) var(--space-1);
+  position: relative;
+  width: 44px; height: 44px; margin: 0 auto;
+  flex-direction: column; justify-content: flex-end;
+  gap: 0; padding: 0 0 7px;
+  border-radius: 11px;
 }
-.app-shell.collapsed .sidebar-timer-proj { display: none; }
+.app-shell.collapsed .sidebar-timer-dot {
+  position: absolute; top: 4px; right: 4px;
+  width: 6px; height: 6px;
+}
 .app-shell.collapsed .sidebar-timer-info { flex: none; width: 100%; text-align: center; }
-.app-shell.collapsed .sidebar-timer-time { font-size: var(--font-size-xs); }
+.app-shell.collapsed .sidebar-timer-proj,
+.app-shell.collapsed .sidebar-timer-time { display: none; }
+.app-shell.collapsed .sidebar-timer-time-short {
+  display: block;
+  font-size: var(--font-size-xs);
+  color: var(--color-primary);
+}
+/* The chip itself is the stop control, so the button covers it and only its
+   square shows. */
+.app-shell.collapsed .sidebar-timer-stop {
+  position: absolute; inset: 0;
+  width: auto; height: auto;
+  padding: 8px 0 0; align-items: flex-start;
+  background: none; border: none; border-radius: 11px;
+}
+.app-shell.collapsed .sidebar-timer-stop:hover { background: none; border-color: transparent; }
 .app-shell.collapsed .sidebar-footer { justify-content: center; }
 /* Collapsed: the rail is too narrow to hold the popover and its overflow would
    clip it, so fly it out to the right, fixed to the viewport near the footer. */
