@@ -174,6 +174,17 @@ pub fn TimerWidget() -> Element {
         }
     };
 
+    // Hold the guards out here so the task dropdown can borrow the list: inside
+    // rsx! the reads are temporaries, which forced a clone of the whole Vec.
+    let narrowed_tasks = tasks.read();
+    let every_task = all_tasks.read();
+    let task_options = match narrowed_tasks.as_ref() {
+        Some(Some(Ok(narrowed))) => Some(narrowed),
+        // No project chosen yet, so offer the full list already loaded above.
+        Some(None) => every_task.as_ref().and_then(|r| r.as_ref().ok()),
+        _ => None,
+    };
+
     rsx! {
         div { class: "sidebar-timer-wrap",
             if is_running {
@@ -235,18 +246,7 @@ pub fn TimerWidget() -> Element {
                                 value: "{selected_task}",
                                 oninput: move |e| selected_task.set(e.value()),
                                 option { value: "", "Select task…" }
-                                // Narrowed to the project once one is chosen,
-                                // otherwise the full list already loaded above.
-                                {match tasks.read().as_ref() {
-                                    Some(Some(Ok(ts))) => Some(ts.clone()),
-                                    Some(None) => all_tasks
-                                        .read()
-                                        .as_ref()
-                                        .and_then(|r| r.as_ref().ok())
-                                        .cloned(),
-                                    _ => None,
-                                }
-                                .map(|ts| rsx! {
+                                {task_options.map(|ts| rsx! {
                                     for t in ts.iter() {
                                         option { value: "{t.id}", "{t.name}" }
                                     }
