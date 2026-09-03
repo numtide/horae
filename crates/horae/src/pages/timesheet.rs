@@ -9,6 +9,7 @@ use uuid::Uuid;
 use crate::components::controls::Segmented;
 use crate::components::date_picker::DatePicker;
 use crate::components::menu::{Menu, MenuItem};
+use crate::components::timer_widget::use_running_timer;
 use crate::models::time_entry::TimeEntry;
 use crate::route::Route;
 use crate::server_fns;
@@ -544,10 +545,14 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
         }
     });
 
+    // The rail owns the running-timer display; starting one here has to refresh it.
+    let running_timer = use_running_timer();
+
     // Start a timer for an existing entry's project/task (the Day-view "Start"
     // action, Harvest-style resume).
     let start_entry = use_callback(move |e: TimeEntry| {
         let mut entries = entries;
+        let mut timer = running_timer;
         spawn(async move {
             match server_fns::start_timer(
                 e.project_id.to_string(),
@@ -556,7 +561,10 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
             )
             .await
             {
-                Ok(_) => entries.restart(),
+                Ok(_) => {
+                    entries.restart();
+                    timer.refresh();
+                }
                 Err(err) => error!("Start timer error: {err}"),
             }
         });
@@ -954,6 +962,7 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                                             return;
                                         };
                                         let mut entries = entries;
+                                        let mut running_timer = running_timer;
                                         if timer_mode() {
                                             add_saving.set(true);
                                             add_error.set(None);
@@ -962,6 +971,7 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                                                     Ok(_) => {
                                                         add_open.set(None);
                                                         entries.restart();
+                                                        running_timer.refresh();
                                                     }
                                                     Err(e) => add_error
                                                         .set(Some(format!("Could not start timer: {e}"))),

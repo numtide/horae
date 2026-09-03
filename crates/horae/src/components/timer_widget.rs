@@ -6,6 +6,31 @@ use uuid::Uuid;
 
 use crate::server_fns;
 
+/// The running timer, owned by the app shell so everything that can change it
+/// reads the same state: the rail renders from it, and a page that starts a
+/// timer refreshes it without knowing the rail exists.
+#[derive(Clone, Copy)]
+pub struct RunningTimer(Resource<Result<Option<crate::models::TimeEntry>, ServerFnError>>);
+
+impl RunningTimer {
+    /// Re-read the timer after starting or stopping one.
+    pub fn refresh(&mut self) {
+        self.0.restart();
+    }
+}
+
+/// Call once, above every component that reads or changes the timer.
+pub fn use_running_timer_provider() {
+    let resource = use_resource(|| async move { server_fns::get_current_timer().await });
+    use_context_provider(|| RunningTimer(resource));
+}
+
+/// The shared timer. Panics if no provider is above the caller, which would
+/// be a wiring mistake rather than a runtime condition.
+pub fn use_running_timer() -> RunningTimer {
+    use_context::<RunningTimer>()
+}
+
 /// The sidebar timer. Idle shows a "Start timer" button; picking a project/task
 /// starts a running timer; while running it shows the live elapsed time, the
 /// project, and a Stop button. It lives in the sidebar so it's reachable from
@@ -27,7 +52,8 @@ pub fn TimerWidget() -> Element {
         });
     });
 
-    let mut timer_resource = use_resource(|| async move { server_fns::get_current_timer().await });
+    let timer = use_running_timer();
+    let mut timer_resource = timer.0;
     let projects = use_resource(|| async move { server_fns::list_projects(None, false).await });
 
     let mut picking = use_signal(|| false);
@@ -118,11 +144,20 @@ pub fn TimerWidget() -> Element {
         div { class: "sidebar-timer-wrap",
             if is_running {
                 div { class: "sidebar-timer-live",
-                    div { class: "sidebar-timer-time", "{hours:02}:{minutes:02}:{seconds:02}" }
-                    div { class: "sidebar-timer-proj",
-                        {running_project_name.unwrap_or_else(|| "Running".into())}
+                    span { class: "sidebar-timer-dot", "aria-hidden": "true" }
+                    div { class: "sidebar-timer-info",
+                        div { class: "sidebar-timer-time", "{hours:02}:{minutes:02}:{seconds:02}" }
+                        div { class: "sidebar-timer-proj",
+                            {running_project_name.unwrap_or_else(|| "Running".into())}
+                        }
                     }
-                    button { class: "sidebar-timer-stop", onclick: handle_stop, "Stop" }
+                    button {
+                        class: "sidebar-timer-stop",
+                        "aria-label": "Stop timer",
+                        title: "Stop timer",
+                        onclick: handle_stop,
+                        span { class: "sidebar-timer-stop-square", "aria-hidden": "true" }
+                    }
                 }
             } else {
                 button {

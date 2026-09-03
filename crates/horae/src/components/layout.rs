@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 
 use crate::components::sidebar::Sidebar;
+use crate::components::timer_widget::use_running_timer_provider;
 
 /// Sidebar width bounds, in px. A drag narrower than `SIDEBAR_COLLAPSE_AT` snaps
 /// the rail to its collapsed icon strip instead of shrinking further.
@@ -11,6 +12,10 @@ const SIDEBAR_COLLAPSE_AT: f64 = 150.0;
 
 #[component]
 pub fn AppLayout() -> Element {
+    // The running timer is shared from here: the rail below renders it, and the
+    // pages in the Outlet can start one and have the rail follow.
+    use_running_timer_provider();
+
     // Owned here (not in the sidebar) so the shell class can narrow the content
     // area together with the rail, and the edge handle can resize it.
     let mut collapsed = use_signal(|| false);

@@ -391,26 +391,38 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* Running state */
+/* Running timer: a pine wash with a live dot, the elapsed time, and a stop
+   square. The kit is explicit that stop is a red square, never a word — a
+   worded button changes the pill's whole silhouette. */
 .sidebar-timer-live {
-  display: flex; flex-direction: column; gap: var(--space-2);
-  padding: var(--space-3);
-  background: var(--color-success-bg); border: 1px solid var(--color-success-line);
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-primary-bg); border: 1px solid var(--color-primary-border);
   border-radius: var(--radius-btn);
 }
+.sidebar-timer-dot {
+  width: 8px; height: 8px; flex-shrink: 0;
+  border-radius: var(--radius-full); background: var(--color-primary);
+}
+.sidebar-timer-info { flex: 1; min-width: 0; }
 .sidebar-timer-time {
-  font-family: var(--font-family-mono); font-size: var(--font-size-xl); font-weight: 600;
-  color: var(--color-success-fg); letter-spacing: 0.04em;
+  font-family: var(--font-family-mono); font-size: var(--font-size-lg); font-weight: 600;
+  color: var(--color-text-strong); letter-spacing: 0.02em;
 }
 .sidebar-timer-proj {
-  font-size: var(--font-size-sm); color: var(--color-text-secondary);
+  font-size: var(--font-size-xs); color: var(--color-text-muted);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .sidebar-timer-stop {
-  padding: var(--space-2); font: inherit; font-size: var(--font-size-sm); font-weight: 600; cursor: pointer;
-  color: var(--color-danger-fg); background: var(--color-danger-bg);
-  border: 1px solid var(--color-danger-line); border-radius: var(--radius-btn);
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 30px; height: 30px; padding: 0; cursor: pointer;
+  background: var(--color-bg-tertiary); border: 1px solid var(--color-border-input);
+  border-radius: var(--radius);
 }
-.sidebar-timer-stop:hover { background: var(--color-danger-line); }
+.sidebar-timer-stop:hover { background: var(--color-bg-overlay); border-color: var(--color-border-strong); }
+.sidebar-timer-stop-square {
+  width: 10px; height: 10px; border-radius: 2px; background: var(--color-danger);
+}
 
 /* Start popover. Fixed (not absolute) so it can be wider than the rail: the
    sidebar scrolls (overflow-y: auto), which per spec also clips horizontally,
@@ -612,6 +624,16 @@ h1, h2, h3, h4, h5, h6 {
 .app-shell.collapsed .sidebar-collapse { margin-left: 0; }
 .app-shell.collapsed .nav-item,
 .app-shell.collapsed .sidebar-timer { justify-content: center; padding: var(--space-2); }
+/* Collapsed: the running pill has no room for a project name or a row layout,
+   so it stacks into a chip — the elapsed time over the stop square. Without
+   these the full-width pill was squeezed into the 68px strip. */
+.app-shell.collapsed .sidebar-timer-live {
+  flex-direction: column; gap: var(--space-2);
+  padding: var(--space-2) var(--space-1);
+}
+.app-shell.collapsed .sidebar-timer-proj { display: none; }
+.app-shell.collapsed .sidebar-timer-info { flex: none; width: 100%; text-align: center; }
+.app-shell.collapsed .sidebar-timer-time { font-size: var(--font-size-xs); }
 .app-shell.collapsed .sidebar-footer { justify-content: center; }
 /* Collapsed: the rail is too narrow to hold the popover and its overflow would
    clip it, so fly it out to the right, fixed to the viewport near the footer. */
