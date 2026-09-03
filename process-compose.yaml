@@ -1,0 +1,109 @@
+# Local development stack: Postgres, migrations, the app, a database browser,
+# and a one-shot seed.
+#
+#   nix develop        # or direnv
+#   process-compose up
+#
+# Or `nix run .#dev` to skip entering the shell first.
+#
+# Connection details live in the `environment` block below and nowhere else —
+# change the port or user there and every process follows.
+#
+# Database state lives in .data/postgres (gitignored) and survives restarts;
+# `rm -rf .data` is the reset button. This replaces `nix run .#postgres` for
+# day-to-day work — that VM is still the way to exercise the NixOS module.
+#
+# Migrations run on every `up` (only the pending ones). To apply one without restarting,
+# run `horae-migrate` from the dev shell.
+#
+# To start only part of the stack, name the processes you want:
+#
+#   process-compose up postgres migrate   # just a database, for `cargo test`
+#                                         # or for running dx yourself
+version: "0.5"
+
+environment:
+  - "PGHOST=127.0.0.1"
+  - "PGPORT=5432"
+  - "PGUSER=horae"
+  - "PGDATABASE=horae"
+  - "DATABASE_URL=postgres://horae@127.0.0.1:5432/horae"
+  - "DEV_LOGIN=1"
+
+processes:
+  postgres:
+    command: |
+      set -euo pipefail
+      if [ ! -d .data/postgres ]; then
+        initdb --username="$PGUSER" --auth=trust --encoding=UTF8 --no-locale -D .data/postgres
+        echo "CREATE DATABASE $PGDATABASE OWNER $PGUSER;" |
+          postgres --single -D .data/postgres postgres
+      fi
+      # -k "" disables the Unix socket: everything here connects over TCP, and a
+      # deep checkout path would otherwise blow Postgres' 107-byte socket limit.
+      exec postgres -D .data/postgres -k "" -h "$PGHOST" -p "$PGPORT"
+    readiness_probe:
+      exec:
+        command: pg_isready -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -q
+      period_seconds: 1
+      failure_threshold: 30
+    shutdown:
+      signal: 2 # SIGINT is Postgres' fast shutdown
+
+  migrate:
+    # sqlx query macros are checked against the live database at compile time, so
+    # the schema has to exist before the app is *built*, not just before it runs.
+    # sqlx-cli applies migrations without compiling anything.
+    command: sqlx migrate run --source crates/horae/migrations
+    depends_on:
+      postgres:
+        condition: process_healthy
+    availability:
+      restart: "no"
+
+  app:
+    # dx has to run from the directory holding Dioxus.toml.
+    working_dir: crates/horae
+    command: dx serve --interactive false --port 8080
+    depends_on:
+      migrate:
+        condition: process_completed_successfully
+    readiness_probe:
+      http_get:
+        host: 127.0.0.1
+        # These are structured fields, so they cannot read the environment:
+        # keep them in step with --port above.
+        port: 8080
+        path: /health
+      initial_delay_seconds: 15
+      period_seconds: 5
+      failure_threshold: 120 # a cold WASM + server build takes minutes
+
+  pgweb:
+    # Browse and query the database at http://localhost:8081 while the stack runs.
+    command: pgweb --bind 127.0.0.1 --listen 8081 --url "$DATABASE_URL" --skip-open
+    depends_on:
+      postgres:
+        condition: process_healthy
+
+  seed:
+    # Waits on the app because dx will have finished building by then, and its
+    # server binary can seed too — `cargo run` would compile the whole thing a
+    # second time, since dx builds under its own profile and target triple.
+    # Falls back to cargo if dx ever moves its output. Skipped once the database
+    # has users, so warm restarts cost nothing.
+    command: |
+      set -euo pipefail
+      users=$(psql "$DATABASE_URL" -tAc "SELECT count(*) FROM users" 2>/dev/null || echo 0)
+      if [ "$users" != "0" ]; then
+        echo "seed: $users user(s) already present, nothing to do"
+      elif [ -x target/dx/horae/debug/web/server ]; then
+        target/dx/horae/debug/web/server seed
+      else
+        cargo run -p horae --features server -- seed
+      fi
+    depends_on:
+      app:
+        condition: process_healthy
+    availability:
+      restart: "no"

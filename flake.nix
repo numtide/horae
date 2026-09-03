@@ -159,6 +159,23 @@
               };
           in
           {
+            # Convenience wrapper: enter the dev shell and bring the stack up.
+            # With direnv already loaded, `process-compose up` does the same thing.
+            dev = {
+              type = "app";
+              program = lib.getExe (hostPkgs.writeShellApplication {
+                name = "horae-dev";
+                runtimeInputs = [ hostPkgs.nix ];
+                text = ''
+                  if [ ! -f process-compose.yaml ]; then
+                    echo "run this from the repository root" >&2
+                    exit 1
+                  fi
+                  exec nix develop --command process-compose up "$@"
+                '';
+              });
+            };
+
             postgres =
               let
                 container = lib.nixosSystem {
