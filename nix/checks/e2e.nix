@@ -39,5 +39,26 @@ pkgs.testers.nixosTest {
     )
     assert '"time_entries"' in result, f"Expected Harvest envelope, got: {result[:200]}"
     assert '"per_page"' in result, f"Missing pagination field in: {result[:200]}"
+
+    # Exports are plain Axum routes under /api/, a prefix the login guard lets
+    # through because everything else there is a server function that checks its
+    # own session. They have to reject anonymous callers themselves.
+    range = "from=2000-01-01&to=2100-01-01"
+    status = server.succeed(
+      "curl -s -o /dev/null -w '%{http_code}' "
+      f"'http://localhost:3000/api/reports/export/csv?{range}'"
+    ).strip()
+    assert status == "401", f"Export served without a session: {status}"
+
+    status = server.succeed(
+      "curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/api/projects/export/csv"
+    ).strip()
+    assert status == "401", f"Projects export served without a session: {status}"
+
+    # …and still serve the data to a signed-in caller.
+    csv = server.succeed(
+      f"curl -s -b /tmp/cookies.txt 'http://localhost:3000/api/reports/export/csv?{range}'"
+    )
+    assert "Date,Project,Task" in csv, f"Authenticated export broken: {csv[:200]}"
   '';
 }
