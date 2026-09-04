@@ -172,10 +172,14 @@ pub fn TimerWidget() -> Element {
     let handle_stop = move |_| {
         if let Some(eid) = entry_id_for_stop.clone() {
             spawn(async move {
-                match server_fns::stop_timer(eid).await {
-                    Ok(_) => timer.refresh(),
-                    Err(e) => error!("Stop timer error: {e}"),
+                if let Err(e) = server_fns::stop_timer(eid).await {
+                    // Usually the entry is no longer running — stopped in another
+                    // tab, or deleted. Re-read anyway: without it the rail keeps
+                    // ticking against a timer the server no longer has, and Stop
+                    // looks dead however often it is pressed.
+                    error!("Stop timer error: {e}");
                 }
+                timer.refresh();
             });
         }
     };
