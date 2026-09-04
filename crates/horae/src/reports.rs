@@ -7,6 +7,35 @@ use axum::extract::{Path, Query};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use serde::Deserialize;
+use tower_sessions::Session;
+
+/// `login_redirect_guard` lets `/api/` through, because everything else there is
+/// a server function that checks its own session. These handlers must too.
+async fn require_session(session: &Session) -> Result<uuid::Uuid, StatusCode> {
+    crate::auth::session::get_session_user_id(session)
+        .await
+        .ok_or(StatusCode::UNAUTHORIZED)
+}
+
+/// Every invoice server function gates on `require_manager`, so exporting one
+/// has to as well.
+async fn require_manager(session: &Session) -> Result<(), StatusCode> {
+    let user_id = require_session(session).await?;
+    let state = crate::state::global_state().await;
+    let role = sqlx::query_scalar!(
+        r#"SELECT org_role as "org_role: horae_core::types::OrgRole"
+           FROM users WHERE id = $1 AND active = true"#,
+        user_id,
+    )
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .ok_or(StatusCode::FORBIDDEN)?;
+
+    role.is_manager_or_above()
+        .then_some(())
+        .ok_or(StatusCode::FORBIDDEN)
+}
 
 /// Mirrors the Reports page filters, so a download matches what is on screen.
 /// Absent client/project/user means "all", as on the page.
@@ -49,8 +78,11 @@ async fn fetch_entries(
 }
 
 pub async fn export_csv(
+    session: Session,
     Query(params): Query<ExportParams>,
 ) -> Result<impl IntoResponse, StatusCode> {
+    require_session(&session).await?;
+
     let entries = fetch_entries(&params)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -102,8 +134,11 @@ pub async fn export_csv(
 }
 
 pub async fn export_xlsx(
+    session: Session,
     Query(params): Query<ExportParams>,
 ) -> Result<impl IntoResponse, StatusCode> {
+    require_session(&session).await?;
+
     let entries = fetch_entries(&params)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -234,8 +269,11 @@ const PROJECT_EXPORT_HEADERS: [&str; 7] = [
 ];
 
 pub async fn export_projects_csv(
+    session: Session,
     Query(params): Query<ProjectsExportParams>,
 ) -> Result<impl IntoResponse, StatusCode> {
+    require_session(&session).await?;
+
     let scope = params.scope.as_deref().unwrap_or("active");
     let rows = fetch_projects_export(scope)
         .await
@@ -273,8 +311,11 @@ pub async fn export_projects_csv(
 }
 
 pub async fn export_projects_xlsx(
+    session: Session,
     Query(params): Query<ProjectsExportParams>,
 ) -> Result<impl IntoResponse, StatusCode> {
+    require_session(&session).await?;
+
     let scope = params.scope.as_deref().unwrap_or("active");
     let rows = fetch_projects_export(scope)
         .await
@@ -363,8 +404,11 @@ async fn fetch_invoice_lines(
 }
 
 pub async fn export_invoice_csv(
+    session: Session,
     Path(invoice_id): Path<uuid::Uuid>,
 ) -> Result<impl IntoResponse, StatusCode> {
+    require_manager(&session).await?;
+
     let (invoice, lines) = fetch_invoice_lines(invoice_id).await?;
 
     let mut wtr = csv::Writer::from_writer(vec![]);
@@ -408,8 +452,11 @@ pub async fn export_invoice_csv(
 }
 
 pub async fn export_invoice_xlsx(
+    session: Session,
     Path(invoice_id): Path<uuid::Uuid>,
 ) -> Result<impl IntoResponse, StatusCode> {
+    require_manager(&session).await?;
+
     let (invoice, lines) = fetch_invoice_lines(invoice_id).await?;
 
     let mut workbook = rust_xlsxwriter::Workbook::new();
@@ -468,8 +515,11 @@ pub async fn export_invoice_xlsx(
 }
 
 pub async fn export_invoice_pdf(
+    session: Session,
     Path(invoice_id): Path<uuid::Uuid>,
 ) -> Result<impl IntoResponse, StatusCode> {
+    require_manager(&session).await?;
+
     let (invoice, lines) = fetch_invoice_lines(invoice_id).await?;
     let state = crate::state::global_state().await;
 
