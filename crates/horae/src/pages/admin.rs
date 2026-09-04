@@ -94,6 +94,10 @@ pub fn AdminUsers() -> Element {
                                             user_name.set(String::new());
                                             user_role.set("member".to_string());
                                             user_error.set(None);
+                                            // A row action that failed earlier
+                                            // left a banner above this form; it
+                                            // no longer describes anything.
+                                            row_error.set(None);
                                             show_user_form.set(false);
                                             users.restart();
                                         }

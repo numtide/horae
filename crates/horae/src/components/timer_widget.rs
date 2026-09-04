@@ -28,7 +28,9 @@ impl RunningTimer {
         *self.changes.write() += 1;
     }
 
-    /// A counter bumped only when a timer actually starts or stops.
+    /// A counter bumped on every attempt to start or stop a timer, including one
+    /// the server refused — a refusal usually means the entry changed under us,
+    /// so the lists that follow this need re-reading either way.
     ///
     /// Reading it subscribes the caller, so a resource that reads it re-runs on
     /// those events — which is how a page's entry list follows a timer started
