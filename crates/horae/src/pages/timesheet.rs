@@ -346,11 +346,8 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
     });
     let week_total: i32 = daily_totals.read().iter().sum();
 
-    // Submission state of the week's entries (Open = still editable).
-    let has_non_open = week_entries
-        .read()
-        .iter()
-        .any(|e| e.state != horae_core::types::EntryState::Open);
+    // A week can mix open and settled entries — invoicing bills one client and
+    // leaves another open — and `submit_week` transitions only the open ones.
     let has_open = week_entries
         .read()
         .iter()
@@ -869,7 +866,6 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                                 div { class: "ts-submit",
                                     button {
                                         class: "ts-submit-main",
-                                        disabled: has_non_open,
                                         onclick: move |_| {
                                             let ws_str = ws.to_string();
                                             let mut timer = running_timer;

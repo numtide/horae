@@ -12,6 +12,7 @@ pub fn AdminUsers() -> Element {
     let mut user_name = use_signal(String::new);
     let mut user_role = use_signal(|| "member".to_string());
     let mut user_error = use_signal(|| None::<String>);
+    let mut row_error = use_signal(|| None::<String>);
 
     let mut show_task_form = use_signal(|| false);
     let mut task_name = use_signal(String::new);
@@ -30,6 +31,12 @@ pub fn AdminUsers() -> Element {
                         if show_user_form() { "Cancel" } else { "Invite User" }
                     }
                 }
+            }
+
+            // Row actions sit outside the create form, where `user_error` is the
+            // only banner, so their refusals need one of their own.
+            if let Some(err) = row_error() {
+                div { class: "alert alert-danger", "{err}" }
             }
 
             if show_user_form() {
@@ -86,6 +93,7 @@ pub fn AdminUsers() -> Element {
                                             user_name.set(String::new());
                                             user_role.set("member".to_string());
                                             user_error.set(None);
+                                            row_error.set(None);
                                             show_user_form.set(false);
                                             users.restart();
                                         }
@@ -135,7 +143,11 @@ pub fn AdminUsers() -> Element {
                                                                     let uid = uid.clone();
                                                                     let new_role = e.value();
                                                                     spawn(async move {
-                                                                        let _ = server_fns::set_user_role(uid, new_role).await;
+                                                                        match server_fns::set_user_role(uid, new_role).await {
+                                                                            Ok(_) => row_error.set(None),
+                                                                            Err(e) => row_error.set(Some(e.to_string())),
+                                                                        }
+                                                                        // Refetch either way; a refusal reverts the control.
                                                                         users.restart();
                                                                     });
                                                                 }
@@ -161,7 +173,10 @@ pub fn AdminUsers() -> Element {
                                                                     let uid = uid.clone();
                                                                     let new_active = !is_active;
                                                                     spawn(async move {
-                                                                        let _ = server_fns::set_user_active(uid, new_active).await;
+                                                                        match server_fns::set_user_active(uid, new_active).await {
+                                                                            Ok(_) => row_error.set(None),
+                                                                            Err(e) => row_error.set(Some(e.to_string())),
+                                                                        }
                                                                         users.restart();
                                                                     });
                                                                 }
