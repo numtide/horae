@@ -33,9 +33,8 @@ pub fn AdminUsers() -> Element {
                 }
             }
 
-            // The row actions below sit outside the create form, so a refusal
-            // there — the org must keep one active admin — needs a banner of its
-            // own or it lands in `user_error`, which only renders inside the form.
+            // Row actions sit outside the create form, where `user_error` is the
+            // only banner, so their refusals need one of their own.
             if let Some(err) = row_error() {
                 div { class: "alert alert-danger", "{err}" }
             }
@@ -94,9 +93,6 @@ pub fn AdminUsers() -> Element {
                                             user_name.set(String::new());
                                             user_role.set("member".to_string());
                                             user_error.set(None);
-                                            // A row action that failed earlier
-                                            // left a banner above this form; it
-                                            // no longer describes anything.
                                             row_error.set(None);
                                             show_user_form.set(false);
                                             users.restart();
@@ -151,8 +147,7 @@ pub fn AdminUsers() -> Element {
                                                                             Ok(_) => row_error.set(None),
                                                                             Err(e) => row_error.set(Some(e.to_string())),
                                                                         }
-                                                                        // Refetch either way: on refusal this snaps the
-                                                                        // control back to the stored role.
+                                                                        // Refetch either way; a refusal reverts the control.
                                                                         users.restart();
                                                                     });
                                                                 }

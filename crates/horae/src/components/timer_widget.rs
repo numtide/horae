@@ -28,9 +28,8 @@ impl RunningTimer {
         *self.changes.write() += 1;
     }
 
-    /// A counter bumped on every attempt to start or stop a timer, including one
-    /// the server refused — a refusal usually means the entry changed under us,
-    /// so the lists that follow this need re-reading either way.
+    /// Bumped on every start or stop attempt, refusals included: a refusal
+    /// usually means the entry changed underneath.
     ///
     /// Reading it subscribes the caller, so a resource that reads it re-runs on
     /// those events — which is how a page's entry list follows a timer started
@@ -175,12 +174,11 @@ pub fn TimerWidget() -> Element {
         if let Some(eid) = entry_id_for_stop.clone() {
             spawn(async move {
                 if let Err(e) = server_fns::stop_timer(eid).await {
-                    // Usually the entry is no longer running — stopped in another
-                    // tab, or deleted. Re-read anyway: without it the rail keeps
-                    // ticking against a timer the server no longer has, and Stop
-                    // looks dead however often it is pressed.
                     error!("Stop timer error: {e}");
                 }
+                // Re-read even after a refusal: the entry is usually already
+                // gone, and skipping this leaves the rail ticking against a
+                // timer the server has dropped.
                 timer.refresh();
             });
         }
