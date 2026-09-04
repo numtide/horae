@@ -9,18 +9,39 @@ use axum::response::IntoResponse;
 use serde::Deserialize;
 use tower_sessions::Session;
 
-/// Reject anonymous callers.
+/// The signed-in user, or 401.
 ///
 /// These routes live under `/api/`, which `auth::login_redirect_guard` lets
 /// through because everything else there is a Dioxus server function, and those
-/// authenticate themselves. Being plain Axum handlers, these have to do the same
-/// or the whole organisation's hours download without a session. The on-screen
-/// reports require a session and no particular role (`report_time`,
-/// `report_detailed`), so exports match that and no more.
-async fn require_session(session: &Session) -> Result<(), StatusCode> {
-    match crate::auth::session::get_session_user_id(session).await {
-        Some(_) => Ok(()),
-        None => Err(StatusCode::UNAUTHORIZED),
+/// authenticate themselves. Being plain Axum handlers, these have to do the same,
+/// or the whole organisation's hours downloads without a session.
+async fn require_session(session: &Session) -> Result<uuid::Uuid, StatusCode> {
+    crate::auth::session::get_session_user_id(session)
+        .await
+        .ok_or(StatusCode::UNAUTHORIZED)
+}
+
+/// Same, but the caller must also be a manager or admin.
+///
+/// Every invoice server function gates on `require_manager`, so exporting an
+/// invoice has to as well — otherwise a download link hands an ordinary employee
+/// the line items, rates and totals the app keeps behind that role.
+async fn require_manager(session: &Session) -> Result<(), StatusCode> {
+    let user_id = require_session(session).await?;
+    let state = crate::state::global_state().await;
+    let role = sqlx::query_scalar!(
+        r#"SELECT org_role as "org_role: horae_core::types::OrgRole"
+           FROM users WHERE id = $1 AND active = true"#,
+        user_id,
+    )
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .ok_or(StatusCode::FORBIDDEN)?;
+
+    match role {
+        horae_core::types::OrgRole::Manager | horae_core::types::OrgRole::Admin => Ok(()),
+        _ => Err(StatusCode::FORBIDDEN),
     }
 }
 
@@ -394,7 +415,7 @@ pub async fn export_invoice_csv(
     session: Session,
     Path(invoice_id): Path<uuid::Uuid>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    require_session(&session).await?;
+    require_manager(&session).await?;
 
     let (invoice, lines) = fetch_invoice_lines(invoice_id).await?;
 
@@ -442,7 +463,7 @@ pub async fn export_invoice_xlsx(
     session: Session,
     Path(invoice_id): Path<uuid::Uuid>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    require_session(&session).await?;
+    require_manager(&session).await?;
 
     let (invoice, lines) = fetch_invoice_lines(invoice_id).await?;
 
@@ -505,7 +526,7 @@ pub async fn export_invoice_pdf(
     session: Session,
     Path(invoice_id): Path<uuid::Uuid>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    require_session(&session).await?;
+    require_manager(&session).await?;
 
     let (invoice, lines) = fetch_invoice_lines(invoice_id).await?;
     let state = crate::state::global_state().await;
