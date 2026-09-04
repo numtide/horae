@@ -9,23 +9,16 @@ use axum::response::IntoResponse;
 use serde::Deserialize;
 use tower_sessions::Session;
 
-/// The signed-in user, or 401.
-///
-/// These routes live under `/api/`, which `auth::login_redirect_guard` lets
-/// through because everything else there is a Dioxus server function, and those
-/// authenticate themselves. Being plain Axum handlers, these have to do the same,
-/// or the whole organisation's hours downloads without a session.
+/// `login_redirect_guard` lets `/api/` through, because everything else there is
+/// a server function that checks its own session. These handlers must too.
 async fn require_session(session: &Session) -> Result<uuid::Uuid, StatusCode> {
     crate::auth::session::get_session_user_id(session)
         .await
         .ok_or(StatusCode::UNAUTHORIZED)
 }
 
-/// Same, but the caller must also be a manager or admin.
-///
-/// Every invoice server function gates on `require_manager`, so exporting an
-/// invoice has to as well — otherwise a download link hands an ordinary employee
-/// the line items, rates and totals the app keeps behind that role.
+/// Every invoice server function gates on `require_manager`, so exporting one
+/// has to as well.
 async fn require_manager(session: &Session) -> Result<(), StatusCode> {
     let user_id = require_session(session).await?;
     let state = crate::state::global_state().await;
@@ -39,10 +32,9 @@ async fn require_manager(session: &Session) -> Result<(), StatusCode> {
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     .ok_or(StatusCode::FORBIDDEN)?;
 
-    match role {
-        horae_core::types::OrgRole::Manager | horae_core::types::OrgRole::Admin => Ok(()),
-        _ => Err(StatusCode::FORBIDDEN),
-    }
+    role.is_manager_or_above()
+        .then_some(())
+        .ok_or(StatusCode::FORBIDDEN)
 }
 
 /// Mirrors the Reports page filters, so a download matches what is on screen.

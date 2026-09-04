@@ -24,6 +24,6 @@ impl User {
     }
 
     pub fn is_manager_or_above(&self) -> bool {
-        matches!(self.org_role, OrgRole::Admin | OrgRole::Manager)
+        self.org_role.is_manager_or_above()
     }
 }

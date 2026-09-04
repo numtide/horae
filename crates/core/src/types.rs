@@ -8,6 +8,13 @@ pub enum OrgRole {
     Member,
 }
 
+impl OrgRole {
+    /// Whether this role may see org-wide billing and approvals.
+    pub fn is_manager_or_above(self) -> bool {
+        matches!(self, Self::Admin | Self::Manager)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ProjectRole {
