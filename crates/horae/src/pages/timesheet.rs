@@ -9,6 +9,7 @@ use uuid::Uuid;
 use crate::components::controls::Segmented;
 use crate::components::date_picker::DatePicker;
 use crate::components::menu::{Menu, MenuItem};
+use crate::components::timer_widget::use_running_timer;
 use crate::models::time_entry::TimeEntry;
 use crate::route::Route;
 use crate::server_fns;
@@ -253,8 +254,17 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
         go.call((ViewMode::Day, week_start() + Duration::days(i), span));
     });
 
+    // The rail owns the running-timer display, and it is shared: starting a timer
+    // here refreshes the rail, and a timer started from the rail invalidates the
+    // entries below.
+    let running_timer = use_running_timer();
+
     let entries = use_resource(move || {
         let ws = *week_start.read();
+        // Starting or stopping a timer adds or closes an entry in this week, so
+        // subscribe to the shared timer: the rail can start one without knowing
+        // this page exists.
+        let _changes = running_timer.changes();
         async move {
             let we = ws + chrono::Duration::days(6);
             server_fns::list_time_entries(
@@ -262,7 +272,9 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                 None,
                 Some(ws.to_string()),
                 Some(we.to_string()),
-                Some(200),
+                // The whole window: every view here sums these rows, so a
+                // truncated fetch would quietly under-report the week's hours.
+                None,
             )
             .await
         }
@@ -346,6 +358,7 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
     let all_submitted_or_approved = !week_entries.read().is_empty() && !has_open;
 
     let submit_status = use_signal(|| None::<String>);
+    let mut grid_error = use_signal(|| None::<String>);
 
     // Add–entry modal state. `add_open` holds the date the new entry is for
     // (None = closed); the rest back the form fields.
@@ -426,10 +439,10 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
         // Run a mutation and refresh the week's entries when it succeeds. Shared
         // by every drag that writes (move, resize, reorder).
         let commit = move |fut: std::pin::Pin<Box<dyn std::future::Future<Output = bool>>>| {
-            let mut entries = entries;
+            let mut timer = running_timer;
             spawn(async move {
                 if fut.await {
-                    entries.restart();
+                    timer.refresh();
                 }
             });
         };
@@ -547,7 +560,7 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
     // Start a timer for an existing entry's project/task (the Day-view "Start"
     // action, Harvest-style resume).
     let start_entry = use_callback(move |e: TimeEntry| {
-        let mut entries = entries;
+        let mut timer = running_timer;
         spawn(async move {
             match server_fns::start_timer(
                 e.project_id.to_string(),
@@ -556,7 +569,9 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
             )
             .await
             {
-                Ok(_) => entries.restart(),
+                Ok(_) => {
+                    timer.refresh();
+                }
                 Err(err) => error!("Start timer error: {err}"),
             }
         });
@@ -582,7 +597,7 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                     .map(|e| (e.notes.clone(), e.billable))
             })
             .unwrap_or((None, true));
-        let mut entries = entries;
+        let mut timer = running_timer;
         spawn(async move {
             let res = persist_entry(
                 edit.existing,
@@ -595,8 +610,17 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                 None, // Week-grid cells are untimed (no time of day)
             )
             .await;
-            if res.is_ok() {
-                entries.restart();
+            match res {
+                Ok(()) => {
+                    grid_error.set(None);
+                    timer.refresh();
+                }
+                // Refresh on failure too: the cell still shows what was typed,
+                // and only a re-read puts the saved value back on screen.
+                Err(e) => {
+                    grid_error.set(Some(format!("Could not save: {e}")));
+                    timer.refresh();
+                }
             }
         });
     });
@@ -613,12 +637,12 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
         if ids.is_empty() {
             return;
         }
-        let mut entries = entries;
+        let mut timer = running_timer;
         spawn(async move {
             for id in ids {
                 let _ = server_fns::delete_time_entry(id.to_string()).await;
             }
-            entries.restart();
+            timer.refresh();
         });
     });
 
@@ -820,6 +844,13 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                 }
             }
 
+            // A cell edit that the server refused: shown here because the grid
+            // has no per-cell place to put it, and staying silent would leave
+            // the typed value on screen looking saved.
+            if let Some(msg) = grid_error() {
+                div { class: "alert alert-danger", "{msg}" }
+            }
+
             // Content
             match &*entries.read() {
                 None => rsx! {
@@ -841,13 +872,13 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                                         disabled: has_non_open,
                                         onclick: move |_| {
                                             let ws_str = ws.to_string();
-                                            let mut entries = entries;
+                                            let mut timer = running_timer;
                                             let mut submit_status = submit_status;
                                             spawn(async move {
                                                 match server_fns::submit_week(ws_str).await {
                                                     Ok(_) => {
                                                         submit_status.set(None);
-                                                        entries.restart();
+                                                        timer.refresh();
                                                     }
                                                     Err(e) => submit_status.set(Some(format!("{e}"))),
                                                 }
@@ -953,7 +984,7 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                                         let Some((project_id, task_id, notes)) = read_pt_notes.call(()) else {
                                             return;
                                         };
-                                        let mut entries = entries;
+                                        let mut running_timer = running_timer;
                                         if timer_mode() {
                                             add_saving.set(true);
                                             add_error.set(None);
@@ -961,7 +992,7 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                                                 match server_fns::start_timer(project_id, task_id, notes).await {
                                                     Ok(_) => {
                                                         add_open.set(None);
-                                                        entries.restart();
+                                                        running_timer.refresh();
                                                     }
                                                     Err(e) => add_error
                                                         .set(Some(format!("Could not start timer: {e}"))),
@@ -998,6 +1029,7 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                                         } else {
                                             true
                                         };
+                                        let mut modal_timer = running_timer;
                                         add_saving.set(true);
                                         add_error.set(None);
                                         spawn(async move {
@@ -1009,7 +1041,7 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                                             match result {
                                                 Ok(()) => {
                                                     add_open.set(None);
-                                                    entries.restart();
+                                                    modal_timer.refresh();
                                                 }
                                                 Err(e) => add_error.set(Some(format!("Could not save: {e}"))),
                                             }
@@ -1032,14 +1064,14 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                                             let Some(id) = *editing.read() else {
                                                 return;
                                             };
-                                            let mut entries = entries;
+                                            let mut modal_timer = running_timer;
                                             add_saving.set(true);
                                             add_error.set(None);
                                             spawn(async move {
                                                 match server_fns::delete_time_entry(id.to_string()).await {
                                                     Ok(()) => {
                                                         add_open.set(None);
-                                                        entries.restart();
+                                                        modal_timer.refresh();
                                                     }
                                                     Err(e) => {
                                                         add_error.set(Some(format!("Could not delete: {e}")))
@@ -1195,9 +1227,12 @@ fn timed_lanes(day: &[TimeEntry]) -> (Vec<i32>, Vec<i32>) {
     // stay the same width and none is hidden.
     let mut k = 0;
     while k < timed.len() {
-        let mut j = k;
         let mut cluster_end = timed[k].2;
-        let mut max_lane = 0i32;
+        let mut max_lane = lane_of[timed[k].0];
+        // Start the scan past k. A zero-length entry — a timer stopped inside
+        // the same minute it started — does not start before its own end, so
+        // scanning from k would leave j at k and spin here forever.
+        let mut j = k + 1;
         while j < timed.len() && timed[j].1 < cluster_end {
             cluster_end = cluster_end.max(timed[j].2);
             max_lane = max_lane.max(lane_of[timed[j].0]);
@@ -2114,5 +2149,47 @@ mod tests {
     #[test]
     fn cal_span_week_shows_all_seven_days() {
         assert_eq!(CalSpan::Week.visible_days(3), vec![0, 1, 2, 3, 4, 5, 6]);
+    }
+
+    fn timed_entry(start_minute: i32, minutes: i32) -> TimeEntry {
+        TimeEntry {
+            id: Uuid::nil(),
+            org_id: Uuid::nil(),
+            user_id: Uuid::nil(),
+            project_id: Uuid::nil(),
+            task_id: Uuid::nil(),
+            spent_date: ymd(2026, 9, 3),
+            minutes,
+            rounded_minutes: None,
+            notes: None,
+            billable: true,
+            is_running: false,
+            started_at: None,
+            start_minute: Some(start_minute),
+            sort_order: 0,
+            state: horae_core::types::EntryState::Open,
+            invoice_id: None,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        }
+    }
+
+    /// Stopping a timer inside the minute it started leaves an entry of zero
+    /// length, which does not begin before its own end. The cluster scan used to
+    /// make no progress on one and spin forever, freezing the Calendar view.
+    #[test]
+    fn timed_lanes_terminates_on_a_zero_length_entry() {
+        let day = vec![timed_entry(540, 0), timed_entry(600, 30)];
+        let (lane_of, lanes_of) = timed_lanes(&day);
+        assert_eq!(lane_of.len(), 2);
+        assert_eq!(lanes_of, vec![1, 1]);
+    }
+
+    #[test]
+    fn timed_lanes_still_widens_overlapping_entries() {
+        let day = vec![timed_entry(540, 60), timed_entry(570, 60)];
+        let (lane_of, lanes_of) = timed_lanes(&day);
+        assert_eq!(lane_of, vec![0, 1]);
+        assert_eq!(lanes_of, vec![2, 2]);
     }
 }

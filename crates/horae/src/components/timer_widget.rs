@@ -6,6 +6,53 @@ use uuid::Uuid;
 
 use crate::server_fns;
 
+/// The running timer, owned by the app shell so everything that can change it
+/// reads the same state: the rail renders from it, and a page that starts a
+/// timer refreshes it without knowing the rail exists.
+#[derive(Clone, Copy)]
+pub struct RunningTimer {
+    entry: Resource<Result<Option<crate::models::TimeEntry>, ServerFnError>>,
+    changes: Signal<u64>,
+}
+
+impl RunningTimer {
+    /// Invalidate after any change to time entries.
+    ///
+    /// This is the single call sites make: it re-reads the timer and, through
+    /// [`Self::changes`], the entry lists that follow it. Pages must not restart
+    /// their own entry resource instead — a mutation can delete or alter the
+    /// running entry, and refreshing only the page leaves the rail counting
+    /// against a row that is gone.
+    pub fn refresh(&mut self) {
+        self.entry.restart();
+        *self.changes.write() += 1;
+    }
+
+    /// A counter bumped only when a timer actually starts or stops.
+    ///
+    /// Reading it subscribes the caller, so a resource that reads it re-runs on
+    /// those events — which is how a page's entry list follows a timer started
+    /// from the rail, which knows nothing about the page. Pages track this
+    /// rather than the timer resource itself, whose pending-to-resolved step on
+    /// mount would cost them a second fetch of data that has not changed.
+    pub fn changes(&self) -> u64 {
+        *self.changes.read()
+    }
+}
+
+/// Call once, above every component that reads or changes the timer.
+pub fn use_running_timer_provider() {
+    let entry = use_resource(|| async move { server_fns::get_current_timer().await });
+    let changes = use_signal(|| 0u64);
+    use_context_provider(|| RunningTimer { entry, changes });
+}
+
+/// The shared timer. Panics if no provider is above the caller, which would
+/// be a wiring mistake rather than a runtime condition.
+pub fn use_running_timer() -> RunningTimer {
+    use_context::<RunningTimer>()
+}
+
 /// The sidebar timer. Idle shows a "Start timer" button; picking a project/task
 /// starts a running timer; while running it shows the live elapsed time, the
 /// project, and a Stop button. It lives in the sidebar so it's reachable from
@@ -27,7 +74,8 @@ pub fn TimerWidget() -> Element {
         });
     });
 
-    let mut timer_resource = use_resource(|| async move { server_fns::get_current_timer().await });
+    let mut timer = use_running_timer();
+    let timer_resource = timer.entry;
     let projects = use_resource(|| async move { server_fns::list_projects(None, false).await });
 
     let mut picking = use_signal(|| false);
@@ -35,14 +83,19 @@ pub fn TimerWidget() -> Element {
     let mut selected_task = use_signal(String::new);
     let mut notes = use_signal(String::new);
 
-    // Tasks narrow to the picked project, falling back to all tasks.
+    // The full list, used to name the running entry's task. The picker below
+    // reads it too while no project is chosen, so this is fetched once rather
+    // than once per purpose.
+    let all_tasks = use_resource(|| async move { server_fns::list_tasks().await });
+
+    // Tasks narrow to the picked project.
     let tasks = use_resource(move || {
         let proj = selected_project.read().clone();
         async move {
             if proj.is_empty() {
-                server_fns::list_tasks().await
+                None
             } else {
-                server_fns::list_project_tasks(proj).await
+                Some(server_fns::list_project_tasks(proj).await)
             }
         }
     });
@@ -52,6 +105,13 @@ pub fn TimerWidget() -> Element {
         .as_ref()
         .and_then(|r| r.as_ref().ok())
         .map(|ps| ps.iter().map(|p| (p.id, p.name.clone())).collect())
+        .unwrap_or_default();
+
+    let task_names: HashMap<Uuid, String> = all_tasks
+        .read()
+        .as_ref()
+        .and_then(|r| r.as_ref().ok())
+        .map(|ts| ts.iter().map(|t| (t.id, t.name.clone())).collect())
         .unwrap_or_default();
 
     let current_timer = timer_resource
@@ -75,10 +135,16 @@ pub fn TimerWidget() -> Element {
         None => (0, 0, 0),
     };
 
-    let running_project_name = current_timer
-        .as_ref()
-        .and_then(|e| project_names.get(&e.project_id))
-        .cloned();
+    // The kit labels the running pill "Project · Task"; fall back to whichever
+    // half resolves.
+    let running_label = current_timer.as_ref().map(|e| {
+        match (project_names.get(&e.project_id), task_names.get(&e.task_id)) {
+            (Some(project), Some(task)) => format!("{project} · {task}"),
+            (Some(project), None) => project.clone(),
+            (None, Some(task)) => task.clone(),
+            (None, None) => "Running".to_string(),
+        }
+    });
 
     let handle_start = move |_| {
         let proj = selected_project.read().clone();
@@ -95,7 +161,7 @@ pub fn TimerWidget() -> Element {
                     notes.set(String::new());
                     selected_project.set(String::new());
                     selected_task.set(String::new());
-                    timer_resource.restart();
+                    timer.refresh();
                 }
                 Err(e) => error!("Start timer error: {e}"),
             }
@@ -107,22 +173,44 @@ pub fn TimerWidget() -> Element {
         if let Some(eid) = entry_id_for_stop.clone() {
             spawn(async move {
                 match server_fns::stop_timer(eid).await {
-                    Ok(_) => timer_resource.restart(),
+                    Ok(_) => timer.refresh(),
                     Err(e) => error!("Stop timer error: {e}"),
                 }
             });
         }
     };
 
+    // Hold the guards out here so the task dropdown can borrow the list: inside
+    // rsx! the reads are temporaries, which forced a clone of the whole Vec.
+    let narrowed_tasks = tasks.read();
+    let every_task = all_tasks.read();
+    let task_options = match narrowed_tasks.as_ref() {
+        Some(Some(Ok(narrowed))) => Some(narrowed),
+        // No project chosen yet, so offer the full list already loaded above.
+        Some(None) => every_task.as_ref().and_then(|r| r.as_ref().ok()),
+        _ => None,
+    };
+
     rsx! {
         div { class: "sidebar-timer-wrap",
             if is_running {
                 div { class: "sidebar-timer-live",
-                    div { class: "sidebar-timer-time", "{hours:02}:{minutes:02}:{seconds:02}" }
-                    div { class: "sidebar-timer-proj",
-                        {running_project_name.unwrap_or_else(|| "Running".into())}
+                    span { class: "sidebar-timer-dot", "aria-hidden": "true" }
+                    div { class: "sidebar-timer-info",
+                        div { class: "sidebar-timer-time", "{hours}:{minutes:02}:{seconds:02}" }
+                        // The collapsed rail's 44px chip has no room for seconds.
+                        div { class: "sidebar-timer-time-short", "{hours}:{minutes:02}" }
+                        div { class: "sidebar-timer-proj",
+                            {running_label.unwrap_or_else(|| "Running".into())}
+                        }
                     }
-                    button { class: "sidebar-timer-stop", onclick: handle_stop, "Stop" }
+                    button {
+                        class: "sidebar-timer-stop",
+                        "aria-label": "Stop timer",
+                        title: "Stop timer",
+                        onclick: handle_stop,
+                        span { class: "sidebar-timer-stop-square", "aria-hidden": "true" }
+                    }
                 }
             } else {
                 button {
@@ -164,7 +252,7 @@ pub fn TimerWidget() -> Element {
                                 value: "{selected_task}",
                                 oninput: move |e| selected_task.set(e.value()),
                                 option { value: "", "Select task…" }
-                                {tasks.read().as_ref().and_then(|r| r.as_ref().ok()).map(|ts| rsx! {
+                                {task_options.map(|ts| rsx! {
                                     for t in ts.iter() {
                                         option { value: "{t.id}", "{t.name}" }
                                     }

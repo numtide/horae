@@ -28,6 +28,19 @@ fn normalize_start(
 
 // ── Time Entries ─────────────────────────────────────────────────────────────
 
+/// Whether this listing is bounded: either it caps the rows, or it closes the
+/// date range on both ends. An unlimited, open-ended listing would walk the
+/// user's whole history.
+#[cfg(feature = "server")]
+fn listing_is_bounded(limit: Option<i64>, date_from: Option<&str>, date_to: Option<&str>) -> bool {
+    limit.is_some() || (date_from.is_some() && date_to.is_some())
+}
+
+/// The session user's entries, newest first.
+///
+/// `limit` of `None` returns every match, which callers that aggregate — the
+/// timesheet sums its own rows — need for their totals to be right. It is only
+/// accepted alongside a closed date range; see [`listing_is_bounded`].
 #[server]
 pub async fn list_time_entries(
     _user_id: Option<String>,
@@ -36,9 +49,14 @@ pub async fn list_time_entries(
     date_to: Option<String>,
     limit: Option<i64>,
 ) -> Result<Vec<TimeEntry>, ServerFnError> {
+    if !listing_is_bounded(limit, date_from.as_deref(), date_to.as_deref()) {
+        return Err(server_err(
+            "an unlimited listing needs both date_from and date_to",
+        ));
+    }
+
     let session_uid = session_user_id().await?;
     let state = crate::state::global_state().await;
-    let limit = limit.unwrap_or(50);
 
     let project_filter: Option<uuid::Uuid> = match project_id {
         Some(ref s) => Some(s.parse().map_err(|_| server_err("Invalid project_id"))?),
@@ -74,7 +92,7 @@ pub async fn list_time_entries(
            AND ($3::date IS NULL OR spent_date >= $3)
            AND ($4::date IS NULL OR spent_date <= $4)
          ORDER BY spent_date DESC, created_at DESC
-         LIMIT $5"#,
+         LIMIT $5::bigint"#,
         session_uid,
         project_filter,
         date_filter as Option<chrono::NaiveDate>,
@@ -540,7 +558,7 @@ pub async fn reorder_untimed_entries(
 
 #[cfg(all(test, feature = "server"))]
 mod tests {
-    use super::normalize_start;
+    use super::{listing_is_bounded, normalize_start};
 
     #[test]
     fn snaps_unaligned_start_to_the_grid() {
@@ -571,5 +589,22 @@ mod tests {
     fn rejects_out_of_range_start() {
         assert!(normalize_start(60, Some(-1)).is_err());
         assert!(normalize_start(60, Some(1440)).is_err());
+    }
+
+    #[test]
+    fn a_limit_bounds_a_listing_on_its_own() {
+        assert!(listing_is_bounded(Some(50), None, None));
+    }
+
+    #[test]
+    fn an_unlimited_listing_needs_both_ends_of_the_range() {
+        assert!(listing_is_bounded(
+            None,
+            Some("2026-08-31"),
+            Some("2026-09-06")
+        ));
+        assert!(!listing_is_bounded(None, Some("2026-08-31"), None));
+        assert!(!listing_is_bounded(None, None, Some("2026-09-06")));
+        assert!(!listing_is_bounded(None, None, None));
     }
 }
