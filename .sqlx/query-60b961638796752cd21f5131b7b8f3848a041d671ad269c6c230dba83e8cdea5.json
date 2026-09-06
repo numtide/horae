@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT te.id as \"id!: Uuid\"\n           FROM time_entries te\n           JOIN projects p ON p.id = te.project_id\n           WHERE te.org_id = $1\n             AND p.client_id = $2\n             AND te.billable = true\n             AND te.invoice_id IS NULL\n             AND te.state IN ('open', 'approved')\n             AND te.spent_date >= $3\n             AND te.spent_date <= $4\n           ORDER BY te.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!: Uuid",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Date",
+        "Date"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "60b961638796752cd21f5131b7b8f3848a041d671ad269c6c230dba83e8cdea5"
+}

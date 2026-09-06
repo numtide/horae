@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE time_entries SET invoice_id = $1, state = 'invoiced' WHERE id = ANY($2) AND invoice_id IS NULL AND state IN ('open', 'approved')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "de83a804c78a3bcd7a68dd57e2a6801ace65db09baad7ee68e2ba622a74d666c"
+}
