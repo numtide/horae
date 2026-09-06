@@ -2,19 +2,19 @@ use dioxus::prelude::*;
 use std::collections::HashMap;
 use uuid::Uuid;
 
+use super::{is_admin, is_manager, loaded, run_action};
 use crate::components::combobox::{ComboOption, Combobox};
+use crate::components::form::{FormCard, FormGroup, Input, Select};
 use crate::components::menu::{Menu, MenuDivider, MenuItem};
+use crate::components::table::DataTable;
 use crate::models::{Client, Project};
 use crate::route::Route;
 use crate::server_fns;
-use horae_core::money::format_cents;
+use horae_core::money::{format_cents, format_cents_plain};
 use horae_core::types::{BudgetKind, ProjectType};
 
 fn hours(minutes: i64) -> String {
-    format!(
-        "{}h",
-        horae_core::duration::format_decimal(minutes.max(0) as u32)
-    )
+    format!("{}h", horae_core::duration::format_decimal(minutes))
 }
 
 /// Budget / Spent / Budget-remaining for one row, expressed in the project's own
@@ -87,7 +87,7 @@ fn row_spend(p: &Project, spent_minutes: i64, spent_cents: i64) -> RowSpend {
 pub fn ProjectList() -> Element {
     // Management view: `include_inactive = true` also lists deactivated projects
     // so managers can reactivate them; new-entry pickers pass `false`.
-    let mut projects = use_resource(|| async move { server_fns::list_projects(None, true).await });
+    let projects = use_resource(|| async move { server_fns::list_projects(None, true).await });
     // All clients (including inactive) so a project under a deactivated client
     // still resolves to its real name; the create form filters to active ones.
     let clients_res = use_resource(|| async move { server_fns::list_clients(true).await });
@@ -117,10 +117,7 @@ pub fn ProjectList() -> Element {
     let mut export_scope = use_signal(|| "active".to_string());
     let mut export_fmt = use_signal(|| "csv".to_string());
 
-    let is_manager = match &*me.read() {
-        Some(Ok(user)) => user.is_manager_or_above(),
-        _ => false,
-    };
+    let is_manager = is_manager(&me);
 
     let client_names: HashMap<Uuid, String> = match &*clients_res.read() {
         Some(Ok(cs)) => cs.iter().map(|c| (c.id, c.name.clone())).collect(),
@@ -179,6 +176,56 @@ pub fn ProjectList() -> Element {
         budget_value.set(String::new());
         error.set(None);
         show_form.set(false);
+    };
+
+    let form_title = if editing_id().is_some() {
+        "Edit Project"
+    } else {
+        "New Project"
+    };
+    // The create form only offers active clients; the placeholder keeps the
+    // picker unset until one is chosen.
+    let form_client_opts: Vec<(String, String)> =
+        std::iter::once((String::new(), "Select a client...".to_string()))
+            .chain(
+                clients_res
+                    .read()
+                    .as_ref()
+                    .and_then(|r| r.as_ref().ok())
+                    .into_iter()
+                    .flatten()
+                    .filter(|c| c.active)
+                    .map(|c| (c.id.to_string(), c.name.clone())),
+            )
+            .collect();
+    // Value is the enum's snake_case `Display`; label via ProjectType::label,
+    // so the pill and this picker share one source of truth.
+    let type_opts: Vec<(String, String)> = [
+        ProjectType::TimeAndMaterials,
+        ProjectType::FixedFee,
+        ProjectType::NonBillable,
+        ProjectType::Retainer,
+    ]
+    .iter()
+    .map(|t| (t.to_string(), t.label().to_string()))
+    .collect();
+    let budget_is_hours = budget_kind() == "hours";
+    let budget_label = if budget_is_hours {
+        "Budget hours"
+    } else {
+        "Budget amount"
+    };
+    let budget_placeholder = if budget_is_hours {
+        "120 or 7:30"
+    } else {
+        "12000 or 12,000.50"
+    };
+    // The figure only means something once a kind is chosen, and what it means
+    // differs, so the field follows the kind.
+    let budget_hint = if budget_is_hours {
+        "Total hours for this project. Leave blank to set it later."
+    } else {
+        "Total fees in the project's currency. Leave blank to set it later."
     };
 
     rsx! {
@@ -246,143 +293,94 @@ pub fn ProjectList() -> Element {
             }
 
             if show_form() && is_manager {
-                div { class: "card",
-                    div { class: "p-5",
-                        h3 { class: "text-sm mb-4 uppercase tracking-wide text-faint",
-                            if editing_id().is_some() { "Edit Project" } else { "New Project" }
-                        }
-                        if let Some(err) = &*error.read() {
-                            div { class: "alert alert-danger", "{err}" }
-                        }
-                        // The client is fixed at creation; only shown when creating.
-                        if editing_id().is_none() {
-                            div { class: "form-group",
-                                label { class: "form-label", r#for: "proj-client", "Client" }
-                                select {
-                                    class: "form-input",
-                                    id: "proj-client",
-                                    value: "{client_id}",
-                                    oninput: move |e| client_id.set(e.value()),
-                                    option { value: "", "Select a client..." }
-                                    if let Some(Ok(clients)) = &*clients_res.read() {
-                                        for c in clients.iter().filter(|c| c.active) {
-                                            option { value: "{c.id}", "{c.name}" }
-                                        }
-                                    }
-                                }
+                FormCard { title: "{form_title}", error,
+                    // The client is fixed at creation; only shown when creating.
+                    if editing_id().is_none() {
+                        FormGroup { label: "Client", id: "proj-client",
+                            Select {
+                                id: "proj-client",
+                                options: form_client_opts,
+                                selected: client_id(),
+                                onchange: move |e: FormEvent| client_id.set(e.value()),
                             }
                         }
-                        div { class: "form-group",
-                            label { class: "form-label", r#for: "proj-name", "Name" }
-                            input {
-                                class: "form-input",
-                                id: "proj-name",
-                                r#type: "text",
-                                placeholder: "Project name",
-                                value: "{name}",
-                                oninput: move |e| name.set(e.value()),
+                    }
+                    FormGroup { label: "Name", id: "proj-name",
+                        Input {
+                            id: "proj-name",
+                            placeholder: "Project name",
+                            value: "{name}",
+                            oninput: move |e: FormEvent| name.set(e.value()),
+                        }
+                    }
+                    FormGroup { label: "Type", id: "proj-type",
+                        Select {
+                            id: "proj-type",
+                            options: type_opts,
+                            selected: project_type(),
+                            onchange: move |e: FormEvent| project_type.set(e.value()),
+                        }
+                    }
+                    FormGroup { label: "Currency", id: "proj-currency",
+                        Input {
+                            id: "proj-currency",
+                            placeholder: "USD",
+                            value: "{currency}",
+                            oninput: move |e: FormEvent| currency.set(e.value()),
+                        }
+                    }
+                    FormGroup { label: "Budget", id: "proj-budget",
+                        Select {
+                            id: "proj-budget",
+                            options: vec![
+                                ("none".to_string(), "None".to_string()),
+                                ("amount".to_string(), "Amount".to_string()),
+                                ("hours".to_string(), "Hours".to_string()),
+                            ],
+                            selected: budget_kind(),
+                            onchange: move |e: FormEvent| budget_kind.set(e.value()),
+                        }
+                    }
+                    if budget_kind() != "none" {
+                        FormGroup { label: "{budget_label}", id: "proj-budget-value", hint: "{budget_hint}",
+                            Input {
+                                id: "proj-budget-value",
+                                placeholder: "{budget_placeholder}",
+                                value: "{budget_value}",
+                                oninput: move |e: FormEvent| budget_value.set(e.value()),
                             }
                         }
-                        div { class: "form-group",
-                            label { class: "form-label", r#for: "proj-type", "Type" }
-                            select {
-                                class: "form-input",
-                                id: "proj-type",
-                                value: "{project_type}",
-                                oninput: move |e| project_type.set(e.value()),
-                                // Value is the enum's snake_case `Display`; label via ProjectType::label,
-                                // so the pill and this picker share one source of truth.
-                                for t in [
-                                    ProjectType::TimeAndMaterials,
-                                    ProjectType::FixedFee,
-                                    ProjectType::NonBillable,
-                                    ProjectType::Retainer,
-                                ] {
-                                    option { value: "{t}", "{t.label()}" }
-                                }
-                            }
-                        }
-                        div { class: "form-group",
-                            label { class: "form-label", r#for: "proj-currency", "Currency" }
-                            input {
-                                class: "form-input",
-                                id: "proj-currency",
-                                r#type: "text",
-                                placeholder: "USD",
-                                value: "{currency}",
-                                oninput: move |e| currency.set(e.value()),
-                            }
-                        }
-                        div { class: "form-group",
-                            label { class: "form-label", r#for: "proj-budget", "Budget" }
-                            select {
-                                class: "form-input",
-                                id: "proj-budget",
-                                value: "{budget_kind}",
-                                oninput: move |e| budget_kind.set(e.value()),
-                                option { value: "none", "None" }
-                                option { value: "amount", "Amount" }
-                                option { value: "hours", "Hours" }
-                            }
-                        }
-                        // The figure only means something once a kind is chosen,
-                        // and what it means differs, so the field follows the kind.
-                        if budget_kind() != "none" {
-                            div { class: "form-group",
-                                label { class: "form-label", r#for: "proj-budget-value",
-                                    if budget_kind() == "hours" { "Budget hours" } else { "Budget amount" }
-                                }
-                                input {
-                                    class: "form-input",
-                                    id: "proj-budget-value",
-                                    r#type: "text",
-                                    placeholder: if budget_kind() == "hours" { "120 or 7:30" } else { "12000 or 12,000.50" },
-                                    value: "{budget_value}",
-                                    oninput: move |e| budget_value.set(e.value()),
-                                }
-                                div { class: "form-hint",
-                                    if budget_kind() == "hours" {
-                                        "Total hours for this project. Leave blank to set it later."
-                                    } else {
-                                        "Total fees in the project's currency. Leave blank to set it later."
-                                    }
-                                }
-                            }
-                        }
-                        button {
-                            class: "btn btn-primary",
-                            onclick: move |_| {
-                                let editing = editing_id();
-                                let cid = client_id();
-                                let n = name();
-                                let pt = project_type();
-                                let c = currency();
-                                let bk = budget_kind();
-                                let bv = budget_value();
-                                spawn(async move {
-                                    let result = match editing {
+                    }
+                    button {
+                        class: "btn btn-primary",
+                        onclick: move |_| {
+                            let editing = editing_id();
+                            let cid = client_id();
+                            let n = name();
+                            let pt = project_type();
+                            let c = currency();
+                            let bk = budget_kind();
+                            let bv = budget_value();
+                            run_action(
+                                async move {
+                                    match editing {
                                         Some(id) => {
                                             server_fns::update_project(id.to_string(), n, pt, c, bk, bv).await
                                         }
                                         None => server_fns::create_project(cid, n, pt, c, bk, bv).await,
-                                    };
-                                    match result {
-                                        Ok(_) => {
-                                            reset_form();
-                                            projects.restart();
-                                        }
-                                        Err(e) => error.set(Some(e.to_string())),
                                     }
-                                });
-                            },
-                            if editing_id().is_some() { "Save Changes" } else { "Create Project" }
-                        }
+                                },
+                                projects,
+                                error,
+                                reset_form,
+                            );
+                        },
+                        if editing_id().is_some() { "Save Changes" } else { "Create Project" }
                     }
                 }
             }
 
-            match &*projects.read() {
-                Some(Ok(list)) => {
+            {loaded(&*projects.read(), |list| {
                     let q = query().to_lowercase();
                     let cf = client_filter();
                     let sc = scope();
@@ -506,13 +504,11 @@ pub fn ProjectList() -> Element {
                                                                         .set(match p.budget_kind {
                                                                             BudgetKind::Amount => p
                                                                                 .budget_amount_cents
-                                                                                .map(|c| format!("{}.{:02}", c / 100, (c % 100).abs()))
+                                                                                .map(format_cents_plain)
                                                                                 .unwrap_or_default(),
                                                                             BudgetKind::Hours => p
                                                                                 .budget_minutes
-                                                                                .map(|m| {
-                                                                                    horae_core::duration::format_hhmm(m.max(0) as u32)
-                                                                                })
+                                                                                .map(horae_core::duration::format_hhmm)
                                                                                 .unwrap_or_default(),
                                                                             BudgetKind::None => String::new(),
                                                                         });
@@ -527,14 +523,12 @@ pub fn ProjectList() -> Element {
                                                             onclick: {
                                                                 let id = p.id;
                                                                 let next_active = !p.active;
-                                                                move |_| {
-                                                                    spawn(async move {
-                                                                        match server_fns::set_project_active(id.to_string(), next_active).await {
-                                                                            Ok(_) => projects.restart(),
-                                                                            Err(e) => error.set(Some(e.to_string())),
-                                                                        }
-                                                                    });
-                                                                }
+                                                                move |_| run_action(
+                                                                    server_fns::set_project_active(id.to_string(), next_active),
+                                                                    projects,
+                                                                    error,
+                                                                    || (),
+                                                                )
                                                             },
                                                             if p.active { "Archive" } else { "Unarchive" }
                                                         }
@@ -556,10 +550,7 @@ pub fn ProjectList() -> Element {
                             }
                         }
                     }
-                }
-                Some(Err(e)) => rsx! { div { class: "alert alert-danger", "{e}" } },
-                None => rsx! { div { class: "text-muted text-sm", "Loading..." } },
-            }
+            })}
 
             if export_open() {
                 {
@@ -623,7 +614,7 @@ pub fn ProjectList() -> Element {
 #[component]
 pub fn ProjectDetail(id: Uuid) -> Element {
     let me = use_resource(|| async move { server_fns::get_me().await });
-    let mut assignments = use_resource(move || {
+    let assignments = use_resource(move || {
         let pid = id.to_string();
         async move { server_fns::list_assignments(pid).await }
     });
@@ -632,18 +623,28 @@ pub fn ProjectDetail(id: Uuid) -> Element {
     let mut show_assign_form = use_signal(|| false);
     let mut assign_user_id = use_signal(String::new);
     let mut assign_role = use_signal(|| "freelancer".to_string());
-    let mut error = use_signal(|| None::<String>);
+    let error = use_signal(|| None::<String>);
 
-    let is_admin = match &*me.read() {
-        Some(Ok(user)) => user.is_admin(),
-        _ => false,
-    };
+    let is_admin = is_admin(&me);
 
     // Build a lookup from user_id -> user name
     let users_map: std::collections::HashMap<uuid::Uuid, String> = match &*users_res.read() {
         Some(Ok(users)) => users.iter().map(|u| (u.id, u.name.clone())).collect(),
         _ => std::collections::HashMap::new(),
     };
+
+    let assign_user_opts: Vec<(String, String)> =
+        std::iter::once((String::new(), "Select a user...".to_string()))
+            .chain(
+                users_res
+                    .read()
+                    .as_ref()
+                    .and_then(|r| r.as_ref().ok())
+                    .into_iter()
+                    .flatten()
+                    .map(|u| (u.id.to_string(), format!("{} ({})", u.name, u.email))),
+            )
+            .collect();
 
     rsx! {
         div {
@@ -670,71 +671,58 @@ pub fn ProjectDetail(id: Uuid) -> Element {
                 }
 
                 if show_assign_form() && is_admin {
-                    div { class: "card",
-                        div { class: "p-5",
-                            h3 { class: "text-sm mb-4 uppercase tracking-wide text-faint", "Assign User" }
-                            if let Some(err) = &*error.read() {
-                                div { class: "alert alert-danger", "{err}" }
+                    FormCard { title: "Assign User", error,
+                        FormGroup { label: "User", id: "assign-user",
+                            Select {
+                                id: "assign-user",
+                                options: assign_user_opts,
+                                selected: assign_user_id(),
+                                onchange: move |e: FormEvent| assign_user_id.set(e.value()),
                             }
-                            div { class: "form-group",
-                                label { class: "form-label", r#for: "assign-user", "User" }
-                                select {
-                                    class: "form-input",
-                                    id: "assign-user",
-                                    value: "{assign_user_id}",
-                                    oninput: move |e| assign_user_id.set(e.value()),
-                                    option { value: "", "Select a user..." }
-                                    if let Some(Ok(users)) = &*users_res.read() {
-                                        for u in users.iter() {
-                                            option { value: "{u.id}", "{u.name} ({u.email})" }
-                                        }
-                                    }
-                                }
+                        }
+                        FormGroup { label: "Role", id: "assign-role",
+                            Select {
+                                id: "assign-role",
+                                options: vec![
+                                    ("lead".to_string(), "Lead".to_string()),
+                                    ("freelancer".to_string(), "Freelancer".to_string()),
+                                    ("admin".to_string(), "Admin".to_string()),
+                                ],
+                                selected: assign_role(),
+                                onchange: move |e: FormEvent| assign_role.set(e.value()),
                             }
-                            div { class: "form-group",
-                                label { class: "form-label", r#for: "assign-role", "Role" }
-                                select {
-                                    class: "form-input",
-                                    id: "assign-role",
-                                    value: "{assign_role}",
-                                    oninput: move |e| assign_role.set(e.value()),
-                                    option { value: "lead", "Lead" }
-                                    option { value: "freelancer", "Freelancer" }
-                                    option { value: "admin", "Admin" }
-                                }
-                            }
-                            button {
-                                class: "btn btn-primary",
-                                onclick: move |_| {
-                                    let pid = id.to_string();
-                                    let uid = assign_user_id();
-                                    let r = assign_role();
-                                    spawn(async move {
-                                        match server_fns::create_assignment(pid, uid, r).await {
-                                            Ok(_) => {
-                                                assign_user_id.set(String::new());
-                                                assign_role.set("freelancer".to_string());
-                                                error.set(None);
-                                                show_assign_form.set(false);
-                                                assignments.restart();
-                                            }
-                                            Err(e) => error.set(Some(e.to_string())),
-                                        }
-                                    });
-                                },
-                                "Assign"
-                            }
+                        }
+                        button {
+                            class: "btn btn-primary",
+                            onclick: move |_| {
+                                let pid = id.to_string();
+                                let uid = assign_user_id();
+                                let r = assign_role();
+                                run_action(
+                                    server_fns::create_assignment(pid, uid, r),
+                                    assignments,
+                                    error,
+                                    move || {
+                                        assign_user_id.set(String::new());
+                                        assign_role.set("freelancer".to_string());
+                                        show_assign_form.set(false);
+                                    },
+                                );
+                            },
+                            "Assign"
                         }
                     }
                 }
 
                 div { class: "card",
-                    match &*assignments.read() {
-                        Some(Ok(list)) if list.is_empty() => rsx! {
-                            p { class: "text-muted text-sm p-5", "No users assigned yet." }
-                        },
-                        Some(Ok(list)) => rsx! {
-                            div { class: "table-container",
+                    {loaded(&*assignments.read(), |list| {
+                        if list.is_empty() {
+                            return rsx! {
+                                p { class: "text-muted text-sm p-5", "No users assigned yet." }
+                            };
+                        }
+                        rsx! {
+                            DataTable {
                                 table {
                                     thead {
                                         tr {
@@ -758,16 +746,12 @@ pub fn ProjectDetail(id: Uuid) -> Element {
                                                             td {
                                                                 button {
                                                                     class: "btn btn-danger btn-sm",
-                                                                    onclick: move |_| {
-                                                                        let aid = aid.clone();
-                                                                        spawn(async move {
-                                                                            if let Err(e) = server_fns::delete_assignment(aid).await {
-                                                                                error.set(Some(e.to_string()));
-                                                                            } else {
-                                                                                assignments.restart();
-                                                                            }
-                                                                        });
-                                                                    },
+                                                                    onclick: move |_| run_action(
+                                                                        server_fns::delete_assignment(aid.clone()),
+                                                                        assignments,
+                                                                        error,
+                                                                        || (),
+                                                                    ),
                                                                     "Remove"
                                                                 }
                                                             }
@@ -779,10 +763,8 @@ pub fn ProjectDetail(id: Uuid) -> Element {
                                     }
                                 }
                             }
-                        },
-                        Some(Err(e)) => rsx! { div { class: "alert alert-danger", "{e}" } },
-                        None => rsx! { div { class: "text-muted text-sm", "Loading..." } },
-                    }
+                        }
+                    })}
                 }
             }
         }

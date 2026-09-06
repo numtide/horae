@@ -1,16 +1,12 @@
 use chrono::{Datelike, Duration, Months, NaiveDate};
 use dioxus::prelude::*;
+use horae_core::week::iso_week_monday;
 
 const WEEKDAYS: [&str; 7] = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 
 /// Six full weeks are always drawn so the panel keeps its height from month to
 /// month and the grid never reflows under the cursor.
 const CELLS: i64 = 42;
-
-/// Monday of the ISO week containing `date`.
-fn week_monday(date: NaiveDate) -> NaiveDate {
-    date - Duration::days(date.weekday().num_days_from_monday() as i64)
-}
 
 /// The first of the month one step either side of `month`.
 fn shift_month(month: NaiveDate, forward: bool) -> NaiveDate {
@@ -47,12 +43,12 @@ pub fn DatePicker(
     // Days between these two carry the wash; the two ends themselves go solid.
     // In day mode both collapse onto `selected`, which is then simply solid.
     let (band_start, band_end) = if week {
-        let start = week_monday(selected);
+        let start = iso_week_monday(selected);
         (start, start + Duration::days(6))
     } else {
         (selected, selected)
     };
-    let grid_start = week_monday(visible);
+    let grid_start = iso_week_monday(visible);
 
     rsx! {
         div { class: "menu dp",

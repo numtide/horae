@@ -1,14 +1,14 @@
 use chrono::Datelike;
 use dioxus::prelude::*;
+// The report/export convention for hours (e.g. 90 → "1.50"), shared with the
+// CSV exporter.
+use horae_core::duration::format_hours2 as hours;
 
+use super::{is_manager, loaded};
 use crate::components::badge::Badge;
+use crate::components::form::{FormGroup, Input};
 use crate::components::table::DataTable;
 use crate::server_fns;
-
-/// Minutes as decimal hours — the report/export convention (e.g. 90 → "1.50").
-fn hours(minutes: i64) -> String {
-    format!("{:.2}", minutes as f64 / 60.0)
-}
 
 /// Money for a group: formatted in its currency, or an em dash when the group
 /// mixes currencies (`currency` is `None`) and the amount isn't summable.
@@ -100,12 +100,7 @@ pub fn Reports() -> Element {
     // Reports cover every user's time and money, so the endpoints are
     // manager-only (SPEC §6). Mirror the Approvals page: keep the rail link for
     // everyone and show a notice here instead of a wall of errors.
-    let is_manager = me
-        .read()
-        .as_ref()
-        .and_then(|r| r.as_ref().ok())
-        .map(|u| u.is_manager_or_above())
-        .unwrap_or(false);
+    let is_manager = is_manager(&me);
     if !is_manager {
         return rsx! {
             div {
@@ -182,22 +177,18 @@ pub fn Reports() -> Element {
 
             div { class: "card mb-6",
                 div { class: "flex gap-4 items-end flex-wrap",
-                    div { class: "form-group",
-                        label { class: "form-label", "From" }
-                        input {
-                            class: "form-input",
-                            r#type: "date",
+                    FormGroup { label: "From",
+                        Input {
+                            kind: "date",
                             value: "{from_date}",
-                            oninput: move |e| from_date.set(e.value()),
+                            oninput: move |e: FormEvent| from_date.set(e.value()),
                         }
                     }
-                    div { class: "form-group",
-                        label { class: "form-label", "To" }
-                        input {
-                            class: "form-input",
-                            r#type: "date",
+                    FormGroup { label: "To",
+                        Input {
+                            kind: "date",
                             value: "{to_date}",
-                            oninput: move |e| to_date.set(e.value()),
+                            oninput: move |e: FormEvent| to_date.set(e.value()),
                         }
                     }
                     div { class: "form-group",
@@ -253,15 +244,14 @@ pub fn Reports() -> Element {
             }
 
             if tab == "time" {
-                match &*summary.read() {
-                    None => rsx! { div { class: "text-muted text-sm", "Loading…" } },
-                    Some(Err(e)) => rsx! { div { class: "alert alert-danger", "{e}" } },
-                    Some(Ok(rows)) if rows.is_empty() => rsx! {
-                        div { class: "card p-8 text-center",
-                            p { class: "text-muted", "No time tracked in this range." }
+                {loaded(&*summary.read(), |rows| {
+                        if rows.is_empty() {
+                            return rsx! {
+                                div { class: "card p-8 text-center",
+                                    p { class: "text-muted", "No time tracked in this range." }
+                                }
+                            };
                         }
-                    },
-                    Some(Ok(rows)) => {
                         let grand_total: i64 = rows.iter().map(|r| r.total_minutes).sum();
                         let grand_rounded: i64 = rows.iter().map(|r| r.rounded_minutes).sum();
                         let grand_billable: i64 = rows.iter().map(|r| r.billable_minutes).sum();
@@ -311,20 +301,19 @@ pub fn Reports() -> Element {
                                 }
                             }
                         }
-                    }
-                }
+                })}
             }
 
             if tab == "detailed" {
-                match &*detailed.read() {
-                    None => rsx! { div { class: "text-muted text-sm", "Loading…" } },
-                    Some(Err(e)) => rsx! { div { class: "alert alert-danger", "{e}" } },
-                    Some(Ok(entries)) if entries.is_empty() => rsx! {
-                        div { class: "card p-8 text-center",
-                            p { class: "text-muted", "No entries in this range." }
-                        }
-                    },
-                    Some(Ok(entries)) => rsx! {
+                {loaded(&*detailed.read(), |entries| {
+                    if entries.is_empty() {
+                        return rsx! {
+                            div { class: "card p-8 text-center",
+                                p { class: "text-muted", "No entries in this range." }
+                            }
+                        };
+                    }
+                    rsx! {
                         DataTable {
                             table {
                                 thead {
@@ -363,8 +352,8 @@ pub fn Reports() -> Element {
                                 }
                             }
                         }
-                    },
-                }
+                    }
+                })}
             }
         }
     }

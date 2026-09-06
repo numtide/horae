@@ -1,23 +1,27 @@
 use dioxus::prelude::*;
 
+use super::{loaded, run_action};
+use crate::components::badge::Badge;
+use crate::components::form::{FormCard, FormGroup, Input, Select};
+use crate::components::table::DataTable;
 use crate::server_fns;
 
 #[component]
 pub fn AdminUsers() -> Element {
     let mut users = use_resource(|| async move { server_fns::list_users(true).await });
-    let mut tasks = use_resource(|| async move { server_fns::list_tasks().await });
+    let tasks = use_resource(|| async move { server_fns::list_tasks().await });
 
     let mut show_user_form = use_signal(|| false);
     let mut user_email = use_signal(String::new);
     let mut user_name = use_signal(String::new);
     let mut user_role = use_signal(|| "member".to_string());
-    let mut user_error = use_signal(|| None::<String>);
+    let user_error = use_signal(|| None::<String>);
     let mut row_error = use_signal(|| None::<String>);
 
     let mut show_task_form = use_signal(|| false);
     let mut task_name = use_signal(String::new);
     let mut task_billable = use_signal(|| true);
-    let mut task_error = use_signal(|| None::<String>);
+    let task_error = use_signal(|| None::<String>);
 
     rsx! {
         div {
@@ -40,77 +44,58 @@ pub fn AdminUsers() -> Element {
             }
 
             if show_user_form() {
-                div { class: "card",
-                    div { class: "p-5",
-                        h3 { class: "text-sm mb-4 uppercase tracking-wide text-faint", "New User" }
-                        if let Some(err) = &*user_error.read() {
-                            div { class: "alert alert-danger", "{err}" }
+                FormCard { title: "New User", error: user_error,
+                    FormGroup { label: "Email", id: "user-email",
+                        Input {
+                            id: "user-email",
+                            kind: "email",
+                            placeholder: "user@example.com",
+                            value: "{user_email}",
+                            oninput: move |e: FormEvent| user_email.set(e.value()),
                         }
-                        div { class: "form-group",
-                            label { class: "form-label", r#for: "user-email", "Email" }
-                            input {
-                                class: "form-input",
-                                id: "user-email",
-                                r#type: "email",
-                                placeholder: "user@example.com",
-                                value: "{user_email}",
-                                oninput: move |e| user_email.set(e.value()),
-                            }
+                    }
+                    FormGroup { label: "Name", id: "user-name",
+                        Input {
+                            id: "user-name",
+                            placeholder: "Full name",
+                            value: "{user_name}",
+                            oninput: move |e: FormEvent| user_name.set(e.value()),
                         }
-                        div { class: "form-group",
-                            label { class: "form-label", r#for: "user-name", "Name" }
-                            input {
-                                class: "form-input",
-                                id: "user-name",
-                                r#type: "text",
-                                placeholder: "Full name",
-                                value: "{user_name}",
-                                oninput: move |e| user_name.set(e.value()),
-                            }
+                    }
+                    FormGroup { label: "Role", id: "user-role",
+                        Select {
+                            id: "user-role",
+                            options: vec![
+                                ("member".to_string(), "Member".to_string()),
+                                ("manager".to_string(), "Manager".to_string()),
+                                ("admin".to_string(), "Admin".to_string()),
+                            ],
+                            selected: user_role(),
+                            onchange: move |e: FormEvent| user_role.set(e.value()),
                         }
-                        div { class: "form-group",
-                            label { class: "form-label", r#for: "user-role", "Role" }
-                            select {
-                                class: "form-input",
-                                id: "user-role",
-                                value: "{user_role}",
-                                onchange: move |e| user_role.set(e.value()),
-                                option { value: "member", "Member" }
-                                option { value: "manager", "Manager" }
-                                option { value: "admin", "Admin" }
-                            }
-                        }
-                        button {
-                            class: "btn btn-primary",
-                            onclick: move |_| {
-                                let e = user_email();
-                                let n = user_name();
-                                let r = user_role();
-                                spawn(async move {
-                                    match server_fns::create_user(e, n, r).await {
-                                        Ok(_) => {
-                                            user_email.set(String::new());
-                                            user_name.set(String::new());
-                                            user_role.set("member".to_string());
-                                            user_error.set(None);
-                                            row_error.set(None);
-                                            show_user_form.set(false);
-                                            users.restart();
-                                        }
-                                        Err(e) => user_error.set(Some(e.to_string())),
-                                    }
-                                });
-                            },
-                            "Create User"
-                        }
+                    }
+                    button {
+                        class: "btn btn-primary",
+                        onclick: move |_| {
+                            let e = user_email();
+                            let n = user_name();
+                            let r = user_role();
+                            run_action(server_fns::create_user(e, n, r), users, user_error, move || {
+                                user_email.set(String::new());
+                                user_name.set(String::new());
+                                user_role.set("member".to_string());
+                                row_error.set(None);
+                                show_user_form.set(false);
+                            });
+                        },
+                        "Create User"
                     }
                 }
             }
 
             div { class: "card",
-                match &*users.read() {
-                    Some(Ok(user_list)) => rsx! {
-                        div { class: "table-container",
+                {loaded(&*users.read(), |user_list| rsx! {
+                        DataTable {
                             table {
                                 thead {
                                     tr {
@@ -159,9 +144,9 @@ pub fn AdminUsers() -> Element {
                                                     }
                                                     td {
                                                         if is_active {
-                                                            span { class: "badge badge-success", "Active" }
+                                                            Badge { variant: "success", "Active" }
                                                         } else {
-                                                            span { class: "badge badge-neutral", "Inactive" }
+                                                            Badge { variant: "neutral", "Inactive" }
                                                         }
                                                     }
                                                     td {
@@ -191,10 +176,7 @@ pub fn AdminUsers() -> Element {
                                 }
                             }
                         }
-                    },
-                    Some(Err(e)) => rsx! { div { class: "alert alert-danger", "{e}" } },
-                    None => rsx! { div { class: "text-muted text-sm", "Loading..." } },
-                }
+                })}
             }
 
             // ── Tasks section ───────────────────────────────────────────
@@ -211,64 +193,50 @@ pub fn AdminUsers() -> Element {
                 }
 
                 if show_task_form() {
-                    div { class: "card",
-                        div { class: "p-5",
-                            h3 { class: "text-sm mb-4 uppercase tracking-wide text-faint", "New Task" }
-                            if let Some(err) = &*task_error.read() {
-                                div { class: "alert alert-danger", "{err}" }
+                    FormCard { title: "New Task", error: task_error,
+                        FormGroup { label: "Name", id: "task-name",
+                            Input {
+                                id: "task-name",
+                                placeholder: "Task name",
+                                value: "{task_name}",
+                                oninput: move |e: FormEvent| task_name.set(e.value()),
                             }
-                            div { class: "form-group",
-                                label { class: "form-label", r#for: "task-name", "Name" }
+                        }
+                        div { class: "form-group",
+                            label { class: "form-label flex items-center gap-2",
                                 input {
-                                    class: "form-input",
-                                    id: "task-name",
-                                    r#type: "text",
-                                    placeholder: "Task name",
-                                    value: "{task_name}",
-                                    oninput: move |e| task_name.set(e.value()),
+                                    r#type: "checkbox",
+                                    checked: task_billable(),
+                                    onchange: move |e| task_billable.set(e.checked()),
                                 }
+                                "Billable by default"
                             }
-                            div { class: "form-group",
-                                label { class: "form-label flex items-center gap-2",
-                                    input {
-                                        r#type: "checkbox",
-                                        checked: task_billable(),
-                                        onchange: move |e| task_billable.set(e.checked()),
-                                    }
-                                    "Billable by default"
-                                }
-                            }
-                            button {
-                                class: "btn btn-primary",
-                                onclick: move |_| {
-                                    let n = task_name();
-                                    let b = task_billable();
-                                    spawn(async move {
-                                        match server_fns::create_task(n, b).await {
-                                            Ok(_) => {
-                                                task_name.set(String::new());
-                                                task_billable.set(true);
-                                                task_error.set(None);
-                                                show_task_form.set(false);
-                                                tasks.restart();
-                                            }
-                                            Err(e) => task_error.set(Some(e.to_string())),
-                                        }
-                                    });
-                                },
-                                "Create Task"
-                            }
+                        }
+                        button {
+                            class: "btn btn-primary",
+                            onclick: move |_| {
+                                let n = task_name();
+                                let b = task_billable();
+                                run_action(server_fns::create_task(n, b), tasks, task_error, move || {
+                                    task_name.set(String::new());
+                                    task_billable.set(true);
+                                    show_task_form.set(false);
+                                });
+                            },
+                            "Create Task"
                         }
                     }
                 }
 
                 div { class: "card",
-                    match &*tasks.read() {
-                        Some(Ok(task_list)) if task_list.is_empty() => rsx! {
-                            p { class: "text-muted text-sm p-5", "No tasks defined yet." }
-                        },
-                        Some(Ok(task_list)) => rsx! {
-                            div { class: "table-container",
+                    {loaded(&*tasks.read(), |task_list| {
+                        if task_list.is_empty() {
+                            return rsx! {
+                                p { class: "text-muted text-sm p-5", "No tasks defined yet." }
+                            };
+                        }
+                        rsx! {
+                            DataTable {
                                 table {
                                     thead {
                                         tr {
@@ -283,16 +251,16 @@ pub fn AdminUsers() -> Element {
                                                 td { "{task.name}" }
                                                 td {
                                                     if task.billable_default {
-                                                        span { class: "badge badge-success", "Yes" }
+                                                        Badge { variant: "success", "Yes" }
                                                     } else {
-                                                        span { class: "badge badge-neutral", "No" }
+                                                        Badge { variant: "neutral", "No" }
                                                     }
                                                 }
                                                 td {
                                                     if task.active {
-                                                        span { class: "badge badge-success", "Active" }
+                                                        Badge { variant: "success", "Active" }
                                                     } else {
-                                                        span { class: "badge badge-neutral", "Inactive" }
+                                                        Badge { variant: "neutral", "Inactive" }
                                                     }
                                                 }
                                             }
@@ -300,10 +268,8 @@ pub fn AdminUsers() -> Element {
                                     }
                                 }
                             }
-                        },
-                        Some(Err(e)) => rsx! { div { class: "alert alert-danger", "{e}" } },
-                        None => rsx! { div { class: "text-muted text-sm", "Loading..." } },
-                    }
+                        }
+                    })}
                 }
             }
         }

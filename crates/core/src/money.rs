@@ -113,6 +113,19 @@ pub fn format_cents(cents: i64, currency: &str) -> String {
     )
 }
 
+/// Two-decimal amount with no currency code and no thousands grouping,
+/// e.g. `-50` → `"-0.50"`. Integer math, so the sign survives amounts under
+/// one currency unit (where `cents / 100` would truncate to `0`).
+pub fn format_cents_plain(cents: i64) -> String {
+    let abs = cents.unsigned_abs();
+    format!(
+        "{}{}.{:02}",
+        if cents < 0 { "-" } else { "" },
+        abs / 100,
+        abs % 100
+    )
+}
+
 /// Display a project budget in its own unit: money for an amount budget, hours
 /// for an hours budget, empty for no budget.
 pub fn format_budget(
@@ -127,7 +140,7 @@ pub fn format_budget(
             .map(|c| format_cents(c, currency))
             .unwrap_or_default(),
         BudgetKind::Hours => minutes
-            .map(|m| format!("{}h", crate::duration::format_decimal(m.max(0) as u32)))
+            .map(|m| format!("{}h", crate::duration::format_decimal(m)))
             .unwrap_or_default(),
         BudgetKind::None => String::new(),
     }
@@ -144,6 +157,14 @@ mod tests {
         assert_eq!(format_cents(99, "USD"), "USD 0.99");
         assert_eq!(format_cents(0, "EUR"), "EUR 0.00");
         assert_eq!(format_cents(-50_000, "USD"), "USD -500.00");
+    }
+
+    #[test]
+    fn format_cents_plain_keeps_sign_below_one_unit() {
+        assert_eq!(format_cents_plain(0), "0.00");
+        assert_eq!(format_cents_plain(99), "0.99");
+        assert_eq!(format_cents_plain(123_456), "1234.56");
+        assert_eq!(format_cents_plain(-50), "-0.50");
     }
 
     #[test]
