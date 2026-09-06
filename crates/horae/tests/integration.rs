@@ -1,6 +1,6 @@
 #![cfg(feature = "server")]
 
-use chrono::NaiveDate;
+use chrono::{DateTime, Duration, NaiveDate, Utc};
 use horae_core::types::{EntryState, InvoiceStatus, OrgRole, ProjectRole, RoundDir};
 use serial_test::serial;
 use sqlx::PgPool;
@@ -47,49 +47,8 @@ async fn seed_project_with_assignment(
     org_id: Uuid,
     user_id: Uuid,
 ) -> (Uuid, Uuid, Uuid) {
-    let client_id = Uuid::now_v7();
-    let project_id = Uuid::now_v7();
-    let task_id = Uuid::now_v7();
+    let (project_id, task_id, client_id) = seed_project_without_assignment(pool, org_id).await;
     let assignment_id = Uuid::now_v7();
-
-    sqlx::query!(
-        "INSERT INTO clients (id, org_id, name, currency) VALUES ($1, $2, 'Acme', 'EUR')",
-        client_id,
-        org_id,
-    )
-    .execute(pool)
-    .await
-    .unwrap();
-
-    sqlx::query!(
-        "INSERT INTO projects (id, org_id, client_id, name, currency) \
-         VALUES ($1, $2, $3, 'Widget', 'EUR')",
-        project_id,
-        org_id,
-        client_id,
-    )
-    .execute(pool)
-    .await
-    .unwrap();
-
-    sqlx::query!(
-        "INSERT INTO tasks (id, org_id, name, billable_default) VALUES ($1, $2, 'Dev', true)",
-        task_id,
-        org_id,
-    )
-    .execute(pool)
-    .await
-    .unwrap();
-
-    sqlx::query!(
-        "INSERT INTO project_tasks (project_id, task_id, billable, rate_cents) \
-         VALUES ($1, $2, true, NULL)",
-        project_id,
-        task_id,
-    )
-    .execute(pool)
-    .await
-    .unwrap();
 
     sqlx::query!(
         "INSERT INTO assignments (id, project_id, user_id, role) \
@@ -154,6 +113,136 @@ async fn seed_project_without_assignment(pool: &PgPool, org_id: Uuid) -> (Uuid, 
     (project_id, task_id, client_id)
 }
 
+/// Insert a stopped (`is_running = false`), billable time entry in the given
+/// state and return its id.
+#[allow(clippy::too_many_arguments)]
+async fn insert_entry(
+    pool: &PgPool,
+    org_id: Uuid,
+    user_id: Uuid,
+    project_id: Uuid,
+    task_id: Uuid,
+    spent_date: NaiveDate,
+    minutes: i32,
+    state: EntryState,
+    start_minute: Option<i32>,
+) -> Uuid {
+    let id = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO time_entries \
+           (id, org_id, user_id, project_id, task_id, spent_date, \
+            minutes, billable, is_running, state, start_minute) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, true, false, $8, $9)",
+        id,
+        org_id,
+        user_id,
+        project_id,
+        task_id,
+        spent_date as NaiveDate,
+        minutes,
+        state as EntryState,
+        start_minute,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    id
+}
+
+/// Insert a running timer (`is_running = true`, 0 minutes) started at
+/// `started_at`.  Fallible so callers can assert on the one-running-timer
+/// partial unique index.
+#[allow(clippy::too_many_arguments)]
+async fn insert_running_entry(
+    pool: &PgPool,
+    org_id: Uuid,
+    user_id: Uuid,
+    project_id: Uuid,
+    task_id: Uuid,
+    spent_date: NaiveDate,
+    started_at: DateTime<Utc>,
+    state: EntryState,
+) -> sqlx::Result<Uuid> {
+    let id = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO time_entries \
+           (id, org_id, user_id, project_id, task_id, spent_date, \
+            minutes, billable, is_running, started_at, state) \
+         VALUES ($1, $2, $3, $4, $5, $6, 0, true, true, $7, $8)",
+        id,
+        org_id,
+        user_id,
+        project_id,
+        task_id,
+        spent_date as NaiveDate,
+        started_at as DateTime<Utc>,
+        state as EntryState,
+    )
+    .execute(pool)
+    .await?;
+    Ok(id)
+}
+
+/// Insert a draft invoice for the client and return its id.  Fallible so
+/// callers can assert on the per-org unique invoice number.
+async fn seed_draft_invoice(
+    pool: &PgPool,
+    org_id: Uuid,
+    client_id: Uuid,
+    number: &str,
+    total_cents: i64,
+) -> sqlx::Result<Uuid> {
+    let id = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO invoices (id, org_id, client_id, number, status, issued_on, due_on, currency, total_cents) \
+         VALUES ($1, $2, $3, $4, 'draft', '2026-07-11', '2026-08-10', 'EUR', $5)",
+        id,
+        org_id,
+        client_id,
+        number,
+        total_cents,
+    )
+    .execute(pool)
+    .await?;
+    Ok(id)
+}
+
+/// Insert an approvals row for the period and return its id.  `approved_by`
+/// decides the state: a manager means an approved week (with `approved_at`
+/// set), `None` a submitted one — the two never vary independently in a
+/// valid row.
+async fn seed_approval(
+    pool: &PgPool,
+    org_id: Uuid,
+    user_id: Uuid,
+    period: (NaiveDate, NaiveDate),
+    approved_by: Option<Uuid>,
+) -> Uuid {
+    let id = Uuid::now_v7();
+    let state = if approved_by.is_some() {
+        EntryState::Approved
+    } else {
+        EntryState::Submitted
+    };
+    sqlx::query!(
+        "INSERT INTO approvals \
+           (id, org_id, user_id, period_start, period_end, state, approved_by, approved_at) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, \
+                 CASE WHEN $7::uuid IS NULL THEN NULL ELSE now() END)",
+        id,
+        org_id,
+        user_id,
+        period.0 as NaiveDate,
+        period.1 as NaiveDate,
+        state as EntryState,
+        approved_by as Option<Uuid>,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    id
+}
+
 // ---------------------------------------------------------------------------
 // Test 1: Timer start / stop flow
 // ---------------------------------------------------------------------------
@@ -167,21 +256,16 @@ async fn timer_start_stop_records_minutes(pool: PgPool) {
 
     // Start a timer by inserting a running entry whose started_at is 5 minutes
     // in the past.
-    let entry_id = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO time_entries \
-           (id, org_id, user_id, project_id, task_id, spent_date, \
-            minutes, billable, is_running, started_at, state) \
-         VALUES ($1, $2, $3, $4, $5, CURRENT_DATE, \
-                 0, true, true, now() - interval '5 minutes', $6)",
-        entry_id,
+    let entry_id = insert_running_entry(
+        &pool,
         org_id,
         user_id,
         project_id,
         task_id,
-        EntryState::Open as EntryState,
+        Utc::now().date_naive(),
+        Utc::now() - Duration::minutes(5),
+        EntryState::Open,
     )
-    .execute(&pool)
     .await
     .unwrap();
 
@@ -249,21 +333,16 @@ async fn timer_under_a_minute_records_zero(pool: PgPool) {
     let user_id = seed_user(&pool, org_id, OrgRole::Member).await;
     let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
 
-    let entry_id = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO time_entries \
-           (id, org_id, user_id, project_id, task_id, spent_date, \
-            minutes, billable, is_running, started_at, state) \
-         VALUES ($1, $2, $3, $4, $5, CURRENT_DATE, \
-                 0, true, true, now() - interval '30 seconds', $6)",
-        entry_id,
+    let entry_id = insert_running_entry(
+        &pool,
         org_id,
         user_id,
         project_id,
         task_id,
-        EntryState::Open as EntryState,
+        Utc::now().date_naive(),
+        Utc::now() - Duration::seconds(30),
+        EntryState::Open,
     )
-    .execute(&pool)
     .await
     .unwrap();
 
@@ -314,40 +393,30 @@ async fn one_timer_per_user_enforced(pool: PgPool) {
     let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
 
     // First running timer -- should succeed
-    let entry1 = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO time_entries \
-           (id, org_id, user_id, project_id, task_id, spent_date, \
-            minutes, billable, is_running, started_at, state) \
-         VALUES ($1, $2, $3, $4, $5, CURRENT_DATE, \
-                 0, true, true, now(), $6)",
-        entry1,
+    insert_running_entry(
+        &pool,
         org_id,
         user_id,
         project_id,
         task_id,
-        EntryState::Open as EntryState,
+        Utc::now().date_naive(),
+        Utc::now(),
+        EntryState::Open,
     )
-    .execute(&pool)
     .await
     .unwrap();
 
     // Second running timer for the same user -- must fail
-    let entry2 = Uuid::now_v7();
-    let result = sqlx::query!(
-        "INSERT INTO time_entries \
-           (id, org_id, user_id, project_id, task_id, spent_date, \
-            minutes, billable, is_running, started_at, state) \
-         VALUES ($1, $2, $3, $4, $5, CURRENT_DATE, \
-                 0, true, true, now(), $6)",
-        entry2,
+    let result = insert_running_entry(
+        &pool,
         org_id,
         user_id,
         project_id,
         task_id,
-        EntryState::Open as EntryState,
+        Utc::now().date_naive(),
+        Utc::now(),
+        EntryState::Open,
     )
-    .execute(&pool)
     .await;
 
     assert!(
@@ -367,23 +436,18 @@ async fn submitted_entries_cannot_be_updated(pool: PgPool) {
     let user_id = seed_user(&pool, org_id, OrgRole::Member).await;
     let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
 
-    let entry_id = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO time_entries \
-           (id, org_id, user_id, project_id, task_id, spent_date, \
-            minutes, billable, is_running, state) \
-         VALUES ($1, $2, $3, $4, $5, CURRENT_DATE, \
-                 30, true, false, $6)",
-        entry_id,
+    let entry_id = insert_entry(
+        &pool,
         org_id,
         user_id,
         project_id,
         task_id,
-        EntryState::Open as EntryState,
+        Utc::now().date_naive(),
+        30,
+        EntryState::Open,
+        None,
     )
-    .execute(&pool)
-    .await
-    .unwrap();
+    .await;
 
     // Transition to submitted
     sqlx::query!(
@@ -447,23 +511,18 @@ async fn rounding_applied_on_submit(pool: PgPool) {
     let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
 
     // Insert entry with 8 raw minutes
-    let entry_id = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO time_entries \
-           (id, org_id, user_id, project_id, task_id, spent_date, \
-            minutes, billable, is_running, state) \
-         VALUES ($1, $2, $3, $4, $5, CURRENT_DATE, \
-                 8, true, false, $6)",
-        entry_id,
+    let entry_id = insert_entry(
+        &pool,
         org_id,
         user_id,
         project_id,
         task_id,
-        EntryState::Open as EntryState,
+        Utc::now().date_naive(),
+        8,
+        EntryState::Open,
+        None,
     )
-    .execute(&pool)
-    .await
-    .unwrap();
+    .await;
 
     // Simulate the submit path: read org rounding config, compute rounded value,
     // persist it together with the state transition.
@@ -563,23 +622,18 @@ async fn approval_workflow_approve_and_reject(pool: PgPool) {
     // --- Approve path ---
 
     // Create an open entry
-    let entry_a = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO time_entries \
-           (id, org_id, user_id, project_id, task_id, spent_date, \
-            minutes, billable, is_running, state) \
-         VALUES ($1, $2, $3, $4, $5, '2026-07-02', \
-                 60, true, false, $6)",
-        entry_a,
+    let entry_a = insert_entry(
+        &pool,
         org_id,
         user_id,
         project_id,
         task_id,
-        EntryState::Open as EntryState,
+        NaiveDate::from_ymd_opt(2026, 7, 2).unwrap(),
+        60,
+        EntryState::Open,
+        None,
     )
-    .execute(&pool)
-    .await
-    .unwrap();
+    .await;
 
     // Submit the entry
     sqlx::query!(
@@ -594,20 +648,7 @@ async fn approval_workflow_approve_and_reject(pool: PgPool) {
     .unwrap();
 
     // Create approval record
-    let approval_id = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO approvals (id, org_id, user_id, period_start, period_end, state) \
-         VALUES ($1, $2, $3, $4, $5, $6)",
-        approval_id,
-        org_id,
-        user_id,
-        period_start as chrono::NaiveDate,
-        period_end as chrono::NaiveDate,
-        EntryState::Submitted as EntryState,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    let approval_id = seed_approval(&pool, org_id, user_id, (period_start, period_end), None).await;
 
     // Manager approves: transition entries + approval
     sqlx::query!(
@@ -659,23 +700,18 @@ async fn approval_workflow_approve_and_reject(pool: PgPool) {
     // --- Reject path ---
 
     // Create a new entry, submit, then reject (reopen entries + delete approval)
-    let entry_b = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO time_entries \
-           (id, org_id, user_id, project_id, task_id, spent_date, \
-            minutes, billable, is_running, state) \
-         VALUES ($1, $2, $3, $4, $5, '2026-07-14', \
-                 45, true, false, $6)",
-        entry_b,
+    let entry_b = insert_entry(
+        &pool,
         org_id,
         user_id,
         project_id,
         task_id,
-        EntryState::Open as EntryState,
+        NaiveDate::from_ymd_opt(2026, 7, 14).unwrap(),
+        45,
+        EntryState::Open,
+        None,
     )
-    .execute(&pool)
-    .await
-    .unwrap();
+    .await;
 
     let period2_start = NaiveDate::from_ymd_opt(2026, 7, 8).unwrap();
     let period2_end = NaiveDate::from_ymd_opt(2026, 7, 14).unwrap();
@@ -692,20 +728,8 @@ async fn approval_workflow_approve_and_reject(pool: PgPool) {
     .await
     .unwrap();
 
-    let approval2_id = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO approvals (id, org_id, user_id, period_start, period_end, state) \
-         VALUES ($1, $2, $3, $4, $5, $6)",
-        approval2_id,
-        org_id,
-        user_id,
-        period2_start as chrono::NaiveDate,
-        period2_end as chrono::NaiveDate,
-        EntryState::Submitted as EntryState,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    let approval2_id =
+        seed_approval(&pool, org_id, user_id, (period2_start, period2_end), None).await;
 
     // Reject: reopen entries and delete the approval row
     sqlx::query!(
@@ -788,22 +812,14 @@ async fn reject_after_approve_reopens_entries(pool: PgPool) {
     .await
     .unwrap();
 
-    let approval_id = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO approvals \
-           (id, org_id, user_id, period_start, period_end, state, approved_by, approved_at) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, now())",
-        approval_id,
+    let approval_id = seed_approval(
+        &pool,
         org_id,
         user_id,
-        period_start as chrono::NaiveDate,
-        period_end as chrono::NaiveDate,
-        EntryState::Approved as EntryState,
-        manager_id,
+        (period_start, period_end),
+        Some(manager_id),
     )
-    .execute(&pool)
-    .await
-    .unwrap();
+    .await;
 
     // Reject/reopen, as `reject_submission` does: reopen the period's
     // submitted and approved entries, then delete the approval row.
@@ -876,40 +892,27 @@ async fn resubmit_after_approve_is_refused(pool: PgPool) {
     let period_end = NaiveDate::from_ymd_opt(2026, 8, 16).unwrap();
 
     // An approved week, plus a new open entry the user added afterwards.
-    let approval_id = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO approvals \
-           (id, org_id, user_id, period_start, period_end, state, approved_by, approved_at) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, now())",
-        approval_id,
+    let approval_id = seed_approval(
+        &pool,
         org_id,
         user_id,
-        period_start as chrono::NaiveDate,
-        period_end as chrono::NaiveDate,
-        EntryState::Approved as EntryState,
-        manager_id,
+        (period_start, period_end),
+        Some(manager_id),
     )
-    .execute(&pool)
-    .await
-    .unwrap();
+    .await;
 
-    let entry_id = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO time_entries \
-           (id, org_id, user_id, project_id, task_id, spent_date, \
-            minutes, billable, is_running, state) \
-         VALUES ($1, $2, $3, $4, $5, '2026-08-11', \
-                 30, true, false, $6)",
-        entry_id,
+    let entry_id = insert_entry(
+        &pool,
         org_id,
         user_id,
         project_id,
         task_id,
-        EntryState::Open as EntryState,
+        NaiveDate::from_ymd_opt(2026, 8, 11).unwrap(),
+        30,
+        EntryState::Open,
+        None,
     )
-    .execute(&pool)
-    .await
-    .unwrap();
+    .await;
 
     // Resubmit, as `submit_week` does: check the existing approval's state
     // before touching anything, and refuse (conflict) when it is approved.
@@ -1121,22 +1124,18 @@ async fn new_task_becomes_loggable_on_project(pool: PgPool) {
     assert_eq!(after, 1, "linked task must be loggable on the project");
 
     // And a time entry can be recorded against it.
-    let entry_id = Uuid::now_v7();
-    sqlx::query(
-        "INSERT INTO time_entries \
-           (id, org_id, user_id, project_id, task_id, spent_date, \
-            minutes, billable, is_running, state) \
-         VALUES ($1, $2, $3, $4, $5, CURRENT_DATE, \
-                 30, true, false, 'open'::entry_state)",
+    let entry_id = insert_entry(
+        &pool,
+        org_id,
+        user_id,
+        project_id,
+        new_task,
+        Utc::now().date_naive(),
+        30,
+        EntryState::Open,
+        None,
     )
-    .bind(entry_id)
-    .bind(org_id)
-    .bind(user_id)
-    .bind(project_id)
-    .bind(new_task)
-    .execute(&pool)
-    .await
-    .unwrap();
+    .await;
 
     let logged: i64 = sqlx::query_scalar("SELECT count(*) FROM time_entries WHERE id = $1")
         .bind(entry_id)
@@ -1156,22 +1155,18 @@ async fn inactive_project_hidden_from_picker_but_kept_on_history(pool: PgPool) {
     let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
 
     // Log a completed entry against the project.
-    let entry_id = Uuid::now_v7();
-    sqlx::query(
-        "INSERT INTO time_entries \
-           (id, org_id, user_id, project_id, task_id, spent_date, \
-            minutes, billable, is_running, state) \
-         VALUES ($1, $2, $3, $4, $5, CURRENT_DATE, \
-                 60, true, false, 'open'::entry_state)",
+    let entry_id = insert_entry(
+        &pool,
+        org_id,
+        user_id,
+        project_id,
+        task_id,
+        Utc::now().date_naive(),
+        60,
+        EntryState::Open,
+        None,
     )
-    .bind(entry_id)
-    .bind(org_id)
-    .bind(user_id)
-    .bind(project_id)
-    .bind(task_id)
-    .execute(&pool)
-    .await
-    .unwrap();
+    .await;
 
     // Manager deactivates the project (set_project_active(.., false)).
     sqlx::query("UPDATE projects SET active = false WHERE id = $1 AND org_id = $2")
@@ -1233,32 +1228,31 @@ async fn generate_invoice_totals_match(pool: PgPool) {
 
     // Insert two billable entries: 60 min (open) and 30 min (approved) — both
     // states are invoiceable.
-    let entry_a = Uuid::now_v7();
-    let entry_b = Uuid::now_v7();
     let date = NaiveDate::from_ymd_opt(2026, 7, 1).unwrap();
-
-    for (eid, mins, state) in [
-        (entry_a, 60, EntryState::Open),
-        (entry_b, 30, EntryState::Approved),
-    ] {
-        sqlx::query!(
-            "INSERT INTO time_entries \
-               (id, org_id, user_id, project_id, task_id, spent_date, \
-                minutes, billable, is_running, state) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, true, false, $8)",
-            eid,
-            org_id,
-            user_id,
-            project_id,
-            task_id,
-            date as NaiveDate,
-            mins,
-            state as EntryState,
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-    }
+    let entry_a = insert_entry(
+        &pool,
+        org_id,
+        user_id,
+        project_id,
+        task_id,
+        date,
+        60,
+        EntryState::Open,
+        None,
+    )
+    .await;
+    let entry_b = insert_entry(
+        &pool,
+        org_id,
+        user_id,
+        project_id,
+        task_id,
+        date,
+        30,
+        EntryState::Approved,
+        None,
+    )
+    .await;
 
     // Generate the invoice via the same logic as the server fn:
     // fetch entries, resolve rates, compute amounts, insert.
@@ -1315,7 +1309,6 @@ async fn generate_invoice_totals_match(pool: PgPool) {
 
     assert_eq!(entries.len(), 2, "should find both billable entries");
 
-    let invoice_id = Uuid::now_v7();
     let mut total_cents: i64 = 0;
 
     // Compute line items first to know the total.
@@ -1352,17 +1345,9 @@ async fn generate_invoice_totals_match(pool: PgPool) {
     assert_eq!(total_cents, 18000, "total must be 12000 + 6000");
 
     // Insert invoice first (line items reference it via FK).
-    sqlx::query!(
-        "INSERT INTO invoices (id, org_id, client_id, number, status, issued_on, due_on, currency, total_cents) \
-         VALUES ($1, $2, $3, 'INV-202607-001', 'draft', '2026-07-11', '2026-08-10', 'EUR', $4)",
-        invoice_id,
-        org_id,
-        client_id,
-        total_cents,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    let invoice_id = seed_draft_invoice(&pool, org_id, client_id, "INV-202607-001", total_cents)
+        .await
+        .unwrap();
 
     // Insert line items.
     for ld in &line_data {
@@ -1444,37 +1429,23 @@ async fn invoiced_entries_cannot_be_rebilled(pool: PgPool) {
         seed_project_with_assignment(&pool, org_id, user_id).await;
 
     let date = NaiveDate::from_ymd_opt(2026, 7, 5).unwrap();
-    let entry_id = Uuid::now_v7();
-
-    sqlx::query!(
-        "INSERT INTO time_entries \
-           (id, org_id, user_id, project_id, task_id, spent_date, \
-            minutes, billable, is_running, state) \
-         VALUES ($1, $2, $3, $4, $5, $6, 60, true, false, $7)",
-        entry_id,
+    let entry_id = insert_entry(
+        &pool,
         org_id,
         user_id,
         project_id,
         task_id,
-        date as NaiveDate,
-        EntryState::Open as EntryState,
+        date,
+        60,
+        EntryState::Open,
+        None,
     )
-    .execute(&pool)
-    .await
-    .unwrap();
+    .await;
 
     // Invoice the entry.
-    let invoice_id = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO invoices (id, org_id, client_id, number, status, issued_on, due_on, currency, total_cents) \
-         VALUES ($1, $2, $3, 'INV-001', 'draft', '2026-07-11', '2026-08-10', 'EUR', 0)",
-        invoice_id,
-        org_id,
-        client_id,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    let invoice_id = seed_draft_invoice(&pool, org_id, client_id, "INV-001", 0)
+        .await
+        .unwrap();
 
     sqlx::query!(
         "UPDATE time_entries SET invoice_id = $1, state = 'invoiced', updated_at = now() \
@@ -1525,37 +1496,23 @@ async fn void_invoice_restores_entries(pool: PgPool) {
         seed_project_with_assignment(&pool, org_id, user_id).await;
 
     let date = NaiveDate::from_ymd_opt(2026, 7, 3).unwrap();
-    let entry_id = Uuid::now_v7();
-
-    sqlx::query!(
-        "INSERT INTO time_entries \
-           (id, org_id, user_id, project_id, task_id, spent_date, \
-            minutes, billable, is_running, state) \
-         VALUES ($1, $2, $3, $4, $5, $6, 45, true, false, $7)",
-        entry_id,
+    let entry_id = insert_entry(
+        &pool,
         org_id,
         user_id,
         project_id,
         task_id,
-        date as NaiveDate,
-        EntryState::Open as EntryState,
+        date,
+        45,
+        EntryState::Open,
+        None,
     )
-    .execute(&pool)
-    .await
-    .unwrap();
+    .await;
 
     // Create and mark invoiced.
-    let invoice_id = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO invoices (id, org_id, client_id, number, status, issued_on, due_on, currency, total_cents) \
-         VALUES ($1, $2, $3, 'INV-V01', 'draft', '2026-07-11', '2026-08-10', 'EUR', 0)",
-        invoice_id,
-        org_id,
-        client_id,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    let invoice_id = seed_draft_invoice(&pool, org_id, client_id, "INV-V01", 0)
+        .await
+        .unwrap();
 
     sqlx::query!(
         "INSERT INTO invoice_line_items (id, invoice_id, time_entry_id, description, minutes, rate_cents, amount_cents) \
@@ -1647,32 +1604,20 @@ async fn approved_entries_are_invoiceable(pool: PgPool) {
         seed_project_with_assignment(&pool, org_id, user_id).await;
 
     let date = NaiveDate::from_ymd_opt(2026, 7, 6).unwrap();
-    let open_id = Uuid::now_v7();
-    let approved_id = Uuid::now_v7();
-    let submitted_id = Uuid::now_v7();
-
-    for (eid, state) in [
-        (open_id, EntryState::Open),
-        (approved_id, EntryState::Approved),
-        (submitted_id, EntryState::Submitted),
+    let mut ids = Vec::new();
+    for state in [
+        EntryState::Open,
+        EntryState::Approved,
+        EntryState::Submitted,
     ] {
-        sqlx::query!(
-            "INSERT INTO time_entries \
-               (id, org_id, user_id, project_id, task_id, spent_date, \
-                minutes, billable, is_running, state) \
-             VALUES ($1, $2, $3, $4, $5, $6, 60, true, false, $7)",
-            eid,
-            org_id,
-            user_id,
-            project_id,
-            task_id,
-            date as NaiveDate,
-            state as EntryState,
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
+        ids.push(
+            insert_entry(
+                &pool, org_id, user_id, project_id, task_id, date, 60, state, None,
+            )
+            .await,
+        );
     }
+    let (open_id, approved_id) = (ids[0], ids[1]);
 
     let period_from = NaiveDate::from_ymd_opt(2026, 7, 1).unwrap();
     let period_to = NaiveDate::from_ymd_opt(2026, 7, 31).unwrap();
@@ -1718,36 +1663,23 @@ async fn invoicing_update_skips_already_invoiced_entries(pool: PgPool) {
         seed_project_with_assignment(&pool, org_id, user_id).await;
 
     let date = NaiveDate::from_ymd_opt(2026, 7, 7).unwrap();
-    let entry_id = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO time_entries \
-           (id, org_id, user_id, project_id, task_id, spent_date, \
-            minutes, billable, is_running, state) \
-         VALUES ($1, $2, $3, $4, $5, $6, 60, true, false, $7)",
-        entry_id,
+    let entry_id = insert_entry(
+        &pool,
         org_id,
         user_id,
         project_id,
         task_id,
-        date as NaiveDate,
-        EntryState::Open as EntryState,
+        date,
+        60,
+        EntryState::Open,
+        None,
     )
-    .execute(&pool)
-    .await
-    .unwrap();
+    .await;
 
     // First invoice claims the entry.
-    let first_invoice = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO invoices (id, org_id, client_id, number, status, issued_on, due_on, currency, total_cents) \
-         VALUES ($1, $2, $3, 'INV-202607-001', 'draft', '2026-07-11', '2026-08-10', 'EUR', 0)",
-        first_invoice,
-        org_id,
-        client_id,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    let first_invoice = seed_draft_invoice(&pool, org_id, client_id, "INV-202607-001", 0)
+        .await
+        .unwrap();
 
     sqlx::query!(
         "UPDATE time_entries SET invoice_id = $1, state = 'invoiced', updated_at = now() \
@@ -1761,17 +1693,9 @@ async fn invoicing_update_skips_already_invoiced_entries(pool: PgPool) {
 
     // A second invoice tries to claim the same entry with the guarded UPDATE
     // generate_invoice uses; it must affect zero rows.
-    let second_invoice = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO invoices (id, org_id, client_id, number, status, issued_on, due_on, currency, total_cents) \
-         VALUES ($1, $2, $3, 'INV-202607-002', 'draft', '2026-07-11', '2026-08-10', 'EUR', 0)",
-        second_invoice,
-        org_id,
-        client_id,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    let second_invoice = seed_draft_invoice(&pool, org_id, client_id, "INV-202607-002", 0)
+        .await
+        .unwrap();
 
     let entry_ids = vec![entry_id];
     let claimed = sqlx::query!(
@@ -1817,26 +1741,11 @@ async fn duplicate_invoice_numbers_rejected(pool: PgPool) {
     let (_project_id, _task_id, client_id) =
         seed_project_with_assignment(&pool, org_id, user_id).await;
 
-    sqlx::query!(
-        "INSERT INTO invoices (id, org_id, client_id, number, status, issued_on, due_on, currency, total_cents) \
-         VALUES ($1, $2, $3, 'INV-202607-001', 'draft', '2026-07-11', '2026-08-10', 'EUR', 0)",
-        Uuid::now_v7(),
-        org_id,
-        client_id,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    seed_draft_invoice(&pool, org_id, client_id, "INV-202607-001", 0)
+        .await
+        .unwrap();
 
-    let dup = sqlx::query!(
-        "INSERT INTO invoices (id, org_id, client_id, number, status, issued_on, due_on, currency, total_cents) \
-         VALUES ($1, $2, $3, 'INV-202607-001', 'draft', '2026-07-11', '2026-08-10', 'EUR', 0)",
-        Uuid::now_v7(),
-        org_id,
-        client_id,
-    )
-    .execute(&pool)
-    .await;
+    let dup = seed_draft_invoice(&pool, org_id, client_id, "INV-202607-001", 0).await;
 
     let err = dup.expect_err("a second invoice with the same number must be rejected");
     let db_err = err
@@ -1943,23 +1852,18 @@ async fn deactivated_user_blocked_and_history_preserved(pool: PgPool) {
     let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
 
     // Create a time entry for this user.
-    let entry_id = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO time_entries \
-           (id, org_id, user_id, project_id, task_id, spent_date, \
-            minutes, billable, is_running, state) \
-         VALUES ($1, $2, $3, $4, $5, CURRENT_DATE, \
-                 60, true, false, $6)",
-        entry_id,
+    let entry_id = insert_entry(
+        &pool,
         org_id,
         user_id,
         project_id,
         task_id,
-        EntryState::Open as EntryState,
+        Utc::now().date_naive(),
+        60,
+        EntryState::Open,
+        None,
     )
-    .execute(&pool)
-    .await
-    .unwrap();
+    .await;
 
     // Deactivate the user.
     sqlx::query!("UPDATE users SET active = false WHERE id = $1", user_id)
@@ -2430,22 +2334,17 @@ async fn stopping_timer_records_start_minute(pool: PgPool) {
     let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
 
     // A timer that started at 09:07 UTC.
-    let started_at: chrono::DateTime<chrono::Utc> = "2026-08-04T09:07:00Z".parse().unwrap();
-    let entry_id = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO time_entries \
-           (id, org_id, user_id, project_id, task_id, spent_date, \
-            minutes, billable, is_running, started_at, state) \
-         VALUES ($1, $2, $3, $4, $5, DATE '2026-08-04', 0, true, true, \
-                 TIMESTAMPTZ '2026-08-04 09:07:00+00', $6)",
-        entry_id,
+    let started_at: DateTime<Utc> = "2026-08-04T09:07:00Z".parse().unwrap();
+    let entry_id = insert_running_entry(
+        &pool,
         org_id,
         user_id,
         project_id,
         task_id,
-        EntryState::Open as EntryState,
+        NaiveDate::from_ymd_opt(2026, 8, 4).unwrap(),
+        started_at,
+        EntryState::Open,
     )
-    .execute(&pool)
     .await
     .unwrap();
 
@@ -2494,23 +2393,18 @@ async fn totals_unaffected_by_start_minute(pool: PgPool) {
     let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
 
     for (minutes, start) in [(30i32, None), (60, Some(540i32)), (90, Some(840))] {
-        sqlx::query!(
-            "INSERT INTO time_entries \
-               (id, org_id, user_id, project_id, task_id, spent_date, \
-                minutes, billable, is_running, state, start_minute) \
-             VALUES ($1, $2, $3, $4, $5, CURRENT_DATE, $6, true, false, $7, $8)",
-            Uuid::now_v7(),
+        insert_entry(
+            &pool,
             org_id,
             user_id,
             project_id,
             task_id,
+            Utc::now().date_naive(),
             minutes,
-            EntryState::Open as EntryState,
+            EntryState::Open,
             start,
         )
-        .execute(&pool)
-        .await
-        .unwrap();
+        .await;
     }
 
     let total: Option<i64> = sqlx::query_scalar!(
@@ -2545,22 +2439,18 @@ async fn reschedule_moves_open_entry_and_rejects_locked(pool: PgPool) {
     let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
 
     // An open timed entry: today 09:00 for 60m.
-    let open_id = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO time_entries \
-           (id, org_id, user_id, project_id, task_id, spent_date, \
-            minutes, billable, is_running, state, start_minute) \
-         VALUES ($1, $2, $3, $4, $5, CURRENT_DATE, 60, true, false, $6, 540)",
-        open_id,
+    let open_id = insert_entry(
+        &pool,
         org_id,
         user_id,
         project_id,
         task_id,
-        EntryState::Open as EntryState,
+        Utc::now().date_naive(),
+        60,
+        EntryState::Open,
+        Some(540),
     )
-    .execute(&pool)
-    .await
-    .unwrap();
+    .await;
 
     // Reschedule to tomorrow 13:00 for 120m (mirrors reschedule_time_entry).
     let moved = sqlx::query!(
@@ -2580,22 +2470,18 @@ async fn reschedule_moves_open_entry_and_rejects_locked(pool: PgPool) {
     assert_eq!(moved.minutes, 120);
 
     // A submitted (locked) entry cannot be rescheduled.
-    let locked_id = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO time_entries \
-           (id, org_id, user_id, project_id, task_id, spent_date, \
-            minutes, billable, is_running, state, start_minute) \
-         VALUES ($1, $2, $3, $4, $5, CURRENT_DATE, 60, true, false, $6, 540)",
-        locked_id,
+    let locked_id = insert_entry(
+        &pool,
         org_id,
         user_id,
         project_id,
         task_id,
-        EntryState::Submitted as EntryState,
+        Utc::now().date_naive(),
+        60,
+        EntryState::Submitted,
+        Some(540),
     )
-    .execute(&pool)
-    .await
-    .unwrap();
+    .await;
 
     let rejected = sqlx::query!(
         "UPDATE time_entries \
@@ -2620,26 +2506,36 @@ async fn reorder_untimed_orders_and_moves_across_days(pool: PgPool) {
     let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
 
     // Two untimed entries on today, one on tomorrow (day offset 0 vs 1).
-    let today: Vec<Uuid> = (0..2).map(|_| Uuid::now_v7()).collect();
-    let moved = Uuid::now_v7();
-    for (id, day_off) in today.iter().map(|id| (*id, 0i32)).chain([(moved, 1i32)]) {
-        sqlx::query!(
-            "INSERT INTO time_entries \
-               (id, org_id, user_id, project_id, task_id, spent_date, \
-                minutes, billable, is_running, state) \
-             VALUES ($1, $2, $3, $4, $5, CURRENT_DATE + $6::int4, 60, true, false, $7)",
-            id,
-            org_id,
-            user_id,
-            project_id,
-            task_id,
-            day_off,
-            EntryState::Open as EntryState,
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
+    let today_date = Utc::now().date_naive();
+    let mut today = Vec::new();
+    for _ in 0..2 {
+        today.push(
+            insert_entry(
+                &pool,
+                org_id,
+                user_id,
+                project_id,
+                task_id,
+                today_date,
+                60,
+                EntryState::Open,
+                None,
+            )
+            .await,
+        );
     }
+    let moved = insert_entry(
+        &pool,
+        org_id,
+        user_id,
+        project_id,
+        task_id,
+        today_date + Duration::days(1),
+        60,
+        EntryState::Open,
+        None,
+    )
+    .await;
 
     // Place [moved, today[0], today[1]] on today — mirrors reorder_untimed_entries.
     // The tomorrow entry is pulled onto today, and the stack is ordered.
@@ -2696,39 +2592,29 @@ async fn submit_week_with_running_timer_is_refused(pool: PgPool) {
     let we = ws + chrono::Duration::days(6);
 
     // A finished open entry (30m) and a running timer, both inside the week.
-    let open_id = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO time_entries \
-           (id, org_id, user_id, project_id, task_id, spent_date, \
-            minutes, billable, is_running, state) \
-         VALUES ($1, $2, $3, $4, $5, $6, 30, true, false, $7)",
-        open_id,
+    let open_id = insert_entry(
+        &pool,
         org_id,
         user_id,
         project_id,
         task_id,
-        ws as NaiveDate,
-        EntryState::Open as EntryState,
+        ws,
+        30,
+        EntryState::Open,
+        None,
     )
-    .execute(&pool)
-    .await
-    .unwrap();
+    .await;
 
-    let running_id = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO time_entries \
-           (id, org_id, user_id, project_id, task_id, spent_date, \
-            minutes, billable, is_running, started_at, state) \
-         VALUES ($1, $2, $3, $4, $5, $6, 0, true, true, now() - interval '5 minutes', $7)",
-        running_id,
+    let running_id = insert_running_entry(
+        &pool,
         org_id,
         user_id,
         project_id,
         task_id,
-        ws as NaiveDate,
-        EntryState::Open as EntryState,
+        ws,
+        Utc::now() - Duration::minutes(5),
+        EntryState::Open,
     )
-    .execute(&pool)
     .await
     .unwrap();
 
@@ -2832,19 +2718,21 @@ async fn stop_timer_refuses_entry_that_left_open(pool: PgPool) {
 
     // A running entry that was (wrongly) locked mid-run: submitted with its
     // rounded minutes frozen at zero.
-    let entry_id = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO time_entries \
-           (id, org_id, user_id, project_id, task_id, spent_date, \
-            minutes, rounded_minutes, billable, is_running, started_at, state) \
-         VALUES ($1, $2, $3, $4, $5, CURRENT_DATE, \
-                 0, 0, true, true, now() - interval '5 minutes', $6)",
-        entry_id,
+    let entry_id = insert_running_entry(
+        &pool,
         org_id,
         user_id,
         project_id,
         task_id,
-        EntryState::Submitted as EntryState,
+        Utc::now().date_naive(),
+        Utc::now() - Duration::minutes(5),
+        EntryState::Submitted,
+    )
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE time_entries SET rounded_minutes = 0 WHERE id = $1",
+        entry_id,
     )
     .execute(&pool)
     .await
