@@ -32,10 +32,3 @@ pub struct TimeEntry {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
-
-impl TimeEntry {
-    /// Format minutes as "H:MM".
-    pub fn format_duration(&self) -> String {
-        horae_core::duration::format_hhmm(self.minutes as u32)
-    }
-}

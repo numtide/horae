@@ -6,6 +6,10 @@ use dioxus::prelude::*;
 use tracing::error;
 use uuid::Uuid;
 
+use horae_core::duration::format_hhmm;
+use horae_core::week::iso_week_monday;
+
+use super::loaded;
 use crate::components::controls::Segmented;
 use crate::components::date_picker::DatePicker;
 use crate::components::menu::{Menu, MenuItem};
@@ -13,12 +17,6 @@ use crate::components::timer_widget::use_running_timer;
 use crate::models::time_entry::TimeEntry;
 use crate::route::Route;
 use crate::server_fns;
-
-/// `H:MM` clock format from integer minutes (the design's cell/total format).
-/// Delegates to the core formatter so duration display has one source of truth.
-fn format_hm(total_minutes: i32) -> String {
-    horae_core::duration::format_hhmm(total_minutes.max(0) as u32)
-}
 
 /// Offset (0 = Mon .. 6 = Sun) of `today` within the week starting `week_start`,
 /// or `None` when today falls outside that week.
@@ -161,11 +159,6 @@ impl std::str::FromStr for Anchor {
             .map(Anchor)
             .unwrap_or_default())
     }
-}
-
-/// Return the Monday of the ISO week containing `date`.
-fn iso_week_monday(date: NaiveDate) -> NaiveDate {
-    date - Duration::days(date.weekday().num_days_from_monday() as i64)
 }
 
 const DAY_LABELS: [&str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -414,7 +407,7 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
         add_project.set(e.project_id.to_string());
         add_task.set(e.task_id.to_string());
         add_notes.set(e.notes.clone().unwrap_or_default());
-        add_duration.set(format_hm(e.minutes));
+        add_duration.set(format_hhmm(e.minutes.into()));
         add_start.set(e.start_minute);
         edit_billable.set(e.billable);
         add_error.set(None);
@@ -466,7 +459,7 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                 };
                 open_add.call(day);
                 add_start.set(Some(start));
-                add_duration.set(format_hm(clamp(start, dur)));
+                add_duration.set(format_hhmm(clamp(start, dur).into()));
             }
             // Move an entry → new start follows the pointer (keeping the grab
             // offset), possibly to another day. No movement → open it for editing.
@@ -728,7 +721,7 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
             // Header: title + last-saved + view toggle
             div { class: "ts-header",
                 h1 { class: "page-title", "Timesheet" }
-                span { class: "ts-saved", "{format_hm(week_total)} this week" }
+                span { class: "ts-saved", "{format_hhmm(week_total.into())} this week" }
                 Segmented {
                     items: vec!["Day".to_string(), "Week".to_string(), "Calendar".to_string()],
                     active: match current_mode {
@@ -849,14 +842,7 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
             }
 
             // Content
-            match &*entries.read() {
-                None => rsx! {
-                    div { class: "text-muted text-sm", "Loading…" }
-                },
-                Some(Err(e)) => rsx! {
-                    div { class: "alert alert-danger", "{e}" }
-                },
-                Some(Ok(_)) => match current_mode {
+            {loaded(&*entries.read(), |_| match current_mode {
                     ViewMode::Week => rsx! {
                         {render_week_view(&week_entries.read(), &daily_totals.read(), ws, today, &project_names.read(), &task_names.read(), &pending_rows.read(), week_actions)}
                         div { class: "ts-submit-bar",
@@ -901,8 +887,7 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                             render_calendar_view(&by_day.read(), &daily_totals.read(), &visible, ws, today, &CalLabels { projects: &project_names.read(), tasks: &task_names.read(), clients: &project_client.read() }, cal_drag, add_hint, drag_commit)
                         }
                     },
-                },
-            }
+                })}
 
             // Add–entry modal (opened by "+" or by clicking a calendar day).
             if let Some(date) = *add_open.read() {
@@ -1386,7 +1371,7 @@ fn render_calendar_view(
                     .cloned()
                     .unwrap_or_else(|| "Untitled".into()),
                 task: labels.tasks.get(&e.task_id).cloned().unwrap_or_default(),
-                duration: format_hm(e.minutes),
+                duration: format_hhmm(e.minutes.into()),
                 time_label,
                 client,
                 entry: e.clone(),
@@ -1441,14 +1426,14 @@ fn render_calendar_view(
                             rsx! {
                                 div { class: "{head_class(i)}",
                                     div { class: "ts-cal-dayname", "{DAY_LABELS[i]} {d.day()}" }
-                                    div { class: "ts-cal-daytotal", "{format_hm(daily_totals[i])}" }
+                                    div { class: "ts-cal-daytotal", "{format_hhmm(daily_totals[i].into())}" }
                                 }
                             }
                         }
                     }
                     div { class: "ts-cal-weektot",
                         div { class: "ts-cal-weektot-label", "{total_label}" }
-                        div { class: "ts-cal-weektot-value", "{format_hm(shown_total)}" }
+                        div { class: "ts-cal-weektot-value", "{format_hhmm(shown_total.into())}" }
                     }
                 }
 
@@ -1761,14 +1746,14 @@ fn render_day_view(
                             class: "{cls}",
                             onclick: move |_| select_day.call(i),
                             span { class: "ts-dayitem-name", "{DAY_LABELS[i as usize]}" }
-                            span { class: "ts-dayitem-total", "{format_hm(daily_totals[i as usize])}" }
+                            span { class: "ts-dayitem-total", "{format_hhmm(daily_totals[i as usize].into())}" }
                         }
                     }
                 }
             }
             div { class: "ts-dayitem ts-weektotal",
                 span { class: "ts-dayitem-name", "Week total" }
-                span { class: "ts-dayitem-total", "{format_hm(daily_totals.iter().sum::<i32>())}" }
+                span { class: "ts-dayitem-total", "{format_hhmm(daily_totals.iter().sum::<i32>().into())}" }
             }
         }
 
@@ -1783,7 +1768,7 @@ fn render_day_view(
                             let task = task_names.get(&entry.task_id).cloned().unwrap_or_else(|| "\u{2014}".into());
                             let note = entry.notes.clone().filter(|n| !n.trim().is_empty());
                             let running = entry.is_running;
-                            let dur = entry.format_duration();
+                            let dur = format_hhmm(entry.minutes.into());
                             let e_start = entry.clone();
                             let e_edit = entry.clone();
                             rsx! {
@@ -1822,7 +1807,7 @@ fn render_day_view(
             div { class: "mt-4 text-right p-2",
                 span { class: "text-muted text-sm", "Day total: " }
                 span { class: "text-mono font-semibold text-primary",
-                    "{format_hm(total)}"
+                    "{format_hhmm(total.into())}"
                 }
             }
         }
@@ -1955,7 +1940,7 @@ fn render_week_view(
                                         if agg.ids[i].len() <= 1 {
                                             let day = week_start + Duration::days(i as i64);
                                             let existing = agg.ids[i].first().copied();
-                                            let val = if mins > 0 { format_hm(mins) } else { String::new() };
+                                            let val = if mins > 0 { format_hhmm(mins.into()) } else { String::new() };
                                             let icls = value_cell_class("ts-cell-input", mins, today_off, i);
                                             rsx! {
                                                 div { class: "ts-cell",
@@ -1986,13 +1971,13 @@ fn render_week_view(
                                             let cls = value_cell_class("ts-cell-box", mins, today_off, i);
                                             rsx! {
                                                 div { class: "ts-cell",
-                                                    div { class: "{cls}", title: "Multiple entries — edit in Day view", "{format_hm(mins)}" }
+                                                    div { class: "{cls}", title: "Multiple entries — edit in Day view", "{format_hhmm(mins.into())}" }
                                                 }
                                             }
                                         }
                                     }
                                 }
-                                div { class: "ts-rowtotal", "{format_hm(row_total)}" }
+                                div { class: "ts-rowtotal", "{format_hhmm(row_total.into())}" }
                                 div { class: "text-center",
                                     button {
                                         class: "ts-del",
@@ -2027,7 +2012,7 @@ fn render_week_view(
                             rsx! {
                                 div { class: "{cls}",
                                     if t > 0 {
-                                        "{format_hm(t)}"
+                                        "{format_hhmm(t.into())}"
                                     } else {
                                         "0"
                                     }
@@ -2035,7 +2020,7 @@ fn render_week_view(
                             }
                         }
                     }
-                    div { class: "ts-grandtotal", "{format_hm(daily_totals.iter().sum::<i32>())}" }
+                    div { class: "ts-grandtotal", "{format_hhmm(daily_totals.iter().sum::<i32>().into())}" }
                     div {}
                 }
             }
@@ -2049,16 +2034,6 @@ mod tests {
 
     fn ymd(y: i32, m: u32, d: u32) -> NaiveDate {
         NaiveDate::from_ymd_opt(y, m, d).unwrap()
-    }
-
-    #[test]
-    fn format_hm_pads_minutes() {
-        assert_eq!(format_hm(65), "1:05");
-    }
-
-    #[test]
-    fn format_hm_clamps_negative_to_zero() {
-        assert_eq!(format_hm(-5), "0:00");
     }
 
     #[test]

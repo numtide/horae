@@ -5,16 +5,12 @@ use horae_core::duration::format_hhmm;
 use horae_core::types::EntryState;
 use uuid::Uuid;
 
+use super::{is_manager, loaded};
 use crate::components::avatar::{Avatar, first_initial};
 use crate::components::badge::Badge;
 use crate::components::controls::Segmented;
 use crate::components::table::DataTable;
 use crate::server_fns;
-
-/// Minutes (aggregated, so `i64`) as `H:MM`, reusing the core formatter.
-fn hhmm(minutes: i64) -> String {
-    format_hhmm(minutes.max(0) as u32)
-}
 
 /// The `list_approvals` status argument for a Segmented label.
 fn status_arg(label: &str) -> Option<String> {
@@ -63,12 +59,7 @@ pub fn Approvals() -> Element {
         .map(|us| us.iter().map(|u| (u.id, u.name.clone())).collect())
         .unwrap_or_default();
 
-    let is_manager = me
-        .read()
-        .as_ref()
-        .and_then(|r| r.as_ref().ok())
-        .map(|u| u.is_manager_or_above())
-        .unwrap_or(false);
+    let is_manager = is_manager(&me);
 
     rsx! {
         div {
@@ -93,15 +84,14 @@ pub fn Approvals() -> Element {
                     div { class: "alert alert-danger mb-4", "{err}" }
                 }
 
-                match &*approvals.read() {
-                    None => rsx! { div { class: "text-muted text-sm", "Loading…" } },
-                    Some(Err(e)) => rsx! { div { class: "alert alert-danger", "{e}" } },
-                    Some(Ok(items)) if items.is_empty() => rsx! {
-                        div { class: "card p-8 text-center",
-                            p { class: "text-muted", "No approvals found." }
+                {loaded(&*approvals.read(), |items| {
+                        if items.is_empty() {
+                            return rsx! {
+                                div { class: "card p-8 text-center",
+                                    p { class: "text-muted", "No approvals found." }
+                                }
+                            };
                         }
-                    },
-                    Some(Ok(items)) => {
                         let total: i64 = items.iter().map(|s| s.total_minutes).sum();
                         let billable: i64 = items.iter().map(|s| s.billable_minutes).sum();
                         let nonbill = (total - billable).max(0);
@@ -121,19 +111,19 @@ pub fn Approvals() -> Element {
                             div { class: "card flex items-center gap-8 mb-6",
                                 div {
                                     div { class: "text-muted text-sm", "Total time" }
-                                    div { class: "appr-total", "{hhmm(total)}" }
+                                    div { class: "appr-total", "{format_hhmm(total)}" }
                                 }
                                 div { class: "flex-1 flex flex-col gap-2",
                                     div { class: "flex items-center gap-3",
                                         span { class: "appr-dot appr-dot-billable" }
                                         span { class: "flex-1 text-sm", "Billable" }
-                                        span { class: "text-mono", "{hhmm(billable)}" }
+                                        span { class: "text-mono", "{format_hhmm(billable)}" }
                                         span { class: "appr-legend-pct", "({bill_pct}%)" }
                                     }
                                     div { class: "flex items-center gap-3",
                                         span { class: "appr-dot appr-dot-nonbillable" }
                                         span { class: "flex-1 text-sm", "Non-billable" }
-                                        span { class: "text-mono", "{hhmm(nonbill)}" }
+                                        span { class: "text-mono", "{format_hhmm(nonbill)}" }
                                         span { class: "appr-legend-pct", "({nonbill_pct}%)" }
                                     }
                                 }
@@ -159,7 +149,7 @@ pub fn Approvals() -> Element {
                                                     .cloned()
                                                     .unwrap_or_else(|| a.user_id.to_string());
                                                 let submitted = a.submitted_at.format("%d %b, %H:%M").to_string();
-                                                let hours = hhmm(s.total_minutes);
+                                                let hours = format_hhmm(s.total_minutes);
                                                 let is_pending = a.state == EntryState::Submitted;
                                                 let can_reopen =
                                                     is_pending || a.state == EntryState::Approved;
@@ -238,8 +228,7 @@ pub fn Approvals() -> Element {
                                 }
                             }
                         }
-                    }
-                }
+                })}
             }
         }
     }

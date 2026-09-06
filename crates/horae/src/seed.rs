@@ -2,8 +2,9 @@
 /// and sample time entries covering the current ISO week (Mon–Fri).
 ///
 /// All INSERTs use ON CONFLICT DO NOTHING so this is safe to run multiple times.
-use chrono::{Datelike, NaiveDate, Utc};
+use chrono::{NaiveDate, Utc};
 use horae_core::types::{BudgetKind, OrgRole, ProjectRole, ProjectType, RoundDir};
+use horae_core::week::iso_week_monday;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -276,12 +277,6 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
 
     tracing::info!("Seed complete.");
     Ok(())
-}
-
-/// Returns the Monday of the ISO week containing `date`.
-fn iso_week_monday(date: NaiveDate) -> NaiveDate {
-    let days_since_monday = date.weekday().num_days_from_monday();
-    date - chrono::Duration::days(days_since_monday as i64)
 }
 
 fn days(n: i64) -> chrono::Duration {

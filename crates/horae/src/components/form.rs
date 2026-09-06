@@ -1,11 +1,34 @@
 use dioxus::prelude::*;
 
-/// A labelled field wrapper with an optional hint line below the control.
+/// Card chrome for an inline create/edit form: uppercase title, the form's
+/// error banner, then the fields.
 #[component]
-pub fn FormGroup(label: String, #[props(default)] hint: String, children: Element) -> Element {
+pub fn FormCard(title: String, error: ReadSignal<Option<String>>, children: Element) -> Element {
+    rsx! {
+        div { class: "card",
+            div { class: "p-5",
+                h3 { class: "text-sm mb-4 uppercase tracking-wide text-faint", "{title}" }
+                if let Some(err) = &*error.read() {
+                    div { class: "alert alert-danger", "{err}" }
+                }
+                {children}
+            }
+        }
+    }
+}
+
+/// A labelled field wrapper with an optional hint line below the control.
+/// `id` becomes the label's `for`, pairing it with a control given the same id.
+#[component]
+pub fn FormGroup(
+    label: String,
+    #[props(default)] id: String,
+    #[props(default)] hint: String,
+    children: Element,
+) -> Element {
     rsx! {
         div { class: "form-group",
-            label { class: "form-label", "{label}" }
+            label { class: "form-label", r#for: if !id.is_empty() { "{id}" }, "{label}" }
             {children}
             if !hint.is_empty() {
                 p { class: "form-hint", "{hint}" }
@@ -18,6 +41,7 @@ pub fn FormGroup(label: String, #[props(default)] hint: String, children: Elemen
 #[component]
 pub fn Input(
     #[props(default = "text".to_string())] kind: String,
+    #[props(default)] id: String,
     #[props(default)] value: String,
     #[props(default)] placeholder: String,
     #[props(default)] disabled: bool,
@@ -27,6 +51,7 @@ pub fn Input(
     rsx! {
         input {
             class: "form-input",
+            id: if !id.is_empty() { "{id}" },
             r#type: "{kind}",
             value: "{value}",
             placeholder: "{placeholder}",
@@ -40,6 +65,7 @@ pub fn Input(
 /// A multi-line text input.
 #[component]
 pub fn Textarea(
+    #[props(default)] id: String,
     #[props(default)] value: String,
     #[props(default)] placeholder: String,
     #[props(default = 3)] rows: i64,
@@ -49,6 +75,7 @@ pub fn Textarea(
     rsx! {
         textarea {
             class: "form-textarea",
+            id: if !id.is_empty() { "{id}" },
             rows: "{rows}",
             placeholder: "{placeholder}",
             disabled,
@@ -63,6 +90,7 @@ pub fn Textarea(
 #[component]
 pub fn Select(
     options: Vec<(String, String)>,
+    #[props(default)] id: String,
     #[props(default)] selected: String,
     #[props(default)] disabled: bool,
     #[props(default)] onchange: EventHandler<FormEvent>,
@@ -70,6 +98,7 @@ pub fn Select(
     rsx! {
         select {
             class: "form-select",
+            id: if !id.is_empty() { "{id}" },
             disabled,
             onchange: move |e| onchange.call(e),
             for (value , label) in options {

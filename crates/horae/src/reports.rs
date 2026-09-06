@@ -6,6 +6,8 @@
 use axum::extract::{Path, Query};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
+use horae_core::duration::format_hours2;
+use horae_core::money::format_cents_plain;
 use serde::Deserialize;
 use tower_sessions::Session;
 
@@ -119,11 +121,8 @@ pub async fn export_csv(
             e.project_name.clone(),
             e.task_name.clone(),
             e.user_name.clone(),
-            format!("{:.2}", e.minutes as f64 / 60.0),
-            format!(
-                "{:.2}",
-                e.rounded_minutes.unwrap_or(e.minutes) as f64 / 60.0
-            ),
+            format_hours2(e.minutes.into()),
+            format_hours2(e.rounded_minutes.unwrap_or(e.minutes).into()),
             if e.billable { "Yes" } else { "No" }.into(),
             e.notes.clone().unwrap_or_default(),
         ])
@@ -433,9 +432,9 @@ pub async fn export_invoice_csv(
     for line in &lines {
         wtr.write_record(&[
             line.description.clone(),
-            format!("{:.2}", line.minutes as f64 / 60.0),
-            format!("{:.2}", line.rate_cents as f64 / 100.0),
-            format!("{:.2}", line.amount_cents as f64 / 100.0),
+            format_hours2(line.minutes.into()),
+            format_cents_plain(line.rate_cents),
+            format_cents_plain(line.amount_cents),
         ])
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     }
@@ -445,7 +444,7 @@ pub async fn export_invoice_csv(
         "Total".to_string(),
         String::new(),
         String::new(),
-        format!("{:.2}", invoice.total_cents as f64 / 100.0),
+        format_cents_plain(invoice.total_cents),
     ])
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
