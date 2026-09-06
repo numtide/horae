@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO time_entries (id, org_id, user_id, project_id, task_id, spent_date, minutes, billable, is_running, started_at, state) VALUES ($1, $2, $3, $4, $5, CURRENT_DATE, 0, true, true, now() - interval '30 seconds', $6)",
+  "query": "INSERT INTO time_entries (id, org_id, user_id, project_id, task_id, spent_date, minutes, billable, is_running, started_at, state) VALUES ($1, $2, $3, $4, $5, $6, 0, true, true, $7, $8)",
   "describe": {
     "columns": [],
     "parameters": {
@@ -10,6 +10,8 @@
         "Uuid",
         "Uuid",
         "Uuid",
+        "Date",
+        "Timestamptz",
         {
           "Custom": {
             "name": "entry_state",
@@ -27,5 +29,5 @@
     },
     "nullable": []
   },
-  "hash": "87bf127e93533b9c6489ba89b278b1c38b91caf53b1e98b3a39d388cdacabf87"
+  "hash": "0419b6b3471530cfda0e884e4ccbc85d6f3d05f9352d5d922db00d89a7fe7eb9"
 }
