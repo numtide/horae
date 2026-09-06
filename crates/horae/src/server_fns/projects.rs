@@ -40,7 +40,7 @@ pub async fn list_projects(
     client_id: Option<String>,
     include_inactive: bool,
 ) -> Result<Vec<Project>, ServerFnError> {
-    let _user = require_user().await?;
+    let user = require_user().await?;
     let state = crate::state::global_state().await;
     let _ = client_id;
 
@@ -54,9 +54,10 @@ pub async fn list_projects(
                 budget_amount_cents, budget_minutes, active,
                 created_at as "created_at: chrono::DateTime<chrono::Utc>"
          FROM projects
-         WHERE ($1::bool OR active = true)
+         WHERE org_id = $2 AND ($1::bool OR active = true)
          ORDER BY name ASC"#,
         include_inactive,
+        user.org_id,
     )
     .fetch_all(&state.db)
     .await
@@ -72,7 +73,7 @@ pub async fn list_projects(
 /// user, and these are per-project aggregates, not per-user time or rates.
 #[server]
 pub async fn list_project_spend() -> Result<Vec<ProjectSpend>, ServerFnError> {
-    let _user = require_user().await?;
+    let user = require_user().await?;
     let state = crate::state::global_state().await;
 
     struct Row {
@@ -96,7 +97,9 @@ pub async fn list_project_spend() -> Result<Vec<ProjectSpend>, ServerFnError> {
            FROM time_entries te
            LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
            LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id
-           JOIN users u ON u.id = te.user_id"#,
+           JOIN users u ON u.id = te.user_id
+           WHERE te.org_id = $1"#,
+        user.org_id,
     )
     .fetch_all(&state.db)
     .await

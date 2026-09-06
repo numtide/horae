@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT c.name as client_name, p.code, p.name,\n                  p.project_type as \"project_type: horae_core::types::ProjectType\",\n                  p.currency,\n                  p.budget_kind as \"budget_kind: horae_core::types::BudgetKind\",\n                  p.budget_amount_cents, p.budget_minutes, p.active\n           FROM projects p\n           JOIN clients c ON c.id = p.client_id\n           ORDER BY c.name, p.name",
+  "query": "SELECT c.name as client_name, p.code, p.name,\n                  p.project_type as \"project_type: horae_core::types::ProjectType\",\n                  p.currency,\n                  p.budget_kind as \"budget_kind: horae_core::types::BudgetKind\",\n                  p.budget_amount_cents, p.budget_minutes, p.active\n           FROM projects p\n           JOIN clients c ON c.id = p.client_id\n           WHERE p.org_id = $1\n           ORDER BY c.name, p.name",
   "describe": {
     "columns": [
       {
@@ -73,7 +73,9 @@
       }
     ],
     "parameters": {
-      "Left": []
+      "Left": [
+        "Uuid"
+      ]
     },
     "nullable": [
       false,
@@ -87,5 +89,5 @@
       false
     ]
   },
-  "hash": "e962bb4078f60e2dc060b6824208c717b745ffff00570f08472e2415469fab18"
+  "hash": "bb5a64138cc09a87ac8c103a345b63815a2fbfe49ee28ce4ff2445e763fd95f8"
 }

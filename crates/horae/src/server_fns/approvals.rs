@@ -203,7 +203,7 @@ pub async fn submit_week(week_start: String) -> Result<Approval, ServerFnError> 
 /// List approvals, optionally filtered by state. Requires manager role.
 #[server]
 pub async fn list_approvals(status: Option<String>) -> Result<Vec<ApprovalSummary>, ServerFnError> {
-    let _manager = require_manager().await?;
+    let manager = require_manager().await?;
     let state = crate::state::global_state().await;
 
     let state_filter: Option<EntryState> = status.map(|s| parse_enum(&s, "status")).transpose()?;
@@ -226,12 +226,15 @@ pub async fn list_approvals(status: Option<String>) -> Result<Vec<ApprovalSummar
              SELECT (SUM(minutes))::bigint as total_minutes,
                     (SUM(minutes) FILTER (WHERE billable))::bigint as billable_minutes
              FROM time_entries te
-             WHERE te.user_id = a.user_id
+             WHERE te.org_id = a.org_id
+               AND te.user_id = a.user_id
                AND te.spent_date BETWEEN a.period_start AND a.period_end
          ) t ON true
-         WHERE ($1::entry_state IS NULL OR a.state = $1)
+         WHERE a.org_id = $2
+           AND ($1::entry_state IS NULL OR a.state = $1)
          ORDER BY a.period_start DESC"#,
         state_filter as Option<EntryState>,
+        manager.org_id,
     )
     .fetch_all(&state.db)
     .await

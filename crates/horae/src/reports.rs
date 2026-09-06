@@ -14,27 +14,29 @@ use tower_sessions::Session;
 /// `login_redirect_guard` lets `/api/` through, because everything else there is
 /// a server function that checks its own session. These handlers must too. The
 /// `active` check is what revokes a deactivated user's still-live session
-/// (FR-002).
-async fn require_session(session: &Session) -> Result<uuid::Uuid, StatusCode> {
+/// (FR-002). Returns the caller's `(user_id, org_id)`: the org comes free from
+/// the same row and is what the export queries scope on.
+async fn require_session(session: &Session) -> Result<(uuid::Uuid, uuid::Uuid), StatusCode> {
     let user_id = crate::auth::session::get_session_user_id(session)
         .await
         .ok_or(StatusCode::UNAUTHORIZED)?;
     let state = crate::state::global_state().await;
-    let active = sqlx::query_scalar!("SELECT active FROM users WHERE id = $1", user_id)
-        .fetch_optional(&state.db)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    if active != Some(true) {
-        return Err(StatusCode::UNAUTHORIZED);
-    }
-    Ok(user_id)
+    let org_id = sqlx::query_scalar!(
+        "SELECT org_id FROM users WHERE id = $1 AND active = true",
+        user_id,
+    )
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .ok_or(StatusCode::UNAUTHORIZED)?;
+    Ok((user_id, org_id))
 }
 
 /// Every invoice server function gates on `require_manager`, so exporting one
 /// has to as well. Returns the manager's org id so the invoice fetches below
 /// can be org-scoped exactly like their server-fn counterparts.
 async fn require_manager(session: &Session) -> Result<uuid::Uuid, StatusCode> {
-    let user_id = require_session(session).await?;
+    let (user_id, _) = require_session(session).await?;
     let state = crate::state::global_state().await;
     let row = sqlx::query!(
         r#"SELECT org_id, org_role as "org_role: horae_core::types::OrgRole"
@@ -67,6 +69,7 @@ pub struct ExportParams {
 /// `report_detailed` server fn — one query, so a download always matches what
 /// the Reports page shows.
 pub(crate) async fn fetch_entries(
+    org_id: uuid::Uuid,
     from: chrono::NaiveDate,
     to: chrono::NaiveDate,
     client_id: Option<uuid::Uuid>,
@@ -83,7 +86,8 @@ pub(crate) async fn fetch_entries(
          JOIN projects p ON te.project_id = p.id
          JOIN tasks t ON te.task_id = t.id
          JOIN users u ON te.user_id = u.id
-         WHERE te.spent_date BETWEEN $1 AND $2
+         WHERE te.org_id = $6
+           AND te.spent_date BETWEEN $1 AND $2
            AND ($3::uuid IS NULL OR p.client_id = $3)
            AND ($4::uuid IS NULL OR te.project_id = $4)
            AND ($5::uuid IS NULL OR te.user_id = $5)
@@ -93,6 +97,7 @@ pub(crate) async fn fetch_entries(
         client_id,
         project_id,
         user_id,
+        org_id,
     )
     .fetch_all(&state.db)
     .await
@@ -104,11 +109,12 @@ pub async fn export_csv(
 ) -> Result<impl IntoResponse, StatusCode> {
     // Same rows as the manager-only `report_detailed` server fn (every user's
     // hours and notes), so the same gate applies.
-    require_manager(&session).await?;
+    let org_id = require_manager(&session).await?;
 
     let from: chrono::NaiveDate = params.from.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
     let to: chrono::NaiveDate = params.to.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
     let entries = fetch_entries(
+        org_id,
         from,
         to,
         params.client_id,
@@ -167,11 +173,12 @@ pub async fn export_xlsx(
 ) -> Result<impl IntoResponse, StatusCode> {
     // Same rows as the manager-only `report_detailed` server fn (every user's
     // hours and notes), so the same gate applies.
-    require_manager(&session).await?;
+    let org_id = require_manager(&session).await?;
 
     let from: chrono::NaiveDate = params.from.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
     let to: chrono::NaiveDate = params.to.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
     let entries = fetch_entries(
+        org_id,
         from,
         to,
         params.client_id,
@@ -276,7 +283,10 @@ fn budget_cell(r: &ProjectExportRow) -> String {
     )
 }
 
-async fn fetch_projects_export(scope: &str) -> Result<Vec<ProjectExportRow>, sqlx::Error> {
+async fn fetch_projects_export(
+    org_id: uuid::Uuid,
+    scope: &str,
+) -> Result<Vec<ProjectExportRow>, sqlx::Error> {
     let state = crate::state::global_state().await;
     let rows = sqlx::query_as!(
         ProjectExportRow,
@@ -287,7 +297,9 @@ async fn fetch_projects_export(scope: &str) -> Result<Vec<ProjectExportRow>, sql
                   p.budget_amount_cents, p.budget_minutes, p.active
            FROM projects p
            JOIN clients c ON c.id = p.client_id
+           WHERE p.org_id = $1
            ORDER BY c.name, p.name"#,
+        org_id,
     )
     .fetch_all(&state.db)
     .await?;
@@ -310,10 +322,10 @@ pub async fn export_projects_csv(
     session: Session,
     Query(params): Query<ProjectsExportParams>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    require_session(&session).await?;
+    let (_, org_id) = require_session(&session).await?;
 
     let scope = params.scope.as_deref().unwrap_or("active");
-    let rows = fetch_projects_export(scope)
+    let rows = fetch_projects_export(org_id, scope)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -352,10 +364,10 @@ pub async fn export_projects_xlsx(
     session: Session,
     Query(params): Query<ProjectsExportParams>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    require_session(&session).await?;
+    let (_, org_id) = require_session(&session).await?;
 
     let scope = params.scope.as_deref().unwrap_or("active");
-    let rows = fetch_projects_export(scope)
+    let rows = fetch_projects_export(org_id, scope)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 

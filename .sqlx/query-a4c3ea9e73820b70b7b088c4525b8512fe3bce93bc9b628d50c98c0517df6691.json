@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT a.id, a.org_id, a.user_id,\n                a.period_start as \"period_start: chrono::NaiveDate\",\n                a.period_end as \"period_end: chrono::NaiveDate\",\n                a.state as \"state: EntryState\",\n                a.submitted_at as \"submitted_at: chrono::DateTime<chrono::Utc>\",\n                a.approved_by,\n                a.approved_at as \"approved_at: chrono::DateTime<chrono::Utc>\",\n                COALESCE(t.total_minutes, 0) as \"total_minutes!\",\n                COALESCE(t.billable_minutes, 0) as \"billable_minutes!\"\n         FROM approvals a\n         LEFT JOIN LATERAL (\n             SELECT (SUM(minutes))::bigint as total_minutes,\n                    (SUM(minutes) FILTER (WHERE billable))::bigint as billable_minutes\n             FROM time_entries te\n             WHERE te.user_id = a.user_id\n               AND te.spent_date BETWEEN a.period_start AND a.period_end\n         ) t ON true\n         WHERE ($1::entry_state IS NULL OR a.state = $1)\n         ORDER BY a.period_start DESC",
+  "query": "SELECT a.id, a.org_id, a.user_id,\n                a.period_start as \"period_start: chrono::NaiveDate\",\n                a.period_end as \"period_end: chrono::NaiveDate\",\n                a.state as \"state: EntryState\",\n                a.submitted_at as \"submitted_at: chrono::DateTime<chrono::Utc>\",\n                a.approved_by,\n                a.approved_at as \"approved_at: chrono::DateTime<chrono::Utc>\",\n                COALESCE(t.total_minutes, 0) as \"total_minutes!\",\n                COALESCE(t.billable_minutes, 0) as \"billable_minutes!\"\n         FROM approvals a\n         LEFT JOIN LATERAL (\n             SELECT (SUM(minutes))::bigint as total_minutes,\n                    (SUM(minutes) FILTER (WHERE billable))::bigint as billable_minutes\n             FROM time_entries te\n             WHERE te.org_id = a.org_id\n               AND te.user_id = a.user_id\n               AND te.spent_date BETWEEN a.period_start AND a.period_end\n         ) t ON true\n         WHERE a.org_id = $2\n           AND ($1::entry_state IS NULL OR a.state = $1)\n         ORDER BY a.period_start DESC",
   "describe": {
     "columns": [
       {
@@ -85,7 +85,8 @@
               ]
             }
           }
-        }
+        },
+        "Uuid"
       ]
     },
     "nullable": [
@@ -102,5 +103,5 @@
       null
     ]
   },
-  "hash": "340e86c19f943fcc63c0972793faa0971357f2e5f3cbf25566076b67f03f7511"
+  "hash": "a4c3ea9e73820b70b7b088c4525b8512fe3bce93bc9b628d50c98c0517df6691"
 }

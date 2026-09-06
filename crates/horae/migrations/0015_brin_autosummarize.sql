@@ -1,0 +1,21 @@
+-- Keep the BRIN index on time_entries.spent_date summarized as rows arrive
+-- (additive: no table/column/data changes).
+--
+-- 0012 created this index with a plain CREATE INDEX, so it took the default of
+-- `autosummarize = off`. With summarization off, a page range only gets a
+-- summary tuple when VACUUM reaches it; until then BRIN has no minimum or
+-- maximum for that range and must return every page in it as a candidate, so a
+-- date-range scan degrades into a heap re-check of the unsummarized tail.
+--
+-- time_entries is append-only in practice, which is exactly the shape that
+-- suffers: the newest rows are always the least likely to have been vacuumed,
+-- and insert-driven autovacuum only fires after 1000 inserts plus 20% of the
+-- table, so on a large table the newest rows stay unsummarized for a long time.
+-- Those are the rows the timesheet and the current-period reports read on every
+-- page load. Measured on an 800k-row copy: 102 ms against the unsummarized tail
+-- versus 4.0 ms once VACUUM had summarized it. The planner cannot see the
+-- difference — the cost estimate is the same either way.
+--
+-- With autosummarize on, the insert that fills a page range queues the
+-- summarization itself, so the tail is summarized without waiting for VACUUM.
+ALTER INDEX time_entries_spent_date_idx SET (autosummarize = on);

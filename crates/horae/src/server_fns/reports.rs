@@ -17,7 +17,7 @@ pub async fn report_time(
     project_id: Option<String>,
     user_id: Option<String>,
 ) -> Result<Vec<ReportRow>, ServerFnError> {
-    let _manager = require_manager().await?;
+    let manager = require_manager().await?;
     let state = crate::state::global_state().await;
 
     let from_date = parse_date(&from, "from")?;
@@ -43,7 +43,8 @@ pub async fn report_time(
            JOIN users u ON te.user_id = u.id
            LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
            LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id
-           WHERE te.spent_date BETWEEN $1 AND $2
+           WHERE te.org_id = $6
+             AND te.spent_date BETWEEN $1 AND $2
              AND ($3::uuid IS NULL OR p.client_id = $3)
              AND ($4::uuid IS NULL OR te.project_id = $4)
              AND ($5::uuid IS NULL OR te.user_id = $5)"#,
@@ -52,6 +53,7 @@ pub async fn report_time(
         client_filter,
         project_filter,
         user_filter,
+        manager.org_id,
     )
     .fetch_all(&state.db)
     .await
@@ -156,7 +158,7 @@ pub async fn report_detailed(
     project_id: Option<String>,
     user_id: Option<String>,
 ) -> Result<Vec<DetailedReportRow>, ServerFnError> {
-    let _manager = require_manager().await?;
+    let manager = require_manager().await?;
 
     let from_date = parse_date(&from, "from")?;
     let to_date = parse_date(&to, "to")?;
@@ -167,6 +169,7 @@ pub async fn report_detailed(
     // The CSV/XLSX exports must return exactly these rows, so the query lives
     // once in `crate::reports` and both surfaces call it.
     crate::reports::fetch_entries(
+        manager.org_id,
         from_date,
         to_date,
         client_filter,
