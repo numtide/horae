@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE organizations SET long_timer_minutes = 60 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0ccbc0f1bb78e4c1048536d6d9e040c62682cecc2e66f444ef5f9a86eedc4480"
+}

@@ -95,18 +95,26 @@ pub async fn submit_week(week_start: String) -> Result<Approval, ServerFnError> 
         .await
         .map_err(server_err)?;
 
-        for entry in &entries {
-            let rounded =
-                horae_core::rounding::round(entry.minutes as u32, round_min, round_dir) as i32;
-            sqlx::query!(
-                "UPDATE time_entries SET rounded_minutes = $1 WHERE id = $2",
-                rounded,
-                entry.id,
-            )
-            .execute(&mut *tx)
-            .await
-            .map_err(server_err)?;
-        }
+        // Rounding stays in `horae-core` — it is the correctness-critical part
+        // and has no business being restated in SQL — but the writes go back as
+        // one array update instead of a round trip per entry.
+        let ids: Vec<uuid::Uuid> = entries.iter().map(|e| e.id).collect();
+        let rounded: Vec<i32> = entries
+            .iter()
+            .map(|e| horae_core::rounding::round(e.minutes as u32, round_min, round_dir) as i32)
+            .collect();
+
+        sqlx::query!(
+            "UPDATE time_entries AS t
+                SET rounded_minutes = v.rounded
+               FROM unnest($1::uuid[], $2::int4[]) AS v(id, rounded)
+              WHERE t.id = v.id",
+            &ids,
+            &rounded,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(server_err)?;
     }
 
     // Transition open entries to submitted, using COALESCE so entries without

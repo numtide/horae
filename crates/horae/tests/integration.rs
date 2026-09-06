@@ -2776,3 +2776,136 @@ async fn stop_timer_refuses_entry_that_left_open(pool: PgPool) {
     assert_eq!(row.minutes, 0, "minutes must not change behind the lock");
     assert!(row.is_running);
 }
+
+// ---------------------------------------------------------------------------
+// Only one timer may run per user. start_timer now leaves that to the
+// `one_running_timer_per_user` partial unique index and reads "no row returned"
+// as the conflict, instead of pre-checking with SELECT EXISTS and letting a
+// concurrent start surface as a raw unique violation.
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial]
+async fn a_second_running_timer_is_refused_by_the_insert(pool: PgPool) {
+    let org_id = seed_org(&pool).await;
+    let user_id = seed_user(&pool, org_id, OrgRole::Member).await;
+    let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
+    let today = chrono::Utc::now().date_naive();
+
+    // The statement start_timer issues, run twice for the same user.
+    async fn start(
+        pool: &PgPool,
+        org_id: Uuid,
+        user_id: Uuid,
+        project_id: Uuid,
+        task_id: Uuid,
+        today: NaiveDate,
+    ) -> Option<Uuid> {
+        sqlx::query_scalar!(
+            "INSERT INTO time_entries \
+               (id, org_id, user_id, project_id, task_id, spent_date, \
+                minutes, billable, is_running, started_at, state) \
+             VALUES ($1, $2, $3, $4, $5, $6, 0, true, true, now(), $7) \
+             ON CONFLICT (user_id) WHERE is_running DO NOTHING \
+             RETURNING id",
+            Uuid::now_v7(),
+            org_id,
+            user_id,
+            project_id,
+            task_id,
+            today as NaiveDate,
+            EntryState::Open as EntryState,
+        )
+        .fetch_optional(pool)
+        .await
+        .unwrap()
+    }
+
+    let first = start(&pool, org_id, user_id, project_id, task_id, today).await;
+    assert!(first.is_some(), "the first timer starts");
+
+    let second = start(&pool, org_id, user_id, project_id, task_id, today).await;
+    assert!(
+        second.is_none(),
+        "a second timer must be refused, not inserted"
+    );
+
+    let running: i64 = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) as "count!" FROM time_entries
+           WHERE user_id = $1 AND is_running"#,
+        user_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(running, 1, "exactly one timer may run per user");
+}
+
+// ---------------------------------------------------------------------------
+// The long-timer sweep claims each overrunning timer exactly once: it marks and
+// returns in a single statement, so a second sweep (a second app instance, or
+// the next tick arriving while the first is still dispatching) sees nothing.
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial]
+async fn the_long_timer_sweep_claims_each_timer_once(pool: PgPool) {
+    let org_id = seed_org(&pool).await;
+    let user_id = seed_user(&pool, org_id, OrgRole::Member).await;
+    let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
+
+    sqlx::query!(
+        "UPDATE organizations SET long_timer_minutes = 60 WHERE id = $1",
+        org_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let entry_id = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO time_entries \
+           (id, org_id, user_id, project_id, task_id, spent_date, \
+            minutes, billable, is_running, started_at, state) \
+         VALUES ($1, $2, $3, $4, $5, $6, 0, true, true, now() - interval '3 hours', $7)",
+        entry_id,
+        org_id,
+        user_id,
+        project_id,
+        task_id,
+        chrono::Utc::now().date_naive() as NaiveDate,
+        EntryState::Open as EntryState,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    async fn claim(pool: &PgPool) -> Vec<Uuid> {
+        sqlx::query_scalar!(
+            r#"WITH due AS (
+                 UPDATE time_entries te
+                    SET notified_long_running_at = now()
+                   FROM organizations o
+                  WHERE o.id = te.org_id
+                    AND te.is_running = true
+                    AND te.notified_long_running_at IS NULL
+                    AND te.started_at < now() - make_interval(mins => o.long_timer_minutes)
+               RETURNING te.id
+               )
+               SELECT id FROM due"#,
+        )
+        .fetch_all(pool)
+        .await
+        .unwrap()
+    }
+
+    assert_eq!(
+        claim(&pool).await,
+        vec![entry_id],
+        "the first sweep claims the overrunning timer"
+    );
+    assert!(
+        claim(&pool).await.is_empty(),
+        "a second sweep must not announce the same timer again"
+    );
+}
