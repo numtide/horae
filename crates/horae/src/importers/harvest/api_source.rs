@@ -231,10 +231,7 @@ pub fn fetch_all(
     let mut out = Vec::new();
     let mut page: u32 = 1;
     loop {
-        let mut url = format!("{API_BASE}/{collection}?per_page={PER_PAGE}&page={page}");
-        if let Some(since) = updated_since {
-            url.push_str(&format!("&updated_since={}", since.to_rfc3339()));
-        }
+        let url = page_url(collection, page, updated_since);
         let body = get_with_backoff(agent, &url, access_token, account_id)?;
         let json: serde_json::Value = serde_json::from_str(&body)?;
         if let Some(items) = json.get(collection).and_then(|v| v.as_array()) {
@@ -247,6 +244,33 @@ pub fn fetch_all(
         }
     }
     Ok(out)
+}
+
+/// Build the URL for one page of a collection. The `updated_since` timestamp is
+/// percent-encoded: an RFC 3339 UTC offset contains `+00:00`, and a raw `+` in a
+/// query string arrives as a space, silently breaking the incremental filter.
+fn page_url(collection: &str, page: u32, updated_since: Option<DateTime<Utc>>) -> String {
+    let mut url = format!("{API_BASE}/{collection}?per_page={PER_PAGE}&page={page}");
+    if let Some(since) = updated_since {
+        url.push_str("&updated_since=");
+        url.push_str(&encode_query_value(&since.to_rfc3339()));
+    }
+    url
+}
+
+/// Percent-encode a query-string value per RFC 3986: every byte outside the
+/// unreserved set is escaped.
+fn encode_query_value(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for b in value.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                out.push(b as char);
+            }
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
 }
 
 /// GET a Harvest URL with the required headers, retrying on HTTP 429 per the
@@ -341,6 +365,28 @@ mod tests {
         // Harvest's billed flag is captured as informational only.
         assert!(r0.invoiced);
         assert_eq!(r0.billable_rate.as_deref(), Some("150"));
+    }
+
+    #[test]
+    fn updated_since_is_percent_encoded() {
+        use chrono::TimeZone;
+        let since = Utc.with_ymd_and_hms(2026, 2, 1, 0, 0, 0).unwrap();
+        let url = page_url("time_entries", 3, Some(since));
+        // The `+00:00` offset must never carry a raw '+', which a server decodes
+        // as a space.
+        assert_eq!(
+            url,
+            "https://api.harvestapp.com/v2/time_entries?per_page=100&page=3\
+             &updated_since=2026-02-01T00%3A00%3A00%2B00%3A00"
+        );
+    }
+
+    #[test]
+    fn page_url_without_updated_since_has_no_filter_param() {
+        assert_eq!(
+            page_url("clients", 1, None),
+            "https://api.harvestapp.com/v2/clients?per_page=100&page=1"
+        );
     }
 
     #[test]

@@ -63,9 +63,12 @@ pub fn task_key(name: &str) -> String {
 }
 
 /// Time-entry natural key: the combination of user, project, task, spent date,
-/// duration in minutes, and notes — so two genuinely distinct entries on the
-/// same day are both kept while an exact re-import of one is recognized as the
-/// same record (FR-012).
+/// duration in minutes, and notes (FR-012). This key alone cannot tell two
+/// genuinely identical entries apart — Harvest's Detailed export lists every
+/// entry, so two same-shaped rows are two real entries. The engine therefore
+/// identifies an id-less row by its natural key **plus** its occurrence number
+/// within the run, tracked with an [`OccurrenceCounter`]; that scheme lives in
+/// the server crate's `importers::harvest::apply` (see `entry_slot_key` there).
 pub fn time_entry_key(
     user_email: &str,
     project_key: &str,
@@ -82,6 +85,28 @@ pub fn time_entry_key(
         &minutes.to_string(),
         notes.unwrap_or(""),
     ])
+}
+
+/// Counts, per natural key, how many identical rows an import run has already
+/// consumed. Two identical rows in one source are two real entries, so the Nth
+/// occurrence of a key is a distinct record that must match the Nth stored
+/// entry with that key — never silently collapse into the first (FR-012).
+#[derive(Debug, Default)]
+pub struct OccurrenceCounter {
+    seen: std::collections::HashMap<String, u64>,
+}
+
+impl OccurrenceCounter {
+    /// How many occurrences of `key` have been consumed so far — the zero-based
+    /// slot the next occurrence of this key should occupy.
+    pub fn seen(&self, key: &str) -> u64 {
+        self.seen.get(key).copied().unwrap_or(0)
+    }
+
+    /// Record that one occurrence of `key` was consumed.
+    pub fn bump(&mut self, key: impl Into<String>) {
+        *self.seen.entry(key.into()).or_insert(0) += 1;
+    }
 }
 
 #[cfg(test)]
@@ -153,6 +178,27 @@ mod tests {
         // A different note is a distinct entry.
         let d = time_entry_key("u@x.com", "proj", "task", date, 90, Some("review"));
         assert_ne!(a, d);
+    }
+
+    #[test]
+    fn occurrence_counter_numbers_repeats_from_zero() {
+        let mut c = OccurrenceCounter::default();
+        assert_eq!(c.seen("k"), 0);
+        c.bump("k");
+        assert_eq!(c.seen("k"), 1);
+        c.bump("k");
+        assert_eq!(c.seen("k"), 2);
+    }
+
+    #[test]
+    fn occurrence_counter_keys_are_independent() {
+        let mut c = OccurrenceCounter::default();
+        c.bump("a");
+        c.bump("a");
+        assert_eq!(c.seen("b"), 0);
+        c.bump("b");
+        assert_eq!(c.seen("a"), 2);
+        assert_eq!(c.seen("b"), 1);
     }
 
     #[test]

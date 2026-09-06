@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id FROM time_entries\n             WHERE org_id = $1 AND user_id = $2 AND project_id = $3 AND task_id = $4\n               AND spent_date = $5 AND minutes = $6\n               AND COALESCE(notes, '') = COALESCE($7, '')\n             ORDER BY id\n             OFFSET $8\n             LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Date",
+        "Int4",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2d75c19e9fd5558e364bdc855d97126ff0ca8974833ceeb37d5423e979593de6"
+}

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id FROM time_entries AS te\n             WHERE org_id = $1 AND user_id = $2 AND project_id = $3 AND task_id = $4\n               AND spent_date = $5 AND minutes = $6\n               AND COALESCE(notes, '') = COALESCE($7, '')\n               AND NOT EXISTS (\n                 SELECT 1 FROM harvest_import_map AS m\n                 WHERE m.org_id = $1\n                   AND m.harvest_entity_type = 'time_entry'::harvest_entity_type\n                   AND m.horae_id = te.id)\n             ORDER BY id\n             LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Date",
+        "Int4",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "53e1422a512fbed1cb0b969b328dc4cb7f07bb6ecb32fa2552504be867c5672d"
+}

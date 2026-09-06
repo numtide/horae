@@ -12,7 +12,7 @@ use horae_core::importers::harvest::{convert, keys};
 use sqlx::{Acquire, Postgres, Transaction};
 use uuid::Uuid;
 
-use super::resolve::{self, OrgDefaults, ParentKind, RowFailure, RunCache};
+use super::resolve::{self, OrgDefaults, PendingCache, RowFailure, RunCache};
 
 /// The per-entity outcomes of applying one row, ready to fold into the summary.
 pub struct RowResult {
@@ -56,21 +56,14 @@ pub async fn apply_row(
 
 /// The resolve → create/skip pipeline for one row inside its savepoint. Returns
 /// the outcomes plus the cache entries to promote only if the caller commits.
-#[allow(clippy::type_complexity)]
 async fn apply_within(
     sp: &mut Transaction<'_, Postgres>,
     cache: &RunCache,
     org: OrgDefaults<'_>,
     row: &SourceRow,
-) -> Result<
-    (
-        Vec<(EntityType, RowOutcome)>,
-        Vec<(ParentKind, String, Uuid)>,
-    ),
-    (EntityType, RowFailure),
-> {
+) -> Result<(Vec<(EntityType, RowOutcome)>, PendingCache), (EntityType, RowFailure)> {
     let mut outcomes = Vec::new();
-    let mut pending = Vec::new();
+    let mut pending = PendingCache::default();
 
     let client = resolve::resolve_client(sp, cache, org, row)
         .await
@@ -95,23 +88,45 @@ async fn apply_within(
         .map_err(|e| (EntityType::Task, e))?;
 
     // Time entry — the record proper.
-    let te_outcome = apply_time_entry(sp, org, project_id, task_id, row)
+    let (te_outcome, entry_slot) = apply_time_entry(sp, cache, org, project_id, task_id, row)
         .await
         .map_err(|e| (EntityType::TimeEntry, e))?;
     outcomes.push((EntityType::TimeEntry, te_outcome));
+    pending.entry_slot = entry_slot;
 
     Ok((outcomes, pending))
 }
 
-/// Insert (or skip) the time entry for a row, matched provenance-first then by
-/// composite natural key.
+/// Insert (or skip) the time entry for a row.
+///
+/// Identity depends on whether the row carries a Harvest id:
+///
+/// - **With an id** (API source): the id alone identifies the entry. Provenance
+///   is checked first; on a miss the natural key may *adopt* an existing entry
+///   not yet claimed by any Harvest id (e.g. from an earlier CSV import), but an
+///   entry claimed by a different id is a different record — two identical
+///   entries with distinct ids are never collapsed into one row.
+/// - **Without an id** (CSV source): identity is the natural key plus its
+///   occurrence number within the run. Harvest's Detailed export lists every
+///   entry, so the Nth identical row is a real Nth entry: it matches the Nth
+///   stored entry with that key (skip) or creates one — keeping duplicates on
+///   first import while a re-import of the same file stays idempotent.
+///
+/// This split assumes a single run never mixes id-bearing and id-less rows for
+/// the same natural key — true for both shipped sources (CSV rows never carry
+/// ids, API rows always do); a hypothetical mixed source could conflate the two
+/// matching schemes.
+///
+/// Also returns the natural-key slot an id-less row consumed, for the caller to
+/// bump in the run cache once the savepoint commits.
 async fn apply_time_entry(
     sp: &mut Transaction<'_, Postgres>,
+    cache: &RunCache,
     org: OrgDefaults<'_>,
     project_id: Uuid,
     task_id: Uuid,
     row: &SourceRow,
-) -> Result<RowOutcome, RowFailure> {
+) -> Result<(RowOutcome, Option<String>), RowFailure> {
     let user_id = resolve::resolve_user(sp, org.org_id, row).await?;
 
     let minutes_i64 = convert::hours_to_minutes(&row.hours)?;
@@ -140,25 +155,62 @@ async fn apply_time_entry(
             row.harvest_updated_at,
         )
         .await?;
-        return Ok(RowOutcome::Skipped);
+        return Ok((RowOutcome::Skipped, None));
     }
 
     // Natural key: (user, project, task, spent_date, minutes, notes).
-    let existing = sqlx::query_scalar!(
-        "SELECT id FROM time_entries
-         WHERE org_id = $1 AND user_id = $2 AND project_id = $3 AND task_id = $4
-           AND spent_date = $5 AND minutes = $6
-           AND COALESCE(notes, '') = COALESCE($7, '')",
-        org.org_id,
-        user_id,
-        project_id,
-        task_id,
-        row.spent_date as chrono::NaiveDate,
-        minutes,
-        notes,
-    )
-    .fetch_optional(&mut **sp)
-    .await?;
+    let (existing, entry_slot) = if row.harvest_time_entry_id.is_some() {
+        // Unmapped Harvest id: adopt only an entry no id has claimed yet, so two
+        // distinct ids with identical fields never collapse into one row.
+        let found = sqlx::query_scalar!(
+            "SELECT id FROM time_entries AS te
+             WHERE org_id = $1 AND user_id = $2 AND project_id = $3 AND task_id = $4
+               AND spent_date = $5 AND minutes = $6
+               AND COALESCE(notes, '') = COALESCE($7, '')
+               AND NOT EXISTS (
+                 SELECT 1 FROM harvest_import_map AS m
+                 WHERE m.org_id = $1
+                   AND m.harvest_entity_type = 'time_entry'::harvest_entity_type
+                   AND m.horae_id = te.id)
+             ORDER BY id
+             LIMIT 1",
+            org.org_id,
+            user_id,
+            project_id,
+            task_id,
+            row.spent_date as chrono::NaiveDate,
+            minutes,
+            notes,
+        )
+        .fetch_optional(&mut **sp)
+        .await?;
+        (found, None)
+    } else {
+        // Id-less row: match the stored entry at this key's next occurrence slot
+        // (ordered by id — UUID v7, so creation order — for determinism).
+        let slot_key = entry_slot_key(user_id, project_id, task_id, row, minutes, notes);
+        let offset = i64::try_from(cache.entry_slot_offset(&slot_key)).unwrap_or(i64::MAX);
+        let found = sqlx::query_scalar!(
+            "SELECT id FROM time_entries
+             WHERE org_id = $1 AND user_id = $2 AND project_id = $3 AND task_id = $4
+               AND spent_date = $5 AND minutes = $6
+               AND COALESCE(notes, '') = COALESCE($7, '')
+             ORDER BY id
+             OFFSET $8
+             LIMIT 1",
+            org.org_id,
+            user_id,
+            project_id,
+            task_id,
+            row.spent_date as chrono::NaiveDate,
+            minutes,
+            notes,
+            offset,
+        )
+        .fetch_optional(&mut **sp)
+        .await?;
+        (found, Some(slot_key))
+    };
     if let Some(id) = existing {
         if let Some(hid) = row.harvest_time_entry_id {
             super::provenance::upsert(
@@ -171,7 +223,7 @@ async fn apply_time_entry(
             )
             .await?;
         }
-        return Ok(RowOutcome::Skipped);
+        return Ok((RowOutcome::Skipped, entry_slot));
     }
 
     // Create. State defaults to `open`; never `invoiced` from Harvest (FR-016).
@@ -203,14 +255,32 @@ async fn apply_time_entry(
         )
         .await?;
     }
-    Ok(RowOutcome::Created)
+    Ok((RowOutcome::Created, entry_slot))
+}
+
+/// The run-cache key for an id-less entry's natural-key slot: the resolved ids
+/// plus exactly the fields the natural-key SQL compares (notes case-sensitive,
+/// trimmed), so the in-run counter and the query can never disagree.
+fn entry_slot_key(
+    user_id: Uuid,
+    project_id: Uuid,
+    task_id: Uuid,
+    row: &SourceRow,
+    minutes: i32,
+    notes: Option<&str>,
+) -> String {
+    format!(
+        "{user_id}\u{1f}{project_id}\u{1f}{task_id}\u{1f}{}\u{1f}{minutes}\u{1f}{}",
+        row.spent_date,
+        notes.unwrap_or(""),
+    )
 }
 
 /// Push a parent's outcome (when it was actually touched) and queue its cache
 /// entry for promotion on commit.
 fn fold(
     outcomes: &mut Vec<(EntityType, RowOutcome)>,
-    pending: &mut Vec<(ParentKind, String, Uuid)>,
+    pending: &mut PendingCache,
     entity: EntityType,
     resolved: resolve::Resolved,
 ) {
@@ -218,7 +288,7 @@ fn fold(
         outcomes.push((entity, o));
     }
     if let Some(e) = resolved.cache_entry {
-        pending.push(e);
+        pending.parents.push(e);
     }
 }
 
