@@ -9,6 +9,7 @@ use super::*;
 /// view that also needs to reactivate deactivated clients.
 #[server]
 pub async fn list_clients(include_inactive: bool) -> Result<Vec<Client>, ServerFnError> {
+    let _user = require_user().await?;
     let state = crate::state::global_state().await;
 
     let clients = sqlx::query_as!(

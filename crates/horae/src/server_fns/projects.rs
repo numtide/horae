@@ -40,6 +40,7 @@ pub async fn list_projects(
     client_id: Option<String>,
     include_inactive: bool,
 ) -> Result<Vec<Project>, ServerFnError> {
+    let _user = require_user().await?;
     let state = crate::state::global_state().await;
     let _ = client_id;
 
@@ -67,8 +68,11 @@ pub async fn list_projects(
 /// Per-project tracked totals for the overview's Spent column: every project's
 /// total logged minutes plus its billable amount, with each entry's rate resolved
 /// through the FR-024 cascade (task → assignment → user default) and summed.
+/// Session-gated only: the Projects overview shows Budget/Spent to every signed-in
+/// user, and these are per-project aggregates, not per-user time or rates.
 #[server]
 pub async fn list_project_spend() -> Result<Vec<ProjectSpend>, ServerFnError> {
+    let _user = require_user().await?;
     let state = crate::state::global_state().await;
 
     struct Row {
@@ -331,6 +335,7 @@ pub async fn set_project_active(
 /// Lists all active org-level tasks.
 #[server]
 pub async fn list_tasks() -> Result<Vec<Task>, ServerFnError> {
+    let _user = require_user().await?;
     let state = crate::state::global_state().await;
 
     let tasks = sqlx::query_as!(
@@ -350,7 +355,7 @@ pub async fn list_tasks() -> Result<Vec<Task>, ServerFnError> {
 /// Lists tasks linked to a specific project via the `project_tasks` join table.
 #[server]
 pub async fn list_project_tasks(project_id: String) -> Result<Vec<Task>, ServerFnError> {
-    let _user_id = session_user_id().await?;
+    let _user = require_user().await?;
     let state = crate::state::global_state().await;
     let project_id = parse_uuid(&project_id, "project_id")?;
 
@@ -554,7 +559,7 @@ pub async fn link_project_task(project_id: String, task_id: String) -> Result<()
 
 #[server]
 pub async fn list_assignments(project_id: String) -> Result<Vec<Assignment>, ServerFnError> {
-    let _user_id = session_user_id().await?;
+    let _user = require_user().await?;
     let state = crate::state::global_state().await;
     let project_id = parse_uuid(&project_id, "project_id")?;
     sqlx::query_as!(

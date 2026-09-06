@@ -10,11 +10,22 @@ use serde::Deserialize;
 use tower_sessions::Session;
 
 /// `login_redirect_guard` lets `/api/` through, because everything else there is
-/// a server function that checks its own session. These handlers must too.
+/// a server function that checks its own session. These handlers must too. The
+/// `active` check is what revokes a deactivated user's still-live session
+/// (FR-002).
 async fn require_session(session: &Session) -> Result<uuid::Uuid, StatusCode> {
-    crate::auth::session::get_session_user_id(session)
+    let user_id = crate::auth::session::get_session_user_id(session)
         .await
-        .ok_or(StatusCode::UNAUTHORIZED)
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+    let state = crate::state::global_state().await;
+    let active = sqlx::query_scalar!("SELECT active FROM users WHERE id = $1", user_id)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if active != Some(true) {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    Ok(user_id)
 }
 
 /// Every invoice server function gates on `require_manager`, so exporting one
@@ -81,7 +92,9 @@ pub async fn export_csv(
     session: Session,
     Query(params): Query<ExportParams>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    require_session(&session).await?;
+    // Same rows as the manager-only `report_detailed` server fn (every user's
+    // hours and notes), so the same gate applies.
+    require_manager(&session).await?;
 
     let entries = fetch_entries(&params)
         .await
@@ -137,7 +150,9 @@ pub async fn export_xlsx(
     session: Session,
     Query(params): Query<ExportParams>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    require_session(&session).await?;
+    // Same rows as the manager-only `report_detailed` server fn (every user's
+    // hours and notes), so the same gate applies.
+    require_manager(&session).await?;
 
     let entries = fetch_entries(&params)
         .await

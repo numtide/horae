@@ -63,6 +63,8 @@ pub fn Reports() -> Element {
     let mut user_filter = use_signal(String::new);
     let mut active_tab = use_signal(|| "time".to_string());
 
+    let me = use_resource(|| async move { server_fns::get_me().await });
+
     // Dropdown sources. Projects narrow to the chosen client.
     let clients = use_resource(|| async move { server_fns::list_clients(false).await });
     let users = use_resource(|| async move { server_fns::list_users(false).await });
@@ -94,6 +96,28 @@ pub fn Reports() -> Element {
         );
         async move { server_fns::report_detailed(f, t, cl, pr, us).await }
     });
+
+    // Reports cover every user's time and money, so the endpoints are
+    // manager-only (SPEC §6). Mirror the Approvals page: keep the rail link for
+    // everyone and show a notice here instead of a wall of errors.
+    let is_manager = me
+        .read()
+        .as_ref()
+        .and_then(|r| r.as_ref().ok())
+        .map(|u| u.is_manager_or_above())
+        .unwrap_or(false);
+    if !is_manager {
+        return rsx! {
+            div {
+                div { class: "page-header",
+                    h1 { class: "page-title", "Reports" }
+                }
+                div { class: "card p-8 text-center",
+                    p { class: "text-muted", "Manager or admin access is required to view reports." }
+                }
+            }
+        };
+    }
 
     // The export must match what the tables show, so the active filters ride
     // along in the query string; unset ones are left out and mean "all".
