@@ -2663,3 +2663,213 @@ async fn reorder_untimed_orders_and_moves_across_days(pool: PgPool) {
     .unwrap_or(0);
     assert_eq!(tomorrow_count, 0, "the moved entry left tomorrow");
 }
+
+// ---------------------------------------------------------------------------
+// Submitting a week that contains a running timer must be refused, not lock
+// the running entry with rounded_minutes frozen at 0 (mirrors submit_week's
+// running-timer guard and its NOT EXISTS predicate on the transition).
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial]
+async fn submit_week_with_running_timer_is_refused(pool: PgPool) {
+    let org_id = seed_org(&pool).await;
+    let user_id = seed_user(&pool, org_id, OrgRole::Member).await;
+    let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
+
+    let ws = chrono::Utc::now().date_naive();
+    let we = ws + chrono::Duration::days(6);
+
+    // A finished open entry (30m) and a running timer, both inside the week.
+    let open_id = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO time_entries \
+           (id, org_id, user_id, project_id, task_id, spent_date, \
+            minutes, billable, is_running, state) \
+         VALUES ($1, $2, $3, $4, $5, $6, 30, true, false, $7)",
+        open_id,
+        org_id,
+        user_id,
+        project_id,
+        task_id,
+        ws as NaiveDate,
+        EntryState::Open as EntryState,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let running_id = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO time_entries \
+           (id, org_id, user_id, project_id, task_id, spent_date, \
+            minutes, billable, is_running, started_at, state) \
+         VALUES ($1, $2, $3, $4, $5, $6, 0, true, true, now() - interval '5 minutes', $7)",
+        running_id,
+        org_id,
+        user_id,
+        project_id,
+        task_id,
+        ws as NaiveDate,
+        EntryState::Open as EntryState,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // The guard submit_week checks before transitioning anything: a running
+    // timer inside the week means the submit is refused with a conflict.
+    let timer_running: bool = sqlx::query_scalar!(
+        "SELECT EXISTS(SELECT 1 FROM time_entries \
+           WHERE user_id = $1 AND spent_date BETWEEN $2 AND $3 AND is_running)",
+        user_id,
+        ws as NaiveDate,
+        we as NaiveDate,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap()
+    .unwrap_or(false);
+    assert!(timer_running, "the guard must see the running timer");
+
+    // The transition statement itself refuses atomically (a timer that starts
+    // between the guard and the update is caught by the NOT EXISTS predicate):
+    // zero rows move to 'submitted', so the week is never split.
+    let result = sqlx::query!(
+        "UPDATE time_entries \
+         SET state = $4, \
+             rounded_minutes = COALESCE(rounded_minutes, minutes) \
+         WHERE user_id = $1 \
+           AND spent_date BETWEEN $2 AND $3 \
+           AND state = $5 \
+           AND NOT EXISTS (SELECT 1 FROM time_entries r \
+                            WHERE r.user_id = $1 \
+                              AND r.spent_date BETWEEN $2 AND $3 \
+                              AND r.is_running)",
+        user_id,
+        ws as NaiveDate,
+        we as NaiveDate,
+        EntryState::Submitted as EntryState,
+        EntryState::Open as EntryState,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        result.rows_affected(),
+        0,
+        "no entry may be submitted while a timer runs in the week"
+    );
+
+    // The corruption this guards against: a submitted entry that is still
+    // running with its billable minutes frozen at zero.
+    let corrupted: i64 = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) as "count!" FROM time_entries
+           WHERE user_id = $1 AND state = $2 AND is_running"#,
+        user_id,
+        EntryState::Submitted as EntryState,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        corrupted, 0,
+        "no entry may end submitted while still running"
+    );
+
+    // Both entries are untouched: still open, the timer still running, and no
+    // rounded_minutes persisted.
+    let row = sqlx::query!(
+        r#"SELECT state as "state: EntryState", is_running, rounded_minutes
+           FROM time_entries WHERE id = $1"#,
+        running_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(row.state, EntryState::Open);
+    assert!(row.is_running);
+    assert_eq!(row.rounded_minutes, None);
+
+    let row = sqlx::query!(
+        r#"SELECT state as "state: EntryState", minutes FROM time_entries WHERE id = $1"#,
+        open_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(row.state, EntryState::Open, "the week must not be split");
+    assert_eq!(row.minutes, 30);
+}
+
+// ---------------------------------------------------------------------------
+// Stopping a timer whose entry has left 'open' (e.g. it was submitted) must be
+// refused instead of writing minutes into a locked row (mirrors stop_timer's
+// state predicate).
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial]
+async fn stop_timer_refuses_entry_that_left_open(pool: PgPool) {
+    let org_id = seed_org(&pool).await;
+    let user_id = seed_user(&pool, org_id, OrgRole::Member).await;
+    let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
+
+    // A running entry that was (wrongly) locked mid-run: submitted with its
+    // rounded minutes frozen at zero.
+    let entry_id = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO time_entries \
+           (id, org_id, user_id, project_id, task_id, spent_date, \
+            minutes, rounded_minutes, billable, is_running, started_at, state) \
+         VALUES ($1, $2, $3, $4, $5, CURRENT_DATE, \
+                 0, 0, true, true, now() - interval '5 minutes', $6)",
+        entry_id,
+        org_id,
+        user_id,
+        project_id,
+        task_id,
+        EntryState::Submitted as EntryState,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // stop_timer first reads the running row's state and maps anything but
+    // 'open' to a conflict; the write itself carries the same predicate.
+    let row = sqlx::query!(
+        r#"SELECT state as "state: EntryState" FROM time_entries
+           WHERE id = $1 AND user_id = $2 AND is_running = true"#,
+        entry_id,
+        user_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_ne!(row.state, EntryState::Open, "the entry is locked");
+
+    let stopped = sqlx::query!(
+        "UPDATE time_entries \
+         SET is_running = false, minutes = 5, started_at = NULL \
+         WHERE id = $1 AND user_id = $2 AND is_running = true AND state = $3 \
+         RETURNING id",
+        entry_id,
+        user_id,
+        EntryState::Open as EntryState,
+    )
+    .fetch_optional(&pool)
+    .await
+    .unwrap();
+    assert!(stopped.is_none(), "a locked entry must not be stopped");
+
+    // The locked row is untouched: no elapsed minutes written behind the lock.
+    let row = sqlx::query!(
+        "SELECT minutes, is_running FROM time_entries WHERE id = $1",
+        entry_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(row.minutes, 0, "minutes must not change behind the lock");
+    assert!(row.is_running);
+}

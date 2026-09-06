@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE time_entries\n         SET state = $4,\n             rounded_minutes = COALESCE(rounded_minutes, minutes)\n         WHERE user_id = $1\n           AND spent_date BETWEEN $2 AND $3\n           AND state = $5\n           AND NOT EXISTS (SELECT 1 FROM time_entries r\n                            WHERE r.user_id = $1\n                              AND r.spent_date BETWEEN $2 AND $3\n                              AND r.is_running)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date",
+        "Date",
+        {
+          "Custom": {
+            "name": "entry_state",
+            "kind": {
+              "Enum": [
+                "open",
+                "submitted",
+                "approved",
+                "invoiced"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "entry_state",
+            "kind": {
+              "Enum": [
+                "open",
+                "submitted",
+                "approved",
+                "invoiced"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8b75269a318a27263063e34f289f3a9b45d4cbdd0528c14c49e60803f1599c4c"
+}

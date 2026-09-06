@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT started_at as \"started_at: chrono::DateTime<chrono::Utc>\",\n                  state as \"state: EntryState\"\n               FROM time_entries\n               WHERE id = $1 AND user_id = $2 AND is_running = true",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "started_at: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 1,
+        "name": "state: EntryState",
+        "type_info": {
+          "Custom": {
+            "name": "entry_state",
+            "kind": {
+              "Enum": [
+                "open",
+                "submitted",
+                "approved",
+                "invoiced"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "19357eb7b69ab4ca25dffac97b46eed7893050dd6a0ac02e76bce556d5e96eab"
+}

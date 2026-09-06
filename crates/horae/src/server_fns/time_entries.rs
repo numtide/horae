@@ -26,6 +26,37 @@ fn normalize_start(
     }
 }
 
+/// Ensure the user may log time on the project: admins may log anywhere,
+/// everyone else needs an assignment row. Shared by the manual-entry and
+/// timer-start paths so both enforce the same rule.
+#[cfg(feature = "server")]
+async fn ensure_assigned(
+    db: &sqlx::PgPool,
+    user_id: uuid::Uuid,
+    project_id: uuid::Uuid,
+    org_role: OrgRole,
+) -> Result<(), ServerFnError> {
+    if org_role == OrgRole::Admin {
+        return Ok(());
+    }
+
+    let assigned = sqlx::query_scalar!(
+        "SELECT EXISTS(SELECT 1 FROM assignments WHERE project_id = $1 AND user_id = $2)",
+        project_id,
+        user_id,
+    )
+    .fetch_one(db)
+    .await
+    .map_err(server_err)?
+    .unwrap_or(false);
+
+    if assigned {
+        Ok(())
+    } else {
+        Err(forbidden("You are not assigned to this project"))
+    }
+}
+
 // ── Time Entries ─────────────────────────────────────────────────────────────
 
 /// Whether this listing is bounded: either it caps the rows, or it closes the
@@ -133,6 +164,8 @@ pub async fn start_timer(
     .await
     .map_err(server_err)?;
 
+    ensure_assigned(&state.db, user_id, project_id, user.org_role).await?;
+
     // Check no timer already running
     let existing = sqlx::query_scalar!(
         "SELECT EXISTS(SELECT 1 FROM time_entries WHERE user_id = $1 AND is_running = true)",
@@ -188,8 +221,9 @@ pub async fn stop_timer(entry_id: String) -> Result<TimeEntry, ServerFnError> {
     // Read the running entry's start time, then compute the exact elapsed
     // minutes in `horae-core` (floored to the minute, no artificial 1-minute
     // minimum) so tracked totals stay exact (FR-003/FR-023).
-    let started_at: chrono::DateTime<chrono::Utc> = sqlx::query_scalar!(
-        r#"SELECT started_at as "started_at: chrono::DateTime<chrono::Utc>"
+    let row = sqlx::query!(
+        r#"SELECT started_at as "started_at: chrono::DateTime<chrono::Utc>",
+                  state as "state: EntryState"
                FROM time_entries
                WHERE id = $1 AND user_id = $2 AND is_running = true"#,
         entry_id,
@@ -198,8 +232,21 @@ pub async fn stop_timer(entry_id: String) -> Result<TimeEntry, ServerFnError> {
     .fetch_optional(&state.db)
     .await
     .map_err(server_err)?
-    .flatten()
     .ok_or_else(|| not_found("No running timer found for this entry"))?;
+
+    // A locked (submitted/approved/invoiced) entry must not receive minutes:
+    // its rounded_minutes were persisted at lock time, so a write here would
+    // put time on the books that billing never sees.
+    if row.state != EntryState::Open {
+        return Err(conflict(
+            "This entry was locked while its timer ran and can no longer be stopped. \
+             Ask a manager to reject the submission first.",
+        ));
+    }
+
+    let started_at = row
+        .started_at
+        .ok_or_else(|| not_found("No running timer found for this entry"))?;
 
     let minutes = horae_core::duration::minutes_between(started_at, chrono::Utc::now()) as i32;
 
@@ -222,7 +269,7 @@ pub async fn stop_timer(entry_id: String) -> Result<TimeEntry, ServerFnError> {
              start_minute = $4,
              started_at = NULL,
              notified_long_running_at = NULL
-         WHERE id = $1 AND user_id = $2 AND is_running = true
+         WHERE id = $1 AND user_id = $2 AND is_running = true AND state = $5
          RETURNING id, org_id, user_id, project_id, task_id,
                    spent_date as "spent_date: chrono::NaiveDate",
                    minutes, start_minute, sort_order, rounded_minutes, notes, billable, is_running,
@@ -234,6 +281,7 @@ pub async fn stop_timer(entry_id: String) -> Result<TimeEntry, ServerFnError> {
         user_id,
         minutes,
         start_minute,
+        EntryState::Open as EntryState,
     )
     .fetch_optional(&state.db)
     .await
@@ -300,22 +348,7 @@ pub async fn create_time_entry(
     .await
     .map_err(server_err)?;
 
-    // Check assignment (skip for admins)
-    if row.org_role != OrgRole::Admin {
-        let assigned = sqlx::query_scalar!(
-            "SELECT EXISTS(SELECT 1 FROM assignments WHERE project_id = $1 AND user_id = $2)",
-            project_id,
-            user_id,
-        )
-        .fetch_one(&state.db)
-        .await
-        .map_err(server_err)?
-        .unwrap_or(false);
-
-        if !assigned {
-            return Err(forbidden("You are not assigned to this project"));
-        }
-    }
+    ensure_assigned(&state.db, user_id, project_id, row.org_role).await?;
 
     let id = uuid::Uuid::now_v7();
 
@@ -558,7 +591,10 @@ pub async fn reorder_untimed_entries(
 
 #[cfg(all(test, feature = "server"))]
 mod tests {
-    use super::{listing_is_bounded, normalize_start};
+    use super::{FORBIDDEN, OrgRole, ensure_assigned, listing_is_bounded, normalize_start};
+    use dioxus::prelude::ServerFnError;
+    use sqlx::PgPool;
+    use uuid::Uuid;
 
     #[test]
     fn snaps_unaligned_start_to_the_grid() {
@@ -606,5 +642,103 @@ mod tests {
         assert!(!listing_is_bounded(None, Some("2026-08-31"), None));
         assert!(!listing_is_bounded(None, None, Some("2026-09-06")));
         assert!(!listing_is_bounded(None, None, None));
+    }
+
+    // ── ensure_assigned (`#[sqlx::test]`, throwaway database per test) ──────
+    // These call the crate-internal guard directly — `tests/` cannot import a
+    // bin crate's modules, so the real behaviour is pinned here.
+
+    /// Seed an org, a user with the given role, and a client/project.
+    /// Returns `(user_id, project_id)`.
+    async fn seed(pool: &PgPool, role: OrgRole) -> (Uuid, Uuid) {
+        let org_id = Uuid::now_v7();
+        sqlx::query!(
+            "INSERT INTO organizations (id, name) VALUES ($1, 'Test Org')",
+            org_id
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+
+        let user_id = Uuid::now_v7();
+        sqlx::query!(
+            "INSERT INTO users (id, org_id, email, name, org_role) \
+             VALUES ($1, $2, $3, 'Test User', $4)",
+            user_id,
+            org_id,
+            format!("{user_id}@test.com"),
+            role as OrgRole,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+
+        let client_id = Uuid::now_v7();
+        sqlx::query!(
+            "INSERT INTO clients (id, org_id, name, currency) VALUES ($1, $2, 'Acme', 'EUR')",
+            client_id,
+            org_id,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+
+        let project_id = Uuid::now_v7();
+        sqlx::query!(
+            "INSERT INTO projects (id, org_id, client_id, name, currency) \
+             VALUES ($1, $2, $3, 'Widget', 'EUR')",
+            project_id,
+            org_id,
+            client_id,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+
+        (user_id, project_id)
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn unassigned_member_is_forbidden(pool: PgPool) {
+        let (user_id, project_id) = seed(&pool, OrgRole::Member).await;
+
+        let err = ensure_assigned(&pool, user_id, project_id, OrgRole::Member)
+            .await
+            .expect_err("an unassigned member must be refused");
+        match err {
+            ServerFnError::ServerError { code, .. } => assert_eq!(code, FORBIDDEN),
+            other => panic!("expected a 403 ServerError, got {other:?}"),
+        }
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn assigned_member_may_log_time(pool: PgPool) {
+        let (user_id, project_id) = seed(&pool, OrgRole::Member).await;
+        sqlx::query!(
+            "INSERT INTO assignments (id, project_id, user_id) VALUES ($1, $2, $3)",
+            Uuid::now_v7(),
+            project_id,
+            user_id,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        assert!(
+            ensure_assigned(&pool, user_id, project_id, OrgRole::Member)
+                .await
+                .is_ok()
+        );
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn admin_may_log_time_without_assignment(pool: PgPool) {
+        let (user_id, project_id) = seed(&pool, OrgRole::Admin).await;
+
+        assert!(
+            ensure_assigned(&pool, user_id, project_id, OrgRole::Admin)
+                .await
+                .is_ok()
+        );
     }
 }

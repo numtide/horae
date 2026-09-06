@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE time_entries\n         SET state = $4,\n             rounded_minutes = COALESCE(rounded_minutes, minutes)\n         WHERE user_id = $1\n           AND spent_date BETWEEN $2 AND $3\n           AND state = $5",
+  "query": "UPDATE time_entries SET state = $4, rounded_minutes = COALESCE(rounded_minutes, minutes) WHERE user_id = $1 AND spent_date BETWEEN $2 AND $3 AND state = $5 AND NOT EXISTS (SELECT 1 FROM time_entries r WHERE r.user_id = $1 AND r.spent_date BETWEEN $2 AND $3 AND r.is_running)",
   "describe": {
     "columns": [],
     "parameters": {
@@ -38,5 +38,5 @@
     },
     "nullable": []
   },
-  "hash": "2a7963973367b6934c398cbed2a8d71cc0d0e95225a2917d0485223448445e17"
+  "hash": "13ef692b23bd5aa696c9946976670c25c2a1e6afb587eaec8ace4c6a5cd8bc90"
 }
