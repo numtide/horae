@@ -749,6 +749,250 @@ async fn approval_workflow_approve_and_reject(pool: PgPool) {
     assert!(!approval_exists);
 }
 
+// Rejecting (reopening) an already-approved week must return its entries to
+// 'open' and clear their rounded minutes. No entry may be left 'approved'
+// without an approvals row backing it — approved entries otherwise have no
+// path back to editable.
+//
+// Like the rest of this file, the test replicates `reject_submission`'s SQL
+// rather than calling the server fn (the crate exposes no library target); it
+// documents the intended transition, not the fn's wiring.
+#[sqlx::test(migrations = "./migrations")]
+#[serial]
+async fn reject_after_approve_reopens_entries(pool: PgPool) {
+    let org_id = seed_org(&pool).await;
+    let user_id = seed_user(&pool, org_id, OrgRole::Member).await;
+    let manager_id = seed_user(&pool, org_id, OrgRole::Manager).await;
+    let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
+
+    let period_start = NaiveDate::from_ymd_opt(2026, 8, 3).unwrap();
+    let period_end = NaiveDate::from_ymd_opt(2026, 8, 9).unwrap();
+
+    // An approved week: entry in 'approved' with rounded_minutes persisted by
+    // submit, approval row in 'approved'.
+    let entry_id = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO time_entries \
+           (id, org_id, user_id, project_id, task_id, spent_date, \
+            minutes, rounded_minutes, billable, is_running, state) \
+         VALUES ($1, $2, $3, $4, $5, '2026-08-04', \
+                 50, 60, true, false, $6)",
+        entry_id,
+        org_id,
+        user_id,
+        project_id,
+        task_id,
+        EntryState::Approved as EntryState,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let approval_id = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO approvals \
+           (id, org_id, user_id, period_start, period_end, state, approved_by, approved_at) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, now())",
+        approval_id,
+        org_id,
+        user_id,
+        period_start as chrono::NaiveDate,
+        period_end as chrono::NaiveDate,
+        EntryState::Approved as EntryState,
+        manager_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // Reject/reopen, as `reject_submission` does: reopen the period's
+    // submitted and approved entries, then delete the approval row.
+    sqlx::query!(
+        "UPDATE time_entries \
+         SET state = $4, rounded_minutes = NULL \
+         WHERE user_id = $1 \
+           AND spent_date BETWEEN $2 AND $3 \
+           AND (state = $5 OR state = $6)",
+        user_id,
+        period_start as chrono::NaiveDate,
+        period_end as chrono::NaiveDate,
+        EntryState::Open as EntryState,
+        EntryState::Submitted as EntryState,
+        EntryState::Approved as EntryState,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    sqlx::query!("DELETE FROM approvals WHERE id = $1", approval_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    // The entry is back to open with its rounding cleared (submit's writes
+    // exactly reversed).
+    let row = sqlx::query!(
+        "SELECT state::text, rounded_minutes FROM time_entries WHERE id = $1",
+        entry_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(row.state.unwrap_or_default(), "open");
+    assert_eq!(row.rounded_minutes, None);
+
+    // Invariant: no entry is 'approved' without an approvals row covering it.
+    let stranded: i64 = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) as "count!" FROM time_entries te
+           WHERE te.state = $1
+             AND NOT EXISTS (
+               SELECT 1 FROM approvals a
+               WHERE a.user_id = te.user_id
+                 AND te.spent_date BETWEEN a.period_start AND a.period_end)"#,
+        EntryState::Approved as EntryState,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(stranded, 0, "approved entries left with no approvals row");
+}
+
+// Resubmitting a week a manager already approved must not silently downgrade
+// the approval back to pending: `submit_week` refuses with a conflict, and the
+// approval record (state, approved_by, approved_at) stays intact.
+//
+// Like the rest of this file, the test replicates `submit_week`'s SQL rather
+// than calling the server fn (the crate exposes no library target); it
+// documents the intended transition, not the fn's wiring.
+#[sqlx::test(migrations = "./migrations")]
+#[serial]
+async fn resubmit_after_approve_is_refused(pool: PgPool) {
+    let org_id = seed_org(&pool).await;
+    let user_id = seed_user(&pool, org_id, OrgRole::Member).await;
+    let manager_id = seed_user(&pool, org_id, OrgRole::Manager).await;
+    let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
+
+    let period_start = NaiveDate::from_ymd_opt(2026, 8, 10).unwrap();
+    let period_end = NaiveDate::from_ymd_opt(2026, 8, 16).unwrap();
+
+    // An approved week, plus a new open entry the user added afterwards.
+    let approval_id = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO approvals \
+           (id, org_id, user_id, period_start, period_end, state, approved_by, approved_at) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, now())",
+        approval_id,
+        org_id,
+        user_id,
+        period_start as chrono::NaiveDate,
+        period_end as chrono::NaiveDate,
+        EntryState::Approved as EntryState,
+        manager_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let entry_id = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO time_entries \
+           (id, org_id, user_id, project_id, task_id, spent_date, \
+            minutes, billable, is_running, state) \
+         VALUES ($1, $2, $3, $4, $5, '2026-08-11', \
+                 30, true, false, $6)",
+        entry_id,
+        org_id,
+        user_id,
+        project_id,
+        task_id,
+        EntryState::Open as EntryState,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // Resubmit, as `submit_week` does: check the existing approval's state
+    // before touching anything, and refuse (conflict) when it is approved.
+    let existing = sqlx::query_scalar!(
+        r#"SELECT state as "state: EntryState" FROM approvals
+           WHERE user_id = $1 AND period_start = $2"#,
+        user_id,
+        period_start as chrono::NaiveDate,
+    )
+    .fetch_optional(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        existing,
+        Some(EntryState::Approved),
+        "submit_week's guard must see the approved week and refuse"
+    );
+
+    // Even if the guard were bypassed (its SELECT locks nothing when no row
+    // exists yet), the conditional upsert must refuse to downgrade an approved
+    // row: no row comes back, which `submit_week` maps to a conflict.
+    let upserted = sqlx::query_scalar!(
+        "INSERT INTO approvals (id, org_id, user_id, period_start, period_end, state) \
+         VALUES ($1, $2, $3, $4, $5, $6) \
+         ON CONFLICT (user_id, period_start) DO UPDATE \
+           SET state = $6, submitted_at = now() \
+           WHERE approvals.state <> $7 \
+         RETURNING id",
+        Uuid::now_v7(),
+        org_id,
+        user_id,
+        period_start as chrono::NaiveDate,
+        period_end as chrono::NaiveDate,
+        EntryState::Submitted as EntryState,
+        EntryState::Approved as EntryState,
+    )
+    .fetch_optional(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        upserted, None,
+        "the upsert must not downgrade an approved approval"
+    );
+
+    // The refused resubmit leaves the new entry open — the week was not
+    // partially submitted before the conflict.
+    let row = sqlx::query!(
+        "SELECT state::text, rounded_minutes FROM time_entries WHERE id = $1",
+        entry_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(row.state.unwrap_or_default(), "open");
+    assert_eq!(row.rounded_minutes, None);
+
+    // The approval record must be intact: still approved, by the same manager.
+    let row = sqlx::query!(
+        "SELECT state::text, approved_by, approved_at FROM approvals WHERE id = $1",
+        approval_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(row.state.unwrap_or_default(), "approved");
+    assert_eq!(row.approved_by, Some(manager_id));
+    assert!(row.approved_at.is_some());
+
+    // Invariant: a pending approval never carries approval metadata.
+    let stale: i64 = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) as "count!" FROM approvals
+           WHERE state = $1 AND (approved_by IS NOT NULL OR approved_at IS NOT NULL)"#,
+        EntryState::Submitted as EntryState,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        stale, 0,
+        "pending approval left with stale approved_by/approved_at"
+    );
+}
+
 // Test 6b: the Approvals list aggregates a period's tracked minutes, splitting
 // billable from total and excluding entries outside [period_start, period_end].
 #[sqlx::test(migrations = "./migrations")]

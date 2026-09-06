@@ -1,10 +1,18 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE time_entries\n         SET state = $4, rounded_minutes = NULL\n         WHERE user_id = $1\n           AND spent_date BETWEEN $2 AND $3\n           AND state = $5",
+  "query": "INSERT INTO approvals (id, org_id, user_id, period_start, period_end, state) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (user_id, period_start) DO UPDATE SET state = $6, submitted_at = now() WHERE approvals.state <> $7 RETURNING id",
   "describe": {
-    "columns": [],
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
     "parameters": {
       "Left": [
+        "Uuid",
+        "Uuid",
         "Uuid",
         "Date",
         "Date",
@@ -36,7 +44,9 @@
         }
       ]
     },
-    "nullable": []
+    "nullable": [
+      false
+    ]
   },
-  "hash": "344cdffdf6ec4ade860e246eb26b61b06eda16871651b43b0c6a50ac1c2f1f88"
+  "hash": "0a0e530df47adab84bb1bfec658a2c2bbcc5d3a403982fef04490787c2cd1a94"
 }

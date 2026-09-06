@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO approvals (id, org_id, user_id, period_start, period_end, state)\n         VALUES ($1, $2, $3, $4, $5, $6)\n         ON CONFLICT (user_id, period_start) DO UPDATE\n           SET state = $6, submitted_at = now()\n         RETURNING id, org_id, user_id,\n                   period_start as \"period_start: chrono::NaiveDate\",\n                   period_end as \"period_end: chrono::NaiveDate\",\n                   state as \"state: EntryState\",\n                   submitted_at as \"submitted_at: chrono::DateTime<chrono::Utc>\",\n                   approved_by,\n                   approved_at as \"approved_at: chrono::DateTime<chrono::Utc>\"",
+  "query": "INSERT INTO approvals (id, org_id, user_id, period_start, period_end, state)\n         VALUES ($1, $2, $3, $4, $5, $6)\n         ON CONFLICT (user_id, period_start) DO UPDATE\n           SET state = $6, submitted_at = now()\n           WHERE approvals.state <> $7\n         RETURNING id, org_id, user_id,\n                   period_start as \"period_start: chrono::NaiveDate\",\n                   period_end as \"period_end: chrono::NaiveDate\",\n                   state as \"state: EntryState\",\n                   submitted_at as \"submitted_at: chrono::DateTime<chrono::Utc>\",\n                   approved_by,\n                   approved_at as \"approved_at: chrono::DateTime<chrono::Utc>\"",
   "describe": {
     "columns": [
       {
@@ -80,6 +80,19 @@
               ]
             }
           }
+        },
+        {
+          "Custom": {
+            "name": "entry_state",
+            "kind": {
+              "Enum": [
+                "open",
+                "submitted",
+                "approved",
+                "invoiced"
+              ]
+            }
+          }
         }
       ]
     },
@@ -95,5 +108,5 @@
       true
     ]
   },
-  "hash": "8223c1c35dedea647056336d10bd99d3e6ac3c9e63911c94627371b687fe6f9f"
+  "hash": "b9632ebb55dfe28fae1080eb5228cbc5f9c193cf46b42872a564af1592c2ebbe"
 }

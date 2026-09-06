@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO time_entries (id, org_id, user_id, project_id, task_id, spent_date, minutes, rounded_minutes, billable, is_running, state) VALUES ($1, $2, $3, $4, $5, '2026-08-04', 50, 60, true, false, $6)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        {
+          "Custom": {
+            "name": "entry_state",
+            "kind": {
+              "Enum": [
+                "open",
+                "submitted",
+                "approved",
+                "invoiced"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f04bc7da0980ecfce042041ab6b39cb8d47b3ccfd2e55a6207486e906134bc8e"
+}

@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COUNT(*) as \"count!\" FROM time_entries te\n           WHERE te.state = $1\n             AND NOT EXISTS (\n               SELECT 1 FROM approvals a\n               WHERE a.user_id = te.user_id\n                 AND te.spent_date BETWEEN a.period_start AND a.period_end)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        {
+          "Custom": {
+            "name": "entry_state",
+            "kind": {
+              "Enum": [
+                "open",
+                "submitted",
+                "approved",
+                "invoiced"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "23bb6d5eb055975397768ff9c8aed604796341a9dd1ef2080e76b89398fedb30"
+}
