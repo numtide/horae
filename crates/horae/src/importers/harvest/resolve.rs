@@ -55,13 +55,28 @@ pub enum ParentKind {
     Task,
 }
 
-/// Ids of parents resolved so far in this run. Only merged after a row's savepoint
+/// What a committed row contributes to the [`RunCache`]. Collected while the
+/// row's savepoint is open and merged only after it commits, so a rolled-back
+/// row never poisons the cache.
+#[derive(Default)]
+pub struct PendingCache {
+    /// Parents this row resolved or created.
+    pub parents: Vec<(ParentKind, String, Uuid)>,
+    /// The natural-key slot an id-less time entry consumed (see
+    /// [`RunCache::entry_slot_offset`]); bumped on commit so the next identical
+    /// row in the run maps to the next stored entry instead of the same one.
+    pub entry_slot: Option<String>,
+}
+
+/// Ids of parents resolved so far in this run, plus the per-natural-key count of
+/// id-less time entries already consumed. Only merged after a row's savepoint
 /// commits, so a rolled-back creation never poisons the cache.
 #[derive(Default)]
 pub struct RunCache {
     clients: HashMap<String, Uuid>,
     projects: HashMap<String, Uuid>,
     tasks: HashMap<String, Uuid>,
+    entry_slots: keys::OccurrenceCounter,
 }
 
 impl RunCache {
@@ -86,10 +101,20 @@ impl RunCache {
     }
 
     /// Merge the entries a committed row resolved/created into the run cache.
-    pub fn merge(&mut self, pending: Vec<(ParentKind, String, Uuid)>) {
-        for (kind, key, id) in pending {
+    pub fn merge(&mut self, pending: PendingCache) {
+        for (kind, key, id) in pending.parents {
             self.map_mut(kind).insert(key, id);
         }
+        if let Some(key) = pending.entry_slot {
+            self.entry_slots.bump(key);
+        }
+    }
+
+    /// How many id-less time entries with this natural key the run has already
+    /// consumed — the zero-based `OFFSET` into the stored entries the next
+    /// identical row should match.
+    pub fn entry_slot_offset(&self, key: &str) -> u64 {
+        self.entry_slots.seen(key)
     }
 }
 

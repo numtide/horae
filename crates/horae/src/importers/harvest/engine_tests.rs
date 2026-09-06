@@ -534,6 +534,182 @@ async fn csv_import_populates_and_is_idempotent(pool: PgPool) {
     assert_eq!(count(&pool, "time_entries").await, 2);
 }
 
+// ── Distinct-but-identical entries are never collapsed ────────────────────────
+
+/// Two identical rows in one Detailed export are two real entries (e.g. two
+/// 30-minute calls on the same day) — both must be imported.
+#[sqlx::test(migrations = "./migrations")]
+async fn two_identical_csv_rows_import_as_two_entries(pool: PgPool) {
+    let org = seed_org(&pool).await;
+    seed_user(&pool, org, "dev@acme.com").await;
+    let row = || {
+        nk_row(
+            "Acme",
+            "Website",
+            "Design",
+            "dev@acme.com",
+            (2026, 1, 15),
+            "0.5",
+            Some("client call"),
+        )
+    };
+
+    let report = commit_csv(&pool, org, vec![row(), row()]).await;
+
+    assert_eq!(report.summary.time_entries.created, 2);
+    assert_eq!(count(&pool, "time_entries").await, 2);
+}
+
+/// Re-importing the same file with repeated identical rows stays idempotent:
+/// each occurrence matches its own stored entry, leaving exactly two.
+#[sqlx::test(migrations = "./migrations")]
+async fn reimporting_identical_csv_rows_is_idempotent(pool: PgPool) {
+    let org = seed_org(&pool).await;
+    seed_user(&pool, org, "dev@acme.com").await;
+    let rows = || {
+        vec![
+            nk_row(
+                "Acme",
+                "Website",
+                "Design",
+                "dev@acme.com",
+                (2026, 1, 15),
+                "0.5",
+                Some("client call"),
+            ),
+            nk_row(
+                "Acme",
+                "Website",
+                "Design",
+                "dev@acme.com",
+                (2026, 1, 15),
+                "0.5",
+                Some("client call"),
+            ),
+        ]
+    };
+
+    commit_csv(&pool, org, rows()).await;
+    let second = commit_csv(&pool, org, rows()).await;
+
+    assert_eq!(second.summary.time_entries.created, 0);
+    assert_eq!(second.summary.time_entries.skipped, 2);
+    assert_eq!(count(&pool, "time_entries").await, 2);
+}
+
+/// Two Harvest entries with different ids but identical fields are distinct
+/// records: each gets its own Horae entry and its own provenance mapping, and an
+/// incremental re-sync matches each by its id.
+#[sqlx::test(migrations = "./migrations")]
+async fn distinct_harvest_ids_with_identical_fields_import_as_two(pool: PgPool) {
+    let org = seed_org(&pool).await;
+    seed_user(&pool, org, "dev@acme.com").await;
+    let rows = || {
+        vec![
+            api_row(
+                (1, 10, 100, 5000, 1000),
+                "Acme",
+                "Website",
+                "Design",
+                "dev@acme.com",
+                (2026, 1, 15),
+                "0.5",
+                Some("client call"),
+            ),
+            api_row(
+                (1, 10, 100, 5001, 1000),
+                "Acme",
+                "Website",
+                "Design",
+                "dev@acme.com",
+                (2026, 1, 15),
+                "0.5",
+                Some("client call"),
+            ),
+        ]
+    };
+
+    let first = commit(&pool, org, rows()).await;
+    assert_eq!(first.summary.time_entries.created, 2);
+    assert_eq!(count(&pool, "time_entries").await, 2);
+
+    // Each Harvest id maps to its own Horae entry — never two ids on one row.
+    let distinct = sqlx::query_scalar!(
+        "SELECT COUNT(DISTINCT horae_id) FROM harvest_import_map
+         WHERE harvest_entity_type = 'time_entry'::harvest_entity_type"
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap()
+    .unwrap_or(0);
+    assert_eq!(distinct, 2);
+
+    // An incremental re-sync matches both entries by id.
+    let second = commit(&pool, org, rows()).await;
+    assert_eq!(second.summary.time_entries.created, 0);
+    assert_eq!(second.summary.time_entries.skipped, 2);
+    assert_eq!(count(&pool, "time_entries").await, 2);
+}
+
+/// A first API sync after a CSV import must adopt the id-less entries the CSV
+/// created — one Harvest id per stored entry — instead of duplicating them.
+#[sqlx::test(migrations = "./migrations")]
+async fn api_sync_adopts_entries_from_a_prior_csv_import(pool: PgPool) {
+    let org = seed_org(&pool).await;
+    seed_user(&pool, org, "dev@acme.com").await;
+    let csv_row = || {
+        nk_row(
+            "Acme",
+            "Website",
+            "Design",
+            "dev@acme.com",
+            (2026, 1, 15),
+            "0.5",
+            Some("client call"),
+        )
+    };
+    commit_csv(&pool, org, vec![csv_row(), csv_row()]).await;
+    assert_eq!(count(&pool, "time_entries").await, 2);
+
+    // The same two entries arrive from the API, now carrying their Harvest ids.
+    let api_rows = vec![
+        api_row(
+            (1, 10, 100, 5000, 1000),
+            "Acme",
+            "Website",
+            "Design",
+            "dev@acme.com",
+            (2026, 1, 15),
+            "0.5",
+            Some("client call"),
+        ),
+        api_row(
+            (1, 10, 100, 5001, 1000),
+            "Acme",
+            "Website",
+            "Design",
+            "dev@acme.com",
+            (2026, 1, 15),
+            "0.5",
+            Some("client call"),
+        ),
+    ];
+    let sync = commit(&pool, org, api_rows).await;
+
+    assert_eq!(sync.summary.time_entries.created, 0);
+    assert_eq!(sync.summary.time_entries.skipped, 2);
+    assert_eq!(count(&pool, "time_entries").await, 2);
+    let distinct = sqlx::query_scalar!(
+        "SELECT COUNT(DISTINCT horae_id) FROM harvest_import_map
+         WHERE harvest_entity_type = 'time_entry'::harvest_entity_type"
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap()
+    .unwrap_or(0);
+    assert_eq!(distinct, 2);
+}
+
 #[sqlx::test(migrations = "./migrations")]
 async fn csv_malformed_file_is_rejected_with_no_writes(pool: PgPool) {
     let org = seed_org(&pool).await;

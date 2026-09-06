@@ -2,8 +2,10 @@
 //! shared `SourceRow` stream (US5, contracts/csv-format.md, research.md §1/§9).
 //!
 //! A CSV carries no stable Harvest ids, so every row's Harvest ids are `None` and
-//! matching falls back to the composite natural key — re-importing the same file
-//! is still duplicate-free, just not edit-robust the way the API source is.
+//! matching falls back to the composite natural key, with repeated identical rows
+//! kept as distinct entries (the Nth occurrence matches the Nth stored entry) —
+//! re-importing the same file is still duplicate-free, just not edit-robust the
+//! way the API source is.
 //! Column headers are matched case-insensitively with surrounding whitespace
 //! trimmed; an unrecognized or empty file is rejected up front with no writes.
 

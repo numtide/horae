@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COUNT(DISTINCT horae_id) FROM harvest_import_map\n         WHERE harvest_entity_type = 'time_entry'::harvest_entity_type",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "bd66ec7f5c3c0558265bbfb08460f43ca552cc4aa8c4d55e95294d2f4e90141a"
+}
