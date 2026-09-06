@@ -6,7 +6,7 @@ use super::*;
 /// Any signed-in user may read it (it is not sensitive).
 #[server]
 pub async fn get_org_name() -> Result<String, ServerFnError> {
-    let user_id = session_user_id().await?;
+    let user_id = require_user().await?.id;
     let state = crate::state::global_state().await;
 
     let name = sqlx::query_scalar!(

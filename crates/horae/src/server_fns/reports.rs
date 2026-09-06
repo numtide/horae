@@ -7,6 +7,7 @@ use super::*;
 /// Grouped time report. Groups by "project", "task", "client", or "person", with
 /// optional client/project/teammate filters. Each group carries billable and cost
 /// amounts (rates via FR-024); its `currency` is `None` when it mixes currencies.
+/// Manager-only: reports span every user's time and money (SPEC §6).
 #[server]
 pub async fn report_time(
     from: String,
@@ -16,7 +17,7 @@ pub async fn report_time(
     project_id: Option<String>,
     user_id: Option<String>,
 ) -> Result<Vec<ReportRow>, ServerFnError> {
-    let _user_id = session_user_id().await?;
+    let _manager = require_manager().await?;
     let state = crate::state::global_state().await;
 
     let from_date: chrono::NaiveDate = from
@@ -150,6 +151,7 @@ fn aggregate_time(rows: &[TimeRow], group_by: &str) -> Vec<ReportRow> {
 }
 
 /// Detailed (per-entry) report for the range, with the same optional filters.
+/// Manager-only, like `report_time`: rows cover every user's entries and notes.
 #[server]
 pub async fn report_detailed(
     from: String,
@@ -158,7 +160,7 @@ pub async fn report_detailed(
     project_id: Option<String>,
     user_id: Option<String>,
 ) -> Result<Vec<DetailedReportRow>, ServerFnError> {
-    let _user_id = session_user_id().await?;
+    let _manager = require_manager().await?;
     let state = crate::state::global_state().await;
 
     let from_date: chrono::NaiveDate = from
@@ -203,6 +205,7 @@ pub async fn report_detailed(
 /// Collect dashboard widgets from all loaded plugins (FR-022).
 #[server]
 pub async fn get_plugin_widgets() -> Result<Vec<PluginWidget>, ServerFnError> {
+    let _user = require_user().await?;
     let state = crate::state::global_state().await;
     let widgets = state.plugins.collect_widgets().await;
     Ok(widgets

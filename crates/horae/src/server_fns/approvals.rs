@@ -35,7 +35,7 @@ async fn week_has_running_timer(
 /// and creates an approval row.
 #[server]
 pub async fn submit_week(week_start: String) -> Result<Approval, ServerFnError> {
-    let user_id = session_user_id().await?;
+    let user_id = require_user().await?.id;
     let state = crate::state::global_state().await;
 
     let ws: chrono::NaiveDate = week_start

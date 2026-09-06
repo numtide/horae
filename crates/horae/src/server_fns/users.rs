@@ -4,18 +4,30 @@ use super::*;
 
 // ── Users ─────────────────────────────────────────────────────────────────────
 
-/// List users. Any authenticated user can list active users (for pickers);
-/// pass `include_inactive = true` to also see deactivated accounts (admin only).
+/// Blank out the pay-sensitive fields for callers below manager: pickers and
+/// name lookups only need identities, while rates are manager/admin material
+/// (SPEC §6 keeps members away from other users' money).
+#[cfg(feature = "server")]
+fn hide_rates(users: &mut [User]) {
+    for u in users {
+        u.cost_rate_cents = None;
+        u.billable_rate_cents = None;
+    }
+}
+
+/// List users. Any authenticated user can list active users (for pickers), but
+/// only managers and admins see the rate fields; pass `include_inactive = true`
+/// to also see deactivated accounts (admin only).
 #[server]
 pub async fn list_users(include_inactive: bool) -> Result<Vec<User>, ServerFnError> {
-    if include_inactive {
-        let _admin = require_admin().await?;
+    let viewer = if include_inactive {
+        require_admin().await?
     } else {
-        let _uid = session_user_id().await?;
-    }
+        require_user().await?
+    };
     let state = crate::state::global_state().await;
 
-    let users = sqlx::query_as!(
+    let mut users = sqlx::query_as!(
         User,
         r#"SELECT id, org_id, email, name, oidc_subject,
                 org_role as "org_role: OrgRole",
@@ -30,6 +42,9 @@ pub async fn list_users(include_inactive: bool) -> Result<Vec<User>, ServerFnErr
     .await
     .map_err(server_err)?;
 
+    if !viewer.is_manager_or_above() {
+        hide_rates(&mut users);
+    }
     Ok(users)
 }
 
@@ -229,4 +244,28 @@ pub async fn set_user_active(user_id: String, active: bool) -> Result<User, Serv
             });
     }
     Ok(user)
+}
+
+#[cfg(all(test, feature = "server"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hide_rates_clears_both_rate_fields() {
+        let mut users = vec![User {
+            id: uuid::Uuid::now_v7(),
+            org_id: uuid::Uuid::now_v7(),
+            email: "a@test.com".into(),
+            name: "A".into(),
+            oidc_subject: None,
+            org_role: OrgRole::Member,
+            cost_rate_cents: Some(6000),
+            billable_rate_cents: Some(10000),
+            active: true,
+            created_at: chrono::Utc::now(),
+        }];
+        hide_rates(&mut users);
+        assert_eq!(users[0].cost_rate_cents, None);
+        assert_eq!(users[0].billable_rate_cents, None);
+    }
 }

@@ -86,7 +86,7 @@ pub async fn list_time_entries(
         ));
     }
 
-    let session_uid = session_user_id().await?;
+    let session_uid = require_user().await?.id;
     let state = crate::state::global_state().await;
 
     let project_filter: Option<uuid::Uuid> = match project_id {
@@ -145,7 +145,7 @@ pub async fn start_timer(
     task_id: String,
     notes: Option<String>,
 ) -> Result<TimeEntry, ServerFnError> {
-    let user_id = session_user_id().await?;
+    let user_id = require_user().await?.id;
     let state = crate::state::global_state().await;
     let project_id = parse_uuid(&project_id, "project_id")?;
     let task_id = parse_uuid(&task_id, "task_id")?;
@@ -214,7 +214,7 @@ pub async fn start_timer(
 /// Stop a running timer and record elapsed minutes.
 #[server]
 pub async fn stop_timer(entry_id: String) -> Result<TimeEntry, ServerFnError> {
-    let user_id = session_user_id().await?;
+    let user_id = require_user().await?.id;
     let state = crate::state::global_state().await;
     let entry_id = parse_uuid(&entry_id, "entry_id")?;
 
@@ -296,7 +296,7 @@ pub async fn stop_timer(entry_id: String) -> Result<TimeEntry, ServerFnError> {
 /// Return the currently running timer for the authenticated user, if any.
 #[server]
 pub async fn get_current_timer() -> Result<Option<TimeEntry>, ServerFnError> {
-    let user_id = session_user_id().await?;
+    let user_id = require_user().await?.id;
     let state = crate::state::global_state().await;
 
     let entry = sqlx::query_as!(
@@ -331,7 +331,7 @@ pub async fn create_time_entry(
     billable: bool,
     start_minute: Option<i32>,
 ) -> Result<TimeEntry, ServerFnError> {
-    let user_id = session_user_id().await?;
+    let user_id = require_user().await?.id;
     let state = crate::state::global_state().await;
     let project_id = parse_uuid(&project_id, "project_id")?;
     let task_id = parse_uuid(&task_id, "task_id")?;
@@ -393,7 +393,7 @@ pub async fn update_time_entry(
     billable: bool,
     start_minute: Option<i32>,
 ) -> Result<TimeEntry, ServerFnError> {
-    let user_id = session_user_id().await?;
+    let user_id = require_user().await?.id;
     let state = crate::state::global_state().await;
     let entry_id = parse_uuid(&entry_id, "entry_id")?;
     let (minutes, start_minute) = normalize_start(minutes, start_minute)?;
@@ -458,7 +458,7 @@ pub async fn update_time_entry(
 /// Delete a time entry. Only allowed while the entry state is 'open'.
 #[server]
 pub async fn delete_time_entry(entry_id: String) -> Result<(), ServerFnError> {
-    let user_id = session_user_id().await?;
+    let user_id = require_user().await?.id;
     let state = crate::state::global_state().await;
     let entry_id = parse_uuid(&entry_id, "entry_id")?;
 
@@ -507,7 +507,7 @@ pub async fn reschedule_time_entry(
     start_minute: i32,
     minutes: i32,
 ) -> Result<TimeEntry, ServerFnError> {
-    let user_id = session_user_id().await?;
+    let user_id = require_user().await?.id;
     let state = crate::state::global_state().await;
     let entry_id = parse_uuid(&entry_id, "entry_id")?;
     let spent_date: chrono::NaiveDate = spent_date
@@ -561,7 +561,7 @@ pub async fn reorder_untimed_entries(
     spent_date: String,
     ordered_ids: Vec<String>,
 ) -> Result<(), ServerFnError> {
-    let user_id = session_user_id().await?;
+    let user_id = require_user().await?.id;
     let state = crate::state::global_state().await;
     let spent_date: chrono::NaiveDate = spent_date
         .parse()

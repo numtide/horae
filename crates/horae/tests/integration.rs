@@ -1994,6 +1994,21 @@ async fn deactivated_user_blocked_and_history_preserved(pool: PgPool) {
     .unwrap_or(false);
     assert!(!dev_admin);
 
+    // The Harvest-API auth extractor and the export routes resolve a session
+    // with the same active-only lookup, so a deactivated user's still-live
+    // session cookie gets 401 there as well.
+    let harvest_org = sqlx::query_scalar!(
+        "SELECT org_id FROM users WHERE id = $1 AND active = true",
+        user_id,
+    )
+    .fetch_optional(&pool)
+    .await
+    .unwrap();
+    assert!(
+        harvest_org.is_none(),
+        "deactivated user must fail the Harvest/export session lookup"
+    );
+
     // Historical time entries are preserved.
     let entry_exists: bool = sqlx::query_scalar!(
         "SELECT EXISTS(SELECT 1 FROM time_entries WHERE id = $1 AND user_id = $2)",
