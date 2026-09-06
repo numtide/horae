@@ -237,23 +237,32 @@ pub async fn generate_invoice(
         }
     })?;
 
-    // Insert line items.
-    for line in &lines {
-        sqlx::query!(
-            r#"INSERT INTO invoice_line_items (id, invoice_id, time_entry_id, description, minutes, rate_cents, amount_cents)
-               VALUES ($1, $2, $3, $4, $5, $6, $7)"#,
-            line.id,
-            line.invoice_id,
-            line.time_entry_id,
-            line.description,
-            line.minutes,
-            line.rate_cents,
-            line.amount_cents,
-        )
-        .execute(&mut *tx)
-        .await
-        .map_err(server_err)?;
-    }
+    // Insert the line items in one statement. A statement per line would hold
+    // the per-org advisory lock — and the FOR UPDATE locks on every selected
+    // entry — for one round trip per line, so a large invoice would block every
+    // other invoice for the org for as long as that takes.
+    let line_ids: Vec<uuid::Uuid> = lines.iter().map(|l| l.id).collect();
+    let line_invoice_ids: Vec<uuid::Uuid> = lines.iter().map(|l| l.invoice_id).collect();
+    let line_entry_ids: Vec<uuid::Uuid> = lines.iter().map(|l| l.time_entry_id).collect();
+    let line_descriptions: Vec<String> = lines.iter().map(|l| l.description.clone()).collect();
+    let line_minutes: Vec<i32> = lines.iter().map(|l| l.minutes).collect();
+    let line_rates: Vec<i64> = lines.iter().map(|l| l.rate_cents).collect();
+    let line_amounts: Vec<i64> = lines.iter().map(|l| l.amount_cents).collect();
+
+    sqlx::query!(
+        r#"INSERT INTO invoice_line_items (id, invoice_id, time_entry_id, description, minutes, rate_cents, amount_cents)
+           SELECT * FROM unnest($1::uuid[], $2::uuid[], $3::uuid[], $4::text[], $5::int4[], $6::int8[], $7::int8[])"#,
+        &line_ids,
+        &line_invoice_ids,
+        &line_entry_ids,
+        &line_descriptions,
+        &line_minutes,
+        &line_rates,
+        &line_amounts,
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(server_err)?;
 
     // Mark entries as invoiced. The row locks taken above already exclude
     // concurrent writers; re-checking state and invoice_id here is the final

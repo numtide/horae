@@ -128,8 +128,9 @@ pub async fn list_time_entries(
     Ok(entries)
 }
 
-/// Start a timer for the given project and task. Only one timer may run at a time
-/// per user (enforced both here and via a DB partial unique index).
+/// Start a timer for the given project and task. Only one timer may run at a
+/// time per user, enforced by the `one_running_timer_per_user` partial unique
+/// index; a second start is reported as a conflict.
 #[server]
 pub async fn start_timer(
     project_id: String,
@@ -143,27 +144,18 @@ pub async fn start_timer(
 
     ensure_assigned(&state.db, user.id, project_id, user.org_role).await?;
 
-    // Check no timer already running
-    let existing = sqlx::query_scalar!(
-        "SELECT EXISTS(SELECT 1 FROM time_entries WHERE user_id = $1 AND is_running = true)",
-        user.id,
-    )
-    .fetch_one(&state.db)
-    .await
-    .map_err(server_err)?
-    .unwrap_or(false);
-
-    if existing {
-        return Err(conflict("A timer is already running. Stop it first."));
-    }
-
     let id = uuid::Uuid::now_v7();
     let today = chrono::Utc::now().date_naive();
 
+    // The `one_running_timer_per_user` partial unique index is the real guard,
+    // so let it decide: a separate SELECT EXISTS pre-check leaves a window in
+    // which two concurrent starts both pass and the loser gets a raw
+    // unique-violation 500 instead of the conflict below.
     let entry = sqlx::query_as!(
         TimeEntry,
         r#"INSERT INTO time_entries (id, org_id, user_id, project_id, task_id, spent_date, minutes, notes, billable, is_running, started_at, state)
          VALUES ($1, $2, $3, $4, $5, $6, 0, $7, true, true, now(), $8)
+         ON CONFLICT (user_id) WHERE is_running DO NOTHING
          RETURNING id, org_id, user_id, project_id, task_id,
                    spent_date as "spent_date: chrono::NaiveDate",
                    minutes, start_minute, sort_order, rounded_minutes, notes, billable, is_running,
@@ -180,9 +172,10 @@ pub async fn start_timer(
         notes.as_deref(),
         EntryState::Open as EntryState,
     )
-    .fetch_one(&state.db)
+    .fetch_optional(&state.db)
     .await
-    .map_err(server_err)?;
+    .map_err(server_err)?
+    .ok_or_else(|| conflict("A timer is already running. Stop it first."))?;
 
     dispatch_time_entry_event(&entry, TimeEntryEvent::Created).await;
     Ok(entry)

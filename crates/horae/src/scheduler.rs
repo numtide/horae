@@ -22,20 +22,34 @@ pub fn spawn(state: &'static AppState) {
     });
 }
 
-/// One poll: announce every running timer past its org's limit that has not been
-/// announced yet, and mark it so it is not announced again until it stops.
+/// One poll: claim every running timer past its org's limit that has not been
+/// announced yet — marking it so it is not announced again until it stops — and
+/// announce each claimed one.
 async fn sweep(state: &AppState) -> anyhow::Result<()> {
+    // Claim and return the due timers in one statement. Selecting first and
+    // marking afterwards let two app instances — or one slow dispatch — both
+    // see the same timer and announce it twice. Marking up front trades that
+    // for the opposite failure: a crash between the UPDATE committing and the
+    // dispatch loop finishing drops an announcement. For a "you left a timer
+    // running" nudge, a missed one is clearly better than a duplicate.
     let rows = sqlx::query!(
-        r#"SELECT te.id, te.org_id, te.user_id, te.project_id, te.task_id,
-                  te.spent_date as "spent_date: chrono::NaiveDate",
-                  te.minutes, te.billable, te.notes,
-                  te.started_at as "started_at!: chrono::DateTime<chrono::Utc>",
-                  (EXTRACT(EPOCH FROM (now() - te.started_at)) / 60)::int as "running_minutes!"
-           FROM time_entries te
-           JOIN organizations o ON o.id = te.org_id
-           WHERE te.is_running = true
-             AND te.notified_long_running_at IS NULL
-             AND te.started_at < now() - make_interval(mins => o.long_timer_minutes)"#,
+        r#"WITH due AS (
+             UPDATE time_entries te
+                SET notified_long_running_at = now()
+               FROM organizations o
+              WHERE o.id = te.org_id
+                AND te.is_running = true
+                AND te.notified_long_running_at IS NULL
+                AND te.started_at < now() - make_interval(mins => o.long_timer_minutes)
+           RETURNING te.id, te.org_id, te.user_id, te.project_id, te.task_id,
+                     te.spent_date, te.minutes, te.billable, te.notes, te.started_at
+           )
+           SELECT id, org_id, user_id, project_id, task_id,
+                  spent_date as "spent_date: chrono::NaiveDate",
+                  minutes, billable, notes,
+                  started_at as "started_at!: chrono::DateTime<chrono::Utc>",
+                  (EXTRACT(EPOCH FROM (now() - started_at)) / 60)::int as "running_minutes!"
+           FROM due"#,
     )
     .fetch_all(&state.db)
     .await?;
@@ -60,12 +74,6 @@ async fn sweep(state: &AppState) -> anyhow::Result<()> {
                     started_at: Some(r.started_at),
                 },
             });
-        sqlx::query!(
-            "UPDATE time_entries SET notified_long_running_at = now() WHERE id = $1",
-            r.id,
-        )
-        .execute(&state.db)
-        .await?;
     }
     Ok(())
 }
