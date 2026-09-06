@@ -987,12 +987,16 @@ async fn generate_invoice_totals_match(pool: PgPool) {
     .await
     .unwrap();
 
-    // Insert two billable entries: 60 min and 30 min.
+    // Insert two billable entries: 60 min (open) and 30 min (approved) — both
+    // states are invoiceable.
     let entry_a = Uuid::now_v7();
     let entry_b = Uuid::now_v7();
     let date = NaiveDate::from_ymd_opt(2026, 7, 1).unwrap();
 
-    for (eid, mins) in [(entry_a, 60), (entry_b, 30)] {
+    for (eid, mins, state) in [
+        (entry_a, 60, EntryState::Open),
+        (entry_b, 30, EntryState::Approved),
+    ] {
         sqlx::query!(
             "INSERT INTO time_entries \
                (id, org_id, user_id, project_id, task_id, spent_date, \
@@ -1005,7 +1009,7 @@ async fn generate_invoice_totals_match(pool: PgPool) {
             task_id,
             date as NaiveDate,
             mins,
-            EntryState::Open as EntryState,
+            state as EntryState,
         )
         .execute(&pool)
         .await
@@ -1052,7 +1056,7 @@ async fn generate_invoice_totals_match(pool: PgPool) {
              AND p.client_id = $2
              AND te.billable = true
              AND te.invoice_id IS NULL
-             AND te.state = 'open'
+             AND te.state IN ('open', 'approved')
              AND te.spent_date >= $3
              AND te.spent_date <= $4
            ORDER BY te.spent_date, te.id"#,
@@ -1134,17 +1138,22 @@ async fn generate_invoice_totals_match(pool: PgPool) {
         .unwrap();
     }
 
-    // Mark entries as invoiced.
+    // Mark entries as invoiced with the same guarded UPDATE generate_invoice
+    // uses; both entries must be claimed.
     let entry_ids = vec![entry_a, entry_b];
-    sqlx::query!(
-        "UPDATE time_entries SET invoice_id = $1, state = 'invoiced', updated_at = now() \
-         WHERE id = ANY($2)",
+    let flipped = sqlx::query!(
+        "UPDATE time_entries SET invoice_id = $1, state = 'invoiced' \
+         WHERE id = ANY($2) \
+           AND invoice_id IS NULL \
+           AND state IN ('open', 'approved')",
         invoice_id,
         &entry_ids,
     )
     .execute(&pool)
     .await
-    .unwrap();
+    .unwrap()
+    .rows_affected();
+    assert_eq!(flipped, 2, "both entries must be claimed by the invoice");
 
     // Verify: total equals sum of line amounts.
     let line_sum: i64 = sqlx::query_scalar!(
@@ -1243,7 +1252,7 @@ async fn invoiced_entries_cannot_be_rebilled(pool: PgPool) {
              AND project_id IN (SELECT id FROM projects WHERE client_id = $2)
              AND billable = true
              AND invoice_id IS NULL
-             AND state = 'open'
+             AND state IN ('open', 'approved')
              AND spent_date >= $3
              AND spent_date <= $4"#,
         org_id,
@@ -1372,6 +1381,227 @@ async fn void_invoice_restores_entries(pool: PgPool) {
     .await
     .unwrap();
     assert_eq!(inv_status, "void");
+}
+
+// The three tests below follow this file's convention of replicating the
+// server fn's SQL against the pool (the crate is bin-only, so the #[server]
+// fns and their session context cannot be driven from here). They pin the
+// invoicing predicates and the database constraints; they do not exercise
+// generate_invoice itself, nor its advisory-lock / FOR UPDATE concurrency
+// behaviour.
+
+/// Approved time is invoiceable alongside open time; submitted time (locked,
+/// pending an approval decision) and already-invoiced time are not. Uses the
+/// same selection predicate as generate_invoice (FR-012, spec.md assumption
+/// "billable, un-invoiced time is directly invoiceable").
+#[sqlx::test(migrations = "./migrations")]
+#[serial]
+async fn approved_entries_are_invoiceable(pool: PgPool) {
+    let org_id = seed_org(&pool).await;
+    let user_id = seed_user(&pool, org_id, OrgRole::Manager).await;
+    let (project_id, task_id, client_id) =
+        seed_project_with_assignment(&pool, org_id, user_id).await;
+
+    let date = NaiveDate::from_ymd_opt(2026, 7, 6).unwrap();
+    let open_id = Uuid::now_v7();
+    let approved_id = Uuid::now_v7();
+    let submitted_id = Uuid::now_v7();
+
+    for (eid, state) in [
+        (open_id, EntryState::Open),
+        (approved_id, EntryState::Approved),
+        (submitted_id, EntryState::Submitted),
+    ] {
+        sqlx::query!(
+            "INSERT INTO time_entries \
+               (id, org_id, user_id, project_id, task_id, spent_date, \
+                minutes, billable, is_running, state) \
+             VALUES ($1, $2, $3, $4, $5, $6, 60, true, false, $7)",
+            eid,
+            org_id,
+            user_id,
+            project_id,
+            task_id,
+            date as NaiveDate,
+            state as EntryState,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+
+    let period_from = NaiveDate::from_ymd_opt(2026, 7, 1).unwrap();
+    let period_to = NaiveDate::from_ymd_opt(2026, 7, 31).unwrap();
+
+    let billable_ids: Vec<Uuid> = sqlx::query_scalar!(
+        r#"SELECT te.id as "id!: Uuid"
+           FROM time_entries te
+           JOIN projects p ON p.id = te.project_id
+           WHERE te.org_id = $1
+             AND p.client_id = $2
+             AND te.billable = true
+             AND te.invoice_id IS NULL
+             AND te.state IN ('open', 'approved')
+             AND te.spent_date >= $3
+             AND te.spent_date <= $4
+           ORDER BY te.id"#,
+        org_id,
+        client_id,
+        period_from as NaiveDate,
+        period_to as NaiveDate,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+
+    let mut expected = vec![open_id, approved_id];
+    expected.sort();
+    assert_eq!(
+        billable_ids, expected,
+        "open and approved entries are invoiceable; submitted is not"
+    );
+}
+
+/// Marking entries invoiced re-checks state and invoice_id, so an entry that
+/// was concurrently billed onto another invoice is left untouched instead of
+/// being silently re-billed (FR-013).
+#[sqlx::test(migrations = "./migrations")]
+#[serial]
+async fn invoicing_update_skips_already_invoiced_entries(pool: PgPool) {
+    let org_id = seed_org(&pool).await;
+    let user_id = seed_user(&pool, org_id, OrgRole::Manager).await;
+    let (project_id, task_id, client_id) =
+        seed_project_with_assignment(&pool, org_id, user_id).await;
+
+    let date = NaiveDate::from_ymd_opt(2026, 7, 7).unwrap();
+    let entry_id = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO time_entries \
+           (id, org_id, user_id, project_id, task_id, spent_date, \
+            minutes, billable, is_running, state) \
+         VALUES ($1, $2, $3, $4, $5, $6, 60, true, false, $7)",
+        entry_id,
+        org_id,
+        user_id,
+        project_id,
+        task_id,
+        date as NaiveDate,
+        EntryState::Open as EntryState,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // First invoice claims the entry.
+    let first_invoice = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO invoices (id, org_id, client_id, number, status, issued_on, due_on, currency, total_cents) \
+         VALUES ($1, $2, $3, 'INV-202607-001', 'draft', '2026-07-11', '2026-08-10', 'EUR', 0)",
+        first_invoice,
+        org_id,
+        client_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    sqlx::query!(
+        "UPDATE time_entries SET invoice_id = $1, state = 'invoiced', updated_at = now() \
+         WHERE id = $2",
+        first_invoice,
+        entry_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // A second invoice tries to claim the same entry with the guarded UPDATE
+    // generate_invoice uses; it must affect zero rows.
+    let second_invoice = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO invoices (id, org_id, client_id, number, status, issued_on, due_on, currency, total_cents) \
+         VALUES ($1, $2, $3, 'INV-202607-002', 'draft', '2026-07-11', '2026-08-10', 'EUR', 0)",
+        second_invoice,
+        org_id,
+        client_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let entry_ids = vec![entry_id];
+    let claimed = sqlx::query!(
+        "UPDATE time_entries \
+         SET invoice_id = $1, state = 'invoiced' \
+         WHERE id = ANY($2) \
+           AND invoice_id IS NULL \
+           AND state IN ('open', 'approved')",
+        second_invoice,
+        &entry_ids,
+    )
+    .execute(&pool)
+    .await
+    .unwrap()
+    .rows_affected();
+
+    assert_eq!(
+        claimed, 0,
+        "an already-invoiced entry must not be re-billed"
+    );
+
+    let inv_id: Option<Uuid> = sqlx::query_scalar!(
+        "SELECT invoice_id FROM time_entries WHERE id = $1",
+        entry_id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        inv_id,
+        Some(first_invoice),
+        "the entry must stay on the invoice that billed it first"
+    );
+}
+
+/// Invoice numbers are unique per org at the database level, so concurrent
+/// generation cannot mint the same number twice (FR-014).
+#[sqlx::test(migrations = "./migrations")]
+#[serial]
+async fn duplicate_invoice_numbers_rejected(pool: PgPool) {
+    let org_id = seed_org(&pool).await;
+    let user_id = seed_user(&pool, org_id, OrgRole::Manager).await;
+    let (_project_id, _task_id, client_id) =
+        seed_project_with_assignment(&pool, org_id, user_id).await;
+
+    sqlx::query!(
+        "INSERT INTO invoices (id, org_id, client_id, number, status, issued_on, due_on, currency, total_cents) \
+         VALUES ($1, $2, $3, 'INV-202607-001', 'draft', '2026-07-11', '2026-08-10', 'EUR', 0)",
+        Uuid::now_v7(),
+        org_id,
+        client_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let dup = sqlx::query!(
+        "INSERT INTO invoices (id, org_id, client_id, number, status, issued_on, due_on, currency, total_cents) \
+         VALUES ($1, $2, $3, 'INV-202607-001', 'draft', '2026-07-11', '2026-08-10', 'EUR', 0)",
+        Uuid::now_v7(),
+        org_id,
+        client_id,
+    )
+    .execute(&pool)
+    .await;
+
+    let err = dup.expect_err("a second invoice with the same number must be rejected");
+    let db_err = err
+        .as_database_error()
+        .expect("rejection must come from the database");
+    assert!(
+        db_err.is_unique_violation(),
+        "expected a unique violation, got: {db_err}"
+    );
 }
 
 // ---------------------------------------------------------------------------

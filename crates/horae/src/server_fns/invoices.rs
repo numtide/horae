@@ -109,8 +109,31 @@ pub async fn generate_invoice(
     .map_err(server_err)?
     .ok_or_else(|| not_found("Client not found"))?;
 
+    // Everything from selecting the entries to flipping them to 'invoiced'
+    // runs in one transaction so two concurrent generate calls cannot bill the
+    // same time twice or mint the same invoice number.
+    let mut tx = state.db.begin().await.map_err(server_err)?;
+
+    // Serialize invoice creation per org while this transaction runs. The
+    // invoice number is derived from a COUNT over existing invoices, which two
+    // concurrent transactions would otherwise compute identically and then
+    // trip the UNIQUE (org_id, number) constraint. The lock is released
+    // automatically at commit or rollback.
+    sqlx::query_scalar!(
+        r#"SELECT pg_advisory_xact_lock(hashtextextended($1, 0)) as "lock!: ()""#,
+        manager.org_id.to_string(),
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(server_err)?;
+
     // Fetch billable, un-invoiced entries for this client in the period,
-    // with rate candidates from all cascade levels.
+    // with rate candidates from all cascade levels. Open and approved time is
+    // invoiceable (spec 001: billable, un-invoiced time is directly
+    // invoiceable); submitted time is locked pending an approval decision.
+    // FOR UPDATE locks the entry rows: a competing transaction blocks here
+    // until this one commits, then re-evaluates its WHERE and skips rows that
+    // were just invoiced.
     struct EntryWithRates {
         entry_id: uuid::Uuid,
         minutes: i32,
@@ -145,16 +168,17 @@ pub async fn generate_invoice(
              AND p.client_id = $2
              AND te.billable = true
              AND te.invoice_id IS NULL
-             AND te.state = 'open'
+             AND te.state IN ('open', 'approved')
              AND te.spent_date >= $3
              AND te.spent_date <= $4
-           ORDER BY te.spent_date, te.id"#,
+           ORDER BY te.spent_date, te.id
+           FOR UPDATE OF te"#,
         manager.org_id,
         client_id,
         from as chrono::NaiveDate,
         to as chrono::NaiveDate,
     )
-    .fetch_all(&state.db)
+    .fetch_all(&mut *tx)
     .await
     .map_err(server_err)?;
 
@@ -173,7 +197,7 @@ pub async fn generate_invoice(
         manager.org_id,
         format!("INV-{year_month}-%"),
     )
-    .fetch_one(&state.db)
+    .fetch_one(&mut *tx)
     .await
     .map_err(server_err)?;
     let invoice_number = format!("INV-{year_month}-{:03}", count + 1);
@@ -218,11 +242,6 @@ pub async fn generate_invoice(
         });
     }
 
-    // Persist the header, line items, and entry links atomically so a mid-way
-    // failure can never leave a half-created invoice or entries flipped to
-    // 'invoiced' without a complete invoice behind them.
-    let mut tx = state.db.begin().await.map_err(server_err)?;
-
     // Insert invoice.
     sqlx::query!(
         r#"INSERT INTO invoices (id, org_id, client_id, number, status, issued_on, due_on, currency, total_cents)
@@ -238,7 +257,19 @@ pub async fn generate_invoice(
     )
     .execute(&mut *tx)
     .await
-    .map_err(server_err)?;
+    // The advisory lock makes a number collision between generate calls
+    // impossible, but any other writer racing the UNIQUE (org_id, number)
+    // constraint should surface as a retryable conflict, not a 500 carrying
+    // raw database text.
+    .map_err(|e| {
+        if e.as_database_error()
+            .is_some_and(|db| db.is_unique_violation())
+        {
+            conflict("Invoice number was just taken by another invoice; please retry.")
+        } else {
+            server_err(e)
+        }
+    })?;
 
     // Insert line items.
     for line in &lines {
@@ -258,19 +289,30 @@ pub async fn generate_invoice(
         .map_err(server_err)?;
     }
 
-    // Mark entries as invoiced.
+    // Mark entries as invoiced. The row locks taken above already exclude
+    // concurrent writers; re-checking state and invoice_id here is the final
+    // guarantee that exactly the entries behind the line items get flipped.
     let entry_ids: Vec<uuid::Uuid> = entries.iter().map(|e| e.entry_id).collect();
-    sqlx::query!(
+    let flipped = sqlx::query!(
         r#"UPDATE time_entries
            SET invoice_id = $1,
                state = 'invoiced'
-           WHERE id = ANY($2)"#,
+           WHERE id = ANY($2)
+             AND invoice_id IS NULL
+             AND state IN ('open', 'approved')"#,
         invoice_id,
         &entry_ids,
     )
     .execute(&mut *tx)
     .await
-    .map_err(server_err)?;
+    .map_err(server_err)?
+    .rows_affected();
+
+    if flipped != entry_ids.len() as u64 {
+        return Err(conflict(
+            "Some of the selected time was modified concurrently; no invoice was created. Please retry.",
+        ));
+    }
 
     tx.commit().await.map_err(server_err)?;
 
