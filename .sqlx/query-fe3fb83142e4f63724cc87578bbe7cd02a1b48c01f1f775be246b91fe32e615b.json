@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, org_id, user_id,\n                period_start as \"period_start: chrono::NaiveDate\",\n                period_end as \"period_end: chrono::NaiveDate\",\n                state as \"state: EntryState\",\n                submitted_at as \"submitted_at: chrono::DateTime<chrono::Utc>\",\n                approved_by,\n                approved_at as \"approved_at: chrono::DateTime<chrono::Utc>\"\n         FROM approvals WHERE id = $1",
+  "query": "SELECT id, org_id, user_id,\n                period_start as \"period_start: chrono::NaiveDate\",\n                period_end as \"period_end: chrono::NaiveDate\",\n                state as \"state: EntryState\",\n                submitted_at as \"submitted_at: chrono::DateTime<chrono::Utc>\",\n                approved_by,\n                approved_at as \"approved_at: chrono::DateTime<chrono::Utc>\"\n         FROM approvals WHERE id = $1\n         FOR UPDATE",
   "describe": {
     "columns": [
       {
@@ -78,5 +78,5 @@
       true
     ]
   },
-  "hash": "ef4cee60f527000e426f52aaa7af18f973ebe5e1b3675ea1281940d498da8f00"
+  "hash": "fe3fb83142e4f63724cc87578bbe7cd02a1b48c01f1f775be246b91fe32e615b"
 }

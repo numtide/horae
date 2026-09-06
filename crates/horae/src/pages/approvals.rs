@@ -161,6 +161,8 @@ pub fn Approvals() -> Element {
                                                 let submitted = a.submitted_at.format("%d %b, %H:%M").to_string();
                                                 let hours = hhmm(s.total_minutes);
                                                 let is_pending = a.state == EntryState::Submitted;
+                                                let can_reopen =
+                                                    is_pending || a.state == EntryState::Approved;
                                                 let aid = a.id.to_string();
                                                 rsx! {
                                                     tr {
@@ -180,7 +182,7 @@ pub fn Approvals() -> Element {
                                                         }
                                                         td { class: "text-mono text-sm text-muted", "{submitted}" }
                                                         td { class: "text-right",
-                                                            if is_pending {
+                                                            if can_reopen {
                                                                 div { class: "flex gap-2 justify-end",
                                                                     button {
                                                                         class: "btn btn-secondary btn-sm",
@@ -193,16 +195,18 @@ pub fn Approvals() -> Element {
                                                                         },
                                                                         "Reopen"
                                                                     }
-                                                                    button {
-                                                                        class: "btn btn-solid btn-sm",
-                                                                        onclick: {
-                                                                            let aid = aid.clone();
-                                                                            move |_| spawn_action(
-                                                                                { let aid = aid.clone(); async move { server_fns::approve_submission(aid).await.map(|_| ()) } },
-                                                                                refresh, action_error,
-                                                                            )
-                                                                        },
-                                                                        "Approve"
+                                                                    if is_pending {
+                                                                        button {
+                                                                            class: "btn btn-solid btn-sm",
+                                                                            onclick: {
+                                                                                let aid = aid.clone();
+                                                                                move |_| spawn_action(
+                                                                                    { let aid = aid.clone(); async move { server_fns::approve_submission(aid).await.map(|_| ()) } },
+                                                                                    refresh, action_error,
+                                                                                )
+                                                                            },
+                                                                            "Approve"
+                                                                        }
                                                                     }
                                                                 }
                                                             } else {

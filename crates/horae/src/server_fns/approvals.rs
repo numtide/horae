@@ -17,9 +17,31 @@ pub async fn submit_week(week_start: String) -> Result<Approval, ServerFnError> 
         .map_err(|_| server_err("Invalid week_start (use YYYY-MM-DD)"))?;
     let we = ws + chrono::Duration::days(6);
 
+    let mut tx = state.db.begin().await.map_err(server_err)?;
+
+    // A week a manager has already approved cannot be resubmitted — silently
+    // downgrading the approval back to pending would erase who approved it and
+    // when. It must be reopened (rejected) first. The row lock keeps a
+    // concurrent approve from slipping between this check and the upsert below.
+    let existing = sqlx::query_scalar!(
+        r#"SELECT state as "state: EntryState" FROM approvals
+           WHERE user_id = $1 AND period_start = $2
+           FOR UPDATE"#,
+        user_id,
+        ws as chrono::NaiveDate,
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(server_err)?;
+    if existing == Some(EntryState::Approved) {
+        return Err(conflict(
+            "This week is already approved; a manager must reopen it before it can be resubmitted",
+        ));
+    }
+
     // Get user's org_id
     let user_row = sqlx::query!("SELECT org_id FROM users WHERE id = $1", user_id)
-        .fetch_one(&state.db)
+        .fetch_one(&mut *tx)
         .await
         .map_err(server_err)?;
     let org_id = user_row.org_id;
@@ -29,7 +51,7 @@ pub async fn submit_week(week_start: String) -> Result<Approval, ServerFnError> 
         r#"SELECT round_minutes, round_dir as "round_dir: RoundDir" FROM organizations WHERE id = $1"#,
         org_id,
     )
-    .fetch_one(&state.db)
+    .fetch_one(&mut *tx)
     .await
     .map_err(server_err)?;
     let round_min = org_row.round_minutes;
@@ -45,7 +67,7 @@ pub async fn submit_week(week_start: String) -> Result<Approval, ServerFnError> 
             we as chrono::NaiveDate,
             EntryState::Open as EntryState,
         )
-        .fetch_all(&state.db)
+        .fetch_all(&mut *tx)
         .await
         .map_err(server_err)?;
 
@@ -58,7 +80,7 @@ pub async fn submit_week(week_start: String) -> Result<Approval, ServerFnError> 
                 rounded,
                 entry.id,
             )
-            .execute(&state.db)
+            .execute(&mut *tx)
             .await
             .map_err(server_err)?;
         }
@@ -79,7 +101,7 @@ pub async fn submit_week(week_start: String) -> Result<Approval, ServerFnError> 
         EntryState::Submitted as EntryState,
         EntryState::Open as EntryState,
     )
-    .execute(&state.db)
+    .execute(&mut *tx)
     .await
     .map_err(server_err)?;
 
@@ -87,7 +109,10 @@ pub async fn submit_week(week_start: String) -> Result<Approval, ServerFnError> 
         return Err(not_found("No open entries found for this week"));
     }
 
-    // Create approval row
+    // Create approval row. The guard above already refused approved weeks, but
+    // when it found no row there was nothing to lock, so a concurrent
+    // submit+approve could land in between: the DO UPDATE's WHERE makes that
+    // window a conflict (no row returned) instead of a silent downgrade.
     let id = uuid::Uuid::now_v7();
     let approval = sqlx::query_as!(
         Approval,
@@ -95,6 +120,7 @@ pub async fn submit_week(week_start: String) -> Result<Approval, ServerFnError> 
          VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT (user_id, period_start) DO UPDATE
            SET state = $6, submitted_at = now()
+           WHERE approvals.state <> $7
          RETURNING id, org_id, user_id,
                    period_start as "period_start: chrono::NaiveDate",
                    period_end as "period_end: chrono::NaiveDate",
@@ -108,10 +134,18 @@ pub async fn submit_week(week_start: String) -> Result<Approval, ServerFnError> 
         ws as chrono::NaiveDate,
         we as chrono::NaiveDate,
         EntryState::Submitted as EntryState,
+        EntryState::Approved as EntryState,
     )
-    .fetch_one(&state.db)
+    .fetch_optional(&mut *tx)
     .await
-    .map_err(server_err)?;
+    .map_err(server_err)?
+    .ok_or_else(|| {
+        conflict(
+            "This week is already approved; a manager must reopen it before it can be resubmitted",
+        )
+    })?;
+
+    tx.commit().await.map_err(server_err)?;
 
     let total_minutes = week_total_minutes(&state.db, user_id, ws, we).await?;
     state
@@ -314,21 +348,20 @@ pub async fn approve_submissions(approval_ids: Vec<String>) -> Result<usize, Ser
     Ok(approve_ids(&manager, &ids).await?.len())
 }
 
-/// Reject a submitted week. Requires manager role.
-/// Reopens the time entries and deletes the approval row.
+/// Reject a submitted week, or reopen an already-approved one. Requires
+/// manager role. Reopens the period's time entries and deletes the approval
+/// row, exactly reversing what submit (and approve) wrote.
 #[server]
 pub async fn reject_submission(approval_id: String) -> Result<(), ServerFnError> {
     let manager = require_manager().await?;
 
-    if !horae_core::state::can_transition(EntryState::Submitted, EntryState::Open, manager.org_role)
-    {
-        return Err(forbidden("Insufficient role to reject submissions"));
-    }
-
     let state = crate::state::global_state().await;
     let approval_id = parse_uuid(&approval_id, "approval_id")?;
 
-    // Fetch the approval to know user + period
+    let mut tx = state.db.begin().await.map_err(server_err)?;
+
+    // Fetch the approval to know user + period + current state, locking the
+    // row so a concurrent approve can't interleave with the reopen below.
     let approval = sqlx::query_as!(
         Approval,
         r#"SELECT id, org_id, user_id,
@@ -338,36 +371,48 @@ pub async fn reject_submission(approval_id: String) -> Result<(), ServerFnError>
                 submitted_at as "submitted_at: chrono::DateTime<chrono::Utc>",
                 approved_by,
                 approved_at as "approved_at: chrono::DateTime<chrono::Utc>"
-         FROM approvals WHERE id = $1"#,
+         FROM approvals WHERE id = $1
+         FOR UPDATE"#,
         approval_id,
     )
-    .fetch_optional(&state.db)
+    .fetch_optional(&mut *tx)
     .await
     .map_err(server_err)?
     .ok_or_else(|| not_found("Approval not found"))?;
 
-    // Reopen entries
+    // Rejecting a pending week and reopening an approved one are both a
+    // transition back to 'open'; the core state machine decides who may do
+    // which from the approval's current state.
+    if !horae_core::state::can_transition(approval.state, EntryState::Open, manager.org_role) {
+        return Err(forbidden("Insufficient role to reject submissions"));
+    }
+
+    // Reopen entries: submitted ones (pending week) or approved ones
+    // (reopened week), clearing the rounding persisted at submit time.
     sqlx::query!(
         "UPDATE time_entries
          SET state = $4, rounded_minutes = NULL
          WHERE user_id = $1
            AND spent_date BETWEEN $2 AND $3
-           AND state = $5",
+           AND (state = $5 OR state = $6)",
         approval.user_id,
         approval.period_start as chrono::NaiveDate,
         approval.period_end as chrono::NaiveDate,
         EntryState::Open as EntryState,
         EntryState::Submitted as EntryState,
+        EntryState::Approved as EntryState,
     )
-    .execute(&state.db)
+    .execute(&mut *tx)
     .await
     .map_err(server_err)?;
 
     // Delete the approval row (per schema: "reject deletes the row")
     sqlx::query!("DELETE FROM approvals WHERE id = $1", approval_id)
-        .execute(&state.db)
+        .execute(&mut *tx)
         .await
         .map_err(server_err)?;
+
+    tx.commit().await.map_err(server_err)?;
 
     let total_minutes = week_total_minutes(
         &state.db,
