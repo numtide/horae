@@ -31,12 +31,13 @@ async fn require_session(session: &Session) -> Result<uuid::Uuid, StatusCode> {
 }
 
 /// Every invoice server function gates on `require_manager`, so exporting one
-/// has to as well.
-async fn require_manager(session: &Session) -> Result<(), StatusCode> {
+/// has to as well. Returns the manager's org id so the invoice fetches below
+/// can be org-scoped exactly like their server-fn counterparts.
+async fn require_manager(session: &Session) -> Result<uuid::Uuid, StatusCode> {
     let user_id = require_session(session).await?;
     let state = crate::state::global_state().await;
-    let role = sqlx::query_scalar!(
-        r#"SELECT org_role as "org_role: horae_core::types::OrgRole"
+    let row = sqlx::query!(
+        r#"SELECT org_id, org_role as "org_role: horae_core::types::OrgRole"
            FROM users WHERE id = $1 AND active = true"#,
         user_id,
     )
@@ -45,8 +46,9 @@ async fn require_manager(session: &Session) -> Result<(), StatusCode> {
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     .ok_or(StatusCode::FORBIDDEN)?;
 
-    role.is_manager_or_above()
-        .then_some(())
+    row.org_role
+        .is_manager_or_above()
+        .then_some(row.org_id)
         .ok_or(StatusCode::FORBIDDEN)
 }
 
@@ -61,11 +63,17 @@ pub struct ExportParams {
     pub user_id: Option<uuid::Uuid>,
 }
 
-async fn fetch_entries(
-    params: &ExportParams,
+/// The rows behind both the CSV/XLSX exports and the manager-only
+/// `report_detailed` server fn — one query, so a download always matches what
+/// the Reports page shows.
+pub(crate) async fn fetch_entries(
+    from: chrono::NaiveDate,
+    to: chrono::NaiveDate,
+    client_id: Option<uuid::Uuid>,
+    project_id: Option<uuid::Uuid>,
+    user_id: Option<uuid::Uuid>,
 ) -> Result<Vec<crate::models::DetailedReportRow>, sqlx::Error> {
     let state = crate::state::global_state().await;
-    let (from, to) = (params.from.as_str(), params.to.as_str());
     sqlx::query_as!(
         crate::models::DetailedReportRow,
         r#"SELECT te.spent_date as "spent_date: chrono::NaiveDate",
@@ -75,16 +83,16 @@ async fn fetch_entries(
          JOIN projects p ON te.project_id = p.id
          JOIN tasks t ON te.task_id = t.id
          JOIN users u ON te.user_id = u.id
-         WHERE te.spent_date BETWEEN $1::date AND $2::date
+         WHERE te.spent_date BETWEEN $1 AND $2
            AND ($3::uuid IS NULL OR p.client_id = $3)
            AND ($4::uuid IS NULL OR te.project_id = $4)
            AND ($5::uuid IS NULL OR te.user_id = $5)
          ORDER BY te.spent_date, p.name, t.name"#,
-        from as &str,
-        to as &str,
-        params.client_id,
-        params.project_id,
-        params.user_id,
+        from as chrono::NaiveDate,
+        to as chrono::NaiveDate,
+        client_id,
+        project_id,
+        user_id,
     )
     .fetch_all(&state.db)
     .await
@@ -98,9 +106,17 @@ pub async fn export_csv(
     // hours and notes), so the same gate applies.
     require_manager(&session).await?;
 
-    let entries = fetch_entries(&params)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let from: chrono::NaiveDate = params.from.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
+    let to: chrono::NaiveDate = params.to.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
+    let entries = fetch_entries(
+        from,
+        to,
+        params.client_id,
+        params.project_id,
+        params.user_id,
+    )
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let mut wtr = csv::Writer::from_writer(vec![]);
     wtr.write_record([
@@ -153,9 +169,17 @@ pub async fn export_xlsx(
     // hours and notes), so the same gate applies.
     require_manager(&session).await?;
 
-    let entries = fetch_entries(&params)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let from: chrono::NaiveDate = params.from.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
+    let to: chrono::NaiveDate = params.to.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
+    let entries = fetch_entries(
+        from,
+        to,
+        params.client_id,
+        params.project_id,
+        params.user_id,
+    )
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let mut workbook = rust_xlsxwriter::Workbook::new();
     let worksheet = workbook.add_worksheet();
@@ -379,13 +403,17 @@ pub async fn export_projects_xlsx(
 
 // ── Invoice export ────────────────────────────────────────────────────────────
 
-async fn fetch_invoice_lines(
+/// An invoice and its line items, org-scoped — shared with the `get_invoice`
+/// server fn so exports render exactly what the app serves. `None` when the
+/// org has no such invoice; each caller maps that to its own not-found error.
+pub(crate) async fn fetch_invoice_with_lines(
     invoice_id: uuid::Uuid,
-) -> Result<(crate::models::Invoice, Vec<crate::models::InvoiceLine>), StatusCode> {
+    org_id: uuid::Uuid,
+) -> Result<Option<(crate::models::Invoice, Vec<crate::models::InvoiceLine>)>, sqlx::Error> {
     use horae_core::types::InvoiceStatus;
 
     let state = crate::state::global_state().await;
-    let invoice = sqlx::query_as!(
+    let Some(invoice) = sqlx::query_as!(
         crate::models::Invoice,
         r#"SELECT id, org_id, client_id, number,
                   status as "status: InvoiceStatus",
@@ -393,13 +421,16 @@ async fn fetch_invoice_lines(
                   due_on as "due_on: chrono::NaiveDate",
                   currency, total_cents, notes,
                   created_at as "created_at: chrono::DateTime<chrono::Utc>"
-           FROM invoices WHERE id = $1"#,
+           FROM invoices
+           WHERE id = $1 AND org_id = $2"#,
         invoice_id,
+        org_id,
     )
     .fetch_optional(&state.db)
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-    .ok_or(StatusCode::NOT_FOUND)?;
+    .await?
+    else {
+        return Ok(None);
+    };
 
     let lines = sqlx::query_as!(
         crate::models::InvoiceLine,
@@ -411,19 +442,40 @@ async fn fetch_invoice_lines(
         invoice_id,
     )
     .fetch_all(&state.db)
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    .await?;
 
-    Ok((invoice, lines))
+    Ok(Some((invoice, lines)))
+}
+
+/// The org's invoice branding block — shared with the `get_org_branding`
+/// server fn so the PDF carries the same identity the settings page edits.
+pub(crate) async fn fetch_org_branding(
+    org_id: uuid::Uuid,
+) -> Result<crate::models::OrgBranding, sqlx::Error> {
+    let state = crate::state::global_state().await;
+    sqlx::query_as!(
+        crate::models::OrgBranding,
+        r#"SELECT provider_name, provider_address, provider_tax_id,
+                  provider_email, provider_phone,
+                  bank_name, bank_iban, bank_bic, bank_routing, bank_account,
+                  invoice_notes, invoice_payment_terms
+           FROM organizations WHERE id = $1"#,
+        org_id,
+    )
+    .fetch_one(&state.db)
+    .await
 }
 
 pub async fn export_invoice_csv(
     session: Session,
     Path(invoice_id): Path<uuid::Uuid>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    require_manager(&session).await?;
+    let org_id = require_manager(&session).await?;
 
-    let (invoice, lines) = fetch_invoice_lines(invoice_id).await?;
+    let (invoice, lines) = fetch_invoice_with_lines(invoice_id, org_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
 
     let mut wtr = csv::Writer::from_writer(vec![]);
     wtr.write_record(["Description", "Hours", "Rate", "Amount"])
@@ -469,9 +521,12 @@ pub async fn export_invoice_xlsx(
     session: Session,
     Path(invoice_id): Path<uuid::Uuid>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    require_manager(&session).await?;
+    let org_id = require_manager(&session).await?;
 
-    let (invoice, lines) = fetch_invoice_lines(invoice_id).await?;
+    let (invoice, lines) = fetch_invoice_with_lines(invoice_id, org_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
 
     let mut workbook = rust_xlsxwriter::Workbook::new();
     let worksheet = workbook.add_worksheet();
@@ -532,9 +587,12 @@ pub async fn export_invoice_pdf(
     session: Session,
     Path(invoice_id): Path<uuid::Uuid>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    require_manager(&session).await?;
+    let org_id = require_manager(&session).await?;
 
-    let (invoice, lines) = fetch_invoice_lines(invoice_id).await?;
+    let (invoice, lines) = fetch_invoice_with_lines(invoice_id, org_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
     let state = crate::state::global_state().await;
 
     // Fetch client name and address.
@@ -546,19 +604,9 @@ pub async fn export_invoice_pdf(
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // Fetch org branding.
-    let branding = sqlx::query_as!(
-        crate::models::OrgBranding,
-        r#"SELECT provider_name, provider_address, provider_tax_id,
-                  provider_email, provider_phone,
-                  bank_name, bank_iban, bank_bic, bank_routing, bank_account,
-                  invoice_notes, invoice_payment_terms
-           FROM organizations WHERE id = $1"#,
-        invoice.org_id,
-    )
-    .fetch_one(&state.db)
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let branding = fetch_org_branding(invoice.org_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let pdf_bytes = crate::render::render_invoice_pdf(
         &invoice,

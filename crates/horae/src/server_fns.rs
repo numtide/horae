@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 #[cfg(feature = "server")]
 pub(crate) use horae_core::types::{
-    BudgetKind, EntryState, InvoiceStatus, OrgRole, ProjectRole, ProjectType, RoundDir,
+    BudgetKind, EntryState, InvoiceStatus, OrgRole, ProjectRole, ProjectType,
 };
 
 #[cfg(feature = "server")]
@@ -96,6 +96,26 @@ pub(crate) fn parse_opt_uuid(
     }
 }
 
+/// Parse a `YYYY-MM-DD` date argument, mapping a malformed value to a clear
+/// error naming the field. Optional dates go through
+/// `opt.as_deref().map(|s| parse_date(s, "…")).transpose()?` — deliberately
+/// without `parse_opt_uuid`'s empty-string-is-`None` shortcut, because
+/// `listing_is_bounded` counts `Some("")` as a bounding date, so swallowing it
+/// would let an unbounded listing through.
+#[cfg(feature = "server")]
+pub(crate) fn parse_date(s: &str, field: &str) -> Result<chrono::NaiveDate, ServerFnError> {
+    s.parse()
+        .map_err(|_| server_err(format!("Invalid {field} (use YYYY-MM-DD)")))
+}
+
+/// Parse a stringly enum argument (roles, states, kinds), mapping a malformed
+/// value to a clear error naming the field.
+#[cfg(feature = "server")]
+pub(crate) fn parse_enum<T: std::str::FromStr>(s: &str, field: &str) -> Result<T, ServerFnError> {
+    s.parse()
+        .map_err(|_| server_err(format!("Invalid {field}")))
+}
+
 /// Load the session's user, requiring the account to still be active. This is
 /// the base gate for every endpoint: sessions outlive deactivation, so the
 /// `active = true` filter is what actually revokes a deactivated user's access
@@ -140,41 +160,46 @@ pub(crate) async fn require_manager() -> Result<crate::models::User, ServerFnErr
 // ── Plugin event dispatch helpers ────────────────────────────────────────────
 // Fire-and-forget: spawn dispatch so the core action is never blocked (FR-021).
 
+/// The time-entry lifecycle events the plugin bus announces. Exhaustive on
+/// purpose: adding an `AppEvent::TimeEntry…` variant forces the mapping in
+/// [`dispatch_time_entry_event`] to be spelled out.
 #[cfg(feature = "server")]
-pub(crate) async fn dispatch_time_entry_event(entry: &crate::models::TimeEntry, event_name: &str) {
+pub(crate) enum TimeEntryEvent {
+    Created,
+    Stopped,
+    Updated,
+    Deleted,
+}
+
+#[cfg(feature = "server")]
+pub(crate) async fn dispatch_time_entry_event(
+    entry: &crate::models::TimeEntry,
+    event: TimeEntryEvent,
+) {
     let state = crate::state::global_state().await;
-    let event = match event_name {
-        "time_entry_created" => crate::plugin::AppEvent::TimeEntryCreated {
-            occurred_at: chrono::Utc::now(),
-            org_id: entry.org_id,
-            time_entry: crate::plugin::event::TimeEntryPayload {
-                id: entry.id,
-                user_id: entry.user_id,
-                project_id: entry.project_id,
-                task_id: entry.task_id,
-                spent_date: entry.spent_date,
-                minutes: entry.minutes,
-                billable: entry.billable,
-                is_running: entry.is_running,
-                notes: entry.notes.clone(),
-                started_at: entry.started_at,
-            },
+    let occurred_at = chrono::Utc::now();
+    let org_id = entry.org_id;
+    let time_entry = time_entry_payload(entry);
+    let event = match event {
+        TimeEntryEvent::Created => crate::plugin::AppEvent::TimeEntryCreated {
+            occurred_at,
+            org_id,
+            time_entry,
         },
-        _ => crate::plugin::AppEvent::TimeEntryStopped {
-            occurred_at: chrono::Utc::now(),
-            org_id: entry.org_id,
-            time_entry: crate::plugin::event::TimeEntryPayload {
-                id: entry.id,
-                user_id: entry.user_id,
-                project_id: entry.project_id,
-                task_id: entry.task_id,
-                spent_date: entry.spent_date,
-                minutes: entry.minutes,
-                billable: entry.billable,
-                is_running: entry.is_running,
-                notes: entry.notes.clone(),
-                started_at: entry.started_at,
-            },
+        TimeEntryEvent::Stopped => crate::plugin::AppEvent::TimeEntryStopped {
+            occurred_at,
+            org_id,
+            time_entry,
+        },
+        TimeEntryEvent::Updated => crate::plugin::AppEvent::TimeEntryUpdated {
+            occurred_at,
+            org_id,
+            time_entry,
+        },
+        TimeEntryEvent::Deleted => crate::plugin::AppEvent::TimeEntryDeleted {
+            occurred_at,
+            org_id,
+            time_entry,
         },
     };
     state.plugins.dispatch(event);
@@ -415,6 +440,9 @@ pub(crate) async fn check_project_budget(
 // ── Feature modules ──────────────────────────────────────────────────────────
 // The #[server] endpoints grouped by feature; re-exported so call sites keep
 // using `server_fns::<fn>` regardless of which submodule a function lives in.
+#[cfg(all(test, feature = "server"))]
+mod test_seed;
+
 mod approvals;
 mod auth;
 mod clients;

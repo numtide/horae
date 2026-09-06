@@ -20,12 +20,8 @@ pub async fn report_time(
     let _manager = require_manager().await?;
     let state = crate::state::global_state().await;
 
-    let from_date: chrono::NaiveDate = from
-        .parse()
-        .map_err(|_| server_err("Invalid from date (use YYYY-MM-DD)"))?;
-    let to_date: chrono::NaiveDate = to
-        .parse()
-        .map_err(|_| server_err("Invalid to date (use YYYY-MM-DD)"))?;
+    let from_date = parse_date(&from, "from")?;
+    let to_date = parse_date(&to, "to")?;
     let client_filter = parse_opt_uuid(client_id, "client_id")?;
     let project_filter = parse_opt_uuid(project_id, "project_id")?;
     let user_filter = parse_opt_uuid(user_id, "user_id")?;
@@ -161,43 +157,24 @@ pub async fn report_detailed(
     user_id: Option<String>,
 ) -> Result<Vec<DetailedReportRow>, ServerFnError> {
     let _manager = require_manager().await?;
-    let state = crate::state::global_state().await;
 
-    let from_date: chrono::NaiveDate = from
-        .parse()
-        .map_err(|_| server_err("Invalid from date (use YYYY-MM-DD)"))?;
-    let to_date: chrono::NaiveDate = to
-        .parse()
-        .map_err(|_| server_err("Invalid to date (use YYYY-MM-DD)"))?;
+    let from_date = parse_date(&from, "from")?;
+    let to_date = parse_date(&to, "to")?;
     let client_filter = parse_opt_uuid(client_id, "client_id")?;
     let project_filter = parse_opt_uuid(project_id, "project_id")?;
     let user_filter = parse_opt_uuid(user_id, "user_id")?;
 
-    let entries = sqlx::query_as!(
-        DetailedReportRow,
-        r#"SELECT te.spent_date as "spent_date: chrono::NaiveDate",
-                p.name AS project_name, t.name AS task_name,
-                u.name AS user_name, te.minutes, te.rounded_minutes, te.billable, te.notes
-         FROM time_entries te
-         JOIN projects p ON te.project_id = p.id
-         JOIN tasks t ON te.task_id = t.id
-         JOIN users u ON te.user_id = u.id
-         WHERE te.spent_date BETWEEN $1 AND $2
-           AND ($3::uuid IS NULL OR p.client_id = $3)
-           AND ($4::uuid IS NULL OR te.project_id = $4)
-           AND ($5::uuid IS NULL OR te.user_id = $5)
-         ORDER BY te.spent_date, p.name, t.name"#,
-        from_date as chrono::NaiveDate,
-        to_date as chrono::NaiveDate,
+    // The CSV/XLSX exports must return exactly these rows, so the query lives
+    // once in `crate::reports` and both surfaces call it.
+    crate::reports::fetch_entries(
+        from_date,
+        to_date,
         client_filter,
         project_filter,
         user_filter,
     )
-    .fetch_all(&state.db)
     .await
-    .map_err(server_err)?;
-
-    Ok(entries)
+    .map_err(server_err)
 }
 
 // ── Plugins ────────────────────────────────────────────────────────────────

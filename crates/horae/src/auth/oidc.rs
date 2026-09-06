@@ -291,8 +291,9 @@ fn candidate(u: &crate::models::User) -> Candidate {
     }
 }
 
-/// Columns for the `User` model, shared by the identity lookups.
-const USER_COLUMNS: &str = "id, org_id, email, name, oidc_subject, org_role, \
+/// Columns for the `User` model, shared by the runtime (non-macro) queries
+/// here and in `auth::dev` so they cannot drift from each other.
+pub(crate) const USER_COLUMNS: &str = "id, org_id, email, name, oidc_subject, org_role, \
      cost_rate_cents, billable_rate_cents, active, created_at";
 
 /// The user already linked to this OIDC subject, if any.
