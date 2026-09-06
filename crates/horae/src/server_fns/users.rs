@@ -34,9 +34,10 @@ pub async fn list_users(include_inactive: bool) -> Result<Vec<User>, ServerFnErr
                 cost_rate_cents, billable_rate_cents, active,
                 created_at as "created_at: chrono::DateTime<chrono::Utc>"
          FROM users
-         WHERE ($1::bool OR active = true)
+         WHERE org_id = $2 AND ($1::bool OR active = true)
          ORDER BY name ASC"#,
         include_inactive,
+        viewer.org_id,
     )
     .fetch_all(&state.db)
     .await

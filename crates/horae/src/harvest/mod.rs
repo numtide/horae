@@ -224,8 +224,10 @@ async fn list_time_entries(
         .map(|s| s.parse().map_err(|_| internal("Invalid project_id filter")))
         .transpose()?;
     let total_entries = sqlx::query_scalar!(
+        // The count filters on `te` alone. Joining `projects` (as the page query
+        // below has to) would cost a heap lookup per counted row, which Postgres
+        // cannot elide even though the FK is NOT NULL.
         "SELECT COUNT(*) FROM time_entries te
-         JOIN projects p ON p.id = te.project_id
          WHERE te.org_id = $1
            AND ($2::uuid IS NULL OR te.user_id = $2)
            AND ($3::uuid IS NULL OR te.project_id = $3)
