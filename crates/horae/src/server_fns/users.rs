@@ -54,9 +54,7 @@ pub async fn create_user(email: String, name: String, role: String) -> Result<Us
     let admin = require_admin().await?;
     let state = crate::state::global_state().await;
     let id = uuid::Uuid::now_v7();
-    let org_role = role
-        .parse::<OrgRole>()
-        .map_err(|_| server_err("Invalid role (use admin, manager, or member)"))?;
+    let org_role: OrgRole = parse_enum(&role, "role (use admin, manager, or member)")?;
 
     let user = sqlx::query_as!(
         User,
@@ -149,9 +147,7 @@ pub async fn set_user_role(user_id: String, role: String) -> Result<User, Server
     let admin = require_admin().await?;
     let state = crate::state::global_state().await;
     let user_id = parse_uuid(&user_id, "user_id")?;
-    let org_role = role
-        .parse::<OrgRole>()
-        .map_err(|_| server_err("Invalid role (use admin, manager, or member)"))?;
+    let org_role: OrgRole = parse_enum(&role, "role (use admin, manager, or member)")?;
 
     // Read the prior role/active so the event reports the transition (a no-op
     // role change emits nothing, FR-012) and so we can refuse demoting the last

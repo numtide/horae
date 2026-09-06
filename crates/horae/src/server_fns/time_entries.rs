@@ -89,24 +89,15 @@ pub async fn list_time_entries(
     let session_uid = require_user().await?.id;
     let state = crate::state::global_state().await;
 
-    let project_filter: Option<uuid::Uuid> = match project_id {
-        Some(ref s) => Some(s.parse().map_err(|_| server_err("Invalid project_id"))?),
-        None => None,
-    };
-    let date_filter: Option<chrono::NaiveDate> = match date_from {
-        Some(ref s) => Some(
-            s.parse()
-                .map_err(|_| server_err("Invalid date_from (use YYYY-MM-DD)"))?,
-        ),
-        None => None,
-    };
-    let date_to_filter: Option<chrono::NaiveDate> = match date_to {
-        Some(ref s) => Some(
-            s.parse()
-                .map_err(|_| server_err("Invalid date_to (use YYYY-MM-DD)"))?,
-        ),
-        None => None,
-    };
+    let project_filter = parse_opt_uuid(project_id, "project_id")?;
+    let date_filter = date_from
+        .as_deref()
+        .map(|s| parse_date(s, "date_from"))
+        .transpose()?;
+    let date_to_filter = date_to
+        .as_deref()
+        .map(|s| parse_date(s, "date_to"))
+        .transpose()?;
 
     let entries = sqlx::query_as!(
         TimeEntry,
@@ -145,31 +136,17 @@ pub async fn start_timer(
     task_id: String,
     notes: Option<String>,
 ) -> Result<TimeEntry, ServerFnError> {
-    let user_id = require_user().await?.id;
+    let user = require_user().await?;
     let state = crate::state::global_state().await;
     let project_id = parse_uuid(&project_id, "project_id")?;
     let task_id = parse_uuid(&task_id, "task_id")?;
 
-    // Get user's org_id
-    let user = sqlx::query_as!(
-        User,
-        r#"SELECT id, org_id, email, name, oidc_subject,
-                org_role as "org_role: OrgRole",
-                cost_rate_cents, billable_rate_cents, active,
-                created_at as "created_at: chrono::DateTime<chrono::Utc>"
-         FROM users WHERE id = $1"#,
-        user_id,
-    )
-    .fetch_one(&state.db)
-    .await
-    .map_err(server_err)?;
-
-    ensure_assigned(&state.db, user_id, project_id, user.org_role).await?;
+    ensure_assigned(&state.db, user.id, project_id, user.org_role).await?;
 
     // Check no timer already running
     let existing = sqlx::query_scalar!(
         "SELECT EXISTS(SELECT 1 FROM time_entries WHERE user_id = $1 AND is_running = true)",
-        user_id,
+        user.id,
     )
     .fetch_one(&state.db)
     .await
@@ -196,7 +173,7 @@ pub async fn start_timer(
                    updated_at as "updated_at: chrono::DateTime<chrono::Utc>""#,
         id,
         user.org_id,
-        user_id,
+        user.id,
         project_id,
         task_id,
         today as chrono::NaiveDate,
@@ -207,7 +184,7 @@ pub async fn start_timer(
     .await
     .map_err(server_err)?;
 
-    dispatch_time_entry_event(&entry, "time_entry_created").await;
+    dispatch_time_entry_event(&entry, TimeEntryEvent::Created).await;
     Ok(entry)
 }
 
@@ -288,7 +265,7 @@ pub async fn stop_timer(entry_id: String) -> Result<TimeEntry, ServerFnError> {
     .map_err(server_err)?
     .ok_or_else(|| not_found("No running timer found for this entry"))?;
 
-    dispatch_time_entry_event(&entry, "time_entry_stopped").await;
+    dispatch_time_entry_event(&entry, TimeEntryEvent::Stopped).await;
     tokio::spawn(check_project_budget(state, entry.project_id));
     Ok(entry)
 }
@@ -331,24 +308,14 @@ pub async fn create_time_entry(
     billable: bool,
     start_minute: Option<i32>,
 ) -> Result<TimeEntry, ServerFnError> {
-    let user_id = require_user().await?.id;
+    let user = require_user().await?;
     let state = crate::state::global_state().await;
     let project_id = parse_uuid(&project_id, "project_id")?;
     let task_id = parse_uuid(&task_id, "task_id")?;
-    let spent_date: chrono::NaiveDate = spent_date
-        .parse()
-        .map_err(|_| server_err("Invalid date (use YYYY-MM-DD)"))?;
+    let spent_date = parse_date(&spent_date, "date")?;
     let (minutes, start_minute) = normalize_start(minutes, start_minute)?;
 
-    let row = sqlx::query!(
-        r#"SELECT org_id, org_role as "org_role: OrgRole" FROM users WHERE id = $1"#,
-        user_id,
-    )
-    .fetch_one(&state.db)
-    .await
-    .map_err(server_err)?;
-
-    ensure_assigned(&state.db, user_id, project_id, row.org_role).await?;
+    ensure_assigned(&state.db, user.id, project_id, user.org_role).await?;
 
     let id = uuid::Uuid::now_v7();
 
@@ -364,8 +331,8 @@ pub async fn create_time_entry(
                    created_at as "created_at: chrono::DateTime<chrono::Utc>",
                    updated_at as "updated_at: chrono::DateTime<chrono::Utc>""#,
         id,
-        row.org_id,
-        user_id,
+        user.org_id,
+        user.id,
         project_id,
         task_id,
         spent_date as chrono::NaiveDate,
@@ -379,7 +346,7 @@ pub async fn create_time_entry(
     .await
     .map_err(server_err)?;
 
-    dispatch_time_entry_event(&entry, "time_entry_created").await;
+    dispatch_time_entry_event(&entry, TimeEntryEvent::Created).await;
     tokio::spawn(check_project_budget(state, entry.project_id));
     Ok(entry)
 }
@@ -442,13 +409,7 @@ pub async fn update_time_entry(
             || b.start_minute != start_minute
     });
     if changed {
-        state
-            .plugins
-            .dispatch(crate::plugin::AppEvent::TimeEntryUpdated {
-                occurred_at: chrono::Utc::now(),
-                org_id: entry.org_id,
-                time_entry: time_entry_payload(&entry),
-            });
+        dispatch_time_entry_event(&entry, TimeEntryEvent::Updated).await;
     }
 
     tokio::spawn(check_project_budget(state, entry.project_id));
@@ -485,13 +446,7 @@ pub async fn delete_time_entry(entry_id: String) -> Result<(), ServerFnError> {
     .map_err(server_err)?
     .ok_or_else(|| conflict("Entry not found or is locked (not in 'open' state)"))?;
 
-    state
-        .plugins
-        .dispatch(crate::plugin::AppEvent::TimeEntryDeleted {
-            occurred_at: chrono::Utc::now(),
-            org_id: entry.org_id,
-            time_entry: time_entry_payload(&entry),
-        });
+    dispatch_time_entry_event(&entry, TimeEntryEvent::Deleted).await;
 
     tokio::spawn(check_project_budget(state, entry.project_id));
     Ok(())
@@ -510,9 +465,7 @@ pub async fn reschedule_time_entry(
     let user_id = require_user().await?.id;
     let state = crate::state::global_state().await;
     let entry_id = parse_uuid(&entry_id, "entry_id")?;
-    let spent_date: chrono::NaiveDate = spent_date
-        .parse()
-        .map_err(|_| server_err("Invalid date (use YYYY-MM-DD)"))?;
+    let spent_date = parse_date(&spent_date, "date")?;
     let (minutes, start_minute) = normalize_start(minutes, Some(start_minute))?;
 
     let entry = sqlx::query_as!(
@@ -539,13 +492,7 @@ pub async fn reschedule_time_entry(
     .map_err(server_err)?
     .ok_or_else(|| conflict("Entry not found or is locked (not in 'open' state)"))?;
 
-    state
-        .plugins
-        .dispatch(crate::plugin::AppEvent::TimeEntryUpdated {
-            occurred_at: chrono::Utc::now(),
-            org_id: entry.org_id,
-            time_entry: time_entry_payload(&entry),
-        });
+    dispatch_time_entry_event(&entry, TimeEntryEvent::Updated).await;
 
     tokio::spawn(check_project_budget(state, entry.project_id));
     Ok(entry)
@@ -563,9 +510,7 @@ pub async fn reorder_untimed_entries(
 ) -> Result<(), ServerFnError> {
     let user_id = require_user().await?.id;
     let state = crate::state::global_state().await;
-    let spent_date: chrono::NaiveDate = spent_date
-        .parse()
-        .map_err(|_| server_err("Invalid date (use YYYY-MM-DD)"))?;
+    let spent_date = parse_date(&spent_date, "date")?;
     let ids = ordered_ids
         .iter()
         .map(|s| parse_uuid(s, "entry_id"))
@@ -592,6 +537,7 @@ pub async fn reorder_untimed_entries(
 #[cfg(all(test, feature = "server"))]
 mod tests {
     use super::{FORBIDDEN, OrgRole, ensure_assigned, listing_is_bounded, normalize_start};
+    use crate::server_fns::test_seed::seed;
     use dioxus::prelude::ServerFnError;
     use sqlx::PgPool;
     use uuid::Uuid;
@@ -648,61 +594,11 @@ mod tests {
     // These call the crate-internal guard directly — `tests/` cannot import a
     // bin crate's modules, so the real behaviour is pinned here.
 
-    /// Seed an org, a user with the given role, and a client/project.
-    /// Returns `(user_id, project_id)`.
-    async fn seed(pool: &PgPool, role: OrgRole) -> (Uuid, Uuid) {
-        let org_id = Uuid::now_v7();
-        sqlx::query!(
-            "INSERT INTO organizations (id, name) VALUES ($1, 'Test Org')",
-            org_id
-        )
-        .execute(pool)
-        .await
-        .unwrap();
-
-        let user_id = Uuid::now_v7();
-        sqlx::query!(
-            "INSERT INTO users (id, org_id, email, name, org_role) \
-             VALUES ($1, $2, $3, 'Test User', $4)",
-            user_id,
-            org_id,
-            format!("{user_id}@test.com"),
-            role as OrgRole,
-        )
-        .execute(pool)
-        .await
-        .unwrap();
-
-        let client_id = Uuid::now_v7();
-        sqlx::query!(
-            "INSERT INTO clients (id, org_id, name, currency) VALUES ($1, $2, 'Acme', 'EUR')",
-            client_id,
-            org_id,
-        )
-        .execute(pool)
-        .await
-        .unwrap();
-
-        let project_id = Uuid::now_v7();
-        sqlx::query!(
-            "INSERT INTO projects (id, org_id, client_id, name, currency) \
-             VALUES ($1, $2, $3, 'Widget', 'EUR')",
-            project_id,
-            org_id,
-            client_id,
-        )
-        .execute(pool)
-        .await
-        .unwrap();
-
-        (user_id, project_id)
-    }
-
     #[sqlx::test(migrations = "./migrations")]
     async fn unassigned_member_is_forbidden(pool: PgPool) {
-        let (user_id, project_id) = seed(&pool, OrgRole::Member).await;
+        let ids = seed(&pool, OrgRole::Member).await;
 
-        let err = ensure_assigned(&pool, user_id, project_id, OrgRole::Member)
+        let err = ensure_assigned(&pool, ids.user_id, ids.project_id, OrgRole::Member)
             .await
             .expect_err("an unassigned member must be refused");
         match err {
@@ -713,19 +609,19 @@ mod tests {
 
     #[sqlx::test(migrations = "./migrations")]
     async fn assigned_member_may_log_time(pool: PgPool) {
-        let (user_id, project_id) = seed(&pool, OrgRole::Member).await;
+        let ids = seed(&pool, OrgRole::Member).await;
         sqlx::query!(
             "INSERT INTO assignments (id, project_id, user_id) VALUES ($1, $2, $3)",
             Uuid::now_v7(),
-            project_id,
-            user_id,
+            ids.project_id,
+            ids.user_id,
         )
         .execute(&pool)
         .await
         .unwrap();
 
         assert!(
-            ensure_assigned(&pool, user_id, project_id, OrgRole::Member)
+            ensure_assigned(&pool, ids.user_id, ids.project_id, OrgRole::Member)
                 .await
                 .is_ok()
         );
@@ -733,10 +629,10 @@ mod tests {
 
     #[sqlx::test(migrations = "./migrations")]
     async fn admin_may_log_time_without_assignment(pool: PgPool) {
-        let (user_id, project_id) = seed(&pool, OrgRole::Admin).await;
+        let ids = seed(&pool, OrgRole::Admin).await;
 
         assert!(
-            ensure_assigned(&pool, user_id, project_id, OrgRole::Admin)
+            ensure_assigned(&pool, ids.user_id, ids.project_id, OrgRole::Admin)
                 .await
                 .is_ok()
         );

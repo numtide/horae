@@ -11,10 +11,7 @@ pub async fn list_invoices(status: Option<String>) -> Result<Vec<Invoice>, Serve
 
     let status_filter: Option<InvoiceStatus> = status
         .as_deref()
-        .map(|s| {
-            s.parse::<InvoiceStatus>()
-                .map_err(|_| server_err("Invalid status"))
-        })
+        .map(|s| parse_enum(s, "status"))
         .transpose()?;
 
     let invoices = sqlx::query_as!(
@@ -42,39 +39,12 @@ pub async fn list_invoices(status: Option<String>) -> Result<Vec<Invoice>, Serve
 #[server]
 pub async fn get_invoice(invoice_id: String) -> Result<InvoiceWithLines, ServerFnError> {
     let manager = require_manager().await?;
-    let state = crate::state::global_state().await;
     let id = parse_uuid(&invoice_id, "invoice_id")?;
 
-    let invoice = sqlx::query_as!(
-        Invoice,
-        r#"SELECT id, org_id, client_id, number,
-                  status as "status: InvoiceStatus",
-                  issued_on as "issued_on: chrono::NaiveDate",
-                  due_on as "due_on: chrono::NaiveDate",
-                  currency, total_cents, notes,
-                  created_at as "created_at: chrono::DateTime<chrono::Utc>"
-           FROM invoices
-           WHERE id = $1 AND org_id = $2"#,
-        id,
-        manager.org_id,
-    )
-    .fetch_optional(&state.db)
-    .await
-    .map_err(server_err)?
-    .ok_or_else(|| not_found("Invoice not found"))?;
-
-    let lines = sqlx::query_as!(
-        InvoiceLine,
-        r#"SELECT id, invoice_id, time_entry_id, description,
-                  minutes, rate_cents, amount_cents
-           FROM invoice_line_items
-           WHERE invoice_id = $1
-           ORDER BY id"#,
-        id,
-    )
-    .fetch_all(&state.db)
-    .await
-    .map_err(server_err)?;
+    let (invoice, lines) = crate::reports::fetch_invoice_with_lines(id, manager.org_id)
+        .await
+        .map_err(server_err)?
+        .ok_or_else(|| not_found("Invoice not found"))?;
 
     Ok(InvoiceWithLines { invoice, lines })
 }
@@ -88,12 +58,8 @@ pub async fn generate_invoice(
     let manager = require_manager().await?;
     let state = crate::state::global_state().await;
     let client_id = parse_uuid(&client_id, "client_id")?;
-    let from: chrono::NaiveDate = period_from
-        .parse()
-        .map_err(|_| server_err("Invalid period_from date"))?;
-    let to: chrono::NaiveDate = period_to
-        .parse()
-        .map_err(|_| server_err("Invalid period_to date"))?;
+    let from = parse_date(&period_from, "period_from")?;
+    let to = parse_date(&period_to, "period_to")?;
 
     // Verify client belongs to this org and get its currency.
     let client = sqlx::query_as!(
@@ -320,7 +286,7 @@ pub async fn generate_invoice(
         id: invoice_id,
         org_id: manager.org_id,
         client_id,
-        number: invoice_number.clone(),
+        number: invoice_number,
         status: InvoiceStatus::Draft,
         issued_on,
         due_on,
@@ -337,16 +303,7 @@ pub async fn generate_invoice(
         .dispatch(crate::plugin::AppEvent::InvoiceCreated {
             occurred_at: chrono::Utc::now(),
             org_id: manager.org_id,
-            invoice: crate::plugin::event::InvoicePayload {
-                id: invoice_id,
-                client_id,
-                invoice_number,
-                status: "draft".into(),
-                issue_date: issued_on,
-                due_date: due_on,
-                currency: invoice.currency.clone(),
-                total_cents,
-            },
+            invoice: invoice_payload(&invoice),
         });
 
     Ok(InvoiceWithLines { invoice, lines })
@@ -360,9 +317,7 @@ pub async fn update_invoice_status(
     let manager = require_manager().await?;
     let state = crate::state::global_state().await;
     let id = parse_uuid(&invoice_id, "invoice_id")?;
-    let target: InvoiceStatus = new_status
-        .parse()
-        .map_err(|_| server_err("Invalid status"))?;
+    let target: InvoiceStatus = parse_enum(&new_status, "status")?;
 
     let current_status: InvoiceStatus = sqlx::query_scalar!(
         r#"SELECT status as "status: InvoiceStatus"
@@ -435,16 +390,7 @@ pub async fn update_invoice_status(
             .dispatch(crate::plugin::AppEvent::InvoiceSent {
                 occurred_at: chrono::Utc::now(),
                 org_id: manager.org_id,
-                invoice: crate::plugin::event::InvoicePayload {
-                    id: invoice.id,
-                    client_id: invoice.client_id,
-                    invoice_number: invoice.number.clone(),
-                    status: "sent".into(),
-                    issue_date: invoice.issued_on,
-                    due_date: invoice.due_on,
-                    currency: invoice.currency.clone(),
-                    total_cents: invoice.total_cents,
-                },
+                invoice: invoice_payload(&invoice),
             });
     }
 

@@ -48,6 +48,17 @@ fn not_found() -> (axum::http::StatusCode, String) {
     (axum::http::StatusCode::NOT_FOUND, "Not found".to_string())
 }
 
+// ── Pagination ──────────────────────────────────────────────────────────────
+
+/// Harvest v2 pagination window shared by every list endpoint: page defaults
+/// to 1 (floored at 1), per_page to 100 (clamped to 1..=100). Returns
+/// `(page, per_page, offset)`.
+fn page_window(page: Option<i64>, per_page: Option<i64>) -> (i64, i64, i64) {
+    let page = page.unwrap_or(1).max(1);
+    let per_page = per_page.unwrap_or(100).clamp(1, 100);
+    (page, per_page, (page - 1) * per_page)
+}
+
 // ── /users/me ───────────────────────────────────────────────────────────────
 
 async fn users_me(user: AuthUser) -> ApiResult<HarvestUser> {
@@ -195,19 +206,11 @@ async fn list_time_entries(
 ) -> ApiResult<HarvestPagination<HarvestTimeEntry>> {
     let state = crate::state::global_state().await;
 
-    // Fetch org rounding config
-    let org_row = sqlx::query!(
-        r#"SELECT round_minutes, round_dir as "round_dir: horae_core::types::RoundDir"
-           FROM organizations WHERE id = $1"#,
-        user.org_id,
-    )
-    .fetch_one(&state.db)
-    .await
-    .map_err(internal)?;
+    let (round_min, round_dir) = crate::db::org_rounding(&state.db, user.org_id)
+        .await
+        .map_err(internal)?;
 
-    let page = filters.page.unwrap_or(1).max(1);
-    let per_page = filters.per_page.unwrap_or(100).clamp(1, 100);
-    let offset = (page - 1) * per_page;
+    let (page, per_page, offset) = page_window(filters.page, filters.per_page);
 
     // Parse filter strings to properly typed values
     let user_id_filter: Option<Uuid> = filters
@@ -290,7 +293,7 @@ async fn list_time_entries(
 
     let entries: Vec<HarvestTimeEntry> = rows
         .iter()
-        .map(|r| time_entry_row_to_harvest(r, org_row.round_minutes as u32, org_row.round_dir))
+        .map(|r| time_entry_row_to_harvest(r, round_min, round_dir))
         .collect();
 
     Ok(Json(HarvestPagination::new(
@@ -306,15 +309,9 @@ async fn list_time_entries(
 async fn get_time_entry(user: AuthUser, Path(id): Path<Uuid>) -> ApiResult<HarvestTimeEntry> {
     let state = crate::state::global_state().await;
 
-    // Fetch org rounding config
-    let org_row = sqlx::query!(
-        r#"SELECT round_minutes, round_dir as "round_dir: horae_core::types::RoundDir"
-           FROM organizations WHERE id = $1"#,
-        user.org_id,
-    )
-    .fetch_one(&state.db)
-    .await
-    .map_err(internal)?;
+    let (round_min, round_dir) = crate::db::org_rounding(&state.db, user.org_id)
+        .await
+        .map_err(internal)?;
 
     let row = sqlx::query_as!(
         TimeEntryRow,
@@ -347,11 +344,7 @@ async fn get_time_entry(user: AuthUser, Path(id): Path<Uuid>) -> ApiResult<Harve
     .map_err(internal)?
     .ok_or_else(not_found)?;
 
-    Ok(Json(time_entry_row_to_harvest(
-        &row,
-        org_row.round_minutes as u32,
-        org_row.round_dir,
-    )))
+    Ok(Json(time_entry_row_to_harvest(&row, round_min, round_dir)))
 }
 
 // ── Projects ────────────────────────────────────────────────────────────────
@@ -426,9 +419,7 @@ async fn list_projects(
     Query(filters): Query<ProjectFilters>,
 ) -> ApiResult<HarvestPagination<HarvestProject>> {
     let state = crate::state::global_state().await;
-    let page = filters.page.unwrap_or(1).max(1);
-    let per_page = filters.per_page.unwrap_or(100).clamp(1, 100);
-    let offset = (page - 1) * per_page;
+    let (page, per_page, offset) = page_window(filters.page, filters.per_page);
 
     let client_id_filter: Option<Uuid> = filters
         .client_id
@@ -553,9 +544,7 @@ async fn list_clients(
     Query(filters): Query<ClientFilters>,
 ) -> ApiResult<HarvestPagination<HarvestClient>> {
     let state = crate::state::global_state().await;
-    let page = filters.page.unwrap_or(1).max(1);
-    let per_page = filters.per_page.unwrap_or(100).clamp(1, 100);
-    let offset = (page - 1) * per_page;
+    let (page, per_page, offset) = page_window(filters.page, filters.per_page);
 
     let total = sqlx::query_scalar!(
         "SELECT COUNT(*) FROM clients
@@ -659,9 +648,7 @@ async fn list_tasks(
     Query(filters): Query<TaskFilters>,
 ) -> ApiResult<HarvestPagination<HarvestTask>> {
     let state = crate::state::global_state().await;
-    let page = filters.page.unwrap_or(1).max(1);
-    let per_page = filters.per_page.unwrap_or(100).clamp(1, 100);
-    let offset = (page - 1) * per_page;
+    let (page, per_page, offset) = page_window(filters.page, filters.per_page);
 
     let total = sqlx::query_scalar!(
         "SELECT COUNT(*) FROM tasks
@@ -771,9 +758,7 @@ async fn list_users(
     Query(filters): Query<UserFilters>,
 ) -> ApiResult<HarvestPagination<HarvestUser>> {
     let state = crate::state::global_state().await;
-    let page = filters.page.unwrap_or(1).max(1);
-    let per_page = filters.per_page.unwrap_or(100).clamp(1, 100);
-    let offset = (page - 1) * per_page;
+    let (page, per_page, offset) = page_window(filters.page, filters.per_page);
 
     let total = sqlx::query_scalar!(
         "SELECT COUNT(*) FROM users
@@ -816,4 +801,21 @@ async fn list_users(
         total,
         "/harvest/v2/users",
     )))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::page_window;
+
+    #[test]
+    fn page_window_defaults_clamps_and_offsets() {
+        // Defaults: first page of 100.
+        assert_eq!(page_window(None, None), (1, 100, 0));
+        // Clamps: page floors at 1, per_page stays within 1..=100.
+        assert_eq!(page_window(Some(0), None), (1, 100, 0));
+        assert_eq!(page_window(None, Some(0)), (1, 1, 0));
+        assert_eq!(page_window(None, Some(500)), (1, 100, 0));
+        // A later page offsets by the preceding pages.
+        assert_eq!(page_window(Some(3), Some(25)), (3, 25, 50));
+    }
 }

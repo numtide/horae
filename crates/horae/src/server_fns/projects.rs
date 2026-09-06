@@ -143,12 +143,8 @@ pub async fn create_project(
     let state = crate::state::global_state().await;
     let id = uuid::Uuid::now_v7();
     let client_id = parse_uuid(&client_id, "client_id")?;
-    let pt = project_type
-        .parse::<ProjectType>()
-        .map_err(|_| server_err("Invalid project_type"))?;
-    let bk = budget_kind
-        .parse::<BudgetKind>()
-        .map_err(|_| server_err("Invalid budget_kind"))?;
+    let pt: ProjectType = parse_enum(&project_type, "project_type")?;
+    let bk: BudgetKind = parse_enum(&budget_kind, "budget_kind")?;
     let (budget_amount_cents, budget_minutes) = parse_budget(bk, &budget_value)?;
     let project = sqlx::query_as!(
         Project,
@@ -199,12 +195,8 @@ pub async fn update_project(
     let manager = require_manager().await?;
     let state = crate::state::global_state().await;
     let project_id = parse_uuid(&project_id, "project_id")?;
-    let pt = project_type
-        .parse::<ProjectType>()
-        .map_err(|_| server_err("Invalid project_type"))?;
-    let bk = budget_kind
-        .parse::<BudgetKind>()
-        .map_err(|_| server_err("Invalid budget_kind"))?;
+    let pt: ProjectType = parse_enum(&project_type, "project_type")?;
+    let bk: BudgetKind = parse_enum(&budget_kind, "budget_kind")?;
     let (budget_amount_cents, budget_minutes) = parse_budget(bk, &budget_value)?;
     // Detect a real change so a no-op update emits nothing (FR-012).
     let changed: Option<bool> = sqlx::query_scalar!(
@@ -585,9 +577,7 @@ pub async fn create_assignment(
     let id = uuid::Uuid::now_v7();
     let project_id = parse_uuid(&project_id, "project_id")?;
     let user_id = parse_uuid(&user_id, "user_id")?;
-    let pr = role
-        .parse::<ProjectRole>()
-        .map_err(|_| server_err("Invalid role"))?;
+    let pr: ProjectRole = parse_enum(&role, "role")?;
     let assignment = sqlx::query_as!(
         Assignment,
         r#"INSERT INTO assignments (id, project_id, user_id, role)

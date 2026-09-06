@@ -35,12 +35,12 @@ async fn week_has_running_timer(
 /// and creates an approval row.
 #[server]
 pub async fn submit_week(week_start: String) -> Result<Approval, ServerFnError> {
-    let user_id = require_user().await?.id;
+    let user = require_user().await?;
+    let user_id = user.id;
+    let org_id = user.org_id;
     let state = crate::state::global_state().await;
 
-    let ws: chrono::NaiveDate = week_start
-        .parse()
-        .map_err(|_| server_err("Invalid week_start (use YYYY-MM-DD)"))?;
+    let ws = parse_date(&week_start, "week_start")?;
     let we = ws + chrono::Duration::days(6);
 
     let mut tx = state.db.begin().await.map_err(server_err)?;
@@ -77,23 +77,9 @@ pub async fn submit_week(week_start: String) -> Result<Approval, ServerFnError> 
         return Err(conflict(RUNNING_TIMER_CONFLICT));
     }
 
-    // Get user's org_id
-    let user_row = sqlx::query!("SELECT org_id FROM users WHERE id = $1", user_id)
-        .fetch_one(&mut *tx)
+    let (round_min, round_dir) = crate::db::org_rounding(&mut *tx, org_id)
         .await
         .map_err(server_err)?;
-    let org_id = user_row.org_id;
-
-    // Fetch org rounding config
-    let org_row = sqlx::query!(
-        r#"SELECT round_minutes, round_dir as "round_dir: RoundDir" FROM organizations WHERE id = $1"#,
-        org_id,
-    )
-    .fetch_one(&mut *tx)
-    .await
-    .map_err(server_err)?;
-    let round_min = org_row.round_minutes;
-    let round_dir = org_row.round_dir;
 
     // Apply rounding per entry if rounding is configured
     if round_min > 0 {
@@ -111,8 +97,7 @@ pub async fn submit_week(week_start: String) -> Result<Approval, ServerFnError> 
 
         for entry in &entries {
             let rounded =
-                horae_core::rounding::round(entry.minutes as u32, round_min as u32, round_dir)
-                    as i32;
+                horae_core::rounding::round(entry.minutes as u32, round_min, round_dir) as i32;
             sqlx::query!(
                 "UPDATE time_entries SET rounded_minutes = $1 WHERE id = $2",
                 rounded,
@@ -213,12 +198,7 @@ pub async fn list_approvals(status: Option<String>) -> Result<Vec<ApprovalSummar
     let _manager = require_manager().await?;
     let state = crate::state::global_state().await;
 
-    let state_filter: Option<EntryState> = status
-        .map(|s| {
-            s.parse::<EntryState>()
-                .map_err(|_| server_err("Invalid status"))
-        })
-        .transpose()?;
+    let state_filter: Option<EntryState> = status.map(|s| parse_enum(&s, "status")).transpose()?;
 
     // Hours are aggregated per row from the user's entries in the approval's
     // period (actual `minutes`, split by `billable`) via a lateral join, so the
@@ -487,75 +467,17 @@ pub async fn reject_submission(approval_id: String) -> Result<(), ServerFnError>
 #[cfg(all(test, feature = "server"))]
 mod tests {
     use super::week_has_running_timer;
-    use horae_core::types::EntryState;
+    use crate::server_fns::test_seed::{SeedIds, seed};
+    use horae_core::types::{EntryState, OrgRole};
     use sqlx::PgPool;
     use uuid::Uuid;
 
-    /// Seed an org, a user, and a client/project/task to hang entries off.
-    /// Returns `(user_id, org_id, project_id, task_id)`.
-    async fn seed(pool: &PgPool) -> (Uuid, Uuid, Uuid, Uuid) {
-        let org_id = Uuid::now_v7();
-        sqlx::query!(
-            "INSERT INTO organizations (id, name) VALUES ($1, 'Test Org')",
-            org_id
-        )
-        .execute(pool)
-        .await
-        .unwrap();
-
-        let user_id = Uuid::now_v7();
-        sqlx::query!(
-            "INSERT INTO users (id, org_id, email, name) VALUES ($1, $2, $3, 'Test User')",
-            user_id,
-            org_id,
-            format!("{user_id}@test.com"),
-        )
-        .execute(pool)
-        .await
-        .unwrap();
-
-        let client_id = Uuid::now_v7();
-        sqlx::query!(
-            "INSERT INTO clients (id, org_id, name, currency) VALUES ($1, $2, 'Acme', 'EUR')",
-            client_id,
-            org_id,
-        )
-        .execute(pool)
-        .await
-        .unwrap();
-
-        let project_id = Uuid::now_v7();
-        sqlx::query!(
-            "INSERT INTO projects (id, org_id, client_id, name, currency) \
-             VALUES ($1, $2, $3, 'Widget', 'EUR')",
-            project_id,
-            org_id,
-            client_id,
-        )
-        .execute(pool)
-        .await
-        .unwrap();
-
-        let task_id = Uuid::now_v7();
-        sqlx::query!(
-            "INSERT INTO tasks (id, org_id, name) VALUES ($1, $2, 'Dev')",
-            task_id,
-            org_id,
-        )
-        .execute(pool)
-        .await
-        .unwrap();
-
-        (user_id, org_id, project_id, task_id)
-    }
-
     async fn insert_entry(
         pool: &PgPool,
-        ids: (Uuid, Uuid, Uuid, Uuid),
+        ids: &SeedIds,
         spent_date: chrono::NaiveDate,
         is_running: bool,
     ) {
-        let (user_id, org_id, project_id, task_id) = ids;
         sqlx::query!(
             "INSERT INTO time_entries \
                (id, org_id, user_id, project_id, task_id, spent_date, \
@@ -563,10 +485,10 @@ mod tests {
              VALUES ($1, $2, $3, $4, $5, $6, 0, true, $7, \
                      CASE WHEN $7 THEN now() END, $8)",
             Uuid::now_v7(),
-            org_id,
-            user_id,
-            project_id,
-            task_id,
+            ids.org_id,
+            ids.user_id,
+            ids.project_id,
+            ids.task_id,
             spent_date as chrono::NaiveDate,
             is_running,
             EntryState::Open as EntryState,
@@ -578,15 +500,14 @@ mod tests {
 
     #[sqlx::test(migrations = "./migrations")]
     async fn sees_a_running_timer_inside_the_week(pool: PgPool) {
-        let ids = seed(&pool).await;
-        let (user_id, ..) = ids;
+        let ids = seed(&pool, OrgRole::Member).await;
         let ws = chrono::Utc::now().date_naive();
         let we = ws + chrono::Duration::days(6);
 
-        insert_entry(&pool, ids, ws, true).await;
+        insert_entry(&pool, &ids, ws, true).await;
 
         assert!(
-            week_has_running_timer(&pool, user_id, ws, we)
+            week_has_running_timer(&pool, ids.user_id, ws, we)
                 .await
                 .unwrap()
         );
@@ -594,17 +515,16 @@ mod tests {
 
     #[sqlx::test(migrations = "./migrations")]
     async fn ignores_stopped_and_out_of_week_timers(pool: PgPool) {
-        let ids = seed(&pool).await;
-        let (user_id, ..) = ids;
+        let ids = seed(&pool, OrgRole::Member).await;
         let ws = chrono::Utc::now().date_naive();
         let we = ws + chrono::Duration::days(6);
 
         // A stopped entry inside the week and a running timer dated after it.
-        insert_entry(&pool, ids, ws, false).await;
-        insert_entry(&pool, ids, we + chrono::Duration::days(1), true).await;
+        insert_entry(&pool, &ids, ws, false).await;
+        insert_entry(&pool, &ids, we + chrono::Duration::days(1), true).await;
 
         assert!(
-            !week_has_running_timer(&pool, user_id, ws, we)
+            !week_has_running_timer(&pool, ids.user_id, ws, we)
                 .await
                 .unwrap()
         );

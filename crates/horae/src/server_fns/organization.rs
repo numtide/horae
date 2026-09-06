@@ -28,22 +28,10 @@ pub async fn get_org_name() -> Result<String, ServerFnError> {
 #[server]
 pub async fn get_org_branding() -> Result<OrgBranding, ServerFnError> {
     let manager = require_manager().await?;
-    let state = crate::state::global_state().await;
 
-    let branding = sqlx::query_as!(
-        OrgBranding,
-        r#"SELECT provider_name, provider_address, provider_tax_id,
-                  provider_email, provider_phone,
-                  bank_name, bank_iban, bank_bic, bank_routing, bank_account,
-                  invoice_notes, invoice_payment_terms
-           FROM organizations WHERE id = $1"#,
-        manager.org_id,
-    )
-    .fetch_one(&state.db)
-    .await
-    .map_err(server_err)?;
-
-    Ok(branding)
+    crate::reports::fetch_org_branding(manager.org_id)
+        .await
+        .map_err(server_err)
 }
 
 #[server]
