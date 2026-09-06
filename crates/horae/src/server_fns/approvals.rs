@@ -4,6 +4,32 @@ use super::*;
 
 // ── Approvals (M7) ──────────────────────────────────────────────────────────
 
+/// The conflict submit_week returns when a running timer sits inside the week
+/// — one string for both return sites so they cannot drift.
+#[cfg(feature = "server")]
+const RUNNING_TIMER_CONFLICT: &str = "A timer is running in this week. Stop it before submitting.";
+
+/// True when the user has a running timer dated inside `[ws, we]`.
+#[cfg(feature = "server")]
+async fn week_has_running_timer(
+    db: &sqlx::PgPool,
+    user_id: uuid::Uuid,
+    ws: chrono::NaiveDate,
+    we: chrono::NaiveDate,
+) -> Result<bool, ServerFnError> {
+    Ok(sqlx::query_scalar!(
+        "SELECT EXISTS(SELECT 1 FROM time_entries
+           WHERE user_id = $1 AND spent_date BETWEEN $2 AND $3 AND is_running)",
+        user_id,
+        ws as chrono::NaiveDate,
+        we as chrono::NaiveDate,
+    )
+    .fetch_one(db)
+    .await
+    .map_err(server_err)?
+    .unwrap_or(false))
+}
+
 /// Submit a week of time entries for approval.
 /// Transitions all 'open' entries in [week_start, week_start+6] to 'submitted'
 /// and creates an approval row.
@@ -37,6 +63,18 @@ pub async fn submit_week(week_start: String) -> Result<Approval, ServerFnError> 
         return Err(conflict(
             "This week is already approved; a manager must reopen it before it can be resubmitted",
         ));
+    }
+
+    // A running timer in the week would be locked with rounded_minutes frozen
+    // at 0 before its elapsed time is known, freezing that time's billable
+    // value at zero. Refuse rather than stop the timer (that would change data
+    // the user didn't ask to change) or skip the entry (that would split the
+    // week across two submissions). Checked inside the transaction so a refusal
+    // rolls back everything, rounding writes included; the transition UPDATE
+    // below keeps its NOT EXISTS predicate as the atomic backstop for a timer
+    // started after this check.
+    if week_has_running_timer(&state.db, user_id, ws, we).await? {
+        return Err(conflict(RUNNING_TIMER_CONFLICT));
     }
 
     // Get user's org_id
@@ -87,14 +125,21 @@ pub async fn submit_week(week_start: String) -> Result<Approval, ServerFnError> 
     }
 
     // Transition open entries to submitted, using COALESCE so entries without
-    // explicit rounding (round_min=0) still get rounded_minutes set to minutes
+    // explicit rounding (round_min=0) still get rounded_minutes set to minutes.
+    // The NOT EXISTS predicate re-checks the running-timer guard atomically, so
+    // a timer that starts between the guard above and this statement can't be
+    // locked mid-run.
     let result = sqlx::query!(
         "UPDATE time_entries
          SET state = $4,
              rounded_minutes = COALESCE(rounded_minutes, minutes)
          WHERE user_id = $1
            AND spent_date BETWEEN $2 AND $3
-           AND state = $5",
+           AND state = $5
+           AND NOT EXISTS (SELECT 1 FROM time_entries r
+                            WHERE r.user_id = $1
+                              AND r.spent_date BETWEEN $2 AND $3
+                              AND r.is_running)",
         user_id,
         ws as chrono::NaiveDate,
         we as chrono::NaiveDate,
@@ -106,6 +151,9 @@ pub async fn submit_week(week_start: String) -> Result<Approval, ServerFnError> 
     .map_err(server_err)?;
 
     if result.rows_affected() == 0 {
+        if week_has_running_timer(&state.db, user_id, ws, we).await? {
+            return Err(conflict(RUNNING_TIMER_CONFLICT));
+        }
         return Err(not_found("No open entries found for this week"));
     }
 
@@ -430,4 +478,135 @@ pub async fn reject_submission(approval_id: String) -> Result<(), ServerFnError>
         });
 
     Ok(())
+}
+
+// DB-backed guard tests (`#[sqlx::test]`, throwaway database per test). They
+// call the crate-internal guard directly, which `tests/` cannot do for a bin
+// crate — so the real behaviour is pinned here, and the integration tests only
+// mirror the SQL statements.
+#[cfg(all(test, feature = "server"))]
+mod tests {
+    use super::week_has_running_timer;
+    use horae_core::types::EntryState;
+    use sqlx::PgPool;
+    use uuid::Uuid;
+
+    /// Seed an org, a user, and a client/project/task to hang entries off.
+    /// Returns `(user_id, org_id, project_id, task_id)`.
+    async fn seed(pool: &PgPool) -> (Uuid, Uuid, Uuid, Uuid) {
+        let org_id = Uuid::now_v7();
+        sqlx::query!(
+            "INSERT INTO organizations (id, name) VALUES ($1, 'Test Org')",
+            org_id
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+
+        let user_id = Uuid::now_v7();
+        sqlx::query!(
+            "INSERT INTO users (id, org_id, email, name) VALUES ($1, $2, $3, 'Test User')",
+            user_id,
+            org_id,
+            format!("{user_id}@test.com"),
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+
+        let client_id = Uuid::now_v7();
+        sqlx::query!(
+            "INSERT INTO clients (id, org_id, name, currency) VALUES ($1, $2, 'Acme', 'EUR')",
+            client_id,
+            org_id,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+
+        let project_id = Uuid::now_v7();
+        sqlx::query!(
+            "INSERT INTO projects (id, org_id, client_id, name, currency) \
+             VALUES ($1, $2, $3, 'Widget', 'EUR')",
+            project_id,
+            org_id,
+            client_id,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+
+        let task_id = Uuid::now_v7();
+        sqlx::query!(
+            "INSERT INTO tasks (id, org_id, name) VALUES ($1, $2, 'Dev')",
+            task_id,
+            org_id,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+
+        (user_id, org_id, project_id, task_id)
+    }
+
+    async fn insert_entry(
+        pool: &PgPool,
+        ids: (Uuid, Uuid, Uuid, Uuid),
+        spent_date: chrono::NaiveDate,
+        is_running: bool,
+    ) {
+        let (user_id, org_id, project_id, task_id) = ids;
+        sqlx::query!(
+            "INSERT INTO time_entries \
+               (id, org_id, user_id, project_id, task_id, spent_date, \
+                minutes, billable, is_running, started_at, state) \
+             VALUES ($1, $2, $3, $4, $5, $6, 0, true, $7, \
+                     CASE WHEN $7 THEN now() END, $8)",
+            Uuid::now_v7(),
+            org_id,
+            user_id,
+            project_id,
+            task_id,
+            spent_date as chrono::NaiveDate,
+            is_running,
+            EntryState::Open as EntryState,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn sees_a_running_timer_inside_the_week(pool: PgPool) {
+        let ids = seed(&pool).await;
+        let (user_id, ..) = ids;
+        let ws = chrono::Utc::now().date_naive();
+        let we = ws + chrono::Duration::days(6);
+
+        insert_entry(&pool, ids, ws, true).await;
+
+        assert!(
+            week_has_running_timer(&pool, user_id, ws, we)
+                .await
+                .unwrap()
+        );
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn ignores_stopped_and_out_of_week_timers(pool: PgPool) {
+        let ids = seed(&pool).await;
+        let (user_id, ..) = ids;
+        let ws = chrono::Utc::now().date_naive();
+        let we = ws + chrono::Duration::days(6);
+
+        // A stopped entry inside the week and a running timer dated after it.
+        insert_entry(&pool, ids, ws, false).await;
+        insert_entry(&pool, ids, we + chrono::Duration::days(1), true).await;
+
+        assert!(
+            !week_has_running_timer(&pool, user_id, ws, we)
+                .await
+                .unwrap()
+        );
+    }
 }

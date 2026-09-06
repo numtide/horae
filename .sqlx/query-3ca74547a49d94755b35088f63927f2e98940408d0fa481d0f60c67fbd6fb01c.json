@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT state as \"state: EntryState\" FROM time_entries\n           WHERE id = $1 AND user_id = $2 AND is_running = true",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "state: EntryState",
+        "type_info": {
+          "Custom": {
+            "name": "entry_state",
+            "kind": {
+              "Enum": [
+                "open",
+                "submitted",
+                "approved",
+                "invoiced"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "3ca74547a49d94755b35088f63927f2e98940408d0fa481d0f60c67fbd6fb01c"
+}
