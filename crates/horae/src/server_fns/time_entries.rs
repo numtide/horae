@@ -494,8 +494,8 @@ pub async fn reschedule_time_entry(
 /// Place a set of untimed entries on `spent_date` in the given top-to-bottom
 /// order. Each id gets its position as `sort_order` and its `spent_date` set to
 /// the target day — so this both reorders a day's stack and moves an untimed
-/// entry to another day. Only untimed entries are touched; hours and state are
-/// left alone, so it works regardless of whether they're locked.
+/// entry to another day. Locked or running entries may only be reordered within
+/// their existing day. An invalid entry rejects the whole operation.
 #[server]
 pub async fn reorder_untimed_entries(
     spent_date: String,
@@ -508,32 +508,176 @@ pub async fn reorder_untimed_entries(
         .iter()
         .map(|s| parse_uuid(s, "entry_id"))
         .collect::<Result<Vec<_>, _>>()?;
-    let orders: Vec<i32> = (0..ids.len() as i32).collect();
+    reorder_entries(&state.db, user_id, spent_date, &ids).await
+}
 
-    sqlx::query!(
+#[cfg(feature = "server")]
+async fn reorder_entries(
+    pool: &sqlx::PgPool,
+    user_id: uuid::Uuid,
+    spent_date: chrono::NaiveDate,
+    ids: &[uuid::Uuid],
+) -> Result<(), ServerFnError> {
+    let count = i32::try_from(ids.len()).map_err(|_| conflict("Too many entries to reorder"))?;
+    let orders: Vec<i32> = (0..count).collect();
+    let mut tx = pool.begin().await.map_err(server_err)?;
+
+    let updated = sqlx::query!(
         r#"UPDATE time_entries AS t
              SET sort_order = v.ord, spent_date = $4
            FROM unnest($1::uuid[], $2::int4[]) AS v(id, ord)
-           WHERE t.id = v.id AND t.user_id = $3 AND t.start_minute IS NULL"#,
-        &ids,
+           WHERE t.id = v.id AND t.user_id = $3 AND t.start_minute IS NULL
+             AND (t.spent_date = $4 OR (t.state = 'open' AND NOT t.is_running))"#,
+        ids,
         &orders,
         user_id,
         spent_date as chrono::NaiveDate,
     )
-    .execute(&state.db)
+    .execute(&mut *tx)
     .await
-    .map_err(server_err)?;
+    .map_err(server_err)?
+    .rows_affected();
 
+    if updated != ids.len() as u64 {
+        return Err(conflict(
+            "Some entries cannot be moved or reordered. Refresh the timesheet and try again.",
+        ));
+    }
+    tx.commit().await.map_err(server_err)?;
     Ok(())
 }
 
 #[cfg(all(test, feature = "server"))]
 mod tests {
-    use super::{FORBIDDEN, OrgRole, ensure_assigned, listing_is_bounded, normalize_start};
-    use crate::server_fns::test_seed::seed;
+    use super::{
+        EntryState, FORBIDDEN, OrgRole, ensure_assigned, listing_is_bounded, normalize_start,
+        reorder_entries,
+    };
+    use crate::server_fns::test_seed::{seed, time_entry};
     use dioxus::prelude::ServerFnError;
     use sqlx::PgPool;
     use uuid::Uuid;
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn moving_locked_time_rejects_the_entire_reorder(pool: PgPool) {
+        let ids = seed(&pool, OrgRole::Member).await;
+        for state in [
+            EntryState::Submitted,
+            EntryState::Approved,
+            EntryState::Invoiced,
+        ] {
+            let open = time_entry(&pool, &ids, EntryState::Open).await;
+            let locked = time_entry(&pool, &ids, state).await;
+            let target = "2026-09-08".parse().unwrap();
+
+            let result = reorder_entries(&pool, ids.user_id, target, &[open, locked]).await;
+
+            assert!(result.is_err(), "must reject moving {state:?} time");
+            let unchanged = sqlx::query_scalar!(
+                "SELECT COUNT(*) FROM time_entries WHERE id = ANY($1) AND spent_date = '2026-09-07' AND sort_order = 0",
+                &[open, locked],
+            ).fetch_one(&pool).await.unwrap();
+            assert_eq!(unchanged, Some(2));
+        }
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn an_open_entry_can_move_into_a_day_with_locked_time(pool: PgPool) {
+        let ids = seed(&pool, OrgRole::Member).await;
+        let open = time_entry(&pool, &ids, EntryState::Open).await;
+        let locked = time_entry(&pool, &ids, EntryState::Approved).await;
+        sqlx::query!(
+            "UPDATE time_entries SET spent_date = '2026-09-08' WHERE id = $1",
+            open
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        reorder_entries(
+            &pool,
+            ids.user_id,
+            "2026-09-07".parse().unwrap(),
+            &[open, locked],
+        )
+        .await
+        .unwrap();
+
+        let entries = sqlx::query!(
+            r#"SELECT id, state as "state: EntryState", sort_order FROM time_entries
+               WHERE user_id = $1 AND spent_date = '2026-09-07' ORDER BY sort_order"#,
+            ids.user_id,
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            entries
+                .iter()
+                .map(|e| (e.id, e.state, e.sort_order))
+                .collect::<Vec<_>>(),
+            vec![
+                (open, EntryState::Open, 0),
+                (locked, EntryState::Approved, 1)
+            ]
+        );
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn a_reorder_rejects_foreign_missing_timed_and_duplicate_ids(pool: PgPool) {
+        let ids = seed(&pool, OrgRole::Member).await;
+        let other = seed(&pool, OrgRole::Member).await;
+        let open = time_entry(&pool, &ids, EntryState::Open).await;
+        let foreign = time_entry(&pool, &other, EntryState::Open).await;
+        let timed = time_entry(&pool, &ids, EntryState::Open).await;
+        sqlx::query!(
+            "UPDATE time_entries SET start_minute = 540 WHERE id = $1",
+            timed
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        for invalid in [foreign, Uuid::now_v7(), timed, open] {
+            let result = reorder_entries(
+                &pool,
+                ids.user_id,
+                "2026-09-08".parse().unwrap(),
+                &[open, invalid],
+            )
+            .await;
+            assert!(result.is_err());
+        }
+        assert_eq!(
+            sqlx::query_scalar!("SELECT sort_order FROM time_entries WHERE id = $1", open)
+                .fetch_one(&pool)
+                .await
+                .unwrap(),
+            0
+        );
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn a_running_timer_cannot_be_moved_to_another_day(pool: PgPool) {
+        let ids = seed(&pool, OrgRole::Member).await;
+        let running = time_entry(&pool, &ids, EntryState::Open).await;
+        sqlx::query!(
+            "UPDATE time_entries SET is_running = true, started_at = now() WHERE id = $1",
+            running
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        assert!(
+            reorder_entries(
+                &pool,
+                ids.user_id,
+                "2026-09-08".parse().unwrap(),
+                &[running]
+            )
+            .await
+            .is_err()
+        );
+    }
 
     #[test]
     fn snaps_unaligned_start_to_the_grid() {

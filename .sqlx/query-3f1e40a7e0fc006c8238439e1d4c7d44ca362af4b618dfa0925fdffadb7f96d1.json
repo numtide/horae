@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COUNT(*) FROM time_entries WHERE id = ANY($1) AND spent_date = '2026-09-07' AND sort_order = 0",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "3f1e40a7e0fc006c8238439e1d4c7d44ca362af4b618dfa0925fdffadb7f96d1"
+}

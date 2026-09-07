@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n             te.id as entry_id,\n             te.minutes,\n             p.name as project_name,\n             t.name as task_name,\n             te.notes,\n             te.spent_date as \"spent_date: chrono::NaiveDate\",\n             pt.rate_cents as task_rate_cents,\n             a.rate_cents as assignment_rate_cents,\n             u.billable_rate_cents as user_rate_cents\n           FROM time_entries te\n           JOIN projects p ON p.id = te.project_id\n           JOIN tasks t ON t.id = te.task_id\n           LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id\n           LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id\n           JOIN users u ON u.id = te.user_id\n           WHERE te.org_id = $1\n             AND p.client_id = $2\n             AND te.billable = true\n             AND te.invoice_id IS NULL\n             AND te.state IN ('open', 'approved')\n             AND te.spent_date >= $3\n             AND te.spent_date <= $4\n           ORDER BY te.spent_date, te.id\n           FOR UPDATE OF te",
+  "query": "SELECT\n             te.id as entry_id,\n             te.minutes,\n             p.name as project_name,\n             t.name as task_name,\n             te.notes,\n             te.spent_date as \"spent_date: chrono::NaiveDate\",\n             pt.rate_cents as task_rate_cents,\n             a.rate_cents as assignment_rate_cents,\n             u.billable_rate_cents as user_rate_cents\n           FROM time_entries te\n           JOIN projects p ON p.id = te.project_id\n           JOIN tasks t ON t.id = te.task_id\n           LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id\n           LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id\n           JOIN users u ON u.id = te.user_id\n           WHERE te.org_id = $1\n             AND p.client_id = $2\n             AND te.billable = true\n             AND NOT te.is_running\n             AND te.invoice_id IS NULL\n             AND te.state IN ('open', 'approved')\n             AND te.spent_date >= $3\n             AND te.spent_date <= $4\n           ORDER BY te.spent_date, te.id\n           FOR UPDATE OF te",
   "describe": {
     "columns": [
       {
@@ -69,5 +69,5 @@
       true
     ]
   },
-  "hash": "758010df080b99aece9d8651675869667310c644a563d2e18a03260718d8449c"
+  "hash": "fa4e405873cf33a03fffd63e1868a7d4e00136552af7af9d0669368e2a2b9ea3"
 }
