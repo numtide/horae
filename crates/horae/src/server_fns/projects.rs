@@ -76,61 +76,35 @@ pub async fn list_project_spend() -> Result<Vec<ProjectSpend>, ServerFnError> {
     let user = require_user().await?;
     let state = crate::state::global_state().await;
 
-    struct Row {
-        project_id: uuid::Uuid,
-        minutes: i32,
-        billable: bool,
-        task_rate_cents: Option<i64>,
-        assignment_rate_cents: Option<i64>,
-        user_rate_cents: Option<i64>,
-    }
-
-    let rows = sqlx::query_as!(
-        Row,
+    // Grouped in Postgres, not folded here: the overview needs one number per
+    // project, and folding in Rust meant fetching one row per time entry to get
+    // there. `COALESCE(pt, a, u)` is the FR-024 cascade — exactly what
+    // `horae_core::invoice::resolve_rate` does — and `line_amount_cents` is the
+    // SQL twin of the Rust function invoicing uses (migration 0016). Neither
+    // LEFT JOIN can multiply rows: `project_tasks` is keyed on
+    // (project_id, task_id) and `assignments` is UNIQUE on (project_id, user_id).
+    let spend = sqlx::query_as!(
+        ProjectSpend,
         r#"SELECT
-             te.project_id,
-             te.minutes,
-             te.billable,
-             pt.rate_cents as task_rate_cents,
-             a.rate_cents as assignment_rate_cents,
-             u.billable_rate_cents as user_rate_cents
+             te.project_id as "project_id!",
+             SUM(te.minutes)::bigint as "spent_minutes!",
+             COALESCE(SUM(line_amount_cents(
+                 COALESCE(pt.rate_cents, a.rate_cents, u.billable_rate_cents, 0),
+                 te.minutes
+               )) FILTER (WHERE te.billable), 0)::bigint as "spent_cents!"
            FROM time_entries te
            LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
            LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id
            JOIN users u ON u.id = te.user_id
-           WHERE te.org_id = $1"#,
+           WHERE te.org_id = $1
+           GROUP BY te.project_id"#,
         user.org_id,
     )
     .fetch_all(&state.db)
     .await
     .map_err(server_err)?;
 
-    // Resolve each entry's rate in Rust so the money total reuses the exact FR-024
-    // logic invoicing uses, then aggregate per project.
-    let mut totals: std::collections::HashMap<uuid::Uuid, (i64, i64)> =
-        std::collections::HashMap::new();
-    for r in &rows {
-        let acc = totals.entry(r.project_id).or_insert((0, 0));
-        acc.0 += r.minutes as i64;
-        if r.billable {
-            let rate = horae_core::invoice::resolve_rate(
-                r.task_rate_cents,
-                r.assignment_rate_cents,
-                r.user_rate_cents,
-            )
-            .unwrap_or(0);
-            acc.1 += horae_core::invoice::line_amount_cents(rate, r.minutes);
-        }
-    }
-
-    Ok(totals
-        .into_iter()
-        .map(|(project_id, (spent_minutes, spent_cents))| ProjectSpend {
-            project_id,
-            spent_minutes,
-            spent_cents,
-        })
-        .collect())
+    Ok(spend)
 }
 
 #[server]

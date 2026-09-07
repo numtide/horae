@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT line_amount_cents($1, $2) as \"amount!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "amount!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2a42d8d9885e09de1740fdd0faed2182bcb970658b50dd7e3cd1c019d90b643d"
+}

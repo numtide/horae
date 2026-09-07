@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT line_amount_cents(NULL::bigint, 60)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "line_amount_cents",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "391f4b474e5f1829adaa3b135a6733350ad0ef246706883eedb92acbda6f7453"
+}
