@@ -243,6 +243,78 @@ async fn seed_approval(
     id
 }
 
+/// Rates for the aggregation tests: the same cascade the reports resolve, but
+/// stated once so a test can say which level it means.
+struct Rates {
+    task: Option<i64>,
+    assignment: Option<i64>,
+    user_billable: Option<i64>,
+}
+
+/// Point the three cascade levels at the given rates. `assignment` is only
+/// written when the user actually has an assignment on the project.
+async fn set_rates(pool: &PgPool, project_id: Uuid, task_id: Uuid, user_id: Uuid, rates: &Rates) {
+    sqlx::query!(
+        "UPDATE project_tasks SET rate_cents = $3 WHERE project_id = $1 AND task_id = $2",
+        project_id,
+        task_id,
+        rates.task,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE assignments SET rate_cents = $3 WHERE project_id = $1 AND user_id = $2",
+        project_id,
+        user_id,
+        rates.assignment,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE users SET billable_rate_cents = $2 WHERE id = $1",
+        user_id,
+        rates.user_billable,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+/// Insert one open time entry, spelling out the fields the money aggregations
+/// read: worked minutes, the rounded minutes invoicing would bill, and whether
+/// the time is billable at all.
+#[allow(clippy::too_many_arguments)]
+async fn insert_money_entry(
+    pool: &PgPool,
+    org_id: Uuid,
+    user_id: Uuid,
+    project_id: Uuid,
+    task_id: Uuid,
+    minutes: i32,
+    rounded_minutes: Option<i32>,
+    billable: bool,
+) {
+    sqlx::query!(
+        "INSERT INTO time_entries \
+           (id, org_id, user_id, project_id, task_id, spent_date, \
+            minutes, rounded_minutes, billable, is_running, state) \
+         VALUES ($1, $2, $3, $4, $5, '2026-03-04', $6, $7, $8, false, 'open')",
+        Uuid::now_v7(),
+        org_id,
+        user_id,
+        project_id,
+        task_id,
+        minutes,
+        rounded_minutes,
+        billable,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
 // ---------------------------------------------------------------------------
 // Test 1: Timer start / stop flow
 // ---------------------------------------------------------------------------
@@ -2908,4 +2980,535 @@ async fn the_long_timer_sweep_claims_each_timer_once(pool: PgPool) {
         claim(&pool).await.is_empty(),
         "a second sweep must not announce the same timer again"
     );
+}
+
+// ---------------------------------------------------------------------------
+// The money the grouped reports add up is computed in SQL, by a deliberate twin
+// of the Rust function invoicing uses. The two must never drift: a report that
+// disagreed with the invoice generated from the same entries would be worse
+// than a slow one. The tests below pin that agreement — first on the function
+// itself, then on the two queries built out of it.
+// ---------------------------------------------------------------------------
+
+/// `line_amount_cents` exists twice: in `horae_core::invoice`, which writes the
+/// per-line amounts on an invoice, and as a SQL function (migration 0016), which
+/// lets the grouped reports sum without shipping a row per time entry. Drive
+/// both from one table of inputs and require exact equality.
+#[sqlx::test(migrations = "./migrations")]
+#[serial]
+async fn line_amount_cents_sql_matches_rust(pool: PgPool) {
+    // (rate_cents, minutes, why this case is here)
+    let cases: &[(i64, i32, &str)] = &[
+        (0, 0, "both zero"),
+        (10_000, 0, "no time logged"),
+        (0, 60, "no rate"),
+        (10_000, 1, "a single minute, where the rounding term shows"),
+        (10_000, 30, "half an hour"),
+        (10_000, 60, "an exact hour"),
+        (10_000, 120, "an exact multiple of an hour"),
+        (12_345, 180, "an odd rate over exact hours"),
+        (12_000, 25, "odd minutes that still divide evenly"),
+        // The `+ 30` is half a cent: a product of 29 sixtieths stays down, 30
+        // goes up. Straddle that boundary from both sides, and reach it through
+        // the rate and through the minutes.
+        (29, 1, "one below the half-cent boundary"),
+        (30, 1, "exactly on the half-cent boundary"),
+        (31, 1, "one above the half-cent boundary"),
+        (1, 29, "one below the boundary, reached through minutes"),
+        (1, 30, "exactly on the boundary, reached through minutes"),
+        (1, 89, "one below the next boundary up"),
+        (1, 90, "exactly on the next boundary up"),
+        (1, 91, "one above the next boundary up"),
+        // A realistic ceiling: a very expensive hour across a full day.
+        (100_000_000, 1_440, "a $1M/h rate over a 24-hour entry"),
+        // Far past anything the domain allows, but still short of where either
+        // side would overflow its 64-bit accumulator.
+        (9_000_000_000_000_000, 1_000, "near the 64-bit ceiling"),
+        // Migration 0010 forbids storing these, but truncation toward zero is
+        // exactly where the two could have drifted — a floor division would
+        // answer -167 for the first — so pin the sign convention anyway.
+        (-10_000, 1, "a negative rate"),
+        (10_000, -1, "negative minutes"),
+    ];
+
+    for &(rate_cents, minutes, why) in cases {
+        let from_sql: i64 = sqlx::query_scalar!(
+            r#"SELECT line_amount_cents($1, $2) as "amount!""#,
+            rate_cents,
+            minutes,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        let from_rust = horae_core::invoice::line_amount_cents(rate_cents, minutes);
+        assert_eq!(
+            from_sql, from_rust,
+            "line_amount_cents({rate_cents}, {minutes}) — {why}: SQL says {from_sql}, Rust says {from_rust}"
+        );
+    }
+
+    // The Rust signature takes plain integers rather than options, so the SQL
+    // twin is STRICT: an absent rate has no amount, not an amount of zero.
+    let no_rate: Option<i64> = sqlx::query_scalar!("SELECT line_amount_cents(NULL::bigint, 60)")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(no_rate, None, "a NULL rate must produce no amount");
+}
+
+/// The Projects overview's Spent column groups in SQL. Seed entries whose rates
+/// come from each level of the FR-024 cascade, then check the grouped query
+/// against the per-entry fold in Rust it replaced.
+#[sqlx::test(migrations = "./migrations")]
+#[serial]
+async fn project_spend_grouped_in_sql_matches_the_rust_fold(pool: PgPool) {
+    let org_id = seed_org(&pool).await;
+    let ana = seed_user(&pool, org_id, OrgRole::Member).await;
+    let bob = seed_user(&pool, org_id, OrgRole::Member).await;
+
+    // Project one bills off the task rate, which outranks Ana's assignment and
+    // her org-wide default.
+    let (p1, t1, _) = seed_project_with_assignment(&pool, org_id, ana).await;
+    set_rates(
+        &pool,
+        p1,
+        t1,
+        ana,
+        &Rates {
+            task: Some(15_000),
+            assignment: Some(12_000),
+            // Ana's default is deliberately an odd figure: a minute of it lands
+            // exactly on the half-cent the rounding term decides, so the totals
+            // below would move if the SQL and Rust rounding ever parted.
+            user_billable: Some(10_050),
+        },
+    )
+    .await;
+
+    // Project two has no task rate, so Bob bills off his assignment and Ana —
+    // who has no assignment there — off her org-wide default.
+    let (p2, t2, _) = seed_project_with_assignment(&pool, org_id, bob).await;
+    set_rates(
+        &pool,
+        p2,
+        t2,
+        bob,
+        &Rates {
+            task: None,
+            assignment: Some(7_000),
+            user_billable: None,
+        },
+    )
+    .await;
+
+    insert_money_entry(&pool, org_id, ana, p1, t1, 60, None, true).await;
+    insert_money_entry(&pool, org_id, ana, p1, t1, 90, None, true).await;
+    // Non-billable time counts toward the hours but not the amount.
+    insert_money_entry(&pool, org_id, ana, p1, t1, 45, None, false).await;
+    // Minutes that do not divide evenly, so the per-row rounding term matters.
+    insert_money_entry(&pool, org_id, bob, p2, t2, 25, None, true).await;
+    insert_money_entry(&pool, org_id, bob, p2, t2, 1, None, true).await;
+    insert_money_entry(&pool, org_id, ana, p2, t2, 1, None, true).await;
+    insert_money_entry(&pool, org_id, ana, p2, t2, 0, None, true).await;
+
+    // The query `list_project_spend` runs.
+    struct SpendRow {
+        project_id: Uuid,
+        spent_minutes: i64,
+        spent_cents: i64,
+    }
+    let mut from_sql = sqlx::query_as!(
+        SpendRow,
+        r#"SELECT
+             te.project_id as "project_id!",
+             SUM(te.minutes)::bigint as "spent_minutes!",
+             COALESCE(SUM(line_amount_cents(
+                 COALESCE(pt.rate_cents, a.rate_cents, u.billable_rate_cents, 0),
+                 te.minutes
+               )) FILTER (WHERE te.billable), 0)::bigint as "spent_cents!"
+           FROM time_entries te
+           LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
+           LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id
+           JOIN users u ON u.id = te.user_id
+           WHERE te.org_id = $1
+           GROUP BY te.project_id"#,
+        org_id,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap()
+    .into_iter()
+    .map(|r| (r.project_id, (r.spent_minutes, r.spent_cents)))
+    .collect::<Vec<_>>();
+    from_sql.sort();
+
+    // The fold this replaced, kept here as the reference implementation.
+    struct EntryRow {
+        project_id: Uuid,
+        minutes: i32,
+        billable: bool,
+        task_rate_cents: Option<i64>,
+        assignment_rate_cents: Option<i64>,
+        user_rate_cents: Option<i64>,
+    }
+    let entries = sqlx::query_as!(
+        EntryRow,
+        r#"SELECT
+             te.project_id, te.minutes, te.billable,
+             pt.rate_cents as task_rate_cents,
+             a.rate_cents as assignment_rate_cents,
+             u.billable_rate_cents as user_rate_cents
+           FROM time_entries te
+           LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
+           LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id
+           JOIN users u ON u.id = te.user_id
+           WHERE te.org_id = $1"#,
+        org_id,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+
+    let mut folded: std::collections::HashMap<Uuid, (i64, i64)> = std::collections::HashMap::new();
+    for e in &entries {
+        let acc = folded.entry(e.project_id).or_insert((0, 0));
+        acc.0 += e.minutes as i64;
+        if e.billable {
+            let rate = horae_core::invoice::resolve_rate(
+                e.task_rate_cents,
+                e.assignment_rate_cents,
+                e.user_rate_cents,
+            )
+            .unwrap_or(0);
+            acc.1 += horae_core::invoice::line_amount_cents(rate, e.minutes);
+        }
+    }
+    let mut from_rust: Vec<_> = folded.into_iter().collect();
+    from_rust.sort();
+
+    assert_eq!(
+        from_sql, from_rust,
+        "the grouped spend query must match the per-entry fold"
+    );
+
+    // And the numbers themselves, so a change that broke both the same way
+    // still fails: project one is 150 billable minutes at 15000/h plus 45
+    // unbilled, project two 27 minutes across two rates.
+    let spend: std::collections::HashMap<Uuid, (i64, i64)> = from_sql.into_iter().collect();
+    assert_eq!(spend[&p1], (195, 37_500));
+    assert_eq!(
+        spend[&p2],
+        (
+            27,
+            // Bob at 7000/h for 25 then 1 minute, Ana at 10050/h for 1 minute;
+            // her zero-minute entry adds nothing.
+            2_917 + 117 + 168
+        )
+    );
+}
+
+/// The grouped time report is aggregated in SQL, over a group key chosen at
+/// runtime. Check every dimension against the fold it replaced, including the
+/// mixed-currency rule and the rounded-minutes split between the billable
+/// amount and the cost.
+#[sqlx::test(migrations = "./migrations")]
+#[serial]
+async fn report_time_grouped_in_sql_matches_the_rust_fold(pool: PgPool) {
+    let org_id = seed_org(&pool).await;
+    let ana = seed_user(&pool, org_id, OrgRole::Member).await;
+    let bob = seed_user(&pool, org_id, OrgRole::Member).await;
+    sqlx::query!("UPDATE users SET name = 'Zoe' WHERE id = $1", ana)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query!("UPDATE users SET name = 'ana' WHERE id = $1", bob)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    // Two projects under clients of different currencies, so grouping by person
+    // puts non-summable money in one group.
+    let (p1, t1, c1) = seed_project_with_assignment(&pool, org_id, ana).await;
+    let (p2, t2, c2) = seed_project_with_assignment(&pool, org_id, bob).await;
+    // Names chosen to differ between byte order and a locale collation, so the
+    // row order is pinned to the BTreeMap this replaced.
+    for (id, name) in [(p1, "Beta"), (p2, "alpha")] {
+        sqlx::query!("UPDATE projects SET name = $2 WHERE id = $1", id, name)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+    for (id, name) in [(t1, "Design"), (t2, "coding")] {
+        sqlx::query!("UPDATE tasks SET name = $2 WHERE id = $1", id, name)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+    sqlx::query!("UPDATE clients SET name = 'Umbrella' WHERE id = $1", c1)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query!(
+        "UPDATE clients SET name = 'initech', currency = 'USD' WHERE id = $1",
+        c2,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    set_rates(
+        &pool,
+        p1,
+        t1,
+        ana,
+        &Rates {
+            task: Some(15_000),
+            assignment: Some(12_000),
+            user_billable: Some(10_000),
+        },
+    )
+    .await;
+    set_rates(
+        &pool,
+        p2,
+        t2,
+        bob,
+        &Rates {
+            task: None,
+            assignment: Some(7_000),
+            user_billable: None,
+        },
+    )
+    .await;
+    // An odd cost rate on purpose: the entries below land on the half-cent the
+    // rounding term decides, so the cost totals move if the two ever part.
+    sqlx::query!(
+        "UPDATE users SET cost_rate_cents = 6_030 WHERE id = $1",
+        ana
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    // Bob has no cost rate, so his time costs nothing rather than failing.
+
+    insert_money_entry(&pool, org_id, ana, p1, t1, 60, None, true).await;
+    // Worked 47, billed 45: the amount and billable hours follow the rounded
+    // minutes, the cost follows the worked ones.
+    insert_money_entry(&pool, org_id, ana, p1, t1, 47, Some(45), true).await;
+    insert_money_entry(&pool, org_id, ana, p1, t1, 25, None, false).await;
+    // Ana on the USD project too, so grouping by person mixes currencies.
+    insert_money_entry(&pool, org_id, ana, p2, t2, 13, None, true).await;
+    insert_money_entry(&pool, org_id, bob, p2, t2, 25, Some(30), true).await;
+    insert_money_entry(&pool, org_id, bob, p2, t2, 1, None, true).await;
+    insert_money_entry(&pool, org_id, bob, p2, t2, 0, None, true).await;
+
+    let range = (
+        NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+        NaiveDate::from_ymd_opt(2026, 12, 31).unwrap(),
+    );
+
+    // The rows every entry contributes, fetched once and folded per dimension
+    // below — the aggregation `report_time` used to do in Rust.
+    struct TimeRow {
+        project_name: String,
+        task_name: String,
+        user_name: String,
+        client_name: String,
+        currency: String,
+        minutes: i32,
+        rounded_minutes: Option<i32>,
+        billable: bool,
+        task_rate_cents: Option<i64>,
+        assignment_rate_cents: Option<i64>,
+        user_billable_rate_cents: Option<i64>,
+        user_cost_rate_cents: Option<i64>,
+    }
+    let entries = sqlx::query_as!(
+        TimeRow,
+        r#"SELECT
+             p.name AS project_name, t.name AS task_name, u.name AS user_name,
+             c.name AS client_name, c.currency AS currency,
+             te.minutes, te.rounded_minutes, te.billable,
+             pt.rate_cents AS task_rate_cents,
+             a.rate_cents AS assignment_rate_cents,
+             u.billable_rate_cents AS user_billable_rate_cents,
+             u.cost_rate_cents AS user_cost_rate_cents
+           FROM time_entries te
+           JOIN projects p ON te.project_id = p.id
+           JOIN clients c ON p.client_id = c.id
+           JOIN tasks t ON te.task_id = t.id
+           JOIN users u ON te.user_id = u.id
+           LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
+           LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id
+           WHERE te.org_id = $1 AND te.spent_date BETWEEN $2 AND $3"#,
+        org_id,
+        range.0 as NaiveDate,
+        range.1 as NaiveDate,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+
+    // (label, total, rounded, billable minutes, billable cents, cost cents, currency)
+    type Row = (String, i64, i64, i64, i64, i64, Option<String>);
+
+    fn fold(rows: &[TimeRow], group_by: &str) -> Vec<Row> {
+        #[derive(Default)]
+        struct Agg {
+            total: i64,
+            rounded: i64,
+            billable_min: i64,
+            billable_cents: i64,
+            cost_cents: i64,
+            currency: Option<String>,
+            mixed: bool,
+        }
+        let mut groups: std::collections::BTreeMap<String, Agg> = std::collections::BTreeMap::new();
+        for r in rows {
+            let label = match group_by {
+                "task" => r.task_name.clone(),
+                "client" => r.client_name.clone(),
+                "person" => r.user_name.clone(),
+                _ => r.project_name.clone(),
+            };
+            let rounded_min = r.rounded_minutes.unwrap_or(r.minutes);
+            let g = groups.entry(label).or_default();
+            g.total += r.minutes as i64;
+            g.rounded += rounded_min as i64;
+            if r.billable {
+                g.billable_min += rounded_min as i64;
+                let rate = horae_core::invoice::resolve_rate(
+                    r.task_rate_cents,
+                    r.assignment_rate_cents,
+                    r.user_billable_rate_cents,
+                )
+                .unwrap_or(0);
+                g.billable_cents += horae_core::invoice::line_amount_cents(rate, rounded_min);
+            }
+            g.cost_cents += horae_core::invoice::line_amount_cents(
+                r.user_cost_rate_cents.unwrap_or(0),
+                r.minutes,
+            );
+            if !g.mixed {
+                match &g.currency {
+                    None => g.currency = Some(r.currency.clone()),
+                    Some(cur) if cur != &r.currency => {
+                        g.mixed = true;
+                        g.currency = None;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        groups
+            .into_iter()
+            .map(|(label, g)| {
+                (
+                    label,
+                    g.total,
+                    g.rounded,
+                    g.billable_min,
+                    g.billable_cents,
+                    g.cost_cents,
+                    g.currency,
+                )
+            })
+            .collect()
+    }
+
+    // "nonsense" is not a dimension: like the Rust match, the CASE falls
+    // through to the project name.
+    for group_by in ["project", "task", "client", "person", "nonsense"] {
+        // The aggregate `report_time` runs, minus the client/project/teammate
+        // filters, which have their own coverage and no bearing on the money.
+        let from_sql: Vec<Row> = sqlx::query!(
+            r#"WITH entry AS (
+                 SELECT
+                   CASE $4::text
+                     WHEN 'task' THEN t.name
+                     WHEN 'client' THEN c.name
+                     WHEN 'person' THEN u.name
+                     ELSE p.name
+                   END AS label,
+                   c.currency AS currency,
+                   te.minutes AS minutes,
+                   COALESCE(te.rounded_minutes, te.minutes) AS rounded_minutes,
+                   te.billable AS billable,
+                   COALESCE(pt.rate_cents, a.rate_cents, u.billable_rate_cents, 0)
+                     AS billable_rate_cents,
+                   COALESCE(u.cost_rate_cents, 0) AS cost_rate_cents
+                 FROM time_entries te
+                 JOIN projects p ON te.project_id = p.id
+                 JOIN clients c ON p.client_id = c.id
+                 JOIN tasks t ON te.task_id = t.id
+                 JOIN users u ON te.user_id = u.id
+                 LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
+                 LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id
+                 WHERE te.org_id = $1 AND te.spent_date BETWEEN $2 AND $3
+               )
+               SELECT
+                 label as "label!",
+                 SUM(minutes)::bigint as "total_minutes!",
+                 SUM(rounded_minutes)::bigint as "rounded_minutes!",
+                 COALESCE(SUM(rounded_minutes) FILTER (WHERE billable), 0)::bigint
+                   as "billable_minutes!",
+                 COALESCE(
+                   SUM(line_amount_cents(billable_rate_cents, rounded_minutes))
+                     FILTER (WHERE billable),
+                   0)::bigint as "billable_cents!",
+                 SUM(line_amount_cents(cost_rate_cents, minutes))::bigint as "cost_cents!",
+                 CASE WHEN COUNT(DISTINCT currency) = 1 THEN MIN(currency) END as "currency?"
+               FROM entry
+               GROUP BY label
+               ORDER BY label COLLATE "C"
+            "#,
+            org_id,
+            range.0 as NaiveDate,
+            range.1 as NaiveDate,
+            group_by,
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|r| {
+            (
+                r.label,
+                r.total_minutes,
+                r.rounded_minutes,
+                r.billable_minutes,
+                r.billable_cents,
+                r.cost_cents,
+                r.currency,
+            )
+        })
+        .collect();
+
+        assert_eq!(
+            from_sql,
+            fold(&entries, group_by),
+            "grouping by {group_by} must match the per-entry fold, row order included"
+        );
+    }
+
+    // Spot-check the numbers so a change that broke both sides the same way
+    // still fails. Grouped by project, "Beta" sorts first under byte order.
+    let by_project = fold(&entries, "project");
+    assert_eq!(
+        by_project[0],
+        (
+            "Beta".to_string(),
+            132,             // 60 + 47 + 25 worked
+            130,             // 60 + 45 (rounded) + 25
+            105,             // only the billable entries, at their billed minutes
+            15_000 + 11_250, // 15000/h for 60 then 45 minutes
+            13_267,          // 6030/h cost over 60, 47 and 25 worked minutes
+            Some("EUR".to_string()),
+        )
+    );
+    // Grouped by person, Ana's EUR and USD work lands in one group with no
+    // summable currency.
+    let by_person = fold(&entries, "person");
+    let zoe = by_person.iter().find(|r| r.0 == "Zoe").unwrap();
+    assert_eq!(zoe.6, None, "a group spanning two currencies reports none");
 }

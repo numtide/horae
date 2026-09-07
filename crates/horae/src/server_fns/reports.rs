@@ -26,126 +26,85 @@ pub async fn report_time(
     let project_filter = parse_opt_uuid(project_id, "project_id")?;
     let user_filter = parse_opt_uuid(user_id, "user_id")?;
 
+    // Grouped in Postgres: a year of entries is a six-figure row count folded
+    // down to a few hundred report lines, and none of the per-entry detail
+    // survives the fold. The group key is a runtime choice but the query macro
+    // takes a string literal, so the dimension rides in as a parameter and the
+    // CASE picks the column — an unknown value falls through to the project
+    // name, as the Rust match did.
+    //
+    // The CTE names each entry's derived values once so the aggregates below
+    // read as the sums they are; Postgres inlines a CTE referenced once.
+    // `COALESCE(pt, a, u)` is `horae_core::invoice::resolve_rate` written out,
+    // and `line_amount_cents` is the SQL twin of the Rust function invoicing
+    // uses (migration 0016). The rounding term inside it is per row, so these
+    // sums cannot be taken over pre-aggregated minutes.
     let rows = sqlx::query_as!(
-        TimeRow,
-        r#"SELECT
-             p.name AS project_name, t.name AS task_name, u.name AS user_name,
-             c.name AS client_name, c.currency AS currency,
-             te.minutes, te.rounded_minutes, te.billable,
-             pt.rate_cents AS task_rate_cents,
-             a.rate_cents AS assignment_rate_cents,
-             u.billable_rate_cents AS user_billable_rate_cents,
-             u.cost_rate_cents AS user_cost_rate_cents
-           FROM time_entries te
-           JOIN projects p ON te.project_id = p.id
-           JOIN clients c ON p.client_id = c.id
-           JOIN tasks t ON te.task_id = t.id
-           JOIN users u ON te.user_id = u.id
-           LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
-           LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id
-           WHERE te.org_id = $6
-             AND te.spent_date BETWEEN $1 AND $2
-             AND ($3::uuid IS NULL OR p.client_id = $3)
-             AND ($4::uuid IS NULL OR te.project_id = $4)
-             AND ($5::uuid IS NULL OR te.user_id = $5)"#,
+        ReportRow,
+        r#"WITH entry AS (
+             SELECT
+               CASE $7::text
+                 WHEN 'task' THEN t.name
+                 WHEN 'client' THEN c.name
+                 WHEN 'person' THEN u.name
+                 ELSE p.name
+               END AS label,
+               c.currency AS currency,
+               te.minutes AS minutes,
+               -- Billable hours and amount use the rounded minutes that get
+               -- invoiced; cost is what the worked time costs, so it stays on
+               -- the actual ones.
+               COALESCE(te.rounded_minutes, te.minutes) AS rounded_minutes,
+               te.billable AS billable,
+               COALESCE(pt.rate_cents, a.rate_cents, u.billable_rate_cents, 0)
+                 AS billable_rate_cents,
+               COALESCE(u.cost_rate_cents, 0) AS cost_rate_cents
+             FROM time_entries te
+             JOIN projects p ON te.project_id = p.id
+             JOIN clients c ON p.client_id = c.id
+             JOIN tasks t ON te.task_id = t.id
+             JOIN users u ON te.user_id = u.id
+             LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
+             LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id
+             WHERE te.org_id = $6
+               AND te.spent_date BETWEEN $1 AND $2
+               AND ($3::uuid IS NULL OR p.client_id = $3)
+               AND ($4::uuid IS NULL OR te.project_id = $4)
+               AND ($5::uuid IS NULL OR te.user_id = $5)
+           )
+           SELECT
+             label as "label!",
+             SUM(minutes)::bigint as "total_minutes!",
+             SUM(rounded_minutes)::bigint as "rounded_minutes!",
+             COALESCE(SUM(rounded_minutes) FILTER (WHERE billable), 0)::bigint
+               as "billable_minutes!",
+             COALESCE(
+               SUM(line_amount_cents(billable_rate_cents, rounded_minutes))
+                 FILTER (WHERE billable),
+               0)::bigint as "billable_cents!",
+             SUM(line_amount_cents(cost_rate_cents, minutes))::bigint as "cost_cents!",
+             -- A group that spans two currencies has no summable total, so it
+             -- reports none rather than a meaningless number.
+             CASE WHEN COUNT(DISTINCT currency) = 1 THEN MIN(currency) END as "currency?"
+           FROM entry
+           GROUP BY label
+           -- Byte order, so the row order matches the BTreeMap this replaced
+           -- rather than the database's default collation.
+           ORDER BY label COLLATE "C"
+        "#,
         from_date as chrono::NaiveDate,
         to_date as chrono::NaiveDate,
         client_filter,
         project_filter,
         user_filter,
         manager.org_id,
+        group_by,
     )
     .fetch_all(&state.db)
     .await
     .map_err(server_err)?;
 
-    Ok(aggregate_time(&rows, &group_by))
-}
-
-/// One time entry joined with the names, currency, and rates the report groups by.
-#[cfg(feature = "server")]
-struct TimeRow {
-    project_name: String,
-    task_name: String,
-    user_name: String,
-    client_name: String,
-    currency: String,
-    minutes: i32,
-    rounded_minutes: Option<i32>,
-    billable: bool,
-    task_rate_cents: Option<i64>,
-    assignment_rate_cents: Option<i64>,
-    user_billable_rate_cents: Option<i64>,
-    user_cost_rate_cents: Option<i64>,
-}
-
-/// Group entries by the requested dimension, summing hours and money. Billable
-/// amount uses the FR-024 rate cascade so a report agrees with invoicing; cost
-/// uses the user's cost rate. A group's `currency` is `None` once it spans two
-/// currencies, since the amounts are then no longer summable.
-#[cfg(feature = "server")]
-fn aggregate_time(rows: &[TimeRow], group_by: &str) -> Vec<ReportRow> {
-    #[derive(Default)]
-    struct Agg {
-        total: i64,
-        rounded: i64,
-        billable_min: i64,
-        billable_cents: i64,
-        cost_cents: i64,
-        currency: Option<String>,
-        mixed: bool,
-    }
-
-    let mut groups: std::collections::BTreeMap<String, Agg> = std::collections::BTreeMap::new();
-    for r in rows {
-        let label = match group_by {
-            "task" => r.task_name.clone(),
-            "client" => r.client_name.clone(),
-            "person" => r.user_name.clone(),
-            _ => r.project_name.clone(),
-        };
-        // Billable hours and amount use the rounded minutes that get invoiced;
-        // cost is what the worked time costs, so it stays on actual minutes.
-        let rounded_min = r.rounded_minutes.unwrap_or(r.minutes);
-        let g = groups.entry(label).or_default();
-        g.total += r.minutes as i64;
-        g.rounded += rounded_min as i64;
-        if r.billable {
-            g.billable_min += rounded_min as i64;
-            let rate = horae_core::invoice::resolve_rate(
-                r.task_rate_cents,
-                r.assignment_rate_cents,
-                r.user_billable_rate_cents,
-            )
-            .unwrap_or(0);
-            g.billable_cents += horae_core::invoice::line_amount_cents(rate, rounded_min);
-        }
-        g.cost_cents +=
-            horae_core::invoice::line_amount_cents(r.user_cost_rate_cents.unwrap_or(0), r.minutes);
-        if !g.mixed {
-            match &g.currency {
-                None => g.currency = Some(r.currency.clone()),
-                Some(cur) if cur != &r.currency => {
-                    g.mixed = true;
-                    g.currency = None;
-                }
-                _ => {}
-            }
-        }
-    }
-
-    groups
-        .into_iter()
-        .map(|(label, g)| ReportRow {
-            label,
-            total_minutes: g.total,
-            rounded_minutes: g.rounded,
-            billable_minutes: g.billable_min,
-            billable_cents: g.billable_cents,
-            cost_cents: g.cost_cents,
-            currency: g.currency,
-        })
-        .collect()
+    Ok(rows)
 }
 
 /// Detailed (per-entry) report for the range, with the same optional filters.
@@ -204,83 +163,4 @@ pub struct PluginWidget {
     pub plugin_name: String,
     pub title: String,
     pub body: String,
-}
-
-#[cfg(all(test, feature = "server"))]
-mod tests {
-    use super::*;
-
-    fn trow(
-        currency: &str,
-        minutes: i32,
-        billable: bool,
-        task_rate: Option<i64>,
-        user_bill: Option<i64>,
-        user_cost: Option<i64>,
-    ) -> TimeRow {
-        TimeRow {
-            project_name: "P".into(),
-            task_name: "T".into(),
-            user_name: "U".into(),
-            client_name: "C".into(),
-            currency: currency.into(),
-            minutes,
-            rounded_minutes: None,
-            billable,
-            task_rate_cents: task_rate,
-            assignment_rate_cents: None,
-            user_billable_rate_cents: user_bill,
-            user_cost_rate_cents: user_cost,
-        }
-    }
-
-    #[test]
-    fn billable_uses_the_rate_cascade_and_cost_uses_the_user_rate() {
-        // 1h billable: task rate (10000/h) wins the cascade over the user rate;
-        // cost is the user's cost rate (6000/h).
-        let out = aggregate_time(
-            &[trow("EUR", 60, true, Some(10000), Some(9999), Some(6000))],
-            "project",
-        );
-        assert_eq!(out.len(), 1);
-        assert_eq!(out[0].billable_cents, 10000);
-        assert_eq!(out[0].cost_cents, 6000);
-        assert_eq!(out[0].currency.as_deref(), Some("EUR"));
-    }
-
-    #[test]
-    fn non_billable_time_has_cost_but_no_billable_amount() {
-        let out = aggregate_time(&[trow("EUR", 60, false, None, None, Some(6000))], "project");
-        assert_eq!(out[0].billable_cents, 0);
-        assert_eq!(out[0].cost_cents, 6000);
-    }
-
-    #[test]
-    fn billable_amount_bills_rounded_minutes_while_cost_uses_actual() {
-        // 60 min worked, rounded to 30 for invoicing; billable rate 10000/h,
-        // cost 6000/h. Amount follows the rounded minutes, cost the actual ones.
-        let row = TimeRow {
-            rounded_minutes: Some(30),
-            ..trow("EUR", 60, true, Some(10000), None, Some(6000))
-        };
-        let out = aggregate_time(&[row], "project");
-        assert_eq!(out[0].billable_minutes, 30);
-        assert_eq!(out[0].billable_cents, 5000);
-        assert_eq!(out[0].cost_cents, 6000);
-    }
-
-    #[test]
-    fn a_group_spanning_two_currencies_reports_no_currency() {
-        // Grouped by person, one teammate's entries land in one group; the two
-        // client currencies make the group's money non-summable.
-        let out = aggregate_time(
-            &[
-                trow("EUR", 60, true, Some(10000), None, None),
-                trow("USD", 60, true, Some(10000), None, None),
-            ],
-            "person",
-        );
-        assert_eq!(out.len(), 1);
-        assert_eq!(out[0].currency, None);
-    }
 }

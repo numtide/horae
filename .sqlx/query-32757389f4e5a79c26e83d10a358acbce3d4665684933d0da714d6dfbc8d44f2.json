@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n             te.project_id,\n             te.minutes,\n             te.billable,\n             pt.rate_cents as task_rate_cents,\n             a.rate_cents as assignment_rate_cents,\n             u.billable_rate_cents as user_rate_cents\n           FROM time_entries te\n           LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id\n           LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id\n           JOIN users u ON u.id = te.user_id\n           WHERE te.org_id = $1",
+  "query": "SELECT\n             te.project_id, te.minutes, te.billable,\n             pt.rate_cents as task_rate_cents,\n             a.rate_cents as assignment_rate_cents,\n             u.billable_rate_cents as user_rate_cents\n           FROM time_entries te\n           LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id\n           LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id\n           JOIN users u ON u.id = te.user_id\n           WHERE te.org_id = $1",
   "describe": {
     "columns": [
       {
@@ -48,5 +48,5 @@
       true
     ]
   },
-  "hash": "e8a4d68be8bbfa8614b18b62bfeb9b850c29ee55ff114f43b632cc68178b4354"
+  "hash": "32757389f4e5a79c26e83d10a358acbce3d4665684933d0da714d6dfbc8d44f2"
 }
