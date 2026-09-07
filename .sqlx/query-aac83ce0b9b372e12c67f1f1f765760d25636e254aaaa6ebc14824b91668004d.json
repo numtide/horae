@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT i.status as \"status: InvoiceStatus\", te.invoice_id,\n                  te.state as \"state: EntryState\"\n           FROM invoices i JOIN time_entries te ON te.id = $2 WHERE i.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "status: InvoiceStatus",
+        "type_info": {
+          "Custom": {
+            "name": "invoice_status",
+            "kind": {
+              "Enum": [
+                "draft",
+                "sent",
+                "paid",
+                "void"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "invoice_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "state: EntryState",
+        "type_info": {
+          "Custom": {
+            "name": "entry_state",
+            "kind": {
+              "Enum": [
+                "open",
+                "submitted",
+                "approved",
+                "invoiced"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "aac83ce0b9b372e12c67f1f1f765760d25636e254aaaa6ebc14824b91668004d"
+}

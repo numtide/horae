@@ -343,69 +343,7 @@ pub async fn update_invoice_status(
     let id = parse_uuid(&invoice_id, "invoice_id")?;
     let target: InvoiceStatus = parse_enum(&new_status, "status")?;
 
-    let current_status: InvoiceStatus = sqlx::query_scalar!(
-        r#"SELECT status as "status: InvoiceStatus"
-           FROM invoices WHERE id = $1 AND org_id = $2"#,
-        id,
-        manager.org_id,
-    )
-    .fetch_optional(&state.db)
-    .await
-    .map_err(server_err)?
-    .ok_or_else(|| not_found("Invoice not found"))?;
-
-    // Enforce state machine: draft->sent, sent->paid, draft|sent->void
-    let valid = matches!(
-        (current_status, target),
-        (InvoiceStatus::Draft, InvoiceStatus::Sent)
-            | (InvoiceStatus::Sent, InvoiceStatus::Paid)
-            | (InvoiceStatus::Draft, InvoiceStatus::Void)
-            | (InvoiceStatus::Sent, InvoiceStatus::Void)
-    );
-    if !valid {
-        return Err(conflict(format!(
-            "Cannot transition invoice from {} to {}",
-            current_status, target
-        )));
-    }
-
-    // Voiding both un-invoices the covered entries and flips the invoice status,
-    // so run them in one transaction: entries must never be released without the
-    // invoice actually reaching 'void'.
-    let mut tx = state.db.begin().await.map_err(server_err)?;
-
-    // On void: restore entries to open, un-invoiced state.
-    if target == InvoiceStatus::Void {
-        sqlx::query!(
-            r#"UPDATE time_entries
-               SET invoice_id = NULL, state = 'open'
-               WHERE invoice_id = $1"#,
-            id,
-        )
-        .execute(&mut *tx)
-        .await
-        .map_err(server_err)?;
-    }
-
-    let invoice = sqlx::query_as!(
-        Invoice,
-        r#"UPDATE invoices SET status = $3
-           WHERE id = $1 AND org_id = $2
-           RETURNING id, org_id, client_id, number,
-                     status as "status: InvoiceStatus",
-                     issued_on as "issued_on: chrono::NaiveDate",
-                     due_on as "due_on: chrono::NaiveDate",
-                     currency, total_cents, notes,
-                     created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
-        id,
-        manager.org_id,
-        target as InvoiceStatus,
-    )
-    .fetch_one(&mut *tx)
-    .await
-    .map_err(server_err)?;
-
-    tx.commit().await.map_err(server_err)?;
+    let invoice = transition_invoice(&state.db, manager.org_id, id, target).await?;
 
     // Dispatch invoice_sent event when transitioning to Sent (FR-019).
     if target == InvoiceStatus::Sent {
@@ -435,6 +373,80 @@ pub async fn update_invoice_status(
                 invoice: invoice_payload(&invoice),
             });
     }
+
+    Ok(invoice)
+}
+
+#[cfg(feature = "server")]
+async fn transition_invoice(
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    id: uuid::Uuid,
+    target: InvoiceStatus,
+) -> Result<Invoice, ServerFnError> {
+    let mut tx = pool.begin().await.map_err(server_err)?;
+
+    // Validate under the same row lock as the transition: payment and void
+    // must not both accept a previously observed 'sent' state.
+    let current_status: InvoiceStatus = sqlx::query_scalar!(
+        r#"SELECT status as "status: InvoiceStatus"
+           FROM invoices WHERE id = $1 AND org_id = $2 FOR UPDATE"#,
+        id,
+        org_id,
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(server_err)?
+    .ok_or_else(|| not_found("Invoice not found"))?;
+
+    // Enforce state machine: draft->sent, sent->paid, draft|sent->void
+    let valid = matches!(
+        (current_status, target),
+        (InvoiceStatus::Draft, InvoiceStatus::Sent)
+            | (InvoiceStatus::Sent, InvoiceStatus::Paid)
+            | (InvoiceStatus::Draft, InvoiceStatus::Void)
+            | (InvoiceStatus::Sent, InvoiceStatus::Void)
+    );
+    if !valid {
+        return Err(conflict(format!(
+            "Cannot transition invoice from {} to {}",
+            current_status, target
+        )));
+    }
+
+    // Reopened time is editable again, so its previously frozen rounding no
+    // longer represents a locked duration. Invoice lines remain unchanged.
+    if target == InvoiceStatus::Void {
+        sqlx::query!(
+            r#"UPDATE time_entries
+               SET invoice_id = NULL, state = 'open', rounded_minutes = NULL
+               WHERE invoice_id = $1"#,
+            id,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(server_err)?;
+    }
+
+    let invoice = sqlx::query_as!(
+        Invoice,
+        r#"UPDATE invoices SET status = $3
+           WHERE id = $1 AND org_id = $2
+           RETURNING id, org_id, client_id, number,
+                     status as "status: InvoiceStatus",
+                     issued_on as "issued_on: chrono::NaiveDate",
+                     due_on as "due_on: chrono::NaiveDate",
+                     currency, total_cents, notes,
+                     created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
+        id,
+        org_id,
+        target as InvoiceStatus,
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(server_err)?;
+
+    tx.commit().await.map_err(server_err)?;
 
     Ok(invoice)
 }
