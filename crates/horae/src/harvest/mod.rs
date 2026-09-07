@@ -7,9 +7,10 @@
 mod auth;
 mod types;
 
-use axum::{Json, Router, extract::Path, extract::Query, routing::get};
+use axum::{Json, Router, extract::Path, extract::Query, http::StatusCode, routing::get};
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::Deserialize;
+use sqlx::PgPool;
 use uuid::Uuid;
 
 use auth::AuthUser;
@@ -46,6 +47,35 @@ fn internal(e: impl std::fmt::Display) -> (axum::http::StatusCode, String) {
 
 fn not_found() -> (axum::http::StatusCode, String) {
     (axum::http::StatusCode::NOT_FOUND, "Not found".to_string())
+}
+
+/// The caller is signed in but not senior enough for this collection. Kept
+/// distinct from [`not_found`] on purpose: a 404 would tell a Harvest client the
+/// org holds no such data, and the login guard deliberately never redirects
+/// under `/harvest/`, so 403 is the only honest answer here.
+fn forbidden(msg: &str) -> (axum::http::StatusCode, String) {
+    (StatusCode::FORBIDDEN, msg.to_string())
+}
+
+/// The `user_id` a time-entry query may read, given what the caller asked for.
+///
+/// Managers and admins see the whole org and may filter to anyone; a member is
+/// confined to their own rows, exactly as the SPA's `list_time_entries` scopes
+/// its listing to the session user. Asking for a colleague's rows is refused
+/// rather than quietly answered with a different row set.
+fn scoped_user_filter(
+    caller: &AuthUser,
+    requested: Option<Uuid>,
+) -> Result<Option<Uuid>, (axum::http::StatusCode, String)> {
+    if caller.org_role.is_manager_or_above() {
+        return Ok(requested);
+    }
+    match requested {
+        Some(id) if id != caller.user_id => Err(forbidden(
+            "Reading another user's time entries requires manager access",
+        )),
+        _ => Ok(Some(caller.user_id)),
+    }
 }
 
 // ── Pagination ──────────────────────────────────────────────────────────────
@@ -205,8 +235,18 @@ async fn list_time_entries(
     Query(filters): Query<TimeEntryFilters>,
 ) -> ApiResult<HarvestPagination<HarvestTimeEntry>> {
     let state = crate::state::global_state().await;
+    time_entries_page(&state.db, &user, filters).await
+}
 
-    let (round_min, round_dir) = crate::db::org_rounding(&state.db, user.org_id)
+/// Entries carry both a teammate's notes and their rates, so the row set is
+/// scoped by [`scoped_user_filter`]: org-wide for a manager, own rows for a
+/// member.
+async fn time_entries_page(
+    db: &PgPool,
+    caller: &AuthUser,
+    filters: TimeEntryFilters,
+) -> ApiResult<HarvestPagination<HarvestTimeEntry>> {
+    let (round_min, round_dir) = crate::db::org_rounding(db, caller.org_id)
         .await
         .map_err(internal)?;
 
@@ -218,6 +258,7 @@ async fn list_time_entries(
         .as_ref()
         .map(|s| s.parse().map_err(|_| internal("Invalid user_id filter")))
         .transpose()?;
+    let user_id_filter = scoped_user_filter(caller, user_id_filter)?;
     let project_id_filter: Option<Uuid> = filters
         .project_id
         .as_ref()
@@ -235,7 +276,7 @@ async fn list_time_entries(
            AND ($5::date IS NULL OR te.spent_date <= $5::date)
            AND ($6::bool IS NULL OR te.is_running = $6)
            AND ($7::timestamptz IS NULL OR te.updated_at >= $7::timestamptz)",
-        user.org_id,
+        caller.org_id,
         user_id_filter,
         project_id_filter,
         filters.from.as_deref() as Option<&str>,
@@ -243,7 +284,7 @@ async fn list_time_entries(
         filters.is_running,
         filters.updated_since.as_deref() as Option<&str>,
     )
-    .fetch_one(&state.db)
+    .fetch_one(db)
     .await
     .map_err(internal)?
     .unwrap_or(0);
@@ -279,7 +320,7 @@ async fn list_time_entries(
            AND ($7::timestamptz IS NULL OR te.updated_at >= $7::timestamptz)
          ORDER BY te.spent_date DESC, te.created_at DESC
          LIMIT $8 OFFSET $9"#,
-        user.org_id,
+        caller.org_id,
         user_id_filter,
         project_id_filter,
         filters.from.as_deref() as Option<&str>,
@@ -289,7 +330,7 @@ async fn list_time_entries(
         per_page,
         offset,
     )
-    .fetch_all(&state.db)
+    .fetch_all(db)
     .await
     .map_err(internal)?;
 
@@ -310,8 +351,16 @@ async fn list_time_entries(
 
 async fn get_time_entry(user: AuthUser, Path(id): Path<Uuid>) -> ApiResult<HarvestTimeEntry> {
     let state = crate::state::global_state().await;
+    time_entry_by_id(&state.db, &user, id).await
+}
 
-    let (round_min, round_dir) = crate::db::org_rounding(&state.db, user.org_id)
+/// A single entry out of the same scoped row set as the listing. To a member a
+/// colleague's entry is simply not in their collection, so it reads as missing
+/// rather than forbidden — the answer an id from another org already gets.
+async fn time_entry_by_id(db: &PgPool, caller: &AuthUser, id: Uuid) -> ApiResult<HarvestTimeEntry> {
+    let user_scope = scoped_user_filter(caller, None)?;
+
+    let (round_min, round_dir) = crate::db::org_rounding(db, caller.org_id)
         .await
         .map_err(internal)?;
 
@@ -337,11 +386,13 @@ async fn get_time_entry(user: AuthUser, Path(id): Path<Uuid>) -> ApiResult<Harve
          JOIN projects p ON p.id = te.project_id
          JOIN tasks t ON t.id = te.task_id
          JOIN clients c ON c.id = p.client_id
-         WHERE te.id = $1 AND te.org_id = $2"#,
+         WHERE te.id = $1 AND te.org_id = $2
+           AND ($3::uuid IS NULL OR te.user_id = $3)"#,
         id,
-        user.org_id,
+        caller.org_id,
+        user_scope,
     )
-    .fetch_optional(&state.db)
+    .fetch_optional(db)
     .await
     .map_err(internal)?
     .ok_or_else(not_found)?;
@@ -760,16 +811,34 @@ async fn list_users(
     Query(filters): Query<UserFilters>,
 ) -> ApiResult<HarvestPagination<HarvestUser>> {
     let state = crate::state::global_state().await;
+    users_page(&state.db, &user, filters).await
+}
+
+/// The org's people, pay rates included. Harvest's user object has no rate-free
+/// shape — a null `cost_rate` there means "no rate is configured" — so blanking
+/// the fields for a member, the way the SPA's `list_users` can, would misreport
+/// the org rather than protect it. The collection is gated whole instead, which
+/// keeps the rule the SPA states: rates are manager material (SPEC §6). A member
+/// still reads their own record from `/users/me`.
+async fn users_page(
+    db: &PgPool,
+    caller: &AuthUser,
+    filters: UserFilters,
+) -> ApiResult<HarvestPagination<HarvestUser>> {
+    if !caller.org_role.is_manager_or_above() {
+        return Err(forbidden("Listing users requires manager access"));
+    }
+
     let (page, per_page, offset) = page_window(filters.page, filters.per_page);
 
     let total = sqlx::query_scalar!(
         "SELECT COUNT(*) FROM users
          WHERE org_id = $1
            AND ($2::bool IS NULL OR active = $2)",
-        user.org_id,
+        caller.org_id,
         filters.is_active,
     )
-    .fetch_one(&state.db)
+    .fetch_one(db)
     .await
     .map_err(internal)?
     .unwrap_or(0);
@@ -784,12 +853,12 @@ async fn list_users(
            AND ($2::bool IS NULL OR active = $2)
          ORDER BY name
          LIMIT $3 OFFSET $4"#,
-        user.org_id,
+        caller.org_id,
         filters.is_active,
         per_page,
         offset,
     )
-    .fetch_all(&state.db)
+    .fetch_all(db)
     .await
     .map_err(internal)?;
 
@@ -807,7 +876,9 @@ async fn list_users(
 
 #[cfg(test)]
 mod tests {
-    use super::page_window;
+    use super::*;
+    use crate::server_fns::test_seed::{SeedIds, seed};
+    use horae_core::types::{EntryState, OrgRole};
 
     #[test]
     fn page_window_defaults_clamps_and_offsets() {
@@ -819,5 +890,195 @@ mod tests {
         assert_eq!(page_window(None, Some(500)), (1, 100, 0));
         // A later page offsets by the preceding pages.
         assert_eq!(page_window(Some(3), Some(25)), (3, 25, 50));
+    }
+
+    // ── Authorization ───────────────────────────────────────────────────────
+    // This API rides the same session cookie as the SPA, so these assert that it
+    // applies the same policy: rates and other people's rows need a manager.
+
+    fn caller(ids: &SeedIds, org_role: OrgRole) -> AuthUser {
+        AuthUser {
+            user_id: ids.user_id,
+            org_id: ids.org_id,
+            org_role,
+        }
+    }
+
+    fn no_time_entry_filters() -> TimeEntryFilters {
+        TimeEntryFilters {
+            user_id: None,
+            project_id: None,
+            from: None,
+            to: None,
+            is_running: None,
+            page: None,
+            per_page: None,
+            updated_since: None,
+        }
+    }
+
+    fn no_user_filters() -> UserFilters {
+        UserFilters {
+            is_active: None,
+            page: None,
+            per_page: None,
+            updated_since: None,
+        }
+    }
+
+    /// The status a refused call answered with. `expect_err` would demand
+    /// `Debug` on every DTO just to print a body the test never looks at.
+    fn refused<T>(result: ApiResult<T>, leak: &str) -> StatusCode {
+        match result {
+            Ok(_) => panic!("{leak}"),
+            Err((status, _)) => status,
+        }
+    }
+
+    /// A second person in the org, carrying the cost rate this API used to hand
+    /// to anyone with a session.
+    async fn colleague(pool: &PgPool, ids: &SeedIds) -> Uuid {
+        let id = Uuid::now_v7();
+        sqlx::query!(
+            "INSERT INTO users (id, org_id, email, name, org_role, cost_rate_cents) \
+             VALUES ($1, $2, $3, 'Coworker', $4, 12345)",
+            id,
+            ids.org_id,
+            format!("{id}@test.com"),
+            OrgRole::Member as OrgRole,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+        id
+    }
+
+    async fn insert_entry(pool: &PgPool, ids: &SeedIds, user_id: Uuid, notes: &str) -> Uuid {
+        let id = Uuid::now_v7();
+        sqlx::query!(
+            "INSERT INTO time_entries \
+               (id, org_id, user_id, project_id, task_id, spent_date, \
+                minutes, notes, billable, is_running, state) \
+             VALUES ($1, $2, $3, $4, $5, CURRENT_DATE, 60, $6, true, false, $7)",
+            id,
+            ids.org_id,
+            user_id,
+            ids.project_id,
+            ids.task_id,
+            notes,
+            EntryState::Open as EntryState,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+        id
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn a_member_cannot_list_users(pool: PgPool) {
+        let ids = seed(&pool, OrgRole::Member).await;
+        colleague(&pool, &ids).await;
+
+        let status = refused(
+            users_page(&pool, &caller(&ids, OrgRole::Member), no_user_filters()).await,
+            "a member read the org's pay rates",
+        );
+
+        assert_eq!(status, StatusCode::FORBIDDEN);
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn a_manager_lists_users_with_their_rates(pool: PgPool) {
+        let ids = seed(&pool, OrgRole::Manager).await;
+        colleague(&pool, &ids).await;
+
+        let Json(page) = users_page(&pool, &caller(&ids, OrgRole::Manager), no_user_filters())
+            .await
+            .expect("a manager was refused the user list");
+
+        let users = &page.data["users"];
+        assert_eq!(users.len(), 2);
+        assert!(users.iter().any(|u| u.cost_rate == Some(123.45)));
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn a_member_sees_only_their_own_time_entries(pool: PgPool) {
+        let ids = seed(&pool, OrgRole::Member).await;
+        let other = colleague(&pool, &ids).await;
+        insert_entry(&pool, &ids, ids.user_id, "mine").await;
+        insert_entry(&pool, &ids, other, "theirs").await;
+
+        let Json(page) = time_entries_page(
+            &pool,
+            &caller(&ids, OrgRole::Member),
+            no_time_entry_filters(),
+        )
+        .await
+        .expect("a member was refused their own entries");
+
+        let entries = &page.data["time_entries"];
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].user.id, ids.user_id.to_string());
+        assert_eq!(entries[0].notes.as_deref(), Some("mine"));
+        // The envelope has to agree with the rows, or a client pages into
+        // entries it is never shown.
+        assert_eq!(page.total_entries, 1);
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn a_manager_sees_the_whole_org(pool: PgPool) {
+        let ids = seed(&pool, OrgRole::Manager).await;
+        let other = colleague(&pool, &ids).await;
+        insert_entry(&pool, &ids, ids.user_id, "mine").await;
+        insert_entry(&pool, &ids, other, "theirs").await;
+
+        let Json(page) = time_entries_page(
+            &pool,
+            &caller(&ids, OrgRole::Manager),
+            no_time_entry_filters(),
+        )
+        .await
+        .expect("a manager was refused the org's entries");
+
+        assert_eq!(page.data["time_entries"].len(), 2);
+        assert_eq!(page.total_entries, 2);
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn a_member_cannot_filter_to_a_colleague(pool: PgPool) {
+        let ids = seed(&pool, OrgRole::Member).await;
+        let other = colleague(&pool, &ids).await;
+        insert_entry(&pool, &ids, other, "theirs").await;
+
+        let filters = TimeEntryFilters {
+            user_id: Some(other.to_string()),
+            ..no_time_entry_filters()
+        };
+        let status = refused(
+            time_entries_page(&pool, &caller(&ids, OrgRole::Member), filters).await,
+            "a member read a colleague's entries by filter",
+        );
+
+        assert_eq!(status, StatusCode::FORBIDDEN);
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn a_member_cannot_fetch_a_colleagues_entry(pool: PgPool) {
+        let ids = seed(&pool, OrgRole::Member).await;
+        let other = colleague(&pool, &ids).await;
+        let theirs = insert_entry(&pool, &ids, other, "theirs").await;
+
+        // Outside the member's row set, so it reads as missing rather than
+        // forbidden — the same answer an id from another org gets.
+        let status = refused(
+            time_entry_by_id(&pool, &caller(&ids, OrgRole::Member), theirs).await,
+            "a member fetched a colleague's entry by id",
+        );
+        assert_eq!(status, StatusCode::NOT_FOUND);
+
+        let Json(entry) = time_entry_by_id(&pool, &caller(&ids, OrgRole::Manager), theirs)
+            .await
+            .expect("a manager was refused an entry in their own org");
+        assert_eq!(entry.id, theirs.to_string());
     }
 }

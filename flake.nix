@@ -203,17 +203,17 @@
                   system = null;
                   modules = [
                     containerModule
-                    ({ config, lib, ... }: {
+                    ({ config, lib, pkgs, ... }: {
                       services.horae = {
                         inherit port;
                         enable = true;
-                        host = "0.0.0.0";
-                        openFirewall = true;
                         database.createLocally = true;
                       };
 
                       # Demo-only: one-click admin login and seeded sample data.
                       # These bypass OIDC and must never appear in production configs.
+                      # The server refuses to serve the bypass anywhere but
+                      # loopback, so the bind address stays at the module default.
                       systemd.services.horae = {
                         environment.DEV_LOGIN = "1";
                         serviceConfig.ExecStartPre = lib.mkForce [
@@ -221,6 +221,26 @@
                           "${config.services.horae.package}/bin/horae seed"
                         ];
                       };
+
+                      # The VM's forwarded port arrives on the guest's NAT address
+                      # (QEMU's fixed 10.0.2.15, the subnet the PostgreSQL rules
+                      # above already trust), which a loopback-bound server does
+                      # not answer. This relay bridges the two so the demo stays a
+                      # one-command launch. It is VM plumbing: nothing here belongs
+                      # in the `services.horae` block above.
+                      systemd.services.horae-demo-relay = {
+                        description = "Relay the VM's forwarded port to the demo server on loopback";
+                        after = [ "horae.service" "network-online.target" ];
+                        wants = [ "network-online.target" ];
+                        wantedBy = [ "multi-user.target" ];
+                        serviceConfig = {
+                          ExecStart = "${pkgs.socat}/bin/socat TCP-LISTEN:${toString port},bind=10.0.2.15,fork,reuseaddr TCP:127.0.0.1:${toString port}";
+                          DynamicUser = true;
+                          Restart = "on-failure";
+                          RestartSec = 1;
+                        };
+                      };
+                      networking.firewall.allowedTCPPorts = [ port ];
                     })
                   ];
                 };

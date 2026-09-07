@@ -133,3 +133,60 @@ impl OidcConfig {
 fn non_empty(key: &str) -> Option<String> {
     std::env::var(key).ok().filter(|v| !v.is_empty())
 }
+
+/// Whether a bind address only accepts connections from the machine itself.
+/// Anything that is not a loopback IP — including a hostname we cannot resolve
+/// here — counts as reachable from elsewhere.
+fn is_loopback_host(host: &str) -> bool {
+    let host = host.trim_start_matches('[').trim_end_matches(']');
+    host.eq_ignore_ascii_case("localhost")
+        || host
+            .parse::<std::net::IpAddr>()
+            .is_ok_and(|ip| ip.is_loopback())
+}
+
+/// `DEV_LOGIN=1` registers `/auth/dev-login`, which hands an admin session to
+/// anyone who asks for one. That is only ever safe when nothing outside the
+/// machine can reach the port, so refuse to start rather than serve an open
+/// admin door on a public interface.
+pub fn check_dev_login_bind(dev_login: bool, host: &str) -> anyhow::Result<()> {
+    if dev_login && !is_loopback_host(host) {
+        anyhow::bail!(
+            "DEV_LOGIN=1 grants an admin session to anyone who can reach the server, \
+             but the bind address is {host}. Bind a loopback address (127.0.0.1) or \
+             unset DEV_LOGIN."
+        );
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::check_dev_login_bind;
+
+    #[test]
+    fn dev_login_is_allowed_on_loopback() {
+        for host in ["127.0.0.1", "::1", "[::1]", "localhost", "127.0.0.53"] {
+            assert!(
+                check_dev_login_bind(true, host).is_ok(),
+                "refused the loopback bind {host}"
+            );
+        }
+    }
+
+    #[test]
+    fn dev_login_is_refused_off_loopback() {
+        // A wildcard bind, a routable address, and a hostname we cannot resolve.
+        for host in ["0.0.0.0", "::", "192.168.1.10", "horae.example.com"] {
+            assert!(
+                check_dev_login_bind(true, host).is_err(),
+                "served the dev-login bypass on {host}"
+            );
+        }
+    }
+
+    #[test]
+    fn without_dev_login_any_bind_is_fine() {
+        assert!(check_dev_login_bind(false, "0.0.0.0").is_ok());
+    }
+}

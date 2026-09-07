@@ -441,7 +441,7 @@ pub(crate) async fn check_project_budget(
 // The #[server] endpoints grouped by feature; re-exported so call sites keep
 // using `server_fns::<fn>` regardless of which submodule a function lives in.
 #[cfg(all(test, feature = "server"))]
-mod test_seed;
+pub(crate) mod test_seed;
 
 mod approvals;
 mod auth;

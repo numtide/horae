@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO users (id, org_id, email, name, org_role, cost_rate_cents) VALUES ($1, $2, $3, 'Coworker', $4, 12345)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        {
+          "Custom": {
+            "name": "org_role",
+            "kind": {
+              "Enum": [
+                "admin",
+                "manager",
+                "member"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "165f77c4024c4753983afe4f44cb66ed35c81dfe471c97bc17c537320de2eb17"
+}
