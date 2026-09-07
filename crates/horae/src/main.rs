@@ -152,6 +152,14 @@ fn main() -> anyhow::Result<()> {
                 .ok()
                 .and_then(|p| p.parse::<u16>().ok())
                 .unwrap_or(args.port);
+            if cfg.dev_login {
+                tracing::warn!(
+                    "DEV_LOGIN=1: /auth/dev-login signs anyone in as an admin without a \
+                     password. Use it for local development only."
+                );
+            }
+            config::check_dev_login_bind(cfg.dev_login, &host)?;
+
             let addr = format!("{}:{}", host, port);
             tracing::info!("Starting Horae on {addr}");
 
