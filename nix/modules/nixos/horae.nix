@@ -49,6 +49,36 @@ in
           instance with a `horae` database owned by the `horae` service user.
         '';
       };
+
+      backup = {
+        enable = lib.mkOption {
+          type = lib.types.bool;
+          default = cfg.database.createLocally;
+          defaultText = lib.literalExpression "config.services.horae.database.createLocally";
+          description = ''
+            Whether to take a periodic `pg_dump` of the Horae database via
+            services.postgresqlBackup. Only applies to the local instance this
+            module provisions; when the database lives elsewhere, back it up there.
+          '';
+        };
+
+        location = lib.mkOption {
+          type = lib.types.path;
+          default = "/var/backup/postgresql";
+          description = ''
+            Directory the dumps are written to. The most recent dump is
+            `horae.sql.gz`; the one before it is kept as `horae.sql.prev.gz`.
+          '';
+        };
+
+        startAt = lib.mkOption {
+          type = with lib.types; either (listOf str) str;
+          default = "*-*-* 01:15:00";
+          description = ''
+            When to take the dump, in systemd.time(7) calendar format.
+          '';
+        };
+      };
     };
 
     secretKeyFile = lib.mkOption {
@@ -89,6 +119,14 @@ in
           };
         }
       ];
+    };
+
+    # Nightly dumps of the database this module provisions. `createLocally`
+    # invites the operator to treat durability as handled, so handle it.
+    services.postgresqlBackup = lib.mkIf (cfg.database.createLocally && cfg.database.backup.enable) {
+      enable = true;
+      databases = [ "horae" ];
+      inherit (cfg.database.backup) location startAt;
     };
 
     systemd.services.horae = {

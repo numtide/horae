@@ -56,7 +56,7 @@ cd crates/horae && DEV_LOGIN=1 DATABASE_URL=… dx serve   # dev server (dx runs
 cargo run -p horae --features server -- <subcommand>     # run the server binary directly
 ```
 
-CLI subcommands: `serve`, `migrate run`, `migrate reset --confirm`, `seed`, `user list`, `user create --email … --name … --role …`.
+CLI subcommands: `serve`, `init --org-name … --admin-email … --admin-name …` (bootstrap: one org + one admin, refuses if an org exists), `migrate run`, `migrate reset --confirm`, `seed` (demo data), `user list`, `user create --email … --name … --role …`.
 
 These are for one-off tasks; `process-compose up` covers the normal run loop. Open
 http://localhost:8080/auth/login and "Sign in as Admin" (needs `DEV_LOGIN=1`, which the stack sets).

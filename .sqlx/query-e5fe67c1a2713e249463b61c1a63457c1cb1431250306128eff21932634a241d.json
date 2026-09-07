@@ -1,0 +1,55 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT org_id, email, name, org_role as \"role: horae_core::types::OrgRole\", active\n               FROM users",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "role: horae_core::types::OrgRole",
+        "type_info": {
+          "Custom": {
+            "name": "org_role",
+            "kind": {
+              "Enum": [
+                "admin",
+                "manager",
+                "member"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "active",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "e5fe67c1a2713e249463b61c1a63457c1cb1431250306128eff21932634a241d"
+}

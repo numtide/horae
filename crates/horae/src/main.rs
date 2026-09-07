@@ -15,6 +15,8 @@ mod harvest;
 #[cfg(feature = "server")]
 mod importers;
 #[cfg(feature = "server")]
+mod init;
+#[cfg(feature = "server")]
 mod plugin;
 #[cfg(feature = "server")]
 mod render;
@@ -46,6 +48,23 @@ fn main() -> anyhow::Result<()> {
     let cfg = AppConfig::from_env()?;
 
     match cli.command() {
+        Commands::Init {
+            org_name,
+            admin_email,
+            admin_name,
+        } => {
+            let rt = tokio::runtime::Runtime::new()?;
+            rt.block_on(async {
+                init_tracing(&cfg.log_level);
+                let pool = db::create_pool(&cfg.database_url).await?;
+                // A fresh installation has an empty database, so migrate before
+                // inserting: `init` is the first command an operator runs.
+                db::run_migrations(&pool).await?;
+                init::run(&pool, &org_name, &admin_email, &admin_name).await?;
+                anyhow::Ok(())
+            })?;
+        }
+
         Commands::Migrate { action } => {
             let rt = tokio::runtime::Runtime::new()?;
             rt.block_on(async {
@@ -62,8 +81,9 @@ fn main() -> anyhow::Result<()> {
                             eprintln!("Pass --confirm to reset the database.");
                             std::process::exit(1);
                         }
-                        tracing::warn!("Resetting database...");
-                        db::run_migrations(&pool).await?;
+                        tracing::warn!("Dropping every table and re-applying migrations...");
+                        db::reset(&pool).await?;
+                        tracing::info!("Reset complete.");
                     }
                 }
                 anyhow::Ok(())
@@ -84,7 +104,7 @@ fn main() -> anyhow::Result<()> {
                             .fetch_optional(&pool)
                             .await?
                             .ok_or_else(|| {
-                                anyhow::anyhow!("No organization found. Run `seed` first.")
+                                anyhow::anyhow!("No organization found. Run `init` first.")
                             })?;
 
                         let id = uuid::Uuid::now_v7();

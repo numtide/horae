@@ -149,9 +149,55 @@ Horae ships as a NixOS module:
 }
 ```
 
-The module runs the server as a systemd service; you still apply migrations and (optionally)
-seed with the `horae` CLI. Do not set `DEV_LOGIN` in a production deployment — configure OIDC
-instead.
+The module runs the server as a systemd service and applies pending migrations on every start.
+
+### First run
+
+A fresh database has no organization, so create one — along with the first admin user —
+before anyone signs in. `horae seed` inserts demo clients, projects and time entries; it is
+for trying the app out, not for standing one up.
+
+The CLI is the same binary as the service — put it on PATH with
+`environment.systemPackages = [ config.services.horae.package ];`. The service runs under a
+systemd `DynamicUser`, so run the CLI as `horae` while the unit is up and the socket
+credentials match the database owner:
+
+```sh
+sudo -u horae DATABASE_URL=postgres:///horae \
+  horae init --org-name "Contoso" --admin-email ops@contoso.example --admin-name "Ops"
+```
+
+`init` creates exactly one organization and one admin and refuses if an organization already
+exists. Add the rest of the team with `horae user create`. Do not set `DEV_LOGIN` in a
+production deployment — configure OIDC instead, and give the admin the email address the
+provider will assert.
+
+### Backups and restore
+
+With `database.createLocally = true` the module enables `services.postgresqlBackup` for the
+`horae` database. A nightly `pg_dump` lands in `/var/backup/postgresql/horae.sql.gz`, with the
+previous run kept beside it as `horae.sql.prev.gz`. That is two days of history on the same
+disk as the database — copy it somewhere else if it matters.
+
+```nix
+services.horae.database.backup = {
+  enable = false;                       # opt out; on by default with createLocally
+  location = "/var/backup/postgresql";  # where the dumps land
+  startAt = "*-*-* 01:15:00";           # systemd.time(7) calendar format
+};
+```
+
+The dumps are taken with `pg_dump -C`, so a restore recreates the database:
+
+```sh
+systemctl stop horae
+sudo -u postgres dropdb horae
+gunzip -c /var/backup/postgresql/horae.sql.gz | sudo -u postgres psql -d postgres
+systemctl start horae
+```
+
+Migrations are forward-only — there are no down-migrations — so restoring a dump taken before
+an upgrade is the only way back from one. Take a dump before upgrading.
 
 ## Command-line interface
 
@@ -160,8 +206,9 @@ is given):
 
 ```sh
 horae serve --host 0.0.0.0 --port 3000
+horae init --org-name "Contoso" --admin-email ops@contoso.example --admin-name "Ops"
 horae migrate run                   # apply pending migrations
-horae migrate reset --confirm       # drop and re-create (dev only)
+horae migrate reset --confirm       # drop every table and re-migrate (dev only)
 horae seed                          # insert demo data (idempotent)
 horae user list
 horae user create --email admin@example.com --name "Admin" --role admin
