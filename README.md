@@ -225,8 +225,9 @@ nix fmt                                               # treefmt: rustfmt, taplo,
 ```
 
 Integration tests use `#[sqlx::test]` (each spins up a throwaway database, so the DB role needs
-`CREATEDB`). `nix build` builds the package and `nix flake check` runs the formatting check plus a
-full NixOS end-to-end test.
+`CREATEDB`). `nix build` builds the package and `nix flake check` runs the whole suite against a
+PostgreSQL started inside the build sandbox, plus clippy, formatting, and the NixOS end-to-end
+tests.
 
 All SQL uses sqlx's compile-time-checked macros; after changing a query or migration, regenerate
 the offline cache with `cargo sqlx prepare --workspace -- --features server --all-targets` and

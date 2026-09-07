@@ -71,7 +71,7 @@ cargo clippy -p horae --features server
 nix fmt                                         # treefmt: rustfmt, taplo, nixpkgs-fmt, mdformat
 ```
 
-Integration tests (`crates/horae/tests/integration.rs`) use `#[sqlx::test]` — each spins up a throwaway database, so the DB role needs `CREATEDB` — and are marked `#[serial]`. `nix build` builds the package; `nix flake check` runs the formatting check plus a full NixOS e2e test.
+Integration tests (`crates/horae/tests/integration.rs`) use `#[sqlx::test]` — each spins up a throwaway database, so the DB role needs `CREATEDB` — and are marked `#[serial]`. `nix build` builds the package; `nix flake check` runs the whole suite against a PostgreSQL started inside the build sandbox (`nix/checks/tests.nix`), plus clippy, formatting, the `.sqlx` cache check, and the NixOS e2e tests.
 
 ### sqlx query cache
 
