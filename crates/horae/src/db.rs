@@ -53,6 +53,25 @@ pub async fn run_migrations(pool: &PgPool) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Drop everything this application owns and re-apply the migrations.
+///
+/// Destructive, and dev-only. Both schemas go: `public` holds the tables and
+/// the migration ledger, `tower_sessions` the session store, which the session
+/// layer recreates on the next start. Dropping the schemas rather than the
+/// database is what lets this run over the pool that is already open — a
+/// session cannot drop the database it is connected to.
+pub async fn reset(pool: &PgPool) -> anyhow::Result<()> {
+    sqlx::raw_sql(
+        r#"DROP SCHEMA IF EXISTS tower_sessions CASCADE;
+           DROP SCHEMA public CASCADE;
+           CREATE SCHEMA public;"#,
+    )
+    .execute(pool)
+    .await?;
+    run_migrations(pool).await?;
+    Ok(())
+}
+
 /// The org's rounding config, `(round_minutes, round_dir)`, ready for
 /// `horae_core::rounding::round`. The executor generic lets callers pass the
 /// pool or an open transaction. `round_minutes` is cast here: the column is
@@ -74,7 +93,7 @@ pub async fn org_rounding(
 
 #[cfg(test)]
 mod tests {
-    use super::create_pool;
+    use super::{create_pool, reset};
 
     /// The startup option only reaches the server if it survives parsing the
     /// URL and the pool's own connect path, so assert it on a pooled
@@ -88,5 +107,40 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(mode, "force_custom_plan");
+    }
+
+    /// `migrate reset --confirm` promises a reset, so assert data is actually
+    /// gone afterwards and the schema is back.
+    #[sqlx::test(migrations = "./migrations")]
+    async fn reset_empties_the_database_and_reapplies_migrations(pool: sqlx::PgPool) {
+        sqlx::query!(
+            "INSERT INTO organizations (id, name) VALUES ($1, 'Doomed')",
+            uuid::Uuid::now_v7(),
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::raw_sql("CREATE SCHEMA tower_sessions")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        reset(&pool).await.unwrap();
+
+        let orgs: i64 = sqlx::query_scalar!("SELECT COUNT(*) FROM organizations")
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+            .unwrap_or(-1);
+        assert_eq!(orgs, 0);
+
+        let sessions: bool = sqlx::query_scalar(
+            "SELECT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'tower_sessions')",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert!(!sessions, "the session schema should be gone too");
     }
 }

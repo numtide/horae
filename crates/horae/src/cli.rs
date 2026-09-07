@@ -20,6 +20,18 @@ impl Cli {
 pub enum Commands {
     /// Start the HTTP server
     Serve(ServeArgs),
+    /// Bootstrap a fresh installation: one organization and one admin user
+    Init {
+        /// Name of the organization to create
+        #[arg(long)]
+        org_name: String,
+        /// Email address of the first admin user
+        #[arg(long)]
+        admin_email: String,
+        /// Display name of the first admin user
+        #[arg(long)]
+        admin_name: String,
+    },
     /// Database migration commands
     Migrate {
         #[command(subcommand)]
@@ -49,7 +61,7 @@ pub struct ServeArgs {
 pub enum MigrateAction {
     /// Run pending migrations (default)
     Run,
-    /// Drop and recreate the database (dev only)
+    /// Drop every table and re-apply the migrations from scratch (dev only)
     Reset {
         /// Confirm destructive action
         #[arg(long)]

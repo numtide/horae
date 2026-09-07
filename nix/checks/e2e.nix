@@ -18,6 +18,11 @@ pkgs.testers.nixosTest {
     # Health check
     server.succeed("curl -s http://localhost:3000/health | grep -q ok")
 
+    # Backups are on by default with database.createLocally, and the unit
+    # actually produces a dump rather than just existing.
+    server.succeed("systemctl start postgresqlBackup-horae.service")
+    server.succeed("test -s /var/backup/postgresql/horae.sql.gz")
+
     # Seed data — run as the horae user (DynamicUser in systemd creates it)
     # so the unix socket auth matches the DB owner.
     server.succeed("sudo -u horae DATABASE_URL=postgres:///horae horae seed")
