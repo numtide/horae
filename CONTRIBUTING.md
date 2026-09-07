@@ -90,7 +90,7 @@ process-compose up     # postgres + hot-reloading dev server on :8080
 ```sh
 cargo test -p horae-core                        # pure domain tests (no DB needed)
 cargo test --features server                    # integration tests (needs Postgres with CREATEDB)
-nix flake check                                 # full suite: fmt + e2e nixosTest
+nix flake check                                 # what CI gates on: tests, clippy, fmt, e2e nixosTest
 ```
 
 ______________________________________________________________________
