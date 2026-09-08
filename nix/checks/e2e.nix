@@ -15,6 +15,13 @@ pkgs.testers.nixosTest {
     server.wait_for_unit("horae.service")
     server.wait_for_open_port(3000)
 
+    # Migrations must wait for the database ownership setup, not just the socket.
+    for dependency in ("After", "Requires"):
+        units = server.succeed(
+            f"systemctl show horae.service --property={dependency} --value"
+        ).split()
+        assert "postgresql.target" in units, f"Missing PostgreSQL setup dependency: {dependency}"
+
     # Health check
     server.succeed("curl -s http://localhost:3000/health | grep -q ok")
 
