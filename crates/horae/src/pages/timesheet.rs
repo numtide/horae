@@ -12,6 +12,7 @@ use super::loaded;
 use crate::components::controls::Segmented;
 use crate::components::date_picker::DatePicker;
 use crate::components::menu::{Menu, MenuItem};
+use crate::components::modal::Modal;
 use crate::components::project_task_picker::ProjectTaskPicker;
 use crate::components::timer_widget::use_running_timer;
 use crate::models::time_entry::TimeEntry;
@@ -954,158 +955,159 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
                 })}
 
             // Add–entry modal (opened by "+" or by clicking a calendar day).
-            if let Some(date) = *add_open.read() {
-                div {
-                    class: "modal-overlay",
-                    onclick: move |_| add_open.set(None),
-                    div {
-                        class: "modal modal-lg",
-                        onclick: move |e| e.stop_propagation(),
-                        div { class: "ts-modal-title",
-                            if editing.read().is_some() { "Edit time entry" } else { "New time entry" }
-                            " for {date.format(\"%A, %d %b\")}"
+            Modal {
+                id: "time-entry-dialog",
+                labelledby: "time-entry-title",
+                open: add_open.read().is_some(),
+                busy: add_saving(),
+                large: true,
+                on_dismiss: move |_| add_open.set(None),
+                if let Some(date) = *add_open.read() {
+                    div { id: "time-entry-title", class: "ts-modal-title",
+                        if editing.read().is_some() { "Edit time entry" } else { "New time entry" }
+                        " for {date.format(\"%A, %d %b\")}"
+                    }
+                    div { class: "ts-modal-body",
+                        label { class: "form-label", "Project / Task" }
+                        ProjectTaskPicker {
+                            project: add_project, task: add_task, projects, tasks,
+                            disabled: editing.read().is_some(),
                         }
-                        div { class: "ts-modal-body",
-                            label { class: "form-label", "Project / Task" }
-                            ProjectTaskPicker {
-                                project: add_project, task: add_task, projects, tasks,
-                                disabled: editing.read().is_some(),
-                            }
-                            div { class: "ts-modal-row",
-                                input {
-                                    class: "form-input ts-modal-notes",
-                                    placeholder: "Notes (optional)",
-                                    value: "{add_notes}",
-                                    oninput: move |e| add_notes.set(e.value()),
-                                }
-                                input {
-                                    class: "form-input ts-modal-duration",
-                                    "aria-label": "Duration",
-                                    placeholder: "0:00",
-                                    value: "{add_duration}",
-                                    oninput: move |e| add_duration.set(e.value()),
-                                }
+                        div { class: "ts-modal-row",
+                            input {
+                                class: "form-input ts-modal-notes",
+                                placeholder: "Notes (optional)",
+                                value: "{add_notes}",
+                                oninput: move |e| add_notes.set(e.value()),
                             }
                             input {
-                                class: "form-input",
-                                "aria-label": "Start time",
-                                placeholder: "Start time, e.g. 9:00 (optional)",
-                                value: add_start().map(|m| horae_core::time_of_day::format(m as u16)).unwrap_or_default(),
-                                oninput: move |e| {
-                                    let v = e.value();
-                                    let v = v.trim();
-                                    if v.is_empty() {
-                                        add_start.set(None);
-                                    } else if let Some(m) = horae_core::time_of_day::parse(v) {
-                                        add_start.set(Some(i32::from(m)));
-                                    }
+                                class: "form-input ts-modal-duration",
+                                "aria-label": "Duration",
+                                placeholder: "0:00",
+                                value: "{add_duration}",
+                                oninput: move |e| add_duration.set(e.value()),
+                            }
+                        }
+                        input {
+                            class: "form-input",
+                            "aria-label": "Start time",
+                            placeholder: "Start time, e.g. 9:00 (optional)",
+                            value: add_start().map(|m| horae_core::time_of_day::format(m as u16)).unwrap_or_default(),
+                            oninput: move |e| {
+                                let v = e.value();
+                                let v = v.trim();
+                                if v.is_empty() {
+                                    add_start.set(None);
+                                } else if let Some(m) = horae_core::time_of_day::parse(v) {
+                                    add_start.set(Some(i32::from(m)));
+                                }
+                            },
+                        }
+                        if let Some(err) = &*add_error.read() {
+                            div { class: "ts-modal-error", role: "alert", "{err}" }
+                        }
+                        div { class: "ts-modal-actions",
+                            // Harvest-style single primary: with no duration on
+                            // today's column it starts a running timer; once a
+                            // duration is typed (or on a past day / when editing)
+                            // it saves a fixed entry.
+                            button {
+                                class: "btn btn-primary",
+                                disabled: add_saving(),
+                                onclick: move |_| {
+                                    let Some((project_id, task_id, notes)) = read_pt_notes.call(()) else {
+                                        return;
+                                    };
+                                    let mut running_timer = running_timer;
+                                    let minutes = match modal_minutes(&add_duration.read(), can_start_timer()) {
+                                        Ok(minutes) => minutes,
+                                        Err(message) => {
+                                            add_error.set(Some(message.to_string()));
+                                            return;
+                                        }
+                                    };
+                                    let Some(minutes) = minutes else {
+                                        add_saving.set(true);
+                                        add_error.set(None);
+                                        spawn(async move {
+                                            match server_fns::start_timer(project_id, task_id, notes).await {
+                                                Ok(_) => {
+                                                    add_open.set(None);
+                                                    running_timer.refresh();
+                                                }
+                                                Err(e) => add_error
+                                                    .set(Some(format!("Could not start timer: {e}"))),
+                                            }
+                                            add_saving.set(false);
+                                        });
+                                        return;
+                                    };
+                                    let start_minute = *add_start.read();
+                                    let editing_id = *editing.read();
+                                    let billable = if editing_id.is_some() {
+                                        edit_billable()
+                                    } else {
+                                        true
+                                    };
+                                    let mut modal_timer = running_timer;
+                                    add_saving.set(true);
+                                    add_error.set(None);
+                                    spawn(async move {
+                                        let result = persist_entry(
+                                            editing_id, project_id, task_id, date, minutes,
+                                            notes, billable, start_minute,
+                                        )
+                                        .await;
+                                        match result {
+                                            Ok(()) => {
+                                                add_open.set(None);
+                                                modal_timer.refresh();
+                                            }
+                                            Err(e) => add_error.set(Some(format!("Could not save: {e}"))),
+                                        }
+                                        add_saving.set(false);
+                                    });
                                 },
+                                if add_saving() {
+                                    "Saving…"
+                                } else if timer_mode() {
+                                    "Start timer"
+                                } else {
+                                    "Save entry"
+                                }
                             }
-                            if let Some(err) = &*add_error.read() {
-                                div { class: "ts-modal-error", "{err}" }
-                            }
-                            div { class: "ts-modal-actions",
-                                // Harvest-style single primary: with no duration on
-                                // today's column it starts a running timer; once a
-                                // duration is typed (or on a past day / when editing)
-                                // it saves a fixed entry.
+                            if editing.read().is_some() {
                                 button {
-                                    class: "btn btn-primary",
+                                    class: "btn btn-danger",
                                     disabled: add_saving(),
                                     onclick: move |_| {
-                                        let Some((project_id, task_id, notes)) = read_pt_notes.call(()) else {
+                                        let Some(id) = *editing.read() else {
                                             return;
-                                        };
-                                        let mut running_timer = running_timer;
-                                        let minutes = match modal_minutes(&add_duration.read(), can_start_timer()) {
-                                            Ok(minutes) => minutes,
-                                            Err(message) => {
-                                                add_error.set(Some(message.to_string()));
-                                                return;
-                                            }
-                                        };
-                                        let Some(minutes) = minutes else {
-                                            add_saving.set(true);
-                                            add_error.set(None);
-                                            spawn(async move {
-                                                match server_fns::start_timer(project_id, task_id, notes).await {
-                                                    Ok(_) => {
-                                                        add_open.set(None);
-                                                        running_timer.refresh();
-                                                    }
-                                                    Err(e) => add_error
-                                                        .set(Some(format!("Could not start timer: {e}"))),
-                                                }
-                                                add_saving.set(false);
-                                            });
-                                            return;
-                                        };
-                                        let start_minute = *add_start.read();
-                                        let editing_id = *editing.read();
-                                        let billable = if editing_id.is_some() {
-                                            edit_billable()
-                                        } else {
-                                            true
                                         };
                                         let mut modal_timer = running_timer;
                                         add_saving.set(true);
                                         add_error.set(None);
                                         spawn(async move {
-                                            let result = persist_entry(
-                                                editing_id, project_id, task_id, date, minutes,
-                                                notes, billable, start_minute,
-                                            )
-                                            .await;
-                                            match result {
+                                            match server_fns::delete_time_entry(id.to_string()).await {
                                                 Ok(()) => {
                                                     add_open.set(None);
                                                     modal_timer.refresh();
                                                 }
-                                                Err(e) => add_error.set(Some(format!("Could not save: {e}"))),
+                                                Err(e) => {
+                                                    add_error.set(Some(format!("Could not delete: {e}")))
+                                                }
                                             }
                                             add_saving.set(false);
                                         });
                                     },
-                                    if add_saving() {
-                                        "Saving…"
-                                    } else if timer_mode() {
-                                        "Start timer"
-                                    } else {
-                                        "Save entry"
-                                    }
+                                    "Delete"
                                 }
-                                if editing.read().is_some() {
-                                    button {
-                                        class: "btn btn-danger",
-                                        disabled: add_saving(),
-                                        onclick: move |_| {
-                                            let Some(id) = *editing.read() else {
-                                                return;
-                                            };
-                                            let mut modal_timer = running_timer;
-                                            add_saving.set(true);
-                                            add_error.set(None);
-                                            spawn(async move {
-                                                match server_fns::delete_time_entry(id.to_string()).await {
-                                                    Ok(()) => {
-                                                        add_open.set(None);
-                                                        modal_timer.refresh();
-                                                    }
-                                                    Err(e) => {
-                                                        add_error.set(Some(format!("Could not delete: {e}")))
-                                                    }
-                                                }
-                                                add_saving.set(false);
-                                            });
-                                        },
-                                        "Delete"
-                                    }
-                                }
-                                button {
-                                    class: "btn btn-ghost",
-                                    onclick: move |_| add_open.set(None),
-                                    "Cancel"
-                                }
+                            }
+                            button {
+                                class: "btn btn-ghost",
+                                disabled: add_saving(),
+                                onclick: move |_| add_open.set(None),
+                                "Cancel"
                             }
                         }
                     }
@@ -1113,41 +1115,39 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
             }
 
             // Add-row picker: choose a project/task to add an empty grid row.
-            if addrow_open() {
-                div {
-                    class: "modal-overlay",
-                    onclick: move |_| addrow_open.set(false),
-                    div {
-                        class: "modal",
-                        onclick: move |e| e.stop_propagation(),
-                        div { class: "ts-modal-title", "Add a row" }
-                        div { class: "ts-modal-body",
-                            label { class: "form-label", "Project / Task" }
-                            ProjectTaskPicker {
-                                project: addrow_project, task: addrow_task, projects, tasks,
+            Modal {
+                id: "add-row-dialog",
+                labelledby: "add-row-title",
+                open: addrow_open(),
+                on_dismiss: move |_| addrow_open.set(false),
+                if addrow_open() {
+                    div { id: "add-row-title", class: "ts-modal-title", "Add a row" }
+                    div { class: "ts-modal-body",
+                        label { class: "form-label", "Project / Task" }
+                        ProjectTaskPicker {
+                            project: addrow_project, task: addrow_task, projects, tasks,
 
-                            }
-                            div { class: "ts-modal-actions",
-                                button {
-                                    class: "btn btn-primary",
-                                    onclick: move |_| {
-                                        let p = addrow_project.read().parse::<Uuid>();
-                                        let t = addrow_task.read().parse::<Uuid>();
-                                        if let (Ok(pid), Ok(tid)) = (p, t) {
-                                            let key = (pid, tid);
-                                            if !pending_rows.read().contains(&key) {
-                                                pending_rows.write().push(key);
-                                            }
+                        }
+                        div { class: "ts-modal-actions",
+                            button {
+                                class: "btn btn-primary",
+                                onclick: move |_| {
+                                    let p = addrow_project.read().parse::<Uuid>();
+                                    let t = addrow_task.read().parse::<Uuid>();
+                                    if let (Ok(pid), Ok(tid)) = (p, t) {
+                                        let key = (pid, tid);
+                                        if !pending_rows.read().contains(&key) {
+                                            pending_rows.write().push(key);
                                         }
-                                        addrow_open.set(false);
-                                    },
-                                    "Add row"
-                                }
-                                button {
-                                    class: "btn btn-ghost",
-                                    onclick: move |_| addrow_open.set(false),
-                                    "Cancel"
-                                }
+                                    }
+                                    addrow_open.set(false);
+                                },
+                                "Add row"
+                            }
+                            button {
+                                class: "btn btn-ghost",
+                                onclick: move |_| addrow_open.set(false),
+                                "Cancel"
                             }
                         }
                     }
