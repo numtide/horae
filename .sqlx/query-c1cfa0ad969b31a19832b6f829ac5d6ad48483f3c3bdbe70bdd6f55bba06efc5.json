@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE time_entries SET is_running = true, started_at = now(), minutes = 0 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c1cfa0ad969b31a19832b6f829ac5d6ad48483f3c3bdbe70bdd6f55bba06efc5"
+}

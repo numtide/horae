@@ -10,6 +10,7 @@ use uuid::Uuid;
 pub struct SeedIds {
     pub org_id: Uuid,
     pub user_id: Uuid,
+    pub client_id: Uuid,
     pub project_id: Uuid,
     pub task_id: Uuid,
 }
@@ -73,7 +74,31 @@ pub async fn seed(pool: &PgPool, role: OrgRole) -> SeedIds {
     SeedIds {
         org_id,
         user_id,
+        client_id,
         project_id,
         task_id,
     }
+}
+
+pub async fn time_entry(
+    pool: &PgPool,
+    ids: &SeedIds,
+    state: horae_core::types::EntryState,
+) -> Uuid {
+    let id = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO time_entries
+           (id, org_id, user_id, project_id, task_id, spent_date, minutes, billable, state)
+         VALUES ($1, $2, $3, $4, $5, '2026-09-07', 60, true, $6)",
+        id,
+        ids.org_id,
+        ids.user_id,
+        ids.project_id,
+        ids.task_id,
+        state as horae_core::types::EntryState,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    id
 }

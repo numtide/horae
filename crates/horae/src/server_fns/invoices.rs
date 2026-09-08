@@ -2,6 +2,9 @@
 
 use super::*;
 
+#[cfg(all(test, feature = "server"))]
+mod tests;
+
 // ── Invoices ──────────────────────────────────────────────────────────────────
 
 #[server]
@@ -61,6 +64,26 @@ pub async fn generate_invoice(
     let from = parse_date(&period_from, "period_from")?;
     let to = parse_date(&period_to, "period_to")?;
 
+    let result =
+        generate_invoice_for_period(&state.db, manager.org_id, client_id, from, to).await?;
+    state
+        .plugins
+        .dispatch(crate::plugin::AppEvent::InvoiceCreated {
+            occurred_at: chrono::Utc::now(),
+            org_id: manager.org_id,
+            invoice: invoice_payload(&result.invoice),
+        });
+    Ok(result)
+}
+
+#[cfg(feature = "server")]
+async fn generate_invoice_for_period(
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    client_id: uuid::Uuid,
+    from: chrono::NaiveDate,
+    to: chrono::NaiveDate,
+) -> Result<InvoiceWithLines, ServerFnError> {
     // Verify client belongs to this org and get its currency.
     let client = sqlx::query_as!(
         Client,
@@ -68,9 +91,9 @@ pub async fn generate_invoice(
                   created_at as "created_at: chrono::DateTime<chrono::Utc>"
            FROM clients WHERE id = $1 AND org_id = $2"#,
         client_id,
-        manager.org_id,
+        org_id,
     )
-    .fetch_optional(&state.db)
+    .fetch_optional(pool)
     .await
     .map_err(server_err)?
     .ok_or_else(|| not_found("Client not found"))?;
@@ -78,7 +101,7 @@ pub async fn generate_invoice(
     // Everything from selecting the entries to flipping them to 'invoiced'
     // runs in one transaction so two concurrent generate calls cannot bill the
     // same time twice or mint the same invoice number.
-    let mut tx = state.db.begin().await.map_err(server_err)?;
+    let mut tx = pool.begin().await.map_err(server_err)?;
 
     // Serialize invoice creation per org while this transaction runs. The
     // invoice number is derived from a COUNT over existing invoices, which two
@@ -87,7 +110,7 @@ pub async fn generate_invoice(
     // automatically at commit or rollback.
     sqlx::query_scalar!(
         r#"SELECT pg_advisory_xact_lock(hashtextextended($1, 0)) as "lock!: ()""#,
-        manager.org_id.to_string(),
+        org_id.to_string(),
     )
     .fetch_one(&mut *tx)
     .await
@@ -133,13 +156,14 @@ pub async fn generate_invoice(
            WHERE te.org_id = $1
              AND p.client_id = $2
              AND te.billable = true
+             AND NOT te.is_running
              AND te.invoice_id IS NULL
              AND te.state IN ('open', 'approved')
              AND te.spent_date >= $3
              AND te.spent_date <= $4
            ORDER BY te.spent_date, te.id
            FOR UPDATE OF te"#,
-        manager.org_id,
+        org_id,
         client_id,
         from as chrono::NaiveDate,
         to as chrono::NaiveDate,
@@ -160,7 +184,7 @@ pub async fn generate_invoice(
     let count: i64 = sqlx::query_scalar!(
         r#"SELECT COUNT(*) as "count!: i64" FROM invoices
            WHERE org_id = $1 AND number LIKE $2"#,
-        manager.org_id,
+        org_id,
         format!("INV-{year_month}-%"),
     )
     .fetch_one(&mut *tx)
@@ -213,7 +237,7 @@ pub async fn generate_invoice(
         r#"INSERT INTO invoices (id, org_id, client_id, number, status, issued_on, due_on, currency, total_cents)
            VALUES ($1, $2, $3, $4, 'draft', $5, $6, $7, $8)"#,
         invoice_id,
-        manager.org_id,
+        org_id,
         client_id,
         invoice_number,
         issued_on as chrono::NaiveDate,
@@ -274,6 +298,7 @@ pub async fn generate_invoice(
                state = 'invoiced'
            WHERE id = ANY($2)
              AND invoice_id IS NULL
+             AND NOT is_running
              AND state IN ('open', 'approved')"#,
         invoice_id,
         &entry_ids,
@@ -293,7 +318,7 @@ pub async fn generate_invoice(
 
     let invoice = Invoice {
         id: invoice_id,
-        org_id: manager.org_id,
+        org_id,
         client_id,
         number: invoice_number,
         status: InvoiceStatus::Draft,
@@ -304,16 +329,6 @@ pub async fn generate_invoice(
         notes: None,
         created_at: now,
     };
-
-    // Dispatch invoice_created event (FR-019).
-    let state = crate::state::global_state().await;
-    state
-        .plugins
-        .dispatch(crate::plugin::AppEvent::InvoiceCreated {
-            occurred_at: chrono::Utc::now(),
-            org_id: manager.org_id,
-            invoice: invoice_payload(&invoice),
-        });
 
     Ok(InvoiceWithLines { invoice, lines })
 }
