@@ -21,6 +21,12 @@ pub async fn run(
 ) -> anyhow::Result<()> {
     let mut tx = pool.begin().await?;
 
+    // Share the seed's bootstrap lock so concurrent initializers cannot both
+    // observe an empty installation and create separate organizations.
+    sqlx::query!("LOCK TABLE organizations IN SHARE ROW EXCLUSIVE MODE")
+        .execute(&mut *tx)
+        .await?;
+
     let existing = sqlx::query_scalar!("SELECT name FROM organizations LIMIT 1")
         .fetch_optional(&mut *tx)
         .await?;
