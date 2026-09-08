@@ -9,6 +9,9 @@ use horae_core::importers::harvest::types::{
     ConnectionStatus, ImportMode, ImportReport, SyncScope,
 };
 
+mod csv_upload;
+pub use csv_upload::CsvUpload;
+
 /// Begin the Harvest OAuth2 connect: generate a per-start `state` nonce bound to
 /// the admin's session and return the authorization URL for the SPA to redirect
 /// to (contracts/importer-api.md §1).
@@ -62,22 +65,16 @@ pub async fn harvest_connection_status() -> Result<ConnectionStatus, ServerFnErr
     })
 }
 
-/// Disconnect Harvest: delete the org's stored OAuth credentials so a fresh
-/// connect can be made (contracts/importer-api.md). Admin-only (FR-001).
+/// Disconnect Harvest: remove OAuth secrets, retaining the original account
+/// binding for a safe reconnect (contracts/importer-api.md). Admin-only (FR-001).
 #[server]
 pub async fn harvest_disconnect() -> Result<(), ServerFnError> {
     let admin = require_admin().await?;
     let state = crate::state::global_state().await;
 
-    sqlx::query!(
-        "DELETE FROM harvest_credentials WHERE org_id = $1",
-        admin.org_id,
-    )
-    .execute(&state.db)
-    .await
-    .map_err(server_err)?;
-
-    Ok(())
+    crate::importers::harvest::credentials::disconnect(&state.db, admin.org_id)
+        .await
+        .map_err(map_api_error)
 }
 
 /// Run an import from the Harvest API (primary source). Rejects up front when no
@@ -107,20 +104,20 @@ pub async fn import_harvest_api(
 
 /// Run an import from an uploaded Harvest CSV (secondary source). Rejects an
 /// unrecognized/empty file up front with no writes (FR-003).
-#[server]
+#[dioxus_fullstack::post("/api/import/harvest/csv/{mode}")]
 pub async fn import_harvest_csv(
-    file: Vec<u8>,
     mode: ImportMode,
+    file: CsvUpload,
 ) -> Result<ImportReport, ServerFnError> {
     let admin = require_admin().await?;
     let state = crate::state::global_state().await;
     let default_currency = org_default_currency(admin.org_id).await?;
 
-    crate::importers::harvest::csv_source::import_csv(
+    crate::importers::harvest::csv_source::import_body(
         &state.db,
         admin.org_id,
         &default_currency,
-        &file,
+        file.into_body()?,
         mode,
     )
     .await
@@ -162,7 +159,68 @@ fn map_api_error(e: crate::importers::harvest::ApiImportError) -> ServerFnError 
     use crate::importers::harvest::ApiImportError;
     match e {
         ApiImportError::NotConnected => err(NOT_FOUND, e),
-        ApiImportError::ReconnectRequired => err(CONFLICT, e),
+        ApiImportError::ReconnectRequired | ApiImportError::Busy => err(CONFLICT, e),
         ApiImportError::Other(inner) => server_err(inner),
+    }
+}
+
+#[cfg(all(test, feature = "server"))]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn csv_route_rejects_invalid_modes_and_headers_without_reading_uploads() {
+        use axum::{Router, body::Body, extract::Request, middleware};
+        use dioxus::prelude::{DioxusRouterExt, dioxus_server::FullstackState};
+        let router = Router::new()
+            .register_server_functions()
+            .with_state(FullstackState::headless())
+            .layer(middleware::from_fn(
+                |request: Request, next: middleware::Next| async move {
+                    let request = request.map(|_| {
+                        Body::from_stream(futures_util::stream::poll_fn(
+                            |_| -> std::task::Poll<
+                                Option<Result<axum::body::Bytes, std::io::Error>>,
+                            > {
+                                panic!("rejected CSV request body was read");
+                            },
+                        ))
+                    });
+                    next.run(request).await
+                },
+            ));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let mut server = tokio::task::JoinSet::new();
+        server.spawn(async move { axum::serve(listener, router).await.unwrap() });
+        let client = dioxus_fullstack::ClientRequest::new_reqwest_client();
+        for (mode, header, expected) in [
+            ("invalid", "csv", 400),
+            ("dryrun", "csv", 400),
+            ("DryRun", "wrong", 403),
+            ("Commit", "wrong", 403),
+            ("DryRun/Commit", "csv", 404),
+        ] {
+            let response = client
+                .post(format!("http://{address}/api/import/harvest/csv/{mode}"))
+                .header("X-Horae-Import", header)
+                .body("not CSV")
+                .timeout(std::time::Duration::from_secs(5))
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(response.status().as_u16(), expected, "{mode}");
+        }
+        server.abort_all();
+        while server.join_next().await.is_some() {}
+    }
+
+    #[test]
+    fn concurrent_api_import_returns_a_retryable_conflict() {
+        let error = map_api_error(crate::importers::harvest::ApiImportError::Busy);
+        assert!(matches!(
+            error,
+            ServerFnError::ServerError { code: CONFLICT, .. }
+        ));
     }
 }

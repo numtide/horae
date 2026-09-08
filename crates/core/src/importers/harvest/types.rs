@@ -50,6 +50,15 @@ pub enum ImportMode {
     Commit,
 }
 
+impl std::fmt::Display for ImportMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::DryRun => "DryRun",
+            Self::Commit => "Commit",
+        })
+    }
+}
+
 /// Whether an API pull fetches everything (`Full`) or only records changed since
 /// the stored watermark (`Incremental`, FR-025).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -96,7 +105,8 @@ pub struct SourceRow {
     pub task_name: String,
     pub task_billable_default: bool,
 
-    // Person — resolved to a Horae user by email (FR-010).
+    // Person — resolved by unique email; CSV alone permits a unique full-name
+    // fallback when email is absent. Neither source creates users (FR-010).
     pub user_email: Option<String>,
     pub user_name: Option<String>,
 
@@ -281,6 +291,12 @@ impl ImportReport {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn import_modes_display_their_wire_names() {
+        assert_eq!(ImportMode::DryRun.to_string(), "DryRun");
+        assert_eq!(ImportMode::Commit.to_string(), "Commit");
+    }
 
     fn errored(entity: EntityType) -> (EntityType, RowOutcome) {
         (

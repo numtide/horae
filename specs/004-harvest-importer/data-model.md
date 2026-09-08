@@ -1,8 +1,25 @@
 # Phase 1 Data Model: Harvest Data Importer
 
-Derived from the spec's Key Entities and `research.md`. The importer creates rows in Horae's existing schema (`crates/horae/migrations/0001_init.sql`) and adds **two new additive tables** in v1 — `harvest_credentials` (OAuth connection) and `harvest_import_map` (provenance). Neither alters existing columns. This document defines the source-side model, the mapping onto existing Horae columns, the two new tables, the idempotency keys, and the in-memory run/report structures. Everything is scoped to the single `organizations` row; every created row carries `org_id`. Primary keys are UUID v7. Time is stored as **integer minutes**, money as **integer minor units (cents) + ISO 4217 currency** — never floats.
+Derived from the spec's Key Entities and `research.md`. The importer creates rows in Horae's existing schema (`crates/horae/migrations/0001_init.sql`) and adds three tables — `harvest_credentials` (OAuth connection), `harvest_import_map` (provenance), and `harvest_account_bindings` (identity retained across disconnects). These additive migrations do not alter existing columns. This document defines the source-side model, the mapping onto existing Horae columns, persisted tables, idempotency keys, and in-memory run/report structures. Everything is scoped to the single `organizations` row; every created row carries `org_id`. Primary keys are UUID v7. Time is stored as **integer minutes**, money as **integer minor units (cents) + ISO 4217 currency** — never floats.
 
 ## Source-side entities (transient, not persisted)
+
+### API catalog records
+
+Clients, projects and tasks from their API collections are imported independently
+of time entries. Borrowed `ClientFields`, `ProjectFields` and `TaskFields` feed the
+same resolvers used by `SourceRow`; no synthetic date, user or zero-duration entry
+is needed for a catalog record. The API task's active flag, billable default and
+default hourly rate come from that task, not from the first time entry using it.
+Its default rate is converted to integer cents through the shared converter.
+Client/project activity, address/currency, project code/dates and parent source
+timestamps are retained when creating new records. Existing matches are skipped.
+
+The API catalog does not create users or enable every task on every project.
+Project-task enablement still follows actual imported time references. Separate
+historical per-entry rates and full project billing-attribute fidelity remain
+limitations of the current import mapping; catalog completeness is not a claim
+of monetary reconciliation.
 
 ### SourceRow
 
@@ -12,7 +29,7 @@ The normalized record both source adapters produce; the engine is source-agnosti
 - Client: `client_name`.
 - Project: `project_name`, `project_code` (optional).
 - Task: `task_name`.
-- Person: `user_email` (API: resolved from the pulled Harvest users by `harvest_user_id`; CSV: the email column or first/last name).
+- Person: separate `user_email` and `user_name` fields. API email is resolved from the pulled Harvest users by `harvest_user_id`. CSV retains email and combined first/last name separately; only when email is absent may it resolve an unambiguous full name. Both paths require exactly one matching user in the importing organization, including inactive users for historical imports; neither creates users.
 - Entry: `spent_date`, `hours` (API: JSON number; CSV: decimal string), `notes` (optional), `billable` (flag), `invoiced` (flag, informational only).
 - Money: `billable_rate`, `billable_amount`, `cost_rate`, `cost_amount` (optional), `currency` (ISO code).
 - Provenance freshness (API only): `harvest_updated_at` — Harvest's `updated_at` for the record, stored on the mapping to drive `updated_since` incremental sync.
@@ -51,6 +68,25 @@ One row per organization (v1 supports a single connected Harvest account). Added
 - The `synced_watermark` is updated **only on a successful committing run**, never in a dry-run (FR-014).
 - **Key rotation (operational note)**: `access_token_enc` / `refresh_token_enc` are sealed with the deployment-supplied encryption key. Rotating that key renders the stored tokens undecryptable; recovery is for an admin to **reconnect (re-run OAuth)**, which overwrites this row with a freshly encrypted pair. There is no in-place re-encryption path in v1.
 - **`synced_watermark` is additive-only**: it drives `updated_since`, which never reports deletions, so a Harvest record deleted after import is not removed on re-sync (see below).
+
+### Account binding across reconnects
+
+Migration `0021_harvest_account_binding.sql` adds `harvest_account_bindings`:
+`org_id` is the UUID primary key and FK to `organizations`; `harvest_account_id`
+is non-null text. It contains no OAuth secrets. The migration copies existing
+credential account IDs without changing tokens, watermarks or imported data.
+
+The first connection binds the organization to its Harvest account in the same
+transaction as credential storage. Reconnecting another account is rejected,
+even if no import has run yet. Disconnect deletes the credential row, including
+tokens and watermark, but retains the binding and all provenance/data. A same-account
+reconnect without disconnect preserves the watermark; after disconnect, the next
+sync starts without a watermark and uses existing provenance for idempotency.
+
+If legacy provenance exists without a binding or credentials, the original
+account cannot be inferred. Connecting is rejected until an operator verifies
+and restores that identity; see the [recovery procedure](quickstart.md#account-identity-and-recovery).
+Changing accounts in an existing organization is not supported by reconnecting.
 
 ### `harvest_import_map` — provenance (FR-012, FR-026)
 
@@ -109,7 +145,7 @@ Horae keeps an **org-level task catalog** (`tasks`) with **per-project enablemen
 | Horae column | Source | Notes |
 |---|---|---|
 | `id` | generated | UUID v7 |
-| `org_id` / `user_id` / `project_id` / `task_id` | run / resolved | user matched by email (FR-010); parents resolved first |
+| `org_id` / `user_id` / `project_id` / `task_id` | run / resolved | unique email, or CSV-only unique full name when email is absent (FR-010); parents resolved first |
 | `spent_date` | `spent_date` | parsed date |
 | `minutes` | `round(hours * 60)` | exact integer minutes via `horae-core` (FR-005) |
 | `rounded_minutes` | — | left NULL (persisted at lock, not at import) |

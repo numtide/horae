@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT code, currency, starts_on as \"starts_on: chrono::NaiveDate\", ends_on as \"ends_on: chrono::NaiveDate\", active FROM projects WHERE org_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "currency",
+        "type_info": "Bpchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "starts_on: chrono::NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 3,
+        "name": "ends_on: chrono::NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 4,
+        "name": "active",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "de64b7ca6322eaafcfa6f445165216957aa9d3cd5a7d3138b34eb6fda49d836c"
+}

@@ -5,9 +5,9 @@
 //! the provenance rows written in the same unit. If any step fails the savepoint
 //! rolls back — leaving no partial fragment — and the row is reported as an error
 //! so the run continues (FR-018). Only on a clean commit are the row's newly
-//! resolved parents promoted into the run cache.
+//! resolved parents, users and project-task links promoted into the run cache.
 
-use horae_core::importers::harvest::types::{EntityType, RowOutcome, SourceRow};
+use horae_core::importers::harvest::types::{EntityType, RowOutcome, SourceKind, SourceRow};
 use horae_core::importers::harvest::{convert, keys};
 use sqlx::{Acquire, Postgres, Transaction};
 use uuid::Uuid;
@@ -27,7 +27,23 @@ pub async fn apply_row(
     cache: &mut RunCache,
     org: OrgDefaults<'_>,
     row: &SourceRow,
+    source: SourceKind,
 ) -> RowResult {
+    for (entity, id) in [
+        (EntityType::Client, row.harvest_client_id),
+        (EntityType::Project, row.harvest_project_id),
+        (EntityType::Task, row.harvest_task_id),
+    ] {
+        if let Some(id) = id
+            && cache.parent_failed(entity, id)
+        {
+            return errored(
+                EntityType::TimeEntry,
+                row,
+                format!("{} {id} failed to import", entity.as_str()),
+            );
+        }
+    }
     let mut sp = match outer.begin().await {
         Ok(sp) => sp,
         Err(e) => {
@@ -39,7 +55,7 @@ pub async fn apply_row(
         }
     };
 
-    match apply_within(&mut sp, cache, org, row).await {
+    match apply_within(&mut sp, cache, org, row, source).await {
         Ok((outcomes, pending)) => match sp.commit().await {
             Ok(()) => {
                 cache.merge(pending);
@@ -61,36 +77,44 @@ async fn apply_within(
     cache: &RunCache,
     org: OrgDefaults<'_>,
     row: &SourceRow,
+    source: SourceKind,
 ) -> Result<(Vec<(EntityType, RowOutcome)>, PendingCache), (EntityType, RowFailure)> {
     let mut outcomes = Vec::new();
     let mut pending = PendingCache::default();
 
-    let client = resolve::resolve_client(sp, cache, org, row)
+    let client = resolve::resolve_client(sp, cache, org, &row.into())
         .await
         .map_err(|e| (EntityType::Client, e))?;
     let client_id = client.id;
     fold(&mut outcomes, &mut pending, EntityType::Client, client);
 
-    let project = resolve::resolve_project(sp, cache, org, client_id, row)
+    let project = resolve::resolve_project(sp, cache, org, client_id, &row.into())
         .await
         .map_err(|e| (EntityType::Project, e))?;
     let project_id = project.id;
     fold(&mut outcomes, &mut pending, EntityType::Project, project);
 
-    let task = resolve::resolve_task(sp, cache, org, row)
+    let task = resolve::resolve_task(sp, cache, org, &row.into())
         .await
         .map_err(|e| (EntityType::Task, e))?;
     let task_id = task.id;
     fold(&mut outcomes, &mut pending, EntityType::Task, task);
 
-    resolve::ensure_project_task(sp, project_id, task_id, row)
+    resolve::ensure_project_task(sp, cache, project_id, task_id, row)
         .await
         .map_err(|e| (EntityType::Task, e))?;
+    pending.project_task = Some((project_id, task_id));
 
-    // Time entry — the record proper.
-    let (te_outcome, entry_slot) = apply_time_entry(sp, cache, org, project_id, task_id, row)
+    let (user_key, user_id) = resolve::resolve_user(sp, cache, org.org_id, row, source)
         .await
         .map_err(|e| (EntityType::TimeEntry, e))?;
+    pending.user = Some((user_key, user_id));
+
+    // Time entry — the record proper.
+    let (te_outcome, entry_slot) =
+        apply_time_entry(sp, cache, org, project_id, task_id, user_id, row)
+            .await
+            .map_err(|e| (EntityType::TimeEntry, e))?;
     outcomes.push((EntityType::TimeEntry, te_outcome));
     pending.entry_slot = entry_slot;
 
@@ -125,10 +149,9 @@ async fn apply_time_entry(
     org: OrgDefaults<'_>,
     project_id: Uuid,
     task_id: Uuid,
+    user_id: Uuid,
     row: &SourceRow,
 ) -> Result<(RowOutcome, Option<String>), RowFailure> {
-    let user_id = resolve::resolve_user(sp, org.org_id, row).await?;
-
     let minutes_i64 = convert::hours_to_minutes(&row.hours)?;
     let minutes = i32::try_from(minutes_i64)
         .map_err(|_| RowFailure::new(format!("duration {minutes_i64} minutes out of range")))?;
@@ -279,7 +302,7 @@ fn entry_slot_key(
 
 /// Push a parent's outcome (when it was actually touched) and queue its cache
 /// entry for promotion on commit.
-fn fold(
+pub(super) fn fold(
     outcomes: &mut Vec<(EntityType, RowOutcome)>,
     pending: &mut PendingCache,
     entity: EntityType,

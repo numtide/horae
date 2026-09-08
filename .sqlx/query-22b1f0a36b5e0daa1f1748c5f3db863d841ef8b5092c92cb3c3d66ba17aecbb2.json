@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "ALTER TABLE harvest_credentials ADD CONSTRAINT reject_sync_marker CHECK (synced_watermark = '{}'::jsonb)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "22b1f0a36b5e0daa1f1748c5f3db863d841ef8b5092c92cb3c3d66ba17aecbb2"
+}

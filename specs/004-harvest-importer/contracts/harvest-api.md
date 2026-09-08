@@ -35,15 +35,16 @@ Each object carries a stable numeric `id` (→ provenance) and an `updated_at` (
 
 ### Pagination
 
-- Responses are paginated; the importer MUST follow paging to completion (bounded `per_page`, following the response's `next`/page links) rather than reading only the first page (FR-023). Pages are consumed as a **stream** (fetch, process, fetch next) to bound memory (SC-006, research.md §9).
+- Responses are paginated; follow `links.next` to completion, including cursor URLs whose numeric `next_page` is null. The importer requests 100 records and rejects responses exceeding 2,000 records or 10 MiB of decompressed JSON. Next links must retain the authenticated origin and collection path; redirects, cycles, user information and fragments are rejected. See Harvest's [pagination documentation](https://help.getharvest.com/api-v2/introduction/overview/pagination/).
+- Time-entry pages use a capacity-one queue between blocking HTTP and async SQL. Catalog metadata is retained for reference resolution; it is not constant-memory storage. A later fetch failure rolls back the data transaction. See [performance and remaining limits](../performance.md).
 
 ### Rate limiting & backoff
 
-- Harvest publishes a request-rate ceiling (on the order of ~100 requests / 15 seconds for general endpoints; reporting endpoints differ). The importer MUST pace requests under the ceiling and, on an HTTP `429`, **wait per the response's retry-after guidance and retry** rather than failing the run (FR-023).
+- Harvest's [general-endpoint limit](https://help.getharvest.com/api-v2/introduction/overview/general/) is 100 requests per 15 seconds. The importer spaces requests by at least 160 ms and retries an HTTP `429` according to the full `Retry-After` delay. It permits six attempts per page; delays above five minutes fail for a later retry, rather than being shortened. Other consumers of the same account can still cause throttling. Data-page connect/request deadlines are 10/30 seconds, but the existing client's non-interruptible system DNS lookup can exceed the request deadline.
 
 ### Incremental sync
 
-- Each collection accepts an `updated_since` filter. On a successful committing run the importer stores a per-entity high-water mark in `harvest_credentials.synced_watermark`; the next run sends `updated_since` so only changed records are fetched (FR-025, SC-008). A full re-sync (no `updated_since`) remains available. Provenance (`harvest_import_map`) ensures the changed records land on the right existing Horae rows.
+- Only time entries use `updated_since`; catalogs are fetched in full. An error-free committing run with source timestamps advances the time-entry watermark atomically with data/provenance, capped at the start of capture with a one-second overlap. Empty responses, missing timestamps, row errors and preview leave it unchanged. A full re-sync remains available. Provenance keeps repeated boundary records duplicate-free.
 - **Deletions are not reported (known limitation)**: `updated_since` returns only changed or new records — Harvest never lists deletions this way. Re-sync is therefore **additive/updating only, not a mirror**: a record deleted in Harvest after import stays in Horae. A future "mirror-delete" mode (diffing Harvest's full id set against `harvest_import_map` to remove upstream-deleted records) is deferred (spec.md Out-of-Scope).
 
 ## B. Field mapping — invert the existing `/harvest/v2` exporter

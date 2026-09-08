@@ -12,7 +12,309 @@ use horae_core::importers::harvest::types::{EntityType, ImportMode, SourceKind, 
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use super::{VecSource, run_import};
+use super::{RowSource, VecSource, run_import};
+
+mod csv_streaming;
+mod lookup_cache;
+
+struct PausedSource {
+    before_pause: Option<SourceRow>,
+    rows: VecSource,
+    pause: Option<(
+        tokio::sync::oneshot::Sender<()>,
+        tokio::sync::oneshot::Receiver<()>,
+    )>,
+}
+
+impl RowSource for PausedSource {
+    async fn next_row(&mut self) -> anyhow::Result<Option<SourceRow>> {
+        if let Some(row) = self.before_pause.take() {
+            return Ok(Some(row));
+        }
+        if let Some((started, release)) = self.pause.take() {
+            let _ = started.send(());
+            release.await?;
+        }
+        self.rows.next_row().await
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn concurrent_imports_reject_overlap_without_collapsing_repeated_entries(pool: PgPool) {
+    for mode in [ImportMode::Commit, ImportMode::DryRun] {
+        let org = seed_org(&pool).await;
+        let email = format!("dev-{org}@acme.com");
+        seed_user(&pool, org, &email).await;
+        let row = nk_row(
+            "Acme",
+            "Website",
+            "Design",
+            &email,
+            (2026, 1, 15),
+            "1",
+            None,
+        );
+        let rows = vec![row.clone(), row];
+        let (started, ready) = tokio::sync::oneshot::channel();
+        let (release, wait) = tokio::sync::oneshot::channel();
+        let source = PausedSource {
+            before_pause: None,
+            rows: VecSource::new(rows.clone()),
+            pause: Some((started, wait)),
+        };
+        let first_pool = pool.clone();
+        let first = tokio::spawn(async move {
+            run_import(&first_pool, org, "USD", SourceKind::Csv, mode, source).await
+        });
+        ready.await.unwrap();
+        let second = run_import(
+            &pool,
+            org,
+            "USD",
+            SourceKind::Csv,
+            ImportMode::Commit,
+            VecSource::new(rows.clone()),
+        )
+        .await;
+        release.send(()).unwrap();
+        let first = first.await.unwrap().unwrap();
+        assert_eq!(
+            second.unwrap_err().to_string(),
+            "Another Harvest import is already running for this organization; retry when it finishes"
+        );
+        assert_eq!(first.summary.time_entries.created, 2);
+        let count_before_retry =
+            sqlx::query_scalar!("SELECT count(*) FROM time_entries WHERE org_id = $1", org)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(
+            count_before_retry,
+            Some(if mode == ImportMode::Commit { 2 } else { 0 })
+        );
+        let retry = commit_csv(&pool, org, rows).await;
+        assert_eq!(
+            (
+                retry.summary.time_entries.created,
+                retry.summary.time_entries.skipped
+            ),
+            if mode == ImportMode::Commit {
+                (0, 2)
+            } else {
+                (2, 0)
+            }
+        );
+    }
+}
+
+fn disconnected_config() -> crate::config::HarvestConfig {
+    crate::config::HarvestConfig {
+        client_id: "test-client".into(),
+        client_secret: "test-secret".into(),
+        redirect_url: "http://localhost/auth/harvest/callback".into(),
+        encryption_key_hex: "11".repeat(32),
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn cancelled_http_waiter_keeps_the_lock_until_its_worker_exits(pool: PgPool) {
+    let org = seed_org(&pool).await;
+    let one_connection = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .connect_with((*pool.connect_options()).clone())
+        .await
+        .unwrap();
+    let guard = super::lock_import(&one_connection, org).await.unwrap();
+    let (started, ready) = tokio::sync::oneshot::channel();
+    let (release, wait) = std::sync::mpsc::channel();
+    let pending = tokio::spawn(super::blocking_import_call(guard, move || {
+        let _ = started.send(());
+        wait.recv().unwrap();
+    }));
+    ready.await.unwrap();
+    pending.abort();
+    assert!(pending.await.unwrap_err().is_cancelled());
+    let competing = super::lock_import(&pool, org).await;
+    // Release the worker even when the assertion fails; runtime teardown waits
+    // for blocking tasks, so a failing regression must not hang the test suite.
+    release.send(()).unwrap();
+    assert!(matches!(competing, Err(super::ApiImportError::Busy)));
+    let retry = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        super::lock_import(&one_connection, org),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    retry.close().await.unwrap();
+    one_connection.close().await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn api_and_csv_share_the_lock_but_other_organizations_can_import(pool: PgPool) {
+    let org = seed_org(&pool).await;
+    let other_org = seed_org(&pool).await;
+    let guard = super::lock_import(&pool, org).await.unwrap();
+    let api = super::run_api_import(
+        &pool,
+        org,
+        "USD",
+        &disconnected_config(),
+        ImportMode::Commit,
+        super::SyncScope::Full,
+    )
+    .await;
+    assert!(matches!(api, Err(super::ApiImportError::Busy)), "{api:?}");
+    let csv =
+        b"Date,Client,Project,Task,Hours,Email\n2026-01-15,Acme,Website,Design,1,dev@acme.com\n";
+    let result = super::csv_source::import_csv(&pool, org, "USD", csv, ImportMode::DryRun)
+        .await
+        .unwrap_err();
+    assert!(result.to_string().contains("already running"), "{result}");
+    let other = run_import(
+        &pool,
+        other_org,
+        "USD",
+        SourceKind::Csv,
+        ImportMode::Commit,
+        VecSource::new(vec![]),
+    )
+    .await;
+    assert!(other.is_ok(), "{other:?}");
+    guard.close().await.unwrap();
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn cancellation_rolls_back_rows_and_releases_the_import_session(pool: PgPool) {
+    let org = seed_org(&pool).await;
+    seed_user(&pool, org, "dev@acme.com").await;
+    let one_connection = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .connect_with((*pool.connect_options()).clone())
+        .await
+        .unwrap();
+    let row = api_row(
+        (1, 10, 100, 5000, 1000),
+        "Acme",
+        "Website",
+        "Design",
+        "dev@acme.com",
+        (2026, 1, 15),
+        "1",
+        None,
+    );
+    let (started, ready) = tokio::sync::oneshot::channel();
+    let (_release, wait) = tokio::sync::oneshot::channel();
+    let source = PausedSource {
+        before_pause: Some(row.clone()),
+        rows: VecSource::new(vec![]),
+        pause: Some((started, wait)),
+    };
+    let first_pool = one_connection.clone();
+    let first = tokio::spawn(async move {
+        run_import(
+            &first_pool,
+            org,
+            "USD",
+            SourceKind::HarvestApi,
+            ImportMode::Commit,
+            source,
+        )
+        .await
+    });
+    ready.await.unwrap();
+    assert!(matches!(
+        super::lock_import(&pool, org).await,
+        Err(super::ApiImportError::Busy)
+    ));
+    first.abort();
+    assert!(first.await.unwrap_err().is_cancelled());
+    // The one-connection pool cannot lend a replacement before closing the
+    // cancelled session, which also rolls back its already-applied first row.
+    let retry = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        run_import(
+            &one_connection,
+            org,
+            "USD",
+            SourceKind::HarvestApi,
+            ImportMode::Commit,
+            VecSource::new(vec![row]),
+        ),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(retry.summary.time_entries.created, 1);
+    assert_eq!(count(&pool, "time_entries").await, 1);
+    one_connection.close().await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn failed_source_releases_the_session_and_rolls_back_partial_rows(pool: PgPool) {
+    let org = seed_org(&pool).await;
+    seed_user(&pool, org, "dev@acme.com").await;
+    let row = nk_row(
+        "Acme",
+        "Website",
+        "Design",
+        "dev@acme.com",
+        (2026, 1, 15),
+        "1",
+        None,
+    );
+    let (started, _ready) = tokio::sync::oneshot::channel();
+    let (release, wait) = tokio::sync::oneshot::channel();
+    drop(release);
+    let source = PausedSource {
+        before_pause: Some(row),
+        rows: VecSource::new(vec![]),
+        pause: Some((started, wait)),
+    };
+    assert!(
+        run_import(
+            &pool,
+            org,
+            "USD",
+            SourceKind::Csv,
+            ImportMode::Commit,
+            source
+        )
+        .await
+        .is_err()
+    );
+    assert_eq!(count(&pool, "time_entries").await, 0);
+    let guard = super::lock_import(&pool, org).await.unwrap();
+    guard.close().await.unwrap();
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn api_connection_checks_work_with_a_single_connection_pool(pool: PgPool) {
+    let org = seed_org(&pool).await;
+    let one_connection = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .connect_with((*pool.connect_options()).clone())
+        .await
+        .unwrap();
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        super::run_api_import(
+            &one_connection,
+            org,
+            "USD",
+            &disconnected_config(),
+            ImportMode::Commit,
+            super::SyncScope::Full,
+        ),
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(result, Err(super::ApiImportError::NotConnected)),
+        "{result:?}"
+    );
+    one_connection.close().await;
+}
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -600,6 +902,140 @@ async fn bad_records_are_reported_and_run_continues(pool: PgPool) {
 }
 
 // ── US5: CSV natural-key path ─────────────────────────────────────────────────
+
+#[sqlx::test(migrations = "./migrations")]
+async fn csv_name_only_matches_one_org_user_and_reimports_without_duplicates(pool: PgPool) {
+    let org = seed_org(&pool).await;
+    let user = seed_user(&pool, org, "dev@acme.com").await;
+    let other_org = seed_org(&pool).await;
+    seed_user(&pool, other_org, "other@example.com").await;
+    let csv = b"Date,Client,Project,Task,Hours,First Name,Last Name\n2026-01-15,Acme,Website,Design,1, dana , DEV \n";
+    let first = super::csv_source::import_csv(&pool, org, "USD", csv, ImportMode::Commit)
+        .await
+        .unwrap();
+    assert_eq!(first.summary.time_entries.created, 1, "{first:?}");
+    let assigned = sqlx::query_scalar!("SELECT user_id FROM time_entries WHERE org_id = $1", org)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(assigned, user);
+    let second = super::csv_source::import_csv(&pool, org, "USD", csv, ImportMode::Commit)
+        .await
+        .unwrap();
+    assert_eq!(second.summary.time_entries.skipped, 1);
+    assert_eq!(count(&pool, "users").await, 2);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn import_rejects_ambiguous_normalized_email_without_partial_writes(pool: PgPool) {
+    let org = seed_org(&pool).await;
+    seed_user(&pool, org, "dev@acme.com").await;
+    seed_user(&pool, org, "DEV@ACME.COM").await;
+    let report =
+        super::csv_source::import_csv(&pool, org, "USD", CSV.as_bytes(), ImportMode::Commit)
+            .await
+            .unwrap();
+    assert_eq!(report.summary.time_entries.errored, 2);
+    assert!(
+        report
+            .row_errors
+            .iter()
+            .all(|error| error.reason.contains("ambiguous user email"))
+    );
+    assert_eq!(count(&pool, "time_entries").await, 0);
+    assert_eq!(count(&pool, "clients").await, 0);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn csv_name_fallback_requires_a_full_unique_name_and_never_overrides_email(pool: PgPool) {
+    let org = seed_org(&pool).await;
+    seed_user(&pool, org, "dev@acme.com").await;
+    let csv = b"Date,Client,Project,Task,Hours,Email,First Name,Last Name\n\
+2026-01-15,Wrong email,P,T,1,missing@example.com,Dana,Dev\n\
+2026-01-15,Partial name,P,T,1,,Dana,\n\
+2026-01-15,Unknown name,P,T,1,,Unknown,User\n\
+2026-01-15,Missing identity,P,T,1,,,\n\
+2026-01-15,Valid,P,T,1, ,Dana,Dev\n";
+    let report = super::csv_source::import_csv(&pool, org, "USD", csv, ImportMode::Commit)
+        .await
+        .unwrap();
+    assert!(report.reconciles());
+    assert_eq!(report.summary.time_entries.errored, 4);
+    assert_eq!(report.summary.time_entries.created, 1);
+    assert!(
+        report.row_errors[0]
+            .reason
+            .contains("no Horae user matches email")
+    );
+    assert!(
+        report.row_errors[1]
+            .reason
+            .contains("no Horae user matches name")
+    );
+    assert!(
+        report.row_errors[3]
+            .reason
+            .contains("no user email or full name")
+    );
+    assert_eq!(count(&pool, "clients").await, 1);
+    assert_eq!(count(&pool, "projects").await, 1);
+    assert_eq!(count(&pool, "tasks").await, 1);
+    assert_eq!(count(&pool, "users").await, 1);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn csv_ambiguous_names_include_inactive_users_but_unique_email_disambiguates(pool: PgPool) {
+    let org = seed_org(&pool).await;
+    seed_user(&pool, org, "dev@acme.com").await;
+    let inactive = seed_user(&pool, org, "old@example.com").await;
+    sqlx::query!("UPDATE users SET active = false WHERE id = $1", inactive)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let csv = b"Date,Client,Project,Task,Hours,Email,First Name,Last Name\n\
+2026-01-15,Ambiguous,P,T,1,,Dana,Dev\n\
+2026-01-15,Historical,P,T,1,old@example.com,Dana,Dev\n";
+    let report = super::csv_source::import_csv(&pool, org, "USD", csv, ImportMode::Commit)
+        .await
+        .unwrap();
+    assert_eq!(report.summary.time_entries.errored, 1);
+    assert!(report.row_errors[0].reason.contains("ambiguous user name"));
+    assert_eq!(report.summary.time_entries.created, 1);
+    let assigned = sqlx::query_scalar!("SELECT user_id FROM time_entries WHERE org_id = $1", org)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(assigned, inactive);
+    assert_eq!(count(&pool, "clients").await, 1);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn csv_name_only_dry_run_and_duplicate_occurrences_preserve_history(pool: PgPool) {
+    let org = seed_org(&pool).await;
+    let user = seed_user(&pool, org, "dev@acme.com").await;
+    sqlx::query!("UPDATE users SET active = false WHERE id = $1", user)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let csv = b"Date,Client,Project,Task,Hours,First Name,Last Name\n\
+2026-01-15,A,P,T,1,Dana,Dev\n\
+2026-01-15,A,P,T,1,Dana,Dev\n";
+    let preview = super::csv_source::import_csv(&pool, org, "USD", csv, ImportMode::DryRun)
+        .await
+        .unwrap();
+    assert_eq!(preview.summary.time_entries.created, 2);
+    assert_eq!(count(&pool, "time_entries").await, 0);
+    assert_eq!(count(&pool, "clients").await, 0);
+    let committed = super::csv_source::import_csv(&pool, org, "USD", csv, ImportMode::Commit)
+        .await
+        .unwrap();
+    assert_eq!(preview.summary, committed.summary);
+    let repeated = super::csv_source::import_csv(&pool, org, "USD", csv, ImportMode::Commit)
+        .await
+        .unwrap();
+    assert_eq!(repeated.summary.time_entries.skipped, 2);
+    assert_eq!(count(&pool, "time_entries").await, 2);
+}
 
 const CSV: &str = "Date,Client,Project,Project Code,Task,Notes,Hours,Billable?,Invoiced?,Email,Currency\n\
 2026-01-15,Acme,Website,WEB,Design,kickoff,1.5,Yes,No,dev@acme.com,USD\n\

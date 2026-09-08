@@ -1,13 +1,9 @@
 //! Primary source adapter: pull Harvest's REST API into the shared `SourceRow`
 //! stream (FR-023/FR-024, research.md §11, contracts/harvest-api.md).
 //!
-//! The adapter separates two concerns so the mapping stays testable without a
-//! network: [`assemble_rows`] is a **pure** join of already-fetched Harvest
-//! collections into `SourceRow`s (unit-tested against fixture JSON), while
-//! [`fetch_all`] does the paginated, rate-limit-aware HTTP with a bearer token.
-//! The parent collections (clients, projects, tasks, task assignments, users) are
-//! bounded and fetched in full; time entries are the large collection and are
-//! joined against those maps.
+//! Catalog metadata is indexed once per run. Time entries are joined one row
+//! at a time from bounded HTTP pages; catalog indexes and the error report still
+//! grow with distinct catalog records and invalid rows respectively.
 
 use std::collections::HashMap;
 
@@ -16,6 +12,8 @@ use horae_core::importers::harvest::types::SourceRow;
 use serde::Deserialize;
 
 use super::RowSource;
+
+pub(super) mod http;
 
 // ── Harvest JSON shapes (only the fields the importer consumes) ───────────────
 
@@ -27,6 +25,7 @@ pub struct ApiClient {
     pub is_active: bool,
     pub address: Option<String>,
     pub currency: Option<String>,
+    pub updated_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -46,6 +45,7 @@ pub struct ApiProject {
     pub client: ApiRef,
     pub starts_on: Option<NaiveDate>,
     pub ends_on: Option<NaiveDate>,
+    pub updated_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -54,6 +54,10 @@ pub struct ApiTask {
     pub name: String,
     #[serde(default = "yes")]
     pub billable_by_default: bool,
+    #[serde(default = "yes")]
+    pub is_active: bool,
+    pub default_hourly_rate: Option<serde_json::Number>,
+    pub updated_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -91,14 +95,15 @@ fn yes() -> bool {
     true
 }
 
-/// A full set of fetched collections, ready to assemble into rows. Public so a
-/// test can build it from fixtures.
-#[derive(Debug, Default)]
+/// Catalog metadata used to resolve source references. Tests may attach entries
+/// to the same fixture; production time entries arrive only through page buffers.
+#[derive(Debug, Default, Clone)]
 pub struct HarvestData {
     pub clients: Vec<ApiClient>,
     pub projects: Vec<ApiProject>,
     pub tasks: Vec<ApiTask>,
     pub users: Vec<ApiUser>,
+    #[cfg(test)]
     pub time_entries: Vec<ApiTimeEntry>,
 }
 
@@ -119,20 +124,36 @@ fn decimal(n: f64) -> String {
 
 /// Join the fetched collections into `SourceRow`s — one per time entry, carrying
 /// its client/project/task/user fields and all Harvest ids (pure, no I/O).
-pub fn assemble_rows(data: &HarvestData) -> Vec<SourceRow> {
-    let clients: HashMap<i64, &ApiClient> = data.clients.iter().map(|c| (c.id, c)).collect();
-    let projects: HashMap<i64, &ApiProject> = data.projects.iter().map(|p| (p.id, p)).collect();
-    let tasks: HashMap<i64, &ApiTask> = data.tasks.iter().map(|t| (t.id, t)).collect();
-    let users: HashMap<i64, &ApiUser> = data.users.iter().map(|u| (u.id, u)).collect();
+#[cfg(test)]
+fn assemble_rows(data: &HarvestData) -> Vec<SourceRow> {
+    let lookup = RowLookup::new(data);
+    data.time_entries.iter().map(|te| lookup.row(te)).collect()
+}
 
-    let mut rows = Vec::with_capacity(data.time_entries.len());
-    for te in &data.time_entries {
-        let project = projects.get(&te.project.id);
+pub(super) struct RowLookup<'a> {
+    clients: HashMap<i64, &'a ApiClient>,
+    projects: HashMap<i64, &'a ApiProject>,
+    tasks: HashMap<i64, &'a ApiTask>,
+    users: HashMap<i64, &'a ApiUser>,
+}
+
+impl<'a> RowLookup<'a> {
+    pub(super) fn new(data: &'a HarvestData) -> Self {
+        Self {
+            clients: data.clients.iter().map(|c| (c.id, c)).collect(),
+            projects: data.projects.iter().map(|p| (p.id, p)).collect(),
+            tasks: data.tasks.iter().map(|t| (t.id, t)).collect(),
+            users: data.users.iter().map(|u| (u.id, u)).collect(),
+        }
+    }
+
+    fn row(&self, te: &ApiTimeEntry) -> SourceRow {
+        let project = self.projects.get(&te.project.id);
         let client = project
-            .and_then(|p| clients.get(&p.client.id))
-            .or_else(|| te.client.as_ref().and_then(|c| clients.get(&c.id)));
-        let task = tasks.get(&te.task.id);
-        let user = users.get(&te.user.id);
+            .and_then(|p| self.clients.get(&p.client.id))
+            .or_else(|| te.client.as_ref().and_then(|c| self.clients.get(&c.id)));
+        let task = self.tasks.get(&te.task.id);
+        let user = self.users.get(&te.user.id);
 
         let client_name = client
             .map(|c| c.name.clone())
@@ -140,7 +161,7 @@ pub fn assemble_rows(data: &HarvestData) -> Vec<SourceRow> {
             .unwrap_or_default();
         let currency = client.and_then(|c| c.currency.clone());
 
-        rows.push(SourceRow {
+        SourceRow {
             harvest_client_id: client.map(|c| c.id).or(te.client.as_ref().map(|c| c.id)),
             harvest_project_id: Some(te.project.id),
             harvest_task_id: Some(te.task.id),
@@ -187,122 +208,29 @@ pub fn assemble_rows(data: &HarvestData) -> Vec<SourceRow> {
 
             harvest_updated_at: te.updated_at,
             source_location: format!("time_entry {}", te.id),
-        });
+        }
     }
-    rows
 }
 
-/// An assembled, in-memory API source. Parents are bounded; time entries are the
-/// bulk and are streamed out one at a time from the assembled vector.
-pub struct ApiSource {
-    rows: std::vec::IntoIter<SourceRow>,
+/// Join only the next record; do not build a second collection of SourceRows.
+pub(super) struct ApiSource<'a> {
+    rows: std::slice::Iter<'a, ApiTimeEntry>,
+    lookup: &'a RowLookup<'a>,
 }
 
-impl ApiSource {
-    pub fn from_data(data: &HarvestData) -> Self {
+impl<'a> ApiSource<'a> {
+    pub(super) fn new(lookup: &'a RowLookup<'a>, rows: &'a [ApiTimeEntry]) -> Self {
         Self {
-            rows: assemble_rows(data).into_iter(),
+            rows: rows.iter(),
+            lookup,
         }
     }
 }
 
-impl RowSource for ApiSource {
+impl RowSource for ApiSource<'_> {
     async fn next_row(&mut self) -> anyhow::Result<Option<SourceRow>> {
-        Ok(self.rows.next())
+        Ok(self.rows.next().map(|te| self.lookup.row(te)))
     }
-}
-
-// ── HTTP layer (blocking ureq, run under spawn_blocking) ──────────────────────
-
-/// Harvest's API v2 data host.
-const API_BASE: &str = "https://api.harvestapp.com/v2";
-/// Number of records per page (Harvest caps `per_page` at 100 for v2 lists).
-const PER_PAGE: u32 = 100;
-
-/// A single-collection paginator, following Harvest's `next_page` links to
-/// completion and honoring an HTTP 429 `Retry-After` (FR-023). Blocking.
-pub fn fetch_all(
-    agent: &ureq::Agent,
-    access_token: &str,
-    account_id: &str,
-    collection: &str,
-    updated_since: Option<DateTime<Utc>>,
-) -> anyhow::Result<Vec<serde_json::Value>> {
-    let mut out = Vec::new();
-    let mut page: u32 = 1;
-    loop {
-        let url = page_url(collection, page, updated_since);
-        let body = get_with_backoff(agent, &url, access_token, account_id)?;
-        let json: serde_json::Value = serde_json::from_str(&body)?;
-        if let Some(items) = json.get(collection).and_then(|v| v.as_array()) {
-            out.extend(items.iter().cloned());
-        }
-        // Harvest returns `next_page: null` on the last page.
-        match json.get("next_page").and_then(|v| v.as_u64()) {
-            Some(next) => page = next as u32,
-            None => break,
-        }
-    }
-    Ok(out)
-}
-
-/// Build the URL for one page of a collection. The `updated_since` timestamp is
-/// percent-encoded: an RFC 3339 UTC offset contains `+00:00`, and a raw `+` in a
-/// query string arrives as a space, silently breaking the incremental filter.
-fn page_url(collection: &str, page: u32, updated_since: Option<DateTime<Utc>>) -> String {
-    let mut url = format!("{API_BASE}/{collection}?per_page={PER_PAGE}&page={page}");
-    if let Some(since) = updated_since {
-        url.push_str("&updated_since=");
-        url.push_str(&encode_query_value(&since.to_rfc3339()));
-    }
-    url
-}
-
-/// Percent-encode a query-string value per RFC 3986: every byte outside the
-/// unreserved set is escaped.
-fn encode_query_value(value: &str) -> String {
-    let mut out = String::with_capacity(value.len());
-    for b in value.bytes() {
-        match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
-                out.push(b as char);
-            }
-            _ => out.push_str(&format!("%{b:02X}")),
-        }
-    }
-    out
-}
-
-/// GET a Harvest URL with the required headers, retrying on HTTP 429 per the
-/// `Retry-After` header (bounded attempts). Blocking.
-fn get_with_backoff(
-    agent: &ureq::Agent,
-    url: &str,
-    access_token: &str,
-    account_id: &str,
-) -> anyhow::Result<String> {
-    const MAX_ATTEMPTS: u32 = 6;
-    for attempt in 1..=MAX_ATTEMPTS {
-        let resp = agent
-            .get(url)
-            .set("Authorization", &format!("Bearer {access_token}"))
-            .set("Harvest-Account-Id", account_id)
-            .set("User-Agent", "Horae Importer (support@horae.app)")
-            .set("Accept", "application/json")
-            .call();
-        match resp {
-            Ok(r) => return Ok(r.into_string()?),
-            Err(ureq::Error::Status(429, r)) if attempt < MAX_ATTEMPTS => {
-                let wait = r
-                    .header("Retry-After")
-                    .and_then(|h| h.parse::<u64>().ok())
-                    .unwrap_or(2);
-                std::thread::sleep(std::time::Duration::from_secs(wait.min(30)));
-            }
-            Err(e) => return Err(anyhow::anyhow!("Harvest GET {url} failed: {e}")),
-        }
-    }
-    Err(anyhow::anyhow!("Harvest GET {url} exhausted retries"))
 }
 
 #[cfg(test)]
@@ -365,28 +293,6 @@ mod tests {
         // Harvest's billed flag is captured as informational only.
         assert!(r0.invoiced);
         assert_eq!(r0.billable_rate.as_deref(), Some("150"));
-    }
-
-    #[test]
-    fn updated_since_is_percent_encoded() {
-        use chrono::TimeZone;
-        let since = Utc.with_ymd_and_hms(2026, 2, 1, 0, 0, 0).unwrap();
-        let url = page_url("time_entries", 3, Some(since));
-        // The `+00:00` offset must never carry a raw '+', which a server decodes
-        // as a space.
-        assert_eq!(
-            url,
-            "https://api.harvestapp.com/v2/time_entries?per_page=100&page=3\
-             &updated_since=2026-02-01T00%3A00%3A00%2B00%3A00"
-        );
-    }
-
-    #[test]
-    fn page_url_without_updated_since_has_no_filter_param() {
-        assert_eq!(
-            page_url("clients", 1, None),
-            "https://api.harvestapp.com/v2/clients?per_page=100&page=1"
-        );
     }
 
     #[test]

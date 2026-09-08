@@ -11,12 +11,15 @@
 //! this keeps a second run at zero creations and is edit-robust because
 //! provenance matches by Harvest id.
 
-use std::collections::HashMap;
+pub mod fields;
+
+use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
+use fields::{ClientFields, ProjectFields, TaskFields};
 use horae_core::importers::harvest::convert;
 use horae_core::importers::harvest::keys;
-use horae_core::importers::harvest::types::{EntityType, RowOutcome, SourceRow};
+use horae_core::importers::harvest::types::{EntityType, RowOutcome, SourceKind, SourceRow};
 use uuid::Uuid;
 
 /// A per-record failure that errors the row and continues the run (FR-018).
@@ -55,6 +58,13 @@ pub enum ParentKind {
     Task,
 }
 
+/// Email and full-name matches occupy separate namespaces within one org run.
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub enum UserKey {
+    Email(String),
+    FullName(String),
+}
+
 /// What a committed row contributes to the [`RunCache`]. Collected while the
 /// row's savepoint is open and merged only after it commits, so a rolled-back
 /// row never poisons the cache.
@@ -62,24 +72,37 @@ pub enum ParentKind {
 pub struct PendingCache {
     /// Parents this row resolved or created.
     pub parents: Vec<(ParentKind, String, Uuid)>,
+    pub user: Option<(UserKey, Uuid)>,
+    pub project_task: Option<(Uuid, Uuid)>,
     /// The natural-key slot an id-less time entry consumed (see
     /// [`RunCache::entry_slot_offset`]); bumped on commit so the next identical
     /// row in the run maps to the next stored entry instead of the same one.
     pub entry_slot: Option<String>,
 }
 
-/// Ids of parents resolved so far in this run, plus the per-natural-key count of
-/// id-less time entries already consumed. Only merged after a row's savepoint
-/// commits, so a rolled-back creation never poisons the cache.
+/// Successful resolutions for one organization/run, plus consumed id-less
+/// occurrences. Only merged after a row's savepoint commits. First successful
+/// identity matches remain stable for the run; the next run resolves them anew.
 #[derive(Default)]
 pub struct RunCache {
     clients: HashMap<String, Uuid>,
     projects: HashMap<String, Uuid>,
     tasks: HashMap<String, Uuid>,
+    users: HashMap<UserKey, Uuid>,
+    project_tasks: HashSet<(Uuid, Uuid)>,
     entry_slots: keys::OccurrenceCounter,
+    failed_parents: HashSet<(EntityType, i64)>,
 }
 
 impl RunCache {
+    pub fn mark_failed(&mut self, entity: EntityType, id: i64) {
+        self.failed_parents.insert((entity, id));
+    }
+
+    pub fn parent_failed(&self, entity: EntityType, id: i64) -> bool {
+        self.failed_parents.contains(&(entity, id))
+    }
+
     fn get(&self, kind: ParentKind, key: &str) -> Option<Uuid> {
         self.map(kind).get(key).copied()
     }
@@ -105,6 +128,12 @@ impl RunCache {
         for (kind, key, id) in pending.parents {
             self.map_mut(kind).insert(key, id);
         }
+        if let Some((key, id)) = pending.user {
+            self.users.insert(key, id);
+        }
+        if let Some(pair) = pending.project_task {
+            self.project_tasks.insert(pair);
+        }
         if let Some(key) = pending.entry_slot {
             self.entry_slots.bump(key);
         }
@@ -120,31 +149,27 @@ impl RunCache {
 
 /// The cache key for a parent in this run: its Harvest id when present, else its
 /// composite natural key. Stable across every row that references the parent.
-fn client_cache_key(row: &SourceRow) -> String {
+fn client_cache_key(row: &ClientFields<'_>) -> String {
     match row.harvest_client_id {
         Some(id) => format!("hid:{id}"),
-        None => format!("nk:{}", keys::client_key(&row.client_name)),
+        None => format!("nk:{}", keys::client_key(row.client_name)),
     }
 }
 
-fn project_cache_key(row: &SourceRow) -> String {
+fn project_cache_key(row: &ProjectFields<'_>) -> String {
     match row.harvest_project_id {
         Some(id) => format!("hid:{id}"),
         None => format!(
             "nk:{}",
-            keys::project_key(
-                &row.client_name,
-                &row.project_name,
-                row.project_code.as_deref()
-            )
+            keys::project_key(row.client_name, row.project_name, row.project_code)
         ),
     }
 }
 
-fn task_cache_key(row: &SourceRow) -> String {
+fn task_cache_key(row: &TaskFields<'_>) -> String {
     match row.harvest_task_id {
         Some(id) => format!("hid:{id}"),
-        None => format!("nk:{}", keys::task_key(&row.task_name)),
+        None => format!("nk:{}", keys::task_key(row.task_name)),
     }
 }
 
@@ -224,7 +249,7 @@ pub async fn resolve_client(
     conn: &mut sqlx::PgConnection,
     cache: &RunCache,
     org: OrgDefaults<'_>,
-    row: &SourceRow,
+    row: &ClientFields<'_>,
 ) -> Result<Resolved, RowFailure> {
     let ck = client_cache_key(row);
     if let Some(id) = cache.get(ParentKind::Client, &ck) {
@@ -240,7 +265,7 @@ pub async fn resolve_client(
     }
 
     // Natural-key fallback: normalized name within the org.
-    let nk = keys::client_key(&row.client_name);
+    let nk = keys::client_key(row.client_name);
     if let Some(id) = sqlx::query_scalar!(
         "SELECT id FROM clients WHERE org_id = $1 AND harvest_norm(name) = $2",
         org.org_id,
@@ -262,11 +287,11 @@ pub async fn resolve_client(
     }
 
     // Create.
-    let name = keys::trim_ws(&row.client_name);
+    let name = keys::trim_ws(row.client_name);
     if name.is_empty() {
         return Err(RowFailure::new("client name is empty"));
     }
-    let currency = currency_or(row.currency.as_deref(), org.default_currency);
+    let currency = currency_or(row.currency, org.default_currency);
     let id = Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO clients (id, org_id, name, currency, address, active)
@@ -275,7 +300,7 @@ pub async fn resolve_client(
         org.org_id,
         name,
         currency,
-        row.client_address.as_deref(),
+        row.client_address,
         row.client_active,
     )
     .execute(&mut *conn)
@@ -298,7 +323,7 @@ pub async fn resolve_project(
     cache: &RunCache,
     org: OrgDefaults<'_>,
     client_id: Uuid,
-    row: &SourceRow,
+    row: &ProjectFields<'_>,
 ) -> Result<Resolved, RowFailure> {
     let ck = project_cache_key(row);
     if let Some(id) = cache.get(ParentKind::Project, &ck) {
@@ -315,7 +340,6 @@ pub async fn resolve_project(
     // Natural key: code when present, else (client, name).
     let code = row
         .project_code
-        .as_deref()
         .map(keys::trim_ws)
         .filter(|c| !c.is_empty());
     let existing_id = match code {
@@ -334,7 +358,7 @@ pub async fn resolve_project(
              WHERE org_id = $1 AND client_id = $2 AND harvest_norm(name) = $3",
                 org.org_id,
                 client_id,
-                keys::normalize(&row.project_name),
+                keys::normalize(row.project_name),
             )
             .fetch_optional(&mut *conn)
             .await?
@@ -353,7 +377,7 @@ pub async fn resolve_project(
         return Ok(Resolved::existing(ParentKind::Project, ck, id));
     }
 
-    let name = keys::trim_ws(&row.project_name);
+    let name = keys::trim_ws(row.project_name);
     if name.is_empty() {
         return Err(RowFailure::new("project name is empty"));
     }
@@ -395,7 +419,7 @@ pub async fn resolve_task(
     conn: &mut sqlx::PgConnection,
     cache: &RunCache,
     org: OrgDefaults<'_>,
-    row: &SourceRow,
+    row: &TaskFields<'_>,
 ) -> Result<Resolved, RowFailure> {
     let ck = task_cache_key(row);
     if let Some(id) = cache.get(ParentKind::Task, &ck) {
@@ -409,7 +433,7 @@ pub async fn resolve_task(
         return Ok(Resolved::existing(ParentKind::Task, ck, id));
     }
 
-    let nk = keys::task_key(&row.task_name);
+    let nk = keys::task_key(row.task_name);
     if let Some(id) = sqlx::query_scalar!(
         "SELECT id FROM tasks WHERE org_id = $1 AND harvest_norm(name) = $2",
         org.org_id,
@@ -430,20 +454,21 @@ pub async fn resolve_task(
         return Ok(Resolved::existing(ParentKind::Task, ck, id));
     }
 
-    let name = keys::trim_ws(&row.task_name);
+    let name = keys::trim_ws(row.task_name);
     if name.is_empty() {
         return Err(RowFailure::new("task name is empty"));
     }
-    let default_rate_cents = rate_cents(row.billable_rate.as_deref())?;
+    let default_rate_cents = rate_cents(row.billable_rate)?;
     let id = Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO tasks (id, org_id, name, billable_default, default_rate_cents, active)
-         VALUES ($1, $2, $3, $4, $5, true)",
+         VALUES ($1, $2, $3, $4, $5, $6)",
         id,
         org.org_id,
         name,
         row.task_billable_default,
         default_rate_cents,
+        row.task_active,
     )
     .execute(&mut *conn)
     .await?;
@@ -463,11 +488,16 @@ pub async fn resolve_task(
 /// — it is a link, not one of the four entity levels.
 pub async fn ensure_project_task(
     conn: &mut sqlx::PgConnection,
+    cache: &RunCache,
     project_id: Uuid,
     task_id: Uuid,
     row: &SourceRow,
 ) -> Result<(), RowFailure> {
+    // A cached link must not hide a malformed rate on a later source row.
     let rate = rate_cents(row.billable_rate.as_deref())?;
+    if cache.project_tasks.contains(&(project_id, task_id)) {
+        return Ok(());
+    }
     sqlx::query!(
         "INSERT INTO project_tasks (project_id, task_id, billable, rate_cents)
          VALUES ($1, $2, $3, $4)
@@ -482,29 +512,69 @@ pub async fn ensure_project_task(
     Ok(())
 }
 
-/// Resolve the Horae user for a row by email (FR-010). Never provisions; an
-/// unmatched user errors the row.
+/// Match one org user, including inactive historical users. Email is authoritative;
+/// only CSV rows without email may use an unambiguous full-name fallback.
+/// Never provisions users or guesses between normalized duplicates.
 pub async fn resolve_user(
     conn: &mut sqlx::PgConnection,
+    cache: &RunCache,
     org_id: Uuid,
     row: &SourceRow,
-) -> Result<Uuid, RowFailure> {
+    source: SourceKind,
+) -> Result<(UserKey, Uuid), RowFailure> {
     let email = row
         .user_email
         .as_deref()
         .map(keys::trim_ws)
-        .filter(|e| !e.is_empty())
-        .ok_or_else(|| RowFailure::new("time entry has no user email to match"))?;
-
-    let id = sqlx::query_scalar!(
-        "SELECT id FROM users WHERE org_id = $1 AND harvest_norm(email) = $2",
-        org_id,
-        keys::normalize(email),
-    )
-    .fetch_optional(&mut *conn)
-    .await?;
-
-    id.ok_or_else(|| RowFailure::new(format!("no Horae user matches email {email:?}")))
+        .filter(|e| !e.is_empty());
+    let (key, field, value) = if let Some(email) = email {
+        (UserKey::Email(keys::normalize(email)), "email", email)
+    } else {
+        if source != SourceKind::Csv {
+            return Err(RowFailure::new("time entry has no user email to match"));
+        }
+        let name = row
+            .user_name
+            .as_deref()
+            .map(keys::trim_ws)
+            .filter(|n| !n.is_empty())
+            .ok_or_else(|| RowFailure::new("time entry has no user email or full name to match"))?;
+        (UserKey::FullName(keys::normalize(name)), "name", name)
+    };
+    if let Some(&id) = cache.users.get(&key) {
+        return Ok((key, id));
+    }
+    // Two matches are enough to prove ambiguity; do not arbitrarily select one.
+    // Missing/ambiguous identities and database errors are never cached.
+    let matches = match &key {
+        UserKey::Email(email) => {
+            sqlx::query_scalar!(
+                "SELECT id FROM users WHERE org_id = $1 AND harvest_norm(email) = $2 LIMIT 2",
+                org_id,
+                email,
+            )
+            .fetch_all(&mut *conn)
+            .await?
+        }
+        UserKey::FullName(name) => {
+            sqlx::query_scalar!(
+                "SELECT id FROM users WHERE org_id = $1 AND harvest_norm(name) = $2 LIMIT 2",
+                org_id,
+                name,
+            )
+            .fetch_all(&mut *conn)
+            .await?
+        }
+    };
+    match matches.as_slice() {
+        [id] => Ok((key, *id)),
+        [] => Err(RowFailure::new(format!(
+            "no Horae user matches {field} {value:?}"
+        ))),
+        _ => Err(RowFailure::new(format!(
+            "ambiguous user {field} {value:?}: multiple Horae users match; provide a unique email or resolve duplicate identities"
+        ))),
+    }
 }
 
 /// The row's currency when it is a plausible 3-letter code, else the org default.

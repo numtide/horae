@@ -2,10 +2,9 @@
 //! adapters, OAuth connect flow, credential storage, and provenance-backed
 //! resolve/apply (plan.md **Project Structure**).
 //!
-//! The engine ([`run_import`]) drives a stream of [`SourceRow`]s — produced by
-//! either the API adapter or the CSV adapter — through resolve → apply → report.
-//! It never learns which adapter produced a row. Each row is applied in its own
-//! savepoint (see [`apply`]); a `DryRun` runs the whole stream inside a
+//! Both source adapters drive normalized [`SourceRow`]s through the shared
+//! resolve → [`apply::apply_row`] → report pipeline. Each row is applied in its
+//! own savepoint; a `DryRun` runs the whole stream inside a
 //! transaction that is rolled back, so nothing persists — not data, not
 //! provenance, not the watermark (FR-014, research.md §7).
 
@@ -14,75 +13,92 @@ pub mod apply;
 pub mod credentials;
 pub mod csv_source;
 pub mod oauth;
+mod parents;
 pub mod provenance;
 pub mod report;
 pub mod resolve;
+mod streaming;
 
 #[cfg(test)]
 mod engine_tests;
+#[cfg(test)]
+mod sync_tests;
 
-use chrono::{DateTime, Utc};
-use horae_core::importers::harvest::types::{
-    EntityType, ImportMode, SourceKind, SourceRow, SyncScope,
-};
+use chrono::Utc;
+#[cfg(test)]
+use horae_core::importers::harvest::types::SourceKind;
+use horae_core::importers::harvest::types::{EntityType, ImportMode, SourceRow, SyncScope};
+#[cfg(test)]
+use sqlx::Acquire;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use api_source::{ApiSource, HarvestData};
+#[cfg(test)]
+use api_source::HarvestData;
 use report::ImportReport;
 use resolve::{OrgDefaults, RunCache};
 
 use crate::config::HarvestConfig;
 
-/// A source of normalized rows the engine consumes lazily (research.md §9). Both
-/// adapters implement it: the CSV adapter walks its parsed records, the API
-/// adapter walks Harvest pages. Returning `None` ends the run.
+/// A source of normalized rows consumed lazily by the API adapter and engine
+/// tests. Returning `None` ends the source; this interface alone does not imply
+/// bounded memory or network streaming.
 pub trait RowSource {
     fn next_row(&mut self) -> impl Future<Output = anyhow::Result<Option<SourceRow>>> + Send;
 }
 
-/// Drive a source through the engine and return the run report. In `Commit` mode
-/// the outer transaction is committed; in `DryRun` it is rolled back so nothing
-/// persists (FR-014). Advancing the incremental watermark on a committing API run
-/// is the caller's responsibility, done only after this returns success.
+/// Drive hand-built test sources through the shared row pipeline, using the
+/// same organization lock, transaction and preview rollback as uploaded sources.
+#[cfg(test)]
 pub async fn run_import<S: RowSource>(
     pool: &PgPool,
     org_id: Uuid,
     default_currency: &str,
     source: SourceKind,
     mode: ImportMode,
-    mut src: S,
+    src: S,
 ) -> anyhow::Result<ImportReport> {
-    let mut report = ImportReport::new(source, mode);
-    let mut cache = RunCache::default();
     let org = OrgDefaults {
         org_id,
         default_currency,
     };
+    let mut connection = lock_import(pool, org_id).await?;
+    let mut tx = connection.begin().await?;
+    let mut report = ImportReport::new(source, mode);
+    apply_rows(&mut tx, &mut RunCache::default(), &mut report, org, src).await?;
+    match mode {
+        ImportMode::Commit => tx.commit().await?,
+        ImportMode::DryRun => tx.rollback().await?,
+    }
+    connection.close().await?;
+    Ok(report)
+}
 
-    let mut tx = pool.begin().await?;
+async fn apply_rows<S: RowSource>(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    cache: &mut RunCache,
+    report: &mut ImportReport,
+    org: OrgDefaults<'_>,
+    mut src: S,
+) -> anyhow::Result<()> {
     while let Some(row) = src.next_row().await? {
-        let result = apply::apply_row(&mut tx, &mut cache, org, &row).await;
+        let result = apply::apply_row(tx, cache, org, &row, report.source).await;
         for (entity, outcome) in &result.outcomes {
             report.record(*entity, outcome);
         }
     }
 
-    match mode {
-        ImportMode::Commit => tx.commit().await?,
-        ImportMode::DryRun => tx.rollback().await?,
-    }
-
     debug_assert!(report.reconciles());
-    Ok(report)
+    Ok(())
 }
 
-/// An in-memory row source over a `Vec` — used by the CSV adapter (after parsing)
-/// and by integration tests that hand-build rows.
+/// An in-memory row source for tests that hand-build rows.
+#[cfg(test)]
 pub struct VecSource {
     rows: std::vec::IntoIter<SourceRow>,
 }
 
+#[cfg(test)]
 impl VecSource {
     pub fn new(rows: Vec<SourceRow>) -> Self {
         Self {
@@ -91,16 +107,21 @@ impl VecSource {
     }
 }
 
+#[cfg(test)]
 impl RowSource for VecSource {
     async fn next_row(&mut self) -> anyhow::Result<Option<SourceRow>> {
         Ok(self.rows.next())
     }
 }
 
-/// Why an API import could not even start (FR-003, FR-024). Distinct from the
-/// per-record errors inside a report — these reject the whole run up front.
+/// Run-level failures (FR-003, FR-024), distinct from per-record report errors.
+/// A failed download or transaction leaves no partially committed import.
 #[derive(Debug, thiserror::Error)]
 pub enum ApiImportError {
+    #[error(
+        "Another Harvest import is already running for this organization; retry when it finishes"
+    )]
+    Busy,
     #[error("no usable Harvest connection — connect Harvest first")]
     NotConnected,
     #[error("Harvest connection expired — reconnect Harvest")]
@@ -109,10 +130,47 @@ pub enum ApiImportError {
     Other(#[from] anyhow::Error),
 }
 
+/// One import session per organization, shared by API and CSV across processes.
+/// The session lock spans token refresh (autocommit) and the separate data
+/// transaction. Closing the connection on every exit, including cancellation,
+/// prevents a session lock from ever leaking back into the shared pool.
+async fn lock_import(
+    pool: &PgPool,
+    org_id: Uuid,
+) -> Result<sqlx::pool::PoolConnection<sqlx::Postgres>, ApiImportError> {
+    let mut connection = pool.acquire().await.map_err(anyhow::Error::from)?;
+    connection.close_on_drop();
+    let acquired = sqlx::query_scalar!(
+        r#"SELECT pg_try_advisory_lock(hashtextextended($1, 0)) as "acquired!""#,
+        format!("horae:harvest-import:{org_id}"),
+    )
+    .fetch_one(&mut *connection)
+    .await
+    .map_err(anyhow::Error::from)?;
+    if !acquired {
+        return Err(ApiImportError::Busy);
+    }
+    Ok(connection)
+}
+
+/// A cancelled waiter cannot cancel blocking HTTP work. Keep the import
+/// session with the worker until it really exits, not with the waiting future.
+async fn blocking_import_call<T: Send + 'static>(
+    connection: sqlx::pool::PoolConnection<sqlx::Postgres>,
+    call: impl FnOnce() -> T + Send + 'static,
+) -> Result<(sqlx::pool::PoolConnection<sqlx::Postgres>, T), ApiImportError> {
+    tokio::task::spawn_blocking(move || {
+        let result = call();
+        (connection, result)
+    })
+    .await
+    .map_err(|e| ApiImportError::Other(anyhow::anyhow!("Harvest HTTP task failed: {e}")))
+}
+
 /// Run a full/incremental import from the Harvest API through the shared engine
 /// (FR-023–FR-026). Loads the org's stored connection, refreshes an expired token
-/// transparently, pulls every collection, assembles rows, runs the engine, and —
-/// only on a committing run — advances the incremental watermark.
+/// transparently, indexes catalogs, streams time-entry pages through the engine, and —
+/// only on an error-free committing run — advances the incremental watermark.
 pub async fn run_api_import(
     pool: &PgPool,
     org_id: Uuid,
@@ -121,8 +179,30 @@ pub async fn run_api_import(
     mode: ImportMode,
     sync: SyncScope,
 ) -> Result<ImportReport, ApiImportError> {
+    run_api_import_with_http(
+        pool,
+        org_id,
+        default_currency,
+        cfg,
+        mode,
+        sync,
+        api_source::http::ApiHttp::new()?,
+    )
+    .await
+}
+
+async fn run_api_import_with_http(
+    pool: &PgPool,
+    org_id: Uuid,
+    default_currency: &str,
+    cfg: &HarvestConfig,
+    mode: ImportMode,
+    sync: SyncScope,
+    http: api_source::http::ApiHttp,
+) -> Result<ImportReport, ApiImportError> {
+    let mut connection = lock_import(pool, org_id).await?;
     let key = &cfg.encryption_key_hex;
-    let mut conn = credentials::load(pool, org_id, key)
+    let mut conn = credentials::load(&mut *connection, org_id, key)
         .await?
         .ok_or(ApiImportError::NotConnected)?;
 
@@ -132,15 +212,15 @@ pub async fn run_api_import(
     {
         let cfg_owned = cfg.clone();
         let refresh_token = conn.refresh_token.clone();
-        let refreshed = tokio::task::spawn_blocking(move || {
+        let (returned_connection, refreshed) = blocking_import_call(connection, move || {
             let agent = ureq::agent();
             oauth::refresh(&agent, &cfg_owned, &refresh_token)
         })
-        .await
-        .map_err(|e| ApiImportError::Other(anyhow::anyhow!("refresh task panicked: {e}")))?
-        .map_err(|_| ApiImportError::ReconnectRequired)?;
+        .await?;
+        connection = returned_connection;
+        let refreshed = refreshed.map_err(|_| ApiImportError::ReconnectRequired)?;
         credentials::update_tokens(
-            pool,
+            &mut *connection,
             org_id,
             key,
             &refreshed.access_token,
@@ -159,87 +239,18 @@ pub async fn run_api_import(
         SyncScope::Incremental => conn.watermark_for(EntityType::TimeEntry),
     };
 
-    // Fetch all collections off the async runtime (blocking ureq).
-    let access = conn.access_token.clone();
-    let account = conn.account_id.clone();
-    let data = tokio::task::spawn_blocking(move || fetch_all_collections(&access, &account, since))
-        .await
-        .map_err(|e| ApiImportError::Other(anyhow::anyhow!("fetch task panicked: {e}")))??;
-
-    // The highest `updated_at` we saw drives the next incremental watermark.
-    let high_water = data
-        .time_entries
-        .iter()
-        .filter_map(|te| te.updated_at)
-        .max();
-
-    let report = run_import(
-        pool,
+    // A bounded queue joins blocking HTTP pages to the async row pipeline.
+    let capture_started_at = Utc::now();
+    streaming::run(
+        connection,
         org_id,
         default_currency,
-        SourceKind::HarvestApi,
         mode,
-        ApiSource::from_data(&data),
+        capture_started_at,
+        move |pages| streaming::fetch(http, &conn.access_token, &conn.account_id, since, pages),
     )
-    .await?;
-
-    if mode == ImportMode::Commit {
-        let mark = high_water.unwrap_or_else(Utc::now);
-        advance_all_watermarks(pool, org_id, mark).await?;
-    }
-
-    Ok(report)
-}
-
-/// Fetch every Harvest collection into a [`HarvestData`] (blocking). Parents in
-/// full; time entries filtered by `updated_since` on an incremental run.
-fn fetch_all_collections(
-    access_token: &str,
-    account_id: &str,
-    since: Option<DateTime<Utc>>,
-) -> anyhow::Result<HarvestData> {
-    use api_source::*;
-    let agent = ureq::agent();
-    let clients = parse_collection::<ApiClient>(&agent, access_token, account_id, "clients", None)?;
-    let projects =
-        parse_collection::<ApiProject>(&agent, access_token, account_id, "projects", None)?;
-    let tasks = parse_collection::<ApiTask>(&agent, access_token, account_id, "tasks", None)?;
-    let users = parse_collection::<ApiUser>(&agent, access_token, account_id, "users", None)?;
-    let time_entries =
-        parse_collection::<ApiTimeEntry>(&agent, access_token, account_id, "time_entries", since)?;
-    Ok(HarvestData {
-        clients,
-        projects,
-        tasks,
-        users,
-        time_entries,
-    })
-}
-
-/// Fetch one collection and deserialize each item into `T`.
-fn parse_collection<T: serde::de::DeserializeOwned>(
-    agent: &ureq::Agent,
-    access_token: &str,
-    account_id: &str,
-    collection: &str,
-    since: Option<DateTime<Utc>>,
-) -> anyhow::Result<Vec<T>> {
-    let items = api_source::fetch_all(agent, access_token, account_id, collection, since)?;
-    items
-        .into_iter()
-        .map(|v| serde_json::from_value(v).map_err(Into::into))
-        .collect()
-}
-
-/// Advance every entity's watermark to `mark` after a successful committing run.
-async fn advance_all_watermarks(
-    pool: &PgPool,
-    org_id: Uuid,
-    mark: DateTime<Utc>,
-) -> anyhow::Result<()> {
-    let marks: Vec<(EntityType, DateTime<Utc>)> =
-        EntityType::ALL.iter().map(|&e| (e, mark)).collect();
-    credentials::advance_watermark(pool, org_id, &marks).await
+    .await
+    .map_err(Into::into)
 }
 
 // ── OAuth connect: session nonce + callback route ─────────────────────────────
@@ -269,8 +280,8 @@ pub struct CallbackParams {
 async fn oauth_callback(
     session: tower_sessions::Session,
     axum::extract::Query(params): axum::extract::Query<CallbackParams>,
-) -> axum::response::Redirect {
-    use axum::response::Redirect;
+) -> axum::response::Response {
+    use axum::response::{IntoResponse, Redirect};
 
     // The nonce is single-use: consume it regardless of outcome.
     let stored: Option<String> = session.get(OAUTH_STATE_KEY).await.ok().flatten();
@@ -285,17 +296,36 @@ async fn oauth_callback(
         Ok(code) => code,
         Err(reason) => {
             tracing::warn!("Harvest callback rejected before exchange: {reason}");
-            return Redirect::to(dest_err);
+            return Redirect::to(dest_err).into_response();
         }
     };
 
     match complete_connect(&session, code).await {
-        Ok(()) => Redirect::to(dest_ok),
+        Ok(()) => Redirect::to(dest_ok).into_response(),
         Err(e) => {
+            if let Some(response) = connection_conflict_response(&e) {
+                return response;
+            }
             tracing::error!("Harvest connect failed: {e}");
-            Redirect::to(dest_err)
+            Redirect::to(dest_err).into_response()
         }
     }
+}
+
+/// Only known, secret-free policy errors may be returned to the browser.
+fn connection_conflict_response(error: &anyhow::Error) -> Option<axum::response::Response> {
+    use axum::response::IntoResponse;
+    let message = if let Some(policy) = error.downcast_ref::<credentials::ConnectionError>() {
+        policy.to_string()
+    } else if matches!(
+        error.downcast_ref::<ApiImportError>(),
+        Some(ApiImportError::Busy)
+    ) {
+        ApiImportError::Busy.to_string()
+    } else {
+        return None;
+    };
+    Some((axum::http::StatusCode::CONFLICT, message).into_response())
 }
 
 /// Decide whether a callback may proceed to the token exchange. Returns the
@@ -368,6 +398,25 @@ async fn complete_connect(session: &tower_sessions::Session, code: String) -> an
 #[cfg(test)]
 mod oauth_callback_tests {
     use super::*;
+
+    #[tokio::test]
+    async fn account_policy_failures_return_safe_actionable_conflicts() {
+        for error in [
+            anyhow::Error::from(credentials::ConnectionError::AccountChange),
+            anyhow::Error::from(credentials::ConnectionError::UnidentifiedProvenance),
+            anyhow::Error::from(ApiImportError::Busy),
+        ] {
+            let response = connection_conflict_response(&error).unwrap();
+            assert_eq!(response.status(), axum::http::StatusCode::CONFLICT);
+            let body = axum::body::to_bytes(response.into_body(), 1024)
+                .await
+                .unwrap();
+            assert_eq!(body.as_ref(), error.to_string().as_bytes());
+        }
+        assert!(
+            connection_conflict_response(&anyhow::anyhow!("secret upstream payload")).is_none()
+        );
+    }
 
     fn params(error: Option<&str>, state: Option<&str>, code: Option<&str>) -> CallbackParams {
         CallbackParams {
