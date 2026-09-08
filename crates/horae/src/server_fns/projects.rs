@@ -528,17 +528,31 @@ pub async fn link_project_task(project_id: String, task_id: String) -> Result<()
 
 #[server]
 pub async fn list_assignments(project_id: String) -> Result<Vec<Assignment>, ServerFnError> {
-    let _user = require_user().await?;
+    let viewer = require_user().await?;
     let state = crate::state::global_state().await;
     let project_id = parse_uuid(&project_id, "project_id")?;
+    assignments_for_viewer(&state.db, &viewer, project_id).await
+}
+
+#[cfg(feature = "server")]
+async fn assignments_for_viewer(
+    db: &sqlx::PgPool,
+    viewer: &User,
+    project_id: uuid::Uuid,
+) -> Result<Vec<Assignment>, ServerFnError> {
     sqlx::query_as!(
         Assignment,
-        r#"SELECT id, project_id, user_id, role as "role: ProjectRole", rate_cents,
-                created_at as "created_at: chrono::DateTime<chrono::Utc>"
-         FROM assignments WHERE project_id = $1 ORDER BY created_at"#,
+        r#"SELECT a.id, a.project_id, a.user_id, a.role as "role: ProjectRole",
+                CASE WHEN $3 THEN a.rate_cents ELSE NULL END AS rate_cents,
+                a.created_at as "created_at: chrono::DateTime<chrono::Utc>"
+         FROM assignments a JOIN projects p ON p.id = a.project_id
+         WHERE a.project_id = $1 AND p.org_id = $2
+         ORDER BY a.created_at, a.id"#,
         project_id,
+        viewer.org_id,
+        viewer.is_manager_or_above(),
     )
-    .fetch_all(&state.db)
+    .fetch_all(db)
     .await
     .map_err(server_err)
 }
@@ -609,3 +623,6 @@ pub async fn delete_assignment(assignment_id: String) -> Result<(), ServerFnErro
     }
     Ok(())
 }
+
+#[cfg(all(test, feature = "server"))]
+mod tests;
