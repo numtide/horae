@@ -99,14 +99,37 @@ can recover dependent time. Existing matched records remain unchanged (FR-017).
 
 ```
 import_harvest_csv(
-    file: Vec<u8>,          // uploaded CSV bytes
-    mode: ImportMode,       // DryRun | Commit
+    mode: ImportMode,       // DryRun | Commit, encoded in the route
+    file: CsvUpload,        // native browser file, sent as the raw request body
 ) -> Result<ImportReport, ServerFnError>
 ```
 
 - Same authorization and dry-run/commit semantics as the API import; the only difference is the source adapter (research.md §1).
 - **Validation**: rejects an unrecognized/empty file up front with a clear message and no writes (FR-003).
 - Because a CSV carries no Harvest ids, matching uses the composite natural key only; no provenance rows are written (data-model.md).
+
+The CSV function is `POST /api/import/harvest/csv/DryRun` (or `/Commit`).
+It remains a Dioxus server function with the same active-admin session check;
+the organization and default currency come from the server, never the file or
+request parameters. Its body is raw CSV, not a JSON byte array. Requests must
+include `X-Horae-Import: csv`; simple cross-site form submissions cannot supply
+that header. Do not enable credentialed cross-origin CORS on this endpoint.
+The route has exactly one mode segment; an invalid mode returns `BAD_REQUEST`
+without reading the upload body.
+
+The browser retains its native file handle for preview and commit without
+reading the whole file into WASM memory. The server's blocking CSV parser feeds
+a one-record queue consumed by the existing async row/savepoint pipeline. SQL
+backpressure stops further parsing and body reads. Headers and the first record
+are checked before opening the data transaction. Record-level validation errors
+are reported in input order; a transport/read failure rejects the entire run and
+rolls back its writes. Only successful parsing through EOF permits a commit.
+Cancellation wakes a parser waiting for more bytes or a full queue; it retains
+the organization-lock connection until it exits.
+
+This bounds queued records, not total process memory. A record or body frame can
+be large, occurrence/cache keys and the complete error report still grow with
+input, and one outer transaction still spans the run. See [performance.md](../performance.md).
 
 ## 4. CLI subcommands (operator, large-file / host-side)
 

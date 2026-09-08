@@ -2,6 +2,7 @@
 //! run a dry-run, review the per-entity summary and record errors, then commit
 //! (contracts/importer-api.md).
 
+use dioxus::html::FileData;
 use dioxus::prelude::*;
 use horae_core::importers::harvest::types::{
     ConnectionStatus, EntityCounts, EntityType, ImportMode, ImportReport, SyncScope,
@@ -24,14 +25,14 @@ enum Source {
 struct CsvFile {
     name: String,
     size: u64,
-    bytes: Vec<u8>,
+    file: FileData,
 }
 
 /// One unit of import work, so the four trigger buttons share a single runner.
 #[derive(Clone)]
 enum Run {
     Api(ImportMode, SyncScope),
-    Csv(ImportMode, Vec<u8>),
+    Csv(ImportMode, FileData),
 }
 
 #[component]
@@ -56,8 +57,8 @@ pub fn HarvestImport() -> Element {
                     .map_err(|e| e.to_string()),
                 mode,
             ),
-            Run::Csv(mode, bytes) => (
-                server_fns::import_harvest_csv(bytes, mode)
+            Run::Csv(mode, file) => (
+                server_fns::import_harvest_csv(mode, file.into())
                     .await
                     .map_err(|e| e.to_string()),
                 mode,
@@ -100,17 +101,12 @@ pub fn HarvestImport() -> Element {
     let on_file = move |e: Event<FormData>| async move {
         if let Some(f) = e.files().into_iter().next() {
             let (name, size) = (f.name(), f.size());
-            match f.read_bytes().await {
-                Ok(bytes) => {
-                    report.set(None);
-                    csv_file.set(Some(CsvFile {
-                        name,
-                        size,
-                        bytes: bytes.to_vec(),
-                    }));
-                }
-                Err(err) => report.set(Some(Err(format!("Could not read file: {err}")))),
-            }
+            report.set(None);
+            csv_file.set(Some(CsvFile {
+                name,
+                size,
+                file: f,
+            }));
         }
     };
 
@@ -350,8 +346,8 @@ pub fn HarvestImport() -> Element {
                                 class: "btn btn-primary",
                                 disabled: running(),
                                 onclick: {
-                                    let bytes = file.bytes.clone();
-                                    move |_| execute(Run::Csv(ImportMode::DryRun, bytes.clone()))
+                                    let selected = file.file.clone();
+                                    move |_| execute(Run::Csv(ImportMode::DryRun, selected.clone()))
                                 },
                                 "Preview file (dry-run)"
                             }
@@ -383,7 +379,7 @@ pub fn HarvestImport() -> Element {
                                 let job = match src {
                                     Source::Api => Run::Api(ImportMode::Commit, SyncScope::Full),
                                     Source::Csv => match csv_file.read().as_ref() {
-                                        Some(f) => Run::Csv(ImportMode::Commit, f.bytes.clone()),
+                                        Some(f) => Run::Csv(ImportMode::Commit, f.file.clone()),
                                         None => return,
                                     },
                                     // No report exists on the landing list.

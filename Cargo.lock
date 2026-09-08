@@ -3239,6 +3239,7 @@ dependencies = [
  "csv",
  "dioxus",
  "extism",
+ "futures-util",
  "gloo-timers",
  "horae-core",
  "openidconnect",

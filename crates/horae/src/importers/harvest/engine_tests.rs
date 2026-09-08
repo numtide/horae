@@ -14,6 +14,7 @@ use uuid::Uuid;
 
 use super::{RowSource, VecSource, run_import};
 
+mod csv_streaming;
 mod lookup_cache;
 
 struct PausedSource {

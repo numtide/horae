@@ -50,6 +50,15 @@ pub enum ImportMode {
     Commit,
 }
 
+impl std::fmt::Display for ImportMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::DryRun => "DryRun",
+            Self::Commit => "Commit",
+        })
+    }
+}
+
 /// Whether an API pull fetches everything (`Full`) or only records changed since
 /// the stored watermark (`Incremental`, FR-025).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -282,6 +291,12 @@ impl ImportReport {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn import_modes_display_their_wire_names() {
+        assert_eq!(ImportMode::DryRun.to_string(), "DryRun");
+        assert_eq!(ImportMode::Commit.to_string(), "Commit");
+    }
 
     fn errored(entity: EntityType) -> (EntityType, RowOutcome) {
         (
