@@ -74,6 +74,21 @@ cargo run -p horae --features server -- import harvest-api --full
 
 **Expected**: the importer pages through Harvest (respecting the rate limit), then creates clients first, then projects under them, then tasks (+ per-project enablement), then time entries. A 1.5-hour Harvest entry stores `minutes = 90` exactly; an entry with a billable rate stores integer cents + ISO currency. Provenance rows are written to `harvest_import_map` for every created record, and the summary counts match the dry-run's would-create numbers. The unknown-user rows are reported as errors and skipped (US4).
 
+### Catalog records without time
+
+Include an unused client, a project with no time and an unused task in the API
+fixture. All must appear in the catalog and summary even when the entire time
+collection is empty. Repeat the import: no duplicates, with each parent counted
+once as skipped. A preview must report the same creations without persisting any
+catalog/provenance rows; a parent-only commit must not advance the time watermark.
+
+Include a malformed task default rate and a time entry referencing that task.
+Both the task and dependent entry must have clear errors, while unrelated catalog
+records import successfully. Correct the task and retry: it and its time entry
+are created, previously imported parents are skipped, and only the error-free
+run can advance the watermark. A project with an unresolved client must not
+invent a placeholder client or leave behind partial provenance.
+
 ## Scenario 4 — Re-sync is idempotent and edit-robust (US2, FR-011/FR-026, SC-002)
 
 ```sh

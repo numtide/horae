@@ -11,9 +11,12 @@
 //! this keeps a second run at zero creations and is edit-robust because
 //! provenance matches by Harvest id.
 
-use std::collections::HashMap;
+pub mod fields;
+
+use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
+use fields::{ClientFields, ProjectFields, TaskFields};
 use horae_core::importers::harvest::convert;
 use horae_core::importers::harvest::keys;
 use horae_core::importers::harvest::types::{EntityType, RowOutcome, SourceRow};
@@ -77,9 +80,18 @@ pub struct RunCache {
     projects: HashMap<String, Uuid>,
     tasks: HashMap<String, Uuid>,
     entry_slots: keys::OccurrenceCounter,
+    failed_parents: HashSet<(EntityType, i64)>,
 }
 
 impl RunCache {
+    pub fn mark_failed(&mut self, entity: EntityType, id: i64) {
+        self.failed_parents.insert((entity, id));
+    }
+
+    pub fn parent_failed(&self, entity: EntityType, id: i64) -> bool {
+        self.failed_parents.contains(&(entity, id))
+    }
+
     fn get(&self, kind: ParentKind, key: &str) -> Option<Uuid> {
         self.map(kind).get(key).copied()
     }
@@ -120,31 +132,27 @@ impl RunCache {
 
 /// The cache key for a parent in this run: its Harvest id when present, else its
 /// composite natural key. Stable across every row that references the parent.
-fn client_cache_key(row: &SourceRow) -> String {
+fn client_cache_key(row: &ClientFields<'_>) -> String {
     match row.harvest_client_id {
         Some(id) => format!("hid:{id}"),
-        None => format!("nk:{}", keys::client_key(&row.client_name)),
+        None => format!("nk:{}", keys::client_key(row.client_name)),
     }
 }
 
-fn project_cache_key(row: &SourceRow) -> String {
+fn project_cache_key(row: &ProjectFields<'_>) -> String {
     match row.harvest_project_id {
         Some(id) => format!("hid:{id}"),
         None => format!(
             "nk:{}",
-            keys::project_key(
-                &row.client_name,
-                &row.project_name,
-                row.project_code.as_deref()
-            )
+            keys::project_key(row.client_name, row.project_name, row.project_code)
         ),
     }
 }
 
-fn task_cache_key(row: &SourceRow) -> String {
+fn task_cache_key(row: &TaskFields<'_>) -> String {
     match row.harvest_task_id {
         Some(id) => format!("hid:{id}"),
-        None => format!("nk:{}", keys::task_key(&row.task_name)),
+        None => format!("nk:{}", keys::task_key(row.task_name)),
     }
 }
 
@@ -224,7 +232,7 @@ pub async fn resolve_client(
     conn: &mut sqlx::PgConnection,
     cache: &RunCache,
     org: OrgDefaults<'_>,
-    row: &SourceRow,
+    row: &ClientFields<'_>,
 ) -> Result<Resolved, RowFailure> {
     let ck = client_cache_key(row);
     if let Some(id) = cache.get(ParentKind::Client, &ck) {
@@ -240,7 +248,7 @@ pub async fn resolve_client(
     }
 
     // Natural-key fallback: normalized name within the org.
-    let nk = keys::client_key(&row.client_name);
+    let nk = keys::client_key(row.client_name);
     if let Some(id) = sqlx::query_scalar!(
         "SELECT id FROM clients WHERE org_id = $1 AND harvest_norm(name) = $2",
         org.org_id,
@@ -262,11 +270,11 @@ pub async fn resolve_client(
     }
 
     // Create.
-    let name = keys::trim_ws(&row.client_name);
+    let name = keys::trim_ws(row.client_name);
     if name.is_empty() {
         return Err(RowFailure::new("client name is empty"));
     }
-    let currency = currency_or(row.currency.as_deref(), org.default_currency);
+    let currency = currency_or(row.currency, org.default_currency);
     let id = Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO clients (id, org_id, name, currency, address, active)
@@ -275,7 +283,7 @@ pub async fn resolve_client(
         org.org_id,
         name,
         currency,
-        row.client_address.as_deref(),
+        row.client_address,
         row.client_active,
     )
     .execute(&mut *conn)
@@ -298,7 +306,7 @@ pub async fn resolve_project(
     cache: &RunCache,
     org: OrgDefaults<'_>,
     client_id: Uuid,
-    row: &SourceRow,
+    row: &ProjectFields<'_>,
 ) -> Result<Resolved, RowFailure> {
     let ck = project_cache_key(row);
     if let Some(id) = cache.get(ParentKind::Project, &ck) {
@@ -315,7 +323,6 @@ pub async fn resolve_project(
     // Natural key: code when present, else (client, name).
     let code = row
         .project_code
-        .as_deref()
         .map(keys::trim_ws)
         .filter(|c| !c.is_empty());
     let existing_id = match code {
@@ -334,7 +341,7 @@ pub async fn resolve_project(
              WHERE org_id = $1 AND client_id = $2 AND harvest_norm(name) = $3",
                 org.org_id,
                 client_id,
-                keys::normalize(&row.project_name),
+                keys::normalize(row.project_name),
             )
             .fetch_optional(&mut *conn)
             .await?
@@ -353,7 +360,7 @@ pub async fn resolve_project(
         return Ok(Resolved::existing(ParentKind::Project, ck, id));
     }
 
-    let name = keys::trim_ws(&row.project_name);
+    let name = keys::trim_ws(row.project_name);
     if name.is_empty() {
         return Err(RowFailure::new("project name is empty"));
     }
@@ -395,7 +402,7 @@ pub async fn resolve_task(
     conn: &mut sqlx::PgConnection,
     cache: &RunCache,
     org: OrgDefaults<'_>,
-    row: &SourceRow,
+    row: &TaskFields<'_>,
 ) -> Result<Resolved, RowFailure> {
     let ck = task_cache_key(row);
     if let Some(id) = cache.get(ParentKind::Task, &ck) {
@@ -409,7 +416,7 @@ pub async fn resolve_task(
         return Ok(Resolved::existing(ParentKind::Task, ck, id));
     }
 
-    let nk = keys::task_key(&row.task_name);
+    let nk = keys::task_key(row.task_name);
     if let Some(id) = sqlx::query_scalar!(
         "SELECT id FROM tasks WHERE org_id = $1 AND harvest_norm(name) = $2",
         org.org_id,
@@ -430,20 +437,21 @@ pub async fn resolve_task(
         return Ok(Resolved::existing(ParentKind::Task, ck, id));
     }
 
-    let name = keys::trim_ws(&row.task_name);
+    let name = keys::trim_ws(row.task_name);
     if name.is_empty() {
         return Err(RowFailure::new("task name is empty"));
     }
-    let default_rate_cents = rate_cents(row.billable_rate.as_deref())?;
+    let default_rate_cents = rate_cents(row.billable_rate)?;
     let id = Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO tasks (id, org_id, name, billable_default, default_rate_cents, active)
-         VALUES ($1, $2, $3, $4, $5, true)",
+         VALUES ($1, $2, $3, $4, $5, $6)",
         id,
         org.org_id,
         name,
         row.task_billable_default,
         default_rate_cents,
+        row.task_active,
     )
     .execute(&mut *conn)
     .await?;

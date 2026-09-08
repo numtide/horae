@@ -4,6 +4,23 @@ Derived from the spec's Key Entities and `research.md`. The importer creates row
 
 ## Source-side entities (transient, not persisted)
 
+### API catalog records
+
+Clients, projects and tasks from their API collections are imported independently
+of time entries. Borrowed `ClientFields`, `ProjectFields` and `TaskFields` feed the
+same resolvers used by `SourceRow`; no synthetic date, user or zero-duration entry
+is needed for a catalog record. The API task's active flag, billable default and
+default hourly rate come from that task, not from the first time entry using it.
+Its default rate is converted to integer cents through the shared converter.
+Client/project activity, address/currency, project code/dates and parent source
+timestamps are retained when creating new records. Existing matches are skipped.
+
+The API catalog does not create users or enable every task on every project.
+Project-task enablement still follows actual imported time references. Separate
+historical per-entry rates and full project billing-attribute fidelity remain
+limitations of the current import mapping; catalog completeness is not a claim
+of monetary reconciliation.
+
 ### SourceRow
 
 The normalized record both source adapters produce; the engine is source-agnostic (research.md §1). A `SourceRow` carries the parent entity fields alongside the entry, **plus optional Harvest ids** used for provenance matching (present for the API source, absent for CSV).
