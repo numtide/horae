@@ -213,18 +213,30 @@ ______________________________________________________________________
 
 | Function | Inputs | Output | Errors | Required role |
 |---|---|---|---|---|
-| `report_time` | `from: Date`, `to: Date`, `group_by: "project" \| "task" \| "client" \| "person"` | `Vec<ReportRow>` (`label`, `total_minutes`, `rounded_minutes`, `billable_minutes`) | `ServerFnError` (`401`, `500`, invalid date) | member (planned: manager) |
-| `report_detailed` | `from: Date`, `to: Date` | `Vec<DetailedReportRow>` | `ServerFnError` (`401`, `500`, invalid date) | member (planned: manager) |
+| `report_time` | `from: Date`, `to: Date`, `group_by: "project" \| "task" \| "client" \| "person"`, optional `client_id`, `project_id`, `user_id` | `Vec<ReportRow>` (`group_id`, `label`, `currency`, `total_minutes`, `rounded_minutes`, `billable_minutes`, `billable_cents`, `cost_cents`) | `ServerFnError` (`401`, `403`, `500`, invalid date/filter) | manager |
+| `report_detailed` | `from: Date`, `to: Date`, optional `client_id`, `project_id`, `user_id` | `Vec<DetailedReportRow>` | `ServerFnError` (`401`, `403`, `500`, invalid date/filter) | manager |
+
+`report_time` groups by the selected entity's UUID and the client's currency,
+not by its display name. Each row has a non-null currency; one person or task
+working across currencies appears in separate rows. Names remain labels, so
+distinct entities with the same name are not merged. Unknown dimensions retain
+the project fallback. Ordering is bytewise label, UUID, then bytewise currency.
+The UI keys rows by UUID and currency and does not sum monetary totals across
+currencies. A same-currency total exceeding the supported integer range is
+reported explicitly. This does not change currency authority or convert money.
 
 Export links (not `#[server]` functions):
+
+See [export execution and resource limits](exports.md) for XLSX/PDF admission,
+dataset/file caps, progressive CSV downloads, and timeout/cancellation semantics.
 
 1. Report/invoice **export** is served by plain Axum routes (CSV / XLSX via
    `reports.rs`), not by server functions, so the browser can download a file
    directly. Exported totals reconcile exactly with the on-screen figures
    (FR-016, FR-023, SC-007).
-1. **(planned)**: FR-016 grants **managers** reporting; current `report_time` /
-   `report_detailed` require only an authenticated member. The `"client"` grouping
-   currently uses project name as a proxy until a clients join is added.
+1. Both report functions require manager access and scope every query to the
+   manager's organization. The `"client"` dimension uses the actual client ID
+   and name.
 
 ______________________________________________________________________
 

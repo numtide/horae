@@ -6,10 +6,15 @@
 use axum::extract::{Path, Query};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
+use futures_util::{Stream, TryStreamExt};
 use horae_core::duration::format_hours2;
 use horae_core::money::format_cents_plain;
 use serde::Deserialize;
 use tower_sessions::Session;
+
+mod bounded;
+mod limits;
+mod streaming;
 
 /// `login_redirect_guard` lets `/api/` through, because everything else there is
 /// a server function that checks its own session. These handlers must too. The
@@ -68,8 +73,8 @@ pub struct ExportParams {
 /// The rows behind both the CSV/XLSX exports and the manager-only
 /// `report_detailed` server fn — one query, so a download always matches what
 /// the Reports page shows.
-pub(crate) async fn fetch_entries(
-    pool: &sqlx::PgPool,
+pub(crate) async fn fetch_entries<'e>(
+    executor: impl sqlx::PgExecutor<'e> + 'e,
     org_id: uuid::Uuid,
     from: chrono::NaiveDate,
     to: chrono::NaiveDate,
@@ -77,6 +82,20 @@ pub(crate) async fn fetch_entries(
     project_id: Option<uuid::Uuid>,
     user_id: Option<uuid::Uuid>,
 ) -> Result<Vec<crate::models::DetailedReportRow>, sqlx::Error> {
+    stream_entries(executor, org_id, from, to, client_id, project_id, user_id)
+        .try_collect()
+        .await
+}
+
+fn stream_entries<'e>(
+    executor: impl sqlx::PgExecutor<'e> + 'e,
+    org_id: uuid::Uuid,
+    from: chrono::NaiveDate,
+    to: chrono::NaiveDate,
+    client_id: Option<uuid::Uuid>,
+    project_id: Option<uuid::Uuid>,
+    user_id: Option<uuid::Uuid>,
+) -> impl Stream<Item = Result<crate::models::DetailedReportRow, sqlx::Error>> + 'e {
     sqlx::query_as!(
         crate::models::DetailedReportRow,
         r#"SELECT te.spent_date as "spent_date: chrono::NaiveDate",
@@ -103,8 +122,7 @@ pub(crate) async fn fetch_entries(
         user_id,
         org_id,
     )
-    .fetch_all(pool)
-    .await
+    .fetch(executor)
 }
 
 pub async fn export_csv(
@@ -115,62 +133,47 @@ pub async fn export_csv(
     // hours and notes), so the same gate applies.
     let org_id = require_manager(&session).await?;
 
-    let from: chrono::NaiveDate = params.from.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
-    let to: chrono::NaiveDate = params.to.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
     let state = crate::state::global_state().await;
-    let entries = fetch_entries(
-        &state.db,
-        org_id,
-        from,
-        to,
-        params.client_id,
-        params.project_id,
-        params.user_id,
-    )
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    let data = entries_csv(&entries)?;
-    Ok((
-        [
-            (axum::http::header::CONTENT_TYPE, "text/csv"),
-            (
-                axum::http::header::CONTENT_DISPOSITION,
-                "attachment; filename=\"timesheet.csv\"",
-            ),
-        ],
-        data,
-    ))
+    streaming::entries(state.db.clone(), org_id, params).await
 }
 
+const ENTRY_EXPORT_HEADERS: [&str; 8] = [
+    "Date",
+    "Project",
+    "Task",
+    "User",
+    "Hours",
+    "Rounded Hours",
+    "Billable",
+    "Notes",
+];
+
+fn write_entry_csv(
+    writer: &mut csv::Writer<Vec<u8>>,
+    entry: &crate::models::DetailedReportRow,
+) -> Result<(), csv::Error> {
+    writer.write_record([
+        entry.spent_date.to_string().as_str(),
+        entry.project_name.as_str(),
+        entry.task_name.as_str(),
+        entry.user_name.as_str(),
+        &format_hours2(entry.minutes.into()),
+        &format_hours2(entry.rounded_minutes.unwrap_or(entry.minutes).into()),
+        if entry.billable { "Yes" } else { "No" },
+        entry.notes.as_deref().unwrap_or(""),
+    ])
+}
+
+#[cfg(test)]
 pub(crate) fn entries_csv(
     entries: &[crate::models::DetailedReportRow],
 ) -> Result<Vec<u8>, StatusCode> {
     let mut wtr = csv::Writer::from_writer(vec![]);
-    wtr.write_record([
-        "Date",
-        "Project",
-        "Task",
-        "User",
-        "Hours",
-        "Rounded Hours",
-        "Billable",
-        "Notes",
-    ])
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    wtr.write_record(ENTRY_EXPORT_HEADERS)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     for e in entries {
-        wtr.write_record(&[
-            e.spent_date.to_string(),
-            e.project_name.clone(),
-            e.task_name.clone(),
-            e.user_name.clone(),
-            format_hours2(e.minutes.into()),
-            format_hours2(e.rounded_minutes.unwrap_or(e.minutes).into()),
-            if e.billable { "Yes" } else { "No" }.into(),
-            e.notes.clone().unwrap_or_default(),
-        ])
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        write_entry_csv(&mut wtr, e).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     }
 
     wtr.into_inner()
@@ -184,22 +187,29 @@ pub async fn export_xlsx(
     // Same rows as the manager-only `report_detailed` server fn (every user's
     // hours and notes), so the same gate applies.
     let org_id = require_manager(&session).await?;
+    let permit = bounded::ExportPermit::acquire()?;
 
-    let from: chrono::NaiveDate = params.from.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
-    let to: chrono::NaiveDate = params.to.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
     let state = crate::state::global_state().await;
-    let entries = fetch_entries(
-        &state.db,
-        org_id,
-        from,
-        to,
-        params.client_id,
-        params.project_id,
-        params.user_id,
-    )
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let entries = limits::entries(&state.db, org_id, &params).await?;
 
+    let data = permit.render(move || entries_xlsx(&entries)).await?;
+
+    Ok((
+        [
+            (
+                axum::http::header::CONTENT_TYPE,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ),
+            (
+                axum::http::header::CONTENT_DISPOSITION,
+                "attachment; filename=\"timesheet.xlsx\"",
+            ),
+        ],
+        data,
+    ))
+}
+
+fn entries_xlsx(entries: &[crate::models::DetailedReportRow]) -> Result<Vec<u8>, StatusCode> {
     let mut workbook = rust_xlsxwriter::Workbook::new();
     let worksheet = workbook.add_worksheet();
 
@@ -247,23 +257,7 @@ pub async fn export_xlsx(
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     }
 
-    let data = workbook
-        .save_to_buffer()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    Ok((
-        [
-            (
-                axum::http::header::CONTENT_TYPE,
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            ),
-            (
-                axum::http::header::CONTENT_DISPOSITION,
-                "attachment; filename=\"timesheet.xlsx\"",
-            ),
-        ],
-        data,
-    ))
+    bounded::workbook_bytes(&mut workbook)
 }
 
 // ── Projects export ───────────────────────────────────────────────────────────
@@ -295,12 +289,22 @@ fn budget_cell(r: &ProjectExportRow) -> String {
     )
 }
 
-async fn fetch_projects_export(
+async fn fetch_projects_export<'e>(
+    executor: impl sqlx::PgExecutor<'e> + 'e,
     org_id: uuid::Uuid,
-    scope: &str,
+    scope: &'e str,
 ) -> Result<Vec<ProjectExportRow>, sqlx::Error> {
-    let state = crate::state::global_state().await;
-    let rows = sqlx::query_as!(
+    stream_projects_export(executor, org_id, scope)
+        .try_collect()
+        .await
+}
+
+fn stream_projects_export<'e>(
+    executor: impl sqlx::PgExecutor<'e> + 'e,
+    org_id: uuid::Uuid,
+    scope: &'e str,
+) -> impl Stream<Item = Result<ProjectExportRow, sqlx::Error>> + 'e {
+    sqlx::query_as!(
         ProjectExportRow,
         r#"SELECT c.name as client_name, p.code, p.name,
                   p.project_type as "project_type: horae_core::types::ProjectType",
@@ -309,21 +313,14 @@ async fn fetch_projects_export(
                   p.budget_amount_cents, p.budget_minutes, p.active
            FROM projects p
            JOIN clients c ON c.id = p.client_id
-           WHERE p.org_id = $1
-           ORDER BY c.name, p.name"#,
+           WHERE p.org_id = $1 AND CASE $2
+             WHEN 'budgeted' THEN p.active AND p.budget_kind <> 'none'
+             WHEN 'archived' THEN NOT p.active ELSE p.active END
+           ORDER BY c.name, p.name, p.id"#,
         org_id,
+        scope,
     )
-    .fetch_all(&state.db)
-    .await?;
-
-    Ok(rows
-        .into_iter()
-        .filter(|r| match scope {
-            "budgeted" => r.active && r.budget_kind != horae_core::types::BudgetKind::None,
-            "archived" => !r.active,
-            _ => r.active,
-        })
-        .collect())
+    .fetch(executor)
 }
 
 const PROJECT_EXPORT_HEADERS: [&str; 7] = [
@@ -336,40 +333,8 @@ pub async fn export_projects_csv(
 ) -> Result<impl IntoResponse, StatusCode> {
     let (_, org_id) = require_session(&session).await?;
 
-    let scope = params.scope.as_deref().unwrap_or("active");
-    let rows = fetch_projects_export(org_id, scope)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    let mut wtr = csv::Writer::from_writer(vec![]);
-    wtr.write_record(PROJECT_EXPORT_HEADERS)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    for r in &rows {
-        wtr.write_record(&[
-            r.client_name.clone(),
-            r.code.clone().unwrap_or_default(),
-            r.name.clone(),
-            r.project_type.label().to_string(),
-            r.currency.trim().to_string(),
-            budget_cell(r),
-            if r.active { "Active" } else { "Archived" }.to_string(),
-        ])
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    }
-    let data = wtr
-        .into_inner()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    Ok((
-        [
-            (axum::http::header::CONTENT_TYPE, "text/csv"),
-            (
-                axum::http::header::CONTENT_DISPOSITION,
-                "attachment; filename=\"projects.csv\"",
-            ),
-        ],
-        data,
-    ))
+    let state = crate::state::global_state().await;
+    streaming::projects(state.db.clone(), org_id, params).await
 }
 
 pub async fn export_projects_xlsx(
@@ -377,12 +342,30 @@ pub async fn export_projects_xlsx(
     Query(params): Query<ProjectsExportParams>,
 ) -> Result<impl IntoResponse, StatusCode> {
     let (_, org_id) = require_session(&session).await?;
+    let permit = bounded::ExportPermit::acquire()?;
 
     let scope = params.scope.as_deref().unwrap_or("active");
-    let rows = fetch_projects_export(org_id, scope)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let state = crate::state::global_state().await;
+    let rows = limits::projects(&state.db, org_id, scope).await?;
 
+    let data = permit.render(move || projects_xlsx(&rows)).await?;
+
+    Ok((
+        [
+            (
+                axum::http::header::CONTENT_TYPE,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ),
+            (
+                axum::http::header::CONTENT_DISPOSITION,
+                "attachment; filename=\"projects.xlsx\"",
+            ),
+        ],
+        data,
+    ))
+}
+
+fn projects_xlsx(rows: &[ProjectExportRow]) -> Result<Vec<u8>, StatusCode> {
     let mut workbook = rust_xlsxwriter::Workbook::new();
     let worksheet = workbook.add_worksheet();
     for (col, h) in PROJECT_EXPORT_HEADERS.iter().enumerate() {
@@ -406,23 +389,7 @@ pub async fn export_projects_xlsx(
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         }
     }
-    let data = workbook
-        .save_to_buffer()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    Ok((
-        [
-            (
-                axum::http::header::CONTENT_TYPE,
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            ),
-            (
-                axum::http::header::CONTENT_DISPOSITION,
-                "attachment; filename=\"projects.xlsx\"",
-            ),
-        ],
-        data,
-    ))
+    bounded::workbook_bytes(&mut workbook)
 }
 
 // ── Invoice export ────────────────────────────────────────────────────────────
@@ -434,10 +401,32 @@ pub(crate) async fn fetch_invoice_with_lines(
     invoice_id: uuid::Uuid,
     org_id: uuid::Uuid,
 ) -> Result<Option<(crate::models::Invoice, Vec<crate::models::InvoiceLine>)>, sqlx::Error> {
-    use horae_core::types::InvoiceStatus;
-
     let state = crate::state::global_state().await;
-    let Some(invoice) = sqlx::query_as!(
+    let mut connection = state.db.acquire().await?;
+    fetch_invoice_from(&mut connection, invoice_id, org_id).await
+}
+
+async fn fetch_invoice_from(
+    connection: &mut sqlx::PgConnection,
+    invoice_id: uuid::Uuid,
+    org_id: uuid::Uuid,
+) -> Result<Option<(crate::models::Invoice, Vec<crate::models::InvoiceLine>)>, sqlx::Error> {
+    let Some(invoice) = fetch_invoice_metadata(&mut *connection, invoice_id, org_id).await? else {
+        return Ok(None);
+    };
+    let lines = stream_invoice_lines(&mut *connection, invoice_id)
+        .try_collect()
+        .await?;
+    Ok(Some((invoice, lines)))
+}
+
+async fn fetch_invoice_metadata(
+    executor: impl sqlx::PgExecutor<'_>,
+    invoice_id: uuid::Uuid,
+    org_id: uuid::Uuid,
+) -> Result<Option<crate::models::Invoice>, sqlx::Error> {
+    use horae_core::types::InvoiceStatus;
+    sqlx::query_as!(
         crate::models::Invoice,
         r#"SELECT id, org_id, client_id, number,
                   status as "status: InvoiceStatus",
@@ -450,13 +439,15 @@ pub(crate) async fn fetch_invoice_with_lines(
         invoice_id,
         org_id,
     )
-    .fetch_optional(&state.db)
-    .await?
-    else {
-        return Ok(None);
-    };
+    .fetch_optional(executor)
+    .await
+}
 
-    let lines = sqlx::query_as!(
+fn stream_invoice_lines<'e>(
+    executor: impl sqlx::PgExecutor<'e> + 'e,
+    invoice_id: uuid::Uuid,
+) -> impl Stream<Item = Result<crate::models::InvoiceLine, sqlx::Error>> + 'e {
+    sqlx::query_as!(
         crate::models::InvoiceLine,
         r#"SELECT id, invoice_id, time_entry_id, description,
                   minutes, rate_cents, amount_cents
@@ -465,10 +456,7 @@ pub(crate) async fn fetch_invoice_with_lines(
            ORDER BY id"#,
         invoice_id,
     )
-    .fetch_all(&state.db)
-    .await?;
-
-    Ok(Some((invoice, lines)))
+    .fetch(executor)
 }
 
 /// The org's invoice branding block — shared with the `get_org_branding`
@@ -477,6 +465,13 @@ pub(crate) async fn fetch_org_branding(
     org_id: uuid::Uuid,
 ) -> Result<crate::models::OrgBranding, sqlx::Error> {
     let state = crate::state::global_state().await;
+    fetch_branding_from(&state.db, org_id).await
+}
+
+async fn fetch_branding_from(
+    executor: impl sqlx::PgExecutor<'_>,
+    org_id: uuid::Uuid,
+) -> Result<crate::models::OrgBranding, sqlx::Error> {
     sqlx::query_as!(
         crate::models::OrgBranding,
         r#"SELECT provider_name, provider_address, provider_tax_id,
@@ -486,7 +481,7 @@ pub(crate) async fn fetch_org_branding(
            FROM organizations WHERE id = $1"#,
         org_id,
     )
-    .fetch_one(&state.db)
+    .fetch_one(executor)
     .await
 }
 
@@ -496,42 +491,31 @@ pub async fn export_invoice_csv(
 ) -> Result<impl IntoResponse, StatusCode> {
     let org_id = require_manager(&session).await?;
 
-    let (invoice, lines) = fetch_invoice_with_lines(invoice_id, org_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let state = crate::state::global_state().await;
+    streaming::invoice(state.db.clone(), org_id, invoice_id).await
+}
 
-    let mut wtr = csv::Writer::from_writer(vec![]);
-    wtr.write_record(["Description", "Hours", "Rate", "Amount"])
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+pub async fn export_invoice_xlsx(
+    session: Session,
+    Path(invoice_id): Path<uuid::Uuid>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let org_id = require_manager(&session).await?;
+    let permit = bounded::ExportPermit::acquire()?;
 
-    for line in &lines {
-        wtr.write_record(&[
-            line.description.clone(),
-            format_hours2(line.minutes.into()),
-            format_cents_plain(line.rate_cents),
-            format_cents_plain(line.amount_cents),
-        ])
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    }
+    let state = crate::state::global_state().await;
+    let (invoice, lines) = limits::invoice(&state.db, org_id, invoice_id).await?;
 
-    // Total row
-    wtr.write_record(&[
-        "Total".to_string(),
-        String::new(),
-        String::new(),
-        format_cents_plain(invoice.total_cents),
-    ])
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let filename = format!("invoice-{}.xlsx", invoice.number);
+    let data = permit
+        .render(move || invoice_xlsx(&invoice, &lines))
+        .await?;
 
-    let data = wtr
-        .into_inner()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    let filename = format!("invoice-{}.csv", invoice.number);
     Ok((
         [
-            (axum::http::header::CONTENT_TYPE, "text/csv".to_string()),
+            (
+                axum::http::header::CONTENT_TYPE,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet".to_string(),
+            ),
             (
                 axum::http::header::CONTENT_DISPOSITION,
                 format!("attachment; filename=\"{filename}\""),
@@ -541,17 +525,10 @@ pub async fn export_invoice_csv(
     ))
 }
 
-pub async fn export_invoice_xlsx(
-    session: Session,
-    Path(invoice_id): Path<uuid::Uuid>,
-) -> Result<impl IntoResponse, StatusCode> {
-    let org_id = require_manager(&session).await?;
-
-    let (invoice, lines) = fetch_invoice_with_lines(invoice_id, org_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
-
+fn invoice_xlsx(
+    invoice: &crate::models::Invoice,
+    lines: &[crate::models::InvoiceLine],
+) -> Result<Vec<u8>, StatusCode> {
     let mut workbook = rust_xlsxwriter::Workbook::new();
     let worksheet = workbook.add_worksheet();
 
@@ -587,24 +564,7 @@ pub async fn export_invoice_xlsx(
         .write_number(total_row, 3, invoice.total_cents as f64 / 100.0)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let data = workbook
-        .save_to_buffer()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    let filename = format!("invoice-{}.xlsx", invoice.number);
-    Ok((
-        [
-            (
-                axum::http::header::CONTENT_TYPE,
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet".to_string(),
-            ),
-            (
-                axum::http::header::CONTENT_DISPOSITION,
-                format!("attachment; filename=\"{filename}\""),
-            ),
-        ],
-        data,
-    ))
+    bounded::workbook_bytes(&mut workbook)
 }
 
 pub async fn export_invoice_pdf(
@@ -612,40 +572,28 @@ pub async fn export_invoice_pdf(
     Path(invoice_id): Path<uuid::Uuid>,
 ) -> Result<impl IntoResponse, StatusCode> {
     let org_id = require_manager(&session).await?;
+    let permit = bounded::ExportPermit::acquire()?;
 
-    let (invoice, lines) = fetch_invoice_with_lines(invoice_id, org_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
     let state = crate::state::global_state().await;
+    let document = limits::pdf(&state.db, org_id, invoice_id).await?;
 
-    // Fetch client name and address.
-    let client = sqlx::query!(
-        "SELECT name, address, tax_id FROM clients WHERE id = $1",
-        invoice.client_id,
-    )
-    .fetch_one(&state.db)
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    let branding = fetch_org_branding(invoice.org_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    let pdf_bytes = crate::render::render_invoice_pdf(
-        &invoice,
-        &lines,
-        &client.name,
-        client.address.as_deref(),
-        client.tax_id.as_deref(),
-        &branding,
-    )
-    .map_err(|e| {
-        tracing::error!("PDF rendering failed: {e}");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    let filename = format!("invoice-{}.pdf", invoice.number);
+    let filename = format!("invoice-{}.pdf", document.invoice.number);
+    let pdf_bytes = permit
+        .render(move || {
+            crate::render::render_invoice_pdf(
+                &document.invoice,
+                &document.lines,
+                &document.client_name,
+                document.client_address.as_deref(),
+                document.client_tax_id.as_deref(),
+                &document.branding,
+            )
+            .map_err(|e| {
+                tracing::error!("PDF rendering failed: {e}");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })
+        })
+        .await?;
     Ok((
         [
             (

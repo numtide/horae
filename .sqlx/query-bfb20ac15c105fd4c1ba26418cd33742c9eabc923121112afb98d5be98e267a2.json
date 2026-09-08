@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE users SET name = 'Zoe' WHERE id = $1",
+  "query": "DELETE FROM invoice_line_items WHERE id = $1",
   "describe": {
     "columns": [],
     "parameters": {
@@ -10,5 +10,5 @@
     },
     "nullable": []
   },
-  "hash": "6f94ee89a9979ce9590978a9eb649fc3ec89fffbc0e6a1d5aad513cf712db146"
+  "hash": "bfb20ac15c105fd4c1ba26418cd33742c9eabc923121112afb98d5be98e267a2"
 }

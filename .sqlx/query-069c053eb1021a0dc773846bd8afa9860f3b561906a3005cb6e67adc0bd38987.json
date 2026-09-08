@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE clients SET name = 'Umbrella' WHERE id = $1",
+  "query": "UPDATE invoices SET notes = repeat('x', 32768) WHERE id = $1",
   "describe": {
     "columns": [],
     "parameters": {
@@ -10,5 +10,5 @@
     },
     "nullable": []
   },
-  "hash": "d2f0428b605abf26478dd6684385227cfb079fe6bd4c55e93d4b4e612e11a629"
+  "hash": "069c053eb1021a0dc773846bd8afa9860f3b561906a3005cb6e67adc0bd38987"
 }
