@@ -14,6 +14,8 @@ use uuid::Uuid;
 
 use super::{RowSource, VecSource, run_import};
 
+mod lookup_cache;
+
 struct PausedSource {
     before_pause: Option<SourceRow>,
     rows: VecSource,

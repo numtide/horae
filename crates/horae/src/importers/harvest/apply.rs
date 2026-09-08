@@ -5,7 +5,7 @@
 //! the provenance rows written in the same unit. If any step fails the savepoint
 //! rolls back — leaving no partial fragment — and the row is reported as an error
 //! so the run continues (FR-018). Only on a clean commit are the row's newly
-//! resolved parents promoted into the run cache.
+//! resolved parents, users and project-task links promoted into the run cache.
 
 use horae_core::importers::harvest::types::{EntityType, RowOutcome, SourceKind, SourceRow};
 use horae_core::importers::harvest::{convert, keys};
@@ -100,13 +100,19 @@ async fn apply_within(
     let task_id = task.id;
     fold(&mut outcomes, &mut pending, EntityType::Task, task);
 
-    resolve::ensure_project_task(sp, project_id, task_id, row)
+    resolve::ensure_project_task(sp, cache, project_id, task_id, row)
         .await
         .map_err(|e| (EntityType::Task, e))?;
+    pending.project_task = Some((project_id, task_id));
+
+    let (user_key, user_id) = resolve::resolve_user(sp, cache, org.org_id, row, source)
+        .await
+        .map_err(|e| (EntityType::TimeEntry, e))?;
+    pending.user = Some((user_key, user_id));
 
     // Time entry — the record proper.
     let (te_outcome, entry_slot) =
-        apply_time_entry(sp, cache, org, project_id, task_id, row, source)
+        apply_time_entry(sp, cache, org, project_id, task_id, user_id, row)
             .await
             .map_err(|e| (EntityType::TimeEntry, e))?;
     outcomes.push((EntityType::TimeEntry, te_outcome));
@@ -143,11 +149,9 @@ async fn apply_time_entry(
     org: OrgDefaults<'_>,
     project_id: Uuid,
     task_id: Uuid,
+    user_id: Uuid,
     row: &SourceRow,
-    source: SourceKind,
 ) -> Result<(RowOutcome, Option<String>), RowFailure> {
-    let user_id = resolve::resolve_user(sp, org.org_id, row, source).await?;
-
     let minutes_i64 = convert::hours_to_minutes(&row.hours)?;
     let minutes = i32::try_from(minutes_i64)
         .map_err(|_| RowFailure::new(format!("duration {minutes_i64} minutes out of range")))?;
