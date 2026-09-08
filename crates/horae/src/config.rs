@@ -2,8 +2,6 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
-    pub host: String,
-    pub port: u16,
     pub database_url: String,
     pub log_level: String,
     /// When `DEV_LOGIN=1`, skip OIDC and log in as the seeded admin user.
@@ -67,11 +65,6 @@ pub const DEFAULT_OIDC_BUTTON_LABEL: &str = "Continue with SSO";
 impl AppConfig {
     pub fn from_env() -> anyhow::Result<Self> {
         Ok(Self {
-            host: std::env::var("HORAE_HOST").unwrap_or_else(|_| "127.0.0.1".into()),
-            port: std::env::var("HORAE_PORT")
-                .ok()
-                .and_then(|p| p.parse().ok())
-                .unwrap_or(3000),
             database_url: std::env::var("DATABASE_URL")
                 .unwrap_or_else(|_| "postgres://localhost/horae".into()),
             log_level: std::env::var("HORAE_LOG").unwrap_or_else(|_| "info".into()),
