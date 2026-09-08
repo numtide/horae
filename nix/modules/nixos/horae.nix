@@ -131,8 +131,9 @@ in
 
     systemd.services.horae = {
       description = "Horae time tracking server";
-      after = [ "network.target" ] ++ lib.optionals cfg.database.createLocally [ "postgresql.service" ];
-      wants = lib.optionals cfg.database.createLocally [ "postgresql.service" ];
+      # The target waits for database/user provisioning as well as the server.
+      after = [ "network.target" ] ++ lib.optionals cfg.database.createLocally [ "postgresql.target" ];
+      requires = lib.optionals cfg.database.createLocally [ "postgresql.target" ];
       wantedBy = [ "multi-user.target" ];
 
       environment = {

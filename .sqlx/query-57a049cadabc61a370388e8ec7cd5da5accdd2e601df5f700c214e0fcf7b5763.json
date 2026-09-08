@@ -1,10 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO assignments (id, project_id, user_id, role, rate_cents)\n             VALUES (gen_random_uuid(), $1, $2, $3, 12000)\n             ON CONFLICT (project_id, user_id) DO NOTHING",
+  "query": "INSERT INTO assignments (id, project_id, user_id, role, rate_cents)\n             VALUES ($1, $2, $3, $4, 12000)",
   "describe": {
     "columns": [],
     "parameters": {
       "Left": [
+        "Uuid",
         "Uuid",
         "Uuid",
         {
@@ -23,5 +24,5 @@
     },
     "nullable": []
   },
-  "hash": "db48623e7a4264583f1f112cb80ebfe2c56e78532e14029e2b76bc1fbd1b37d2"
+  "hash": "57a049cadabc61a370388e8ec7cd5da5accdd2e601df5f700c214e0fcf7b5763"
 }

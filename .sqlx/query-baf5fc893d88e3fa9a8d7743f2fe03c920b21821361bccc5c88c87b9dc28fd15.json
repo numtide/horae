@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO users (id, org_id, email, name, org_role, billable_rate_cents)\n         VALUES ($1, $2, 'admin@example.com', 'Admin User', $3, 10000)\n         ON CONFLICT (id) DO NOTHING",
+  "query": "INSERT INTO users (id, org_id, email, name, org_role, billable_rate_cents)\n         VALUES ($1, $2, 'admin@example.com', 'Admin User', $3, 10000)",
   "describe": {
     "columns": [],
     "parameters": {
@@ -23,5 +23,5 @@
     },
     "nullable": []
   },
-  "hash": "a68a64b13f898f52e79a9ef48707f3dbfc868af6ee7fd891d0ad103f8894219e"
+  "hash": "baf5fc893d88e3fa9a8d7743f2fe03c920b21821361bccc5c88c87b9dc28fd15"
 }
