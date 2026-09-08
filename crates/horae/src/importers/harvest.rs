@@ -60,14 +60,18 @@ pub async fn run_import<S: RowSource>(
         default_currency,
     };
     let mut connection = lock_import(pool, org_id).await?;
-    let mut tx = connection.begin().await?;
-    let report = apply_rows(&mut tx, org, source, mode, src).await?;
-    match mode {
-        ImportMode::Commit => tx.commit().await?,
-        ImportMode::DryRun => tx.rollback().await?,
+    let result = async {
+        let mut tx = connection.begin().await?;
+        let report = apply_rows(&mut tx, org, source, mode, src).await?;
+        match mode {
+            ImportMode::Commit => tx.commit().await?,
+            ImportMode::DryRun => tx.rollback().await?,
+        }
+        Ok(report)
     }
-    connection.close().await?;
-    Ok(report)
+    .await;
+    release_import(connection).await?;
+    result
 }
 
 async fn apply_rows<S: RowSource>(
@@ -149,6 +153,19 @@ async fn lock_import(
     Ok(connection)
 }
 
+async fn release_import(
+    mut connection: sqlx::pool::PoolConnection<sqlx::Postgres>,
+) -> anyhow::Result<()> {
+    // Closing the socket does not wait for PostgreSQL to release session locks.
+    // Await the unlock so an immediate retry cannot see a completed import as busy.
+    // SQLx flushes any rollback queued by a dropped transaction before this query.
+    sqlx::query!("SELECT pg_advisory_unlock_all()")
+        .execute(&mut *connection)
+        .await?;
+    connection.close().await?;
+    Ok(())
+}
+
 /// A cancelled waiter cannot cancel blocking HTTP work. Keep the import
 /// session with the worker until it really exits, not with the waiting future.
 async fn blocking_import_call<T: Send + 'static>(
@@ -177,9 +194,17 @@ pub async fn run_api_import(
 ) -> Result<ImportReport, ApiImportError> {
     let mut connection = lock_import(pool, org_id).await?;
     let key = &cfg.encryption_key_hex;
-    let mut conn = credentials::load(&mut *connection, org_id, key)
-        .await?
-        .ok_or(ApiImportError::NotConnected)?;
+    let loaded = credentials::load(&mut *connection, org_id, key)
+        .await
+        .map_err(ApiImportError::from)
+        .and_then(|value| value.ok_or(ApiImportError::NotConnected));
+    let mut conn = match loaded {
+        Ok(value) => value,
+        Err(error) => {
+            release_import(connection).await?;
+            return Err(error);
+        }
+    };
 
     // Transparent refresh when the access token is at or past expiry (FR-024).
     if let Some(expiry) = conn.token_expires_at
@@ -193,8 +218,14 @@ pub async fn run_api_import(
         })
         .await?;
         connection = returned_connection;
-        let refreshed = refreshed.map_err(|_| ApiImportError::ReconnectRequired)?;
-        credentials::update_tokens(
+        let refreshed = match refreshed {
+            Ok(value) => value,
+            Err(_) => {
+                release_import(connection).await?;
+                return Err(ApiImportError::ReconnectRequired);
+            }
+        };
+        let updated = credentials::update_tokens(
             &mut *connection,
             org_id,
             key,
@@ -202,7 +233,11 @@ pub async fn run_api_import(
             &refreshed.refresh_token,
             refreshed.expires_at,
         )
-        .await?;
+        .await;
+        if let Err(error) = updated {
+            release_import(connection).await?;
+            return Err(error.into());
+        }
         conn.access_token = refreshed.access_token;
         conn.refresh_token = refreshed.refresh_token;
         conn.token_expires_at = refreshed.expires_at;
@@ -222,18 +257,20 @@ pub async fn run_api_import(
         fetch_all_collections(&access, &account, since)
     })
     .await?;
-    let data = data?;
-
-    let result = apply_api_data(
-        &mut connection,
-        org_id,
-        default_currency,
-        mode,
-        &data,
-        capture_started_at,
-    )
+    let result = async {
+        let data = data?;
+        apply_api_data(
+            &mut connection,
+            org_id,
+            default_currency,
+            mode,
+            &data,
+            capture_started_at,
+        )
+        .await
+    }
     .await;
-    connection.close().await.map_err(anyhow::Error::from)?;
+    release_import(connection).await?;
     result.map_err(Into::into)
 }
 

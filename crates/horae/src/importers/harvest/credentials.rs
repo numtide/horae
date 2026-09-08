@@ -134,38 +134,39 @@ pub async fn store(
     let access_enc = encrypt(key_hex, access_token)?;
     let refresh_enc = encrypt(key_hex, refresh_token)?;
     let mut connection = super::lock_import(pool, org_id).await?;
-    let mut tx = connection.begin().await?;
-    let bound_account = sqlx::query_scalar!(
-        "SELECT harvest_account_id FROM harvest_account_bindings WHERE org_id = $1",
-        org_id,
-    )
-    .fetch_optional(&mut *tx)
-    .await?;
-    match bound_account {
-        Some(bound) if bound != account_id => return Err(ConnectionError::AccountChange.into()),
-        Some(_) => {}
-        None => {
-            let has_provenance = sqlx::query_scalar!(
+    let result = async {
+        let mut tx = connection.begin().await?;
+        let bound_account = sqlx::query_scalar!(
+            "SELECT harvest_account_id FROM harvest_account_bindings WHERE org_id = $1",
+            org_id,
+        )
+        .fetch_optional(&mut *tx)
+        .await?;
+        match bound_account {
+            Some(bound) if bound != account_id => return Err(ConnectionError::AccountChange.into()),
+            Some(_) => {}
+            None => {
+                let has_provenance = sqlx::query_scalar!(
                 r#"SELECT EXISTS(SELECT 1 FROM harvest_import_map WHERE org_id = $1) AS "exists!""#,
                 org_id,
             )
             .fetch_one(&mut *tx)
             .await?;
-            if has_provenance {
-                return Err(ConnectionError::UnidentifiedProvenance.into());
-            }
-            sqlx::query!(
+                if has_provenance {
+                    return Err(ConnectionError::UnidentifiedProvenance.into());
+                }
+                sqlx::query!(
                 "INSERT INTO harvest_account_bindings (org_id, harvest_account_id) VALUES ($1, $2)",
                 org_id,
                 account_id,
             )
             .execute(&mut *tx)
             .await?;
+            }
         }
-    }
-    let id = Uuid::now_v7();
-    let saved = sqlx::query!(
-        r#"INSERT INTO harvest_credentials
+        let id = Uuid::now_v7();
+        let saved = sqlx::query!(
+            r#"INSERT INTO harvest_credentials
              (id, org_id, harvest_account_id, access_token_enc, refresh_token_enc,
               token_expires_at, scope)
            VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -175,33 +176,37 @@ pub async fn store(
              token_expires_at   = EXCLUDED.token_expires_at,
              scope              = EXCLUDED.scope
            WHERE harvest_credentials.harvest_account_id = EXCLUDED.harvest_account_id"#,
-        id,
-        org_id,
-        account_id,
-        access_enc,
-        refresh_enc,
-        token_expires_at as Option<chrono::DateTime<chrono::Utc>>,
-        scope,
-    )
-    .execute(&mut *tx)
-    .await?;
-    if saved.rows_affected() != 1 {
-        return Err(ConnectionError::AccountChange.into());
+            id,
+            org_id,
+            account_id,
+            access_enc,
+            refresh_enc,
+            token_expires_at as Option<chrono::DateTime<chrono::Utc>>,
+            scope,
+        )
+        .execute(&mut *tx)
+        .await?;
+        if saved.rows_affected() != 1 {
+            return Err(ConnectionError::AccountChange.into());
+        }
+        tx.commit().await?;
+        Ok(())
     }
-    tx.commit().await?;
-    connection.close().await?;
-    Ok(())
+    .await;
+    super::release_import(connection).await?;
+    result
 }
 
 /// Remove OAuth secrets, retaining account identity and all imported records.
 /// Like connecting, this must not race with import or token refresh.
 pub async fn disconnect(pool: &sqlx::PgPool, org_id: Uuid) -> Result<(), super::ApiImportError> {
     let mut connection = super::lock_import(pool, org_id).await?;
-    sqlx::query!("DELETE FROM harvest_credentials WHERE org_id = $1", org_id)
+    let result = sqlx::query!("DELETE FROM harvest_credentials WHERE org_id = $1", org_id)
         .execute(&mut *connection)
         .await
-        .map_err(anyhow::Error::from)?;
-    connection.close().await.map_err(anyhow::Error::from)?;
+        .map_err(anyhow::Error::from);
+    super::release_import(connection).await?;
+    result?;
     Ok(())
 }
 
@@ -425,8 +430,17 @@ mod tests {
             load(&pool, org, KEY).await.unwrap().unwrap().account_id,
             "original"
         );
-        held.close().await.unwrap();
+        super::super::release_import(held).await.unwrap();
         disconnect(&pool, org).await.unwrap();
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn completed_credential_changes_allow_immediate_retries(pool: sqlx::PgPool) {
+        let org = organization(&pool).await;
+        for _ in 0..64 {
+            connect(&pool, org, "original").await.unwrap();
+            disconnect(&pool, org).await.unwrap();
+        }
     }
 
     #[sqlx::test(migrations = "./migrations")]

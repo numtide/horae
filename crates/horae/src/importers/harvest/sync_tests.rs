@@ -22,7 +22,7 @@ async fn apply_api_data(
         capture_started_at,
     )
     .await;
-    connection.close().await?;
+    release_import(connection).await?;
     result
 }
 
@@ -103,7 +103,7 @@ async fn refreshed_tokens_survive_a_dry_run_rollback_in_the_same_import_session(
     .await
     .unwrap();
     assert_eq!(report.summary.time_entries.created, 1);
-    connection.close().await.unwrap();
+    release_import(connection).await.unwrap();
     let stored = credentials::load(&pool, org, KEY).await.unwrap().unwrap();
     assert_eq!(
         (stored.access_token.as_str(), stored.refresh_token.as_str()),
