@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, project_id, user_id, role as \"role: ProjectRole\", rate_cents,\n                created_at as \"created_at: chrono::DateTime<chrono::Utc>\"\n         FROM assignments WHERE project_id = $1 ORDER BY created_at",
+  "query": "SELECT a.id, a.project_id, a.user_id, a.role as \"role: ProjectRole\",\n                CASE WHEN $3 THEN a.rate_cents ELSE NULL END AS rate_cents,\n                a.created_at as \"created_at: chrono::DateTime<chrono::Utc>\"\n         FROM assignments a JOIN projects p ON p.id = a.project_id\n         WHERE a.project_id = $1 AND p.org_id = $2\n         ORDER BY a.created_at, a.id",
   "describe": {
     "columns": [
       {
@@ -47,7 +47,9 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Uuid",
+        "Bool"
       ]
     },
     "nullable": [
@@ -55,9 +57,9 @@
       false,
       false,
       false,
-      true,
+      null,
       false
     ]
   },
-  "hash": "77685ce6fc79f4dc78af0ce9c90223c9f5b16b4c42b3ff89b59592d60a750139"
+  "hash": "21cbff79f969bfecd384c61cd1dd1b5c86f0f0a2ecfefcc7dda63377916b947e"
 }

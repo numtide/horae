@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "ALTER TABLE time_entries ADD CONSTRAINT seed_test_failure CHECK (minutes < 300)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "25a79538628672752948621269630426b7c39b1984e0fb13d3c23646229e6f59"
+}

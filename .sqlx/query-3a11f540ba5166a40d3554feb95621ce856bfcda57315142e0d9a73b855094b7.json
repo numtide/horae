@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT jsonb_build_array(\n            (SELECT jsonb_agg(to_jsonb(o) ORDER BY id) FROM organizations o),\n            (SELECT jsonb_agg(to_jsonb(u) ORDER BY id) FROM users u),\n            (SELECT jsonb_agg(to_jsonb(c) ORDER BY id) FROM clients c),\n            (SELECT jsonb_agg(to_jsonb(p) ORDER BY id) FROM projects p),\n            (SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM tasks t),\n            (SELECT jsonb_agg(to_jsonb(a) ORDER BY id) FROM assignments a),\n            (SELECT jsonb_agg(to_jsonb(pt) ORDER BY project_id, task_id) FROM project_tasks pt),\n            (SELECT jsonb_agg(to_jsonb(e) ORDER BY id) FROM time_entries e)\n        ) AS \"snapshot!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "snapshot!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "3a11f540ba5166a40d3554feb95621ce856bfcda57315142e0d9a73b855094b7"
+}
