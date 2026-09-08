@@ -62,6 +62,44 @@ fn from_list<T: 'static, E: 'static, R: Default>(
         .unwrap_or_default()
 }
 
+/// Empty is an intentional clear/start action, not a failed parse.
+fn entry_minutes(input: &str) -> Result<Option<i32>, &'static str> {
+    if input.trim().is_empty() {
+        return Ok(None);
+    }
+    match horae_core::duration::parse(input) {
+        Ok(m) if m <= 24 * 60 => Ok(Some(m as i32)),
+        Ok(_) => Err("Duration can't exceed 24 hours."),
+        Err(_) => Err("Enter a duration like 1:30 or 1.5 (at most 24 hours)."),
+    }
+}
+
+/// Only a blank new entry on today, without a start time, may start a timer.
+/// A typed zero is a duration, and invalid text must never start a timer.
+fn modal_minutes(input: &str, can_start_timer: bool) -> Result<Option<i32>, &'static str> {
+    match entry_minutes(input)? {
+        None if can_start_timer => Ok(None),
+        None | Some(0) => Err("Duration must be greater than zero."),
+        minutes => Ok(minutes),
+    }
+}
+
+struct CellFields {
+    minutes: i32,
+    notes: Option<String>,
+    billable: bool,
+    start_minute: Option<i32>,
+}
+
+fn cell_fields(input: &str, existing: Option<&TimeEntry>) -> Result<CellFields, &'static str> {
+    Ok(CellFields {
+        minutes: entry_minutes(input)?.unwrap_or(0),
+        notes: existing.and_then(|e| e.notes.clone()),
+        billable: existing.is_none_or(|e| e.billable),
+        start_minute: existing.and_then(|e| e.start_minute),
+    })
+}
+
 /// Create, update, or (when `minutes` is 0) delete a time entry — `existing` is
 /// the entry to change, or `None` to create one. Shared by the week grid cells
 /// and the entry dialog so both save the same way.
@@ -356,7 +394,7 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
     let mut add_project = use_signal(String::new);
     let mut add_task = use_signal(String::new);
     let mut add_notes = use_signal(String::new);
-    let mut add_duration = use_signal(|| "0:00".to_string());
+    let mut add_duration = use_signal(String::new);
     let mut add_error = use_signal(|| None::<String>);
     let mut add_saving = use_signal(|| false);
     // When set, the modal edits this existing entry instead of creating one; its
@@ -371,14 +409,17 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
     // a new entry on today's column with no duration typed yet. Once a duration
     // or a start time is set the entry is clearly a fixed one, so the primary
     // saves instead of starting a timer.
-    let timer_mode = use_memo(move || {
+    let can_start_timer = use_memo(move || {
         let Some(date) = *add_open.read() else {
             return false;
         };
-        editing.read().is_none()
-            && date == today
-            && add_start.read().is_none()
-            && !matches!(horae_core::duration::parse(&add_duration.read()), Ok(m) if m > 0)
+        editing.read().is_none() && date == today && add_start.read().is_none()
+    });
+    let timer_mode = use_memo(move || {
+        matches!(
+            modal_minutes(&add_duration.read(), can_start_timer()),
+            Ok(None)
+        )
     });
 
     // Open the modal to create a new entry for `date`, defaulting the selects to
@@ -394,7 +435,7 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
         add_project.set(first_project);
         add_task.set(first_task);
         add_notes.set(String::new());
-        add_duration.set("0:00".to_string());
+        add_duration.set(String::new());
         add_start.set(None);
         add_error.set(None);
         add_open.set(Some(date));
@@ -575,18 +616,27 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
     let mut addrow_task = use_signal(String::new);
 
     // Commit a grid cell: create, update, or clear the entry behind it, then
-    // reload. Notes/billable of an updated entry are preserved.
+    // reload. Notes, billability, and the start time of an update are preserved.
     let commit_cell = use_callback(move |edit: CellEdit| {
-        let (notes, billable) = edit
-            .existing
-            .and_then(|id| {
-                week_entries
-                    .read()
-                    .iter()
-                    .find(|e| e.id == id)
-                    .map(|e| (e.notes.clone(), e.billable))
-            })
-            .unwrap_or((None, true));
+        let fields = {
+            let entries = week_entries.read();
+            let existing = edit
+                .existing
+                .and_then(|id| entries.iter().find(|e| e.id == id));
+            if edit.existing.is_some() && existing.is_none() {
+                grid_error.set(Some(
+                    "Entry is no longer available. Refresh and try again.".to_string(),
+                ));
+                return;
+            }
+            match cell_fields(&edit.input, existing) {
+                Ok(fields) => fields,
+                Err(message) => {
+                    grid_error.set(Some(message.to_string()));
+                    return;
+                }
+            }
+        };
         let mut timer = running_timer;
         spawn(async move {
             let res = persist_entry(
@@ -594,10 +644,10 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                 edit.project_id.to_string(),
                 edit.task_id.to_string(),
                 edit.day,
-                edit.minutes,
-                notes,
-                billable,
-                None, // Week-grid cells are untimed (no time of day)
+                fields.minutes,
+                fields.notes,
+                fields.billable,
+                fields.start_minute,
             )
             .await;
             match res {
@@ -931,6 +981,7 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                                 input {
                                     class: "form-input ts-modal-duration",
                                     "aria-label": "Duration",
+                                    placeholder: "0:00",
                                     value: "{add_duration}",
                                     oninput: move |e| add_duration.set(e.value()),
                                 }
@@ -966,7 +1017,14 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                                             return;
                                         };
                                         let mut running_timer = running_timer;
-                                        if timer_mode() {
+                                        let minutes = match modal_minutes(&add_duration.read(), can_start_timer()) {
+                                            Ok(minutes) => minutes,
+                                            Err(message) => {
+                                                add_error.set(Some(message.to_string()));
+                                                return;
+                                            }
+                                        };
+                                        let Some(minutes) = minutes else {
                                             add_saving.set(true);
                                             add_error.set(None);
                                             spawn(async move {
@@ -981,27 +1039,6 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                                                 add_saving.set(false);
                                             });
                                             return;
-                                        }
-                                        // Parse cap keeps the u32 -> i32 cast lossless: a day
-                                        // can't hold more than 24h, and 0 is not an entry.
-                                        const MAX_ENTRY_MINUTES: u32 = 24 * 60;
-                                        let minutes = match horae_core::duration::parse(&add_duration.read()) {
-                                            Ok(0) => {
-                                                add_error
-                                                    .set(Some("Duration must be greater than zero.".to_string()));
-                                                return;
-                                            }
-                                            Ok(m) if m > MAX_ENTRY_MINUTES => {
-                                                add_error
-                                                    .set(Some("Duration can't exceed 24 hours.".to_string()));
-                                                return;
-                                            }
-                                            Ok(m) => m as i32,
-                                            Err(_) => {
-                                                add_error
-                                                    .set(Some("Enter a duration like 1:30.".to_string()));
-                                                return;
-                                            }
                                         };
                                         let start_minute = *add_start.read();
                                         let editing_id = *editing.read();
@@ -1822,7 +1859,7 @@ struct CellEdit {
     day: NaiveDate,
     /// The entry already in the cell (update/delete), or `None` to create one.
     existing: Option<Uuid>,
-    minutes: i32,
+    input: String,
 }
 
 /// The actions the editable week grid dispatches back to the page.
@@ -1950,19 +1987,9 @@ fn render_week_view(
                                                         value: "{val}",
                                                         placeholder: "\u{2013}",
                                                         onchange: move |e| {
-                                                            let raw = e.value();
-                                                            let v = raw.trim();
-                                                            let minutes = if v.is_empty() {
-                                                                0
-                                                            } else {
-                                                                match horae_core::duration::parse(v) {
-                                                                    Ok(m) if m <= 24 * 60 => m as i32,
-                                                                    _ => return,
-                                                                }
-                                                            };
                                                             actions
                                                                 .commit
-                                                                .call(CellEdit { project_id: pid, task_id: tid, day, existing, minutes });
+                                                                .call(CellEdit { project_id: pid, task_id: tid, day, existing, input: e.value() });
                                                         },
                                                     }
                                                 }
@@ -2142,6 +2169,67 @@ mod tests {
             invoice_id: None,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
+        }
+    }
+
+    #[test]
+    fn invalid_duration_cannot_start_a_timer_save_or_clear_a_cell() {
+        let entry = timed_entry(540, 60);
+        for input in [
+            "-1",
+            "-0",
+            "NaN",
+            "inf",
+            "71582789:00",
+            "1:60",
+            "oops",
+            "24:01",
+        ] {
+            assert!(modal_minutes(input, true).is_err(), "timer: {input}");
+            assert!(modal_minutes(input, false).is_err(), "save: {input}");
+            assert!(cell_fields(input, Some(&entry)).is_err(), "cell: {input}");
+        }
+    }
+
+    #[test]
+    fn only_a_blank_duration_can_start_an_eligible_timer() {
+        assert_eq!(modal_minutes("  ", true), Ok(None));
+        assert!(modal_minutes("  ", false).is_err());
+        for input in ["0", "0:00", "0.0001"] {
+            assert!(modal_minutes(input, true).is_err());
+        }
+        assert_eq!(modal_minutes("1.5", true), Ok(Some(90)));
+        assert_eq!(modal_minutes("24:00", false), Ok(Some(1440)));
+    }
+
+    #[test]
+    fn weekly_duration_edit_preserves_nine_am_start_notes_and_billability() {
+        let mut entry = timed_entry(540, 60);
+        entry.notes = Some("Keep these notes".to_string());
+        entry.billable = false;
+
+        let fields = cell_fields("1:30", Some(&entry)).unwrap();
+
+        assert_eq!(fields.minutes, 90);
+        assert_eq!(fields.start_minute, Some(540));
+        assert_eq!(fields.notes, entry.notes);
+        assert!(!fields.billable);
+    }
+
+    #[test]
+    fn weekly_new_entries_are_untimed_and_explicit_clears_still_work() {
+        let fields = cell_fields("1.5", None).unwrap();
+        assert_eq!(fields.minutes, 90);
+        assert_eq!(fields.start_minute, None);
+        assert_eq!(fields.notes, None);
+        assert!(fields.billable);
+        for input in ["", "  ", "0:00"] {
+            assert_eq!(
+                cell_fields(input, Some(&timed_entry(540, 60)))
+                    .unwrap()
+                    .minutes,
+                0
+            );
         }
     }
 

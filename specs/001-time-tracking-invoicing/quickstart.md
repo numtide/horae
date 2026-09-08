@@ -34,6 +34,10 @@ Each maps to a user story in `spec.md`. "Expected" is the pass condition.
 1. Add a manual entry (date, duration, project, task, notes) → **Expected**: it appears in the list (AS3).
 1. Edit an entry's duration/notes/billable flag → **Expected**: changes persist and day/period totals update (AS4).
 1. With a timer running, try to start a second one → **Expected**: prevented / first is stopped, with a clear message (AS5, FR-004).
+1. Open a new entry for today without a start time. Leave duration blank → **Expected**: the primary action is **Start timer**. Type `0:00`, `-1`, `NaN`, `inf`, `71582789:00`, or malformed text and submit → **Expected**: a visible error and no timer or saved entry. Type `1.5` → saves 90 minutes; entries cannot exceed 24 hours.
+1. In an editable Week cell with saved time, enter the invalid values above → **Expected**: a visible error; reloading shows the original entry unchanged. Explicitly clearing the cell or entering `0:00` still deletes an open entry.
+
+Duration input accepts non-negative `H:MM` or decimal hours, rounded half up to whole minutes without floating-point arithmetic. The shared parser allows up to `u32::MAX` minutes (for hour budgets); entry forms additionally limit a single entry to 24 hours. Decimal input supports at most 38 fractional digits and an unscaled numerator up to `i128::MAX`. Negative values, scientific notation, non-finite values, and values outside these bounds are rejected.
 
 ### US2 — Organize clients, projects, tasks (P2)
 

@@ -35,6 +35,7 @@ Each maps to a spec acceptance scenario / success criterion.
 1. **Positioning (Story 2 / SC-002)**: An entry with start 14:00 for 1:00 renders beginning at the 14:00 gridline, one hour tall.
 1. **Timer start (Story 2 / SC-006)**: Start a timer, wait, stop it → the finished entry appears at the clock time it was started (to the snap step).
 1. **Untimed unchanged (Story 3 / SC-004)**: Add an entry via the Week grid (duration only) → in Calendar it stacks from the top of its day; day/week totals equal the exact sum (SC-003). Clear a timed entry's start in the form → it moves to the untimed stack, duration unchanged.
+1. **Week edit preserves placement**: Create a 9:00 entry lasting 1:00, then change its Week cell to `1:30` → in Calendar it still starts at 9:00 and ends at 10:30 after reload, with notes and billability unchanged. Edit a 23:45 entry to `1:00` → the server retains its start and clamps the duration to the remaining 15 minutes.
 1. **Resize & move (Story 4)**: Drag a timed block's bottom edge down 1h → duration +1:00, same start. Drag its body to 13:00 → start 13:00, same duration. Drag it into another day's column → moves days, keeps start+duration. All persist after reload.
 1. **Edge cases**: Drag past end-of-day → clamps to 24:00 (no cross-midnight). A plain click (no drag) → opens the entry form with no start time (today's behavior). Try to move/resize a submitted entry → blocked with a "locked" message.
 1. **Totals invariant (SC-003)**: On a mixed day (timed + untimed), the day total and week total equal the exact sum of every entry's minutes — unchanged by any start time.
@@ -42,4 +43,4 @@ Each maps to a spec acceptance scenario / success criterion.
 
 ## Expected outcome
 
-All automated checks green; scenarios 1–8 behave as described; existing (pre-feature) entries display, edit, submit, and total exactly as before.
+All automated checks green; the manual scenarios behave as described; existing (pre-feature) entries display, edit, submit, and total exactly as before.
