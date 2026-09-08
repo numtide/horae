@@ -74,7 +74,7 @@ pub struct ApiUser {
 pub struct ApiTimeEntry {
     pub id: i64,
     pub spent_date: NaiveDate,
-    pub hours: f64,
+    pub hours: serde_json::Number,
     pub notes: Option<String>,
     #[serde(default)]
     pub billable: bool,
@@ -84,8 +84,8 @@ pub struct ApiTimeEntry {
     pub project: ApiRef,
     pub task: ApiRef,
     pub user: ApiRef,
-    pub billable_rate: Option<f64>,
-    pub cost_rate: Option<f64>,
+    pub billable_rate: Option<serde_json::Number>,
+    pub cost_rate: Option<serde_json::Number>,
     pub updated_at: Option<DateTime<Utc>>,
 }
 
@@ -107,18 +107,43 @@ pub struct HarvestData {
     pub time_entries: Vec<ApiTimeEntry>,
 }
 
-/// Render a Harvest JSON number back to a decimal string for the exact
-/// [`horae_core::importers::harvest::convert`] helpers — never an `f64` in the
-/// conversion path. Harvest sends at most 2 decimals for hours and money; six
-/// digits is more than enough to reproduce the source value.
-fn decimal(n: f64) -> String {
-    // Trim trailing zeros so "1.500000" → "1.5" (keeps the exact value).
-    let s = format!("{n:.6}");
-    let trimmed = s.trim_end_matches('0').trim_end_matches('.');
-    if trimmed.is_empty() {
-        "0".to_string()
+/// Preserve JSON decimals through the page Value and typed record. The enabled
+/// arbitrary_precision feature is required at BOTH deserialization stages.
+/// Expand ordinary JSON exponents without changing the user-input grammar.
+/// Exponents beyond the core converter's precision remain unexpanded for its
+/// validation, rather than allocating an attacker-controlled output size.
+pub(super) fn decimal(n: &serde_json::Number) -> String {
+    let text = n.to_string();
+    let Some((mantissa, exponent)) = text.split_once(['e', 'E']) else {
+        return text;
+    };
+    let Ok(exponent) = exponent.parse::<i32>() else {
+        return text;
+    };
+    if !(-38..=38).contains(&exponent) {
+        return text;
+    }
+    let (sign, mantissa) = mantissa
+        .strip_prefix('-')
+        .map_or(("", mantissa), |n| ("-", n));
+    let point = mantissa.find('.').unwrap_or(mantissa.len());
+    let Ok(point) = i32::try_from(point) else {
+        return text;
+    };
+    let Some(point) = point.checked_add(exponent) else {
+        return text;
+    };
+    let mut digits = mantissa.replace('.', "");
+    if point <= 0 {
+        format!("{sign}0.{}{digits}", "0".repeat((-point) as usize))
     } else {
-        trimmed.to_string()
+        let point = point as usize;
+        if point < digits.len() {
+            digits.insert(point, '.');
+        } else {
+            digits.push_str(&"0".repeat(point - digits.len()));
+        }
+        format!("{sign}{digits}")
     }
 }
 
@@ -195,14 +220,14 @@ impl<'a> RowLookup<'a> {
             }),
 
             spent_date: te.spent_date,
-            hours: decimal(te.hours),
+            hours: decimal(&te.hours),
             notes: te.notes.clone(),
             billable: te.billable,
             invoiced: te.is_billed,
 
-            billable_rate: te.billable_rate.map(decimal),
+            billable_rate: te.billable_rate.as_ref().map(decimal),
             billable_amount: None,
-            cost_rate: te.cost_rate.map(decimal),
+            cost_rate: te.cost_rate.as_ref().map(decimal),
             cost_amount: None,
             currency,
 
@@ -292,16 +317,43 @@ mod tests {
         assert!(r0.billable);
         // Harvest's billed flag is captured as informational only.
         assert!(r0.invoiced);
-        assert_eq!(r0.billable_rate.as_deref(), Some("150"));
+        assert_eq!(r0.billable_rate.as_deref(), Some("150.0"));
     }
 
     #[test]
     fn hours_render_as_exact_decimals() {
-        assert_eq!(decimal(1.5), "1.5");
-        assert_eq!(decimal(0.25), "0.25");
-        assert_eq!(decimal(2.0), "2");
-        assert_eq!(decimal(0.0), "0");
-        assert_eq!(decimal(150.0), "150");
+        for value in ["1.5", "0.25", "2.0", "0.0", "150.0", "1.004999999999999999"] {
+            assert_eq!(decimal(&value.parse().unwrap()), value);
+        }
+    }
+
+    #[test]
+    fn json_exponents_expand_exactly_with_bounded_output() {
+        use horae_core::importers::harvest::convert::{hours_to_minutes, money_to_cents};
+        for (json, expected) in [
+            ("1.5e2", "150"),
+            ("1e-2", "0.01"),
+            ("1.25e+1", "12.5"),
+            ("-1e-2", "-0.01"),
+            ("1e0", "1"),
+            ("9.223372036854775807e16", "92233720368547758.07"),
+        ] {
+            assert_eq!(decimal(&json.parse().unwrap()), expected);
+        }
+        assert_eq!(
+            money_to_cents(&decimal(&"9.223372036854775807e16".parse().unwrap())),
+            Ok(i64::MAX)
+        );
+        assert_eq!(
+            hours_to_minutes(&decimal(&"1.5e-1".parse().unwrap())),
+            Ok(9)
+        );
+        for json in ["1e2147483647", "1e-2147483648", "1e99999999999999999999"] {
+            let value = decimal(&json.parse().unwrap());
+            assert!(value.len() < 32);
+            assert!(hours_to_minutes(&value).is_err());
+            assert!(money_to_cents(&value).is_err());
+        }
     }
 
     #[test]
@@ -310,5 +362,53 @@ mod tests {
         let rows = assemble_rows(&fixture());
         assert_eq!(hours_to_minutes(&rows[0].hours).unwrap(), 90);
         assert_eq!(hours_to_minutes(&rows[1].hours).unwrap(), 15);
+    }
+
+    #[test]
+    fn http_page_preserves_decimal_values_before_integer_conversion() {
+        use horae_core::importers::harvest::convert::{hours_to_minutes, money_to_cents};
+        use http::test_server::{Response, Server};
+
+        // Raw JSON is intentional: json!(a_float) would already lose the source
+        // precision before the real HTTP parser ever sees it.
+        let server = Server::start(|_| Response {
+            status: 200,
+            headers: vec![],
+            body: br#"{"time_entries":[{
+              "id":5000,"spent_date":"2026-01-15",
+              "hours":0.00833333333333333333333333333333333334,
+              "project":{"id":10},"task":{"id":100},"user":{"id":1000},
+              "billable_rate":1.004999999999999999,
+              "cost_rate":92233720368547758.07
+            }],"links":{"next":null}}"#
+                .to_vec(),
+        });
+        let data = fixture();
+        let lookup = RowLookup::new(&data);
+        let mut rows = Vec::new();
+        http::ApiHttp::local(server.base.clone())
+            .pages::<ApiTimeEntry>(
+                "token",
+                "account",
+                "time_entries",
+                None,
+                || false,
+                |entries| {
+                    rows.extend(entries.iter().map(|entry| lookup.row(entry)));
+                    Ok(())
+                },
+            )
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+        let row = &rows[0];
+        assert_eq!(hours_to_minutes(&row.hours), Ok(1));
+        assert_eq!(
+            money_to_cents(row.billable_rate.as_deref().unwrap()),
+            Ok(100)
+        );
+        assert_eq!(
+            money_to_cents(row.cost_rate.as_deref().unwrap()),
+            Ok(i64::MAX)
+        );
     }
 }

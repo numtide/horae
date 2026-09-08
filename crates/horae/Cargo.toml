@@ -11,6 +11,7 @@ path = "src/main.rs"
 [features]
 default = []
 server = [
+  "serde_json/arbitrary_precision",
   "horae-core/sqlx",
   "dioxus/server",
   "dep:tokio",
