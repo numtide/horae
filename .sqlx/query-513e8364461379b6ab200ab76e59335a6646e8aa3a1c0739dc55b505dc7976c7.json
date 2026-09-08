@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n             te.project_id as \"project_id!\",\n             SUM(te.minutes)::bigint as \"spent_minutes!\",\n             COALESCE(SUM(line_amount_cents(\n                 COALESCE(pt.rate_cents, a.rate_cents, u.billable_rate_cents, 0),\n                 effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir)\n               )) FILTER (WHERE te.billable), 0)::bigint as \"spent_cents!\"\n           FROM time_entries te\n           LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id\n           LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id\n           JOIN users u ON u.id = te.user_id\n           JOIN organizations o ON o.id = te.org_id\n           WHERE te.org_id = $1\n           GROUP BY te.project_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "project_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "spent_minutes!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "spent_cents!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "513e8364461379b6ab200ab76e59335a6646e8aa3a1c0739dc55b505dc7976c7"
+}

@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, minutes, rounded_minutes FROM time_entries WHERE org_id = $1 ORDER BY id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "minutes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "rounded_minutes",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "82454cbed200a0bfaf92f15c4fed93eb86e183294c741bac7bdcddfcb86e9c51"
+}

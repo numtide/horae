@@ -160,13 +160,13 @@ fn time_entry_row_to_harvest(
     org_round_dir: horae_core::types::RoundDir,
 ) -> HarvestTimeEntry {
     let hours = row.minutes as f64 / 60.0;
-    let rounded_hours = if let Some(rm) = row.rounded_minutes {
-        rm as f64 / 60.0
-    } else {
-        // Compute rounding for unlocked entries using org settings
-        let rounded = horae_core::rounding::round(row.minutes as u32, org_round_min, org_round_dir);
-        rounded as f64 / 60.0
-    };
+    let rounded_hours = horae_core::rounding::effective_minutes(
+        row.minutes as u32,
+        row.rounded_minutes.map(|minutes| minutes as u32),
+        org_round_min,
+        org_round_dir,
+    ) as f64
+        / 60.0;
     let is_locked = matches!(row.state.as_str(), "submitted" | "approved" | "invoiced");
     let locked_reason = match row.state.as_str() {
         "submitted" => Some("Pending Approval".to_string()),
@@ -914,6 +914,49 @@ mod tests {
             page: None,
             per_page: None,
             updated_since: None,
+        }
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn harvest_effective_minutes_match_sql_for_open_and_frozen_time(pool: PgPool) {
+        let ids = seed(&pool, OrgRole::Manager).await;
+        let id = insert_entry(&pool, &ids, ids.user_id, "rounding").await;
+        sqlx::query!(
+            "UPDATE organizations SET round_minutes = 15, round_dir = 'nearest' WHERE id = $1",
+            ids.org_id,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!("UPDATE time_entries SET minutes = 8 WHERE id = $1", id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        let caller = caller(&ids, OrgRole::Manager);
+        for frozen in [None, Some(10), Some(0)] {
+            sqlx::query!(
+                "UPDATE time_entries SET rounded_minutes = $2 WHERE id = $1",
+                id,
+                frozen
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            let expected = sqlx::query_scalar!(
+                r#"SELECT effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir) as "minutes!"
+                   FROM time_entries te JOIN organizations o ON o.id = te.org_id WHERE te.id = $1"#,
+                id,
+            ).fetch_one(&pool).await.unwrap();
+            let Json(entry) = time_entry_by_id(&pool, &caller, id).await.unwrap();
+            let Json(page) = time_entries_page(&pool, &caller, no_time_entry_filters())
+                .await
+                .unwrap();
+            assert_eq!(entry.hours, 8.0 / 60.0);
+            assert_eq!(entry.rounded_hours, f64::from(expected) / 60.0);
+            assert_eq!(
+                page.data["time_entries"][0].rounded_hours,
+                entry.rounded_hours
+            );
         }
     }
 

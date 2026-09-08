@@ -3124,12 +3124,13 @@ async fn project_spend_grouped_in_sql_matches_the_rust_fold(pool: PgPool) {
              SUM(te.minutes)::bigint as "spent_minutes!",
              COALESCE(SUM(line_amount_cents(
                  COALESCE(pt.rate_cents, a.rate_cents, u.billable_rate_cents, 0),
-                 te.minutes
+                 effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir)
                )) FILTER (WHERE te.billable), 0)::bigint as "spent_cents!"
            FROM time_entries te
            LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
            LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id
            JOIN users u ON u.id = te.user_id
+           JOIN organizations o ON o.id = te.org_id
            WHERE te.org_id = $1
            GROUP BY te.project_id"#,
         org_id,
@@ -3432,7 +3433,7 @@ async fn report_time_grouped_in_sql_matches_the_rust_fold(pool: PgPool) {
                    END AS label,
                    c.currency AS currency,
                    te.minutes AS minutes,
-                   COALESCE(te.rounded_minutes, te.minutes) AS rounded_minutes,
+                   effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir) AS rounded_minutes,
                    te.billable AS billable,
                    COALESCE(pt.rate_cents, a.rate_cents, u.billable_rate_cents, 0)
                      AS billable_rate_cents,
@@ -3442,6 +3443,7 @@ async fn report_time_grouped_in_sql_matches_the_rust_fold(pool: PgPool) {
                  JOIN clients c ON p.client_id = c.id
                  JOIN tasks t ON te.task_id = t.id
                  JOIN users u ON te.user_id = u.id
+                 JOIN organizations o ON o.id = te.org_id
                  LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
                  LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id
                  WHERE te.org_id = $1 AND te.spent_date BETWEEN $2 AND $3
