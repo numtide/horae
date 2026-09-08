@@ -84,7 +84,7 @@ async fn apply_rows<S: RowSource>(
     mut src: S,
 ) -> anyhow::Result<()> {
     while let Some(row) = src.next_row().await? {
-        let result = apply::apply_row(tx, cache, org, &row).await;
+        let result = apply::apply_row(tx, cache, org, &row, report.source).await;
         for (entity, outcome) in &result.outcomes {
             report.record(*entity, outcome);
         }

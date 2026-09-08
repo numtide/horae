@@ -21,6 +21,7 @@ use super::{VecSource, run_import};
 
 /// Columns that must be present for the file to be a recognizable export.
 const REQUIRED: &[&str] = &["date", "client", "project", "task", "hours"];
+const USER_COLUMNS: &[&str] = &["email", "user email", "first name", "last name"];
 
 /// Errors that reject the whole file up front (FR-003).
 #[derive(Debug, thiserror::Error)]
@@ -29,6 +30,8 @@ pub enum CsvError {
     Empty,
     #[error("not a recognizable Harvest CSV export (missing columns: {0})")]
     Unrecognized(String),
+    #[error("invalid CSV user identity: {0}")]
+    Identity(String),
     #[error(transparent)]
     Other(#[from] anyhow::Error),
 }
@@ -57,11 +60,13 @@ fn parse_csv(bytes: &[u8]) -> Result<(Vec<SourceRow>, Vec<ParseErr>), CsvError> 
         .headers()
         .map_err(|e| CsvError::Other(e.into()))?
         .clone();
-    let index: HashMap<String, usize> = headers
-        .iter()
-        .enumerate()
-        .map(|(i, h)| (h.trim().to_lowercase(), i))
-        .collect();
+    let mut index = HashMap::new();
+    for (i, header) in headers.iter().enumerate() {
+        let header = header.trim().to_lowercase();
+        if index.insert(header.clone(), i).is_some() && USER_COLUMNS.contains(&header.as_str()) {
+            return Err(CsvError::Identity(format!("duplicate column {header:?}")));
+        }
+    }
 
     let missing: Vec<&str> = REQUIRED
         .iter()
@@ -70,6 +75,14 @@ fn parse_csv(bytes: &[u8]) -> Result<(Vec<SourceRow>, Vec<ParseErr>), CsvError> 
         .collect();
     if !missing.is_empty() {
         return Err(CsvError::Unrecognized(missing.join(", ")));
+    }
+    if !USER_COLUMNS
+        .iter()
+        .any(|column| index.contains_key(*column))
+    {
+        return Err(CsvError::Unrecognized(
+            "Email or First Name/Last Name".into(),
+        ));
     }
 
     let get = |rec: &csv::StringRecord, col: &str| -> Option<String> {
@@ -117,15 +130,23 @@ fn parse_csv(bytes: &[u8]) -> Result<(Vec<SourceRow>, Vec<ParseErr>), CsvError> 
             }
         };
 
-        let email = get(&record, "email").or_else(|| {
-            // Fall back to a "First Last" name when there is no email column.
-            match (get(&record, "first name"), get(&record, "last name")) {
-                (Some(f), Some(l)) => Some(format!("{f} {l}")),
-                (Some(f), None) => Some(f),
-                (None, Some(l)) => Some(l),
-                (None, None) => None,
-            }
-        });
+        let email = get(&record, "email");
+        let user_email = get(&record, "user email");
+        if let (Some(email), Some(alias)) = (&email, &user_email)
+            && horae_core::importers::harvest::keys::normalize(email)
+                != horae_core::importers::harvest::keys::normalize(alias)
+        {
+            errors.push(ParseErr {
+                source_location: location,
+                reason: "Email and User Email disagree; provide one user identity".into(),
+            });
+            continue;
+        }
+        let name = match (get(&record, "first name"), get(&record, "last name")) {
+            (Some(first), Some(last)) => Some(format!("{first} {last}")),
+            (Some(name), None) | (None, Some(name)) => Some(name),
+            (None, None) => None,
+        };
 
         rows.push(SourceRow {
             harvest_client_id: None,
@@ -147,8 +168,8 @@ fn parse_csv(bytes: &[u8]) -> Result<(Vec<SourceRow>, Vec<ParseErr>), CsvError> 
             task_name: get(&record, "task").unwrap_or_default(),
             task_billable_default: parse_bool(get(&record, "billable?").as_deref()),
 
-            user_email: email,
-            user_name: None,
+            user_email: email.or(user_email),
+            user_name: name,
 
             spent_date,
             hours: get(&record, "hours").unwrap_or_default(),
@@ -167,6 +188,9 @@ fn parse_csv(bytes: &[u8]) -> Result<(Vec<SourceRow>, Vec<ParseErr>), CsvError> 
         });
     }
 
+    if rows.is_empty() && errors.is_empty() {
+        return Err(CsvError::Empty);
+    }
     Ok((rows, errors))
 }
 
@@ -238,6 +262,7 @@ mod tests {
         assert_eq!(r.project_code.as_deref(), Some("WEB"));
         assert_eq!(r.task_name, "Design");
         assert_eq!(r.user_email.as_deref(), Some("dev@acme.com"));
+        assert_eq!(r.user_name.as_deref(), Some("Dana Dev"));
         assert_eq!(r.hours, "1.5");
         assert!(r.billable);
         assert_eq!(r.currency.as_deref(), Some("USD"));
@@ -249,6 +274,48 @@ mod tests {
     #[test]
     fn empty_file_is_rejected() {
         assert!(matches!(parse_csv(b"   \n"), Err(CsvError::Empty)));
+        assert!(matches!(
+            parse_csv(b"Date,Client,Project,Task,Hours,Email\n"),
+            Err(CsvError::Empty)
+        ));
+    }
+
+    #[test]
+    fn identity_columns_are_required_and_cannot_repeat() {
+        assert!(matches!(
+            parse_csv(b"Date,Client,Project,Task,Hours\n2026-01-15,A,P,T,1\n"),
+            Err(CsvError::Unrecognized(_))
+        ));
+        for column in USER_COLUMNS {
+            let csv = format!(
+                "Date,Client,Project,Task,Hours,{column}, {} \n",
+                column.to_uppercase()
+            );
+            assert!(matches!(
+                parse_csv(csv.as_bytes()),
+                Err(CsvError::Identity(_))
+            ));
+        }
+    }
+
+    #[test]
+    fn names_stay_separate_from_optional_email() {
+        let (rows, errors) = parse_csv(b"Date,Client,Project,Task,Hours,First Name,Last Name,User Email\n2026-01-15,A,P,T,1, Dana , Dev ,\n2026-01-15,A,P,T,1,Dana,,dev@acme.com\n").unwrap();
+        assert!(errors.is_empty());
+        assert_eq!(rows[0].user_email, None);
+        assert_eq!(rows[0].user_name.as_deref(), Some("Dana Dev"));
+        assert_eq!(rows[1].user_email.as_deref(), Some("dev@acme.com"));
+        assert_eq!(rows[1].user_name.as_deref(), Some("Dana"));
+    }
+
+    #[test]
+    fn conflicting_email_aliases_error_only_the_affected_row() {
+        let (rows, errors) = parse_csv(b"Date,Client,Project,Task,Hours,Email,User Email\n2026-01-15,A,P,T,1,dev@acme.com,other@acme.com\n2026-01-15,A,P,T,1,DEV@ACME.COM, dev@acme.com \n2026-01-15,A,P,T,1,,dev@acme.com\n").unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors[0].source_location, "CSV line 2");
+        assert!(errors[0].reason.contains("disagree"));
+        assert_eq!(rows[1].user_email.as_deref(), Some("dev@acme.com"));
     }
 
     #[test]
@@ -260,8 +327,8 @@ mod tests {
 
     #[test]
     fn bad_date_becomes_a_row_error_not_a_rejection() {
-        let csv = "Date,Client,Project,Task,Hours,Billable?,Currency\n\
-not-a-date,Acme,Website,Design,1.5,Yes,USD\n";
+        let csv = "Date,Client,Project,Task,Hours,Billable?,Currency,Email\n\
+not-a-date,Acme,Website,Design,1.5,Yes,USD,dev@acme.com\n";
         let (rows, errors) = parse_csv(csv.as_bytes()).unwrap();
         assert!(rows.is_empty());
         assert_eq!(errors.len(), 1);
