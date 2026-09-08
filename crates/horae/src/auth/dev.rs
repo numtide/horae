@@ -71,14 +71,13 @@ pub async fn logout_post(session: Session) -> impl IntoResponse {
     // Capture the user before clearing the session so the logout can be announced.
     if let Some(uid) = crate::auth::session::get_session_user_id(&session).await {
         let state = crate::state::global_state().await;
-        let sql = format!(
-            "SELECT {} FROM users WHERE id = $1",
-            crate::auth::oidc::USER_COLUMNS
-        );
-        if let Ok(user) = sqlx::query_as::<_, crate::models::User>(&sql)
-            .bind(uid)
-            .fetch_one(&state.db)
-            .await
+        if let Ok(user) = sqlx::query!(
+            r#"SELECT id, org_id, email, name, org_role::text as "org_role!: String"
+               FROM users WHERE id = $1"#,
+            uid,
+        )
+        .fetch_one(&state.db)
+        .await
         {
             state
                 .plugins
@@ -89,7 +88,7 @@ pub async fn logout_post(session: Session) -> impl IntoResponse {
                         id: user.id,
                         email: user.email,
                         name: user.name,
-                        org_role: user.org_role.to_string(),
+                        org_role: user.org_role,
                         method: None,
                     },
                 });
