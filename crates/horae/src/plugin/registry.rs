@@ -3,6 +3,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
+use anyhow::Context;
 use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
 
 use super::event::AppEvent;
@@ -13,6 +14,7 @@ const MAX_PENDING_CALLS: usize = 64;
 const MAX_RUNNING_CALLS: usize = 8;
 const MAX_CALL_BYTES: usize = 1024 * 1024;
 const MAX_MEMORY_PAGES: u32 = 1024;
+const MAX_CALL_FUEL: u64 = 100_000_000;
 
 /// A loaded plugin: its manifest and the extism plugin instance.
 struct LoadedPlugin {
@@ -47,7 +49,21 @@ impl PluginRegistry {
     /// Scan a directory for plugin subdirectories, each containing a
     /// `plugin.toml` and a `*.wasm` file. Malformed plugins are logged
     /// and skipped (FR-018 edge case).
-    pub fn load(plugins_dir: &Path, database: Option<super::database::PluginDatabase>) -> Self {
+    pub async fn load(
+        plugins_dir: &Path,
+        database: Option<super::database::PluginDatabase>,
+    ) -> anyhow::Result<Self> {
+        let plugins_dir = plugins_dir.to_path_buf();
+        Ok(
+            tokio::task::spawn_blocking(move || Self::load_directory(&plugins_dir, database))
+                .await?,
+        )
+    }
+
+    fn load_directory(
+        plugins_dir: &Path,
+        database: Option<super::database::PluginDatabase>,
+    ) -> Self {
         let mut registry = Self::empty();
         registry.database = database;
 
@@ -74,7 +90,7 @@ impl PluginRegistry {
             }
 
             if let Err(e) = registry.load_plugin(&path) {
-                tracing::warn!("skipping plugin at {}: {e}", path.display());
+                tracing::warn!("skipping plugin at {}: {e:#}", path.display());
             }
         }
 
@@ -118,9 +134,12 @@ impl PluginRegistry {
         let plugin = extism::PluginBuilder::new(&extism_manifest)
             .with_functions(host_functions)
             .with_wasi(true)
+            // Extism initializes the guest before starting its call timer.
+            // Fuel covers that phase too and is replenished for every call.
+            .with_fuel_limit(MAX_CALL_FUEL)
             .with_wasmtime_config(engine)
             .build()
-            .map_err(|e| anyhow::anyhow!("failed to load WASM {}: {e}", wasm_path.display()))?;
+            .with_context(|| format!("failed to load WASM {}", wasm_path.display()))?;
 
         // Verify the plugin exports the declared hook functions
         for hook in &manifest.hooks {
@@ -257,6 +276,14 @@ async fn invoke(
 ) -> anyhow::Result<Vec<u8>> {
     let (mut plugin, worker) = tokio::time::timeout(CALL_TIMEOUT, async {
         let plugin = Arc::clone(&loaded.plugin).lock_owned().await;
+        // A failed initializer can leave Extism's instance partially initialized.
+        // Do not let a later call replenish its fuel and bypass initialization.
+        if plugin
+            .fuel_consumed()
+            .is_some_and(|fuel| fuel >= MAX_CALL_FUEL)
+        {
+            anyhow::bail!("plugin fuel budget exhausted; restart required");
+        }
         let worker = workers.acquire_owned().await?;
         Ok::<_, anyhow::Error>((plugin, worker))
     })
@@ -321,34 +348,37 @@ mod tests {
     use super::*;
     use crate::plugin::event::{InvoicePayload, TimeEntryPayload, UserPayload};
 
+    mod initialization;
     mod isolation;
 
     fn fixtures_dir() -> std::path::PathBuf {
         std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/plugins")
     }
 
-    #[test]
-    fn load_empty_directory() {
+    #[tokio::test]
+    async fn load_empty_directory() {
         let dir = tempfile::tempdir().unwrap();
-        let registry = PluginRegistry::load(dir.path(), None);
+        let registry = PluginRegistry::load(dir.path(), None).await.unwrap();
         assert_eq!(registry.plugin_count(), 0);
     }
 
-    #[test]
-    fn load_nonexistent_directory() {
-        let registry = PluginRegistry::load(std::path::Path::new("/does/not/exist"), None);
+    #[tokio::test]
+    async fn load_nonexistent_directory() {
+        let registry = PluginRegistry::load(std::path::Path::new("/does/not/exist"), None)
+            .await
+            .unwrap();
         assert_eq!(registry.plugin_count(), 0);
     }
 
-    #[test]
-    fn load_test_plugins() {
-        let registry = PluginRegistry::load(&fixtures_dir(), None);
+    #[tokio::test]
+    async fn load_test_plugins() {
+        let registry = PluginRegistry::load(&fixtures_dir(), None).await.unwrap();
         assert_eq!(registry.plugin_count(), 2);
     }
 
     #[tokio::test]
     async fn dispatch_to_echo_plugin_succeeds() {
-        let registry = PluginRegistry::load(&fixtures_dir(), None);
+        let registry = PluginRegistry::load(&fixtures_dir(), None).await.unwrap();
 
         let event = AppEvent::TimeEntryCreated {
             occurred_at: chrono::Utc::now(),
@@ -375,7 +405,7 @@ mod tests {
 
     #[tokio::test]
     async fn failing_plugin_does_not_block_caller() {
-        let registry = PluginRegistry::load(&fixtures_dir(), None);
+        let registry = PluginRegistry::load(&fixtures_dir(), None).await.unwrap();
 
         let event = AppEvent::TimeEntryCreated {
             occurred_at: chrono::Utc::now(),
@@ -410,7 +440,7 @@ mod tests {
 
     #[tokio::test]
     async fn dispatch_event_with_no_subscribers() {
-        let registry = PluginRegistry::load(&fixtures_dir(), None);
+        let registry = PluginRegistry::load(&fixtures_dir(), None).await.unwrap();
 
         // Neither test plugin subscribes to user_logged_in.
         let event = AppEvent::UserLoggedIn {
@@ -430,7 +460,7 @@ mod tests {
 
     #[tokio::test]
     async fn collect_widgets_from_echo_plugin() {
-        let registry = PluginRegistry::load(&fixtures_dir(), None);
+        let registry = PluginRegistry::load(&fixtures_dir(), None).await.unwrap();
         let widgets = registry.collect_widgets().await;
 
         // echo-plugin exports dashboard_widget; fail-plugin does not.
@@ -442,7 +472,7 @@ mod tests {
 
     #[tokio::test]
     async fn dispatch_invoice_sent_to_echo_plugin() {
-        let registry = PluginRegistry::load(&fixtures_dir(), None);
+        let registry = PluginRegistry::load(&fixtures_dir(), None).await.unwrap();
 
         let event = AppEvent::InvoiceSent {
             occurred_at: chrono::Utc::now(),

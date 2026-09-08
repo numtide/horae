@@ -1,8 +1,8 @@
 # Plugin Interface Contract
 
-**Status: Planned (User Story 5).** The plugin subsystem is **not yet implemented**
-in the codebase. This document is a forward-looking interface contract derived from
-PLAN.md's "Plugin System" section and functional requirements **FR-018..FR-022**. It
+**Status: Runtime implemented (User Story 5); hot reload remains planned.**
+This interface contract is derived from PLAN.md's "Plugin System" section and
+functional requirements **FR-018..FR-022**. It
 defines the plugin manifest, the event catalog, the host functions, the
 dashboard-widget return shape, and the sandbox / failure-isolation guarantees so that
 implementation and plugin authors share one contract.
@@ -15,7 +15,7 @@ Plugins are **WASM modules loaded at runtime via
 operator-trusted but **sandboxed**: they may only call the host functions Horae
 explicitly exposes and can never write to the datastore or render arbitrary UI code.
 
-Planned module layout (`crates/horae/src/plugin/`):
+Module layout (`crates/horae/src/plugin/`):
 
 1. `registry.rs` — `PluginRegistry`: scans the `plugins/` data directory, loads each
    `*.wasm` at startup, holds a handle per plugin.
@@ -24,8 +24,10 @@ Planned module layout (`crates/horae/src/plugin/`):
 1. `event.rs` — the `AppEvent` enum, serialized to JSON and passed to plugins.
 1. `manifest.rs` — the `plugin.toml` schema.
 
-At startup the registry loads every plugin and registers it for the hooks it
-declares (FR-018). `AppState` gains `plugins: Arc<PluginRegistry>`; on each business
+At startup the registry loads plugins sequentially on a blocking worker and
+registers each valid plugin for the hooks it declares (FR-018). Directory access,
+compilation, and instantiation do not run on an async runtime worker.
+`AppState` holds `plugins: Arc<PluginRegistry>`; on each business
 event, `registry.dispatch(event)` invokes all subscribed plugins concurrently
 (FR-019).
 
@@ -328,7 +330,16 @@ These guarantees implement FR-020 and FR-021 and the spec's plugin edge cases.
    widgets. Delivery is best-effort: exhausted capacity or an oversized payload is
    logged and skipped, without delaying or undoing the core action.
 1. **Timeouts and memory.** Waiting for an instance and worker is limited to 5 seconds;
-   execution has a separate 5-second timeout. Each linear memory is limited to
+   execution has a separate 5-second wait timeout. The engine additionally supplies
+   100,000,000 fuel units during construction and replenishes that budget for each
+   call, including guest initialization. This covers WASM start functions and
+   WASI/Haskell initializers that can run before Extism starts its call timer.
+   Fuel measures metered guest work, not elapsed time or native host instructions.
+   A plugin that exhausts fuel cannot execute subsequent calls until the server
+   restarts and loads a fresh instance; this avoids running a partially initialized
+   guest. Ordinary successful calls receive a fresh budget rather than consuming
+   one lifetime allowance.
+   Each linear memory is limited to
    1,024 memory pages (64 MiB), including its initial allocation. The engine caps
    memories, instances, and tables at four each, allowing for Extism's kernel and
    auxiliary guest instances. On timeout, the host requests engine cancellation.
@@ -337,6 +348,9 @@ These guarantees implement FR-020 and FR-021 and the spec's plugin edge cases.
    Dropping an async waiter likewise does not release a still-running call's
    capacity. These limits keep slow plugins off the async runtime's workers; they
    are not a guarantee that a synchronous host call ends at exactly 5 seconds.
+   Compilation and local filesystem operations are not bounded by guest fuel;
+   operators must trust the installed plugin files. These are not hard native
+   process RSS/CPU limits.
 1. **Failure isolation.** A plugin that errors, panics, times out, or attempts a
    disallowed action does **not** block, delay, or corrupt the core action that
    triggered the event. The core mutation has already been committed before dispatch;
@@ -348,10 +362,12 @@ These guarantees implement FR-020 and FR-021 and the spec's plugin edge cases.
 
 ______________________________________________________________________
 
-## Installation & lifecycle (planned)
+## Installation & lifecycle
 
-1. Plugins are dropped into `{dataDir}/plugins/`, each with its `*.wasm` module and a
-   `plugin.toml`. The registry scans this directory at startup.
+1. Plugins are dropped into the configured plugins directory, each in its own
+   subdirectory with a `*.wasm` module and `plugin.toml`. The registry scans this
+   directory at startup. Invalid plugins are logged and skipped; a failure of the
+   loading worker itself is returned to startup rather than silently ignored.
 1. A future admin UI page will list loaded plugins and allow enable/disable without a
    restart (hot-reload via `extism::Plugin` re-instantiation).
 1. Hook call sites live in the server functions: dispatch `time_entry_created` /

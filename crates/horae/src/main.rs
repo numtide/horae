@@ -198,8 +198,9 @@ fn main() -> anyhow::Result<()> {
                     Some(url) => Some(plugin::database::PluginDatabase::connect(url).await?),
                     None => None,
                 };
-                let registry =
-                    std::sync::Arc::new(plugin::PluginRegistry::load(plugins_dir, plugin_database));
+                let registry = std::sync::Arc::new(
+                    plugin::PluginRegistry::load(plugins_dir, plugin_database).await?,
+                );
                 state::init_state(
                     pool.clone(),
                     registry,
