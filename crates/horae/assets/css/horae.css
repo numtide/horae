@@ -608,6 +608,7 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--color-text); font-weight: 600;
 }
 .adm-main { max-width: 760px; }
+.adm-main.flex-1 { flex: 1 1 420px; }
 
 /* Collapsed rail (icon strip) */
 @media (min-width: 769px) {
@@ -890,15 +891,16 @@ tbody tr:hover { background: var(--color-row-hover); }
 .badge-neutral::before { background: var(--color-border-strong); }
 
 /* Page header */
-.page-header { margin-bottom: var(--space-6); display: flex; align-items: center; gap: var(--space-4); }
+.page-header { margin-bottom: var(--space-6); display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); }
 .page-title {
   font-family: var(--font-family-display);
   font-size: var(--font-size-2xl);
   font-weight: 500;
   margin: 0;
   color: var(--color-text);
+  min-width: 0; overflow-wrap: anywhere;
 }
-.page-actions { margin-left: auto; display: flex; gap: var(--space-2); }
+.page-actions { margin-left: auto; display: flex; flex-wrap: wrap; gap: var(--space-2); max-width: 100%; }
 
 /* Auth pages */
 .auth-container {
@@ -1311,10 +1313,11 @@ tbody tr:hover { background: var(--color-row-hover); }
 /* ── Timesheet ─────────────────────────────────────────────────────────────
    The week grid: a project column + 7 day columns + total + a delete column.
    Day cells look like read-only inputs; today/weekend/empty are colour-coded. */
-.ts-header { display: flex; align-items: center; gap: var(--space-4); margin-bottom: var(--space-6); }
+.ts-header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); margin-bottom: var(--space-6); }
 .ts-saved { margin-left: auto; font-size: 13px; color: var(--color-text-muted); }
 
-.ts-toolbar { display: flex; align-items: center; gap: var(--space-4); margin-bottom: var(--space-5); }
+.ts-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); margin-bottom: var(--space-5); }
+.ts-toolbar > .menu-anchor { max-width: 100%; }
 .ts-add {
   width: 46px; height: 46px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
@@ -1328,7 +1331,7 @@ tbody tr:hover { background: var(--color-row-hover); }
   background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-lg);
 }
 .ts-pager-btn {
-  width: 42px; height: 44px; background: transparent; border: none;
+  width: 42px; height: 44px; flex-shrink: 0; background: transparent; border: none;
   color: var(--color-text-secondary); cursor: pointer; font-size: var(--font-size-base);
 }
 .ts-pager-btn:hover { color: var(--color-text); background: var(--color-bg-tertiary); }
@@ -1348,6 +1351,12 @@ tbody tr:hover { background: var(--color-row-hover); }
 /* The calendar's day-span dropdown sits beside the pager; give its trigger the
    same height and text size as the pager and add button so the row lines up. */
 .ts-toolbar .menu-anchor > .btn { height: 46px; padding: 0 var(--space-4); font-size: var(--font-size-sm); }
+@media (max-width: 480px) {
+  .ts-pager-label { flex: 1; flex-wrap: wrap; justify-content: center; gap: 0 var(--space-1); min-width: 0; padding: 0 var(--space-2); }
+  .ts-pager-range { font-size: var(--font-size-xs); }
+  .ts-toolbar .dp { max-width: calc(100vw - 2 * var(--app-pad)); }
+  .ts-toolbar .menu-anchor:has(.ts-pager) { flex-basis: 100%; }
+}
 
 .ts-grid-card { background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-panel); overflow: hidden; }
 .ts-grid-scroll { overflow-x: auto; }
@@ -1367,7 +1376,7 @@ tbody tr:hover { background: var(--color-row-hover); }
 .ts-total-head { text-align: right; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-text-muted); }
 
 /* Day view: a strip of day totals (the viewed day underlined), not tabs. */
-.ts-daystrip { display: flex; gap: var(--space-1); margin-bottom: var(--space-4); border-bottom: 1px solid var(--color-border); }
+.ts-daystrip { display: flex; overflow-x: auto; gap: var(--space-1); margin-bottom: var(--space-4); border-bottom: 1px solid var(--color-border); }
 .ts-dayitem {
   flex: 1; display: flex; flex-direction: column; gap: 2px;
   padding: var(--space-2) var(--space-3);
@@ -1387,16 +1396,16 @@ tbody tr:hover { background: var(--color-row-hover); }
 .ts-day-empty { padding: var(--space-8); text-align: center; }
 .ts-day-list { display: flex; flex-direction: column; }
 .ts-day-entry {
-  display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4);
+  display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--space-4);
   padding: var(--space-4) var(--space-2);
   border-bottom: 1px solid var(--color-border);
 }
 .ts-day-entry:last-child { border-bottom: none; }
-.ts-day-entry-main { min-width: 0; }
+.ts-day-entry-main { flex: 1 1 240px; min-width: 0; overflow-wrap: anywhere; }
 .ts-day-entry-project { font-weight: 600; color: var(--color-text); }
 .ts-day-entry-task { font-size: var(--font-size-sm); color: var(--color-text-secondary); margin-top: 2px; }
 .ts-day-entry-notes { font-size: var(--font-size-sm); color: var(--color-text-muted); margin-top: var(--space-2); white-space: pre-line; }
-.ts-day-entry-side { display: flex; align-items: center; gap: var(--space-3); flex-shrink: 0; }
+.ts-day-entry-side { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); max-width: 100%; }
 .ts-day-entry-dur { font-size: var(--font-size-sm); color: var(--color-text); min-width: 52px; text-align: right; }
 .ts-day-action {
   padding: var(--space-1) var(--space-3);
@@ -1576,7 +1585,7 @@ tbody tr:hover { background: var(--color-row-hover); }
    grouped banding); colours/spacing come from tokens, layout from utilities. */
 .proj-search {
   display: flex; align-items: center; gap: var(--space-2);
-  width: 300px; padding: var(--space-2) var(--space-3);
+  width: 300px; max-width: 100%; padding: var(--space-2) var(--space-3);
   background: var(--color-bg-secondary); border: 1px solid var(--color-border);
   border-radius: var(--radius-btn);
 }
@@ -1592,15 +1601,14 @@ tbody tr:hover { background: var(--color-row-hover); }
   background: var(--color-bg-secondary); border: 1px solid var(--color-border);
   border-radius: var(--radius-panel); overflow: hidden;
 }
-/* The row's tracks add up to ~1000px, so on a narrower viewport they have to
-   scroll rather than be clipped by the card — the Actions menu is the last
-   column and would otherwise be unreachable. Same shape as `.ts-grid-scroll`. */
+/* Reserve space for the project name as well as numeric tracks and gaps. Keep
+   headers, rows and group bands the same width inside the horizontal scroller. */
 .proj-scroll { overflow-x: auto; }
+.proj-head, .proj-row, .proj-group { min-width: 1280px; }
 .proj-head,
 .proj-row {
   display: grid;
-  grid-template-columns: 1fr 130px 130px 96px 210px 220px 120px;
-  min-width: 1000px;
+  grid-template-columns: minmax(280px, 1fr) 130px 130px 96px 210px 220px 120px;
   align-items: center; gap: var(--space-2);
   padding: var(--space-4) var(--space-5);
 }
@@ -1609,7 +1617,8 @@ tbody tr:hover { background: var(--color-row-hover); }
   background: var(--color-bg-tertiary); overflow: hidden;
 }
 .proj-bar-fill { height: 100%; background: var(--color-primary); }
-.proj-namelink { color: var(--color-text); text-decoration: none; }
+.proj-row > :first-child { flex-wrap: wrap; }
+.proj-namelink { min-width: 0; overflow-wrap: anywhere; color: var(--color-text); text-decoration: none; }
 .proj-namelink:hover { color: var(--color-primary); text-decoration: none; }
 .proj-head {
   border-bottom: 1px solid var(--color-border);
