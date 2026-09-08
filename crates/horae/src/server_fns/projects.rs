@@ -76,6 +76,16 @@ pub async fn list_project_spend() -> Result<Vec<ProjectSpend>, ServerFnError> {
     let user = require_user().await?;
     let state = crate::state::global_state().await;
 
+    fetch_project_spend(&state.db, user.org_id)
+        .await
+        .map_err(server_err)
+}
+
+#[cfg(feature = "server")]
+pub(super) async fn fetch_project_spend(
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+) -> Result<Vec<ProjectSpend>, sqlx::Error> {
     // Grouped in Postgres, not folded here: the overview needs one number per
     // project, and folding in Rust meant fetching one row per time entry to get
     // there. `COALESCE(pt, a, u)` is the FR-024 cascade — exactly what
@@ -90,19 +100,19 @@ pub async fn list_project_spend() -> Result<Vec<ProjectSpend>, ServerFnError> {
              SUM(te.minutes)::bigint as "spent_minutes!",
              COALESCE(SUM(line_amount_cents(
                  COALESCE(pt.rate_cents, a.rate_cents, u.billable_rate_cents, 0),
-                 te.minutes
+                 effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir)
                )) FILTER (WHERE te.billable), 0)::bigint as "spent_cents!"
            FROM time_entries te
            LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
            LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id
            JOIN users u ON u.id = te.user_id
+           JOIN organizations o ON o.id = te.org_id
            WHERE te.org_id = $1
            GROUP BY te.project_id"#,
-        user.org_id,
+        org_id,
     )
-    .fetch_all(&state.db)
-    .await
-    .map_err(server_err)?;
+    .fetch_all(pool)
+    .await?;
 
     Ok(spend)
 }

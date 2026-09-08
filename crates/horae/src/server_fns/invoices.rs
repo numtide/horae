@@ -139,7 +139,7 @@ async fn generate_invoice_for_period(
         EntryWithRates,
         r#"SELECT
              te.id as entry_id,
-             te.minutes,
+             effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir) as "minutes!",
              p.name as project_name,
              t.name as task_name,
              te.notes,
@@ -153,6 +153,7 @@ async fn generate_invoice_for_period(
            LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
            LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id
            JOIN users u ON u.id = te.user_id
+           JOIN organizations o ON o.id = te.org_id
            WHERE te.org_id = $1
              AND p.client_id = $2
              AND te.billable = true
@@ -295,13 +296,16 @@ async fn generate_invoice_for_period(
     let flipped = sqlx::query!(
         r#"UPDATE time_entries
            SET invoice_id = $1,
-               state = 'invoiced'
-           WHERE id = ANY($2)
+               state = 'invoiced',
+               rounded_minutes = billed.minutes
+           FROM unnest($2::uuid[], $3::int4[]) AS billed(id, minutes)
+           WHERE time_entries.id = billed.id
              AND invoice_id IS NULL
              AND NOT is_running
              AND state IN ('open', 'approved')"#,
         invoice_id,
         &entry_ids,
+        &line_minutes,
     )
     .execute(&mut *tx)
     .await

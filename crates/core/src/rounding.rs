@@ -1,5 +1,11 @@
 use crate::types::RoundDir;
 
+/// Minutes used for billing: a frozen value wins over today's rounding rule.
+/// Raw worked minutes remain separate, for elapsed-time and cost reporting.
+pub fn effective_minutes(minutes: u32, frozen: Option<u32>, inc: u32, dir: RoundDir) -> u32 {
+    frozen.unwrap_or_else(|| round(minutes, inc, dir))
+}
+
 /// Round `minutes` to the nearest multiple of `inc`.
 ///
 /// - `inc == 0` → identity (no rounding)
@@ -35,6 +41,15 @@ pub fn round(minutes: u32, inc: u32, dir: RoundDir) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn effective_minutes_respect_frozen_history_including_zero() {
+        for dir in [RoundDir::Up, RoundDir::Down, RoundDir::Nearest] {
+            assert_eq!(effective_minutes(8, Some(10), 15, dir), 10);
+            assert_eq!(effective_minutes(8, Some(0), 15, dir), 0);
+            assert_eq!(effective_minutes(8, None, 15, dir), round(8, 15, dir));
+        }
+    }
 
     #[test]
     fn identity_when_inc_zero() {

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT minutes, amount_cents FROM invoice_line_items WHERE invoice_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "minutes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "amount_cents",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "d211f8ac8908a5d1d31ba670ca4966db113a9e44013066d37a398a9ecc425248"
+}

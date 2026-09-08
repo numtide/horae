@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE time_entries\n           SET invoice_id = $1,\n               state = 'invoiced',\n               rounded_minutes = billed.minutes\n           FROM unnest($2::uuid[], $3::int4[]) AS billed(id, minutes)\n           WHERE time_entries.id = billed.id\n             AND invoice_id IS NULL\n             AND NOT is_running\n             AND state IN ('open', 'approved')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "Int4Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "82958e7cb14e8c0863d11a96c552af94b24faf22ad1888e54cf8b78cc5238617"
+}

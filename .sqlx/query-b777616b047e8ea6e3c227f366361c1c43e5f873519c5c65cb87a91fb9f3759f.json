@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE organizations SET round_minutes = 60, round_dir = 'up' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b777616b047e8ea6e3c227f366361c1c43e5f873519c5c65cb87a91fb9f3759f"
+}

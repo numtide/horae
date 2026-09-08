@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir) as \"minutes!\"\n                   FROM time_entries te JOIN organizations o ON o.id = te.org_id WHERE te.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "minutes!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "881102d66690610894e06226eaf21df6b74537d51abf706aa1cf2967164155a8"
+}

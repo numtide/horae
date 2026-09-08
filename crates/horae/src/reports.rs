@@ -69,6 +69,7 @@ pub struct ExportParams {
 /// `report_detailed` server fn — one query, so a download always matches what
 /// the Reports page shows.
 pub(crate) async fn fetch_entries(
+    pool: &sqlx::PgPool,
     org_id: uuid::Uuid,
     from: chrono::NaiveDate,
     to: chrono::NaiveDate,
@@ -76,22 +77,24 @@ pub(crate) async fn fetch_entries(
     project_id: Option<uuid::Uuid>,
     user_id: Option<uuid::Uuid>,
 ) -> Result<Vec<crate::models::DetailedReportRow>, sqlx::Error> {
-    let state = crate::state::global_state().await;
     sqlx::query_as!(
         crate::models::DetailedReportRow,
         r#"SELECT te.spent_date as "spent_date: chrono::NaiveDate",
                 p.name AS project_name, t.name AS task_name,
-                u.name AS user_name, te.minutes, te.rounded_minutes, te.billable, te.notes
+                u.name AS user_name, te.minutes,
+                effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir) as "rounded_minutes?",
+                te.billable, te.notes
          FROM time_entries te
          JOIN projects p ON te.project_id = p.id
          JOIN tasks t ON te.task_id = t.id
          JOIN users u ON te.user_id = u.id
+         JOIN organizations o ON o.id = te.org_id
          WHERE te.org_id = $6
            AND te.spent_date BETWEEN $1 AND $2
            AND ($3::uuid IS NULL OR p.client_id = $3)
            AND ($4::uuid IS NULL OR te.project_id = $4)
            AND ($5::uuid IS NULL OR te.user_id = $5)
-         ORDER BY te.spent_date, p.name, t.name"#,
+         ORDER BY te.spent_date, p.name, t.name, te.id"#,
         from as chrono::NaiveDate,
         to as chrono::NaiveDate,
         client_id,
@@ -99,7 +102,7 @@ pub(crate) async fn fetch_entries(
         user_id,
         org_id,
     )
-    .fetch_all(&state.db)
+    .fetch_all(pool)
     .await
 }
 
@@ -113,7 +116,9 @@ pub async fn export_csv(
 
     let from: chrono::NaiveDate = params.from.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
     let to: chrono::NaiveDate = params.to.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
+    let state = crate::state::global_state().await;
     let entries = fetch_entries(
+        &state.db,
         org_id,
         from,
         to,
@@ -124,6 +129,22 @@ pub async fn export_csv(
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
+    let data = entries_csv(&entries)?;
+    Ok((
+        [
+            (axum::http::header::CONTENT_TYPE, "text/csv"),
+            (
+                axum::http::header::CONTENT_DISPOSITION,
+                "attachment; filename=\"timesheet.csv\"",
+            ),
+        ],
+        data,
+    ))
+}
+
+pub(crate) fn entries_csv(
+    entries: &[crate::models::DetailedReportRow],
+) -> Result<Vec<u8>, StatusCode> {
     let mut wtr = csv::Writer::from_writer(vec![]);
     wtr.write_record([
         "Date",
@@ -137,7 +158,7 @@ pub async fn export_csv(
     ])
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    for e in &entries {
+    for e in entries {
         wtr.write_record(&[
             e.spent_date.to_string(),
             e.project_name.clone(),
@@ -151,20 +172,8 @@ pub async fn export_csv(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     }
 
-    let data = wtr
-        .into_inner()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    Ok((
-        [
-            (axum::http::header::CONTENT_TYPE, "text/csv"),
-            (
-                axum::http::header::CONTENT_DISPOSITION,
-                "attachment; filename=\"timesheet.csv\"",
-            ),
-        ],
-        data,
-    ))
+    wtr.into_inner()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
 pub async fn export_xlsx(
@@ -177,7 +186,9 @@ pub async fn export_xlsx(
 
     let from: chrono::NaiveDate = params.from.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
     let to: chrono::NaiveDate = params.to.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
+    let state = crate::state::global_state().await;
     let entries = fetch_entries(
+        &state.db,
         org_id,
         from,
         to,

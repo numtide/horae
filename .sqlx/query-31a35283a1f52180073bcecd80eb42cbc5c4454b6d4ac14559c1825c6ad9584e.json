@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT te.spent_date as \"spent_date: chrono::NaiveDate\",\n                p.name AS project_name, t.name AS task_name,\n                u.name AS user_name, te.minutes, te.rounded_minutes, te.billable, te.notes\n         FROM time_entries te\n         JOIN projects p ON te.project_id = p.id\n         JOIN tasks t ON te.task_id = t.id\n         JOIN users u ON te.user_id = u.id\n         WHERE te.org_id = $6\n           AND te.spent_date BETWEEN $1 AND $2\n           AND ($3::uuid IS NULL OR p.client_id = $3)\n           AND ($4::uuid IS NULL OR te.project_id = $4)\n           AND ($5::uuid IS NULL OR te.user_id = $5)\n         ORDER BY te.spent_date, p.name, t.name",
+  "query": "SELECT te.spent_date as \"spent_date: chrono::NaiveDate\",\n                p.name AS project_name, t.name AS task_name,\n                u.name AS user_name, te.minutes,\n                effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir) as \"rounded_minutes?\",\n                te.billable, te.notes\n         FROM time_entries te\n         JOIN projects p ON te.project_id = p.id\n         JOIN tasks t ON te.task_id = t.id\n         JOIN users u ON te.user_id = u.id\n         JOIN organizations o ON o.id = te.org_id\n         WHERE te.org_id = $6\n           AND te.spent_date BETWEEN $1 AND $2\n           AND ($3::uuid IS NULL OR p.client_id = $3)\n           AND ($4::uuid IS NULL OR te.project_id = $4)\n           AND ($5::uuid IS NULL OR te.user_id = $5)\n         ORDER BY te.spent_date, p.name, t.name, te.id",
   "describe": {
     "columns": [
       {
@@ -30,7 +30,7 @@
       },
       {
         "ordinal": 5,
-        "name": "rounded_minutes",
+        "name": "rounded_minutes?",
         "type_info": "Int4"
       },
       {
@@ -60,10 +60,10 @@
       false,
       false,
       false,
-      true,
+      null,
       false,
       true
     ]
   },
-  "hash": "a673e42b67bef9a880da9230723a344485b2b9593e90523f9ca91addaf2f14a7"
+  "hash": "31a35283a1f52180073bcecd80eb42cbc5c4454b6d4ac14559c1825c6ad9584e"
 }
