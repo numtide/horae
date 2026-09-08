@@ -83,6 +83,11 @@ pub(super) async fn validate_connection(connection: &mut sqlx::PgConnection) -> 
                         'public.harvest_norm(text)'::regprocedure,
                         'public.line_amount_cents(bigint,integer)'::regprocedure,
                         'public.set_updated_at()'::regprocedure
+                    )
+                    -- The rounding helper may not be installed yet. A NULL in
+                    -- NOT IN would also allow unrelated functions through.
+                    AND p.oid IS DISTINCT FROM to_regprocedure(
+                        'public.effective_minutes(integer,integer,smallint,public.round_dir)'
                     ))
             )
         ) AS "unsafe!""#
@@ -99,6 +104,45 @@ pub(super) async fn validate_connection(connection: &mut sqlx::PgConnection) -> 
 #[cfg(test)]
 pub(super) mod tests {
     use super::*;
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn reader_accepts_optional_first_party_rounding_helper(pool: sqlx::PgPool) {
+        // The validator must work both before and after the rounding migration.
+        // Only its function identity matters here; arithmetic has its own tests.
+        let present = sqlx::query_scalar!(
+            r#"SELECT to_regprocedure('public.effective_minutes(integer,integer,smallint,public.round_dir)') IS NOT NULL as "present!""#,
+        ).fetch_one(&pool).await.unwrap();
+        if !present {
+            sqlx::query!(
+                "CREATE FUNCTION public.effective_minutes(integer, integer, smallint, public.round_dir)
+                 RETURNS integer LANGUAGE sql IMMUTABLE AS $$ SELECT COALESCE($2, $1) $$",
+            ).execute(&pool).await.unwrap();
+        }
+        let reader = Reader::new(&pool).await;
+        let mut connection = reader.pool.acquire().await.unwrap();
+        let result = validate_connection(&mut connection).await;
+        drop(connection);
+        reader.finish().await;
+        result.unwrap();
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn reader_rejects_unapproved_invoker_functions(pool: sqlx::PgPool) {
+        sqlx::query!(
+            "CREATE FUNCTION public.plugin_test_unknown() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$",
+        ).execute(&pool).await.unwrap();
+        let reader = Reader::new(&pool).await;
+        let mut connection = reader.pool.acquire().await.unwrap();
+        let result = validate_connection(&mut connection).await;
+        drop(connection);
+        reader.finish().await;
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("unapproved database function")
+        );
+    }
 
     #[sqlx::test(migrations = "./migrations")]
     async fn application_database_owner_is_not_a_plugin_identity(pool: sqlx::PgPool) {
