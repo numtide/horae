@@ -92,7 +92,7 @@ pub fn ProjectList() -> Element {
     // still resolves to its real name; the create form filters to active ones.
     let clients_res = use_resource(|| async move { server_fns::list_clients(true).await });
     let me = use_resource(|| async move { server_fns::get_me().await });
-    let spend_res = use_resource(|| async move { server_fns::list_project_spend().await });
+    let mut spend_res = use_resource(|| async move { server_fns::list_project_spend().await });
 
     let mut show_form = use_signal(|| false);
     // `Some(id)` while editing an existing project, `None` while creating.
@@ -101,6 +101,7 @@ pub fn ProjectList() -> Element {
     let mut name = use_signal(String::new);
     let mut project_type = use_signal(|| "time_and_materials".to_string());
     let mut currency = use_signal(|| "USD".to_string());
+    let mut rate_value = use_signal(String::new);
     let mut budget_kind = use_signal(|| "none".to_string());
     // The figure that goes with the kind — an amount or a number of hours.
     let mut budget_value = use_signal(String::new);
@@ -172,6 +173,7 @@ pub fn ProjectList() -> Element {
         name.set(String::new());
         project_type.set("time_and_materials".to_string());
         currency.set("USD".to_string());
+        rate_value.set(String::new());
         budget_kind.set("none".to_string());
         budget_value.set(String::new());
         error.set(None);
@@ -329,6 +331,14 @@ pub fn ProjectList() -> Element {
                             oninput: move |e: FormEvent| currency.set(e.value()),
                         }
                     }
+                    FormGroup { label: "Hourly rate", id: "proj-rate", hint: "Leave blank to use the user's default. Task and assignment overrides take priority. Zero is a free rate.",
+                        Input {
+                            id: "proj-rate",
+                            placeholder: "120.00",
+                            value: "{rate_value}",
+                            oninput: move |e: FormEvent| rate_value.set(e.value()),
+                        }
+                    }
                     FormGroup { label: "Budget", id: "proj-budget",
                         Select {
                             id: "proj-budget",
@@ -361,18 +371,22 @@ pub fn ProjectList() -> Element {
                             let c = currency();
                             let bk = budget_kind();
                             let bv = budget_value();
+                            let rv = rate_value();
                             run_action(
                                 async move {
                                     match editing {
                                         Some(id) => {
-                                            server_fns::update_project(id.to_string(), n, pt, c, bk, bv).await
+                                            server_fns::update_project(id.to_string(), n, pt, c, bk, bv, rv).await
                                         }
-                                        None => server_fns::create_project(cid, n, pt, c, bk, bv).await,
+                                        None => server_fns::create_project(cid, n, pt, c, bk, bv, rv).await,
                                     }
                                 },
                                 projects,
                                 error,
-                                reset_form,
+                                move || {
+                                    spend_res.restart();
+                                    reset_form();
+                                },
                             );
                         },
                         if editing_id().is_some() { "Save Changes" } else { "Create Project" }
@@ -497,6 +511,7 @@ pub fn ProjectList() -> Element {
                                                                     name.set(p.name.clone());
                                                                     project_type.set(p.project_type.to_string());
                                                                     currency.set(p.currency.clone());
+                                                                    rate_value.set(p.rate_cents.map(format_cents_plain).unwrap_or_default());
                                                                     budget_kind.set(p.budget_kind.to_string());
                                                                     // Seed the figure so saving an untouched
                                                                     // form doesn't clear the budget.

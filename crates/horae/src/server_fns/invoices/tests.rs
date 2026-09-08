@@ -3,6 +3,167 @@ use crate::server_fns::test_seed::{seed, time_entry};
 use sqlx::PgPool;
 
 #[sqlx::test(migrations = "./migrations")]
+async fn billing_cascade_agrees_across_all_four_levels_including_zero(pool: PgPool) {
+    for (task, assignment, project, user, expected) in [
+        (Some(5000), Some(4000), Some(3500), Some(3000), 5000),
+        (None, Some(4000), Some(3500), Some(3000), 4000),
+        (None, None, Some(3500), Some(3000), 3500),
+        (None, None, None, Some(3000), 3000),
+        (None, None, None, None, 0),
+        (Some(0), Some(4000), Some(3500), Some(3000), 0),
+        (None, Some(0), Some(3500), Some(3000), 0),
+        (None, None, Some(0), Some(3000), 0),
+    ] {
+        let ids = seed(&pool, OrgRole::Manager).await;
+        time_entry(&pool, &ids, EntryState::Open).await;
+        sqlx::query!(
+            "UPDATE users SET billable_rate_cents = $2 WHERE id = $1",
+            ids.user_id,
+            user
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            "UPDATE projects SET rate_cents = $2 WHERE id = $1",
+            ids.project_id,
+            project
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!("INSERT INTO project_tasks (project_id, task_id, billable, rate_cents) VALUES ($1, $2, true, $3)", ids.project_id, ids.task_id, task)
+            .execute(&pool).await.unwrap();
+        sqlx::query!("INSERT INTO assignments (id, project_id, user_id, role, rate_cents) VALUES ($1, $2, $3, 'lead', $4)", uuid::Uuid::now_v7(), ids.project_id, ids.user_id, assignment)
+            .execute(&pool).await.unwrap();
+        let day = "2026-09-07".parse().unwrap();
+        let report = crate::server_fns::reports::fetch_report(
+            &pool,
+            ids.org_id,
+            (day, day),
+            "project",
+            None,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        let spend = crate::server_fns::projects::fetch_project_spend(&pool, ids.org_id)
+            .await
+            .unwrap();
+        let invoice = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, day, day)
+            .await
+            .unwrap();
+        assert_eq!(
+            (
+                report[0].billable_cents,
+                spend[0].spent_cents,
+                invoice.invoice.total_cents,
+                invoice.lines[0].rate_cents
+            ),
+            (expected, expected, expected, expected),
+            "rates: {task:?}, {assignment:?}, {project:?}, {user:?}",
+        );
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn project_rate_is_used_by_invoices_reports_and_spend(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    time_entry(&pool, &ids, EntryState::Open).await;
+    sqlx::query!(
+        "UPDATE users SET billable_rate_cents = 3000 WHERE id = $1",
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE projects SET rate_cents = 6000 WHERE id = $1",
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let day = "2026-09-07".parse().unwrap();
+    let invoice = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, day, day)
+        .await
+        .unwrap();
+    assert_eq!(invoice.lines[0].rate_cents, 6000);
+    assert_eq!(invoice.invoice.total_cents, 6000);
+    let report = crate::server_fns::reports::fetch_report(
+        &pool,
+        ids.org_id,
+        (day, day),
+        "project",
+        None,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(report[0].billable_cents, 6000);
+    let spend = crate::server_fns::projects::fetch_project_spend(&pool, ids.org_id)
+        .await
+        .unwrap();
+    assert_eq!(spend[0].spent_cents, 6000);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn invoiced_amounts_survive_rate_changes_and_void_uses_current_rates(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    time_entry(&pool, &ids, EntryState::Open).await;
+    sqlx::query!(
+        "UPDATE users SET billable_rate_cents = 3000 WHERE id = $1",
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let day = "2026-09-07".parse().unwrap();
+    let invoice = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, day, day)
+        .await
+        .unwrap();
+    sqlx::query!(
+        "UPDATE projects SET rate_cents = 6000 WHERE id = $1",
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let report = crate::server_fns::reports::fetch_report(
+        &pool,
+        ids.org_id,
+        (day, day),
+        "project",
+        None,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(report[0].billable_cents, invoice.invoice.total_cents);
+    let spend = crate::server_fns::projects::fetch_project_spend(&pool, ids.org_id)
+        .await
+        .unwrap();
+    assert_eq!(spend[0].spent_cents, invoice.invoice.total_cents);
+    transition_invoice(&pool, ids.org_id, invoice.invoice.id, InvoiceStatus::Void)
+        .await
+        .unwrap();
+    let replacement = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, day, day)
+        .await
+        .unwrap();
+    assert_eq!(replacement.invoice.total_cents, 6000);
+    let spend = crate::server_fns::projects::fetch_project_spend(&pool, ids.org_id)
+        .await
+        .unwrap();
+    assert_eq!(
+        spend[0].spent_cents, 6000,
+        "the old void invoice must not duplicate spend"
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn non_billable_context_produces_no_unbilled_amount_on_any_report(pool: PgPool) {
     for project_billable in [false, true] {
         let ids = seed(&pool, OrgRole::Manager).await;

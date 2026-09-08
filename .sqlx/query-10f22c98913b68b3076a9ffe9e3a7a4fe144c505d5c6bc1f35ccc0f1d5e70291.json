@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE projects SET active = $3\n          WHERE id = $1 AND org_id = $2\n         RETURNING id, org_id, client_id, code, name,\n                   project_type as \"project_type: ProjectType\", currency,\n                   starts_on as \"starts_on: chrono::NaiveDate\",\n                   ends_on as \"ends_on: chrono::NaiveDate\",\n                   budget_kind as \"budget_kind: BudgetKind\",\n                   budget_amount_cents, budget_minutes, active,\n                   created_at as \"created_at: chrono::DateTime<chrono::Utc>\"",
+  "query": "SELECT id, org_id, client_id, code, name,\n                project_type as \"project_type: ProjectType\", currency, rate_cents,\n                starts_on as \"starts_on: chrono::NaiveDate\",\n                ends_on as \"ends_on: chrono::NaiveDate\",\n                budget_kind as \"budget_kind: BudgetKind\",\n                budget_amount_cents, budget_minutes, active,\n                created_at as \"created_at: chrono::DateTime<chrono::Utc>\"\n         FROM projects\n         WHERE org_id = $2 AND ($1::bool OR active = true)\n         ORDER BY name ASC",
   "describe": {
     "columns": [
       {
@@ -52,16 +52,21 @@
       },
       {
         "ordinal": 7,
+        "name": "rate_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
         "name": "starts_on: chrono::NaiveDate",
         "type_info": "Date"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "ends_on: chrono::NaiveDate",
         "type_info": "Date"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "budget_kind: BudgetKind",
         "type_info": {
           "Custom": {
@@ -77,31 +82,30 @@
         }
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "budget_amount_cents",
         "type_info": "Int8"
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "budget_minutes",
         "type_info": "Int8"
       },
       {
-        "ordinal": 12,
+        "ordinal": 13,
         "name": "active",
         "type_info": "Bool"
       },
       {
-        "ordinal": 13,
+        "ordinal": 14,
         "name": "created_at: chrono::DateTime<chrono::Utc>",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Uuid",
-        "Bool"
+        "Bool",
+        "Uuid"
       ]
     },
     "nullable": [
@@ -114,6 +118,7 @@
       false,
       true,
       true,
+      true,
       false,
       true,
       true,
@@ -121,5 +126,5 @@
       false
     ]
   },
-  "hash": "a72269b049f1ff16c83885f190eebff384de12b8dd5725666f215473ce92f798"
+  "hash": "10f22c98913b68b3076a9ffe9e3a7a4fe144c505d5c6bc1f35ccc0f1d5e70291"
 }

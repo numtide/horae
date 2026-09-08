@@ -13,6 +13,7 @@ pub struct Project {
     pub name: String,
     pub project_type: ProjectType,
     pub currency: String,
+    pub rate_cents: Option<i64>,
     pub starts_on: Option<NaiveDate>,
     pub ends_on: Option<NaiveDate>,
     pub budget_kind: BudgetKind,
