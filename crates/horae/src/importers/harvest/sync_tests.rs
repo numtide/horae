@@ -1,6 +1,9 @@
 use super::*;
-use chrono::TimeZone;
+use chrono::{DateTime, TimeZone};
 use serde_json::json;
+
+mod paging;
+mod scale;
 
 const KEY: &str = "1111111111111111111111111111111111111111111111111111111111111111";
 
@@ -12,18 +15,35 @@ async fn apply_api_data(
     data: &HarvestData,
     capture_started_at: DateTime<Utc>,
 ) -> anyhow::Result<ImportReport> {
-    let mut connection = lock_import(pool, org_id).await?;
-    let result = super::apply_api_data(
-        &mut connection,
+    let connection = lock_import(pool, org_id).await?;
+    apply_api_data_in_session(connection, org_id, currency, mode, data, capture_started_at).await
+}
+
+async fn apply_api_data_in_session(
+    connection: sqlx::pool::PoolConnection<sqlx::Postgres>,
+    org_id: Uuid,
+    currency: &str,
+    mode: ImportMode,
+    data: &HarvestData,
+    capture_started_at: DateTime<Utc>,
+) -> anyhow::Result<ImportReport> {
+    let mut catalog = data.clone();
+    let entries = std::mem::take(&mut catalog.time_entries);
+    streaming::run(
+        connection,
         org_id,
         currency,
         mode,
-        data,
         capture_started_at,
+        move |pages| {
+            pages.blocking_send(streaming::Page::Catalog(catalog))?;
+            for page in entries.chunks(100) {
+                pages.blocking_send(streaming::Page::Entries(page.to_vec()))?;
+            }
+            Ok(())
+        },
     )
-    .await;
-    release_import(connection).await?;
-    result
+    .await
 }
 
 fn day(day: u32) -> DateTime<Utc> {
@@ -408,8 +428,8 @@ async fn refreshed_tokens_survive_a_dry_run_rollback_in_the_same_import_session(
     )
     .await
     .unwrap();
-    let report = super::apply_api_data(
-        &mut connection,
+    let report = apply_api_data_in_session(
+        connection,
         org,
         "USD",
         ImportMode::DryRun,
@@ -419,7 +439,6 @@ async fn refreshed_tokens_survive_a_dry_run_rollback_in_the_same_import_session(
     .await
     .unwrap();
     assert_eq!(report.summary.time_entries.created, 1);
-    release_import(connection).await.unwrap();
     let stored = credentials::load(&pool, org, KEY).await.unwrap().unwrap();
     assert_eq!(
         (stored.access_token.as_str(), stored.refresh_token.as_str()),
