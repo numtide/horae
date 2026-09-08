@@ -3,6 +3,134 @@ use crate::server_fns::test_seed::{seed, time_entry};
 use sqlx::PgPool;
 
 #[sqlx::test(migrations = "./migrations")]
+async fn invoice_total_overflow_leaves_all_time_unbilled(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    for _ in 0..3 {
+        time_entry(&pool, &ids, EntryState::Open).await;
+    }
+    sqlx::query!(
+        "UPDATE users SET billable_rate_cents = $2 WHERE id = $1",
+        ids.user_id,
+        i64::MAX
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let day = "2026-09-07".parse().unwrap();
+
+    let result = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, day, day).await;
+
+    assert!(matches!(
+        result,
+        Err(ServerFnError::ServerError { code: CONFLICT, .. })
+    ));
+    assert_no_partial_invoice(&pool).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn invoice_line_overflow_leaves_time_unbilled(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    let entry = time_entry(&pool, &ids, EntryState::Open).await;
+    sqlx::query!(
+        "UPDATE users SET billable_rate_cents = $2 WHERE id = $1",
+        ids.user_id,
+        i64::MAX
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!("UPDATE time_entries SET minutes = 61 WHERE id = $1", entry)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let day = "2026-09-07".parse().unwrap();
+
+    let result = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, day, day).await;
+
+    assert!(matches!(
+        result,
+        Err(ServerFnError::ServerError { code: CONFLICT, .. })
+    ));
+    assert_no_partial_invoice(&pool).await;
+}
+
+async fn assert_no_partial_invoice(pool: &PgPool) {
+    let row = sqlx::query!(
+        r#"SELECT (SELECT count(*) FROM invoices) as "invoices!",
+                  (SELECT count(*) FROM invoice_line_items) as "lines!",
+                  EXISTS(SELECT 1 FROM time_entries WHERE state <> 'open'
+                    OR invoice_id IS NOT NULL OR rounded_minutes IS NOT NULL) as "changed!""#,
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    assert_eq!((row.invoices, row.lines, row.changed), (0, 0, false));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn large_invoice_and_reports_agree_without_intermediate_overflow(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    time_entry(&pool, &ids, EntryState::Open).await;
+    sqlx::query!(
+        "UPDATE users SET billable_rate_cents = $2 WHERE id = $1",
+        ids.user_id,
+        i64::MAX
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let day = "2026-09-07".parse().unwrap();
+    let invoice = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, day, day)
+        .await
+        .unwrap();
+    let report = crate::server_fns::reports::fetch_report(
+        &pool,
+        ids.org_id,
+        (day, day),
+        "project",
+        None,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+    let spend = crate::server_fns::projects::fetch_project_spend(&pool, ids.org_id)
+        .await
+        .unwrap();
+    assert_eq!(
+        (
+            invoice.lines[0].amount_cents,
+            invoice.invoice.total_cents,
+            report[0].billable_cents,
+            spend[0].spent_cents
+        ),
+        (i64::MAX, i64::MAX, i64::MAX, i64::MAX)
+    );
+
+    time_entry(&pool, &ids, EntryState::Open).await;
+    let report_error = crate::server_fns::reports::fetch_report(
+        &pool,
+        ids.org_id,
+        (day, day),
+        "project",
+        None,
+        None,
+        None,
+    )
+    .await
+    .unwrap_err();
+    let spend_error = crate::server_fns::projects::fetch_project_spend(&pool, ids.org_id)
+        .await
+        .unwrap_err();
+    for error in [report_error, spend_error] {
+        assert_eq!(
+            error.as_database_error().unwrap().code().as_deref(),
+            Some("22003")
+        );
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn invoicing_uses_and_freezes_effective_minutes(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
     let open = time_entry(&pool, &ids, EntryState::Open).await;

@@ -1401,7 +1401,7 @@ async fn generate_invoice_totals_match(pool: PgPool) {
             e.user_rate_cents,
         )
         .unwrap_or(0);
-        let amount = horae_core::invoice::line_amount_cents(rate, e.minutes);
+        let amount = horae_core::invoice::line_amount_cents(rate, e.minutes).unwrap();
         total_cents += amount;
         line_data.push(LineData {
             id: Uuid::now_v7(),
@@ -3021,9 +3021,25 @@ async fn line_amount_cents_sql_matches_rust(pool: PgPool) {
         (1, 91, "one above the next boundary up"),
         // A realistic ceiling: a very expensive hour across a full day.
         (100_000_000, 1_440, "a $1M/h rate over a 24-hour entry"),
-        // Far past anything the domain allows, but still short of where either
-        // side would overflow its 64-bit accumulator.
+        // Large values that still fit the old 64-bit intermediate.
         (9_000_000_000_000_000, 1_000, "near the 64-bit ceiling"),
+        (
+            i64::MAX,
+            60,
+            "maximum amount with an overflowing 64-bit product",
+        ),
+        (i64::MAX, 0, "maximum rate and zero duration"),
+        (
+            i64::MAX,
+            1,
+            "large rate divided down to a representable amount",
+        ),
+        (
+            i64::MIN,
+            60,
+            "signed lower boundary retains truncation semantics",
+        ),
+        (i64::from(i32::MAX), i32::MAX, "large rate and duration"),
         // Migration 0010 forbids storing these, but truncation toward zero is
         // exactly where the two could have drifted — a floor division would
         // answer -167 for the first — so pin the sign convention anyway.
@@ -3040,7 +3056,7 @@ async fn line_amount_cents_sql_matches_rust(pool: PgPool) {
         .fetch_one(&pool)
         .await
         .unwrap();
-        let from_rust = horae_core::invoice::line_amount_cents(rate_cents, minutes);
+        let from_rust = horae_core::invoice::line_amount_cents(rate_cents, minutes).unwrap();
         assert_eq!(
             from_sql, from_rust,
             "line_amount_cents({rate_cents}, {minutes}) — {why}: SQL says {from_sql}, Rust says {from_rust}"
@@ -3054,6 +3070,31 @@ async fn line_amount_cents_sql_matches_rust(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(no_rate, None, "a NULL rate must produce no amount");
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial]
+async fn line_amount_cents_sql_and_rust_reject_final_overflow(pool: PgPool) {
+    for (rate, minutes) in [
+        (i64::MAX, 61),
+        (i64::MIN, 61),
+        (i64::MAX, i32::MAX),
+        (i64::MIN, i32::MIN),
+    ] {
+        let error = sqlx::query_scalar!(
+            r#"SELECT line_amount_cents($1, $2) as "amount!""#,
+            rate,
+            minutes
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap_err();
+        assert_eq!(
+            error.as_database_error().unwrap().code().as_deref(),
+            Some("22003")
+        );
+        assert!(horae_core::invoice::line_amount_cents(rate, minutes).is_err());
+    }
 }
 
 /// The Projects overview's Spent column groups in SQL. Seed entries whose rates
@@ -3181,7 +3222,7 @@ async fn project_spend_grouped_in_sql_matches_the_rust_fold(pool: PgPool) {
                 e.user_rate_cents,
             )
             .unwrap_or(0);
-            acc.1 += horae_core::invoice::line_amount_cents(rate, e.minutes);
+            acc.1 += horae_core::invoice::line_amount_cents(rate, e.minutes).unwrap();
         }
     }
     let mut from_rust: Vec<_> = folded.into_iter().collect();
@@ -3384,12 +3425,14 @@ async fn report_time_grouped_in_sql_matches_the_rust_fold(pool: PgPool) {
                     r.user_billable_rate_cents,
                 )
                 .unwrap_or(0);
-                g.billable_cents += horae_core::invoice::line_amount_cents(rate, rounded_min);
+                g.billable_cents +=
+                    horae_core::invoice::line_amount_cents(rate, rounded_min).unwrap();
             }
             g.cost_cents += horae_core::invoice::line_amount_cents(
                 r.user_cost_rate_cents.unwrap_or(0),
                 r.minutes,
-            );
+            )
+            .unwrap();
             if !g.mixed {
                 match &g.currency {
                     None => g.currency = Some(r.currency.clone()),

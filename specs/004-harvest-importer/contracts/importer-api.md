@@ -93,6 +93,17 @@ ImportReport {
 - **No invoice coupling**: entries import as `open`, never `invoiced` from Harvest's billed flag (FR-016).
 - **Credentials protected**: OAuth tokens stored encrypted, never returned to the browser or logged (FR-022).
 
+## Decimal limits
+
+Decimal conversion is exact and rounds half up. The parser accepts up to 38
+fractional digits with an unscaled numerator no larger than `i128::MAX`;
+converted minutes/cents must fit in `i64`. The entry writer additionally checks
+that stored minutes fit in PostgreSQL's non-negative `integer` range.
+High fractional precision does not overflow the scaling intermediate.
+An out-of-range value or precision produces a typed conversion error, reported
+against that source row. Its savepoint is rolled back and subsequent rows are
+still processed; values are never clamped or silently wrapped.
+
 ## Out of scope (v1)
 
 - **Propagating Harvest deletions** — a "mirror-delete" re-sync mode that removes records deleted in Harvest. Re-sync is additive/updating only (`updated_since` never reports deletions), so upstream-deleted records remain in Horae until an admin removes them manually (FR-025, harvest-api.md).

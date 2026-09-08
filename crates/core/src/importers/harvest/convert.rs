@@ -20,17 +20,22 @@ pub enum ConvertError {
     NotANumber(String),
     #[error("value must not be negative: {0:?}")]
     Negative(String),
+    #[error("decimal value or precision out of range: {0:?}")]
+    OutOfRange(String),
 }
 
 /// Convert decimal hours to exact whole minutes: `round(hours * 60)`, half up.
 ///
-/// `0.25` → 15, `1.5` → 90, `2` → 120. Rejects a negative or unparseable value.
+/// `0.25` → 15, `1.5` → 90, `2` → 120. Rejects negative/unparseable input or
+/// a result outside `i64`. Supports at most 38 fractional digits and an
+/// unscaled decimal numerator no larger than `i128::MAX`.
 pub fn hours_to_minutes(hours: &str) -> Result<i64, ConvertError> {
     scale_decimal(hours, 60)
 }
 
 /// Convert a decimal money amount to integer minor units: `round(amount * 100)`,
 /// half up. `10` → 1000, `10.5` → 1050, `1.005` → 101. Rejects a negative value.
+/// Uses the same decimal precision and result limits as [`hours_to_minutes`].
 pub fn money_to_cents(amount: &str) -> Result<i64, ConvertError> {
     scale_decimal(amount, 100)
 }
@@ -40,17 +45,35 @@ pub fn money_to_cents(amount: &str) -> Result<i64, ConvertError> {
 /// arithmetic — no `f64` rounds through the middle.
 fn scale_decimal(s: &str, scale: i128) -> Result<i64, ConvertError> {
     let (numerator, denominator) = parse_decimal(s)?;
-    // value * scale = numerator * scale / denominator; round to nearest integer,
-    // ties up: floor((2 * n * scale + denominator) / (2 * denominator)).
-    let num = numerator * scale;
-    let den = denominator;
-    let rounded = (2 * num + den) / (2 * den);
-    i64::try_from(rounded).map_err(|_| ConvertError::NotANumber(s.to_owned()))
+    let out_of_range = || ConvertError::OutOfRange(s.to_owned());
+    let whole = (numerator / denominator)
+        .checked_mul(scale)
+        .ok_or_else(out_of_range)?;
+    let fraction = numerator % denominator;
+    let mut scaled_fraction = 0;
+    let mut remainder = 0;
+    // At most 100 additions (the cents scale). Reducing each addition avoids
+    // overflowing fraction * scale even for a 38-digit decimal fraction.
+    for _ in 0..scale {
+        if remainder >= denominator - fraction {
+            remainder -= denominator - fraction;
+            scaled_fraction += 1;
+        } else {
+            remainder += fraction;
+        }
+    }
+    let rounded_fraction = scaled_fraction + i128::from(remainder >= denominator - remainder);
+    let rounded = whole
+        .checked_add(rounded_fraction)
+        .ok_or_else(out_of_range)?;
+    i64::try_from(rounded).map_err(|_| out_of_range())
 }
 
 /// Parse a non-negative decimal string into `(numerator, 10^fractional_digits)`
 /// so `numerator / denominator` is its exact value. Accepts an optional leading
 /// `+`, digits, an optional single `.`, and digits; rejects everything else.
+/// Supports up to 38 fractional digits and an unscaled numerator up to
+/// `i128::MAX`; exceeding either bound returns `OutOfRange`.
 fn parse_decimal(s: &str) -> Result<(i128, i128), ConvertError> {
     let trimmed = s.trim();
     let body = trimmed.strip_prefix('+').unwrap_or(trimmed);
@@ -81,17 +104,87 @@ fn parse_decimal(s: &str) -> Result<(i128, i128), ConvertError> {
         numerator = numerator
             .checked_mul(10)
             .and_then(|n| n.checked_add((b - b'0') as i128))
-            .ok_or_else(|| ConvertError::NotANumber(s.to_owned()))?;
+            .ok_or_else(|| ConvertError::OutOfRange(s.to_owned()))?;
     }
     let denominator = 10i128
-        .checked_pow(frac_part.len() as u32)
-        .ok_or_else(|| ConvertError::NotANumber(s.to_owned()))?;
+        .checked_pow(
+            u32::try_from(frac_part.len()).map_err(|_| ConvertError::OutOfRange(s.to_owned()))?,
+        )
+        .ok_or_else(|| ConvertError::OutOfRange(s.to_owned()))?;
     Ok((numerator, denominator))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn conversion_handles_high_precision_without_intermediate_overflow() {
+        assert_eq!(
+            hours_to_minutes("1.70141183460469231731687303715884105727"),
+            Ok(102)
+        );
+        assert_eq!(
+            money_to_cents("1.70141183460469231731687303715884105727"),
+            Ok(170)
+        );
+    }
+
+    #[test]
+    fn conversion_rejects_unrepresentable_scaled_values_without_panicking() {
+        assert!(hours_to_minutes(&i128::MAX.to_string()).is_err());
+        assert!(money_to_cents(&i128::MAX.to_string()).is_err());
+    }
+
+    #[test]
+    fn conversion_preserves_the_i64_boundary_and_rejects_rounding_past_it() {
+        assert_eq!(money_to_cents("92233720368547758.07"), Ok(i64::MAX));
+        assert_eq!(hours_to_minutes("153722867280912930.12"), Ok(i64::MAX));
+        for result in [
+            money_to_cents("92233720368547758.075"),
+            hours_to_minutes("153722867280912930.125"),
+        ] {
+            assert!(matches!(result, Err(ConvertError::OutOfRange(_))));
+        }
+    }
+
+    #[test]
+    fn high_precision_fraction_straddles_the_half_minute_exactly() {
+        assert_eq!(
+            hours_to_minutes("0.00833333333333333333333333333333333333"),
+            Ok(0)
+        );
+        assert_eq!(
+            hours_to_minutes("0.00833333333333333333333333333333333334"),
+            Ok(1)
+        );
+        assert_eq!(
+            hours_to_minutes("0.99999999999999999999999999999999999999"),
+            Ok(60)
+        );
+    }
+
+    #[test]
+    fn conversion_reports_precision_and_numerator_limits() {
+        for input in [format!("0.{}1", "0".repeat(38)), format!("{}0", i128::MAX)] {
+            assert!(matches!(
+                money_to_cents(&input),
+                Err(ConvertError::OutOfRange(_))
+            ));
+        }
+    }
+
+    #[test]
+    fn conversion_matches_exact_scaled_rationals() {
+        for numerator in 0..=10_000i64 {
+            let decimal = format!("{}.{:03}", numerator / 1000, numerator % 1000);
+            assert_eq!(
+                hours_to_minutes(&decimal),
+                Ok((numerator * 60 + 500) / 1000)
+            );
+            assert_eq!(money_to_cents(&decimal), Ok((numerator * 100 + 500) / 1000));
+        }
+    }
 
     #[test]
     fn hours_common_values_are_exact() {

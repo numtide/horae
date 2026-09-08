@@ -450,6 +450,60 @@ async fn dry_run_writes_nothing_and_matches_commit(pool: PgPool) {
 // ── US4: resilience + reconciliation ──────────────────────────────────────────
 
 #[sqlx::test(migrations = "./migrations")]
+async fn overflowing_decimals_fail_only_their_rows(pool: PgPool) {
+    let org = seed_org(&pool).await;
+    seed_user(&pool, org, "dev@acme.com").await;
+    let bad_hours = api_row(
+        (1, 10, 100, 5000, 1000),
+        "Bad Hours",
+        "Hours",
+        "Design",
+        "dev@acme.com",
+        (2026, 1, 15),
+        &i128::MAX.to_string(),
+        None,
+    );
+    let mut bad_rate = api_row(
+        (2, 20, 200, 5001, 1000),
+        "Bad Rate",
+        "Rate",
+        "Design",
+        "dev@acme.com",
+        (2026, 1, 15),
+        "1",
+        None,
+    );
+    bad_rate.billable_rate = Some(i128::MAX.to_string());
+    let good = api_row(
+        (3, 30, 300, 5002, 1000),
+        "Good",
+        "Good",
+        "Design",
+        "dev@acme.com",
+        (2026, 1, 15),
+        "1.70141183460469231731687303715884105727",
+        None,
+    );
+
+    let report = commit(&pool, org, vec![bad_hours, bad_rate, good]).await;
+
+    assert!(report.reconciles());
+    assert_eq!(report.row_errors.len(), 2);
+    assert_eq!(report.summary.time_entries.created, 1);
+    let entries = sqlx::query!("SELECT minutes FROM time_entries WHERE org_id = $1", org)
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].minutes, 102);
+    let clients = sqlx::query_scalar!("SELECT name FROM clients WHERE org_id = $1", org)
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    assert_eq!(clients, vec!["Good"]);
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn bad_records_are_reported_and_run_continues(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@acme.com").await;
