@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE time_entries SET minutes = 121 WHERE id = $1 RETURNING xmin::text",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "xmin",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "0c60d3a8791ff00a425614788d6703cf4d24c90cefcce75db4ee2e5e1f02eba2"
+}

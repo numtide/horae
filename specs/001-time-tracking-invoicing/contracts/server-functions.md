@@ -76,6 +76,11 @@ Notes:
 1. **FR-015 / edit-lock**: `update_time_entry` and `delete_time_entry` succeed only
    while the entry is in the `open` state; once an entry is `submitted`, `approved`,
    or attached to an invoice it is locked (returns `409`).
+1. `update_time_entry` locks the owned, open entry before comparing normalized
+   values and effective billability. An unchanged edit returns the current entry
+   without rewriting it, changing `updated_at`, dispatching an update event, or
+   scheduling a budget check. Concurrent edits compare against the preceding
+   committed edit; a concurrent lock or deletion still returns `409`.
 1. `stop_timer` computes elapsed minutes exactly from `started_at` (minimum 1
    minute), satisfying FR-003 / FR-023.
 
