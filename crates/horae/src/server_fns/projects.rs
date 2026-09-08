@@ -5,6 +5,9 @@ use super::*;
 #[cfg(all(test, feature = "server"))]
 mod tests;
 
+#[cfg(all(test, feature = "server"))]
+mod mutation_tests;
+
 // ── Projects ─────────────────────────────────────────────────────────────────
 
 #[cfg(feature = "server")]
@@ -206,63 +209,21 @@ pub async fn update_project(
     let manager = require_manager().await?;
     let state = crate::state::global_state().await;
     let project_id = parse_uuid(&project_id, "project_id")?;
-    let pt: ProjectType = parse_enum(&project_type, "project_type")?;
-    let bk: BudgetKind = parse_enum(&budget_kind, "budget_kind")?;
-    let (budget_amount_cents, budget_minutes) = parse_budget(bk, &budget_value)?;
-    let rate_cents = parse_project_rate(&rate_value)?;
-    // Detect a real change so a no-op update emits nothing (FR-012).
-    let changed: Option<bool> = sqlx::query_scalar!(
-        r#"SELECT (name IS DISTINCT FROM $3
-                 OR project_type::text IS DISTINCT FROM $4
-                 OR currency IS DISTINCT FROM $5
-                 OR budget_kind::text IS DISTINCT FROM $6
-                 OR budget_amount_cents IS DISTINCT FROM $7
-                 OR budget_minutes IS DISTINCT FROM $8
-                 OR rate_cents IS DISTINCT FROM $9) as "changed!"
-         FROM projects WHERE id = $1 AND org_id = $2"#,
-        project_id,
+    let (project, changed) = update_project_record(
+        &state.db,
         manager.org_id,
-        name,
-        project_type,
-        currency,
-        budget_kind,
-        budget_amount_cents,
-        budget_minutes,
-        rate_cents,
-    )
-    .fetch_optional(&state.db)
-    .await
-    .map_err(server_err)?;
-
-    let project = sqlx::query_as!(
-        Project,
-        r#"UPDATE projects
-            SET name = $3, project_type = $4, currency = $5, budget_kind = $6,
-                budget_amount_cents = $7, budget_minutes = $8, rate_cents = $9
-          WHERE id = $1 AND org_id = $2
-         RETURNING id, org_id, client_id, code, name,
-                   project_type as "project_type: ProjectType", currency, rate_cents,
-                   starts_on as "starts_on: chrono::NaiveDate",
-                   ends_on as "ends_on: chrono::NaiveDate",
-                   budget_kind as "budget_kind: BudgetKind",
-                   budget_amount_cents, budget_minutes, active,
-                   created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
         project_id,
-        manager.org_id,
-        name,
-        pt as ProjectType,
-        currency,
-        bk as BudgetKind,
-        budget_amount_cents,
-        budget_minutes,
-        rate_cents,
+        &ProjectEdit {
+            name: &name,
+            project_type: &project_type,
+            currency: &currency,
+            budget_kind: &budget_kind,
+            budget_value: &budget_value,
+            rate_value: &rate_value,
+        },
     )
-    .fetch_optional(&state.db)
-    .await
-    .map_err(server_err)?
-    .ok_or_else(|| not_found("Project not found"))?;
-
-    if changed == Some(true) {
+    .await?;
+    if changed {
         state
             .plugins
             .dispatch(crate::plugin::AppEvent::ProjectUpdated {
@@ -272,6 +233,64 @@ pub async fn update_project(
             });
     }
     Ok(project)
+}
+
+#[cfg(feature = "server")]
+struct ProjectEdit<'a> {
+    name: &'a str,
+    project_type: &'a str,
+    currency: &'a str,
+    budget_kind: &'a str,
+    budget_value: &'a str,
+    rate_value: &'a str,
+}
+
+#[cfg(feature = "server")]
+async fn update_project_record(
+    db: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    project_id: uuid::Uuid,
+    edit: &ProjectEdit<'_>,
+) -> Result<(Project, bool), ServerFnError> {
+    let pt: ProjectType = parse_enum(edit.project_type, "project_type")?;
+    let bk: BudgetKind = parse_enum(edit.budget_kind, "budget_kind")?;
+    let (budget_amount_cents, budget_minutes) = parse_budget(bk, edit.budget_value)?;
+    let rate_cents = parse_project_rate(edit.rate_value)?;
+    let mut tx = db.begin().await.map_err(server_err)?;
+    let before = lock_project(&mut tx, org_id, project_id).await?;
+
+    let project = sqlx::query_as!(
+        Project,
+        r#"UPDATE projects
+            SET name = $3, project_type = $4, currency = $5, budget_kind = $6,
+                budget_amount_cents = $7, budget_minutes = $8, rate_cents = $9
+          WHERE id = $1 AND org_id = $2
+            AND (name, project_type, currency, budget_kind, budget_amount_cents, budget_minutes, rate_cents)
+              IS DISTINCT FROM ($3, $4, $5, $6, $7, $8, $9)
+         RETURNING id, org_id, client_id, code, name,
+                   project_type as "project_type: ProjectType", currency, rate_cents,
+                   starts_on as "starts_on: chrono::NaiveDate",
+                   ends_on as "ends_on: chrono::NaiveDate",
+                   budget_kind as "budget_kind: BudgetKind",
+                   budget_amount_cents, budget_minutes, active,
+                   created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
+        project_id,
+        org_id,
+        edit.name,
+        pt as ProjectType,
+        edit.currency,
+        bk as BudgetKind,
+        budget_amount_cents,
+        budget_minutes,
+        rate_cents,
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(server_err)?;
+
+    let changed = project.is_some();
+    tx.commit().await.map_err(server_err)?;
+    Ok((project.unwrap_or(before), changed))
 }
 
 /// Activate or deactivate a project. Deactivated projects are hidden from
@@ -284,37 +303,9 @@ pub async fn set_project_active(
     let manager = require_manager().await?;
     let state = crate::state::global_state().await;
     let project_id = parse_uuid(&project_id, "project_id")?;
-    // Detect a real flip so a no-op set emits nothing (FR-012).
-    let was_active: Option<bool> = sqlx::query_scalar!(
-        "SELECT active FROM projects WHERE id = $1 AND org_id = $2",
-        project_id,
-        manager.org_id,
-    )
-    .fetch_optional(&state.db)
-    .await
-    .map_err(server_err)?;
-
-    let project = sqlx::query_as!(
-        Project,
-        r#"UPDATE projects SET active = $3
-          WHERE id = $1 AND org_id = $2
-         RETURNING id, org_id, client_id, code, name,
-                   project_type as "project_type: ProjectType", currency, rate_cents,
-                   starts_on as "starts_on: chrono::NaiveDate",
-                   ends_on as "ends_on: chrono::NaiveDate",
-                   budget_kind as "budget_kind: BudgetKind",
-                   budget_amount_cents, budget_minutes, active,
-                   created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
-        project_id,
-        manager.org_id,
-        active,
-    )
-    .fetch_optional(&state.db)
-    .await
-    .map_err(server_err)?
-    .ok_or_else(|| not_found("Project not found"))?;
-
-    if let Some(t) = crate::plugin::event::active_transition(was_active, active) {
+    let (project, transition) =
+        set_project_active_record(&state.db, manager.org_id, project_id, active).await?;
+    if let Some(t) = transition {
         let occurred_at = chrono::Utc::now();
         let project = project_payload(&project);
         state.plugins.dispatch(match t {
@@ -335,6 +326,70 @@ pub async fn set_project_active(
         });
     }
     Ok(project)
+}
+
+#[cfg(feature = "server")]
+async fn set_project_active_record(
+    db: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    project_id: uuid::Uuid,
+    active: bool,
+) -> Result<(Project, Option<crate::plugin::event::ActiveTransition>), ServerFnError> {
+    let mut tx = db.begin().await.map_err(server_err)?;
+    let before = lock_project(&mut tx, org_id, project_id).await?;
+
+    let project = sqlx::query_as!(
+        Project,
+        r#"UPDATE projects SET active = $3
+          WHERE id = $1 AND org_id = $2
+            AND active IS DISTINCT FROM $3
+         RETURNING id, org_id, client_id, code, name,
+                   project_type as "project_type: ProjectType", currency, rate_cents,
+                   starts_on as "starts_on: chrono::NaiveDate",
+                   ends_on as "ends_on: chrono::NaiveDate",
+                   budget_kind as "budget_kind: BudgetKind",
+                   budget_amount_cents, budget_minutes, active,
+                   created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
+        project_id,
+        org_id,
+        active,
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(server_err)?;
+
+    let transition = project.as_ref().and_then(|updated| {
+        crate::plugin::event::active_transition(Some(before.active), updated.active)
+    });
+    tx.commit().await.map_err(server_err)?;
+    Ok((project.unwrap_or(before), transition))
+}
+
+#[cfg(feature = "server")]
+async fn lock_project(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    org_id: uuid::Uuid,
+    project_id: uuid::Uuid,
+) -> Result<Project, ServerFnError> {
+    // Lock before comparing so competing edits and activation changes use
+    // the latest committed row even when the request initially looked unchanged.
+    sqlx::query_as!(
+        Project,
+        r#"SELECT id, org_id, client_id, code, name,
+                  project_type as "project_type: ProjectType", currency, rate_cents,
+                  starts_on as "starts_on: chrono::NaiveDate",
+                  ends_on as "ends_on: chrono::NaiveDate",
+                  budget_kind as "budget_kind: BudgetKind",
+                  budget_amount_cents, budget_minutes, active,
+                  created_at as "created_at: chrono::DateTime<chrono::Utc>"
+           FROM projects WHERE id = $1 AND org_id = $2 FOR UPDATE"#,
+        project_id,
+        org_id,
+    )
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(server_err)?
+    .ok_or_else(|| not_found("Project not found"))
 }
 
 // ── Tasks ────────────────────────────────────────────────────────────────────
@@ -456,40 +511,16 @@ pub async fn update_task(
     let manager = require_manager().await?;
     let state = crate::state::global_state().await;
     let task_id = parse_uuid(&task_id, "task_id")?;
-    // Detect a real change so a no-op update emits nothing (FR-012).
-    let changed: Option<bool> = sqlx::query_scalar!(
-        r#"SELECT (name IS DISTINCT FROM $3
-                 OR billable_default IS DISTINCT FROM $4
-                 OR default_rate_cents IS DISTINCT FROM $5) as "changed!"
-         FROM tasks WHERE id = $1 AND org_id = $2"#,
-        task_id,
+    let (task, changed) = update_task_record(
+        &state.db,
         manager.org_id,
-        name,
+        task_id,
+        &name,
         billable_default,
         default_rate_cents,
     )
-    .fetch_optional(&state.db)
-    .await
-    .map_err(server_err)?;
-
-    let task = sqlx::query_as!(
-        Task,
-        "UPDATE tasks
-            SET name = $3, billable_default = $4, default_rate_cents = $5
-          WHERE id = $1 AND org_id = $2
-         RETURNING id, org_id, name, billable_default, default_rate_cents, active",
-        task_id,
-        manager.org_id,
-        name,
-        billable_default,
-        default_rate_cents,
-    )
-    .fetch_optional(&state.db)
-    .await
-    .map_err(server_err)?
-    .ok_or_else(|| not_found("Task not found"))?;
-
-    if changed == Some(true) {
+    .await?;
+    if changed {
         state
             .plugins
             .dispatch(crate::plugin::AppEvent::TaskUpdated {
@@ -501,6 +532,40 @@ pub async fn update_task(
     Ok(task)
 }
 
+#[cfg(feature = "server")]
+async fn update_task_record(
+    db: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    task_id: uuid::Uuid,
+    name: &str,
+    billable_default: bool,
+    default_rate_cents: Option<i64>,
+) -> Result<(Task, bool), ServerFnError> {
+    let mut tx = db.begin().await.map_err(server_err)?;
+    let before = lock_task(&mut tx, org_id, task_id).await?;
+
+    let task = sqlx::query_as!(
+        Task,
+        "UPDATE tasks
+            SET name = $3, billable_default = $4, default_rate_cents = $5
+          WHERE id = $1 AND org_id = $2
+            AND (name, billable_default, default_rate_cents) IS DISTINCT FROM ($3, $4, $5)
+         RETURNING id, org_id, name, billable_default, default_rate_cents, active",
+        task_id,
+        org_id,
+        name,
+        billable_default,
+        default_rate_cents,
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(server_err)?;
+
+    let changed = task.is_some();
+    tx.commit().await.map_err(server_err)?;
+    Ok((task.unwrap_or(before), changed))
+}
+
 /// Activate or deactivate an org-level task. Deactivated tasks are hidden from
 /// new-entry pickers but stay attached to existing time entries (FR-011).
 #[server]
@@ -508,31 +573,9 @@ pub async fn set_task_active(task_id: String, active: bool) -> Result<Task, Serv
     let manager = require_manager().await?;
     let state = crate::state::global_state().await;
     let task_id = parse_uuid(&task_id, "task_id")?;
-    // Detect a real flip so a no-op set emits nothing (FR-012).
-    let was_active: Option<bool> = sqlx::query_scalar!(
-        "SELECT active FROM tasks WHERE id = $1 AND org_id = $2",
-        task_id,
-        manager.org_id,
-    )
-    .fetch_optional(&state.db)
-    .await
-    .map_err(server_err)?;
-
-    let task = sqlx::query_as!(
-        Task,
-        "UPDATE tasks SET active = $3
-          WHERE id = $1 AND org_id = $2
-         RETURNING id, org_id, name, billable_default, default_rate_cents, active",
-        task_id,
-        manager.org_id,
-        active,
-    )
-    .fetch_optional(&state.db)
-    .await
-    .map_err(server_err)?
-    .ok_or_else(|| not_found("Task not found"))?;
-
-    if let Some(t) = crate::plugin::event::active_transition(was_active, active) {
+    let (task, transition) =
+        set_task_active_record(&state.db, manager.org_id, task_id, active).await?;
+    if let Some(t) = transition {
         let occurred_at = chrono::Utc::now();
         let task = task_payload(&task);
         state.plugins.dispatch(match t {
@@ -553,6 +596,57 @@ pub async fn set_task_active(task_id: String, active: bool) -> Result<Task, Serv
         });
     }
     Ok(task)
+}
+
+#[cfg(feature = "server")]
+async fn set_task_active_record(
+    db: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    task_id: uuid::Uuid,
+    active: bool,
+) -> Result<(Task, Option<crate::plugin::event::ActiveTransition>), ServerFnError> {
+    let mut tx = db.begin().await.map_err(server_err)?;
+    let before = lock_task(&mut tx, org_id, task_id).await?;
+
+    let task = sqlx::query_as!(
+        Task,
+        "UPDATE tasks SET active = $3
+          WHERE id = $1 AND org_id = $2
+            AND active IS DISTINCT FROM $3
+         RETURNING id, org_id, name, billable_default, default_rate_cents, active",
+        task_id,
+        org_id,
+        active,
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(server_err)?;
+
+    let transition = task.as_ref().and_then(|updated| {
+        crate::plugin::event::active_transition(Some(before.active), updated.active)
+    });
+    tx.commit().await.map_err(server_err)?;
+    Ok((task.unwrap_or(before), transition))
+}
+
+#[cfg(feature = "server")]
+async fn lock_task(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    org_id: uuid::Uuid,
+    task_id: uuid::Uuid,
+) -> Result<Task, ServerFnError> {
+    // Share the row lock between detail edits and activation changes, including no-ops.
+    sqlx::query_as!(
+        Task,
+        "SELECT id, org_id, name, billable_default, default_rate_cents, active
+         FROM tasks WHERE id = $1 AND org_id = $2 FOR UPDATE",
+        task_id,
+        org_id,
+    )
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(server_err)?
+    .ok_or_else(|| not_found("Task not found"))
 }
 
 /// Enable an org-level task on a project so it becomes loggable there. The
