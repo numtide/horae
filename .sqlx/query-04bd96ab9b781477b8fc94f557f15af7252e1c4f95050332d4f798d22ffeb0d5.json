@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "ALTER TABLE time_entries DROP CONSTRAINT seed_test_failure",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "04bd96ab9b781477b8fc94f557f15af7252e1c4f95050332d4f798d22ffeb0d5"
+}

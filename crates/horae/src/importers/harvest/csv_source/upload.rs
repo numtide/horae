@@ -14,7 +14,7 @@ use tokio::sync::{Mutex, mpsc};
 use uuid::Uuid;
 
 use super::super::{
-    apply, lock_import,
+    apply, lock_import, release_import,
     report::ImportReport,
     resolve::{OrgDefaults, RunCache},
 };
@@ -142,7 +142,7 @@ pub async fn import_body(
     let connection = Arc::try_unwrap(session)
         .map_err(|_| anyhow::anyhow!("CSV session is still in use"))?
         .into_inner();
-    connection.close().await.map_err(anyhow::Error::from)?;
+    release_import(connection).await?;
     match (result, parsed) {
         (Ok(report), Ok(Ok(()))) => Ok(report),
         (Err(error), Ok(Err(parse_error))) if error.is::<IncompleteUpload>() => Err(parse_error),
