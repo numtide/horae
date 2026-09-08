@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "CREATE FUNCTION public.plugin_test_secret() RETURNS text LANGUAGE sql SECURITY DEFINER AS $$ SELECT 'secret'::text $$",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "0c28c835c2e7aa0bce60a3a2b3a0c4e8ccef9ef961880aa4f6150889711df764"
+}

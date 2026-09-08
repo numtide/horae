@@ -29,6 +29,7 @@ pub struct PluginRegistry {
     hook_index: HashMap<String, Vec<usize>>,
     pending: Arc<Semaphore>,
     workers: Arc<Semaphore>,
+    database: Option<super::database::PluginDatabase>,
 }
 
 impl PluginRegistry {
@@ -39,14 +40,16 @@ impl PluginRegistry {
             hook_index: HashMap::new(),
             pending: Arc::new(Semaphore::new(MAX_PENDING_CALLS)),
             workers: Arc::new(Semaphore::new(MAX_RUNNING_CALLS)),
+            database: None,
         }
     }
 
     /// Scan a directory for plugin subdirectories, each containing a
     /// `plugin.toml` and a `*.wasm` file. Malformed plugins are logged
     /// and skipped (FR-018 edge case).
-    pub fn load(plugins_dir: &Path) -> Self {
+    pub fn load(plugins_dir: &Path, database: Option<super::database::PluginDatabase>) -> Self {
         let mut registry = Self::empty();
+        registry.database = database;
 
         if !plugins_dir.exists() {
             tracing::info!(
@@ -97,7 +100,8 @@ impl PluginRegistry {
             .with_timeout(CALL_TIMEOUT)
             .with_memory_max(MAX_MEMORY_PAGES);
 
-        let host_functions = super::host::host_functions(manifest.config.clone());
+        let host_functions =
+            super::host::host_functions(manifest.config.clone(), self.database.clone());
 
         let mut allocation = wasmtime::PoolingAllocationConfig::default();
         // Extism links the kernel and guest before lazily instantiating the
@@ -326,25 +330,25 @@ mod tests {
     #[test]
     fn load_empty_directory() {
         let dir = tempfile::tempdir().unwrap();
-        let registry = PluginRegistry::load(dir.path());
+        let registry = PluginRegistry::load(dir.path(), None);
         assert_eq!(registry.plugin_count(), 0);
     }
 
     #[test]
     fn load_nonexistent_directory() {
-        let registry = PluginRegistry::load(std::path::Path::new("/does/not/exist"));
+        let registry = PluginRegistry::load(std::path::Path::new("/does/not/exist"), None);
         assert_eq!(registry.plugin_count(), 0);
     }
 
     #[test]
     fn load_test_plugins() {
-        let registry = PluginRegistry::load(&fixtures_dir());
+        let registry = PluginRegistry::load(&fixtures_dir(), None);
         assert_eq!(registry.plugin_count(), 2);
     }
 
     #[tokio::test]
     async fn dispatch_to_echo_plugin_succeeds() {
-        let registry = PluginRegistry::load(&fixtures_dir());
+        let registry = PluginRegistry::load(&fixtures_dir(), None);
 
         let event = AppEvent::TimeEntryCreated {
             occurred_at: chrono::Utc::now(),
@@ -371,7 +375,7 @@ mod tests {
 
     #[tokio::test]
     async fn failing_plugin_does_not_block_caller() {
-        let registry = PluginRegistry::load(&fixtures_dir());
+        let registry = PluginRegistry::load(&fixtures_dir(), None);
 
         let event = AppEvent::TimeEntryCreated {
             occurred_at: chrono::Utc::now(),
@@ -406,7 +410,7 @@ mod tests {
 
     #[tokio::test]
     async fn dispatch_event_with_no_subscribers() {
-        let registry = PluginRegistry::load(&fixtures_dir());
+        let registry = PluginRegistry::load(&fixtures_dir(), None);
 
         // Neither test plugin subscribes to user_logged_in.
         let event = AppEvent::UserLoggedIn {
@@ -426,7 +430,7 @@ mod tests {
 
     #[tokio::test]
     async fn collect_widgets_from_echo_plugin() {
-        let registry = PluginRegistry::load(&fixtures_dir());
+        let registry = PluginRegistry::load(&fixtures_dir(), None);
         let widgets = registry.collect_widgets().await;
 
         // echo-plugin exports dashboard_widget; fail-plugin does not.
@@ -438,7 +442,7 @@ mod tests {
 
     #[tokio::test]
     async fn dispatch_invoice_sent_to_echo_plugin() {
-        let registry = PluginRegistry::load(&fixtures_dir());
+        let registry = PluginRegistry::load(&fixtures_dir(), None);
 
         let event = AppEvent::InvoiceSent {
             occurred_at: chrono::Utc::now(),
