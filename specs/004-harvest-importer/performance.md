@@ -113,6 +113,56 @@ With page buffering and transaction-local custom plans, including loopback HTTP 
 
 All three scenarios passed the row, error, minute and provenance checks; preview left no imported data persisted. The plan change and page buffering were applied together; the time improvement cannot be attributed to streaming alone, and the reference excludes HTTP. The HTTP reimport is paced over 1,004 requests, explaining its higher elapsed time than the reference's SQL-only reimport. Custom plans do not guarantee that the planner always selects the cheapest actual execution plan; the separate SQL probe illustrates one reproduced failure mode.
 
+## Progressive CSV uploads
+
+The CSV screen retains `FileData` rather than uploaded bytes. The client side of
+Dioxus `FileStream` sends the browser's native Blob; the server uses its own body
+extractor without logging request headers. Parsing runs in a blocking worker,
+with async body reads bridged through the Tokio runtime. A one-record channel
+backpressures parsing while SQL applies rows. No production `Vec<SourceRow>` or
+whole-upload byte vector is constructed. The slice/collect helpers remain only
+in tests, exercising the same parser and body-import pipeline.
+
+Tests gate input until the first row is delivered, preserve multiline UTF-8
+across single-byte reads, observe real SQL before upload EOF, and block SQL to
+verify that later input records are not consumed. Broken uploads roll back
+parents and entries; cancellation while waiting for input or a full row queue
+wakes the worker. Preview, commit and repeated identical records retain their
+existing semantics.
+
+The ignored CSV scale test lazily generates 100,000 rows in 100-row body frames,
+with one client/project/task/user, 365 dates, unique notes and 100 invalid dates.
+It runs preview, commit and reimport sequentially, checking 99,900 valid rows,
+100 report errors, 5,994,000 minutes, no provenance, and zero preview writes.
+
+```sh
+cargo test -p horae --features server --release measure_csv_streaming_100k -- --ignored --nocapture
+```
+
+The fixture exercises the production HTTP-body/parser/SQL bridge, not browser or
+TCP upload performance. Linux RSS/HWM includes the test process but excludes
+PostgreSQL; HWM is cumulative across the three scenarios. No before/after speedup
+or hard process-memory guarantee follows from this measurement.
+
+Local release sample, 2026-09-08:
+
+| Phase | Elapsed seconds | Reported process high-water RSS, KiB |
+|---|---:|---:|
+| 100,000-row preview | 111.400 | 28,212 |
+| First commit after preview | 729.610 | 29,696 |
+| Reimport in the same process | 866.154 | 29,704 |
+
+All three scenarios passed their count, minute, error and persistence checks.
+Brief independent SQL diagnostics ran concurrently, so these are illustrative
+samples rather than an exclusive-load benchmark. CSV lookup planning remains a
+separate bottleneck: during this run, PostgreSQL estimated zero live entries
+after preview rollback and vacuum, despite nonempty table pages. The selected
+plan scanned entries by organization and filtered the remaining natural key.
+A temporary-table reproduction retained that poor plan with custom planning and
+with an additional candidate composite index; refreshing the temporary table's
+statistics changed the plan. No production index, planner setting or automatic
+`ANALYZE` was added for this unaddressed case.
+
 ## Remaining scale limits
 
-Memory still grows with catalog metadata, distinct cached parents/users/project-task pairs and accumulated row errors. The CSV adapter still retains uploaded bytes and parsed rows, plus occurrence keys. The API transaction remains open during time-entry downloading and application; this change does not batch commits or limit total database transaction/WAL size. The import remains request-scoped, not a durable background job; these measurements do not cover browser or reverse-proxy timeouts. Those limits are distinct from bounded time-entry page buffering.
+Memory still grows with catalog metadata, distinct cached parents/users/project-task pairs and accumulated row errors. CSV also retains distinct natural-key occurrence counters to preserve repeated identical entries. CSV buffering scales with the largest record/header and incoming body frame, not a fixed byte cap: a single very large quoted record can still be expensive. API and CSV transactions remain open during downloading and application; these changes do not batch commits or limit total database transaction/WAL size. Imports remain request-scoped, not durable background jobs; these measurements do not cover browser or reverse-proxy timeouts. Those limits are distinct from bounded page/record queues.
