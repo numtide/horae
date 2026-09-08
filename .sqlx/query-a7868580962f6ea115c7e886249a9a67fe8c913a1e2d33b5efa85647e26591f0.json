@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE projects SET active = false, project_type = CASE WHEN $2 THEN 'non_billable'::project_type ELSE project_type END WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a7868580962f6ea115c7e886249a9a67fe8c913a1e2d33b5efa85647e26591f0"
+}

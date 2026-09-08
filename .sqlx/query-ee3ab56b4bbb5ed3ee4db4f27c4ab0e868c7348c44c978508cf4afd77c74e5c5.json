@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO project_tasks (project_id, task_id, billable) VALUES ($1, $2, true)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ee3ab56b4bbb5ed3ee4db4f27c4ab0e868c7348c44c978508cf4afd77c74e5c5"
+}

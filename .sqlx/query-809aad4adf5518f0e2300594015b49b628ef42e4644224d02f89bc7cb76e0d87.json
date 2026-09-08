@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE time_entries\n         SET minutes = $3, notes = $4, billable = $5, start_minute = $7\n         WHERE id = $1 AND user_id = $2 AND state = $6\n         RETURNING id, org_id, user_id, project_id, task_id,\n                   spent_date as \"spent_date: chrono::NaiveDate\",\n                   minutes, start_minute, sort_order, rounded_minutes, notes, billable, is_running,\n                   started_at as \"started_at: chrono::DateTime<chrono::Utc>\",\n                   state as \"state: EntryState\", invoice_id,\n                   created_at as \"created_at: chrono::DateTime<chrono::Utc>\",\n                   updated_at as \"updated_at: chrono::DateTime<chrono::Utc>\"",
+  "query": "INSERT INTO time_entries\n           (id, org_id, user_id, project_id, task_id, spent_date, minutes, notes,\n            billable, is_running, started_at, state, start_minute)\n           SELECT $1, org_id, user_id, project_id, task_id, $5, $6, $7,\n                  billable AND $8, $9, CASE WHEN $9 THEN now() END, 'open', $10\n           FROM time_entry_contexts\n           WHERE user_id = $2 AND project_id = $3 AND task_id = $4\n           ON CONFLICT (user_id) WHERE is_running DO NOTHING\n           RETURNING id, org_id, user_id, project_id, task_id,\n                     spent_date as \"spent_date: chrono::NaiveDate\",\n                     minutes, start_minute, sort_order, rounded_minutes, notes, billable, is_running,\n                     started_at as \"started_at: chrono::DateTime<chrono::Utc>\",\n                     state as \"state: EntryState\", invoice_id,\n                     created_at as \"created_at: chrono::DateTime<chrono::Utc>\",\n                     updated_at as \"updated_at: chrono::DateTime<chrono::Utc>\"",
   "describe": {
     "columns": [
       {
@@ -110,22 +110,13 @@
       "Left": [
         "Uuid",
         "Uuid",
+        "Uuid",
+        "Uuid",
+        "Date",
         "Int4",
         "Text",
         "Bool",
-        {
-          "Custom": {
-            "name": "entry_state",
-            "kind": {
-              "Enum": [
-                "open",
-                "submitted",
-                "approved",
-                "invoiced"
-              ]
-            }
-          }
-        },
+        "Bool",
         "Int4"
       ]
     },
@@ -150,5 +141,5 @@
       false
     ]
   },
-  "hash": "4f35863d66b25a1fa66d2e2e06c5b75a3fd847b87c1aca9abadf309d83be2d71"
+  "hash": "809aad4adf5518f0e2300594015b49b628ef42e4644224d02f89bc7cb76e0d87"
 }

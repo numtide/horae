@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, org_id, name, billable_default, default_rate_cents, active\n         FROM tasks\n         WHERE active = true\n         ORDER BY name ASC",
+  "query": "SELECT t.id, t.org_id, t.name, t.billable_default, t.default_rate_cents, t.active\n         FROM tasks t\n         JOIN project_tasks pt ON t.id = pt.task_id\n         JOIN projects p ON p.id = pt.project_id\n         WHERE pt.project_id = $1 AND t.active = true AND t.org_id = $2 AND p.org_id = $2\n         ORDER BY t.name",
   "describe": {
     "columns": [
       {
@@ -35,7 +35,10 @@
       }
     ],
     "parameters": {
-      "Left": []
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
     },
     "nullable": [
       false,
@@ -46,5 +49,5 @@
       false
     ]
   },
-  "hash": "84af766d5644f7f336becb74a3eef10b8f8e9a33df5ef1d40ba80465323665fc"
+  "hash": "23e38d01f314365dee55712b06e856d779d06f8abbab64e5b5255caef61753cd"
 }

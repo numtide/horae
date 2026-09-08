@@ -4,6 +4,7 @@ use dioxus::prelude::*;
 use tracing::error;
 use uuid::Uuid;
 
+use crate::components::project_task_picker::ProjectTaskPicker;
 use crate::server_fns;
 
 /// The running timer, owned by the app shell so everything that can change it
@@ -77,29 +78,17 @@ pub fn TimerWidget() -> Element {
 
     let mut timer = use_running_timer();
     let timer_resource = timer.entry;
-    let projects = use_resource(|| async move { server_fns::list_projects(None, false).await });
+    let projects = use_resource(|| async move { server_fns::list_projects(None, true).await });
 
     let mut picking = use_signal(|| false);
     let mut selected_project = use_signal(String::new);
     let mut selected_task = use_signal(String::new);
     let mut notes = use_signal(String::new);
+    let mut action_error = use_signal(|| None::<String>);
+    let mut saving = use_signal(|| false);
 
-    // The full list, used to name the running entry's task. The picker below
-    // reads it too while no project is chosen, so this is fetched once rather
-    // than once per purpose.
+    // Task names are shared by the running label and the project-scoped picker.
     let all_tasks = use_resource(|| async move { server_fns::list_tasks().await });
-
-    // Tasks narrow to the picked project.
-    let tasks = use_resource(move || {
-        let proj = selected_project.read().clone();
-        async move {
-            if proj.is_empty() {
-                None
-            } else {
-                Some(server_fns::list_project_tasks(proj).await)
-            }
-        }
-    });
 
     let project_names: HashMap<Uuid, String> = projects
         .read()
@@ -148,13 +137,19 @@ pub fn TimerWidget() -> Element {
     });
 
     let handle_start = move |_| {
+        if saving() {
+            return;
+        }
         let proj = selected_project.read().clone();
         let task = selected_task.read().clone();
         if proj.is_empty() || task.is_empty() {
+            action_error.set(Some("Select a project and task.".to_string()));
             return;
         }
         let note = notes.read().trim().to_string();
         let note = (!note.is_empty()).then_some(note);
+        saving.set(true);
+        action_error.set(None);
         spawn(async move {
             match server_fns::start_timer(proj, task, note).await {
                 Ok(_) => {
@@ -164,39 +159,42 @@ pub fn TimerWidget() -> Element {
                     selected_task.set(String::new());
                     timer.refresh();
                 }
-                Err(e) => error!("Start timer error: {e}"),
+                Err(e) => {
+                    error!("Start timer error: {e}");
+                    action_error.set(Some(e.to_string()));
+                }
             }
+            saving.set(false);
         });
     };
 
     let entry_id_for_stop = current_timer.as_ref().map(|e| e.id.to_string());
     let handle_stop = move |_| {
+        if saving() {
+            return;
+        }
         if let Some(eid) = entry_id_for_stop.clone() {
+            saving.set(true);
+            action_error.set(None);
             spawn(async move {
                 if let Err(e) = server_fns::stop_timer(eid).await {
                     error!("Stop timer error: {e}");
+                    action_error.set(Some(e.to_string()));
                 }
                 // Re-read even after a refusal: the entry is usually already
                 // gone, and skipping this leaves the rail ticking against a
                 // timer the server has dropped.
                 timer.refresh();
+                saving.set(false);
             });
         }
     };
 
-    // Hold the guards out here so the task dropdown can borrow the list: inside
-    // rsx! the reads are temporaries, which forced a clone of the whole Vec.
-    let narrowed_tasks = tasks.read();
-    let every_task = all_tasks.read();
-    let task_options = match narrowed_tasks.as_ref() {
-        Some(Some(Ok(narrowed))) => Some(narrowed),
-        // No project chosen yet, so offer the full list already loaded above.
-        Some(None) => every_task.as_ref().and_then(|r| r.as_ref().ok()),
-        _ => None,
-    };
-
     rsx! {
         div { class: "sidebar-timer-wrap",
+            if let Some(message) = action_error() {
+                div { class: "alert alert-danger", role: "alert", "{message}" }
+            }
             if is_running {
                 div { class: "sidebar-timer-live",
                     span { class: "sidebar-timer-dot", "aria-hidden": "true" }
@@ -210,6 +208,7 @@ pub fn TimerWidget() -> Element {
                     }
                     button {
                         class: "sidebar-timer-stop",
+                        disabled: saving(),
                         "aria-label": "Stop timer",
                         title: "Stop timer",
                         onclick: handle_stop,
@@ -237,31 +236,7 @@ pub fn TimerWidget() -> Element {
                         }
                         div { class: "sidebar-timer-pop-body",
                             label { class: "form-label", "Project / Task" }
-                            select {
-                                class: "form-input",
-                                value: "{selected_project}",
-                                oninput: move |e| {
-                                    selected_project.set(e.value());
-                                    selected_task.set(String::new());
-                                },
-                                option { value: "", "Select project…" }
-                                {projects.read().as_ref().and_then(|r| r.as_ref().ok()).map(|ps| rsx! {
-                                    for p in ps.iter() {
-                                        option { value: "{p.id}", "{p.name}" }
-                                    }
-                                })}
-                            }
-                            select {
-                                class: "form-input",
-                                value: "{selected_task}",
-                                oninput: move |e| selected_task.set(e.value()),
-                                option { value: "", "Select task…" }
-                                {task_options.map(|ts| rsx! {
-                                    for t in ts.iter() {
-                                        option { value: "{t.id}", "{t.name}" }
-                                    }
-                                })}
-                            }
+                            ProjectTaskPicker { project: selected_project, task: selected_task, projects, tasks: all_tasks }
                             textarea {
                                 class: "form-input form-textarea",
                                 placeholder: "Notes (optional)",
@@ -269,7 +244,7 @@ pub fn TimerWidget() -> Element {
                                 oninput: move |e| notes.set(e.value()),
                             }
                             div { class: "sidebar-timer-form-actions",
-                                button { class: "btn btn-primary", onclick: handle_start, "Start timer" }
+                                button { class: "btn btn-primary", disabled: saving(), onclick: handle_start, "Start timer" }
                                 button {
                                     class: "btn btn-ghost",
                                     onclick: move |_| picking.set(false),

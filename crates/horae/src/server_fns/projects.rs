@@ -2,6 +2,9 @@
 
 use super::*;
 
+#[cfg(all(test, feature = "server"))]
+mod tests;
+
 // ── Projects ─────────────────────────────────────────────────────────────────
 
 /// Read a typed budget into the column its kind belongs in: money budgets store
@@ -101,8 +104,10 @@ pub(super) async fn fetch_project_spend(
              COALESCE(SUM(line_amount_cents(
                  COALESCE(pt.rate_cents, a.rate_cents, u.billable_rate_cents, 0),
                  effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir)
-               )) FILTER (WHERE te.billable), 0)::bigint as "spent_cents!"
+               )) FILTER (WHERE (te.billable AND (te.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable, t.billable_default))))), 0)::bigint as "spent_cents!"
            FROM time_entries te
+           JOIN projects p ON p.id = te.project_id
+           JOIN tasks t ON t.id = te.task_id
            LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
            LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id
            JOIN users u ON u.id = te.user_id
@@ -314,15 +319,16 @@ pub async fn set_project_active(
 /// Lists all active org-level tasks.
 #[server]
 pub async fn list_tasks() -> Result<Vec<Task>, ServerFnError> {
-    let _user = require_user().await?;
+    let user = require_user().await?;
     let state = crate::state::global_state().await;
 
     let tasks = sqlx::query_as!(
         Task,
         "SELECT id, org_id, name, billable_default, default_rate_cents, active
          FROM tasks
-         WHERE active = true
+         WHERE active = true AND org_id = $1
          ORDER BY name ASC",
+        user.org_id,
     )
     .fetch_all(&state.db)
     .await
@@ -334,7 +340,7 @@ pub async fn list_tasks() -> Result<Vec<Task>, ServerFnError> {
 /// Lists tasks linked to a specific project via the `project_tasks` join table.
 #[server]
 pub async fn list_project_tasks(project_id: String) -> Result<Vec<Task>, ServerFnError> {
-    let _user = require_user().await?;
+    let user = require_user().await?;
     let state = crate::state::global_state().await;
     let project_id = parse_uuid(&project_id, "project_id")?;
 
@@ -343,9 +349,11 @@ pub async fn list_project_tasks(project_id: String) -> Result<Vec<Task>, ServerF
         "SELECT t.id, t.org_id, t.name, t.billable_default, t.default_rate_cents, t.active
          FROM tasks t
          JOIN project_tasks pt ON t.id = pt.task_id
-         WHERE pt.project_id = $1 AND t.active = true
+         JOIN projects p ON p.id = pt.project_id
+         WHERE pt.project_id = $1 AND t.active = true AND t.org_id = $2 AND p.org_id = $2
          ORDER BY t.name",
         project_id,
+        user.org_id,
     )
     .fetch_all(&state.db)
     .await
@@ -353,23 +361,22 @@ pub async fn list_project_tasks(project_id: String) -> Result<Vec<Task>, ServerF
 }
 
 #[server]
-pub async fn create_task(name: String, billable_default: bool) -> Result<Task, ServerFnError> {
+pub async fn create_task(
+    name: String,
+    billable_default: bool,
+    project_id: Option<String>,
+) -> Result<Task, ServerFnError> {
     let manager = require_manager().await?;
     let state = crate::state::global_state().await;
-    let id = uuid::Uuid::now_v7();
-    let task = sqlx::query_as!(
-        Task,
-        "INSERT INTO tasks (id, org_id, name, billable_default)
-         VALUES ($1, $2, $3, $4)
-         RETURNING id, org_id, name, billable_default, default_rate_cents, active",
-        id,
+    let project_id = parse_opt_uuid(project_id, "project_id")?;
+    let task = create_task_for_project(
+        &state.db,
         manager.org_id,
-        name,
+        &name,
         billable_default,
+        project_id,
     )
-    .fetch_one(&state.db)
-    .await
-    .map_err(server_err)?;
+    .await?;
 
     state
         .plugins
@@ -378,6 +385,41 @@ pub async fn create_task(name: String, billable_default: bool) -> Result<Task, S
             org_id: manager.org_id,
             task: task_payload(&task),
         });
+    Ok(task)
+}
+
+#[cfg(feature = "server")]
+async fn create_task_for_project(
+    db: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    name: &str,
+    billable_default: bool,
+    project_id: Option<uuid::Uuid>,
+) -> Result<Task, ServerFnError> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(conflict("Task name cannot be empty"));
+    }
+    let mut tx = db.begin().await.map_err(server_err)?;
+    let id = uuid::Uuid::now_v7();
+    let task = sqlx::query_as!(
+        Task,
+        "INSERT INTO tasks (id, org_id, name, billable_default)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id, org_id, name, billable_default, default_rate_cents, active",
+        id,
+        org_id,
+        name,
+        billable_default,
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(server_err)?;
+
+    if let Some(project_id) = project_id {
+        enable_project_task(&mut tx, org_id, project_id, task.id).await?;
+    }
+    tx.commit().await.map_err(server_err)?;
     Ok(task)
 }
 
@@ -500,37 +542,47 @@ pub async fn link_project_task(project_id: String, task_id: String) -> Result<()
     let project_id = parse_uuid(&project_id, "project_id")?;
     let task_id = parse_uuid(&task_id, "task_id")?;
 
-    let result = sqlx::query!(
-        "INSERT INTO project_tasks (project_id, task_id, billable, rate_cents)
-         SELECT p.id, t.id, t.billable_default, t.default_rate_cents
-           FROM projects p
-           JOIN tasks t ON t.org_id = p.org_id
-          WHERE p.id = $1 AND t.id = $2 AND p.org_id = $3
-         ON CONFLICT (project_id, task_id) DO NOTHING",
+    let mut tx = state.db.begin().await.map_err(server_err)?;
+    enable_project_task(&mut tx, manager.org_id, project_id, task_id).await?;
+    tx.commit().await.map_err(server_err)?;
+    Ok(())
+}
+
+#[cfg(feature = "server")]
+async fn enable_project_task(
+    db: &mut sqlx::PgConnection,
+    org_id: uuid::Uuid,
+    project_id: uuid::Uuid,
+    task_id: uuid::Uuid,
+) -> Result<(), ServerFnError> {
+    // Validate before the idempotent insert, including already-linked pairs.
+    // Hold these rows until commit so archiving cannot race task enablement.
+    let task = sqlx::query!(
+        "SELECT t.billable_default, t.default_rate_cents
+         FROM projects p JOIN clients c ON c.id = p.client_id AND c.org_id = p.org_id
+         JOIN tasks t ON t.org_id = p.org_id
+         WHERE p.id = $1 AND t.id = $2 AND p.org_id = $3
+           AND p.active AND c.active AND t.active
+         FOR SHARE OF p, c, t",
         project_id,
         task_id,
-        manager.org_id,
+        org_id,
     )
-    .execute(&state.db)
+    .fetch_optional(&mut *db)
+    .await
+    .map_err(server_err)?
+    .ok_or_else(|| not_found("Active project and task not found in this organization"))?;
+    sqlx::query!(
+        "INSERT INTO project_tasks (project_id, task_id, billable, rate_cents)
+         VALUES ($1, $2, $3, $4) ON CONFLICT (project_id, task_id) DO NOTHING",
+        project_id,
+        task_id,
+        task.billable_default,
+        task.default_rate_cents,
+    )
+    .execute(db)
     .await
     .map_err(server_err)?;
-
-    // No row inserted and no existing link means the project/task pair was not
-    // found in this org (the SELECT matched nothing).
-    if result.rows_affected() == 0 {
-        let linked = sqlx::query_scalar!(
-            "SELECT EXISTS(SELECT 1 FROM project_tasks WHERE project_id = $1 AND task_id = $2)",
-            project_id,
-            task_id,
-        )
-        .fetch_one(&state.db)
-        .await
-        .map_err(server_err)?
-        .unwrap_or(false);
-        if !linked {
-            return Err(not_found("Project or task not found in this organization"));
-        }
-    }
     Ok(())
 }
 

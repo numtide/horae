@@ -13,6 +13,7 @@ use super::loaded;
 use crate::components::controls::Segmented;
 use crate::components::date_picker::DatePicker;
 use crate::components::menu::{Menu, MenuItem};
+use crate::components::project_task_picker::ProjectTaskPicker;
 use crate::components::timer_widget::use_running_timer;
 use crate::models::time_entry::TimeEntry;
 use crate::route::Route;
@@ -310,7 +311,7 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
             .await
         }
     });
-    let projects = use_resource(|| async move { server_fns::list_projects(None, false).await });
+    let projects = use_resource(|| async move { server_fns::list_projects(None, true).await });
     let tasks = use_resource(|| async move { server_fns::list_tasks().await });
     let clients = use_resource(|| async move { server_fns::list_clients(true).await });
 
@@ -719,28 +720,6 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
         Some((project_id, task_id, notes))
     });
 
-    // Options for the modal selects: (id, label).
-    let project_options = use_memo(move || -> Vec<(String, String)> {
-        from_list(&projects, |ps| {
-            ps.iter()
-                .map(|p| {
-                    let label = match &p.code {
-                        Some(code) => format!("[{code}] {}", p.name),
-                        None => p.name.clone(),
-                    };
-                    (p.id.to_string(), label)
-                })
-                .collect()
-        })
-    });
-    let task_options = use_memo(move || -> Vec<(String, String)> {
-        from_list(&tasks, |ts| {
-            ts.iter()
-                .map(|t| (t.id.to_string(), t.name.clone()))
-                .collect()
-        })
-    });
-
     // The "+" button adds for today when it's in the viewed week, else Monday.
     let add_default_date = if (0..7).contains(&(today - ws).num_days()) {
         today
@@ -953,23 +932,9 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                         }
                         div { class: "ts-modal-body",
                             label { class: "form-label", "Project / Task" }
-                            select {
-                                class: "form-select",
-                                value: "{add_project}",
+                            ProjectTaskPicker {
+                                project: add_project, task: add_task, projects, tasks,
                                 disabled: editing.read().is_some(),
-                                onchange: move |e| add_project.set(e.value()),
-                                for (id , label) in project_options.read().iter() {
-                                    option { value: "{id}", "{label}" }
-                                }
-                            }
-                            select {
-                                class: "form-select",
-                                value: "{add_task}",
-                                disabled: editing.read().is_some(),
-                                onchange: move |e| add_task.set(e.value()),
-                                for (id , label) in task_options.read().iter() {
-                                    option { value: "{id}", "{label}" }
-                                }
                             }
                             div { class: "ts-modal-row",
                                 input {
@@ -1123,21 +1088,9 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                         div { class: "ts-modal-title", "Add a row" }
                         div { class: "ts-modal-body",
                             label { class: "form-label", "Project / Task" }
-                            select {
-                                class: "form-select",
-                                value: "{addrow_project}",
-                                onchange: move |e| addrow_project.set(e.value()),
-                                for (id , label) in project_options.read().iter() {
-                                    option { value: "{id}", "{label}" }
-                                }
-                            }
-                            select {
-                                class: "form-select",
-                                value: "{addrow_task}",
-                                onchange: move |e| addrow_task.set(e.value()),
-                                for (id , label) in task_options.read().iter() {
-                                    option { value: "{id}", "{label}" }
-                                }
+                            ProjectTaskPicker {
+                                project: addrow_project, task: addrow_task, projects, tasks,
+
                             }
                             div { class: "ts-modal-actions",
                                 button {

@@ -78,7 +78,7 @@ pub(super) async fn fetch_report(
                -- invoiced; cost is what the worked time costs, so it stays on
                -- the actual ones.
                effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir) AS rounded_minutes,
-               te.billable AS billable,
+               (te.billable AND (te.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable, t.billable_default)))) AS billable,
                COALESCE(pt.rate_cents, a.rate_cents, u.billable_rate_cents, 0)
                  AS billable_rate_cents,
                COALESCE(u.cost_rate_cents, 0) AS cost_rate_cents
