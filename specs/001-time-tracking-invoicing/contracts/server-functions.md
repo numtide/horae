@@ -213,10 +213,33 @@ formal approval step), but part of the real contract and the entry-locking model
 
 | Function | Inputs | Output | Errors | Required role |
 |---|---|---|---|---|
-| `submit_week` | `week_start: Date` | `Approval` | `ServerFnError` (`404` no open entries) | member (own week) |
+| `get_week_start` | — | `Weekday` | `ServerFnError` (`500` invalid stored configuration) | member (own organization) |
+| `submit_week` | `week_start: Date` | `Approval` | `ServerFnError` (`400` wrong first weekday or out-of-range week, `404` no open entries, `409` running timer or already-approved week) | member (own week) |
 | `list_approvals` | `status: Option<String>` | `Vec<Approval>` | `ServerFnError` (`403` non-manager) | manager |
 | `approve_submission` | `approval_id: Uuid` | `Approval` | `ServerFnError` (`403`, `404` not in `submitted` state) | manager |
 | `reject_submission` | `approval_id: Uuid` | `()` | `ServerFnError` (`403`, `404`) | manager |
+
+Submission checks the organization's configured first weekday and running timers,
+freezes each open entry's current rounded minutes, writes the approval and reads
+the event total in one transaction. The event is dispatched only after commit.
+
+Interactive entry writes and imported inserts take a shared transaction advisory
+lock for the user before writing entries; submission takes the same lock
+exclusively before checking the period. This deliberately covers every week for
+that user, so cross-week moves need no racy source-date lookup or two-period lock
+ordering. Other users remain independent and ordinary writers share the lock.
+An import holds its successful row locks until the outer transaction ends, so a
+long import can delay that user's submission. Direct SQL and maintenance seed
+operations do not participate in this application-level barrier.
+
+The timesheet and date picker use the configured first weekday. The five-day
+calendar still shows Monday–Friday, in date order within that week. Invalid
+configuration is displayed as an error, not silently replaced with Monday.
+
+The existing policy on new open time in an already-approved week is unchanged:
+it can still be added, but the week cannot be resubmitted until a manager reopens
+it. Deciding whether to reject such additions or automatically reopen the week
+is a separate policy change.
 
 ______________________________________________________________________
 

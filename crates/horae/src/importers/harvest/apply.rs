@@ -227,6 +227,7 @@ async fn apply_time_entry(
     }
 
     // Create. State defaults to `open`; never `invoiced` from Harvest (FR-016).
+    crate::db::lock_time_entry_write(sp, user_id).await?;
     let id = Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO time_entries

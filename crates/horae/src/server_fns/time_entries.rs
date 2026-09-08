@@ -73,7 +73,10 @@ async fn insert_time_entry(
     user_id: uuid::Uuid,
     input: NewTimeEntry<'_>,
 ) -> Result<TimeEntry, ServerFnError> {
-    sqlx::query_as!(
+    let mut tx = crate::db::begin_time_entry_write(db, user_id)
+        .await
+        .map_err(server_err)?;
+    let entry = sqlx::query_as!(
         TimeEntry,
         r#"INSERT INTO time_entries
            (id, org_id, user_id, project_id, task_id, spent_date, minutes, notes,
@@ -93,8 +96,10 @@ async fn insert_time_entry(
         uuid::Uuid::now_v7(), user_id, input.project_id, input.task_id,
         input.spent_date as chrono::NaiveDate, input.minutes, input.notes, input.billable,
         input.is_running, input.start_minute,
-    ).fetch_optional(db).await.map_err(server_err)?
-    .ok_or_else(|| conflict("Project/task is unavailable or not assigned, or a timer is already running."))
+    ).fetch_optional(&mut *tx).await.map_err(server_err)?
+    .ok_or_else(|| conflict("Project/task is unavailable or not assigned, or a timer is already running."))?;
+    tx.commit().await.map_err(server_err)?;
+    Ok(entry)
 }
 
 // ── Time Entries ─────────────────────────────────────────────────────────────
@@ -208,6 +213,9 @@ pub async fn stop_timer(entry_id: String) -> Result<TimeEntry, ServerFnError> {
     let user_id = require_user().await?.id;
     let state = crate::state::global_state().await;
     let entry_id = parse_uuid(&entry_id, "entry_id")?;
+    let mut tx = crate::db::begin_time_entry_write(&state.db, user_id)
+        .await
+        .map_err(server_err)?;
 
     // Read the running entry's start time, then compute the exact elapsed
     // minutes in `horae-core` (floored to the minute, no artificial 1-minute
@@ -220,7 +228,7 @@ pub async fn stop_timer(entry_id: String) -> Result<TimeEntry, ServerFnError> {
         entry_id,
         user_id,
     )
-    .fetch_optional(&state.db)
+    .fetch_optional(&mut *tx)
     .await
     .map_err(server_err)?
     .ok_or_else(|| not_found("No running timer found for this entry"))?;
@@ -274,11 +282,12 @@ pub async fn stop_timer(entry_id: String) -> Result<TimeEntry, ServerFnError> {
         start_minute,
         EntryState::Open as EntryState,
     )
-    .fetch_optional(&state.db)
+    .fetch_optional(&mut *tx)
     .await
     .map_err(server_err)?
     .ok_or_else(|| not_found("No running timer found for this entry"))?;
 
+    tx.commit().await.map_err(server_err)?;
     dispatch_time_entry_event(&entry, TimeEntryEvent::Stopped).await;
     tokio::spawn(check_project_budget(state, entry.project_id));
     Ok(entry)
@@ -391,6 +400,9 @@ async fn update_entry(
     start_minute: Option<i32>,
 ) -> Result<(TimeEntry, bool), ServerFnError> {
     let (minutes, start_minute) = normalize_start(minutes, start_minute)?;
+    let mut tx = crate::db::begin_time_entry_write(db, user_id)
+        .await
+        .map_err(server_err)?;
     // Read current values first so a no-op update emits no event (FR-012).
     let before = sqlx::query!(
         r#"SELECT minutes, start_minute, notes, billable FROM time_entries
@@ -399,7 +411,7 @@ async fn update_entry(
         user_id,
         EntryState::Open as EntryState,
     )
-    .fetch_optional(db)
+    .fetch_optional(&mut *tx)
     .await
     .map_err(server_err)?;
 
@@ -429,7 +441,7 @@ async fn update_entry(
         EntryState::Open as EntryState,
         start_minute,
     )
-    .fetch_optional(db)
+    .fetch_optional(&mut *tx)
     .await
     .map_err(server_err)?
     .ok_or_else(|| conflict("Entry not found or is locked (not in 'open' state)"))?;
@@ -440,6 +452,7 @@ async fn update_entry(
             || b.billable != entry.billable
             || b.start_minute != start_minute
     });
+    tx.commit().await.map_err(server_err)?;
     Ok((entry, changed))
 }
 /// Delete a time entry. Only allowed while the entry state is 'open'.
@@ -448,6 +461,9 @@ pub async fn delete_time_entry(entry_id: String) -> Result<(), ServerFnError> {
     let user_id = require_user().await?.id;
     let state = crate::state::global_state().await;
     let entry_id = parse_uuid(&entry_id, "entry_id")?;
+    let mut tx = crate::db::begin_time_entry_write(&state.db, user_id)
+        .await
+        .map_err(server_err)?;
 
     // Delete and capture the row in one statement so the "only open entries"
     // guard holds atomically (no TOCTOU) and the event carries the removed
@@ -467,11 +483,12 @@ pub async fn delete_time_entry(entry_id: String) -> Result<(), ServerFnError> {
         user_id,
         EntryState::Open as EntryState,
     )
-    .fetch_optional(&state.db)
+    .fetch_optional(&mut *tx)
     .await
     .map_err(server_err)?
     .ok_or_else(|| conflict("Entry not found or is locked (not in 'open' state)"))?;
 
+    tx.commit().await.map_err(server_err)?;
     dispatch_time_entry_event(&entry, TimeEntryEvent::Deleted).await;
 
     tokio::spawn(check_project_budget(state, entry.project_id));
@@ -493,6 +510,9 @@ pub async fn reschedule_time_entry(
     let entry_id = parse_uuid(&entry_id, "entry_id")?;
     let spent_date = parse_date(&spent_date, "date")?;
     let (minutes, start_minute) = normalize_start(minutes, Some(start_minute))?;
+    let mut tx = crate::db::begin_time_entry_write(&state.db, user_id)
+        .await
+        .map_err(server_err)?;
 
     let entry = sqlx::query_as!(
         TimeEntry,
@@ -513,11 +533,12 @@ pub async fn reschedule_time_entry(
         minutes,
         EntryState::Open as EntryState,
     )
-    .fetch_optional(&state.db)
+    .fetch_optional(&mut *tx)
     .await
     .map_err(server_err)?
     .ok_or_else(|| conflict("Entry not found or is locked (not in 'open' state)"))?;
 
+    tx.commit().await.map_err(server_err)?;
     dispatch_time_entry_event(&entry, TimeEntryEvent::Updated).await;
 
     tokio::spawn(check_project_budget(state, entry.project_id));
@@ -553,7 +574,9 @@ async fn reorder_entries(
 ) -> Result<(), ServerFnError> {
     let count = i32::try_from(ids.len()).map_err(|_| conflict("Too many entries to reorder"))?;
     let orders: Vec<i32> = (0..count).collect();
-    let mut tx = pool.begin().await.map_err(server_err)?;
+    let mut tx = crate::db::begin_time_entry_write(pool, user_id)
+        .await
+        .map_err(server_err)?;
 
     let updated = sqlx::query!(
         r#"UPDATE time_entries AS t
@@ -1085,5 +1108,107 @@ mod tests {
                 .await
                 .is_ok()
         );
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn submission_barrier_blocks_manual_entries_and_timer_starts(pool: PgPool) {
+        for is_running in [false, true] {
+            let ids = linked_seed(&pool, OrgRole::Admin).await;
+            let mut submission = pool.begin().await.unwrap();
+            let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
+                .fetch_one(&mut *submission)
+                .await
+                .unwrap()
+                .unwrap();
+            sqlx::query!(
+                r#"SELECT pg_advisory_xact_lock(hashtextextended('horae.timesheet:' || $1::uuid::text, 0)) as "lock!: ()""#,
+                ids.user_id,
+            ).execute(&mut *submission).await.unwrap();
+            let run_pool = pool.clone();
+            let mut run = tokio::task::JoinSet::new();
+            run.spawn(async move {
+                let mut input = manual_entry(&ids);
+                input.is_running = is_running;
+                insert_time_entry(&run_pool, ids.user_id, input).await
+            });
+            crate::server_fns::test_seed::wait_for_blocked(&pool, blocker).await;
+            submission.commit().await.unwrap();
+            let entry = tokio::time::timeout(std::time::Duration::from_secs(5), run.join_next())
+                .await
+                .unwrap()
+                .unwrap()
+                .unwrap()
+                .unwrap();
+            assert_eq!(entry.is_running, is_running);
+        }
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn submission_barrier_blocks_edits_and_cross_week_reorders(pool: PgPool) {
+        for reorder in [false, true] {
+            let ids = linked_seed(&pool, OrgRole::Admin).await;
+            let entry = time_entry(&pool, &ids, EntryState::Open).await;
+            let mut submission = pool.begin().await.unwrap();
+            let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
+                .fetch_one(&mut *submission)
+                .await
+                .unwrap()
+                .unwrap();
+            sqlx::query!(
+                r#"SELECT pg_advisory_xact_lock(hashtextextended('horae.timesheet:' || $1::uuid::text, 0)) as "lock!: ()""#,
+                ids.user_id,
+            ).execute(&mut *submission).await.unwrap();
+            let run_pool = pool.clone();
+            let mut run = tokio::task::JoinSet::new();
+            run.spawn(async move {
+                if reorder {
+                    reorder_entries(
+                        &run_pool,
+                        ids.user_id,
+                        "2026-09-14".parse().unwrap(),
+                        &[entry],
+                    )
+                    .await
+                } else {
+                    update_entry(&run_pool, ids.user_id, entry, 121, None, true, None)
+                        .await
+                        .map(|_| ())
+                }
+            });
+            crate::server_fns::test_seed::wait_for_blocked(&pool, blocker).await;
+            // The submission wins. A waiting mutation must recheck the locked
+            // entry state after it acquires the barrier, not use an old read.
+            sqlx::query!(
+                "UPDATE time_entries SET state = 'submitted', rounded_minutes = 60 WHERE id = $1",
+                entry
+            )
+            .execute(&mut *submission)
+            .await
+            .unwrap();
+            submission.commit().await.unwrap();
+            let result = tokio::time::timeout(std::time::Duration::from_secs(5), run.join_next())
+                .await
+                .unwrap()
+                .unwrap()
+                .unwrap();
+            assert!(
+                matches!(
+                    result,
+                    Err(ServerFnError::ServerError { code: CONFLICT, .. })
+                ),
+                "{result:?}"
+            );
+            let stored = sqlx::query!(
+                r#"SELECT minutes, spent_date as "spent_date: chrono::NaiveDate" FROM time_entries WHERE id = $1"#,
+                entry
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+            assert_eq!(
+                (stored.minutes, stored.spent_date),
+                (60, "2026-09-07".parse().unwrap())
+            );
+        }
     }
 }
