@@ -162,7 +162,21 @@ fn map_api_error(e: crate::importers::harvest::ApiImportError) -> ServerFnError 
     use crate::importers::harvest::ApiImportError;
     match e {
         ApiImportError::NotConnected => err(NOT_FOUND, e),
-        ApiImportError::ReconnectRequired => err(CONFLICT, e),
+        ApiImportError::ReconnectRequired | ApiImportError::Busy => err(CONFLICT, e),
         ApiImportError::Other(inner) => server_err(inner),
+    }
+}
+
+#[cfg(all(test, feature = "server"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn concurrent_api_import_returns_a_retryable_conflict() {
+        let error = map_api_error(crate::importers::harvest::ApiImportError::Busy);
+        assert!(matches!(
+            error,
+            ServerFnError::ServerError { code: CONFLICT, .. }
+        ));
     }
 }

@@ -26,6 +26,23 @@ harvest_connection_status() -> Result<ConnectionStatus, ServerFnError>   // conn
 
 ## 2. Import from the Harvest API (PRIMARY) — admin-only
 
+API and CSV imports share one PostgreSQL advisory lock per organization, across
+server processes. Both previews and committing runs hold it. A competing run is
+rejected with `CONFLICT` and a retry message before resolving or applying rows; API
+runs acquire it before loading credentials, refreshing tokens, or fetching data.
+Other organizations can import independently. This does not impose uniqueness
+on time-entry fields: distinct Harvest IDs and repeated CSV occurrences remain
+distinct entries.
+
+The lock uses one pooled connection for the whole run, including token refresh
+outside the data transaction. The connection is closed after the run and on
+errors or cancellation, so a session lock cannot return to the shared pool.
+Cancellation rolls back uncommitted data; a blocking HTTP call already in flight
+keeps the lock until it finishes, but its cancelled importer cannot apply the
+result. Successfully persisted refreshed OAuth tokens remain stored even if
+later data work is rolled back. Use a direct PostgreSQL connection or a pooler
+with session affinity; transaction-mode pooling cannot preserve session locks.
+
 ```
 import_harvest_api(
     mode: ImportMode,        // DryRun | Commit

@@ -27,7 +27,7 @@ use chrono::{DateTime, Utc};
 use horae_core::importers::harvest::types::{
     EntityType, ImportMode, SourceKind, SourceRow, SyncScope,
 };
-use sqlx::PgPool;
+use sqlx::{Acquire, PgPool};
 use uuid::Uuid;
 
 use api_source::{ApiSource, HarvestData};
@@ -59,12 +59,14 @@ pub async fn run_import<S: RowSource>(
         org_id,
         default_currency,
     };
-    let mut tx = pool.begin().await?;
+    let mut connection = lock_import(pool, org_id).await?;
+    let mut tx = connection.begin().await?;
     let report = apply_rows(&mut tx, org, source, mode, src).await?;
     match mode {
         ImportMode::Commit => tx.commit().await?,
         ImportMode::DryRun => tx.rollback().await?,
     }
+    connection.close().await?;
     Ok(report)
 }
 
@@ -112,12 +114,53 @@ impl RowSource for VecSource {
 /// per-record errors inside a report — these reject the whole run up front.
 #[derive(Debug, thiserror::Error)]
 pub enum ApiImportError {
+    #[error(
+        "Another Harvest import is already running for this organization; retry when it finishes"
+    )]
+    Busy,
     #[error("no usable Harvest connection — connect Harvest first")]
     NotConnected,
     #[error("Harvest connection expired — reconnect Harvest")]
     ReconnectRequired,
     #[error(transparent)]
     Other(#[from] anyhow::Error),
+}
+
+/// One import session per organization, shared by API and CSV across processes.
+/// The session lock spans token refresh (autocommit) and the separate data
+/// transaction. Closing the connection on every exit, including cancellation,
+/// prevents a session lock from ever leaking back into the shared pool.
+async fn lock_import(
+    pool: &PgPool,
+    org_id: Uuid,
+) -> Result<sqlx::pool::PoolConnection<sqlx::Postgres>, ApiImportError> {
+    let mut connection = pool.acquire().await.map_err(anyhow::Error::from)?;
+    connection.close_on_drop();
+    let acquired = sqlx::query_scalar!(
+        r#"SELECT pg_try_advisory_lock(hashtextextended($1, 0)) as "acquired!""#,
+        format!("horae:harvest-import:{org_id}"),
+    )
+    .fetch_one(&mut *connection)
+    .await
+    .map_err(anyhow::Error::from)?;
+    if !acquired {
+        return Err(ApiImportError::Busy);
+    }
+    Ok(connection)
+}
+
+/// A cancelled waiter cannot cancel blocking HTTP work. Keep the import
+/// session with the worker until it really exits, not with the waiting future.
+async fn blocking_import_call<T: Send + 'static>(
+    connection: sqlx::pool::PoolConnection<sqlx::Postgres>,
+    call: impl FnOnce() -> T + Send + 'static,
+) -> Result<(sqlx::pool::PoolConnection<sqlx::Postgres>, T), ApiImportError> {
+    tokio::task::spawn_blocking(move || {
+        let result = call();
+        (connection, result)
+    })
+    .await
+    .map_err(|e| ApiImportError::Other(anyhow::anyhow!("Harvest HTTP task failed: {e}")))
 }
 
 /// Run a full/incremental import from the Harvest API through the shared engine
@@ -132,8 +175,9 @@ pub async fn run_api_import(
     mode: ImportMode,
     sync: SyncScope,
 ) -> Result<ImportReport, ApiImportError> {
+    let mut connection = lock_import(pool, org_id).await?;
     let key = &cfg.encryption_key_hex;
-    let mut conn = credentials::load(pool, org_id, key)
+    let mut conn = credentials::load(&mut *connection, org_id, key)
         .await?
         .ok_or(ApiImportError::NotConnected)?;
 
@@ -143,15 +187,15 @@ pub async fn run_api_import(
     {
         let cfg_owned = cfg.clone();
         let refresh_token = conn.refresh_token.clone();
-        let refreshed = tokio::task::spawn_blocking(move || {
+        let (returned_connection, refreshed) = blocking_import_call(connection, move || {
             let agent = ureq::agent();
             oauth::refresh(&agent, &cfg_owned, &refresh_token)
         })
-        .await
-        .map_err(|e| ApiImportError::Other(anyhow::anyhow!("refresh task panicked: {e}")))?
-        .map_err(|_| ApiImportError::ReconnectRequired)?;
+        .await?;
+        connection = returned_connection;
+        let refreshed = refreshed.map_err(|_| ApiImportError::ReconnectRequired)?;
         credentials::update_tokens(
-            pool,
+            &mut *connection,
             org_id,
             key,
             &refreshed.access_token,
@@ -174,24 +218,27 @@ pub async fn run_api_import(
     let capture_started_at = Utc::now();
     let access = conn.access_token.clone();
     let account = conn.account_id.clone();
-    let data = tokio::task::spawn_blocking(move || fetch_all_collections(&access, &account, since))
-        .await
-        .map_err(|e| ApiImportError::Other(anyhow::anyhow!("fetch task panicked: {e}")))??;
+    let (mut connection, data) = blocking_import_call(connection, move || {
+        fetch_all_collections(&access, &account, since)
+    })
+    .await?;
+    let data = data?;
 
-    apply_api_data(
-        pool,
+    let result = apply_api_data(
+        &mut connection,
         org_id,
         default_currency,
         mode,
         &data,
         capture_started_at,
     )
-    .await
-    .map_err(Into::into)
+    .await;
+    connection.close().await.map_err(anyhow::Error::from)?;
+    result.map_err(Into::into)
 }
 
 async fn apply_api_data(
-    pool: &PgPool,
+    connection: &mut sqlx::PgConnection,
     org_id: Uuid,
     default_currency: &str,
     mode: ImportMode,
@@ -206,7 +253,7 @@ async fn apply_api_data(
         .filter_map(|te| te.updated_at)
         .max();
 
-    let mut tx = pool.begin().await?;
+    let mut tx = connection.begin().await?;
     let report = apply_rows(
         &mut tx,
         OrgDefaults {

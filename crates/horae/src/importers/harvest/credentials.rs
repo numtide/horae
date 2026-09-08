@@ -73,11 +73,14 @@ pub fn decrypt(key_hex: &str, blob: &[u8]) -> anyhow::Result<String> {
 }
 
 /// Load and decrypt the org's Harvest connection, if it exists.
-pub async fn load(
-    pool: &sqlx::PgPool,
+pub async fn load<'e, E>(
+    exec: E,
     org_id: Uuid,
     key_hex: &str,
-) -> anyhow::Result<Option<HarvestConnection>> {
+) -> anyhow::Result<Option<HarvestConnection>>
+where
+    E: sqlx::PgExecutor<'e>,
+{
     let row = sqlx::query!(
         r#"SELECT harvest_account_id, access_token_enc, refresh_token_enc,
                   token_expires_at as "token_expires_at: DateTime<Utc>",
@@ -85,7 +88,7 @@ pub async fn load(
            FROM harvest_credentials WHERE org_id = $1"#,
         org_id,
     )
-    .fetch_optional(pool)
+    .fetch_optional(exec)
     .await?;
 
     let Some(row) = row else {
@@ -143,14 +146,17 @@ pub async fn store(
 
 /// Persist refreshed access/refresh tokens after a transparent token refresh
 /// (FR-024), without touching the account id or watermark.
-pub async fn update_tokens(
-    pool: &sqlx::PgPool,
+pub async fn update_tokens<'e, E>(
+    exec: E,
     org_id: Uuid,
     key_hex: &str,
     access_token: &str,
     refresh_token: &str,
     token_expires_at: Option<DateTime<Utc>>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<()>
+where
+    E: sqlx::PgExecutor<'e>,
+{
     let access_enc = encrypt(key_hex, access_token)?;
     let refresh_enc = encrypt(key_hex, refresh_token)?;
     sqlx::query!(
@@ -163,7 +169,7 @@ pub async fn update_tokens(
         refresh_enc,
         token_expires_at as Option<chrono::DateTime<chrono::Utc>>,
     )
-    .execute(pool)
+    .execute(exec)
     .await?;
     Ok(())
 }

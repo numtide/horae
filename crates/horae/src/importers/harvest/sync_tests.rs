@@ -4,8 +4,71 @@ use serde_json::json;
 
 const KEY: &str = "1111111111111111111111111111111111111111111111111111111111111111";
 
+async fn apply_api_data(
+    pool: &PgPool,
+    org_id: Uuid,
+    currency: &str,
+    mode: ImportMode,
+    data: &HarvestData,
+    capture_started_at: DateTime<Utc>,
+) -> anyhow::Result<ImportReport> {
+    let mut connection = lock_import(pool, org_id).await?;
+    let result = super::apply_api_data(
+        &mut connection,
+        org_id,
+        currency,
+        mode,
+        data,
+        capture_started_at,
+    )
+    .await;
+    connection.close().await?;
+    result
+}
+
 fn day(day: u32) -> DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, 1, day, 0, 0, 0).unwrap()
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn refreshed_tokens_survive_a_dry_run_rollback_in_the_same_import_session(pool: PgPool) {
+    let org = setup(&pool).await;
+    let mut connection = lock_import(&pool, org).await.unwrap();
+    credentials::update_tokens(
+        &mut *connection,
+        org,
+        KEY,
+        "new-access",
+        "new-refresh",
+        Some(day(4)),
+    )
+    .await
+    .unwrap();
+    let report = super::apply_api_data(
+        &mut connection,
+        org,
+        "USD",
+        ImportMode::DryRun,
+        &valid_data(),
+        day(4),
+    )
+    .await
+    .unwrap();
+    assert_eq!(report.summary.time_entries.created, 1);
+    connection.close().await.unwrap();
+    let stored = credentials::load(&pool, org, KEY).await.unwrap().unwrap();
+    assert_eq!(
+        (stored.access_token.as_str(), stored.refresh_token.as_str()),
+        ("new-access", "new-refresh")
+    );
+    assert_eq!(stored.watermark, json!({}));
+    assert_eq!(
+        sqlx::query_scalar!("SELECT count(*) FROM time_entries")
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        Some(0)
+    );
 }
 
 async fn setup(pool: &PgPool) -> Uuid {
