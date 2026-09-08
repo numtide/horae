@@ -106,6 +106,7 @@ pub fn ProjectList() -> Element {
     // The figure that goes with the kind — an amount or a number of hours.
     let mut budget_value = use_signal(String::new);
     let mut error = use_signal(|| None::<String>);
+    let action_error = use_signal(|| None::<String>);
 
     // Filters over the loaded list (client-side; the design's status/client
     // dropdowns and search all narrow the same set).
@@ -394,6 +395,10 @@ pub fn ProjectList() -> Element {
                 }
             }
 
+            if let Some(message) = action_error() {
+                div { class: "alert alert-danger", role: "alert", "Could not change project status: {message}" }
+            }
+
             {loaded(&*projects.read(), |list| {
                     let q = query().to_lowercase();
                     let cf = client_filter();
@@ -541,7 +546,7 @@ pub fn ProjectList() -> Element {
                                                                 move |_| run_action(
                                                                     server_fns::set_project_active(id.to_string(), next_active),
                                                                     projects,
-                                                                    error,
+                                                                    action_error,
                                                                     || (),
                                                                 )
                                                             },
@@ -639,6 +644,7 @@ pub fn ProjectDetail(id: Uuid) -> Element {
     let mut assign_user_id = use_signal(String::new);
     let mut assign_role = use_signal(|| "freelancer".to_string());
     let error = use_signal(|| None::<String>);
+    let action_error = use_signal(|| None::<String>);
 
     let is_admin = is_admin(&me);
 
@@ -731,6 +737,10 @@ pub fn ProjectDetail(id: Uuid) -> Element {
                     }
                 }
 
+                if let Some(message) = action_error() {
+                    div { class: "alert alert-danger", role: "alert", "Could not remove assignment: {message}" }
+                }
+
                 div { class: "card",
                     {loaded(&*assignments.read(), |list| {
                         if list.is_empty() {
@@ -766,7 +776,7 @@ pub fn ProjectDetail(id: Uuid) -> Element {
                                                                     onclick: move |_| run_action(
                                                                         server_fns::delete_assignment(aid.clone()),
                                                                         assignments,
-                                                                        error,
+                                                                        action_error,
                                                                         || (),
                                                                     ),
                                                                     "Remove"
