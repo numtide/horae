@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE time_entries SET state = $2 WHERE id = $1 RETURNING xmin::text",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "xmin",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "entry_state",
+            "kind": {
+              "Enum": [
+                "open",
+                "submitted",
+                "approved",
+                "invoiced"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "5dd6e69669622b3ed823214ff9676a4d407bd3cd932569ec4b4eb9d8a10f956b"
+}
