@@ -71,6 +71,12 @@ Horae's exporter (`crates/horae/src/harvest/` — `mod.rs`, `types.rs`, `auth.rs
 
 **Precision caveat**: `minutes = round(hours * 60)` recovers the exact original minutes only when the source supplies sufficient-precision `hours` (Harvest's API `hours` and a well-formed CSV decimal both do — `0.25` → 15, `1.5` → 90). The zero-drift reconciliation (SC-003/SC-007) assumes this; a source that pre-rounded hours to too few decimals could differ by a minute. This is a property of the source data, not the conversion.
 
+**JSON decoding**: the server enables `serde_json/arbitrary_precision` and retains `hours`, `billable_rate`, `cost_rate` and task `default_hourly_rate` as exact JSON numbers through both the page `Value` and typed-record stages. Neither stage converts them to `f64` or rounds them to a fixed number of decimal places. This is necessary because [Harvest defines entry hours and rates as decimals](https://help.getharvest.com/api-v2/timesheets-api/timesheets/time-entries/).
+
+JSON exponents from −38 through +38 are expanded by moving the decimal point, adding at most 38 zeros. Larger exponents remain unexpanded and fail the checked minute/rate conversion as a record error; they are never expanded into unbounded allocations. The existing core limits (38 fractional digits, an unscaled numerator at most `i128::MAX`, and a scaled result within `i64`) still apply. Invalid/out-of-range converted values retain their source record location, do not prevent later valid rows from importing, and suppress watermark advancement. User-entered duration syntax and the CSV adapter are unchanged.
+
+This preserves numeric input precision; it does **not** solve historical per-entry monetary fidelity. The current engine still stores a shared project-task billing rate, does not persist entry-specific cost rates/amounts, and does not reconcile every imported monetary field. Those mapping limitations remain separate from decimal decoding.
+
 ## Boundary
 
 - The importer **reads** `crates/horae/src/harvest/` only as a mapping reference; it does not modify it and does not route writes through it (that module is read-only by design — Constitution IV).

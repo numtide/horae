@@ -5,6 +5,87 @@ use serde_json::json;
 mod paging;
 mod scale;
 
+#[sqlx::test(migrations = "./migrations")]
+async fn exact_api_decimals_survive_preview_commit_and_reimport(pool: PgPool) {
+    let org = setup(&pool).await;
+    let mut source = valid_data();
+    source.tasks[0].default_hourly_rate = Some("1.004999999999999999".parse().unwrap());
+    source.time_entries[0].hours = "0.00833333333333333333333333333333333334".parse().unwrap();
+    source.time_entries[0].billable_rate = Some("9.223372036854775807e16".parse().unwrap());
+    source.time_entries[0].billable = true;
+
+    for (mode, created) in [
+        (ImportMode::DryRun, 1),
+        (ImportMode::Commit, 1),
+        (ImportMode::Commit, 0),
+    ] {
+        let report = apply_api_data(&pool, org, "USD", mode, &source, day(4))
+            .await
+            .unwrap();
+        assert!(report.row_errors.is_empty(), "{:?}", report.row_errors);
+        assert_eq!(report.summary.time_entries.created, created);
+        let stored = sqlx::query!(
+            "SELECT te.minutes, pt.rate_cents, t.default_rate_cents
+             FROM time_entries te
+             JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
+             JOIN tasks t ON t.id = te.task_id
+             WHERE te.org_id = $1",
+            org,
+        )
+        .fetch_optional(&pool)
+        .await
+        .unwrap();
+        if mode == ImportMode::DryRun {
+            assert!(stored.is_none());
+            assert_eq!(watermark(&pool, org).await, json!({}));
+        } else {
+            let stored = stored.unwrap();
+            assert_eq!(
+                (stored.minutes, stored.rate_cents, stored.default_rate_cents),
+                (1, Some(i64::MAX), Some(100))
+            );
+        }
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn out_of_range_api_decimals_error_per_row_and_leave_retry_watermark(pool: PgPool) {
+    let org = setup(&pool).await;
+    let mut source = valid_data();
+    let mut huge_hours = source.time_entries[0].clone();
+    huge_hours.id = 11;
+    huge_hours.hours = "1e99999999999999999999".parse().unwrap();
+    let mut huge_rate = source.time_entries[0].clone();
+    huge_rate.id = 12;
+    huge_rate.billable_rate = Some("92233720368547758.075".parse().unwrap());
+    let mut following = source.time_entries[0].clone();
+    following.id = 13;
+    source
+        .time_entries
+        .extend([huge_hours, huge_rate, following]);
+    for mode in [ImportMode::DryRun, ImportMode::Commit] {
+        let report = apply_api_data(&pool, org, "USD", mode, &source, day(4))
+            .await
+            .unwrap();
+        assert_eq!(report.summary.time_entries.created, 2);
+        assert_eq!(report.error_count(), 2);
+        assert_eq!(
+            report
+                .row_errors
+                .iter()
+                .map(|error| error.source_location.as_str())
+                .collect::<Vec<_>>(),
+            vec!["time_entry 11", "time_entry 12"]
+        );
+        let count = sqlx::query_scalar!("SELECT count(*) FROM time_entries")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, Some(if mode == ImportMode::DryRun { 0 } else { 2 }));
+        assert_eq!(watermark(&pool, org).await, json!({}));
+    }
+}
+
 const KEY: &str = "1111111111111111111111111111111111111111111111111111111111111111";
 
 async fn apply_api_data(
