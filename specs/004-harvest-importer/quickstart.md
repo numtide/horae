@@ -127,6 +127,8 @@ Also exercise a name-only export: remove the email column, add `First Name` / `L
 
 ## Automated tests backing these scenarios
 
+Lookup-query counts, cold-index measurements and remaining scale limits are documented in [Import lookup measurements](performance.md).
+
 - `cargo test -p horae-core` — pure conversions and natural-key normalization: `hours → minutes`, `money → cents` (round-trip vs. the export transforms), trim/case-fold key equality.
 - `cargo test -p horae --features server` (`#[sqlx::test]`, `#[serial]`) — FK-safe insertion, provenance-based idempotent re-run (including edited-after-import), dry-run-writes-nothing (rows, provenance, and watermark unchanged), incremental-watermark behavior, unknown-user row errors, and summary reconciliation. The API adapter is exercised against **stubbed HTTP fixtures** (paged JSON, a 429 backoff, a token refresh) so no live Harvest account is needed; fixture CSVs under `crates/horae/tests/` drive the secondary-source tests.
 
