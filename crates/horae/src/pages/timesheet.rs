@@ -873,7 +873,7 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
                 // Calendar-only: day-range dropdown beside the pager (Harvest-style).
                 // Picking a span pushes it to the URL so it's shareable.
                 if current_mode == ViewMode::Calendar {
-                    Menu { label: span.label().to_string(),
+                    Menu { id: "calendar-span-menu", label: span.label().to_string(),
                         MenuItem {
                             selected: span == CalSpan::Day,
                             onclick: move |_| go.call((ViewMode::Calendar, date.0, CalSpan::Day)),
