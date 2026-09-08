@@ -31,6 +31,54 @@ fn day(day: u32) -> DateTime<Utc> {
 }
 
 #[sqlx::test(migrations = "./migrations")]
+async fn disconnect_and_reconnect_preserves_imported_records_and_exact_identity(pool: PgPool) {
+    let org = setup(&pool).await;
+    let first = apply_api_data(&pool, org, "USD", ImportMode::Commit, &valid_data(), day(4))
+        .await
+        .unwrap();
+    assert_eq!(first.summary.time_entries.created, 1);
+    credentials::disconnect(&pool, org).await.unwrap();
+    assert!(
+        credentials::store(
+            &pool,
+            org,
+            KEY,
+            "other-account",
+            "access",
+            "refresh",
+            None,
+            None
+        )
+        .await
+        .is_err()
+    );
+    credentials::store(
+        &pool,
+        org,
+        KEY,
+        "test-account",
+        "access",
+        "refresh",
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+    let second = apply_api_data(&pool, org, "USD", ImportMode::Commit, &valid_data(), day(4))
+        .await
+        .unwrap();
+    assert_eq!(second.summary.time_entries.created, 0);
+    assert_eq!(second.summary.time_entries.skipped, 1);
+    assert_eq!(
+        sqlx::query_scalar!("SELECT count(*) FROM time_entries")
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        Some(1)
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn refreshed_tokens_survive_a_dry_run_rollback_in_the_same_import_session(pool: PgPool) {
     let org = setup(&pool).await;
     let mut connection = lock_import(&pool, org).await.unwrap();

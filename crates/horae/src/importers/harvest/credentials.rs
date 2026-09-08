@@ -11,7 +11,21 @@ use chacha20poly1305::aead::{Aead, AeadCore, KeyInit, OsRng};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
 use chrono::{DateTime, Utc};
 use horae_core::importers::harvest::types::EntityType;
+use sqlx::Acquire;
 use uuid::Uuid;
+
+/// Connection policy failures that are safe to display to an administrator.
+#[derive(Debug, thiserror::Error)]
+pub enum ConnectionError {
+    #[error(
+        "This organization is bound to another Harvest account. Reconnect the original account; changing accounts requires an explicit data migration."
+    )]
+    AccountChange,
+    #[error(
+        "Existing Harvest import identities have no verified account. Ask the operator to verify and bind the original account before reconnecting."
+    )]
+    UnidentifiedProvenance,
+}
 
 /// A decrypted Harvest connection for one org (in-memory only).
 #[derive(Debug, Clone)]
@@ -104,8 +118,8 @@ where
 }
 
 /// Upsert the org's Harvest connection, encrypting the tokens. One row per org
-/// (v1); reconnecting overwrites the previous credentials. The parameters mirror
-/// the persisted columns one-to-one, hence the count.
+/// (v1); reconnecting the same account overwrites only its credentials. The
+/// parameters mirror the persisted columns one-to-one, hence the count.
 #[allow(clippy::too_many_arguments)]
 pub async fn store(
     pool: &sqlx::PgPool,
@@ -119,18 +133,48 @@ pub async fn store(
 ) -> anyhow::Result<()> {
     let access_enc = encrypt(key_hex, access_token)?;
     let refresh_enc = encrypt(key_hex, refresh_token)?;
+    let mut connection = super::lock_import(pool, org_id).await?;
+    let mut tx = connection.begin().await?;
+    let bound_account = sqlx::query_scalar!(
+        "SELECT harvest_account_id FROM harvest_account_bindings WHERE org_id = $1",
+        org_id,
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
+    match bound_account {
+        Some(bound) if bound != account_id => return Err(ConnectionError::AccountChange.into()),
+        Some(_) => {}
+        None => {
+            let has_provenance = sqlx::query_scalar!(
+                r#"SELECT EXISTS(SELECT 1 FROM harvest_import_map WHERE org_id = $1) AS "exists!""#,
+                org_id,
+            )
+            .fetch_one(&mut *tx)
+            .await?;
+            if has_provenance {
+                return Err(ConnectionError::UnidentifiedProvenance.into());
+            }
+            sqlx::query!(
+                "INSERT INTO harvest_account_bindings (org_id, harvest_account_id) VALUES ($1, $2)",
+                org_id,
+                account_id,
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+    }
     let id = Uuid::now_v7();
-    sqlx::query!(
+    let saved = sqlx::query!(
         r#"INSERT INTO harvest_credentials
              (id, org_id, harvest_account_id, access_token_enc, refresh_token_enc,
               token_expires_at, scope)
            VALUES ($1, $2, $3, $4, $5, $6, $7)
            ON CONFLICT (org_id) DO UPDATE SET
-             harvest_account_id = EXCLUDED.harvest_account_id,
              access_token_enc   = EXCLUDED.access_token_enc,
              refresh_token_enc  = EXCLUDED.refresh_token_enc,
              token_expires_at   = EXCLUDED.token_expires_at,
-             scope              = EXCLUDED.scope"#,
+             scope              = EXCLUDED.scope
+           WHERE harvest_credentials.harvest_account_id = EXCLUDED.harvest_account_id"#,
         id,
         org_id,
         account_id,
@@ -139,8 +183,25 @@ pub async fn store(
         token_expires_at as Option<chrono::DateTime<chrono::Utc>>,
         scope,
     )
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
+    if saved.rows_affected() != 1 {
+        return Err(ConnectionError::AccountChange.into());
+    }
+    tx.commit().await?;
+    connection.close().await?;
+    Ok(())
+}
+
+/// Remove OAuth secrets, retaining account identity and all imported records.
+/// Like connecting, this must not race with import or token refresh.
+pub async fn disconnect(pool: &sqlx::PgPool, org_id: Uuid) -> Result<(), super::ApiImportError> {
+    let mut connection = super::lock_import(pool, org_id).await?;
+    sqlx::query!("DELETE FROM harvest_credentials WHERE org_id = $1", org_id)
+        .execute(&mut *connection)
+        .await
+        .map_err(anyhow::Error::from)?;
+    connection.close().await.map_err(anyhow::Error::from)?;
     Ok(())
 }
 
@@ -225,6 +286,247 @@ fn decode_hex(s: &str) -> anyhow::Result<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    async fn organization(pool: &sqlx::PgPool) -> Uuid {
+        let org = Uuid::now_v7();
+        sqlx::query!(
+            "INSERT INTO organizations (id, name) VALUES ($1, 'Account binding test')",
+            org
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+        org
+    }
+
+    async fn connect(pool: &sqlx::PgPool, org: Uuid, account: &str) -> anyhow::Result<()> {
+        store(pool, org, KEY, account, "access", "refresh", None, None).await
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn another_account_cannot_replace_credentials_or_watermarks(pool: sqlx::PgPool) {
+        let org = organization(&pool).await;
+        connect(&pool, org, "original").await.unwrap();
+        let mark = Utc::now();
+        advance_watermark(&pool, org, &[(EntityType::TimeEntry, mark)])
+            .await
+            .unwrap();
+
+        assert!(connect(&pool, org, "different").await.is_err());
+        let stored = load(&pool, org, KEY).await.unwrap().unwrap();
+        assert_eq!(stored.account_id, "original");
+        assert_eq!(stored.watermark_for(EntityType::TimeEntry), Some(mark));
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn unidentified_legacy_provenance_requires_operator_review(pool: sqlx::PgPool) {
+        let org = organization(&pool).await;
+        super::super::provenance::upsert(&pool, org, EntityType::Client, 1, Uuid::now_v7(), None)
+            .await
+            .unwrap();
+        let error = connect(&pool, org, "unknown").await.unwrap_err();
+        assert!(matches!(
+            error.downcast_ref(),
+            Some(ConnectionError::UnidentifiedProvenance)
+        ));
+        assert!(load(&pool, org, KEY).await.unwrap().is_none());
+        // After verifying the legacy source, an operator can restore only the
+        // missing identity; no provenance or imported data needs deletion.
+        sqlx::query!(
+            "INSERT INTO harvest_account_bindings (org_id, harvest_account_id) VALUES ($1, $2)",
+            org,
+            "verified-original",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        connect(&pool, org, "verified-original").await.unwrap();
+        assert!(connect(&pool, org, "different").await.is_err());
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn disconnect_preserves_identity_and_provenance_for_the_original_account(
+        pool: sqlx::PgPool,
+    ) {
+        let org = organization(&pool).await;
+        connect(&pool, org, "original").await.unwrap();
+        let mapped = Uuid::now_v7();
+        super::super::provenance::upsert(&pool, org, EntityType::Client, 1, mapped, None)
+            .await
+            .unwrap();
+        disconnect(&pool, org).await.unwrap();
+        disconnect(&pool, org).await.unwrap();
+        assert!(load(&pool, org, KEY).await.unwrap().is_none());
+        let error = connect(&pool, org, "different").await.unwrap_err();
+        assert!(matches!(
+            error.downcast_ref(),
+            Some(ConnectionError::AccountChange)
+        ));
+        connect(&pool, org, "original").await.unwrap();
+        assert_eq!(
+            super::super::provenance::lookup(&pool, org, EntityType::Client, 1)
+                .await
+                .unwrap(),
+            Some(mapped)
+        );
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn same_account_reconnect_rotates_encryption_without_resetting_watermarks(
+        pool: sqlx::PgPool,
+    ) {
+        let org = organization(&pool).await;
+        connect(&pool, org, "original").await.unwrap();
+        let mark = Utc::now();
+        advance_watermark(&pool, org, &[(EntityType::TimeEntry, mark)])
+            .await
+            .unwrap();
+        let new_key = "ff0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+        store(
+            &pool,
+            org,
+            new_key,
+            "original",
+            "new-access",
+            "new-refresh",
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        let stored = load(&pool, org, new_key).await.unwrap().unwrap();
+        assert_eq!(
+            (stored.access_token.as_str(), stored.refresh_token.as_str()),
+            ("new-access", "new-refresh")
+        );
+        assert_eq!(stored.watermark_for(EntityType::TimeEntry), Some(mark));
+        assert!(load(&pool, org, KEY).await.is_err());
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn connect_and_disconnect_share_import_exclusion_without_blocking_other_orgs(
+        pool: sqlx::PgPool,
+    ) {
+        let org = organization(&pool).await;
+        connect(&pool, org, "original").await.unwrap();
+        let held = super::super::lock_import(&pool, org).await.unwrap();
+        let connect_error = connect(&pool, org, "original").await.unwrap_err();
+        assert!(matches!(
+            connect_error.downcast_ref(),
+            Some(super::super::ApiImportError::Busy)
+        ));
+        assert!(matches!(
+            disconnect(&pool, org).await,
+            Err(super::super::ApiImportError::Busy)
+        ));
+        let other = organization(&pool).await;
+        connect(&pool, other, "different").await.unwrap();
+        assert_eq!(
+            load(&pool, org, KEY).await.unwrap().unwrap().account_id,
+            "original"
+        );
+        held.close().await.unwrap();
+        disconnect(&pool, org).await.unwrap();
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn failed_credential_write_does_not_leave_an_account_binding(pool: sqlx::PgPool) {
+        let org = organization(&pool).await;
+        sqlx::query!(
+            "ALTER TABLE harvest_credentials ADD CONSTRAINT reject_scope CHECK (scope IS NULL)"
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        assert!(
+            store(
+                &pool,
+                org,
+                KEY,
+                "failed",
+                "access",
+                "refresh",
+                None,
+                Some("rejected")
+            )
+            .await
+            .is_err()
+        );
+        connect(&pool, org, "different").await.unwrap();
+        assert_eq!(
+            load(&pool, org, KEY).await.unwrap().unwrap().account_id,
+            "different"
+        );
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn concurrent_first_connections_cannot_bind_different_accounts(pool: sqlx::PgPool) {
+        let org = organization(&pool).await;
+        let (first, second) =
+            tokio::join!(connect(&pool, org, "first"), connect(&pool, org, "second"));
+        assert_ne!(first.is_ok(), second.is_ok());
+        let account = if first.is_ok() { "first" } else { "second" };
+        assert_eq!(
+            load(&pool, org, KEY).await.unwrap().unwrap().account_id,
+            account
+        );
+        let losing = if first.is_ok() { "second" } else { "first" };
+        assert!(connect(&pool, org, losing).await.is_err());
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn connection_changes_work_with_a_single_connection_pool(pool: sqlx::PgPool) {
+        let org = organization(&pool).await;
+        let single = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(1)
+            .connect_with((*pool.connect_options()).clone())
+            .await
+            .unwrap();
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            connect(&single, org, "original").await.unwrap();
+            disconnect(&single, org).await.unwrap();
+            connect(&single, org, "original").await.unwrap();
+        })
+        .await
+        .unwrap();
+        single.close().await;
+    }
+
+    #[sqlx::test(migrations = false)]
+    async fn migration_binds_existing_connections_without_changing_secrets_or_markers(
+        pool: sqlx::PgPool,
+    ) {
+        let mut before = sqlx::migrate!("./migrations");
+        before.migrations = before
+            .iter()
+            .filter(|m| m.version < 21)
+            .cloned()
+            .collect::<Vec<_>>()
+            .into();
+        before.run(&pool).await.unwrap();
+        let org = organization(&pool).await;
+        let access = encrypt(KEY, "legacy-access").unwrap();
+        let refresh = encrypt(KEY, "legacy-refresh").unwrap();
+        sqlx::query!(
+            "INSERT INTO harvest_credentials (id, org_id, harvest_account_id, access_token_enc, refresh_token_enc) VALUES ($1, $2, 'legacy', $3, $4)",
+            Uuid::now_v7(), org, access, refresh,
+        ).execute(&pool).await.unwrap();
+        let mark = Utc::now();
+        advance_watermark(&pool, org, &[(EntityType::TimeEntry, mark)])
+            .await
+            .unwrap();
+        sqlx::migrate!("./migrations").run(&pool).await.unwrap();
+        let stored = load(&pool, org, KEY).await.unwrap().unwrap();
+        assert_eq!(
+            (stored.access_token.as_str(), stored.refresh_token.as_str()),
+            ("legacy-access", "legacy-refresh")
+        );
+        assert_eq!(stored.watermark_for(EntityType::TimeEntry), Some(mark));
+        assert!(connect(&pool, org, "different").await.is_err());
+        disconnect(&pool, org).await.unwrap();
+        assert!(connect(&pool, org, "different").await.is_err());
+        connect(&pool, org, "legacy").await.unwrap();
+    }
 
     // A deterministic 32-byte key for round-trip tests.
     const KEY: &str = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";

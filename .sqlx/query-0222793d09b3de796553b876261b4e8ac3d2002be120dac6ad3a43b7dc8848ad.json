@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO harvest_credentials\n             (id, org_id, harvest_account_id, access_token_enc, refresh_token_enc,\n              token_expires_at, scope)\n           VALUES ($1, $2, $3, $4, $5, $6, $7)\n           ON CONFLICT (org_id) DO UPDATE SET\n             access_token_enc   = EXCLUDED.access_token_enc,\n             refresh_token_enc  = EXCLUDED.refresh_token_enc,\n             token_expires_at   = EXCLUDED.token_expires_at,\n             scope              = EXCLUDED.scope\n           WHERE harvest_credentials.harvest_account_id = EXCLUDED.harvest_account_id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Bytea",
+        "Bytea",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0222793d09b3de796553b876261b4e8ac3d2002be120dac6ad3a43b7dc8848ad"
+}

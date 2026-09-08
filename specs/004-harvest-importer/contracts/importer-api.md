@@ -17,8 +17,31 @@ GET /auth/harvest/callback?code=…&state=…      (plain Axum route, beside aut
 
 - The browser redirect target after the admin authorizes on Harvest (cannot be a `#[server]` fn).
 - **Validates `state`** against the value stored at connect-start for this session, rejecting a missing or mismatched `state` **without exchanging the code** — this prevents CSRF / forged or replayed callbacks. Only on a valid `state` does it proceed.
-- Exchanges `code` for `access_token` + `refresh_token`, resolves the Harvest **account id**, and stores all three **encrypted at rest** in `harvest_credentials`, scoped to the org (FR-022). Tokens are never returned to the browser or logged.
+- Exchanges `code` for `access_token` + `refresh_token`, resolves the Harvest **account id**, and stores the tokens **encrypted at rest** alongside the account ID in `harvest_credentials`, scoped to the org (FR-022). Tokens are never returned to the browser or logged; the account ID is non-secret metadata.
 - On success, redirects back into the admin "Import from Harvest" screen showing a connected state.
+
+The organization is permanently bound to the first connected Harvest account.
+Reconnect may replace credentials for that same account (including after key
+rotation), but cannot switch accounts. Account mismatch or unidentified legacy
+provenance returns a plain-text `409 Conflict` with recovery instructions; only
+these known policy errors and the import-busy message are exposed, never tokens
+or arbitrary upstream errors. Return to the import screen and reconnect the
+original account, or ask the operator to verify legacy identity.
+
+Credential storage and disconnect acquire the same organization lock as imports.
+If an import is running, they reject with `CONFLICT` rather than replacing or
+removing credentials underneath its token refresh or data transaction. OAuth
+code exchange/account discovery precedes credential storage; a rejected callback
+must start a fresh connect attempt when the conflicting operation has finished.
+
+```
+harvest_disconnect() -> Result<(), ServerFnError>
+```
+
+Admin-only. Removes stored OAuth credentials but preserves account binding,
+provenance and imported records. It does not revoke tokens at Harvest. A later
+connection must use the original account. Disconnect removes the watermark with
+the credential row; the next sync replays data through existing provenance.
 
 ```
 harvest_connection_status() -> Result<ConnectionStatus, ServerFnError>   // connected? account id, token freshness — never the tokens

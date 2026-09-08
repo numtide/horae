@@ -357,8 +357,8 @@ pub struct CallbackParams {
 async fn oauth_callback(
     session: tower_sessions::Session,
     axum::extract::Query(params): axum::extract::Query<CallbackParams>,
-) -> axum::response::Redirect {
-    use axum::response::Redirect;
+) -> axum::response::Response {
+    use axum::response::{IntoResponse, Redirect};
 
     // The nonce is single-use: consume it regardless of outcome.
     let stored: Option<String> = session.get(OAUTH_STATE_KEY).await.ok().flatten();
@@ -373,17 +373,36 @@ async fn oauth_callback(
         Ok(code) => code,
         Err(reason) => {
             tracing::warn!("Harvest callback rejected before exchange: {reason}");
-            return Redirect::to(dest_err);
+            return Redirect::to(dest_err).into_response();
         }
     };
 
     match complete_connect(&session, code).await {
-        Ok(()) => Redirect::to(dest_ok),
+        Ok(()) => Redirect::to(dest_ok).into_response(),
         Err(e) => {
+            if let Some(response) = connection_conflict_response(&e) {
+                return response;
+            }
             tracing::error!("Harvest connect failed: {e}");
-            Redirect::to(dest_err)
+            Redirect::to(dest_err).into_response()
         }
     }
+}
+
+/// Only known, secret-free policy errors may be returned to the browser.
+fn connection_conflict_response(error: &anyhow::Error) -> Option<axum::response::Response> {
+    use axum::response::IntoResponse;
+    let message = if let Some(policy) = error.downcast_ref::<credentials::ConnectionError>() {
+        policy.to_string()
+    } else if matches!(
+        error.downcast_ref::<ApiImportError>(),
+        Some(ApiImportError::Busy)
+    ) {
+        ApiImportError::Busy.to_string()
+    } else {
+        return None;
+    };
+    Some((axum::http::StatusCode::CONFLICT, message).into_response())
 }
 
 /// Decide whether a callback may proceed to the token exchange. Returns the
@@ -456,6 +475,25 @@ async fn complete_connect(session: &tower_sessions::Session, code: String) -> an
 #[cfg(test)]
 mod oauth_callback_tests {
     use super::*;
+
+    #[tokio::test]
+    async fn account_policy_failures_return_safe_actionable_conflicts() {
+        for error in [
+            anyhow::Error::from(credentials::ConnectionError::AccountChange),
+            anyhow::Error::from(credentials::ConnectionError::UnidentifiedProvenance),
+            anyhow::Error::from(ApiImportError::Busy),
+        ] {
+            let response = connection_conflict_response(&error).unwrap();
+            assert_eq!(response.status(), axum::http::StatusCode::CONFLICT);
+            let body = axum::body::to_bytes(response.into_body(), 1024)
+                .await
+                .unwrap();
+            assert_eq!(body.as_ref(), error.to_string().as_bytes());
+        }
+        assert!(
+            connection_conflict_response(&anyhow::anyhow!("secret upstream payload")).is_none()
+        );
+    }
 
     fn params(error: Option<&str>, state: Option<&str>, code: Option<&str>) -> CallbackParams {
         CallbackParams {
