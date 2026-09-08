@@ -107,6 +107,11 @@ cd crates/horae && DEV_LOGIN=1 dx serve               # dev server on :8080, hot
 
 Horae is configured through environment variables.
 
+`horae` and `horae serve` use the same bind defaults and `HORAE_HOST`/`HORAE_PORT`
+environment settings. Explicit `serve --host`/`--port` flags take precedence over
+those variables. Under `dx serve`, Dioxus's `IP`/`PORT` variables override the bind
+address for hot-reload proxying.
+
 | Variable | Default | Description |
 |---|---|---|
 | `DATABASE_URL` | `postgres://localhost/horae` | PostgreSQL connection URL |
@@ -156,6 +161,12 @@ The module runs the server as a systemd service and applies pending migrations o
 A fresh database has no organization, so create one — along with the first admin user —
 before anyone signs in. `horae seed` inserts demo clients, projects and time entries; it is
 for trying the app out, not for standing one up.
+
+`seed` initializes an empty, migrated database in one transaction, with sample time
+for the current ISO week. Repeating it leaves an existing demo completely unchanged,
+even in a later week: it does not add time, overwrite edits, or restore deleted rows.
+Older or partially populated demos are also left untouched. It refuses a database
+containing any non-demo organization; use a separate empty database to try the demo.
 
 The CLI is the same binary as the service — put it on PATH with
 `environment.systemPackages = [ config.services.horae.package ];`. The service runs under a
