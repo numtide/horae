@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE tasks SET active = ($2 <> 'task') WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cf98798fc104c1352bf13720bb3ac95b1813bc8f5bce1de09c0685a98af85870"
+}

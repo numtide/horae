@@ -217,7 +217,7 @@ pub fn AdminUsers() -> Element {
                             onclick: move |_| {
                                 let n = task_name();
                                 let b = task_billable();
-                                run_action(server_fns::create_task(n, b), tasks, task_error, move || {
+                                run_action(server_fns::create_task(n, b, None), tasks, task_error, move || {
                                     task_name.set(String::new());
                                     task_billable.set(true);
                                     show_task_form.set(false);

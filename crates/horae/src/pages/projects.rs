@@ -655,6 +655,8 @@ pub fn ProjectDetail(id: Uuid) -> Element {
                 p { class: "text-muted p-5", "Project detail for {id}" }
             }
 
+            ProjectTasks { key: "{id}", project_id: id, can_manage: is_manager(&me) }
+
             // ── Assignments section ─────────────────────────────────────
             div { class: "mt-6",
                 div { class: "page-header",
@@ -765,6 +767,82 @@ pub fn ProjectDetail(id: Uuid) -> Element {
                             }
                         }
                     })}
+                }
+            }
+        }
+    }
+}
+
+#[component]
+fn ProjectTasks(project_id: Uuid, can_manage: bool) -> Element {
+    let mut enabled = use_resource(move || async move {
+        server_fns::list_project_tasks(project_id.to_string()).await
+    });
+    let mut catalog = use_resource(|| async move { server_fns::list_tasks().await });
+    let mut selected = use_signal(String::new);
+    let mut name = use_signal(String::new);
+    let mut billable = use_signal(|| true);
+    let mut error = use_signal(|| None::<String>);
+    let mut saving = use_signal(|| false);
+
+    rsx! {
+        div { class: "card mt-6 p-5",
+            h2 { class: "page-title text-xl", "Project tasks" }
+            {loaded(&*enabled.read(), |tasks| rsx! {
+                if tasks.is_empty() { p { "No tasks enabled yet." } }
+                ul { for task in tasks { li { key: "{task.id}", "{task.name}" } } }
+            })}
+            if let Some(message) = error() {
+                div { class: "alert alert-danger", role: "alert", "{message}" }
+            }
+            if can_manage {
+                FormGroup { label: "Enable an existing task", id: "project-task",
+                    {loaded(&*catalog.read(), |tasks| rsx! {
+                        select {
+                            id: "project-task", class: "form-select", value: "{selected}",
+                            disabled: saving(), onchange: move |e| selected.set(e.value()),
+                            option { value: "", "Select task…" }
+                            for task in tasks { option { value: "{task.id}", "{task.name}" } }
+                        }
+                    })}
+                }
+                button {
+                    class: "btn btn-secondary", disabled: saving() || selected().is_empty(),
+                    onclick: move |_| {
+                        let task_id = selected();
+                        saving.set(true);
+                        spawn(async move {
+                            match server_fns::link_project_task(project_id.to_string(), task_id).await {
+                                Ok(()) => { error.set(None); selected.set(String::new()); enabled.restart(); }
+                                Err(e) => error.set(Some(e.to_string())),
+                            }
+                            saving.set(false);
+                        });
+                    },
+                    "Enable task"
+                }
+                FormGroup { label: "New task name", id: "new-project-task",
+                    Input { id: "new-project-task", value: "{name}", oninput: move |e: FormEvent| name.set(e.value()) }
+                }
+                label { class: "form-label flex items-center gap-2",
+                    input { r#type: "checkbox", checked: billable(), onchange: move |e| billable.set(e.checked()) }
+                    "Billable on this project"
+                }
+                button {
+                    class: "btn btn-primary", disabled: saving() || name().trim().is_empty(),
+                    onclick: move |_| {
+                        let task_name = name();
+                        let task_billable = billable();
+                        saving.set(true);
+                        spawn(async move {
+                            match server_fns::create_task(task_name, task_billable, Some(project_id.to_string())).await {
+                                Ok(_) => { error.set(None); name.set(String::new()); enabled.restart(); catalog.restart(); }
+                                Err(e) => error.set(Some(e.to_string())),
+                            }
+                            saving.set(false);
+                        });
+                    },
+                    "Create and enable task"
                 }
             }
         }

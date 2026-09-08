@@ -12,6 +12,7 @@ pub mod layout;
 pub mod logo;
 pub mod menu;
 pub mod nav;
+pub mod project_task_picker;
 pub mod sidebar;
 pub mod table;
 pub mod theme;

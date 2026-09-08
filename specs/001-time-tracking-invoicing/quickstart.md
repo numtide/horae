@@ -43,6 +43,8 @@ Duration input accepts non-negative `H:MM` or decimal hours, rounded half up to 
 
 1. As a manager, create a client (name + currency), a project (billing method, budget, rate), and a task → **Expected**: the task becomes selectable when logging time (AS1–AS3).
 1. Mark a project inactive → **Expected**: it disappears from new-entry pickers but existing entries remain (AS4, FR-011).
+1. Open a project's detail page as a manager and use **Create and enable task**, with the billable checkbox off → **Expected**: the task appears under Project tasks and is selectable only on that project. Start a timer or save manual time on it → the entry is non-billable. Enabling an existing task twice is harmless and keeps its project-specific overrides.
+1. Use the entry modal, **Add row**, and sidebar timer pickers. Change projects → **Expected**: the previous task selection clears and only enabled tasks for the chosen project appear. Inactive clients/projects/tasks and unassigned projects are absent; an unavailable context submitted directly to the server is rejected. Existing entries remain editable while open, including after their project is archived.
 
 ### US3 — Invoice tracked time (P3)
 

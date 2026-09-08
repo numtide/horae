@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT project_id as \"project_id!\", task_id as \"task_id!\", billable as \"billable!\"\n           FROM time_entry_contexts WHERE user_id = $1 ORDER BY project_id, task_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "project_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "task_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "billable!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "eb95a558445e9528c043df62ad1d83672337c08437e4fffe70ae9905dece847e"
+}
