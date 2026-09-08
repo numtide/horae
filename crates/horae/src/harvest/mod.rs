@@ -1,13 +1,19 @@
-// Harvest-compatible REST API surface, mounted at /harvest/v2.
-//
-// Tools like harvest-invoicer and harvest-exporter can be pointed at
-//   https://horae.example.com/harvest
-// and will call /harvest/v2/time_entries etc. as normal.
+// Read-only Harvest-style subset, mounted at /harvest/v2. Session auth, UUID
+// identifiers, and incomplete filters require client adaptation; see the
+// compatibility matrix in specs/001-time-tracking-invoicing/contracts/harvest-api.md.
 
 mod auth;
 mod types;
 
-use axum::{Json, Router, extract::Path, extract::Query, http::StatusCode, routing::get};
+#[cfg(test)]
+mod pagination_tests;
+
+use axum::{
+    Json, Router,
+    extract::{OriginalUri, Path, Query, State},
+    http::StatusCode,
+    routing::get,
+};
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::Deserialize;
 use sqlx::PgPool;
@@ -16,21 +22,23 @@ use uuid::Uuid;
 use auth::AuthUser;
 use types::*;
 
-pub fn router() -> Router {
-    Router::new().nest(
-        "/harvest/v2",
-        Router::new()
-            .route("/users/me", get(users_me))
-            .route("/time_entries", get(list_time_entries))
-            .route("/time_entries/{id}", get(get_time_entry))
-            .route("/projects", get(list_projects))
-            .route("/projects/{id}", get(get_project))
-            .route("/clients", get(list_clients))
-            .route("/clients/{id}", get(get_client))
-            .route("/tasks", get(list_tasks))
-            .route("/tasks/{id}", get(get_task))
-            .route("/users", get(list_users)),
-    )
+pub fn router(db: PgPool) -> Router {
+    Router::new()
+        .nest(
+            "/harvest/v2",
+            Router::new()
+                .route("/users/me", get(users_me))
+                .route("/time_entries", get(list_time_entries))
+                .route("/time_entries/{id}", get(get_time_entry))
+                .route("/projects", get(list_projects))
+                .route("/projects/{id}", get(get_project))
+                .route("/clients", get(list_clients))
+                .route("/clients/{id}", get(get_client))
+                .route("/tasks", get(list_tasks))
+                .route("/tasks/{id}", get(get_task))
+                .route("/users", get(list_users)),
+        )
+        .with_state(db)
 }
 
 // ── Error helper ────────────────────────────────────────────────────────────
@@ -80,20 +88,32 @@ fn scoped_user_filter(
 
 // ── Pagination ──────────────────────────────────────────────────────────────
 
-/// Harvest v2 pagination window shared by every list endpoint: page defaults
-/// to 1 (floored at 1), per_page to 100 (clamped to 1..=100). Returns
-/// `(page, per_page, offset)`.
-fn page_window(page: Option<i64>, per_page: Option<i64>) -> (i64, i64, i64) {
-    let page = page.unwrap_or(1).max(1);
-    let per_page = per_page.unwrap_or(100).clamp(1, 100);
-    (page, per_page, (page - 1) * per_page)
+/// Numbered pagination shared by all list endpoints, with a bounded page size
+/// and a checked PostgreSQL bigint offset. Returns `(page, per_page, offset)`.
+fn page_window(
+    page: Option<i64>,
+    per_page: Option<i64>,
+) -> Result<(i64, i64, i64), (StatusCode, String)> {
+    let page = page.unwrap_or(1);
+    let per_page = per_page.unwrap_or(100);
+    if page < 1 || !(1..=100).contains(&per_page) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "page must be positive and per_page must be between 1 and 100".to_owned(),
+        ));
+    }
+    let offset = (page - 1).checked_mul(per_page).ok_or_else(|| {
+        (
+            StatusCode::BAD_REQUEST,
+            "Pagination offset is too large".to_owned(),
+        )
+    })?;
+    Ok((page, per_page, offset))
 }
 
 // ── /users/me ───────────────────────────────────────────────────────────────
 
-async fn users_me(user: AuthUser) -> ApiResult<HarvestUser> {
-    let state = crate::state::global_state().await;
-
+async fn users_me(user: AuthUser, State(db): State<PgPool>) -> ApiResult<HarvestUser> {
     let row: UserRow = sqlx::query_as!(
         UserRow,
         r#"SELECT id, name, email, active, org_role::text AS "org_role!: String",
@@ -102,7 +122,7 @@ async fn users_me(user: AuthUser) -> ApiResult<HarvestUser> {
          FROM users WHERE id = $1"#,
         user.user_id,
     )
-    .fetch_one(&state.db)
+    .fetch_one(&db)
     .await
     .map_err(internal)?;
 
@@ -113,14 +133,14 @@ async fn users_me(user: AuthUser) -> ApiResult<HarvestUser> {
 
 #[derive(Deserialize)]
 pub struct TimeEntryFilters {
-    pub user_id: Option<String>,
-    pub project_id: Option<String>,
-    pub from: Option<String>,
-    pub to: Option<String>,
+    pub user_id: Option<Uuid>,
+    pub project_id: Option<Uuid>,
+    pub from: Option<NaiveDate>,
+    pub to: Option<NaiveDate>,
     pub is_running: Option<bool>,
     pub page: Option<i64>,
     pub per_page: Option<i64>,
-    pub updated_since: Option<String>,
+    pub updated_since: Option<DateTime<Utc>>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -232,10 +252,12 @@ fn time_entry_row_to_harvest(
 
 async fn list_time_entries(
     user: AuthUser,
+    State(db): State<PgPool>,
+    OriginalUri(uri): OriginalUri,
     Query(filters): Query<TimeEntryFilters>,
 ) -> ApiResult<HarvestPagination<HarvestTimeEntry>> {
-    let state = crate::state::global_state().await;
-    time_entries_page(&state.db, &user, filters).await
+    let Json(page) = time_entries_page(&db, &user, filters).await?;
+    Ok(Json(page.with_query(uri.query())))
 }
 
 /// Entries carry both a teammate's notes and their rates, so the row set is
@@ -246,24 +268,12 @@ async fn time_entries_page(
     caller: &AuthUser,
     filters: TimeEntryFilters,
 ) -> ApiResult<HarvestPagination<HarvestTimeEntry>> {
+    let (page, per_page, offset) = page_window(filters.page, filters.per_page)?;
+    let user_id_filter = scoped_user_filter(caller, filters.user_id)?;
     let (round_min, round_dir) = crate::db::org_rounding(db, caller.org_id)
         .await
         .map_err(internal)?;
 
-    let (page, per_page, offset) = page_window(filters.page, filters.per_page);
-
-    // Parse filter strings to properly typed values
-    let user_id_filter: Option<Uuid> = filters
-        .user_id
-        .as_ref()
-        .map(|s| s.parse().map_err(|_| internal("Invalid user_id filter")))
-        .transpose()?;
-    let user_id_filter = scoped_user_filter(caller, user_id_filter)?;
-    let project_id_filter: Option<Uuid> = filters
-        .project_id
-        .as_ref()
-        .map(|s| s.parse().map_err(|_| internal("Invalid project_id filter")))
-        .transpose()?;
     let total_entries = sqlx::query_scalar!(
         // The count filters on `te` alone. Joining `projects` (as the page query
         // below has to) would cost a heap lookup per counted row, which Postgres
@@ -278,11 +288,11 @@ async fn time_entries_page(
            AND ($7::timestamptz IS NULL OR te.updated_at >= $7::timestamptz)",
         caller.org_id,
         user_id_filter,
-        project_id_filter,
-        filters.from.as_deref() as Option<&str>,
-        filters.to.as_deref() as Option<&str>,
+        filters.project_id,
+        filters.from as Option<NaiveDate>,
+        filters.to as Option<NaiveDate>,
         filters.is_running,
-        filters.updated_since.as_deref() as Option<&str>,
+        filters.updated_since as Option<DateTime<Utc>>,
     )
     .fetch_one(db)
     .await
@@ -321,15 +331,15 @@ async fn time_entries_page(
            AND ($5::date IS NULL OR te.spent_date <= $5::date)
            AND ($6::bool IS NULL OR te.is_running = $6)
            AND ($7::timestamptz IS NULL OR te.updated_at >= $7::timestamptz)
-         ORDER BY te.spent_date DESC, te.created_at DESC
+         ORDER BY te.spent_date DESC, te.created_at DESC, te.id DESC
          LIMIT $8 OFFSET $9"#,
         caller.org_id,
         user_id_filter,
-        project_id_filter,
-        filters.from.as_deref() as Option<&str>,
-        filters.to.as_deref() as Option<&str>,
+        filters.project_id,
+        filters.from as Option<NaiveDate>,
+        filters.to as Option<NaiveDate>,
         filters.is_running,
-        filters.updated_since.as_deref() as Option<&str>,
+        filters.updated_since as Option<DateTime<Utc>>,
         per_page,
         offset,
     )
@@ -352,9 +362,12 @@ async fn time_entries_page(
     )))
 }
 
-async fn get_time_entry(user: AuthUser, Path(id): Path<Uuid>) -> ApiResult<HarvestTimeEntry> {
-    let state = crate::state::global_state().await;
-    time_entry_by_id(&state.db, &user, id).await
+async fn get_time_entry(
+    user: AuthUser,
+    State(db): State<PgPool>,
+    Path(id): Path<Uuid>,
+) -> ApiResult<HarvestTimeEntry> {
+    time_entry_by_id(&db, &user, id).await
 }
 
 /// A single entry out of the same scoped row set as the listing. To a member a
@@ -411,10 +424,10 @@ async fn time_entry_by_id(db: &PgPool, caller: &AuthUser, id: Uuid) -> ApiResult
 #[derive(Deserialize)]
 pub struct ProjectFilters {
     pub is_active: Option<bool>,
-    pub client_id: Option<String>,
+    pub client_id: Option<Uuid>,
     pub page: Option<i64>,
     pub per_page: Option<i64>,
-    pub updated_since: Option<String>,
+    pub updated_since: Option<DateTime<Utc>>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -475,16 +488,11 @@ fn project_row_to_harvest(row: &ProjectRow) -> HarvestProject {
 
 async fn list_projects(
     user: AuthUser,
+    State(db): State<PgPool>,
+    OriginalUri(uri): OriginalUri,
     Query(filters): Query<ProjectFilters>,
 ) -> ApiResult<HarvestPagination<HarvestProject>> {
-    let state = crate::state::global_state().await;
-    let (page, per_page, offset) = page_window(filters.page, filters.per_page);
-
-    let client_id_filter: Option<Uuid> = filters
-        .client_id
-        .as_ref()
-        .map(|s| s.parse().map_err(|_| internal("Invalid client_id")))
-        .transpose()?;
+    let (page, per_page, offset) = page_window(filters.page, filters.per_page)?;
 
     let total = sqlx::query_scalar!(
         "SELECT COUNT(*) FROM projects p
@@ -494,10 +502,10 @@ async fn list_projects(
            AND ($4::timestamptz IS NULL OR p.created_at >= $4::timestamptz)",
         user.org_id,
         filters.is_active,
-        client_id_filter,
-        filters.updated_since.as_deref() as Option<&str>,
+        filters.client_id,
+        filters.updated_since as Option<DateTime<Utc>>,
     )
-    .fetch_one(&state.db)
+    .fetch_one(&db)
     .await
     .map_err(internal)?
     .unwrap_or(0);
@@ -516,34 +524,39 @@ async fn list_projects(
            AND ($2::bool IS NULL OR p.active = $2)
            AND ($3::uuid IS NULL OR p.client_id = $3)
            AND ($4::timestamptz IS NULL OR p.created_at >= $4::timestamptz)
-         ORDER BY p.name
+         ORDER BY p.name, p.id
          LIMIT $5 OFFSET $6"#,
         user.org_id,
         filters.is_active,
-        client_id_filter,
-        filters.updated_since.as_deref() as Option<&str>,
+        filters.client_id,
+        filters.updated_since as Option<DateTime<Utc>>,
         per_page,
         offset,
     )
-    .fetch_all(&state.db)
+    .fetch_all(&db)
     .await
     .map_err(internal)?;
 
     let items: Vec<HarvestProject> = rows.iter().map(project_row_to_harvest).collect();
 
-    Ok(Json(HarvestPagination::new(
-        "projects",
-        items,
-        page,
-        per_page,
-        total,
-        "/harvest/v2/projects",
-    )))
+    Ok(Json(
+        HarvestPagination::new(
+            "projects",
+            items,
+            page,
+            per_page,
+            total,
+            "/harvest/v2/projects",
+        )
+        .with_query(uri.query()),
+    ))
 }
 
-async fn get_project(user: AuthUser, Path(id): Path<Uuid>) -> ApiResult<HarvestProject> {
-    let state = crate::state::global_state().await;
-
+async fn get_project(
+    user: AuthUser,
+    State(db): State<PgPool>,
+    Path(id): Path<Uuid>,
+) -> ApiResult<HarvestProject> {
     let row = sqlx::query_as!(
         ProjectRow,
         r#"SELECT p.id, p.name, p.code, p.project_type::text AS "project_type!: String", p.active,
@@ -558,7 +571,7 @@ async fn get_project(user: AuthUser, Path(id): Path<Uuid>) -> ApiResult<HarvestP
         id,
         user.org_id,
     )
-    .fetch_optional(&state.db)
+    .fetch_optional(&db)
     .await
     .map_err(internal)?
     .ok_or_else(not_found)?;
@@ -573,7 +586,7 @@ pub struct ClientFilters {
     pub is_active: Option<bool>,
     pub page: Option<i64>,
     pub per_page: Option<i64>,
-    pub updated_since: Option<String>,
+    pub updated_since: Option<DateTime<Utc>>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -600,10 +613,11 @@ fn client_row_to_harvest(row: &ClientRow) -> HarvestClient {
 
 async fn list_clients(
     user: AuthUser,
+    State(db): State<PgPool>,
+    OriginalUri(uri): OriginalUri,
     Query(filters): Query<ClientFilters>,
 ) -> ApiResult<HarvestPagination<HarvestClient>> {
-    let state = crate::state::global_state().await;
-    let (page, per_page, offset) = page_window(filters.page, filters.per_page);
+    let (page, per_page, offset) = page_window(filters.page, filters.per_page)?;
 
     let total = sqlx::query_scalar!(
         "SELECT COUNT(*) FROM clients
@@ -612,9 +626,9 @@ async fn list_clients(
            AND ($3::timestamptz IS NULL OR created_at >= $3::timestamptz)",
         user.org_id,
         filters.is_active,
-        filters.updated_since.as_deref() as Option<&str>,
+        filters.updated_since as Option<DateTime<Utc>>,
     )
-    .fetch_one(&state.db)
+    .fetch_one(&db)
     .await
     .map_err(internal)?
     .unwrap_or(0);
@@ -627,33 +641,38 @@ async fn list_clients(
          WHERE org_id = $1
            AND ($2::bool IS NULL OR active = $2)
            AND ($3::timestamptz IS NULL OR created_at >= $3::timestamptz)
-         ORDER BY name
+         ORDER BY name, id
          LIMIT $4 OFFSET $5"#,
         user.org_id,
         filters.is_active,
-        filters.updated_since.as_deref() as Option<&str>,
+        filters.updated_since as Option<DateTime<Utc>>,
         per_page,
         offset,
     )
-    .fetch_all(&state.db)
+    .fetch_all(&db)
     .await
     .map_err(internal)?;
 
     let items: Vec<HarvestClient> = rows.iter().map(client_row_to_harvest).collect();
 
-    Ok(Json(HarvestPagination::new(
-        "clients",
-        items,
-        page,
-        per_page,
-        total,
-        "/harvest/v2/clients",
-    )))
+    Ok(Json(
+        HarvestPagination::new(
+            "clients",
+            items,
+            page,
+            per_page,
+            total,
+            "/harvest/v2/clients",
+        )
+        .with_query(uri.query()),
+    ))
 }
 
-async fn get_client(user: AuthUser, Path(id): Path<Uuid>) -> ApiResult<HarvestClient> {
-    let state = crate::state::global_state().await;
-
+async fn get_client(
+    user: AuthUser,
+    State(db): State<PgPool>,
+    Path(id): Path<Uuid>,
+) -> ApiResult<HarvestClient> {
     let row = sqlx::query_as!(
         ClientRow,
         r#"SELECT id, name, active, address, currency,
@@ -662,7 +681,7 @@ async fn get_client(user: AuthUser, Path(id): Path<Uuid>) -> ApiResult<HarvestCl
         id,
         user.org_id,
     )
-    .fetch_optional(&state.db)
+    .fetch_optional(&db)
     .await
     .map_err(internal)?
     .ok_or_else(not_found)?;
@@ -704,10 +723,11 @@ fn task_row_to_harvest(row: &TaskRow) -> HarvestTask {
 
 async fn list_tasks(
     user: AuthUser,
+    State(db): State<PgPool>,
+    OriginalUri(uri): OriginalUri,
     Query(filters): Query<TaskFilters>,
 ) -> ApiResult<HarvestPagination<HarvestTask>> {
-    let state = crate::state::global_state().await;
-    let (page, per_page, offset) = page_window(filters.page, filters.per_page);
+    let (page, per_page, offset) = page_window(filters.page, filters.per_page)?;
 
     let total = sqlx::query_scalar!(
         "SELECT COUNT(*) FROM tasks
@@ -716,7 +736,7 @@ async fn list_tasks(
         user.org_id,
         filters.is_active,
     )
-    .fetch_one(&state.db)
+    .fetch_one(&db)
     .await
     .map_err(internal)?
     .unwrap_or(0);
@@ -727,32 +747,30 @@ async fn list_tasks(
          FROM tasks
          WHERE org_id = $1
            AND ($2::bool IS NULL OR active = $2)
-         ORDER BY name
+         ORDER BY name, id
          LIMIT $3 OFFSET $4",
         user.org_id,
         filters.is_active,
         per_page,
         offset,
     )
-    .fetch_all(&state.db)
+    .fetch_all(&db)
     .await
     .map_err(internal)?;
 
     let items: Vec<HarvestTask> = rows.iter().map(task_row_to_harvest).collect();
 
-    Ok(Json(HarvestPagination::new(
-        "tasks",
-        items,
-        page,
-        per_page,
-        total,
-        "/harvest/v2/tasks",
-    )))
+    Ok(Json(
+        HarvestPagination::new("tasks", items, page, per_page, total, "/harvest/v2/tasks")
+            .with_query(uri.query()),
+    ))
 }
 
-async fn get_task(user: AuthUser, Path(id): Path<Uuid>) -> ApiResult<HarvestTask> {
-    let state = crate::state::global_state().await;
-
+async fn get_task(
+    user: AuthUser,
+    State(db): State<PgPool>,
+    Path(id): Path<Uuid>,
+) -> ApiResult<HarvestTask> {
     let row = sqlx::query_as!(
         TaskRow,
         "SELECT id, name, active, billable_default, default_rate_cents
@@ -760,7 +778,7 @@ async fn get_task(user: AuthUser, Path(id): Path<Uuid>) -> ApiResult<HarvestTask
         id,
         user.org_id,
     )
-    .fetch_optional(&state.db)
+    .fetch_optional(&db)
     .await
     .map_err(internal)?
     .ok_or_else(not_found)?;
@@ -814,10 +832,12 @@ fn user_row_to_harvest(row: &UserRow) -> HarvestUser {
 
 async fn list_users(
     user: AuthUser,
+    State(db): State<PgPool>,
+    OriginalUri(uri): OriginalUri,
     Query(filters): Query<UserFilters>,
 ) -> ApiResult<HarvestPagination<HarvestUser>> {
-    let state = crate::state::global_state().await;
-    users_page(&state.db, &user, filters).await
+    let Json(page) = users_page(&db, &user, filters).await?;
+    Ok(Json(page.with_query(uri.query())))
 }
 
 /// The org's people, pay rates included. Harvest's user object has no rate-free
@@ -835,7 +855,7 @@ async fn users_page(
         return Err(forbidden("Listing users requires manager access"));
     }
 
-    let (page, per_page, offset) = page_window(filters.page, filters.per_page);
+    let (page, per_page, offset) = page_window(filters.page, filters.per_page)?;
 
     let total = sqlx::query_scalar!(
         "SELECT COUNT(*) FROM users
@@ -857,7 +877,7 @@ async fn users_page(
          FROM users
          WHERE org_id = $1
            AND ($2::bool IS NULL OR active = $2)
-         ORDER BY name
+         ORDER BY name, id
          LIMIT $3 OFFSET $4"#,
         caller.org_id,
         filters.is_active,
@@ -887,15 +907,19 @@ mod tests {
     use horae_core::types::{EntryState, OrgRole};
 
     #[test]
-    fn page_window_defaults_clamps_and_offsets() {
+    fn page_window_defaults_and_checked_offsets() {
         // Defaults: first page of 100.
-        assert_eq!(page_window(None, None), (1, 100, 0));
-        // Clamps: page floors at 1, per_page stays within 1..=100.
-        assert_eq!(page_window(Some(0), None), (1, 100, 0));
-        assert_eq!(page_window(None, Some(0)), (1, 1, 0));
-        assert_eq!(page_window(None, Some(500)), (1, 100, 0));
+        assert_eq!(page_window(None, None).unwrap(), (1, 100, 0));
+        assert!(page_window(Some(0), None).is_err());
+        assert!(page_window(None, Some(0)).is_err());
+        assert!(page_window(None, Some(500)).is_err());
         // A later page offsets by the preceding pages.
-        assert_eq!(page_window(Some(3), Some(25)), (3, 25, 50));
+        assert_eq!(page_window(Some(3), Some(25)).unwrap(), (3, 25, 50));
+        assert_eq!(
+            page_window(Some(i64::MAX), Some(1)).unwrap(),
+            (i64::MAX, 1, i64::MAX - 1)
+        );
+        assert!(page_window(Some(i64::MAX), Some(100)).is_err());
     }
 
     // ── Authorization ───────────────────────────────────────────────────────
@@ -1213,7 +1237,7 @@ mod tests {
         insert_entry(&pool, &ids, other, "theirs").await;
 
         let filters = TimeEntryFilters {
-            user_id: Some(other.to_string()),
+            user_id: Some(other),
             ..no_time_entry_filters()
         };
         let status = refused(
