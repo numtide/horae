@@ -136,7 +136,7 @@ pub(super) async fn run(
     let connection = Arc::try_unwrap(session)
         .map_err(|_| anyhow::anyhow!("Harvest session is still in use"))?
         .into_inner();
-    connection.close().await?;
+    super::release_import(connection).await?;
     // Preserve the download failure rather than the consumer's missing-complete
     // error. A producer cancelled by a SQL failure must not hide that SQL error.
     match (result, fetched) {
