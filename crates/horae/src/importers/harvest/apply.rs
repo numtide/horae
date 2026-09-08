@@ -28,6 +28,21 @@ pub async fn apply_row(
     org: OrgDefaults<'_>,
     row: &SourceRow,
 ) -> RowResult {
+    for (entity, id) in [
+        (EntityType::Client, row.harvest_client_id),
+        (EntityType::Project, row.harvest_project_id),
+        (EntityType::Task, row.harvest_task_id),
+    ] {
+        if let Some(id) = id
+            && cache.parent_failed(entity, id)
+        {
+            return errored(
+                EntityType::TimeEntry,
+                row,
+                format!("{} {id} failed to import", entity.as_str()),
+            );
+        }
+    }
     let mut sp = match outer.begin().await {
         Ok(sp) => sp,
         Err(e) => {
@@ -65,19 +80,19 @@ async fn apply_within(
     let mut outcomes = Vec::new();
     let mut pending = PendingCache::default();
 
-    let client = resolve::resolve_client(sp, cache, org, row)
+    let client = resolve::resolve_client(sp, cache, org, &row.into())
         .await
         .map_err(|e| (EntityType::Client, e))?;
     let client_id = client.id;
     fold(&mut outcomes, &mut pending, EntityType::Client, client);
 
-    let project = resolve::resolve_project(sp, cache, org, client_id, row)
+    let project = resolve::resolve_project(sp, cache, org, client_id, &row.into())
         .await
         .map_err(|e| (EntityType::Project, e))?;
     let project_id = project.id;
     fold(&mut outcomes, &mut pending, EntityType::Project, project);
 
-    let task = resolve::resolve_task(sp, cache, org, row)
+    let task = resolve::resolve_task(sp, cache, org, &row.into())
         .await
         .map_err(|e| (EntityType::Task, e))?;
     let task_id = task.id;
@@ -278,7 +293,7 @@ fn entry_slot_key(
 
 /// Push a parent's outcome (when it was actually touched) and queue its cache
 /// entry for promotion on commit.
-fn fold(
+pub(super) fn fold(
     outcomes: &mut Vec<(EntityType, RowOutcome)>,
     pending: &mut PendingCache,
     entity: EntityType,

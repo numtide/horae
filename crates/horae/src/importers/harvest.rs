@@ -14,6 +14,7 @@ pub mod apply;
 pub mod credentials;
 pub mod csv_source;
 pub mod oauth;
+mod parents;
 pub mod provenance;
 pub mod report;
 pub mod resolve;
@@ -37,8 +38,8 @@ use resolve::{OrgDefaults, RunCache};
 use crate::config::HarvestConfig;
 
 /// A source of normalized rows the engine consumes lazily (research.md §9). Both
-/// adapters implement it: the CSV adapter walks its parsed records, the API
-/// adapter walks Harvest pages. Returning `None` ends the run.
+/// adapters implement it over parsed records. Returning `None` ends the run;
+/// this interface alone does not imply bounded memory or network streaming.
 pub trait RowSource {
     fn next_row(&mut self) -> impl Future<Output = anyhow::Result<Option<SourceRow>>> + Send;
 }
@@ -61,7 +62,8 @@ pub async fn run_import<S: RowSource>(
     };
     let mut connection = lock_import(pool, org_id).await?;
     let mut tx = connection.begin().await?;
-    let report = apply_rows(&mut tx, org, source, mode, src).await?;
+    let mut report = ImportReport::new(source, mode);
+    apply_rows(&mut tx, &mut RunCache::default(), &mut report, org, src).await?;
     match mode {
         ImportMode::Commit => tx.commit().await?,
         ImportMode::DryRun => tx.rollback().await?,
@@ -72,22 +74,20 @@ pub async fn run_import<S: RowSource>(
 
 async fn apply_rows<S: RowSource>(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    cache: &mut RunCache,
+    report: &mut ImportReport,
     org: OrgDefaults<'_>,
-    source: SourceKind,
-    mode: ImportMode,
     mut src: S,
-) -> anyhow::Result<ImportReport> {
-    let mut report = ImportReport::new(source, mode);
-    let mut cache = RunCache::default();
+) -> anyhow::Result<()> {
     while let Some(row) = src.next_row().await? {
-        let result = apply::apply_row(tx, &mut cache, org, &row).await;
+        let result = apply::apply_row(tx, cache, org, &row).await;
         for (entity, outcome) in &result.outcomes {
             report.record(*entity, outcome);
         }
     }
 
     debug_assert!(report.reconciles());
-    Ok(report)
+    Ok(())
 }
 
 /// An in-memory row source over a `Vec` — used by the CSV adapter (after parsing)
@@ -254,14 +254,18 @@ async fn apply_api_data(
         .max();
 
     let mut tx = connection.begin().await?;
-    let report = apply_rows(
+    let org = OrgDefaults {
+        org_id,
+        default_currency,
+    };
+    let mut cache = RunCache::default();
+    let mut report = ImportReport::new(SourceKind::HarvestApi, mode);
+    parents::apply(&mut tx, &mut cache, org, data, &mut report).await?;
+    apply_rows(
         &mut tx,
-        OrgDefaults {
-            org_id,
-            default_currency,
-        },
-        SourceKind::HarvestApi,
-        mode,
+        &mut cache,
+        &mut report,
+        org,
         ApiSource::from_data(data),
     )
     .await?;

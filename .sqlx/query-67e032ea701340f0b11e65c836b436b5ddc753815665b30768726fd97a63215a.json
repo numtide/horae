@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT harvest_updated_at as \"harvest_updated_at: DateTime<Utc>\" FROM harvest_import_map WHERE org_id = $1 AND harvest_entity_type = 'client' AND harvest_id = 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "harvest_updated_at: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "67e032ea701340f0b11e65c836b436b5ddc753815665b30768726fd97a63215a"
+}

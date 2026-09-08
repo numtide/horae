@@ -5,9 +5,9 @@
 //! network: [`assemble_rows`] is a **pure** join of already-fetched Harvest
 //! collections into `SourceRow`s (unit-tested against fixture JSON), while
 //! [`fetch_all`] does the paginated, rate-limit-aware HTTP with a bearer token.
-//! The parent collections (clients, projects, tasks, task assignments, users) are
-//! bounded and fetched in full; time entries are the large collection and are
-//! joined against those maps.
+//! Parent collections are fetched in full and applied separately by `parents`;
+//! time entries are joined against their metadata here. Fetching and assembly
+//! currently retain full collections in memory, not bounded network streams.
 
 use std::collections::HashMap;
 
@@ -27,6 +27,7 @@ pub struct ApiClient {
     pub is_active: bool,
     pub address: Option<String>,
     pub currency: Option<String>,
+    pub updated_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -46,6 +47,7 @@ pub struct ApiProject {
     pub client: ApiRef,
     pub starts_on: Option<NaiveDate>,
     pub ends_on: Option<NaiveDate>,
+    pub updated_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -54,6 +56,10 @@ pub struct ApiTask {
     pub name: String,
     #[serde(default = "yes")]
     pub billable_by_default: bool,
+    #[serde(default = "yes")]
+    pub is_active: bool,
+    pub default_hourly_rate: Option<serde_json::Number>,
+    pub updated_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -192,8 +198,8 @@ pub fn assemble_rows(data: &HarvestData) -> Vec<SourceRow> {
     rows
 }
 
-/// An assembled, in-memory API source. Parents are bounded; time entries are the
-/// bulk and are streamed out one at a time from the assembled vector.
+/// An assembled, in-memory source of time rows. Catalog records are applied
+/// separately before these rows, sharing the same transaction and run cache.
 pub struct ApiSource {
     rows: std::vec::IntoIter<SourceRow>,
 }

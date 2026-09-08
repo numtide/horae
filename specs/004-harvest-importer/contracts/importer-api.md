@@ -76,6 +76,22 @@ import_harvest_api(
 - **Authorization**: rejects non-administrators with `FORBIDDEN` (FR-001). Reads the acting admin + single org from the session/`AppState`.
 - **Precondition**: requires a usable Harvest connection; with none, rejects up front with a clear "connect Harvest" message and no writes (FR-003). Refreshes an expired access token transparently; a failed refresh → reject with "reconnect Harvest" (FR-024).
 - **Pull**: fetches clients → projects → tasks/assignments → users(reference) → time entries, following pagination and respecting the rate limit (FR-023), then feeds the normalized rows through the shared engine.
+
+API clients, projects and tasks are applied as independent catalog records before
+time entries, including records with no time. They reuse the same provenance-first
+resolvers as denormalized time/CSV rows. The catalog and time phases share one
+run cache, report and outer transaction: parents are counted once, dry-run rolls
+back both phases, and a watermark-write failure also rolls back catalog writes.
+An import containing only parents does not invent a time-entry watermark.
+
+Each catalog record has its own savepoint. A failed parent is reported by type
+and Harvest ID; dependent projects/time entries fail visibly instead of creating
+placeholder parents. Independent records continue. A project whose client is
+absent from the client collection may resolve existing provenance or use its
+embedded client name. An ID without either is not enough to create a client.
+Parent errors retain the previous incremental watermark, so a corrected retry
+can recover dependent time. Existing matched records remain unchanged (FR-017).
+
 - **`mode = DryRun`**: full pull → resolve → plan against live data, returns the report with **zero writes** — no data, no provenance, no watermark update (FR-014). `mode = Commit`: applies the plan and writes provenance + advances the watermark on success (FR-015, FR-025, FR-026).
 - **`SyncScope`** is a plainly named two-state enum (not `Option<bool>`); `Incremental` sends `updated_since` from `harvest_credentials.synced_watermark`.
 
