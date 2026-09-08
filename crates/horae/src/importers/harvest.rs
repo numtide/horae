@@ -20,6 +20,8 @@ pub mod resolve;
 
 #[cfg(test)]
 mod engine_tests;
+#[cfg(test)]
+mod sync_tests;
 
 use chrono::{DateTime, Utc};
 use horae_core::importers::harvest::types::{
@@ -43,34 +45,43 @@ pub trait RowSource {
 
 /// Drive a source through the engine and return the run report. In `Commit` mode
 /// the outer transaction is committed; in `DryRun` it is rolled back so nothing
-/// persists (FR-014). Advancing the incremental watermark on a committing API run
-/// is the caller's responsibility, done only after this returns success.
+/// persists (FR-014). API synchronization uses the same row pipeline inside a
+/// transaction shared with its watermark update.
 pub async fn run_import<S: RowSource>(
     pool: &PgPool,
     org_id: Uuid,
     default_currency: &str,
     source: SourceKind,
     mode: ImportMode,
-    mut src: S,
+    src: S,
 ) -> anyhow::Result<ImportReport> {
-    let mut report = ImportReport::new(source, mode);
-    let mut cache = RunCache::default();
     let org = OrgDefaults {
         org_id,
         default_currency,
     };
-
     let mut tx = pool.begin().await?;
-    while let Some(row) = src.next_row().await? {
-        let result = apply::apply_row(&mut tx, &mut cache, org, &row).await;
-        for (entity, outcome) in &result.outcomes {
-            report.record(*entity, outcome);
-        }
-    }
-
+    let report = apply_rows(&mut tx, org, source, mode, src).await?;
     match mode {
         ImportMode::Commit => tx.commit().await?,
         ImportMode::DryRun => tx.rollback().await?,
+    }
+    Ok(report)
+}
+
+async fn apply_rows<S: RowSource>(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    org: OrgDefaults<'_>,
+    source: SourceKind,
+    mode: ImportMode,
+    mut src: S,
+) -> anyhow::Result<ImportReport> {
+    let mut report = ImportReport::new(source, mode);
+    let mut cache = RunCache::default();
+    while let Some(row) = src.next_row().await? {
+        let result = apply::apply_row(tx, &mut cache, org, &row).await;
+        for (entity, outcome) in &result.outcomes {
+            report.record(*entity, outcome);
+        }
     }
 
     debug_assert!(report.reconciles());
@@ -112,7 +123,7 @@ pub enum ApiImportError {
 /// Run a full/incremental import from the Harvest API through the shared engine
 /// (FR-023–FR-026). Loads the org's stored connection, refreshes an expired token
 /// transparently, pulls every collection, assembles rows, runs the engine, and —
-/// only on a committing run — advances the incremental watermark.
+/// only on an error-free committing run — advances the incremental watermark.
 pub async fn run_api_import(
     pool: &PgPool,
     org_id: Uuid,
@@ -160,32 +171,73 @@ pub async fn run_api_import(
     };
 
     // Fetch all collections off the async runtime (blocking ureq).
+    let capture_started_at = Utc::now();
     let access = conn.access_token.clone();
     let account = conn.account_id.clone();
     let data = tokio::task::spawn_blocking(move || fetch_all_collections(&access, &account, since))
         .await
         .map_err(|e| ApiImportError::Other(anyhow::anyhow!("fetch task panicked: {e}")))??;
 
-    // The highest `updated_at` we saw drives the next incremental watermark.
+    apply_api_data(
+        pool,
+        org_id,
+        default_currency,
+        mode,
+        &data,
+        capture_started_at,
+    )
+    .await
+    .map_err(Into::into)
+}
+
+async fn apply_api_data(
+    pool: &PgPool,
+    org_id: Uuid,
+    default_currency: &str,
+    mode: ImportMode,
+    data: &HarvestData,
+    capture_started_at: DateTime<Utc>,
+) -> anyhow::Result<ImportReport> {
+    // A missing timestamp cannot certify coverage. Empty responses likewise
+    // carry no source timestamp from which to advance the cursor.
     let high_water = data
         .time_entries
         .iter()
         .filter_map(|te| te.updated_at)
         .max();
 
-    let report = run_import(
-        pool,
-        org_id,
-        default_currency,
+    let mut tx = pool.begin().await?;
+    let report = apply_rows(
+        &mut tx,
+        OrgDefaults {
+            org_id,
+            default_currency,
+        },
         SourceKind::HarvestApi,
         mode,
-        ApiSource::from_data(&data),
+        ApiSource::from_data(data),
     )
     .await?;
 
-    if mode == ImportMode::Commit {
-        let mark = high_water.unwrap_or_else(Utc::now);
-        advance_all_watermarks(pool, org_id, mark).await?;
+    if mode == ImportMode::Commit
+        && report.error_count() == 0
+        && data
+            .time_entries
+            .iter()
+            .all(|entry| entry.updated_at.is_some())
+        && let Some(high_water) = high_water
+        && let Some(mark) = high_water
+            .min(capture_started_at)
+            .checked_sub_signed(chrono::Duration::seconds(1))
+    {
+        // Re-fetch changes made during capture, including a one-second overlap
+        // for timestamp precision and boundary inclusivity. Provenance makes
+        // those retries idempotent. Parents are always fetched in full.
+        credentials::advance_watermark(&mut *tx, org_id, &[(EntityType::TimeEntry, mark)]).await?;
+    }
+    match mode {
+        ImportMode::Commit => tx.commit().await?,
+        ImportMode::DryRun => tx.rollback().await?,
     }
 
     Ok(report)
@@ -229,17 +281,6 @@ fn parse_collection<T: serde::de::DeserializeOwned>(
         .into_iter()
         .map(|v| serde_json::from_value(v).map_err(Into::into))
         .collect()
-}
-
-/// Advance every entity's watermark to `mark` after a successful committing run.
-async fn advance_all_watermarks(
-    pool: &PgPool,
-    org_id: Uuid,
-    mark: DateTime<Utc>,
-) -> anyhow::Result<()> {
-    let marks: Vec<(EntityType, DateTime<Utc>)> =
-        EntityType::ALL.iter().map(|&e| (e, mark)).collect();
-    credentials::advance_watermark(pool, org_id, &marks).await
 }
 
 // ── OAuth connect: session nonce + callback route ─────────────────────────────

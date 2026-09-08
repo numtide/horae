@@ -168,13 +168,16 @@ pub async fn update_tokens(
     Ok(())
 }
 
-/// Advance the per-entity incremental-sync watermark after a successful
-/// committing run (FR-025). Never called for a dry-run.
-pub async fn advance_watermark(
-    pool: &sqlx::PgPool,
+/// Advance the per-entity incremental-sync watermark (FR-025). The API importer
+/// enlists this write in its data transaction, only for an error-free commit.
+pub async fn advance_watermark<'e, E>(
+    exec: E,
     org_id: Uuid,
     marks: &[(EntityType, DateTime<Utc>)],
-) -> anyhow::Result<()> {
+) -> anyhow::Result<()>
+where
+    E: sqlx::PgExecutor<'e>,
+{
     if marks.is_empty() {
         return Ok(());
     }
@@ -193,7 +196,7 @@ pub async fn advance_watermark(
         org_id,
         patch,
     )
-    .execute(pool)
+    .execute(exec)
     .await?;
     Ok(())
 }

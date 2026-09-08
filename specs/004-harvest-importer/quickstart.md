@@ -50,11 +50,15 @@ cargo run -p horae --features server -- import harvest-api --full      # unchang
 cargo run -p horae --features server -- import harvest-api --incremental
 ```
 
-**Expected**: an incremental re-sync fetches only records Harvest changed since the last successful run (`updated_since` from the stored watermark) and applies just those, leaving unchanged records intact (SC-008).
+**Expected**: an incremental re-sync filters time entries using `updated_since` from the stored watermark; parent collections are still fetched in full. Only the time-entry watermark advances, bounded by both the latest source timestamp and the start of the fetch, with a one-second overlap for timestamp precision and boundary records. Provenance keeps repeated boundary records duplicate-free. An empty response or any missing time-entry timestamp leaves the previous watermark unchanged (SC-008).
 
 ## Scenario 5 — Partial success reconciles (US4, FR-018/020/021, SC-005)
 
 **Expected** (already observable from Scenario 3's report): valid records imported, invalid records skipped with per-record reasons and their source location, no partial fragments (and no dangling provenance rows) left behind, and per entity type `processed = created + updated + skipped + errored`.
+
+For the API path, include an older entry whose user is absent from Horae and a newer valid entry. After the partial import, the previous watermark must remain unchanged. Create the missing user and run an incremental sync: the failed entry is now created, the already-imported entry is skipped, and the error-free run can advance the watermark. No retry queue is needed; failed runs deliberately retain the earlier fetch boundary. Successful data writes and their watermark update commit in one transaction, so a failed watermark write rolls back that run's data and provenance as well.
+
+If a previous version already advanced past failed records, correct their reported errors and run a full sync once; retaining the current watermark cannot recover records that an older run already excluded.
 
 ## Scenario 6 — CSV fallback (secondary source, US5)
 
