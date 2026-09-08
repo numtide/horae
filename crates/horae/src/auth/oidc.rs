@@ -22,6 +22,8 @@ use uuid::Uuid;
 
 use crate::auth::session::set_session_user_id;
 use crate::config::OidcConfig;
+use crate::models::User;
+use horae_core::types::OrgRole;
 
 /// Session key holding the in-flight authorization request's CSRF, PKCE, and
 /// nonce secrets between `/auth/login` and `/auth/callback`.
@@ -209,19 +211,14 @@ fn resolve_identity(
     Resolution::DenyNoUser
 }
 
-/// Look up the identity, apply [`resolve_identity`], and on success write the
-/// session and dispatch `user_logged_in`. Returns `Ok(true)` when logged in.
-async fn resolve_and_login(
-    state: &'static crate::state::AppState,
-    session: &Session,
-    identity: &Identity,
-) -> anyhow::Result<bool> {
-    let by_subject = fetch_by_subject(state, &identity.subject).await?;
+/// Resolve a verified identity to the account that may receive a session.
+async fn resolve_user(db: &sqlx::PgPool, identity: &Identity) -> anyhow::Result<Option<User>> {
+    let by_subject = fetch_by_subject(db, &identity.subject).await?;
     // Only an as-yet-unlinked account may be claimed by a verified email — a
     // first-login bootstrap. This prevents a different subject with a matching
     // email from silently rebinding an already-linked account.
     let by_email = match (identity.email_verified, &identity.email) {
-        (true, Some(email)) => fetch_unlinked_by_email(state, email).await?,
+        (true, Some(email)) => fetch_unlinked_by_email(db, email).await?,
         _ => None,
     };
 
@@ -243,23 +240,50 @@ async fn resolve_and_login(
         }
         Resolution::DenyNoUser => {
             tracing::warn!("OIDC login denied: no account for subject/email");
-            return Ok(false);
+            return Ok(None);
         }
         Resolution::DenyInactive => {
             tracing::warn!("OIDC login denied: account is deactivated");
-            return Ok(false);
+            return Ok(None);
         }
     };
 
     if link_subject {
-        // Guard the link on the row still being unlinked, closing the window
-        // between the read above and this write.
-        sqlx::query("UPDATE users SET oidc_subject = $1 WHERE id = $2 AND oidc_subject IS NULL")
-            .bind(&identity.subject)
-            .bind(user.id)
-            .execute(&state.db)
-            .await?;
+        let linked = sqlx::query_as!(
+            User,
+            r#"UPDATE users SET oidc_subject = $1
+               WHERE id = $2 AND oidc_subject IS NULL AND active
+               RETURNING id, org_id, email, name, oidc_subject,
+                         org_role as "org_role: OrgRole",
+                         cost_rate_cents, billable_rate_cents, active,
+                         created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
+            identity.subject,
+            user.id,
+        )
+        .fetch_optional(db)
+        .await?;
+        if linked.is_some() {
+            return Ok(linked);
+        }
+        // A concurrent callback may have linked the row. Only the same subject
+        // winning that same active account is allowed to receive a session.
+        return Ok(fetch_by_subject(db, &identity.subject)
+            .await?
+            .filter(|current| current.id == user.id && current.active));
     }
+
+    Ok(Some(user))
+}
+
+/// Resolve the identity before creating a session or dispatching a login event.
+async fn resolve_and_login(
+    state: &'static crate::state::AppState,
+    session: &Session,
+    identity: &Identity,
+) -> anyhow::Result<bool> {
+    let Some(user) = resolve_user(&state.db, identity).await? else {
+        return Ok(false);
+    };
 
     // Rotate the session id on the privilege change to defeat session fixation:
     // any pre-auth id an attacker may have fixed is discarded before we mark the
@@ -291,35 +315,36 @@ fn candidate(u: &crate::models::User) -> Candidate {
     }
 }
 
-/// Columns for the `User` model, shared by the runtime (non-macro) queries
-/// here and in `auth::dev` so they cannot drift from each other.
-pub(crate) const USER_COLUMNS: &str = "id, org_id, email, name, oidc_subject, org_role, \
-     cost_rate_cents, billable_rate_cents, active, created_at";
-
 /// The user already linked to this OIDC subject, if any.
-async fn fetch_by_subject(
-    state: &crate::state::AppState,
-    subject: &str,
-) -> anyhow::Result<Option<crate::models::User>> {
-    let sql = format!("SELECT {USER_COLUMNS} FROM users WHERE oidc_subject = $1");
-    let user = sqlx::query_as::<_, crate::models::User>(&sql)
-        .bind(subject)
-        .fetch_optional(&state.db)
-        .await?;
+async fn fetch_by_subject(db: &sqlx::PgPool, subject: &str) -> anyhow::Result<Option<User>> {
+    let user = sqlx::query_as!(
+        User,
+        r#"SELECT id, org_id, email, name, oidc_subject,
+                  org_role as "org_role: OrgRole",
+                  cost_rate_cents, billable_rate_cents, active,
+                  created_at as "created_at: chrono::DateTime<chrono::Utc>"
+           FROM users WHERE oidc_subject = $1"#,
+        subject,
+    )
+    .fetch_optional(db)
+    .await?;
     Ok(user)
 }
 
 /// The user with this email that has **not** yet been linked to any OIDC
 /// subject — the only account a verified email is allowed to claim (FR-002).
-async fn fetch_unlinked_by_email(
-    state: &crate::state::AppState,
-    email: &str,
-) -> anyhow::Result<Option<crate::models::User>> {
-    let sql = format!("SELECT {USER_COLUMNS} FROM users WHERE email = $1 AND oidc_subject IS NULL");
-    let user = sqlx::query_as::<_, crate::models::User>(&sql)
-        .bind(email)
-        .fetch_optional(&state.db)
-        .await?;
+async fn fetch_unlinked_by_email(db: &sqlx::PgPool, email: &str) -> anyhow::Result<Option<User>> {
+    let user = sqlx::query_as!(
+        User,
+        r#"SELECT id, org_id, email, name, oidc_subject,
+                  org_role as "org_role: OrgRole",
+                  cost_rate_cents, billable_rate_cents, active,
+                  created_at as "created_at: chrono::DateTime<chrono::Utc>"
+           FROM users WHERE email = $1 AND oidc_subject IS NULL"#,
+        email,
+    )
+    .fetch_optional(db)
+    .await?;
     Ok(user)
 }
 
@@ -470,6 +495,8 @@ fn discover_client(cfg: &OidcConfig) -> anyhow::Result<CoreClient> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    mod linking;
 
     fn active(id: Uuid) -> Candidate {
         Candidate { id, active: true }
