@@ -187,18 +187,18 @@ ______________________________________________________________________
 
 ## Host functions
 
-Horae exposes exactly these host functions to plugins via extism's `host_fn!` macro.
-A plugin's capabilities are limited to this set (FR-020) — there is no filesystem,
-no arbitrary syscalls, and **no data-write access**.
+Horae exposes these host functions through Extism. Only install trusted plugins:
+the current SQL host function uses the application database pool, and its syntax
+guard does not isolate the privileges of SQL functions. Separate database
+credentials and grants are still required to meet FR-020's read-only guarantee.
 
 1. `horae_log(level, message)` — structured logging. `level` is one of
    `"error" | "warn" | "info" | "debug"`; `message` is a string. Returns nothing.
    Entries are written to the host log annotated with the plugin name.
 1. `horae_db_query(sql, params_json) -> rows_json` — **read-only** SQL lookup. `sql`
    is a query string; `params_json` is a JSON array of bind parameters; the result is
-   a JSON array of row objects. The connection is constrained to read-only
-   (SELECT-only); any attempt to mutate data is rejected (FR-020: plugins MUST NOT
-   modify stored data directly).
+   a JSON array of row objects. Direct write statements are rejected, but this is
+   not yet a database privilege boundary (see the warning above).
 1. `horae_http_post(url, body_json) -> response_json` — outbound HTTP POST for
    webhooks and integrations. `url` is the target; `body_json` is the request body;
    the return is a JSON object with the response status and body. Subject to the
@@ -213,15 +213,22 @@ Each host function takes a single JSON-string argument and (except `horae_log`)
 returns a single JSON string, consistent across all four:
 
 - `horae_db_query` — in `{"sql": string, "params": [ ... ]}`; out a JSON array of row
-  objects, or `{"error": string}`. Read-only is enforced twice: a `SELECT`/`WITH`
+  objects, or `{"error": string}`. A `SELECT`/`WITH`
   prefix guard rejects a leading write or a second `;`-separated statement, and the
   query is executed wrapped as `SELECT json_agg(_t) FROM (<sql>) _t`, a subquery form
-  Postgres accepts only for a `SELECT`. Postgres also does the row→JSON serialisation.
-- `horae_http_post` — in `{"url": string, "body": <json>}`; out `{"status": u16, "body": string}`, or `{"error": string}`. Bounded by a 10-second timeout.
+  Postgres accepts only for a `SELECT`. This is a syntax check, not a privilege
+  boundary. Queries have a 5-second deadline and transaction-local statement
+  timeout; the transaction is rolled back even on success. Postgres performs
+  row→JSON serialization; the response limit is checked after that aggregation.
+- `horae_http_post` — in `{"url": string, "body": <json>}`; out `{"status": u16, "body": string}`, or `{"error": string}`. Bounded by a 10-second timeout and a 1 MiB response body. Invalid UTF-8 and oversized responses are reported as errors.
 - `horae_config_get` — in `{"key": string}`; out the JSON string value or JSON `null`.
 
 Per-plugin configuration lives in an optional top-level `[config]` table in the
 plugin's `plugin.toml` (string keys and values), read only by that plugin.
+
+Host requests and serialized responses are limited to 1 MiB. Event payloads and
+plugin return values have the same limit. An oversized host request/response
+fails the invocation before copying it into another WASM/host buffer.
 
 ______________________________________________________________________
 
@@ -262,19 +269,30 @@ These guarantees implement FR-020 and FR-021 and the spec's plugin edge cases.
    no filesystem, no ambient capabilities (FR-020). A malformed, unsupported, or
    malicious module is rejected at load time and never gains capabilities beyond those
    explicitly granted.
-1. **Concurrent dispatch.** On each business event, `registry.dispatch(event)` invokes
-   all subscribed plugins concurrently; plugins do not block one another.
-1. **Timeouts.** Every plugin invocation is bounded by a host-enforced timeout. A
-   plugin that hangs is aborted when the timeout elapses (targets SC-006: an event
-   reaches subscribers within ~1 second and a slow plugin never stalls the core).
+1. **Concurrent dispatch.** On each business event, `registry.dispatch(event)` schedules
+   subscribed plugins on blocking workers, never on the async runtime's workers.
+   Each instance executes one invocation at a time. The registry admits at most
+   64 pending/running calls and runs at most 8 concurrently, shared by events and
+   widgets. Delivery is best-effort: exhausted capacity or an oversized payload is
+   logged and skipped, without delaying or undoing the core action.
+1. **Timeouts and memory.** Waiting for an instance and worker is limited to 5 seconds;
+   execution has a separate 5-second timeout. Each linear memory is limited to
+   1,024 memory pages (64 MiB), including its initial allocation. The engine caps
+   memories, instances, and tables at four each, allowing for Extism's kernel and
+   auxiliary guest instances. On timeout, the host requests engine cancellation.
+   Already-running synchronous host I/O cannot be preempted: its own timeout still
+   applies, and its instance lock and capacity permits remain held until it exits.
+   Dropping an async waiter likewise does not release a still-running call's
+   capacity. These limits keep slow plugins off the async runtime's workers; they
+   are not a guarantee that a synchronous host call ends at exactly 5 seconds.
 1. **Failure isolation.** A plugin that errors, panics, times out, or attempts a
    disallowed action does **not** block, delay, or corrupt the core action that
    triggered the event. The core mutation has already been committed before dispatch;
    plugin outcomes cannot roll it back (FR-021). Failures are caught, isolated to the
    offending plugin, and logged with the plugin name.
-1. **No direct datastore writes.** The only data access is `horae_db_query`
-   (read-only). There is no host function that lets a plugin write to the database,
-   satisfying FR-020 and the "cannot corrupt the core action" requirement of FR-021.
+1. **Datastore access.** `horae_db_query` accepts SELECT-shaped statements and rolls
+   back its transaction, but still uses the application role. This does not yet
+   satisfy FR-020 against untrusted SQL functions or unrestricted data reads.
 
 ______________________________________________________________________
 
