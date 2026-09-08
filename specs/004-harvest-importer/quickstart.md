@@ -7,7 +7,7 @@ Runnable validation guide proving the importer works end-to-end. The **primary f
 ```sh
 nix develop                                  # dev shell
 export DATABASE_URL=postgres://localhost/horae
-cargo run -p horae --features server -- migrate run    # applies the two new tables: harvest_credentials, harvest_import_map
+cargo run -p horae --features server -- migrate run    # includes credentials, provenance and account binding
 # Provision the users whose time will be imported (importer matches by email, never creates users):
 cargo run -p horae --features server -- user create --email dev@example.com --name "Dev User" --role member
 ```
@@ -21,6 +21,42 @@ For the API flow, configure the Harvest OAuth app credentials (client id/secret,
 1. Harvest redirects back to `/auth/harvest/callback`; Horae exchanges the code, resolves the Harvest account id, and stores the access + refresh tokens **encrypted** in `harvest_credentials`.
 
 **Expected**: the screen shows a connected state (account id, token freshness) — and the tokens themselves are never shown or logged. No Harvest data is read until an import is run.
+
+## Account identity and recovery
+
+Each Horae organization is bound to its first connected Harvest account, including
+after **Disconnect**. Reconnecting the same account can replace expired tokens or
+recover from encryption-key rotation. Connecting another account returns a clear
+conflict without replacing credentials, watermarks, provenance or imported data.
+Disconnect removes OAuth secrets and the watermark, not imported records or the
+binding; a subsequent same-account sync safely replays records by Harvest ID.
+
+Before deploying the account-binding migration, stop all Horae server instances
+and importer processes, apply migrations, then restart all instances on the new
+version. The migration binds existing credential rows to their recorded accounts.
+It cannot reconstruct the source account of old provenance if credentials were
+already deleted, nor repair mappings mixed by an earlier account switch.
+
+For the specific error about **unverified existing import identities**:
+
+1. Back up the database and stop all server/importer processes.
+1. Verify the original Harvest account ID against a trusted credential backup or
+   import records. Confirm that all of the organization's existing provenance
+   belongs to that one account. Do not infer identity from matching numeric IDs
+   or client/project names alone. If identity cannot be established, leave the
+   connection blocked and retain the data for review.
+1. Check that no `harvest_account_bindings` or `harvest_credentials` row exists
+   for that organization. Restore only the missing binding with an operator SQL
+   `INSERT INTO harvest_account_bindings (org_id, harvest_account_id)` using the
+   verified organization UUID and original account ID. Do not overwrite an
+   existing binding or delete provenance to get past the guard.
+1. Restart Horae, reconnect the verified original account, preview a full sync,
+   and review the report before committing it.
+
+This is identity recovery, not an account-switch procedure. Importing a different
+account requires a separate Horae deployment/database or an explicitly designed
+data migration that reconciles existing identities and monetary history. No
+automatic reset, data deletion or cross-account migration is provided.
 
 ## Scenario 2 — Dry-run the API import previews without writing (US3, FR-014)
 
