@@ -1,12 +1,14 @@
-/// Seed the database with a demo organisation, users, clients, projects, tasks,
-/// and sample time entries covering the current ISO week (Mon–Fri).
-///
-/// All INSERTs use ON CONFLICT DO NOTHING so this is safe to run multiple times.
+//! Initialize an empty database with a demo organization and the current ISO
+//! week's sample time. Existing demos, including older or edited ones, are left
+//! untouched: restarting the demo must not add time or restore deleted data.
 use chrono::{NaiveDate, Utc};
 use horae_core::types::{BudgetKind, OrgRole, ProjectRole, ProjectType, RoundDir};
 use horae_core::week::iso_week_monday;
 use sqlx::PgPool;
 use uuid::Uuid;
+
+#[cfg(test)]
+mod tests;
 
 // ── Fixed UUIDs for idempotent seeding ───────────────────────────────────────
 
@@ -32,78 +34,91 @@ const TASK_MEETING_ID: Uuid = Uuid::from_u128(0x0195_0000_0000_7000_8000_0000000
 const TASK_REVIEW_ID: Uuid = Uuid::from_u128(0x0195_0000_0000_7000_8000_00000000000a);
 
 pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
+    let mut tx = pool.begin().await?;
+    // Serialize bootstrap, including an empty table with no row to lock. `init`
+    // takes the same lock before checking for an existing organization.
+    sqlx::query!("LOCK TABLE organizations IN SHARE ROW EXCLUSIVE MODE")
+        .execute(&mut *tx)
+        .await?;
+    let organizations = sqlx::query_scalar!("SELECT id FROM organizations LIMIT 2")
+        .fetch_all(&mut *tx)
+        .await?;
+    if organizations.iter().any(|id| *id != ORG_ID) {
+        anyhow::bail!(
+            "An organization already exists — `seed` only initializes an empty demo installation."
+        );
+    }
+    if !organizations.is_empty() {
+        tx.commit().await?;
+        tracing::info!("Demo organization already exists; leaving all data unchanged.");
+        return Ok(());
+    }
     tracing::info!("Seeding demo data…");
 
     // Organisation
     sqlx::query!(
         "INSERT INTO organizations (id, name, default_currency, week_start, round_minutes, round_dir)
-         VALUES ($1, $2, 'EUR', 1, 15, $3)
-         ON CONFLICT (id) DO NOTHING",
+         VALUES ($1, $2, 'EUR', 1, 15, $3)",
         ORG_ID,
         "Demo Org",
         RoundDir::Nearest as RoundDir,
     )
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
 
     // Admin user (used for DEV_LOGIN)
     sqlx::query!(
         "INSERT INTO users (id, org_id, email, name, org_role, billable_rate_cents)
-         VALUES ($1, $2, 'admin@example.com', 'Admin User', $3, 10000)
-         ON CONFLICT (id) DO NOTHING",
+         VALUES ($1, $2, 'admin@example.com', 'Admin User', $3, 10000)",
         ADMIN_ID,
         ORG_ID,
         OrgRole::Admin as OrgRole,
     )
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
 
     // Clients
     sqlx::query!(
         "INSERT INTO clients (id, org_id, name, currency)
-         VALUES ($1, $2, 'Acme Corp', 'EUR')
-         ON CONFLICT (id) DO NOTHING",
+         VALUES ($1, $2, 'Acme Corp', 'EUR')",
         CLIENT_ACME_ID,
         ORG_ID,
     )
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
 
     sqlx::query!(
         "INSERT INTO clients (id, org_id, name, currency)
-         VALUES ($1, $2, 'TechStart Inc', 'USD')
-         ON CONFLICT (id) DO NOTHING",
+         VALUES ($1, $2, 'TechStart Inc', 'USD')",
         CLIENT_TECH_ID,
         ORG_ID,
     )
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
 
     // Projects
     sqlx::query!(
         "INSERT INTO projects (id, org_id, client_id, code, name, project_type, currency, budget_kind, budget_minutes)
-         VALUES ($1, $2, $3, 'ACME-01', 'Acme Website Redesign', $4, 'EUR', $5, 12000)
-         ON CONFLICT (id) DO NOTHING",
+         VALUES ($1, $2, $3, 'ACME-01', 'Acme Website Redesign', $4, 'EUR', $5, 12000)",
         PROJ_ACME_ID,
         ORG_ID,
         CLIENT_ACME_ID,
         ProjectType::TimeAndMaterials as ProjectType,
         BudgetKind::Hours as BudgetKind,
     )
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
 
     sqlx::query!(
         "INSERT INTO projects (id, org_id, client_id, code, name, project_type, currency, budget_kind, budget_amount_cents)
-         VALUES ($1, $2, $3, 'TECH-01', 'TechStart API Integration', $4, 'USD', $5, 1500000)
-         ON CONFLICT (id) DO NOTHING",
+         VALUES ($1, $2, $3, 'TECH-01', 'TechStart API Integration', $4, 'USD', $5, 1500000)",
         PROJ_TECH_ID,
         ORG_ID,
         CLIENT_TECH_ID,
         ProjectType::FixedFee as ProjectType,
         BudgetKind::Amount as BudgetKind,
     )
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
 
     // Tasks (org-level catalog)
@@ -115,15 +130,14 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
     ] {
         sqlx::query!(
             "INSERT INTO tasks (id, org_id, name, billable_default, default_rate_cents)
-             VALUES ($1, $2, $3, $4, $5)
-             ON CONFLICT (id) DO NOTHING",
+             VALUES ($1, $2, $3, $4, $5)",
             id,
             ORG_ID,
             name,
             billable,
             rate_cents,
         )
-        .execute(pool)
+        .execute(&mut *tx)
         .await?;
     }
 
@@ -138,15 +152,13 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
     ] {
         sqlx::query!(
             "INSERT INTO project_tasks (project_id, task_id, billable, rate_cents)
-             VALUES ($1, $2, $3, $4)
-             ON CONFLICT (project_id, task_id) DO UPDATE
-             SET rate_cents = EXCLUDED.rate_cents",
+             VALUES ($1, $2, $3, $4)",
             proj_id,
             task_id,
             billable,
             rate_cents,
         )
-        .execute(pool)
+        .execute(&mut *tx)
         .await?;
     }
 
@@ -154,13 +166,13 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
     for proj_id in [PROJ_ACME_ID, PROJ_TECH_ID] {
         sqlx::query!(
             "INSERT INTO assignments (id, project_id, user_id, role, rate_cents)
-             VALUES (gen_random_uuid(), $1, $2, $3, 12000)
-             ON CONFLICT (project_id, user_id) DO NOTHING",
+             VALUES ($1, $2, $3, $4, 12000)",
+            Uuid::now_v7(),
             proj_id,
             ADMIN_ID,
             ProjectRole::Lead as ProjectRole,
         )
-        .execute(pool)
+        .execute(&mut *tx)
         .await?;
     }
 
@@ -260,8 +272,8 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
         sqlx::query!(
             "INSERT INTO time_entries
                (id, org_id, user_id, project_id, task_id, spent_date, minutes, notes, billable)
-             VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8)
-             ON CONFLICT DO NOTHING",
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+            Uuid::now_v7(),
             ORG_ID,
             ADMIN_ID,
             *project_id,
@@ -271,10 +283,11 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
             *notes,
             *billable,
         )
-        .execute(pool)
+        .execute(&mut *tx)
         .await?;
     }
 
+    tx.commit().await?;
     tracing::info!("Seed complete.");
     Ok(())
 }
