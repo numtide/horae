@@ -116,6 +116,25 @@ fn disconnected_config() -> crate::config::HarvestConfig {
 }
 
 #[sqlx::test(migrations = "./migrations")]
+async fn completed_imports_allow_immediate_retries(pool: PgPool) {
+    let org = seed_org(&pool).await;
+    for _ in 0..64 {
+        for mode in [ImportMode::Commit, ImportMode::DryRun] {
+            run_import(
+                &pool,
+                org,
+                "USD",
+                SourceKind::Csv,
+                mode,
+                VecSource::new(vec![]),
+            )
+            .await
+            .unwrap();
+        }
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn cancelled_http_waiter_keeps_the_lock_until_its_worker_exits(pool: PgPool) {
     let org = seed_org(&pool).await;
     let one_connection = sqlx::postgres::PgPoolOptions::new()
