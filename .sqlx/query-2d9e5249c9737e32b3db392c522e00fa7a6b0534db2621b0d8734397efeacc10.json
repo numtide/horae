@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) FROM harvest_import_map WHERE org_id = $1 AND harvest_entity_type = 'time_entry'::harvest_entity_type",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2d9e5249c9737e32b3db392c522e00fa7a6b0534db2621b0d8734397efeacc10"
+}

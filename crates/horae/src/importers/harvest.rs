@@ -18,20 +18,22 @@ mod parents;
 pub mod provenance;
 pub mod report;
 pub mod resolve;
+mod streaming;
 
 #[cfg(test)]
 mod engine_tests;
 #[cfg(test)]
 mod sync_tests;
 
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use horae_core::importers::harvest::types::{
     EntityType, ImportMode, SourceKind, SourceRow, SyncScope,
 };
 use sqlx::{Acquire, PgPool};
 use uuid::Uuid;
 
-use api_source::{ApiSource, HarvestData};
+#[cfg(test)]
+use api_source::HarvestData;
 use report::ImportReport;
 use resolve::{OrgDefaults, RunCache};
 
@@ -110,8 +112,8 @@ impl RowSource for VecSource {
     }
 }
 
-/// Why an API import could not even start (FR-003, FR-024). Distinct from the
-/// per-record errors inside a report — these reject the whole run up front.
+/// Run-level failures (FR-003, FR-024), distinct from per-record report errors.
+/// A failed download or transaction leaves no partially committed import.
 #[derive(Debug, thiserror::Error)]
 pub enum ApiImportError {
     #[error(
@@ -165,7 +167,7 @@ async fn blocking_import_call<T: Send + 'static>(
 
 /// Run a full/incremental import from the Harvest API through the shared engine
 /// (FR-023–FR-026). Loads the org's stored connection, refreshes an expired token
-/// transparently, pulls every collection, assembles rows, runs the engine, and —
+/// transparently, indexes catalogs, streams time-entry pages through the engine, and —
 /// only on an error-free committing run — advances the incremental watermark.
 pub async fn run_api_import(
     pool: &PgPool,
@@ -174,6 +176,27 @@ pub async fn run_api_import(
     cfg: &HarvestConfig,
     mode: ImportMode,
     sync: SyncScope,
+) -> Result<ImportReport, ApiImportError> {
+    run_api_import_with_http(
+        pool,
+        org_id,
+        default_currency,
+        cfg,
+        mode,
+        sync,
+        api_source::http::ApiHttp::new()?,
+    )
+    .await
+}
+
+async fn run_api_import_with_http(
+    pool: &PgPool,
+    org_id: Uuid,
+    default_currency: &str,
+    cfg: &HarvestConfig,
+    mode: ImportMode,
+    sync: SyncScope,
+    http: api_source::http::ApiHttp,
 ) -> Result<ImportReport, ApiImportError> {
     let mut connection = lock_import(pool, org_id).await?;
     let key = &cfg.encryption_key_hex;
@@ -214,124 +237,18 @@ pub async fn run_api_import(
         SyncScope::Incremental => conn.watermark_for(EntityType::TimeEntry),
     };
 
-    // Fetch all collections off the async runtime (blocking ureq).
+    // A bounded queue joins blocking HTTP pages to the async row pipeline.
     let capture_started_at = Utc::now();
-    let access = conn.access_token.clone();
-    let account = conn.account_id.clone();
-    let (mut connection, data) = blocking_import_call(connection, move || {
-        fetch_all_collections(&access, &account, since)
-    })
-    .await?;
-    let data = data?;
-
-    let result = apply_api_data(
-        &mut connection,
+    streaming::run(
+        connection,
         org_id,
         default_currency,
         mode,
-        &data,
         capture_started_at,
+        move |pages| streaming::fetch(http, &conn.access_token, &conn.account_id, since, pages),
     )
-    .await;
-    connection.close().await.map_err(anyhow::Error::from)?;
-    result.map_err(Into::into)
-}
-
-async fn apply_api_data(
-    connection: &mut sqlx::PgConnection,
-    org_id: Uuid,
-    default_currency: &str,
-    mode: ImportMode,
-    data: &HarvestData,
-    capture_started_at: DateTime<Utc>,
-) -> anyhow::Result<ImportReport> {
-    // A missing timestamp cannot certify coverage. Empty responses likewise
-    // carry no source timestamp from which to advance the cursor.
-    let high_water = data
-        .time_entries
-        .iter()
-        .filter_map(|te| te.updated_at)
-        .max();
-
-    let mut tx = connection.begin().await?;
-    let org = OrgDefaults {
-        org_id,
-        default_currency,
-    };
-    let mut cache = RunCache::default();
-    let mut report = ImportReport::new(SourceKind::HarvestApi, mode);
-    parents::apply(&mut tx, &mut cache, org, data, &mut report).await?;
-    apply_rows(
-        &mut tx,
-        &mut cache,
-        &mut report,
-        org,
-        ApiSource::from_data(data),
-    )
-    .await?;
-
-    if mode == ImportMode::Commit
-        && report.error_count() == 0
-        && data
-            .time_entries
-            .iter()
-            .all(|entry| entry.updated_at.is_some())
-        && let Some(high_water) = high_water
-        && let Some(mark) = high_water
-            .min(capture_started_at)
-            .checked_sub_signed(chrono::Duration::seconds(1))
-    {
-        // Re-fetch changes made during capture, including a one-second overlap
-        // for timestamp precision and boundary inclusivity. Provenance makes
-        // those retries idempotent. Parents are always fetched in full.
-        credentials::advance_watermark(&mut *tx, org_id, &[(EntityType::TimeEntry, mark)]).await?;
-    }
-    match mode {
-        ImportMode::Commit => tx.commit().await?,
-        ImportMode::DryRun => tx.rollback().await?,
-    }
-
-    Ok(report)
-}
-
-/// Fetch every Harvest collection into a [`HarvestData`] (blocking). Parents in
-/// full; time entries filtered by `updated_since` on an incremental run.
-fn fetch_all_collections(
-    access_token: &str,
-    account_id: &str,
-    since: Option<DateTime<Utc>>,
-) -> anyhow::Result<HarvestData> {
-    use api_source::*;
-    let agent = ureq::agent();
-    let clients = parse_collection::<ApiClient>(&agent, access_token, account_id, "clients", None)?;
-    let projects =
-        parse_collection::<ApiProject>(&agent, access_token, account_id, "projects", None)?;
-    let tasks = parse_collection::<ApiTask>(&agent, access_token, account_id, "tasks", None)?;
-    let users = parse_collection::<ApiUser>(&agent, access_token, account_id, "users", None)?;
-    let time_entries =
-        parse_collection::<ApiTimeEntry>(&agent, access_token, account_id, "time_entries", since)?;
-    Ok(HarvestData {
-        clients,
-        projects,
-        tasks,
-        users,
-        time_entries,
-    })
-}
-
-/// Fetch one collection and deserialize each item into `T`.
-fn parse_collection<T: serde::de::DeserializeOwned>(
-    agent: &ureq::Agent,
-    access_token: &str,
-    account_id: &str,
-    collection: &str,
-    since: Option<DateTime<Utc>>,
-) -> anyhow::Result<Vec<T>> {
-    let items = api_source::fetch_all(agent, access_token, account_id, collection, since)?;
-    items
-        .into_iter()
-        .map(|v| serde_json::from_value(v).map_err(Into::into))
-        .collect()
+    .await
+    .map_err(Into::into)
 }
 
 // ── OAuth connect: session nonce + callback route ─────────────────────────────

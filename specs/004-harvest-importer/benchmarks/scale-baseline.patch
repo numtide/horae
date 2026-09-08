@@ -1,0 +1,164 @@
+diff --git a/crates/horae/src/importers/harvest/sync_tests/scale.rs b/crates/horae/src/importers/harvest/sync_tests/scale.rs
+new file mode 100644
+index 0000000..9838397
+--- /dev/null
++++ b/crates/horae/src/importers/harvest/sync_tests/scale.rs
+@@ -0,0 +1,145 @@
++//! Explicit release-mode scale checks. Run one test per process so Linux's
++//! process high-water RSS is not inherited from another benchmark scenario.
++//! This baseline includes JSON conversion, row assembly and SQL application,
++//! but not HTTP download latency or the memory of an external HTTP server.
++
++use std::time::Instant;
++
++use super::*;
++
++const RECORDS: u64 = 100_000;
++const INVALID: u64 = 100;
++
++fn memory_status() -> String {
++    std::fs::read_to_string("/proc/self/status")
++        .map(|status| {
++            status
++                .lines()
++                .filter(|line| line.starts_with("VmRSS:") || line.starts_with("VmHWM:"))
++                .collect::<Vec<_>>()
++                .join(", ")
++        })
++        .unwrap_or_else(|_| "RSS unavailable on this platform".into())
++}
++
++fn scale_data() -> HarvestData {
++    let mut data = valid_data();
++    let start = chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
++    // Reproduce the existing fetched-JSON -> typed-collection boundary. The
++    // first and every thousandth row has an unknown user; later rows must run.
++    let items: Vec<_> = (0..RECORDS)
++        .map(|n| {
++            json!({
++                "id": 1_000_000 + n,
++                "spent_date": start + chrono::Duration::days((n % 365) as i64),
++                "hours": 1,
++                "notes": format!("scale entry {n}"),
++                "project": {"id": 2},
++                "task": {"id": 3},
++                "user": {"id": if n % 1000 == 0 { 5 } else { 4 }},
++                "updated_at": day(3)
++            })
++        })
++        .collect();
++    eprintln!("fetched_json_records={RECORDS} {}", memory_status());
++    data.time_entries = items
++        .into_iter()
++        .map(|v| serde_json::from_value(v).unwrap())
++        .collect();
++    data
++}
++
++async fn assert_stored_rows(pool: &PgPool, org: Uuid, expected: i64) {
++    let stored = sqlx::query!(
++        "SELECT count(*) AS entries, COALESCE(sum(minutes), 0)::bigint AS minutes FROM time_entries WHERE org_id = $1",
++        org
++    ).fetch_one(pool).await.unwrap();
++    assert_eq!(stored.entries, Some(expected));
++    assert_eq!(stored.minutes, Some(expected * 60));
++    let provenance = sqlx::query_scalar!(
++        "SELECT count(*) FROM harvest_import_map WHERE org_id = $1 AND harvest_entity_type = 'time_entry'::harvest_entity_type",
++        org
++    ).fetch_one(pool).await.unwrap();
++    assert_eq!(provenance, Some(expected));
++    assert_eq!(watermark(pool, org).await, json!({}));
++}
++
++async fn measured_apply(
++    pool: &PgPool,
++    org: Uuid,
++    data: &HarvestData,
++    mode: ImportMode,
++) -> ImportReport {
++    let started = Instant::now();
++    eprintln!("apply_start mode={mode:?} {}", memory_status());
++    let report = apply_api_data(pool, org, "USD", mode, data, day(4))
++        .await
++        .unwrap();
++    eprintln!(
++        "apply_complete mode={mode:?} elapsed_s={:.3} {}",
++        started.elapsed().as_secs_f64(),
++        memory_status()
++    );
++    assert!(report.reconciles());
++    assert_eq!(report.summary.time_entries.processed(), RECORDS);
++    assert_eq!(report.summary.time_entries.errored, INVALID);
++    assert_eq!(report.error_count(), INVALID as usize);
++    assert!(
++        report
++            .row_errors
++            .iter()
++            .all(|e| e.reason.contains("no Horae user matches email"))
++    );
++    report
++}
++
++#[sqlx::test(migrations = "./migrations")]
++#[ignore = "100,000-entry scale measurement; run explicitly with --release --nocapture"]
++async fn api_100k_commit_and_reimport(pool: PgPool) {
++    assert!(
++        !cfg!(debug_assertions),
++        "scale measurements require --release"
++    );
++    let org = setup(&pool).await;
++    eprintln!("baseline {}", memory_status());
++    let started = Instant::now();
++    let data = scale_data();
++    eprintln!(
++        "typed_records elapsed_s={:.3} {}",
++        started.elapsed().as_secs_f64(),
++        memory_status()
++    );
++    let first = measured_apply(&pool, org, &data, ImportMode::Commit).await;
++    assert_eq!(first.summary.time_entries.created, RECORDS - INVALID);
++    assert_stored_rows(&pool, org, (RECORDS - INVALID) as i64).await;
++    let repeated = measured_apply(&pool, org, &data, ImportMode::Commit).await;
++    assert_eq!(repeated.summary.time_entries.created, 0);
++    assert_eq!(repeated.summary.time_entries.skipped, RECORDS - INVALID);
++    assert_stored_rows(&pool, org, (RECORDS - INVALID) as i64).await;
++}
++
++#[sqlx::test(migrations = "./migrations")]
++#[ignore = "100,000-entry scale measurement; run explicitly with --release --nocapture"]
++async fn api_100k_dry_run(pool: PgPool) {
++    assert!(
++        !cfg!(debug_assertions),
++        "scale measurements require --release"
++    );
++    let org = setup(&pool).await;
++    eprintln!("baseline {}", memory_status());
++    let started = Instant::now();
++    let data = scale_data();
++    eprintln!(
++        "typed_records elapsed_s={:.3} {}",
++        started.elapsed().as_secs_f64(),
++        memory_status()
++    );
++    let preview = measured_apply(&pool, org, &data, ImportMode::DryRun).await;
++    assert_eq!(preview.summary.time_entries.created, RECORDS - INVALID);
++    assert_stored_rows(&pool, org, 0).await;
++    let parents = sqlx::query_scalar!("SELECT count(*) FROM clients WHERE org_id = $1", org)
++        .fetch_one(&pool)
++        .await
++        .unwrap();
++    assert_eq!(parents, Some(0));
++}
+
+diff --git a/crates/horae/src/importers/harvest/sync_tests.rs b/crates/horae/src/importers/harvest/sync_tests.rs
+--- a/crates/horae/src/importers/harvest/sync_tests.rs
++++ b/crates/horae/src/importers/harvest/sync_tests.rs
+@@ -1,5 +1,7 @@
+ use super::*;
+ use chrono::TimeZone;
+ use serde_json::json;
+-
++
++mod scale;
++
+ const KEY: &str = "1111111111111111111111111111111111111111111111111111111111111111";

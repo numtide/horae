@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) AS entries, COALESCE(sum(minutes), 0)::bigint AS minutes FROM time_entries WHERE org_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entries",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "minutes",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "b9fa70402bbc0b4a02cb8b529fb26bc66c4d2b6787adef28c683d774acfb5291"
+}
