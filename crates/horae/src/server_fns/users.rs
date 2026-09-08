@@ -91,12 +91,30 @@ pub async fn create_user(email: String, name: String, role: String) -> Result<Us
     Ok(user)
 }
 
-/// The target user's current `(active, org_role)` within the org, if they exist.
-/// Read before a role/active change to drive both the plugin event and the
-/// last-admin guard.
+#[cfg(feature = "server")]
+async fn begin_user_access_change(
+    db: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, ServerFnError> {
+    let mut tx = db.begin().await.map_err(server_err)?;
+    // Both role and activation changes must serialize before counting admins;
+    // locking only the target user lets two admins remove each other.
+    sqlx::query!(
+        "SELECT id FROM organizations WHERE id = $1 FOR UPDATE",
+        org_id
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(server_err)?
+    .ok_or_else(|| not_found("Organization not found"))?;
+    Ok(tx)
+}
+
+/// Read the prior state under the organization's access-change lock, for both
+/// the last-admin guard and the post-commit event.
 #[cfg(feature = "server")]
 async fn user_active_role(
-    db: &sqlx::PgPool,
+    db: &mut sqlx::PgConnection,
     user_id: uuid::Uuid,
     org_id: uuid::Uuid,
 ) -> Result<Option<(bool, OrgRole)>, ServerFnError> {
@@ -118,7 +136,7 @@ async fn user_active_role(
 /// force a re-seed (FR-002).
 #[cfg(feature = "server")]
 async fn ensure_other_active_admin(
-    db: &sqlx::PgPool,
+    db: &mut sqlx::PgConnection,
     org_id: uuid::Uuid,
     exclude: uuid::Uuid,
 ) -> Result<(), ServerFnError> {
@@ -150,36 +168,7 @@ pub async fn set_user_role(user_id: String, role: String) -> Result<User, Server
     let user_id = parse_uuid(&user_id, "user_id")?;
     let org_role: OrgRole = parse_enum(&role, "role (use admin, manager, or member)")?;
 
-    // Read the prior role/active so the event reports the transition (a no-op
-    // role change emits nothing, FR-012) and so we can refuse demoting the last
-    // active admin — including an admin dropping their own role.
-    let current = user_active_role(&state.db, user_id, admin.org_id).await?;
-    let previous: Option<OrgRole> = current.map(|(_, role)| role);
-
-    let demoting_active_admin = current.is_some_and(|(active, role)| {
-        active && role == OrgRole::Admin && org_role != OrgRole::Admin
-    });
-    if demoting_active_admin {
-        ensure_other_active_admin(&state.db, admin.org_id, user_id).await?;
-    }
-
-    let user = sqlx::query_as!(
-        User,
-        r#"UPDATE users SET org_role = $3
-         WHERE id = $1 AND org_id = $2
-         RETURNING id, org_id, email, name, oidc_subject,
-                   org_role as "org_role: OrgRole",
-                   cost_rate_cents, billable_rate_cents, active,
-                   created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
-        user_id,
-        admin.org_id,
-        org_role as OrgRole,
-    )
-    .fetch_optional(&state.db)
-    .await
-    .map_err(server_err)?
-    .ok_or_else(|| not_found("User not found"))?;
-
+    let (user, previous) = change_user_role(&state.db, admin.org_id, user_id, org_role).await?;
     if let Some(prev) = previous.filter(|p| *p != user.org_role) {
         state
             .plugins
@@ -193,6 +182,48 @@ pub async fn set_user_role(user_id: String, role: String) -> Result<User, Server
     Ok(user)
 }
 
+#[cfg(feature = "server")]
+async fn change_user_role(
+    db: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    user_id: uuid::Uuid,
+    org_role: OrgRole,
+) -> Result<(User, Option<OrgRole>), ServerFnError> {
+    let mut tx = begin_user_access_change(db, org_id).await?;
+    // Read the prior role/active so the event reports the transition (a no-op
+    // role change emits nothing, FR-012) and so we can refuse demoting the last
+    // active admin — including an admin dropping their own role.
+    let current = user_active_role(&mut tx, user_id, org_id).await?;
+    let previous: Option<OrgRole> = current.map(|(_, role)| role);
+
+    let demoting_active_admin = current.is_some_and(|(active, role)| {
+        active && role == OrgRole::Admin && org_role != OrgRole::Admin
+    });
+    if demoting_active_admin {
+        ensure_other_active_admin(&mut tx, org_id, user_id).await?;
+    }
+
+    let user = sqlx::query_as!(
+        User,
+        r#"UPDATE users SET org_role = $3
+         WHERE id = $1 AND org_id = $2
+         RETURNING id, org_id, email, name, oidc_subject,
+                   org_role as "org_role: OrgRole",
+                   cost_rate_cents, billable_rate_cents, active,
+                   created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
+        user_id,
+        org_id,
+        org_role as OrgRole,
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(server_err)?
+    .ok_or_else(|| not_found("User not found"))?;
+
+    tx.commit().await.map_err(server_err)?;
+    Ok((user, previous))
+}
+
 /// Activate or deactivate a user account. Deactivated users cannot sign in
 /// but their historical time entries are preserved (FR-002).
 #[server]
@@ -201,33 +232,7 @@ pub async fn set_user_active(user_id: String, active: bool) -> Result<User, Serv
     let state = crate::state::global_state().await;
     let user_id = parse_uuid(&user_id, "user_id")?;
 
-    let current = user_active_role(&state.db, user_id, admin.org_id).await?;
-    let was_active: Option<bool> = current.map(|(active, _)| active);
-
-    // Deactivating the last active admin would lock the org out.
-    let deactivating_active_admin =
-        !active && current.is_some_and(|(a, role)| a && role == OrgRole::Admin);
-    if deactivating_active_admin {
-        ensure_other_active_admin(&state.db, admin.org_id, user_id).await?;
-    }
-
-    let user = sqlx::query_as!(
-        User,
-        r#"UPDATE users SET active = $3
-         WHERE id = $1 AND org_id = $2
-         RETURNING id, org_id, email, name, oidc_subject,
-                   org_role as "org_role: OrgRole",
-                   cost_rate_cents, billable_rate_cents, active,
-                   created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
-        user_id,
-        admin.org_id,
-        active,
-    )
-    .fetch_optional(&state.db)
-    .await
-    .map_err(server_err)?
-    .ok_or_else(|| not_found("User not found"))?;
-
+    let (user, was_active) = change_user_active(&state.db, admin.org_id, user_id, active).await?;
     // FR-005 defines only a deactivation event (no user_reactivated).
     if crate::plugin::event::active_transition(was_active, active)
         == Some(crate::plugin::event::ActiveTransition::Deactivated)
@@ -243,9 +248,50 @@ pub async fn set_user_active(user_id: String, active: bool) -> Result<User, Serv
     Ok(user)
 }
 
+#[cfg(feature = "server")]
+async fn change_user_active(
+    db: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    user_id: uuid::Uuid,
+    active: bool,
+) -> Result<(User, Option<bool>), ServerFnError> {
+    let mut tx = begin_user_access_change(db, org_id).await?;
+    let current = user_active_role(&mut tx, user_id, org_id).await?;
+    let was_active: Option<bool> = current.map(|(active, _)| active);
+
+    // Deactivating the last active admin would lock the org out.
+    let deactivating_active_admin =
+        !active && current.is_some_and(|(a, role)| a && role == OrgRole::Admin);
+    if deactivating_active_admin {
+        ensure_other_active_admin(&mut tx, org_id, user_id).await?;
+    }
+
+    let user = sqlx::query_as!(
+        User,
+        r#"UPDATE users SET active = $3
+         WHERE id = $1 AND org_id = $2
+         RETURNING id, org_id, email, name, oidc_subject,
+                   org_role as "org_role: OrgRole",
+                   cost_rate_cents, billable_rate_cents, active,
+                   created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
+        user_id,
+        org_id,
+        active,
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(server_err)?
+    .ok_or_else(|| not_found("User not found"))?;
+
+    tx.commit().await.map_err(server_err)?;
+    Ok((user, was_active))
+}
+
 #[cfg(all(test, feature = "server"))]
 mod tests {
     use super::*;
+
+    mod concurrency;
 
     #[test]
     fn hide_rates_clears_both_rate_fields() {
