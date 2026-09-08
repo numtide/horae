@@ -1,4 +1,5 @@
 pub mod budget;
+mod decimal;
 pub mod duration;
 pub mod importers;
 pub mod invoice;
