@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE projects SET name = repeat('x', 32768) WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8b6e0fe704b5bf9d4b0f41916ad6e36c50eecb26fdc55d35dbe05e80d23db19c"
+}

@@ -3239,6 +3239,7 @@ dependencies = [
  "csv",
  "dioxus",
  "extism",
+ "futures-util",
  "gloo-timers",
  "horae-core",
  "openidconnect",
@@ -3263,6 +3264,7 @@ dependencies = [
  "ureq 2.12.1",
  "uuid",
  "wasm-bindgen",
+ "zip",
 ]
 
 [[package]]

@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT current_setting('transaction_isolation') as \"isolation!\", current_setting('statement_timeout') as \"timeout!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "isolation!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "timeout!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "7539fa48d680a6a5ff76509cc1203d6b41c7603773ed11065da872c8f6915e45"
+}

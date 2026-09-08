@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COUNT(*) as \"rows!\",\n                  COALESCE(SUM(octet_length(project_name)::bigint + octet_length(task_name)\n                    + octet_length(user_name) + COALESCE(octet_length(notes), 0)), 0)::bigint as \"bytes!\",\n                  COALESCE(MAX(GREATEST(octet_length(project_name), octet_length(task_name),\n                    octet_length(user_name), COALESCE(octet_length(notes), 0))), 0) as \"field_bytes!\"\n           FROM (SELECT p.name project_name, t.name task_name, u.name user_name, te.notes\n                 FROM time_entries te\n                 JOIN projects p ON p.id = te.project_id\n                 JOIN tasks t ON t.id = te.task_id\n                 JOIN users u ON u.id = te.user_id\n                 WHERE te.org_id = $6 AND te.spent_date BETWEEN $1 AND $2\n                   AND ($3::uuid IS NULL OR p.client_id = $3)\n                   AND ($4::uuid IS NULL OR te.project_id = $4)\n                   AND ($5::uuid IS NULL OR te.user_id = $5)\n                 LIMIT $7) bounded",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "rows!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "bytes!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "field_bytes!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Date",
+        "Date",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "19466a71ba2070a7bd46a425f594bb678aaeab8ecbd4d4597e478fcddcff6314"
+}

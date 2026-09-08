@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COALESCE(SUM(octet_length(value)::bigint), 0)::bigint as \"bytes!\",\n                  COALESCE(MAX(octet_length(value)), 0) as \"field_bytes!\"\n           FROM (SELECT unnest(ARRAY[c.name, c.address, c.tax_id, o.provider_name,\n                    o.provider_address, o.provider_tax_id, o.provider_email, o.provider_phone,\n                    o.bank_name, o.bank_iban, o.bank_bic, o.bank_routing, o.bank_account,\n                    o.invoice_notes, o.invoice_payment_terms]) value\n                 FROM invoices i JOIN clients c ON c.id = i.client_id\n                 JOIN organizations o ON o.id = i.org_id\n                 WHERE i.id = $1 AND i.org_id = $2) fields",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "bytes!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "field_bytes!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "5b8a9a2e7e6bd853750c10c73a9f3e7f0f69a605f59a0ce7f6f93110332ab5cb"
+}

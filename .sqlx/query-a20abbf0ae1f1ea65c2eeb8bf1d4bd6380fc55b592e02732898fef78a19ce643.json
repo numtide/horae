@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COUNT(*) as \"rows!\",\n                  COALESCE(SUM(octet_length(client_name)::bigint + COALESCE(octet_length(code), 0)\n                    + octet_length(name) + octet_length(currency)), 0)::bigint as \"bytes!\",\n                  COALESCE(MAX(GREATEST(octet_length(client_name), COALESCE(octet_length(code), 0),\n                    octet_length(name), octet_length(currency))), 0) as \"field_bytes!\"\n           FROM (SELECT c.name client_name, p.code, p.name, p.currency\n                 FROM projects p JOIN clients c ON c.id = p.client_id\n                 WHERE p.org_id = $1 AND CASE $2\n                   WHEN 'budgeted' THEN p.active AND p.budget_kind <> 'none'\n                   WHEN 'archived' THEN NOT p.active ELSE p.active END\n                 LIMIT $3) bounded",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "rows!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "bytes!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "field_bytes!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "a20abbf0ae1f1ea65c2eeb8bf1d4bd6380fc55b592e02732898fef78a19ce643"
+}

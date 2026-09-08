@@ -14,6 +14,7 @@ fn build_engine() -> TypstEngine<typst_as_lib::TypstTemplateMainFile> {
         .main_file(INVOICE_TEMPLATE)
         .search_fonts_with(
             typst_as_lib::typst_kit_options::TypstKitFontOptions::default()
+                .include_system_fonts(false)
                 .include_embedded_fonts(true),
         )
         .build()
