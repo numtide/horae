@@ -105,15 +105,23 @@ ______________________________________________________________________
 | Function | Inputs | Output | Errors | Required role |
 |---|---|---|---|---|
 | `list_projects` | `client_id: Option<Uuid>` (reserved; not yet filtered), `include_inactive: bool` | `Vec<Project>` | `ServerFnError` (`500`) | member |
-| `create_project` | `client_id: Uuid`, `name: String`, `project_type: String`, `currency: String`, `budget_kind: String` | `Project` | `ServerFnError` (`403` non-manager) | manager |
-| `update_project` | `project_id: Uuid`, `name: String`, `project_type: String`, `currency: String`, `budget_kind: String` | `Project` | `ServerFnError` (`403`, `404`) | manager |
+| `create_project` | `client_id: Uuid`, `name: String`, `project_type: String`, `currency: String`, `budget_kind: String`, `budget_value: String`, `rate_value: String` | `Project` | `ServerFnError` (`403` non-manager, `409` invalid rate) | manager |
+| `update_project` | `project_id: Uuid`, `name: String`, `project_type: String`, `currency: String`, `budget_kind: String`, `budget_value: String`, `rate_value: String` | `Project` | `ServerFnError` (`403`, `404`, `409` invalid rate) | manager |
 | `set_project_active` | `project_id: Uuid`, `active: bool` | `Project` | `ServerFnError` (`403`, `404`) | manager |
 
 Notes:
 
 1. `project_type` and `budget_kind` are Postgres enums bound as text; the billing
    method / budget rate fields of FR-009 map onto these plus `budget_amount_cents`
-   / `budget_minutes` on the row.
+   / `budget_minutes` on the row. `rate_value` is an exact hourly amount with at
+   most two decimal places; blank clears the optional `rate_cents`, and zero is
+   an explicit free rate. Negative, malformed, and overflowing rates are rejected.
+1. Billing resolves task → assignment → project → user default (FR-024), with
+   zero when every level is unset. Current rates apply to un-invoiced time,
+   including time logged before a rate change. Generating an invoice freezes
+   its line rates and amounts; grouped reports, project spend, and Harvest entry
+   rates use the attached invoice line while it remains attached. An old void
+   invoice's lines cannot override the rate of a replacement invoice.
 1. Per FR-009 project create/edit/deactivate are gated at **manager**. The
    management view passes `include_inactive = true` to `list_projects` to include
    inactive projects for reactivation. The `client_id` filter argument on

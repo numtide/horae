@@ -2,6 +2,20 @@ use super::*;
 use crate::server_fns::test_seed::seed;
 use sqlx::PgPool;
 
+#[test]
+fn project_rate_distinguishes_inheritance_zero_and_exact_amounts() {
+    assert_eq!(parse_project_rate("  ").unwrap(), None);
+    assert_eq!(parse_project_rate("0").unwrap(), Some(0));
+    assert_eq!(parse_project_rate(" 120.50 ").unwrap(), Some(12050));
+    assert_eq!(
+        parse_project_rate("92233720368547758.07").unwrap(),
+        Some(i64::MAX)
+    );
+    for invalid in ["-1", "NaN", "inf", "12.345", "92233720368547758.08"] {
+        assert!(parse_project_rate(invalid).is_err(), "accepted {invalid}");
+    }
+}
+
 #[sqlx::test(migrations = "./migrations")]
 async fn creating_a_project_task_enables_it_with_its_defaults(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;

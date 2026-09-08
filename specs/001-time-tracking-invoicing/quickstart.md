@@ -48,9 +48,16 @@ Duration input accepts non-negative `H:MM` or decimal hours, rounded half up to 
 
 ### US3 — Invoice tracked time (P3)
 
+1. Set a project's hourly rate to `120.50`, save, and reopen Edit → **Expected**: the exact rate persists. Clear it → inherit the user's default; set `0` → an explicit free rate. Negative or malformed values show an error without saving.
+
+1. With no task or assignment override, log one billable hour against a project with a rate → **Expected**: the project spend, report, and invoice use that rate. Change the project rate after invoicing → the invoiced amount stays fixed in reports and spend; un-invoiced time uses the new rate. Voiding and generating a replacement invoice uses the current rate without counting the old invoice's lines twice.
+
 1. With billable, un-invoiced time for a client, generate an invoice for a period → **Expected**: a draft invoice whose line items and total reconcile exactly with the selected entries (AS1, FR-012/FR-023).
+
 1. **Expected**: the included entries are now marked invoiced and can't be billed again (AS2, FR-013).
+
 1. Move the invoice draft → sent → paid (or void) → **Expected**: status updates in lists (AS3).
+
 1. Export the invoice → **Expected**: exported amounts match the on-screen invoice exactly (AS4, SC-007).
 
 ### US4 — Administer users & access (P4)

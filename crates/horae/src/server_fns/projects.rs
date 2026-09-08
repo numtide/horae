@@ -7,6 +7,20 @@ mod tests;
 
 // ── Projects ─────────────────────────────────────────────────────────────────
 
+#[cfg(feature = "server")]
+fn parse_project_rate(value: &str) -> Result<Option<i64>, ServerFnError> {
+    let value = value.trim();
+    if value.is_empty() {
+        return Ok(None);
+    }
+    let cents = horae_core::money::parse_cents(value)
+        .map_err(|_| conflict("Rate must be an amount, e.g. 120 or 120.50"))?;
+    if cents < 0 {
+        return Err(conflict("Rate cannot be negative"));
+    }
+    Ok(Some(cents))
+}
+
 /// Read a typed budget into the column its kind belongs in: money budgets store
 /// minor units, hours budgets store minutes, and the other column stays NULL so
 /// the two can never disagree. A blank value clears the budget, which is how a
@@ -50,7 +64,7 @@ pub async fn list_projects(
     let projects = sqlx::query_as!(
         Project,
         r#"SELECT id, org_id, client_id, code, name,
-                project_type as "project_type: ProjectType", currency,
+                project_type as "project_type: ProjectType", currency, rate_cents,
                 starts_on as "starts_on: chrono::NaiveDate",
                 ends_on as "ends_on: chrono::NaiveDate",
                 budget_kind as "budget_kind: BudgetKind",
@@ -71,7 +85,7 @@ pub async fn list_projects(
 
 /// Per-project tracked totals for the overview's Spent column: every project's
 /// total logged minutes plus its billable amount, with each entry's rate resolved
-/// through the FR-024 cascade (task → assignment → user default) and summed.
+/// through the FR-024 cascade (task → assignment → project → user default) and summed.
 /// Session-gated only: the Projects overview shows Budget/Spent to every signed-in
 /// user, and these are per-project aggregates, not per-user time or rates.
 #[server]
@@ -91,25 +105,26 @@ pub(super) async fn fetch_project_spend(
 ) -> Result<Vec<ProjectSpend>, sqlx::Error> {
     // Grouped in Postgres, not folded here: the overview needs one number per
     // project, and folding in Rust meant fetching one row per time entry to get
-    // there. `COALESCE(pt, a, u)` is the FR-024 cascade — exactly what
+    // there. `COALESCE(pt, a, p, u)` is the FR-024 cascade — exactly what
     // `horae_core::invoice::resolve_rate` does — and `line_amount_cents` is the
-    // SQL twin of the Rust function invoicing uses (migration 0016). Neither
-    // LEFT JOIN can multiply rows: `project_tasks` is keyed on
-    // (project_id, task_id) and `assignments` is UNIQUE on (project_id, user_id).
+    // SQL twin of the Rust function invoicing uses. Attached invoice amounts
+    // take priority over live rates. The joins cannot multiply rows: project
+    // tasks, assignments, and invoice lines each have a unique pair key.
     let spend = sqlx::query_as!(
         ProjectSpend,
         r#"SELECT
              te.project_id as "project_id!",
              SUM(te.minutes)::bigint as "spent_minutes!",
-             COALESCE(SUM(line_amount_cents(
-                 COALESCE(pt.rate_cents, a.rate_cents, u.billable_rate_cents, 0),
+             COALESCE(SUM(COALESCE(line.amount_cents, line_amount_cents(
+                 COALESCE(pt.rate_cents, a.rate_cents, p.rate_cents, u.billable_rate_cents, 0),
                  effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir)
-               )) FILTER (WHERE (te.billable AND (te.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable, t.billable_default))))), 0)::bigint as "spent_cents!"
+               ))) FILTER (WHERE (te.billable AND (te.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable, t.billable_default))))), 0)::bigint as "spent_cents!"
            FROM time_entries te
            JOIN projects p ON p.id = te.project_id
            JOIN tasks t ON t.id = te.task_id
            LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
            LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id
+           LEFT JOIN invoice_line_items line ON line.invoice_id = te.invoice_id AND line.time_entry_id = te.id
            JOIN users u ON u.id = te.user_id
            JOIN organizations o ON o.id = te.org_id
            WHERE te.org_id = $1
@@ -130,6 +145,7 @@ pub async fn create_project(
     currency: String,
     budget_kind: String,
     budget_value: String,
+    rate_value: String,
 ) -> Result<Project, ServerFnError> {
     let manager = require_manager().await?;
     let state = crate::state::global_state().await;
@@ -138,14 +154,15 @@ pub async fn create_project(
     let pt: ProjectType = parse_enum(&project_type, "project_type")?;
     let bk: BudgetKind = parse_enum(&budget_kind, "budget_kind")?;
     let (budget_amount_cents, budget_minutes) = parse_budget(bk, &budget_value)?;
+    let rate_cents = parse_project_rate(&rate_value)?;
     let project = sqlx::query_as!(
         Project,
         r#"INSERT INTO projects
              (id, org_id, client_id, name, project_type, currency,
-              budget_kind, budget_amount_cents, budget_minutes)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+              budget_kind, budget_amount_cents, budget_minutes, rate_cents)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          RETURNING id, org_id, client_id, code, name,
-                   project_type as "project_type: ProjectType", currency,
+                   project_type as "project_type: ProjectType", currency, rate_cents,
                    starts_on as "starts_on: chrono::NaiveDate",
                    ends_on as "ends_on: chrono::NaiveDate",
                    budget_kind as "budget_kind: BudgetKind",
@@ -160,6 +177,7 @@ pub async fn create_project(
         bk as BudgetKind,
         budget_amount_cents,
         budget_minutes,
+        rate_cents,
     )
     .fetch_one(&state.db)
     .await
@@ -183,6 +201,7 @@ pub async fn update_project(
     currency: String,
     budget_kind: String,
     budget_value: String,
+    rate_value: String,
 ) -> Result<Project, ServerFnError> {
     let manager = require_manager().await?;
     let state = crate::state::global_state().await;
@@ -190,6 +209,7 @@ pub async fn update_project(
     let pt: ProjectType = parse_enum(&project_type, "project_type")?;
     let bk: BudgetKind = parse_enum(&budget_kind, "budget_kind")?;
     let (budget_amount_cents, budget_minutes) = parse_budget(bk, &budget_value)?;
+    let rate_cents = parse_project_rate(&rate_value)?;
     // Detect a real change so a no-op update emits nothing (FR-012).
     let changed: Option<bool> = sqlx::query_scalar!(
         r#"SELECT (name IS DISTINCT FROM $3
@@ -197,7 +217,8 @@ pub async fn update_project(
                  OR currency IS DISTINCT FROM $5
                  OR budget_kind::text IS DISTINCT FROM $6
                  OR budget_amount_cents IS DISTINCT FROM $7
-                 OR budget_minutes IS DISTINCT FROM $8) as "changed!"
+                 OR budget_minutes IS DISTINCT FROM $8
+                 OR rate_cents IS DISTINCT FROM $9) as "changed!"
          FROM projects WHERE id = $1 AND org_id = $2"#,
         project_id,
         manager.org_id,
@@ -207,6 +228,7 @@ pub async fn update_project(
         budget_kind,
         budget_amount_cents,
         budget_minutes,
+        rate_cents,
     )
     .fetch_optional(&state.db)
     .await
@@ -216,10 +238,10 @@ pub async fn update_project(
         Project,
         r#"UPDATE projects
             SET name = $3, project_type = $4, currency = $5, budget_kind = $6,
-                budget_amount_cents = $7, budget_minutes = $8
+                budget_amount_cents = $7, budget_minutes = $8, rate_cents = $9
           WHERE id = $1 AND org_id = $2
          RETURNING id, org_id, client_id, code, name,
-                   project_type as "project_type: ProjectType", currency,
+                   project_type as "project_type: ProjectType", currency, rate_cents,
                    starts_on as "starts_on: chrono::NaiveDate",
                    ends_on as "ends_on: chrono::NaiveDate",
                    budget_kind as "budget_kind: BudgetKind",
@@ -233,6 +255,7 @@ pub async fn update_project(
         bk as BudgetKind,
         budget_amount_cents,
         budget_minutes,
+        rate_cents,
     )
     .fetch_optional(&state.db)
     .await
@@ -276,7 +299,7 @@ pub async fn set_project_active(
         r#"UPDATE projects SET active = $3
           WHERE id = $1 AND org_id = $2
          RETURNING id, org_id, client_id, code, name,
-                   project_type as "project_type: ProjectType", currency,
+                   project_type as "project_type: ProjectType", currency, rate_cents,
                    starts_on as "starts_on: chrono::NaiveDate",
                    ends_on as "ends_on: chrono::NaiveDate",
                    budget_kind as "budget_kind: BudgetKind",
