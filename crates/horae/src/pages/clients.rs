@@ -21,6 +21,7 @@ pub fn ClientList() -> Element {
     let mut address = use_signal(String::new);
     let mut tax_id = use_signal(String::new);
     let mut error = use_signal(|| None::<String>);
+    let action_error = use_signal(|| None::<String>);
 
     let is_manager = is_manager(&me);
 
@@ -125,6 +126,10 @@ pub fn ClientList() -> Element {
                 }
             }
 
+            if let Some(message) = action_error() {
+                div { class: "alert alert-danger", role: "alert", "Could not change client status: {message}" }
+            }
+
             div { class: "card",
                 {loaded(&*clients.read(), |list| rsx! {
                     DataTable {
@@ -181,7 +186,7 @@ pub fn ClientList() -> Element {
                                                                 move |_| run_action(
                                                                     server_fns::set_client_active(id.to_string(), next_active),
                                                                     clients,
-                                                                    error,
+                                                                    action_error,
                                                                     || (),
                                                                 )
                                                             },
