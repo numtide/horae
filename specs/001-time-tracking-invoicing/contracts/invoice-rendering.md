@@ -11,6 +11,29 @@
 
 ## Output
 
+### Billing minutes and historical quantities
+
+Invoice line `minutes` are effective billing minutes, not raw worked time.
+`horae_core::rounding::effective_minutes` and its PostgreSQL equivalent use a
+persisted `rounded_minutes` value when present (including zero); otherwise they
+apply the organization's current rule to each entry. Invoice creation freezes
+the selected quantity on the entry in the same transaction as the line snapshot.
+Changing organization rounding afterwards does not change those quantities.
+
+Grouped reports, detailed reports and their CSV/XLSX exports, Harvest's
+`rounded_hours`, and the monetary project-spend calculation use this same rule.
+Raw hours and labor cost remain based on worked minutes. The invoice PDF reads
+the line snapshot and does not recompute rounding at render time.
+
+Migration `0017_effective_minutes.sql` fills missing frozen quantities for
+already-invoiced entries from their own invoice line, never from today's rule.
+It does not overwrite existing frozen values, line quantities, rates, or amounts.
+Historical discrepancies already recorded in invoice lines require a separate
+review; the migration does not silently correct issued documents. Rate and
+currency resolution are unchanged by this rounding correction.
+
+### PDF
+
 - A single PDF per invoice whose line items and `total_cents` reconcile **exactly** with the invoice (FR-012/FR-023/SC-007).
 - **Deterministic**: identical inputs (invoice + branding + template + fonts) MUST produce byte-identical output (FR-025) — no timestamps or nondeterministic ordering baked in.
 

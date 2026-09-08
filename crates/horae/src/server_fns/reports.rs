@@ -26,6 +26,29 @@ pub async fn report_time(
     let project_filter = parse_opt_uuid(project_id, "project_id")?;
     let user_filter = parse_opt_uuid(user_id, "user_id")?;
 
+    fetch_report(
+        &state.db,
+        manager.org_id,
+        (from_date, to_date),
+        &group_by,
+        client_filter,
+        project_filter,
+        user_filter,
+    )
+    .await
+    .map_err(server_err)
+}
+
+#[cfg(feature = "server")]
+pub(super) async fn fetch_report(
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    period: (chrono::NaiveDate, chrono::NaiveDate),
+    group_by: &str,
+    client_filter: Option<uuid::Uuid>,
+    project_filter: Option<uuid::Uuid>,
+    user_filter: Option<uuid::Uuid>,
+) -> Result<Vec<ReportRow>, sqlx::Error> {
     // Grouped in Postgres: a year of entries is a six-figure row count folded
     // down to a few hundred report lines, and none of the per-entry detail
     // survives the fold. The group key is a runtime choice but the query macro
@@ -54,7 +77,7 @@ pub async fn report_time(
                -- Billable hours and amount use the rounded minutes that get
                -- invoiced; cost is what the worked time costs, so it stays on
                -- the actual ones.
-               COALESCE(te.rounded_minutes, te.minutes) AS rounded_minutes,
+               effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir) AS rounded_minutes,
                te.billable AS billable,
                COALESCE(pt.rate_cents, a.rate_cents, u.billable_rate_cents, 0)
                  AS billable_rate_cents,
@@ -64,6 +87,7 @@ pub async fn report_time(
              JOIN clients c ON p.client_id = c.id
              JOIN tasks t ON te.task_id = t.id
              JOIN users u ON te.user_id = u.id
+             JOIN organizations o ON o.id = te.org_id
              LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
              LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id
              WHERE te.org_id = $6
@@ -92,17 +116,16 @@ pub async fn report_time(
            -- rather than the database's default collation.
            ORDER BY label COLLATE "C"
         "#,
-        from_date as chrono::NaiveDate,
-        to_date as chrono::NaiveDate,
+        period.0 as chrono::NaiveDate,
+        period.1 as chrono::NaiveDate,
         client_filter,
         project_filter,
         user_filter,
-        manager.org_id,
+        org_id,
         group_by,
     )
-    .fetch_all(&state.db)
-    .await
-    .map_err(server_err)?;
+    .fetch_all(pool)
+    .await?;
 
     Ok(rows)
 }
@@ -127,7 +150,9 @@ pub async fn report_detailed(
 
     // The CSV/XLSX exports must return exactly these rows, so the query lives
     // once in `crate::reports` and both surfaces call it.
+    let state = crate::state::global_state().await;
     crate::reports::fetch_entries(
+        &state.db,
         manager.org_id,
         from_date,
         to_date,
