@@ -3263,6 +3263,7 @@ dependencies = [
  "ureq 2.12.1",
  "uuid",
  "wasm-bindgen",
+ "wasmtime",
 ]
 
 [[package]]

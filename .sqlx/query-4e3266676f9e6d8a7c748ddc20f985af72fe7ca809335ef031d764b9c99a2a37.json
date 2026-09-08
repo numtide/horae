@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COUNT(*) AS \"count!\" FROM pg_stat_activity\n                       WHERE datname = current_database() AND state = 'active'\n                         AND query = $1 AND pid <> pg_backend_pid()",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "4e3266676f9e6d8a7c748ddc20f985af72fe7ca809335ef031d764b9c99a2a37"
+}
