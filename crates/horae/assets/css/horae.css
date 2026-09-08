@@ -231,18 +231,14 @@
    values are a documented convention (matching Tailwind's scale) and repeated
    literally in each query below:
      sm 640px · md 768px · lg 1024px · xl 1280px
-   Layout-level responsiveness is done by overriding tokens (--sidebar-width,
-   --app-pad) in :root at a breakpoint; per-element overrides use the `bp:`
-   utility classes at the end of this file (e.g. `md:flex-row`, `lg:grid-cols-3`).
+   Content padding follows --app-pad; sidebar geometry is set with the app-shell
+   rules below. Per-element overrides use the `bp:` utility classes at the end
+   of this file (e.g. `md:flex-row`, `lg:grid-cols-3`).
    ──────────────────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
   :root {
-    --sidebar-width: 0px;
     --app-pad: var(--space-4);
   }
-  /* The fixed sidebar collapses on small screens; a hamburger toggle to bring
-     it back is a planned follow-up (needs a use_signal drawer state). */
-  .app-sidebar, .sidebar-resize { display: none; }
 }
 
 /* Reset */
@@ -340,7 +336,8 @@ h1, h2, h3, h4, h5, h6 {
   display: flex; flex-direction: column;
   overflow-y: auto;
 }
-.app-content { flex: 1; min-width: 0; padding: var(--space-8); }
+.app-content { flex: 1; min-width: 0; padding: var(--app-pad); }
+.app-shell > .mobile-nav-toggle { display: none; }
 
 /* Brand row */
 .sidebar-brand { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-6); }
@@ -613,6 +610,7 @@ h1, h2, h3, h4, h5, h6 {
 .adm-main { max-width: 760px; }
 
 /* Collapsed rail (icon strip) */
+@media (min-width: 769px) {
 .app-shell.collapsed .app-sidebar { width: 68px; padding-left: var(--space-2); padding-right: var(--space-2); }
 .app-shell.collapsed .sidebar-brand-name,
 .app-shell.collapsed .sidebar-brand-dot,
@@ -662,6 +660,7 @@ h1, h2, h3, h4, h5, h6 {
 .app-shell.collapsed .sidebar-menu {
   position: fixed; left: 62px; right: auto; bottom: var(--space-3); width: 224px;
 }
+}
 
 /* Drag-to-resize: a hit target on the rail's right edge, plus a full-viewport
    catcher shown only while dragging so the pointer keeps tracking everywhere. */
@@ -675,6 +674,25 @@ h1, h2, h3, h4, h5, h6 {
 .app-shell.collapsed .sidebar-resize { left: calc(68px - 3px); }
 .sidebar-resize:hover { background: var(--color-primary-border); }
 .resize-overlay { position: fixed; inset: 0; z-index: 40; cursor: col-resize; user-select: none; }
+
+/* Mobile navigation is an in-flow disclosure, sharing the desktop rail's
+   controls and timer. Its geometry must not inherit the desktop resize width. */
+@media (max-width: 768px) {
+  .app-shell { display: block; }
+  .app-shell > .mobile-nav-toggle { display: inline-flex; }
+  .app-shell > .app-sidebar {
+    display: none; width: 100%; height: auto; position: static;
+    border-right: none; border-bottom: 1px solid var(--color-border);
+    overflow: visible;
+  }
+  .app-shell.mobile-open > .app-sidebar { display: flex; }
+  .sidebar-collapse, .sidebar-resize, .resize-overlay { display: none; }
+  .sidebar-timer-pop {
+    top: var(--space-4);
+    max-height: calc(100dvh - 2 * var(--space-4));
+    overflow-y: auto;
+  }
+}
 
 /* Cards */
 .card {

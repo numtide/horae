@@ -12,9 +12,9 @@ use crate::server_fns;
 /// state, and a footer showing the signed-in user. `collapsed` is owned by
 /// `AppLayout` so the shell can narrow the content area in step with the rail.
 #[component]
-pub fn Sidebar(collapsed: Signal<bool>) -> Element {
+pub fn Sidebar(collapsed: Signal<bool>, on_navigate: EventHandler<()>) -> Element {
     rsx! {
-        aside { class: "app-sidebar",
+        aside { id: "app-navigation", class: "app-sidebar", aria_label: "Navigation",
             div { class: "sidebar-brand",
                 HoraeMark {}
                 span { class: "sidebar-brand-name", "Horae" }
@@ -32,25 +32,25 @@ pub fn Sidebar(collapsed: Signal<bool>) -> Element {
 
             div { class: "sidebar-section", "Track" }
             div { class: "sidebar-group",
-                SideLink { to: Route::Timesheet { view: ViewMode::Week, date: Anchor::default(), span: CalSpan::default() }, icon: "timesheet", label: "Timesheet" }
+                SideLink { to: Route::Timesheet { view: ViewMode::Week, date: Anchor::default(), span: CalSpan::default() }, icon: "timesheet", label: "Timesheet", on_navigate }
             }
 
             div { class: "sidebar-section", "Organize" }
             div { class: "sidebar-group",
-                SideLink { to: Route::ClientList {}, icon: "clients", label: "Clients" }
-                SideLink { to: Route::ProjectList {}, icon: "projects", label: "Projects" }
-                SideLink { to: Route::InvoiceList {}, icon: "invoices", label: "Invoices" }
+                SideLink { to: Route::ClientList {}, icon: "clients", label: "Clients", on_navigate }
+                SideLink { to: Route::ProjectList {}, icon: "projects", label: "Projects", on_navigate }
+                SideLink { to: Route::InvoiceList {}, icon: "invoices", label: "Invoices", on_navigate }
             }
 
             div { class: "sidebar-section", "Review" }
             div { class: "sidebar-group",
-                SideLink { to: Route::Approvals {}, icon: "approvals", label: "Approvals" }
-                SideLink { to: Route::Reports {}, icon: "reports", label: "Reports" }
+                SideLink { to: Route::Approvals {}, icon: "approvals", label: "Approvals", on_navigate }
+                SideLink { to: Route::Reports {}, icon: "reports", label: "Reports", on_navigate }
             }
 
             div { class: "sidebar-spacer" }
 
-            SidebarUser {}
+            SidebarUser { on_navigate }
         }
     }
 }
@@ -59,12 +59,13 @@ pub fn Sidebar(collapsed: Signal<bool>) -> Element {
 /// The active route keeps its icon (tinted, over a raised surface) rather than
 /// swapping it out, matching Harvest's rail.
 #[component]
-fn SideLink(to: Route, icon: String, label: String) -> Element {
+fn SideLink(to: Route, icon: String, label: String, on_navigate: EventHandler<()>) -> Element {
     // Match by route variant, not the exact URL, so a param-carrying route (the
     // timesheet's /timesheet/<view>/<date>) stays highlighted on any view/day.
     let active = crate::route::route_is_active(&to);
     rsx! {
         Link { to, class: if active { "nav-item active" } else { "nav-item" },
+            onclick: move |_| on_navigate.call(()),
             span { class: "nav-item-icon", NavIcon { name: icon } }
             span { class: "nav-item-label", "{label}" }
         }
@@ -75,7 +76,7 @@ fn SideLink(to: Route, icon: String, label: String) -> Element {
 /// (settings, an admin section for admins, and sign out). Falls back to a
 /// placeholder until `get_me` resolves (or when not authenticated).
 #[component]
-fn SidebarUser() -> Element {
+fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
     let me = use_resource(|| async move { server_fns::get_me().await });
     let mut open = use_signal(|| false);
 
@@ -120,7 +121,7 @@ fn SidebarUser() -> Element {
                         }
                     }
                     div { class: "sidebar-menu-list",
-                        Link { to: Route::Settings {}, class: "menu-item", onclick: move |_| open.set(false),
+                        Link { to: Route::Settings {}, class: "menu-item", onclick: move |_| { open.set(false); on_navigate.call(()); },
                             span { class: "menu-item-icon", NavIcon { name: "settings" } }
                             "Settings"
                         }
@@ -129,11 +130,11 @@ fn SidebarUser() -> Element {
                     if is_admin {
                         div { class: "sidebar-menu-list",
                             div { class: "menu-group", "Admin" }
-                            Link { to: Route::AdminUsers {}, class: "menu-item", onclick: move |_| open.set(false),
+                            Link { to: Route::AdminUsers {}, class: "menu-item", onclick: move |_| { open.set(false); on_navigate.call(()); },
                                 span { class: "menu-item-icon", NavIcon { name: "users" } }
                                 "People"
                             }
-                            Link { to: Route::HarvestImport {}, class: "menu-item", onclick: move |_| open.set(false),
+                            Link { to: Route::HarvestImport {}, class: "menu-item", onclick: move |_| { open.set(false); on_navigate.call(()); },
                                 span { class: "menu-item-icon", NavIcon { name: "import" } }
                                 "Importers"
                             }
