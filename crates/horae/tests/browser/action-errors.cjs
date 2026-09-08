@@ -29,7 +29,7 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated, seeded test instance');
       formEndpoint: 'create_project', submit: 'Create Project',
       action: async () => {
         await page.getByRole('button', { name: /^Actions/ }).first().click();
-        await page.getByRole('button', { name: 'Archive', exact: true }).click();
+        await page.getByRole('menuitem', { name: 'Archive', exact: true }).click();
       },
     },
     {

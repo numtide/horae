@@ -269,7 +269,7 @@ pub fn ProjectList() -> Element {
             }
 
             div { class: "flex items-center gap-4 mb-6",
-                Menu { label: "{scope_label}",
+                Menu { id: "project-scope-menu", label: "{scope_label}",
                     MenuItem {
                         selected: scope() == "active",
                         onclick: move |_| scope.set("active".to_string()),
@@ -508,7 +508,7 @@ pub fn ProjectList() -> Element {
                                             }
                                             div { class: "flex justify-end",
                                                 if is_manager {
-                                                    Menu { label: "Actions", align_right: true,
+                                                    Menu { id: "project-actions-{p.id}", label: "Actions", align_right: true,
                                                         MenuItem {
                                                             onclick: {
                                                                 let p = p.clone();

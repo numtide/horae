@@ -193,6 +193,7 @@ generator owns only the mechanical utility + responsive matrix.
 - Color contrast meets WCAG AA — `#EFEAE0` on `#1A1813` is ~9:1
 - Form inputs have associated `<label>` elements
 - Shared `Modal` dialogs stay mounted and use native `showModal()` / `close()` for background inertness and focus restoration. Escape, backdrop clicks and Cancel dismiss them unless a mutation is pending; the panel scrolls within the viewport on short screens.
+- Shared `Menu` uses a native popover in the top layer so tables cannot clip it. It opens above or below its trigger within the viewport, dismisses on outside click or anchor scrolling/resizing, and supports arrows, Home/End, initial-letter navigation, Escape and Tab. Each caller supplies a stable, unique ID for the trigger/menu association. The browser owns visibility; the shared script supplies positioning and [menu keyboard behavior](https://www.w3.org/WAI/ARIA/apg/patterns/menu-button/).
 - Status indicated by text + color (never color alone) — badges include both dot and text label
 
 ## Interaction Principles

@@ -511,6 +511,13 @@ h1, h2, h3, h4, h5, h6 {
   min-width: 180px; padding: var(--space-1);
 }
 .menu-pop-right { left: auto; right: 0; }
+/* Top-layer menus are positioned against the viewport, not a clipping table. */
+.menu-popover {
+  position: fixed; inset: auto; margin: 0; padding: var(--space-1);
+  width: max-content; min-width: min(180px, calc(100vw - 16px));
+  max-width: calc(100vw - 16px); max-height: calc(100dvh - 16px);
+  overflow-y: auto; overscroll-behavior: contain; color: var(--color-text);
+}
 .menu-group {
   padding: var(--space-2) var(--space-2) var(--space-1);
   font-size: var(--font-size-xs); font-weight: 600; color: var(--color-text-secondary);
