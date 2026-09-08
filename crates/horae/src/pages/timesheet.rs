@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use chrono::{Datelike, Duration, NaiveDate, Weekday};
 use dioxus::html::geometry::PixelsVector2D;
 use dioxus::prelude::*;
-use tracing::error;
 use uuid::Uuid;
 
 use horae_core::duration::format_hhmm;
@@ -478,14 +477,18 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
             horae_core::time_of_day::clamp_to_day(start.clamp(0, 1439) as u16, dur.max(0) as u32)
                 as i32
         };
-        // Run a mutation and refresh the week's entries when it succeeds. Shared
-        // by every drag that writes (move, resize, reorder).
-        let commit = move |fut: std::pin::Pin<Box<dyn std::future::Future<Output = bool>>>| {
+        // Refresh after refusals too: another session may have changed the entry,
+        // or a response may have been lost after the server committed the move.
+        let commit = move |fut: std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<(), ServerFnError>>>,
+        >| {
             let mut timer = running_timer;
             spawn(async move {
-                if fut.await {
-                    timer.refresh();
+                match fut.await {
+                    Ok(()) => grid_error.set(None),
+                    Err(e) => grid_error.set(Some(format!("Could not change entry: {e}"))),
                 }
+                timer.refresh();
             });
         };
         // A locked (submitted/approved/invoiced) entry can't be moved, resized, or
@@ -530,7 +533,7 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
                 commit(Box::pin(async move {
                     server_fns::reschedule_time_entry(id, date, new_start, dur)
                         .await
-                        .is_ok()
+                        .map(|_| ())
                 }));
             }
             // Resize an entry → new duration from its start to the pointer.
@@ -545,7 +548,7 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
                 commit(Box::pin(async move {
                     server_fns::reschedule_time_entry(id, date, start, dur)
                         .await
-                        .is_ok()
+                        .map(|_| ())
                 }));
             }
             // Reorder an untimed entry within its day's stack. No move (or a drop
@@ -593,7 +596,7 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
                 let ids: Vec<String> = after.iter().map(|id| id.to_string()).collect();
                 let date = target_date.to_string();
                 commit(Box::pin(async move {
-                    server_fns::reorder_untimed_entries(date, ids).await.is_ok()
+                    server_fns::reorder_untimed_entries(date, ids).await
                 }));
             }
         }
@@ -611,17 +614,17 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
             )
             .await
             {
-                Ok(_) => {
-                    timer.refresh();
-                }
-                Err(err) => error!("Start timer error: {err}"),
+                Ok(_) => grid_error.set(None),
+                Err(e) => grid_error.set(Some(format!("Could not start timer: {e}"))),
             }
+            timer.refresh();
         });
     });
 
     // ── Editable week grid ───────────────────────────────────────────────────
     // Rows added via "Add row" that have no entries yet this week.
     let mut pending_rows = use_signal(Vec::<(Uuid, Uuid)>::new);
+    let mut removing_row = use_signal(|| false);
     let mut addrow_open = use_signal(|| false);
     let mut addrow_project = use_signal(String::new);
     let mut addrow_task = use_signal(String::new);
@@ -678,22 +681,43 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
 
     // Remove a row: drop a pending one, or delete every entry it holds this week.
     let remove_row = use_callback(move |key: (Uuid, Uuid)| {
+        if removing_row() {
+            return;
+        }
         pending_rows.write().retain(|k| *k != key);
-        let ids: Vec<Uuid> = week_entries
+        let entries: Vec<(Uuid, NaiveDate)> = week_entries
             .read()
             .iter()
             .filter(|e| e.project_id == key.0 && e.task_id == key.1)
-            .map(|e| e.id)
+            .map(|e| (e.id, e.spent_date))
             .collect();
-        if ids.is_empty() {
+        if entries.is_empty() {
             return;
         }
+        removing_row.set(true);
         let mut timer = running_timer;
         spawn(async move {
-            for id in ids {
-                let _ = server_fns::delete_time_entry(id.to_string()).await;
+            let total = entries.len();
+            let mut deleted = 0;
+            let mut first_error = None;
+            for (id, day) in entries {
+                match server_fns::delete_time_entry(id.to_string()).await {
+                    Ok(()) => deleted += 1,
+                    Err(e) => {
+                        if first_error.is_none() {
+                            first_error = Some(format!("{day}: {e}"));
+                        }
+                    }
+                }
             }
+            grid_error.set(first_error.map(|error| {
+                format!(
+                    "Deleted {deleted} of {total} entries. {} deletions were not confirmed. First error: {error}",
+                    total - deleted
+                )
+            }));
             timer.refresh();
+            removing_row.set(false);
         });
     });
 
@@ -710,6 +734,7 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
     let week_actions = WeekActions {
         commit: commit_cell,
         remove_row,
+        removing_row: removing_row.into(),
         add_row: open_add_row,
     };
 
@@ -874,11 +899,10 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
                 }
             }
 
-            // A cell edit that the server refused: shown here because the grid
-            // has no per-cell place to put it, and staying silent would leave
-            // the typed value on screen looking saved.
+            // Keep mutation failures visible across the week, day and calendar
+            // views, including partial row deletion results.
             if let Some(msg) = grid_error() {
-                div { class: "alert alert-danger", "{msg}" }
+                div { class: "alert alert-danger", role: "alert", "{msg}" }
             }
 
             // Content
@@ -1846,6 +1870,7 @@ struct CellEdit {
 struct WeekActions {
     commit: Callback<CellEdit>,
     remove_row: Callback<(Uuid, Uuid)>,
+    removing_row: ReadSignal<bool>,
     add_row: Callback<()>,
 }
 
@@ -1994,6 +2019,7 @@ fn render_week_view(
                                 div { class: "text-center",
                                     button {
                                         class: "ts-del",
+                                        disabled: (actions.removing_row)(),
                                         "aria-label": "Remove row",
                                         onclick: move |_| actions.remove_row.call((pid, tid)),
                                         "\u{00d7}"
