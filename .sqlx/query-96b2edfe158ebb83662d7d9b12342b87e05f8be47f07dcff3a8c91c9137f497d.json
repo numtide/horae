@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE time_entries SET minutes = 1, notes = 'Edited demo'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "96b2edfe158ebb83662d7d9b12342b87e05f8be47f07dcff3a8c91c9137f497d"
+}
