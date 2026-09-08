@@ -22,7 +22,7 @@ async fn apply_api_data(
         capture_started_at,
     )
     .await;
-    connection.close().await?;
+    release_import(connection).await?;
     result
 }
 
