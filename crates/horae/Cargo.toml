@@ -116,4 +116,5 @@ gloo-timers = { version = "0.3", features = ["futures"], optional = true }
 futures-util = "0.3"
 serial_test = "3"
 tempfile = "3"
+tower = { version = "0.5", features = ["util"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }

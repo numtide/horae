@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, name, email, active, org_role::text AS \"org_role!: String\",\n         cost_rate_cents, billable_rate_cents,\n         created_at as \"created_at: chrono::DateTime<chrono::Utc>\"\n         FROM users\n         WHERE org_id = $1\n           AND ($2::bool IS NULL OR active = $2)\n         ORDER BY name\n         LIMIT $3 OFFSET $4",
+  "query": "SELECT id, name, email, active, org_role::text AS \"org_role!: String\",\n         cost_rate_cents, billable_rate_cents,\n         created_at as \"created_at: chrono::DateTime<chrono::Utc>\"\n         FROM users\n         WHERE org_id = $1\n           AND ($2::bool IS NULL OR active = $2)\n         ORDER BY name, id\n         LIMIT $3 OFFSET $4",
   "describe": {
     "columns": [
       {
@@ -63,5 +63,5 @@
       false
     ]
   },
-  "hash": "f9f62fdd533e5fca071301808e05fd151e8023bbf373f21d7d9c702f86098fdf"
+  "hash": "93f0d0c8adaa3d806409921cf6ed51df38a4244cd8325d84c083d6baef78ae70"
 }

@@ -1,4 +1,4 @@
-use axum::extract::FromRequestParts;
+use axum::extract::{FromRef, FromRequestParts};
 use axum::http::{StatusCode, request::Parts};
 use horae_core::types::OrgRole;
 use uuid::Uuid;
@@ -19,10 +19,13 @@ pub struct AuthUser {
     pub org_role: OrgRole,
 }
 
-impl<S: Send + Sync> FromRequestParts<S> for AuthUser {
+impl<S: Send + Sync> FromRequestParts<S> for AuthUser
+where
+    sqlx::PgPool: FromRef<S>,
+{
     type Rejection = (StatusCode, &'static str);
 
-    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         // Extract the session from request extensions (set by SessionManagerLayer).
         let session = parts
             .extensions
@@ -36,13 +39,13 @@ impl<S: Send + Sync> FromRequestParts<S> for AuthUser {
 
         // Look up the user's org and role. The `active` filter is what revokes a
         // deactivated user's still-live session (FR-002).
-        let state = crate::state::global_state().await;
+        let db = sqlx::PgPool::from_ref(state);
         let row = sqlx::query!(
             r#"SELECT org_id, org_role as "org_role: OrgRole"
                FROM users WHERE id = $1 AND active = true"#,
             user_id
         )
-        .fetch_optional(&state.db)
+        .fetch_optional(&db)
         .await
         .map_err(|_| (StatusCode::UNAUTHORIZED, "User not found"))?
         .ok_or((StatusCode::UNAUTHORIZED, "User not found"))?;
