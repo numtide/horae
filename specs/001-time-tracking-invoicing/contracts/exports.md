@@ -57,12 +57,50 @@ the native renderer may outlive the request's wait deadline. External process
 isolation would be needed for enforceable memory/CPU termination. The current
 template treats customer/provider text as data, not executable Typst code.
 
-## CSV and other remaining limits
+## Progressive CSV downloads
 
-CSV still materializes its selected rows and output in memory. Progressive CSV
-generation is a separate pending improvement; it is not covered by the XLSX/PDF
-admission or dataset caps above. The SPA's detailed-report and invoice-detail
-server functions likewise retain their existing uncapped collection contract.
+Timesheet, project, and invoice CSV routes stream the existing SQL queries row
+by row. The CSV header and first row are sent before reading the remaining
+rows; an empty result sends just its header (plus the stored total for an empty
+invoice). Column order, quoting, filenames, effective minutes, and exact integer
+money formatting are unchanged. Invoice metadata, lines, and total come from
+one read-only, repeatable-read transaction.
+
+CSV has four admission slots per process, separate from XLSX/PDF. Admission is
+reserved before acquiring a database connection; excess requests receive `503`.
+One bounded channel holds one output chunk. After the initial chunk, the writer
+flushes around 64 KiB, always at a record boundary. A slow reader stops the
+producer from reading more rows once the queue and in-progress chunk fill.
+The slot is retained by both producer and response until each is finished or
+dropped, including a completed producer whose body has not yet been consumed.
+
+There is no CSV row-count or total-file-size cap. Memory is proportional to the
+largest row and a small number of chunks, **not a hard 64 KiB limit**: a single
+large text field, CSV quoting, SQLx/network buffering, and HTTP transport buffers
+can exceed that threshold. PostgreSQL may also sort/materialize query results
+on its side; streaming does not bound database working memory.
+
+Each statement has a 5-second timeout and an idle transaction has a 10-second
+timeout. The producer has a 60-second wall-clock wait limit, including pool
+acquisition and waits for a slow consumer. This is not a hard CPU deadline for
+encoding an exceptionally large row. Dropping the handler or body aborts the
+async producer. Its connection is closed instead of being returned with an
+unfinished query; SQLx retains the pool slot during graceful closure. See
+[SQLx connection cleanup](https://docs.rs/sqlx/0.8.6/sqlx/pool/struct.PoolConnection.html#method.close_on_drop).
+
+Invalid dates receive `400`; authorization failures retain `401`/`403`.
+Producer failures before the first chunk return an HTTP error (`404` for a
+missing or foreign invoice, `504` for a deadline, otherwise `500`). Once headers have been
+sent, a query error, panic, or timeout interrupts the response body; it does
+**not** turn into normal end-of-file or append an error record to the CSV.
+Clients must treat an interrupted download as incomplete and retry it. A proxy
+that buffers responses can delay when the client observes the first bytes.
+
+## Other remaining limits
+
+The SPA's detailed-report and invoice-detail server functions retain their
+existing uncapped collection contract. CSV import streaming is separate from
+these export routes.
 
 Invoice PDFs read current client/provider details in their export snapshot;
 this is not a historical branding snapshot captured when the invoice was sent.
@@ -77,6 +115,11 @@ panic/error cleanup, response-body lifetime, and output writer boundaries.
 Workbook tests read the generated ZIP/XML, including frozen zero rounding;
 PDF tests compare bytes from repeated renders.
 
+CSV tests cover first-chunk delivery before source completion, backpressure,
+overload, startup/body cancellation, database connection closure, actual SQL
+errors, producer panic/timeout, quoting and exact cents, tenant/filter selection,
+concurrent invoice edits, and downloads exceeding the XLSX row-count limit.
+
 For a manual release measurement against an auxiliary PostgreSQL database with
 the current migrations, run inside the Nix dev shell:
 
@@ -89,3 +132,12 @@ The test uses its own disposable database. It renders 10,000 timesheet rows and
 process high-water RSS. Set `HORAE_EXPORT_PROBE_DIR` to an existing temporary
 directory to retain the XLSX/PDF artifacts. This is a sample dataset measurement,
 not a worst-case capacity guarantee. No new query indexes are introduced.
+
+For a progressive 100,000-row CSV measurement, without collecting the output:
+
+```sh
+cargo test -p horae --features server --release measure_streaming_csv_export -- --ignored --nocapture
+```
+
+This also uses a disposable database and reports first-chunk latency, total
+time, bytes, chunk count, and process high-water RSS (including fixture setup).

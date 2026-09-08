@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT CASE WHEN n = 2 THEN 1 / (n - 2) ELSE n END as \"value!\" FROM generate_series(1, 2) n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "value!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "9642cbe6be162366ea2e117553cc65e155cec35e0532c04ff739ce1b8cab3272"
+}

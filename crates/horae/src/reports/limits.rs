@@ -30,7 +30,7 @@ fn check(rows: i64, bytes: i64, field_bytes: i32, limits: Limits) -> Result<(), 
     Ok(())
 }
 
-fn database_error(error: sqlx::Error) -> StatusCode {
+pub(super) fn database_error(error: sqlx::Error) -> StatusCode {
     tracing::error!("Export query failed: {error}");
     if error
         .as_database_error()
@@ -44,20 +44,25 @@ fn database_error(error: sqlx::Error) -> StatusCode {
 
 async fn begin(pool: &PgPool) -> Result<Transaction<'_, Postgres>, StatusCode> {
     let mut tx = pool.begin().await.map_err(database_error)?;
+    configure_transaction(&mut tx).await?;
+    Ok(tx)
+}
+
+pub(super) async fn configure_transaction(connection: &mut PgConnection) -> Result<(), StatusCode> {
     // Size checks and payload reads must see exactly the same rows and text.
     sqlx::query!("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
-        .execute(&mut *tx)
+        .execute(&mut *connection)
         .await
         .map_err(database_error)?;
     sqlx::query!("SET LOCAL statement_timeout = '5s'")
-        .execute(&mut *tx)
+        .execute(&mut *connection)
         .await
         .map_err(database_error)?;
     sqlx::query!("SET LOCAL idle_in_transaction_session_timeout = '10s'")
-        .execute(&mut *tx)
+        .execute(&mut *connection)
         .await
         .map_err(database_error)?;
-    Ok(tx)
+    Ok(())
 }
 
 pub(super) async fn entries(
