@@ -7,7 +7,7 @@
 //! so the run continues (FR-018). Only on a clean commit are the row's newly
 //! resolved parents promoted into the run cache.
 
-use horae_core::importers::harvest::types::{EntityType, RowOutcome, SourceRow};
+use horae_core::importers::harvest::types::{EntityType, RowOutcome, SourceKind, SourceRow};
 use horae_core::importers::harvest::{convert, keys};
 use sqlx::{Acquire, Postgres, Transaction};
 use uuid::Uuid;
@@ -27,6 +27,7 @@ pub async fn apply_row(
     cache: &mut RunCache,
     org: OrgDefaults<'_>,
     row: &SourceRow,
+    source: SourceKind,
 ) -> RowResult {
     for (entity, id) in [
         (EntityType::Client, row.harvest_client_id),
@@ -54,7 +55,7 @@ pub async fn apply_row(
         }
     };
 
-    match apply_within(&mut sp, cache, org, row).await {
+    match apply_within(&mut sp, cache, org, row, source).await {
         Ok((outcomes, pending)) => match sp.commit().await {
             Ok(()) => {
                 cache.merge(pending);
@@ -76,6 +77,7 @@ async fn apply_within(
     cache: &RunCache,
     org: OrgDefaults<'_>,
     row: &SourceRow,
+    source: SourceKind,
 ) -> Result<(Vec<(EntityType, RowOutcome)>, PendingCache), (EntityType, RowFailure)> {
     let mut outcomes = Vec::new();
     let mut pending = PendingCache::default();
@@ -103,9 +105,10 @@ async fn apply_within(
         .map_err(|e| (EntityType::Task, e))?;
 
     // Time entry — the record proper.
-    let (te_outcome, entry_slot) = apply_time_entry(sp, cache, org, project_id, task_id, row)
-        .await
-        .map_err(|e| (EntityType::TimeEntry, e))?;
+    let (te_outcome, entry_slot) =
+        apply_time_entry(sp, cache, org, project_id, task_id, row, source)
+            .await
+            .map_err(|e| (EntityType::TimeEntry, e))?;
     outcomes.push((EntityType::TimeEntry, te_outcome));
     pending.entry_slot = entry_slot;
 
@@ -141,8 +144,9 @@ async fn apply_time_entry(
     project_id: Uuid,
     task_id: Uuid,
     row: &SourceRow,
+    source: SourceKind,
 ) -> Result<(RowOutcome, Option<String>), RowFailure> {
-    let user_id = resolve::resolve_user(sp, org.org_id, row).await?;
+    let user_id = resolve::resolve_user(sp, org.org_id, row, source).await?;
 
     let minutes_i64 = convert::hours_to_minutes(&row.hours)?;
     let minutes = i32::try_from(minutes_i64)

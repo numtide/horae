@@ -123,6 +123,8 @@ cargo run -p horae --features server -- import harvest-csv harvest-sample.csv   
 
 **Expected**: same FK-safe order, exact conversions, dry-run, and per-row error behavior as the API path; the re-run creates zero duplicates (matched by the composite natural key, since the CSV carries no Harvest ids and writes no provenance).
 
+Also exercise a name-only export: remove the email column, add `First Name` / `Last Name`, and match an existing user's full name. Dry-run creates nothing, commit assigns the correct user, and re-import skips the stored entries (including repeated identical rows). A blank email permits the same fallback; an unknown nonblank email does not. Add a second user with the same normalized full name, including an inactive user: the name-only row must error, while a unique email still selects the intended user. Two emails that differ only by ASCII case must be rejected as ambiguous in both CSV and API imports. Users with the same name in another organization do not affect matching. See the CSV contract for alias and header validation.
+
 ## Automated tests backing these scenarios
 
 - `cargo test -p horae-core` — pure conversions and natural-key normalization: `hours → minutes`, `money → cents` (round-trip vs. the export transforms), trim/case-fold key equality.

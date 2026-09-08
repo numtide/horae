@@ -31,6 +31,40 @@ fn day(day: u32) -> DateTime<Utc> {
 }
 
 #[sqlx::test(migrations = "./migrations")]
+async fn api_requires_email_even_when_full_name_matches(pool: PgPool) {
+    let org = setup(&pool).await;
+    let mut source = valid_data();
+    source.users[0].email.clear();
+    source.users[0].first_name = "Sync".into();
+    source.users[0].last_name = "User".into();
+    let report = apply_api_data(&pool, org, "USD", ImportMode::Commit, &source, day(4))
+        .await
+        .unwrap();
+    assert_eq!(report.summary.time_entries.errored, 1);
+    assert_eq!(report.summary.time_entries.created, 0);
+    assert!(report.row_errors[0].reason.contains("no user email"));
+    assert_eq!(watermark(&pool, org).await, json!({}));
+    source.users[0].email = "known@example.com".into();
+    let retry = apply_api_data(&pool, org, "USD", ImportMode::Commit, &source, day(4))
+        .await
+        .unwrap();
+    assert_eq!(retry.summary.time_entries.created, 1);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn api_rejects_ambiguous_email_without_advancing_watermark(pool: PgPool) {
+    let org = setup(&pool).await;
+    add_user(&pool, org, "KNOWN@EXAMPLE.COM").await;
+    let report = apply_api_data(&pool, org, "USD", ImportMode::Commit, &valid_data(), day(4))
+        .await
+        .unwrap();
+    assert_eq!(report.summary.time_entries.errored, 1);
+    assert_eq!(report.summary.time_entries.created, 0);
+    assert!(report.row_errors[0].reason.contains("ambiguous user email"));
+    assert_eq!(watermark(&pool, org).await, json!({}));
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn parent_only_api_import_creates_catalog_and_reimport_skips_it(pool: PgPool) {
     let org = setup(&pool).await;
     let mut source = valid_data();

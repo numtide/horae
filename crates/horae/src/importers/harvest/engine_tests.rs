@@ -803,6 +803,140 @@ async fn bad_records_are_reported_and_run_continues(pool: PgPool) {
 
 // ── US5: CSV natural-key path ─────────────────────────────────────────────────
 
+#[sqlx::test(migrations = "./migrations")]
+async fn csv_name_only_matches_one_org_user_and_reimports_without_duplicates(pool: PgPool) {
+    let org = seed_org(&pool).await;
+    let user = seed_user(&pool, org, "dev@acme.com").await;
+    let other_org = seed_org(&pool).await;
+    seed_user(&pool, other_org, "other@example.com").await;
+    let csv = b"Date,Client,Project,Task,Hours,First Name,Last Name\n2026-01-15,Acme,Website,Design,1, dana , DEV \n";
+    let first = super::csv_source::import_csv(&pool, org, "USD", csv, ImportMode::Commit)
+        .await
+        .unwrap();
+    assert_eq!(first.summary.time_entries.created, 1, "{first:?}");
+    let assigned = sqlx::query_scalar!("SELECT user_id FROM time_entries WHERE org_id = $1", org)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(assigned, user);
+    let second = super::csv_source::import_csv(&pool, org, "USD", csv, ImportMode::Commit)
+        .await
+        .unwrap();
+    assert_eq!(second.summary.time_entries.skipped, 1);
+    assert_eq!(count(&pool, "users").await, 2);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn import_rejects_ambiguous_normalized_email_without_partial_writes(pool: PgPool) {
+    let org = seed_org(&pool).await;
+    seed_user(&pool, org, "dev@acme.com").await;
+    seed_user(&pool, org, "DEV@ACME.COM").await;
+    let report =
+        super::csv_source::import_csv(&pool, org, "USD", CSV.as_bytes(), ImportMode::Commit)
+            .await
+            .unwrap();
+    assert_eq!(report.summary.time_entries.errored, 2);
+    assert!(
+        report
+            .row_errors
+            .iter()
+            .all(|error| error.reason.contains("ambiguous user email"))
+    );
+    assert_eq!(count(&pool, "time_entries").await, 0);
+    assert_eq!(count(&pool, "clients").await, 0);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn csv_name_fallback_requires_a_full_unique_name_and_never_overrides_email(pool: PgPool) {
+    let org = seed_org(&pool).await;
+    seed_user(&pool, org, "dev@acme.com").await;
+    let csv = b"Date,Client,Project,Task,Hours,Email,First Name,Last Name\n\
+2026-01-15,Wrong email,P,T,1,missing@example.com,Dana,Dev\n\
+2026-01-15,Partial name,P,T,1,,Dana,\n\
+2026-01-15,Unknown name,P,T,1,,Unknown,User\n\
+2026-01-15,Missing identity,P,T,1,,,\n\
+2026-01-15,Valid,P,T,1, ,Dana,Dev\n";
+    let report = super::csv_source::import_csv(&pool, org, "USD", csv, ImportMode::Commit)
+        .await
+        .unwrap();
+    assert!(report.reconciles());
+    assert_eq!(report.summary.time_entries.errored, 4);
+    assert_eq!(report.summary.time_entries.created, 1);
+    assert!(
+        report.row_errors[0]
+            .reason
+            .contains("no Horae user matches email")
+    );
+    assert!(
+        report.row_errors[1]
+            .reason
+            .contains("no Horae user matches name")
+    );
+    assert!(
+        report.row_errors[3]
+            .reason
+            .contains("no user email or full name")
+    );
+    assert_eq!(count(&pool, "clients").await, 1);
+    assert_eq!(count(&pool, "projects").await, 1);
+    assert_eq!(count(&pool, "tasks").await, 1);
+    assert_eq!(count(&pool, "users").await, 1);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn csv_ambiguous_names_include_inactive_users_but_unique_email_disambiguates(pool: PgPool) {
+    let org = seed_org(&pool).await;
+    seed_user(&pool, org, "dev@acme.com").await;
+    let inactive = seed_user(&pool, org, "old@example.com").await;
+    sqlx::query!("UPDATE users SET active = false WHERE id = $1", inactive)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let csv = b"Date,Client,Project,Task,Hours,Email,First Name,Last Name\n\
+2026-01-15,Ambiguous,P,T,1,,Dana,Dev\n\
+2026-01-15,Historical,P,T,1,old@example.com,Dana,Dev\n";
+    let report = super::csv_source::import_csv(&pool, org, "USD", csv, ImportMode::Commit)
+        .await
+        .unwrap();
+    assert_eq!(report.summary.time_entries.errored, 1);
+    assert!(report.row_errors[0].reason.contains("ambiguous user name"));
+    assert_eq!(report.summary.time_entries.created, 1);
+    let assigned = sqlx::query_scalar!("SELECT user_id FROM time_entries WHERE org_id = $1", org)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(assigned, inactive);
+    assert_eq!(count(&pool, "clients").await, 1);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn csv_name_only_dry_run_and_duplicate_occurrences_preserve_history(pool: PgPool) {
+    let org = seed_org(&pool).await;
+    let user = seed_user(&pool, org, "dev@acme.com").await;
+    sqlx::query!("UPDATE users SET active = false WHERE id = $1", user)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let csv = b"Date,Client,Project,Task,Hours,First Name,Last Name\n\
+2026-01-15,A,P,T,1,Dana,Dev\n\
+2026-01-15,A,P,T,1,Dana,Dev\n";
+    let preview = super::csv_source::import_csv(&pool, org, "USD", csv, ImportMode::DryRun)
+        .await
+        .unwrap();
+    assert_eq!(preview.summary.time_entries.created, 2);
+    assert_eq!(count(&pool, "time_entries").await, 0);
+    assert_eq!(count(&pool, "clients").await, 0);
+    let committed = super::csv_source::import_csv(&pool, org, "USD", csv, ImportMode::Commit)
+        .await
+        .unwrap();
+    assert_eq!(preview.summary, committed.summary);
+    let repeated = super::csv_source::import_csv(&pool, org, "USD", csv, ImportMode::Commit)
+        .await
+        .unwrap();
+    assert_eq!(repeated.summary.time_entries.skipped, 2);
+    assert_eq!(count(&pool, "time_entries").await, 2);
+}
+
 const CSV: &str = "Date,Client,Project,Project Code,Task,Notes,Hours,Billable?,Invoiced?,Email,Currency\n\
 2026-01-15,Acme,Website,WEB,Design,kickoff,1.5,Yes,No,dev@acme.com,USD\n\
 2026-01-16,Acme,Website,WEB,Design,,0.25,No,No,dev@acme.com,USD\n";
