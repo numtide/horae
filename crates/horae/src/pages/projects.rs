@@ -6,6 +6,7 @@ use super::{is_admin, is_manager, loaded, run_action};
 use crate::components::combobox::{ComboOption, Combobox};
 use crate::components::form::{FormCard, FormGroup, Input, Select};
 use crate::components::menu::{Menu, MenuDivider, MenuItem};
+use crate::components::modal::Modal;
 use crate::components::table::DataTable;
 use crate::models::{Client, Project};
 use crate::route::Route;
@@ -572,7 +573,11 @@ pub fn ProjectList() -> Element {
                     }
             })}
 
-            if export_open() {
+            Modal {
+                id: "export-projects-dialog",
+                labelledby: "export-projects-title",
+                open: export_open(),
+                on_dismiss: move |_| export_open.set(false),
                 {
                     let url = format!(
                         "/api/projects/export/{}?scope={}",
@@ -580,47 +585,39 @@ pub fn ProjectList() -> Element {
                         export_scope()
                     );
                     rsx! {
-                        div {
-                            class: "modal-overlay",
-                            onclick: move |_| export_open.set(false),
-                            div {
-                                class: "modal",
-                                onclick: move |e| e.stop_propagation(),
-                                div { class: "modal-title", "Export projects" }
-                                div { class: "modal-body",
-                                    div { class: "modal-label", "Which projects?" }
-                                    div { class: "seg-row",
-                                        for (val , lbl) in [("active", "Active"), ("budgeted", "Budgeted"), ("archived", "Archived")] {
-                                            button {
-                                                class: if export_scope() == val { "seg-btn selected" } else { "seg-btn" },
-                                                onclick: move |_| export_scope.set(val.to_string()),
-                                                "{lbl}"
-                                            }
-                                        }
+                        div { id: "export-projects-title", class: "modal-title", "Export projects" }
+                        div { class: "modal-body",
+                            div { class: "modal-label", "Which projects?" }
+                            div { class: "seg-row",
+                                for (val , lbl) in [("active", "Active"), ("budgeted", "Budgeted"), ("archived", "Archived")] {
+                                    button {
+                                        class: if export_scope() == val { "seg-btn selected" } else { "seg-btn" },
+                                        onclick: move |_| export_scope.set(val.to_string()),
+                                        "{lbl}"
                                     }
-                                    div { class: "modal-label", "Format" }
-                                    div { class: "seg-row",
-                                        for (val , lbl) in [("csv", "CSV"), ("xlsx", "Excel")] {
-                                            button {
-                                                class: if export_fmt() == val { "seg-btn selected" } else { "seg-btn" },
-                                                onclick: move |_| export_fmt.set(val.to_string()),
-                                                "{lbl}"
-                                            }
-                                        }
+                                }
+                            }
+                            div { class: "modal-label", "Format" }
+                            div { class: "seg-row",
+                                for (val , lbl) in [("csv", "CSV"), ("xlsx", "Excel")] {
+                                    button {
+                                        class: if export_fmt() == val { "seg-btn selected" } else { "seg-btn" },
+                                        onclick: move |_| export_fmt.set(val.to_string()),
+                                        "{lbl}"
                                     }
-                                    div { class: "modal-actions",
-                                        a {
-                                            class: "btn btn-primary",
-                                            href: "{url}",
-                                            onclick: move |_| export_open.set(false),
-                                            "Export projects"
-                                        }
-                                        button {
-                                            class: "btn btn-secondary",
-                                            onclick: move |_| export_open.set(false),
-                                            "Cancel"
-                                        }
-                                    }
+                                }
+                            }
+                            div { class: "modal-actions",
+                                a {
+                                    class: "btn btn-primary",
+                                    href: "{url}",
+                                    onclick: move |_| export_open.set(false),
+                                    "Export projects"
+                                }
+                                button {
+                                    class: "btn btn-secondary",
+                                    onclick: move |_| export_open.set(false),
+                                    "Cancel"
                                 }
                             }
                         }
