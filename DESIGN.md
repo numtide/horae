@@ -93,6 +93,7 @@ Sizes are `--font-size-*` tokens with matching `text-*` utilities: `xs` 12 · `s
 - **Sidebar** (`--sidebar-width: 264px`): full-height left rail on the warm dark surface (`--color-bg-secondary`), 1px right border, sticky. Holds the brand, a start-timer action, grouped navigation, and the signed-in user; there is no separate top nav. Collapses to a 68px icon strip.
 - **Content area**: scrollable, generous padding, `--color-bg` (`#100F0C`) background.
 - **Mobile navigation** (up to 768px): a labelled toggle expands the same sidebar above the content. It stays in normal document flow, so short screens can scroll to every link. Selecting a link closes the panel and focuses the content; Escape closes it and returns focus to the toggle. Desktop width and collapse state are preserved independently.
+- **Narrow content**: page headers and actions wrap; the admin subnavigation moves above its panel when the two columns no longer fit. Dense project/time grids and the day-total strip scroll within their own containers. Project names and badges wrap inside an aligned name column instead of overlapping budget figures.
 
 ## Component Inventory
 
