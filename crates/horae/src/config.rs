@@ -6,8 +6,6 @@ pub struct AppConfig {
     pub log_level: String,
     /// When `DEV_LOGIN=1`, skip OIDC and log in as the seeded admin user.
     pub dev_login: bool,
-    /// Secret for signing session cookies (set `SESSION_SECRET` in prod).
-    pub session_secret: String,
     /// Directory containing plugin subdirectories (each with plugin.toml + *.wasm).
     pub plugins_dir: String,
     /// Separate unprivileged login for plugin SQL. Unset disables SQL access.
@@ -16,7 +14,7 @@ pub struct AppConfig {
     /// production auth is enabled exactly when this is present and `dev_login`
     /// is false.
     pub oidc: Option<OidcConfig>,
-    /// Mark session cookies `Secure` (send only over HTTPS). Set `SECURE_COOKIES=1`
+    /// Mark session cookies `Secure` (send only over HTTPS). Set `HORAE_SECURE_COOKIES=1`
     /// in production, where TLS is terminated in front of (or by) the app.
     pub secure_cookies: bool,
     /// Harvest OAuth2 + token-encryption settings. `Some` only when the client id,
@@ -73,8 +71,6 @@ impl AppConfig {
             dev_login: std::env::var("DEV_LOGIN")
                 .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
                 .unwrap_or(false),
-            session_secret: std::env::var("SESSION_SECRET")
-                .unwrap_or_else(|_| "dev-secret-change-me-in-production".into()),
             plugins_dir: std::env::var("HORAE_PLUGINS_DIR").unwrap_or_else(|_| "plugins".into()),
             plugin_database_url: non_empty("HORAE_PLUGIN_DATABASE_URL"),
             oidc: OidcConfig::from_env(),
@@ -159,6 +155,8 @@ pub fn check_dev_login_bind(dev_login: bool, host: &str) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::check_dev_login_bind;
+
+    mod environment;
 
     #[test]
     fn dev_login_is_allowed_on_loopback() {

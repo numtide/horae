@@ -12,7 +12,13 @@ cargo run -p horae --features server -- migrate run    # includes credentials, p
 cargo run -p horae --features server -- user create --email dev@example.com --name "Dev User" --role member
 ```
 
-For the API flow, configure the Harvest OAuth app credentials (client id/secret, redirect URL) and the token-encryption key via Horae's configuration, alongside the existing OIDC/session secrets (see `config.rs`). The redirect URL must point at Horae's callback route `/auth/harvest/callback`.
+For the API flow, set all four non-empty environment variables:
+
+- `HORAE_HARVEST_CLIENT_ID` and `HORAE_HARVEST_CLIENT_SECRET`: Harvest OAuth app credentials.
+- `HORAE_HARVEST_REDIRECT_URL`: the exact public callback URL registered with Harvest, ending in `/auth/harvest/callback`.
+- `HORAE_HARVEST_ENC_KEY`: a random 32-byte encryption key encoded as 64 hexadecimal digits (for example, generate one with `openssl rand -hex 32`). Keep it outside the repository and Nix store; rotating it requires reconnecting Harvest to replace credentials encrypted with the old key.
+
+These are separate from Horae's `HORAE_OIDC_*` login settings. There is no `SESSION_SECRET` to configure: sessions are stored in PostgreSQL. See the [deployment configuration](../../README.md#configuration) for HTTPS and cookie settings.
 
 ## Scenario 1 — Connect Harvest via OAuth (US1, FR-022)
 

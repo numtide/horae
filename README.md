@@ -105,7 +105,9 @@ cd crates/horae && DEV_LOGIN=1 dx serve               # dev server on :8080, hot
 
 ## Configuration
 
-Horae is configured through environment variables.
+Horae is configured through environment variables. [.env.example](.env.example) lists
+the supported settings for local development; the binary does not load `.env` files
+automatically. Export the variables in your shell or configure them in your service manager.
 
 `horae` and `horae serve` use the same bind defaults and `HORAE_HOST`/`HORAE_PORT`
 environment settings. Explicit `serve --host`/`--port` flags take precedence over
@@ -118,10 +120,16 @@ address for hot-reload proxying.
 | `HORAE_HOST` | `127.0.0.1` | Bind address |
 | `HORAE_PORT` | `3000` | Listen port |
 | `HORAE_LOG` | `info` | Log level (`trace`, `debug`, `info`, `warn`, `error`) |
-| `SESSION_SECRET` | `dev-secret-…` | Cookie signing secret — **always set in production** |
 | `HORAE_SECURE_COOKIES` | `0` | Mark session cookies `Secure` (HTTPS only); set to `1` in production |
 | `DEV_LOGIN` | `0` | `1` enables the one-click admin login and bypasses OIDC (dev only) |
 | `HORAE_PLUGINS_DIR` | `plugins` | Directory scanned for plugins at startup |
+| `HORAE_PLUGIN_DATABASE_URL` | unset | Separate unprivileged login for [plugin SQL](specs/001-time-tracking-invoicing/contracts/plugin-interface.md); unset or empty disables it |
+
+Sessions are stored in PostgreSQL; the cookie contains an opaque session identifier,
+not signed user data. `SESSION_SECRET` is not used and can be removed from existing
+environment files; changing it does not revoke sessions. Serve production traffic over
+HTTPS and set `HORAE_SECURE_COOKIES=1`. The `Secure` flag restricts cookie transport;
+it does not configure TLS or a reverse proxy.
 
 Production authentication uses OIDC. It is enabled only when all four OIDC variables are set
 (and `DEV_LOGIN` is off):
@@ -131,9 +139,19 @@ Production authentication uses OIDC. It is enabled only when all four OIDC varia
 | `HORAE_OIDC_ISSUER` | OIDC provider issuer URL |
 | `HORAE_OIDC_CLIENT_ID` | OIDC client ID |
 | `HORAE_OIDC_CLIENT_SECRET` | OIDC client secret |
-| `HORAE_OIDC_REDIRECT_URL` | Callback URL registered with the provider |
+| `HORAE_OIDC_REDIRECT_URL` | Exact public callback URL registered with the provider, ending in `/auth/callback` |
 | `HORAE_OIDC_ADDITIONAL_AUDIENCES` | Extra `aud` values to trust (comma-separated); optional |
 | `HORAE_OIDC_BUTTON_LABEL` | Sign-in button text; defaults to `Continue with SSO` |
+
+Unset or empty required values leave OIDC unconfigured; they do not enable the dev
+bypass. Use the `HORAE_OIDC_*` names above, not the old unprefixed `OIDC_*` examples.
+`DEV_LOGIN=1` bypasses OIDC even when all provider settings are present.
+
+Harvest import has a separate set of optional credentials:
+`HORAE_HARVEST_CLIENT_ID`, `HORAE_HARVEST_CLIENT_SECRET`,
+`HORAE_HARVEST_REDIRECT_URL`, and `HORAE_HARVEST_ENC_KEY`. See the
+[importer setup](specs/004-harvest-importer/quickstart.md) for its callback and
+token-encryption requirements; OIDC settings do not configure Harvest access.
 
 ## Self-hosting
 
@@ -155,6 +173,23 @@ Horae ships as a NixOS module:
 ```
 
 The module runs the server as a systemd service and applies pending migrations on every start.
+
+For production, set `secretKeyFile` to a root-readable runtime file (for example,
+`"/run/secrets/horae-env"`) provisioned outside the Nix store. It is a systemd
+environment file, not a cookie-signing key. For an HTTPS deployment it can contain:
+
+```dotenv
+DEV_LOGIN=0
+HORAE_SECURE_COOKIES=1
+HORAE_OIDC_ISSUER=https://identity.example.com
+HORAE_OIDC_CLIENT_ID=horae
+HORAE_OIDC_CLIENT_SECRET=replace-with-provider-secret
+HORAE_OIDC_REDIRECT_URL=https://time.example.com/auth/callback
+```
+
+Use your provider's issuer and credentials, register the exact redirect URL, and
+configure the HTTPS reverse proxy separately. Do not put real secrets in Nix string
+literals or copy the development admin bypass into a production environment.
 
 ### First run
 

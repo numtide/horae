@@ -86,7 +86,11 @@ in
       default = null;
       description = ''
         Path to a file containing environment variables with secrets
-        (e.g. SESSION_SECRET, OIDC_CLIENT_SECRET). Loaded via systemd EnvironmentFile.
+        (e.g. HORAE_OIDC_CLIENT_SECRET or HORAE_HARVEST_ENC_KEY). Loaded via
+        systemd EnvironmentFile. Use a runtime path such as /run/secrets/horae-env
+        and keep secret contents out of the Nix store. OIDC also requires
+        HORAE_OIDC_ISSUER, HORAE_OIDC_CLIENT_ID, and HORAE_OIDC_REDIRECT_URL;
+        these can be in the same file or systemd.services.horae.environment.
       '';
     };
 
