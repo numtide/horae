@@ -21,12 +21,36 @@ pub fn AppLayout() -> Element {
     let mut collapsed = use_signal(|| false);
     let mut width = use_signal(|| SIDEBAR_DEFAULT);
     let mut dragging = use_signal(|| false);
+    let mut mobile_open = use_signal(|| false);
+
+    let on_navigate = move |_| {
+        if mobile_open() {
+            mobile_open.set(false);
+            document::eval("document.getElementById('app-main').focus();");
+        }
+    };
 
     rsx! {
         div {
-            class: if collapsed() { "app-shell collapsed" } else { "app-shell" },
+            class: format!("app-shell{}{}", if collapsed() { " collapsed" } else { "" }, if mobile_open() { " mobile-open" } else { "" }),
             style: "--sidebar-width: {width()}px;",
-            Sidebar { collapsed }
+            onkeydown: move |e: KeyboardEvent| {
+                if mobile_open() && e.key() == Key::Escape {
+                    mobile_open.set(false);
+                    e.prevent_default();
+                    document::eval("document.getElementById('navigation-toggle').focus();");
+                }
+            },
+            button {
+                id: "navigation-toggle",
+                class: "mobile-nav-toggle btn btn-secondary m-4",
+                r#type: "button",
+                "aria-controls": "app-navigation",
+                "aria-expanded": "{mobile_open}",
+                onclick: move |_| mobile_open.set(!mobile_open()),
+                if mobile_open() { "Close navigation" } else { "Open navigation" }
+            }
+            Sidebar { collapsed, on_navigate }
 
             // Drag handle on the rail's right edge. Present when collapsed too, so
             // the rail can be dragged back open (the brand toggle also works).
@@ -39,7 +63,7 @@ pub fn AppLayout() -> Element {
                 },
             }
 
-            main { class: "app-content",
+            main { id: "app-main", class: "app-content", tabindex: "-1",
                 Outlet::<crate::route::Route> {}
             }
 
