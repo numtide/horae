@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (\n            SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n            WHERE c.relowner = (SELECT oid FROM pg_roles WHERE rolname = current_user)\n            OR CASE WHEN c.relkind = 'S' THEN\n                has_sequence_privilege(c.oid, 'USAGE,UPDATE')\n            WHEN c.relkind IN ('r','p','v','m','f') THEN\n                ((has_table_privilege(c.oid, 'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')\n                  OR has_any_column_privilege(c.oid, 'INSERT,UPDATE,REFERENCES'))\n                 AND NOT (n.nspname = 'pg_catalog' AND c.relname = 'pg_settings'))\n                OR (n.nspname NOT IN ('pg_catalog', 'information_schema')\n                    AND NOT (n.nspname = 'public' AND c.relkind IN ('r','p') AND c.relname = ANY($1))\n                    AND has_any_column_privilege(c.oid, 'SELECT'))\n            ELSE false END\n        ) OR has_column_privilege('public.users', 'oidc_subject', 'SELECT') AS \"unsafe!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "unsafe!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "NameArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "bc73990719d208836bc39a970ef4cf1bbfc04d8aa153714ea24fca8bdd3b9a47"
+}

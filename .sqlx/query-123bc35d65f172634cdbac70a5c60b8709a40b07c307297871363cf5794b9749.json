@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT to_regprocedure('public.effective_minutes(integer,integer,smallint,public.round_dir)') IS NOT NULL as \"present!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "present!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "123bc35d65f172634cdbac70a5c60b8709a40b07c307297871363cf5794b9749"
+}
