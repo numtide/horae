@@ -383,9 +383,9 @@ pub async fn update_time_entry(
     .await?;
     if changed {
         dispatch_time_entry_event(&entry, TimeEntryEvent::Updated).await;
+        tokio::spawn(check_project_budget(state, entry.project_id));
     }
 
-    tokio::spawn(check_project_budget(state, entry.project_id));
     Ok(entry)
 }
 
@@ -403,36 +403,53 @@ async fn update_entry(
     let mut tx = crate::db::begin_time_entry_write(db, user_id)
         .await
         .map_err(server_err)?;
-    // Read current values first so a no-op update emits no event (FR-012).
-    let before = sqlx::query!(
-        r#"SELECT minutes, start_minute, notes, billable FROM time_entries
-           WHERE id = $1 AND user_id = $2 AND state = $3"#,
+    // Lock before comparing so a competing edit cannot turn a stale no-op
+    // into an unreported change, or cause duplicate update events (FR-012).
+    let before = sqlx::query_as!(
+        TimeEntry,
+        r#"SELECT id, org_id, user_id, project_id, task_id,
+                  spent_date as "spent_date: chrono::NaiveDate",
+                  minutes, start_minute, sort_order, rounded_minutes, notes, billable, is_running,
+                  started_at as "started_at: chrono::DateTime<chrono::Utc>",
+                  state as "state: EntryState", invoice_id,
+                  created_at as "created_at: chrono::DateTime<chrono::Utc>",
+                  updated_at as "updated_at: chrono::DateTime<chrono::Utc>"
+           FROM time_entries
+           WHERE id = $1 AND user_id = $2 AND state = $3
+           FOR UPDATE"#,
         entry_id,
         user_id,
         EntryState::Open as EntryState,
     )
     .fetch_optional(&mut *tx)
     .await
-    .map_err(server_err)?;
+    .map_err(server_err)?
+    .ok_or_else(|| conflict("Entry not found or is locked (not in 'open' state)"))?;
 
     let entry = sqlx::query_as!(
         TimeEntry,
-        r#"UPDATE time_entries
-         SET minutes = $3, notes = $4, start_minute = $7,
-             billable = $5 AND COALESCE((
+        r#"WITH effective AS (
+           SELECT e.id, $5 AND COALESCE((
                SELECT p.project_type <> 'non_billable' AND COALESCE(pt.billable, t.billable_default)
-               FROM projects p JOIN tasks t ON t.id = time_entries.task_id
+               FROM projects p JOIN tasks t ON t.id = e.task_id
                LEFT JOIN project_tasks pt ON pt.project_id = p.id AND pt.task_id = t.id
-               WHERE p.id = time_entries.project_id
-             ), false)
-         WHERE id = $1 AND user_id = $2 AND state = $6
-         RETURNING id, org_id, user_id, project_id, task_id,
-                   spent_date as "spent_date: chrono::NaiveDate",
-                   minutes, start_minute, sort_order, rounded_minutes, notes, billable, is_running,
-                   started_at as "started_at: chrono::DateTime<chrono::Utc>",
-                   state as "state: EntryState", invoice_id,
-                   created_at as "created_at: chrono::DateTime<chrono::Utc>",
-                   updated_at as "updated_at: chrono::DateTime<chrono::Utc>""#,
+               WHERE p.id = e.project_id
+             ), false) AS billable
+           FROM time_entries e WHERE e.id = $1
+         )
+         UPDATE time_entries e
+         SET minutes = $3, notes = $4, start_minute = $7, billable = effective.billable
+         FROM effective
+         WHERE e.id = effective.id AND e.id = $1 AND e.user_id = $2 AND e.state = $6
+           AND (e.minutes, e.notes, e.start_minute, e.billable)
+               IS DISTINCT FROM ($3, $4, $7, effective.billable)
+         RETURNING e.id, e.org_id, e.user_id, e.project_id, e.task_id,
+                   e.spent_date as "spent_date: chrono::NaiveDate",
+                   e.minutes, e.start_minute, e.sort_order, e.rounded_minutes, e.notes, e.billable, e.is_running,
+                   e.started_at as "started_at: chrono::DateTime<chrono::Utc>",
+                   e.state as "state: EntryState", e.invoice_id,
+                   e.created_at as "created_at: chrono::DateTime<chrono::Utc>",
+                   e.updated_at as "updated_at: chrono::DateTime<chrono::Utc>""#,
         entry_id,
         user_id,
         minutes,
@@ -443,17 +460,11 @@ async fn update_entry(
     )
     .fetch_optional(&mut *tx)
     .await
-    .map_err(server_err)?
-    .ok_or_else(|| conflict("Entry not found or is locked (not in 'open' state)"))?;
+    .map_err(server_err)?;
 
-    let changed = before.is_none_or(|b| {
-        b.minutes != minutes
-            || b.notes.as_deref() != notes
-            || b.billable != entry.billable
-            || b.start_minute != start_minute
-    });
+    let changed = entry.is_some();
     tx.commit().await.map_err(server_err)?;
-    Ok((entry, changed))
+    Ok((entry.unwrap_or(before), changed))
 }
 /// Delete a time entry. Only allowed while the entry state is 'open'.
 #[server]
@@ -602,6 +613,9 @@ async fn reorder_entries(
     tx.commit().await.map_err(server_err)?;
     Ok(())
 }
+
+#[cfg(all(test, feature = "server"))]
+mod update_tests;
 
 #[cfg(all(test, feature = "server"))]
 mod tests {
