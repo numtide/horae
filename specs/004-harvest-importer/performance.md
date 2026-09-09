@@ -52,6 +52,67 @@ The pair of indexes occupied 32,768 / 163,840 / 5,931,008 bytes at those respect
 
 Deployment uses ordinary transactional `CREATE INDEX`, consistent with the existing migrations: user writes can wait while indexes are built. Schedule migration appropriately for large user tables. Index maintenance adds write/storage cost; this probe does not measure write throughput.
 
+## API pages
+
+The API importer now processes time-entry pages through a capacity-one channel. Blocking HTTP can retain the page being downloaded and one queued page while async SQL consumes the current page. Catalog metadata is indexed once; each `SourceRow` is assembled only when needed. The importer no longer holds all time-entry JSON objects, all typed entries and a second full vector of assembled rows.
+
+Requests use 100 records per page. Responses are limited to 2,000 records and 10 MiB of decompressed JSON; these are input limits, not a promise that JSON parsing uses only 10 MiB of resident memory. Pagination follows the provider's `links.next`, including cursor URLs with a null `next_page`. Links must retain the original origin and collection path, contain no user information or fragment, and fit in 8 KiB. Redirects and cyclic pagination fail the run. Missing pagination/record fields and invalid JSON fail visibly instead of silently truncating the import. These choices follow Harvest's [pagination contract](https://help.getharvest.com/api-v2/introduction/overview/pagination/).
+
+The client spaces requests by at least 160 ms, including retries across collections, and honors `Retry-After` in full for waits up to five minutes. Longer waits reject the run for a later retry; they are never shortened into an early request. There are at most six attempts per page. Concurrent traffic from other applications can still consume the account's quota and trigger 429 responses; see Harvest's [rate limits](https://help.getharvest.com/api-v2/introduction/overview/general/). Data-page connections have a 10-second connect limit and a 30-second request deadline. Backoff checks cancellation every 100 ms; an already-started blocking request can continue until it completes or times out. The existing ureq client's system DNS lookup is not interruptible and can exceed that deadline; the session lock remains owned until the worker actually exits.
+
+One outer transaction still preserves preview rollback, per-row savepoints and the atomic data/provenance/watermark update. A later download failure rolls everything back. Row-level validation failures continue to later pages but suppress watermark advancement. Cancellation before commit drops the SQL transaction and closes the page receiver; the HTTP worker retains ownership of the close-on-drop database session until it really exits, so the organization advisory lock cannot be released early. This requires only one pool connection.
+
+### Plans while tables grow
+
+A prepared lookup planned against a nearly empty provenance table can retain an unsuitable generic plan as that table grows inside the import transaction. The [plan-cache probe](benchmarks/import-plan-cache.sql) reproduces this using a temporary copy with both original indexes. On local PostgreSQL 17.10, the cached plan used the reverse `(org_id, entity_type, horae_id)` index, filtered out 100,000 records on a miss, and took 8.342 ms. A custom plan used all three primary-key fields and took 0.022 ms (0.131 ms planning). These are single illustrative samples; the index predicates and filtered-row counts establish the extra work more directly than those timings.
+
+The API data transaction sets `SET LOCAL plan_cache_mode = force_custom_plan`. This incurs planning work but avoids retaining the initial tiny-table plan throughout a growing import; PostgreSQL documents the [generic/custom plan tradeoff](https://www.postgresql.org/docs/17/runtime-config-query.html#GUC-PLAN-CACHE-MODE). It does not change database-wide settings, CSV behavior or the statement-count comparison above. The setting ends with the transaction.
+
+```sh
+psql -X "$DATABASE_URL" -f specs/004-harvest-importer/benchmarks/import-plan-cache.sql
+```
+
+### Reproducing the scale checks
+
+The ignored scale tests generate 100,000 entries over 365 dates, with unique notes, one client/project/task, one known user and 100 entries referencing an unknown user. The first entry is invalid. A loopback HTTP fixture generates one page at a time, retains only the first 16 request headers, and uses the production request pacing. Each run verifies 1,004 HTTP requests, reconciled counts, 99,900 valid entries, 5,994,000 minutes and exact provenance counts. Preview verifies that no parents, time entries or provenance persist; reimport verifies zero creations. The invalid entries leave the watermark unchanged.
+
+Run each scenario in a separate process so Linux's process high-water RSS is not inherited from another scenario:
+
+```sh
+cargo test -p horae --features server --release api_100k_commit_and_reimport --locked -- --ignored --nocapture
+cargo test -p horae --features server --release api_100k_dry_run --locked -- --ignored --nocapture
+```
+
+Use the normal Nix development shell and a migrated disposable development database role with `CREATEDB`. SQLx creates a separate test database. The smaller `http_pages_preview_commit_and_reimport` test exercises the same HTTP path in the ordinary test suite.
+
+For the pre-streaming reference, use a separate worktree at `cdba75d37d7ba35616d6c5e2254bd2f2039454e6`, apply [scale-baseline.patch](benchmarks/scale-baseline.patch), and run the same commands. That reference constructs the fetched JSON collection in-process and measures conversion, assembly and SQL application; it excludes HTTP. It is not an HTTP latency comparison.
+
+RSS/HWM readings come from `/proc/self/status` and include the Rust test process and loopback fixture, but not PostgreSQL's process, database storage or the kernel's page cache. Release uses the checked-in optimization/LTO profile. These are local synthetic checks, not production capacity guarantees.
+
+Reference measurement on 2026-09-08, before page streaming or transaction-local custom plans:
+
+| Phase | Elapsed seconds | Reported process high-water RSS, KiB |
+|---|---:|---:|
+| Before constructing input | — | 9,136 |
+| Fetched JSON collection constructed | — | 307,756 |
+| JSON construction and typed conversion | 0.338 | 329,000 |
+| First 100,000-entry application | 1,953.051 | 372,532 |
+| Reimport in the same process | 91.033 | 372,532 |
+
+The reference passed all row, minute, error, provenance and reimport assertions. The reimport inherits the process high-water mark; it is not an independent peak-memory measurement. An additional `/proc` sample near the end of the first application reported 373,076 KiB, consistent with approximately 364 MiB rather than an exact allocation count. The old preview scenario was not measured separately.
+
+With page buffering and transaction-local custom plans, including loopback HTTP and production pacing:
+
+| Phase | Elapsed seconds | Reported process high-water RSS, KiB |
+|---|---:|---:|
+| Before starting HTTP | — | 9,172 |
+| First 100,000-entry import | 522.387 | 11,924 |
+| Reimport in the same process | 160.717 | 11,952 |
+| Before independent preview | — | 8,788 |
+| 100,000-entry preview | 513.223 | 11,320 |
+
+All three scenarios passed the row, error, minute and provenance checks; preview left no imported data persisted. The plan change and page buffering were applied together; the time improvement cannot be attributed to streaming alone, and the reference excludes HTTP. The HTTP reimport is paced over 1,004 requests, explaining its higher elapsed time than the reference's SQL-only reimport. Custom plans do not guarantee that the planner always selects the cheapest actual execution plan; the separate SQL probe illustrates one reproduced failure mode.
+
 ## Remaining scale limits
 
-This change does not establish bounded-memory network streaming or validate a 100,000-entry end-to-end import. The adapters still materialize collections, the transaction spans the run, and cache size grows with distinct parents/users/project-task pairs and CSV occurrence keys. Those memory, latency and transaction measurements remain separate from the lookup improvements above.
+Memory still grows with catalog metadata, distinct cached parents/users/project-task pairs and accumulated row errors. The CSV adapter still retains uploaded bytes and parsed rows, plus occurrence keys. The API transaction remains open during time-entry downloading and application; this change does not batch commits or limit total database transaction/WAL size. The import remains request-scoped, not a durable background job; these measurements do not cover browser or reverse-proxy timeouts. Those limits are distinct from bounded time-entry page buffering.
