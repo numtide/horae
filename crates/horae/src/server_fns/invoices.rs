@@ -132,6 +132,7 @@ async fn generate_invoice_for_period(
         spent_date: chrono::NaiveDate,
         task_rate_cents: Option<i64>,
         assignment_rate_cents: Option<i64>,
+        project_rate_cents: Option<i64>,
         user_rate_cents: Option<i64>,
     }
 
@@ -146,6 +147,7 @@ async fn generate_invoice_for_period(
              te.spent_date as "spent_date: chrono::NaiveDate",
              pt.rate_cents as task_rate_cents,
              a.rate_cents as assignment_rate_cents,
+             p.rate_cents as project_rate_cents,
              u.billable_rate_cents as user_rate_cents
            FROM time_entries te
            JOIN projects p ON p.id = te.project_id
@@ -208,6 +210,7 @@ async fn generate_invoice_for_period(
         let rate = horae_core::invoice::resolve_rate(
             e.task_rate_cents,
             e.assignment_rate_cents,
+            e.project_rate_cents,
             e.user_rate_cents,
         )
         .unwrap_or(0);

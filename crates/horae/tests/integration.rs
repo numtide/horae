@@ -243,8 +243,7 @@ async fn seed_approval(
     id
 }
 
-/// Rates for the aggregation tests: the same cascade the reports resolve, but
-/// stated once so a test can say which level it means.
+/// Rates for aggregation fixtures with the optional project rate left unset.
 struct Rates {
     task: Option<i64>,
     assignment: Option<i64>,
@@ -1398,6 +1397,7 @@ async fn generate_invoice_totals_match(pool: PgPool) {
         let rate = horae_core::invoice::resolve_rate(
             e.task_rate_cents,
             e.assignment_rate_cents,
+            None,
             e.user_rate_cents,
         )
         .unwrap_or(0);
@@ -2091,8 +2091,7 @@ async fn role_gating_member_vs_manager_vs_admin(pool: PgPool) {
 // US3: invoicing tracked time (continued)
 // ---------------------------------------------------------------------------
 
-/// Rate resolution cascade: task rate takes priority over assignment rate,
-/// which takes priority over user default rate (FR-024).
+/// With no project rate, task and assignment rates override the user default.
 #[sqlx::test(migrations = "./migrations")]
 #[serial]
 async fn rate_resolution_cascade(pool: PgPool) {
@@ -2160,6 +2159,7 @@ async fn rate_resolution_cascade(pool: PgPool) {
     let resolved = horae_core::invoice::resolve_rate(
         rates.task_rate_cents,
         rates.assignment_rate_cents,
+        None,
         rates.user_rate_cents,
     );
     assert_eq!(resolved, Some(15000), "task rate should take priority");
@@ -2195,6 +2195,7 @@ async fn rate_resolution_cascade(pool: PgPool) {
     let resolved = horae_core::invoice::resolve_rate(
         rates.task_rate_cents,
         rates.assignment_rate_cents,
+        None,
         rates.user_rate_cents,
     );
     assert_eq!(
@@ -2234,6 +2235,7 @@ async fn rate_resolution_cascade(pool: PgPool) {
     let resolved = horae_core::invoice::resolve_rate(
         rates.task_rate_cents,
         rates.assignment_rate_cents,
+        None,
         rates.user_rate_cents,
     );
     assert_eq!(
@@ -3219,6 +3221,7 @@ async fn project_spend_grouped_in_sql_matches_the_rust_fold(pool: PgPool) {
             let rate = horae_core::invoice::resolve_rate(
                 e.task_rate_cents,
                 e.assignment_rate_cents,
+                None,
                 e.user_rate_cents,
             )
             .unwrap_or(0);
@@ -3422,6 +3425,7 @@ async fn report_time_grouped_in_sql_matches_the_rust_fold(pool: PgPool) {
                 let rate = horae_core::invoice::resolve_rate(
                     r.task_rate_cents,
                     r.assignment_rate_cents,
+                    None,
                     r.user_billable_rate_cents,
                 )
                 .unwrap_or(0);

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE assignments SET rate_cents = $2 WHERE project_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "96f915a0fc30f62f4f75cfc88be11c2218b22ae4b6fa4c9676e9a3de0eba2c02"
+}

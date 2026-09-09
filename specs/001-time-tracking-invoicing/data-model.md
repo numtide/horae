@@ -32,9 +32,9 @@ Derived from the spec's Key Entities and `SPEC.md` §2. Everything is scoped to 
 
 ### Project
 
-- **Fields**: `id`, `org_id`, `client_id`, `code`, `name`, `project_type`, `currency` (defaults from client), `starts_on`, `ends_on`, `budget_kind`, `budget_amount_cents` (when `budget_kind = amount`), `active`, `created_at`.
+- **Fields**: `id`, `org_id`, `client_id`, `code`, `name`, `project_type`, `currency` (defaults from client), `rate_cents` (optional non-negative hourly rate), `starts_on`, `ends_on`, `budget_kind`, `budget_amount_cents` (when `budget_kind = amount`), `active`, `created_at`.
 - **Relationships**: belongs to a `Client`; has `Task` memberships, `Assignment`s, and `TimeEntry` records.
-- **Rules**: inactive projects are not selectable for new time entries (FR-011).
+- **Rules**: inactive projects are not selectable for new time entries (FR-011). Billing rates cascade task → assignment → project → user default; NULL inherits while zero overrides. Existing projects retain NULL until a manager supplies a rate. Invoice line snapshots are not repriced when any rate changes.
 
 ### Task
 

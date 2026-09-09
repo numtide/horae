@@ -58,7 +58,7 @@ pub(super) async fn fetch_report(
     //
     // The CTE names each entry's derived values once so the aggregates below
     // read as the sums they are; Postgres inlines a CTE referenced once.
-    // `COALESCE(pt, a, u)` is `horae_core::invoice::resolve_rate` written out,
+    // `COALESCE(pt, a, p, u)` is `horae_core::invoice::resolve_rate` written out,
     // and `line_amount_cents` is the SQL twin of the Rust function invoicing
     // uses (migration 0016). The rounding term inside it is per row, so these
     // sums cannot be taken over pre-aggregated minutes.
@@ -79,8 +79,9 @@ pub(super) async fn fetch_report(
                -- the actual ones.
                effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir) AS rounded_minutes,
                (te.billable AND (te.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable, t.billable_default)))) AS billable,
-               COALESCE(pt.rate_cents, a.rate_cents, u.billable_rate_cents, 0)
+               COALESCE(pt.rate_cents, a.rate_cents, p.rate_cents, u.billable_rate_cents, 0)
                  AS billable_rate_cents,
+               line.amount_cents AS frozen_amount_cents,
                COALESCE(u.cost_rate_cents, 0) AS cost_rate_cents
              FROM time_entries te
              JOIN projects p ON te.project_id = p.id
@@ -90,6 +91,7 @@ pub(super) async fn fetch_report(
              JOIN organizations o ON o.id = te.org_id
              LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
              LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id
+             LEFT JOIN invoice_line_items line ON line.invoice_id = te.invoice_id AND line.time_entry_id = te.id
              WHERE te.org_id = $6
                AND te.spent_date BETWEEN $1 AND $2
                AND ($3::uuid IS NULL OR p.client_id = $3)
@@ -103,7 +105,7 @@ pub(super) async fn fetch_report(
              COALESCE(SUM(rounded_minutes) FILTER (WHERE billable), 0)::bigint
                as "billable_minutes!",
              COALESCE(
-               SUM(line_amount_cents(billable_rate_cents, rounded_minutes))
+               SUM(COALESCE(frozen_amount_cents, line_amount_cents(billable_rate_cents, rounded_minutes)))
                  FILTER (WHERE billable),
                0)::bigint as "billable_cents!",
              SUM(line_amount_cents(cost_rate_cents, minutes))::bigint as "cost_cents!",

@@ -3,14 +3,17 @@
 /// Returns the first non-None rate in priority order:
 /// 1. Task rate on the project (`project_tasks.rate_cents`)
 /// 2. User's per-project assignment override (`assignments.rate_cents`)
-/// 3. User's org-wide default (`users.billable_rate_cents`)
+/// 3. Project rate (`projects.rate_cents`)
+/// 4. User's org-wide default (`users.billable_rate_cents`)
 pub fn resolve_rate(
     task_rate_cents: Option<i64>,
     assignment_rate_cents: Option<i64>,
+    project_rate_cents: Option<i64>,
     user_rate_cents: Option<i64>,
 ) -> Option<i64> {
     task_rate_cents
         .or(assignment_rate_cents)
+        .or(project_rate_cents)
         .or(user_rate_cents)
 }
 
@@ -39,13 +42,21 @@ mod tests {
     #[test]
     fn resolve_rate_cascade() {
         // Task rate wins when present
-        assert_eq!(resolve_rate(Some(5000), Some(4000), Some(3000)), Some(5000));
+        assert_eq!(
+            resolve_rate(Some(5000), Some(4000), Some(3500), Some(3000)),
+            Some(5000)
+        );
         // Falls through to assignment
-        assert_eq!(resolve_rate(None, Some(4000), Some(3000)), Some(4000));
+        assert_eq!(
+            resolve_rate(None, Some(4000), Some(3500), Some(3000)),
+            Some(4000)
+        );
+        assert_eq!(resolve_rate(None, None, Some(3500), Some(3000)), Some(3500));
+        assert_eq!(resolve_rate(None, None, Some(0), Some(3000)), Some(0));
         // Falls through to user default
-        assert_eq!(resolve_rate(None, None, Some(3000)), Some(3000));
+        assert_eq!(resolve_rate(None, None, None, Some(3000)), Some(3000));
         // All None
-        assert_eq!(resolve_rate(None, None, None), None);
+        assert_eq!(resolve_rate(None, None, None, None), None);
     }
 
     #[test]
