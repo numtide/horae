@@ -136,7 +136,7 @@ pub fn Gallery() -> Element {
             section { class: "gallery-section",
                 h2 { class: "gallery-heading", "Dropdown menu" }
                 div { class: "gallery-row",
-                    Menu { label: "Actions",
+                    Menu { id: "gallery-actions-menu", label: "Actions",
                         MenuItem { onclick: move |_| {}, "Edit" }
                         MenuItem { selected: true, onclick: move |_| {}, "Pin" }
                         MenuDivider {}

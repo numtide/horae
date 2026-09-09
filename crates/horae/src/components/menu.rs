@@ -1,11 +1,12 @@
 use dioxus::prelude::*;
 
 /// A dropdown menu: a trigger button that reveals a popover of [`MenuItem`]s.
-/// Manages its own open state and closes on an outside click or when any item is
-/// chosen. Box and item styling come from the shared `.menu` / `.menu-item`
-/// classes (also used by the sidebar account menu).
+/// Uses the browser's top layer so scrollable tables cannot clip its items.
+/// Native light dismissal and menu.js handle dismissal, positioning and keys.
 #[component]
 pub fn Menu(
+    /// Unique, stable DOM ID, also used to associate the trigger and menu.
+    id: String,
     /// Text shown on the trigger button (a `▾` caret is appended).
     label: String,
     /// Anchor the popover to the right edge — for right-aligned cells.
@@ -13,35 +14,32 @@ pub fn Menu(
     align_right: bool,
     children: Element,
 ) -> Element {
-    let mut open = use_signal(|| false);
     let popover = if align_right {
-        "menu menu-pop menu-pop-right"
+        "menu menu-popover menu-popover-right"
     } else {
-        "menu menu-pop"
+        "menu menu-popover"
     };
     rsx! {
+        document::Script { src: asset!("/assets/js/menu.js") }
         div { class: "menu-anchor",
             button {
+                id: "{id}-trigger",
                 r#type: "button",
                 class: "btn btn-secondary btn-sm",
                 "aria-haspopup": "menu",
-                "aria-expanded": "{open}",
-                onclick: move |_| {
-                    let next = !open();
-                    open.set(next);
-                },
+                "aria-expanded": "false",
+                "aria-controls": "{id}",
+                popovertarget: "{id}",
                 "{label}"
                 span { class: "ml-2 text-faint", "▾" }
             }
-            if open() {
-                div { class: "menu-overlay", onclick: move |_| open.set(false) }
-                div {
-                    class: "{popover}",
-                    role: "menu",
-                    // Any click inside picks an item; close once it bubbles here.
-                    onclick: move |_| open.set(false),
-                    {children}
-                }
+            div {
+                id: "{id}",
+                class: popover,
+                popover: "auto",
+                role: "menu",
+                "aria-labelledby": "{id}-trigger",
+                {children}
             }
         }
     }
@@ -69,6 +67,9 @@ pub fn MenuItem(
     rsx! {
         button {
             r#type: "button",
+            role: "menuitem",
+            tabindex: "-1",
+            "aria-current": selected.then_some("true"),
             class: "{class}",
             disabled,
             onclick: move |e| onclick.call(e),
@@ -81,6 +82,6 @@ pub fn MenuItem(
 #[component]
 pub fn MenuDivider() -> Element {
     rsx! {
-        div { class: "menu-divider" }
+        div { class: "menu-divider", role: "separator" }
     }
 }
