@@ -2,11 +2,31 @@ use chrono::{DateTime, NaiveDate, Utc};
 use serde::Serialize;
 use uuid::Uuid;
 
-/// Business events dispatched to subscribed plugins (FR-019).
-/// Each variant carries a payload matching the contract's JSON schemas.
-#[derive(Debug, Clone, Serialize)]
-#[serde(tag = "event")]
-pub enum AppEvent {
+// Keep manifest validation, dispatch names, and serialized event tags in one
+// catalog so a newly added event is always subscribable.
+macro_rules! app_events {
+    ($(#[serde(rename = $hook:literal)] $variant:ident {
+        $($field:ident: $ty:ty,)*
+    },)*) => {
+        /// Business events dispatched to subscribed plugins (FR-019).
+        #[derive(Debug, Clone, Serialize)]
+        #[serde(tag = "event")]
+        pub enum AppEvent {
+            $(#[serde(rename = $hook)] $variant { $($field: $ty,)* },)*
+        }
+
+        pub const KNOWN_HOOKS: &[&str] = &[$($hook,)*];
+
+        impl AppEvent {
+            /// The hook name matching the plugin manifest's `hooks` entries.
+            pub fn hook_name(&self) -> &'static str {
+                match self { $(Self::$variant { .. } => $hook,)* }
+            }
+        }
+    };
+}
+
+app_events! {
     #[serde(rename = "time_entry_created")]
     TimeEntryCreated {
         occurred_at: DateTime<Utc>,
@@ -216,46 +236,6 @@ pub enum AppEvent {
 }
 
 impl AppEvent {
-    /// The hook name matching the plugin manifest's `hooks` entries.
-    pub fn hook_name(&self) -> &'static str {
-        match self {
-            Self::TimeEntryCreated { .. } => "time_entry_created",
-            Self::TimeEntryStopped { .. } => "time_entry_stopped",
-            Self::InvoiceCreated { .. } => "invoice_created",
-            Self::InvoiceSent { .. } => "invoice_sent",
-            Self::UserLoggedIn { .. } => "user_logged_in",
-            Self::TimeEntryUpdated { .. } => "time_entry_updated",
-            Self::TimeEntryDeleted { .. } => "time_entry_deleted",
-            Self::TimesheetSubmitted { .. } => "timesheet_submitted",
-            Self::SubmissionApproved { .. } => "submission_approved",
-            Self::SubmissionRejected { .. } => "submission_rejected",
-            Self::InvoicePaid { .. } => "invoice_paid",
-            Self::InvoiceVoided { .. } => "invoice_voided",
-            Self::ClientCreated { .. } => "client_created",
-            Self::ClientUpdated { .. } => "client_updated",
-            Self::ClientDeactivated { .. } => "client_deactivated",
-            Self::ClientReactivated { .. } => "client_reactivated",
-            Self::ProjectCreated { .. } => "project_created",
-            Self::ProjectUpdated { .. } => "project_updated",
-            Self::ProjectDeactivated { .. } => "project_deactivated",
-            Self::ProjectReactivated { .. } => "project_reactivated",
-            Self::TaskCreated { .. } => "task_created",
-            Self::TaskUpdated { .. } => "task_updated",
-            Self::TaskDeactivated { .. } => "task_deactivated",
-            Self::TaskReactivated { .. } => "task_reactivated",
-            Self::UserCreated { .. } => "user_created",
-            Self::UserRoleChanged { .. } => "user_role_changed",
-            Self::UserDeactivated { .. } => "user_deactivated",
-            Self::UserLoggedOut { .. } => "user_logged_out",
-            Self::UserAssignedToProject { .. } => "user_assigned_to_project",
-            Self::AssignmentRemoved { .. } => "assignment_removed",
-            Self::OrgBrandingUpdated { .. } => "org_branding_updated",
-            Self::ProjectBudgetThresholdReached { .. } => "project_budget_threshold_reached",
-            Self::ProjectOverBudget { .. } => "project_over_budget",
-            Self::TimerRunningTooLong { .. } => "timer_running_too_long",
-        }
-    }
-
     pub fn to_json(&self) -> String {
         serde_json::to_string(self).unwrap_or_default()
     }

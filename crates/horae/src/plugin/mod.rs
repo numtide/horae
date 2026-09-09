@@ -1,3 +1,4 @@
+pub mod database;
 pub mod event;
 pub mod host;
 pub mod manifest;

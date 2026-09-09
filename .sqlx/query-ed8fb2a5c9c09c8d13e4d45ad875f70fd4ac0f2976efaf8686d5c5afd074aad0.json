@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (\n            SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace\n            WHERE has_function_privilege(p.oid, 'EXECUTE') AND (\n                p.prosecdef OR (n.nspname NOT IN ('pg_catalog','information_schema')\n                    AND p.oid NOT IN (\n                        'public.harvest_norm(text)'::regprocedure,\n                        'public.line_amount_cents(bigint,integer)'::regprocedure,\n                        'public.set_updated_at()'::regprocedure\n                    )\n                    -- The rounding helper may not be installed yet. A NULL in\n                    -- NOT IN would also allow unrelated functions through.\n                    AND p.oid IS DISTINCT FROM to_regprocedure(\n                        'public.effective_minutes(integer,integer,smallint,public.round_dir)'\n                    ))\n            )\n        ) AS \"unsafe!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "unsafe!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ed8fb2a5c9c09c8d13e4d45ad875f70fd4ac0f2976efaf8686d5c5afd074aad0"
+}
