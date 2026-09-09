@@ -55,7 +55,7 @@ pub fn AdminShell() -> Element {
                 span { "←" }
                 "Back to Timesheet"
             }
-            div { class: "flex items-start gap-12",
+            div { class: "flex flex-wrap items-start gap-12",
                 aside { class: "adm-nav",
                     div { class: "adm-head flex items-center gap-3",
                         span { class: "adm-head-mark", "{org_initial}" }
