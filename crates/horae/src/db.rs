@@ -53,6 +53,30 @@ pub async fn run_migrations(pool: &PgPool) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Join the user's time-entry write barrier before acquiring entry row locks.
+/// Writers share this lock; submitting a week takes the same key exclusively.
+/// The user-wide key also covers moves between weeks without a racy date lookup.
+pub async fn lock_time_entry_write(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    user_id: uuid::Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"SELECT pg_advisory_xact_lock_shared(hashtextextended('horae.timesheet:' || $1::uuid::text, 0)) as "lock!: ()""#,
+        user_id,
+    ).execute(&mut **tx).await?;
+    Ok(())
+}
+
+/// Open an interactive entry mutation under the shared submission barrier.
+pub async fn begin_time_entry_write(
+    pool: &PgPool,
+    user_id: uuid::Uuid,
+) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    lock_time_entry_write(&mut tx, user_id).await?;
+    Ok(tx)
+}
+
 /// Drop everything this application owns and re-apply the migrations.
 ///
 /// Destructive, and dev-only. Both schemas go: `public` holds the tables and

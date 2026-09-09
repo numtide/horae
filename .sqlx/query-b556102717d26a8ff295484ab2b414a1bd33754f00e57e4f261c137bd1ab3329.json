@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (current_user <> session_user OR rolsuper OR rolcreatedb\n            OR rolcreaterole OR rolreplication OR rolbypassrls\n            OR EXISTS (SELECT 1 FROM pg_auth_members WHERE member = pg_roles.oid)\n            OR has_database_privilege(current_database(), 'CREATE')\n            OR EXISTS (SELECT 1 FROM pg_namespace WHERE has_schema_privilege(oid, 'CREATE'))\n        ) AS \"unsafe!\" FROM pg_roles WHERE rolname = session_user",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "unsafe!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "b556102717d26a8ff295484ab2b414a1bd33754f00e57e4f261c137bd1ab3329"
+}
