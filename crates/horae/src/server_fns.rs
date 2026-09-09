@@ -17,6 +17,7 @@ pub(crate) use crate::models::{
 // these errors.
 #[cfg(feature = "server")]
 mod status {
+    pub const BAD_REQUEST: u16 = 400;
     pub const UNAUTHORIZED: u16 = 401;
     pub const FORBIDDEN: u16 = 403;
     pub const NOT_FOUND: u16 = 404;
@@ -256,7 +257,7 @@ pub(crate) fn submission_payload(
 /// Sum of tracked minutes for a user across a period, for submission events.
 #[cfg(feature = "server")]
 pub(crate) async fn week_total_minutes(
-    db: &sqlx::PgPool,
+    db: impl sqlx::PgExecutor<'_>,
     user_id: uuid::Uuid,
     start: chrono::NaiveDate,
     end: chrono::NaiveDate,

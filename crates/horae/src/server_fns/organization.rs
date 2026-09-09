@@ -2,6 +2,33 @@
 
 use super::*;
 
+/// First weekday of the signed-in user's organization, shared by the timesheet
+/// and its date picker. Invalid stored configuration must not silently default.
+#[server]
+pub async fn get_week_start() -> Result<chrono::Weekday, ServerFnError> {
+    let user = require_user().await?;
+    let state = crate::state::global_state().await;
+    let day = sqlx::query_scalar!(
+        "SELECT week_start FROM organizations WHERE id = $1",
+        user.org_id
+    )
+    .fetch_one(&state.db)
+    .await
+    .map_err(server_err)?;
+    match day {
+        1 => Ok(chrono::Weekday::Mon),
+        2 => Ok(chrono::Weekday::Tue),
+        3 => Ok(chrono::Weekday::Wed),
+        4 => Ok(chrono::Weekday::Thu),
+        5 => Ok(chrono::Weekday::Fri),
+        6 => Ok(chrono::Weekday::Sat),
+        7 => Ok(chrono::Weekday::Sun),
+        _ => Err(server_err(
+            "The organization's week start must be between 1 and 7",
+        )),
+    }
+}
+
 /// The organization's display name — for the admin shell's workspace header.
 /// Any signed-in user may read it (it is not sensitive).
 #[server]

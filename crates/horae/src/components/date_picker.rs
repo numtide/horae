@@ -1,6 +1,6 @@
-use chrono::{Datelike, Duration, Months, NaiveDate};
+use chrono::{Datelike, Duration, Months, NaiveDate, Weekday};
 use dioxus::prelude::*;
-use horae_core::week::iso_week_monday;
+use horae_core::week::week_start;
 
 const WEEKDAYS: [&str; 7] = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 
@@ -22,16 +22,18 @@ fn shift_month(month: NaiveDate, forward: bool) -> NaiveDate {
 /// A month calendar panel: the surface a period stepper opens onto.
 ///
 /// The panel is a plain block — the caller owns where it sits (wrap it in
-/// `.menu-anchor` + `.dp-pop` for a popover) and when it closes. Days run
-/// Monday-first, matching the app's ISO weeks.
+/// `.menu-anchor` + `.dp-pop` for a popover) and when it closes.
 #[component]
 pub fn DatePicker(
     /// The picked day: the month the calendar opens on, and what it highlights.
     selected: NaiveDate,
-    /// Highlight the whole ISO week of `selected` rather than the single day —
+    /// Highlight the whole configured week of `selected` rather than the single day —
     /// for callers that page a week at a time.
     #[props(default)]
     week: bool,
+    /// The first weekday in both the grid and the selected weekly period.
+    #[props(default = Weekday::Mon)]
+    first_day: Weekday,
     onpick: EventHandler<NaiveDate>,
 ) -> Element {
     let today = chrono::Utc::now().date_naive();
@@ -43,12 +45,25 @@ pub fn DatePicker(
     // Days between these two carry the wash; the two ends themselves go solid.
     // In day mode both collapse onto `selected`, which is then simply solid.
     let (band_start, band_end) = if week {
-        let start = iso_week_monday(selected);
-        (start, start + Duration::days(6))
+        let Some(start) = week_start(selected, first_day) else {
+            return rsx! { div { class: "alert alert-danger", "This week is outside the supported date range." } };
+        };
+        let Some(end) = start.checked_add_days(chrono::Days::new(6)) else {
+            return rsx! { div { class: "alert alert-danger", "This week is outside the supported date range." } };
+        };
+        (start, end)
     } else {
         (selected, selected)
     };
-    let grid_start = iso_week_monday(visible);
+    let Some(grid_start) = week_start(visible, first_day).filter(|start| {
+        start
+            .checked_add_days(chrono::Days::new((CELLS - 1) as u64))
+            .is_some()
+    }) else {
+        return rsx! { div { class: "alert alert-danger", "This month is outside the supported date range." } };
+    };
+    let labels: [_; 7] =
+        std::array::from_fn(|i| WEEKDAYS[(i + first_day.num_days_from_monday() as usize) % 7]);
 
     rsx! {
         div { class: "menu dp",
@@ -73,7 +88,7 @@ pub fn DatePicker(
             }
 
             div { class: "grid grid-cols-7 pb-2 border-b mb-2",
-                for day in WEEKDAYS {
+                for day in labels {
                     div { class: "text-center text-xs text-label", "{day}" }
                 }
             }

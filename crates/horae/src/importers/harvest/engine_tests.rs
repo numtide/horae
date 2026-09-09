@@ -360,6 +360,49 @@ async fn seed_user(pool: &PgPool, org_id: Uuid, email: &str) -> Uuid {
     id
 }
 
+#[sqlx::test(migrations = "./migrations")]
+async fn submission_barrier_blocks_imported_time_entries(pool: PgPool) {
+    let org = seed_org(&pool).await;
+    let user = seed_user(&pool, org, "dana@test.com").await;
+    let mut submission = pool.begin().await.unwrap();
+    let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
+        .fetch_one(&mut *submission)
+        .await
+        .unwrap()
+        .unwrap();
+    sqlx::query!(
+        r#"SELECT pg_advisory_xact_lock(hashtextextended('horae.timesheet:' || $1::uuid::text, 0)) as "lock!: ()""#,
+        user,
+    ).execute(&mut *submission).await.unwrap();
+    let run_pool = pool.clone();
+    let mut run = tokio::task::JoinSet::new();
+    run.spawn(async move {
+        commit_csv(
+            &run_pool,
+            org,
+            vec![nk_row(
+                "Acme",
+                "Widget",
+                "Dev",
+                "dana@test.com",
+                (2026, 9, 7),
+                "1",
+                None,
+            )],
+        )
+        .await
+    });
+    crate::server_fns::test_seed::wait_for_blocked(&pool, blocker).await;
+    submission.commit().await.unwrap();
+    let report = tokio::time::timeout(std::time::Duration::from_secs(5), run.join_next())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert!(report.row_errors.is_empty(), "{:?}", report.row_errors);
+    assert_eq!(count(&pool, "time_entries").await, 1);
+}
+
 /// A source row with the given Harvest ids and fields; other fields take sane
 /// defaults so tests only set what they care about.
 #[allow(clippy::too_many_arguments)]

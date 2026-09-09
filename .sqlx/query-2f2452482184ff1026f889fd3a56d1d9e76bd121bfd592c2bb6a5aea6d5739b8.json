@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO time_entries\n           (id, org_id, user_id, project_id, task_id, spent_date, minutes, billable, is_running, started_at, state)\n         SELECT $1, org_id, user_id, project_id, task_id, spent_date, 0, billable, true, now(), 'open'\n         FROM time_entries WHERE id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2f2452482184ff1026f889fd3a56d1d9e76bd121bfd592c2bb6a5aea6d5739b8"
+}
