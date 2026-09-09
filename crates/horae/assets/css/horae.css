@@ -1632,16 +1632,28 @@ tbody tr:hover { background: var(--color-row-hover); }
 
 /* Modal + segmented choice buttons (used by the projects Export dialog). */
 .modal-overlay {
-  position: fixed; inset: 0; background: var(--color-scrim);
+  position: fixed; inset: 0; margin: 0;
+  width: 100%; height: 100dvh; max-width: none; max-height: none;
+  padding: min(140px, 8dvh) var(--space-4) var(--space-4);
+  border: 0; background: transparent; color: var(--color-text);
+}
+.modal-overlay[open] {
   display: flex; align-items: flex-start; justify-content: center;
-  padding-top: 140px; z-index: 60;
 }
+.modal-overlay::backdrop { background: var(--color-scrim); }
 .modal {
-  width: 480px; max-width: calc(100vw - 40px);
+  width: 480px; max-width: 100%; max-height: 100%;
   background: var(--color-bg-secondary); border: 1px solid var(--color-border);
-  border-radius: var(--radius-panel); overflow: hidden; box-shadow: var(--shadow-modal);
+  border-radius: var(--radius-panel); overflow: auto; overscroll-behavior: contain;
+  box-shadow: var(--shadow-modal);
 }
-.modal-lg { width: 640px; max-width: 92vw; }
+.modal-lg { width: 640px; }
+@media (max-width: 480px) {
+  .ts-modal-row { flex-wrap: wrap; }
+  .ts-modal-notes { min-width: 0; flex-basis: 100%; }
+  .ts-modal-actions { flex-wrap: wrap; }
+  .modal .seg-row { grid-auto-flow: row; }
+}
 .modal-title {
   padding: var(--space-4) var(--space-5); border-bottom: 1px solid var(--color-border);
   text-align: center; font-family: var(--font-family-display);

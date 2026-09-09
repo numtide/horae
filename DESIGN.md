@@ -191,6 +191,7 @@ generator owns only the mechanical utility + responsive matrix.
 - ARIA labels on icon-only buttons
 - Color contrast meets WCAG AA — `#EFEAE0` on `#1A1813` is ~9:1
 - Form inputs have associated `<label>` elements
+- Shared `Modal` dialogs stay mounted and use native `showModal()` / `close()` for background inertness and focus restoration. Escape, backdrop clicks and Cancel dismiss them unless a mutation is pending; the panel scrolls within the viewport on short screens.
 - Status indicated by text + color (never color alone) — badges include both dot and text label
 
 ## Interaction Principles
