@@ -2,10 +2,9 @@
 //! adapters, OAuth connect flow, credential storage, and provenance-backed
 //! resolve/apply (plan.md **Project Structure**).
 //!
-//! The engine ([`run_import`]) drives a stream of [`SourceRow`]s — produced by
-//! either the API adapter or the CSV adapter — through resolve → apply → report.
-//! It never learns which adapter produced a row. Each row is applied in its own
-//! savepoint (see [`apply`]); a `DryRun` runs the whole stream inside a
+//! Both source adapters drive normalized [`SourceRow`]s through the shared
+//! resolve → [`apply::apply_row`] → report pipeline. Each row is applied in its
+//! own savepoint; a `DryRun` runs the whole stream inside a
 //! transaction that is rolled back, so nothing persists — not data, not
 //! provenance, not the watermark (FR-014, research.md §7).
 
@@ -26,10 +25,12 @@ mod engine_tests;
 mod sync_tests;
 
 use chrono::Utc;
-use horae_core::importers::harvest::types::{
-    EntityType, ImportMode, SourceKind, SourceRow, SyncScope,
-};
-use sqlx::{Acquire, PgPool};
+#[cfg(test)]
+use horae_core::importers::harvest::types::SourceKind;
+use horae_core::importers::harvest::types::{EntityType, ImportMode, SourceRow, SyncScope};
+#[cfg(test)]
+use sqlx::Acquire;
+use sqlx::PgPool;
 use uuid::Uuid;
 
 #[cfg(test)]
@@ -39,17 +40,16 @@ use resolve::{OrgDefaults, RunCache};
 
 use crate::config::HarvestConfig;
 
-/// A source of normalized rows the engine consumes lazily (research.md §9). Both
-/// adapters implement it over parsed records. Returning `None` ends the run;
-/// this interface alone does not imply bounded memory or network streaming.
+/// A source of normalized rows consumed lazily by the API adapter and engine
+/// tests. Returning `None` ends the source; this interface alone does not imply
+/// bounded memory or network streaming.
 pub trait RowSource {
     fn next_row(&mut self) -> impl Future<Output = anyhow::Result<Option<SourceRow>>> + Send;
 }
 
-/// Drive a source through the engine and return the run report. In `Commit` mode
-/// the outer transaction is committed; in `DryRun` it is rolled back so nothing
-/// persists (FR-014). API synchronization uses the same row pipeline inside a
-/// transaction shared with its watermark update.
+/// Drive hand-built test sources through the shared row pipeline, using the
+/// same organization lock, transaction and preview rollback as uploaded sources.
+#[cfg(test)]
 pub async fn run_import<S: RowSource>(
     pool: &PgPool,
     org_id: Uuid,
@@ -96,12 +96,13 @@ async fn apply_rows<S: RowSource>(
     Ok(())
 }
 
-/// An in-memory row source over a `Vec` — used by the CSV adapter (after parsing)
-/// and by integration tests that hand-build rows.
+/// An in-memory row source for tests that hand-build rows.
+#[cfg(test)]
 pub struct VecSource {
     rows: std::vec::IntoIter<SourceRow>,
 }
 
+#[cfg(test)]
 impl VecSource {
     pub fn new(rows: Vec<SourceRow>) -> Self {
         Self {
@@ -110,6 +111,7 @@ impl VecSource {
     }
 }
 
+#[cfg(test)]
 impl RowSource for VecSource {
     async fn next_row(&mut self) -> anyhow::Result<Option<SourceRow>> {
         Ok(self.rows.next())
