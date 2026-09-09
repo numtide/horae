@@ -118,7 +118,9 @@ in
           name = "horae";
           ensureDBOwnership = true;
           ensureClauses = {
-            createdb = true;
+            # Explicit false also revokes the privilege on existing installs.
+            # Only the separate development/test role needs CREATEDB.
+            createdb = false;
             login = true;
           };
         }

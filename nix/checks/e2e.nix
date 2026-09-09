@@ -22,6 +22,25 @@ pkgs.testers.nixosTest {
         ).split()
         assert "postgresql.target" in units, f"Missing PostgreSQL setup dependency: {dependency}"
 
+    # Application migrations need ownership of horae, not permission to create
+    # other databases. The separate sqlx test role still needs CREATEDB.
+    def assert_no_createdb():
+        allowed = server.succeed(
+            "sudo -u postgres psql -At -c \"SELECT rolcreatedb FROM pg_roles WHERE rolname = 'horae'\""
+        ).strip()
+        assert allowed == "f", f"Service role has CREATEDB: {allowed}"
+        server.fail("sudo -u horae createdb horae_forbidden_probe")
+
+    assert_no_createdb()
+
+    # Existing installations must lose the old privilege on setup as well.
+    server.succeed("sudo -u postgres psql -v ON_ERROR_STOP=1 -c 'ALTER ROLE horae CREATEDB'")
+    server.succeed("systemctl restart postgresql-setup.service")
+    assert_no_createdb()
+    server.succeed("systemctl restart horae.service")
+    server.wait_for_unit("horae.service")
+    server.wait_for_open_port(3000)
+
     # Health check
     server.succeed("curl -s http://localhost:3000/health | grep -q ok")
 
