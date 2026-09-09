@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n        (SELECT COUNT(*) FROM time_entries) AS \"entries!\",\n        (SELECT COUNT(*) FROM harvest_import_map) AS \"mappings!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entries!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "mappings!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "8c5eb24eb3f38c5d7567273d60c1c053ae1abda058ea5b2e735ece275d22a898"
+}

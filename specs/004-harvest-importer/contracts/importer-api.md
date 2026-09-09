@@ -17,14 +17,54 @@ GET /auth/harvest/callback?code=…&state=…      (plain Axum route, beside aut
 
 - The browser redirect target after the admin authorizes on Harvest (cannot be a `#[server]` fn).
 - **Validates `state`** against the value stored at connect-start for this session, rejecting a missing or mismatched `state` **without exchanging the code** — this prevents CSRF / forged or replayed callbacks. Only on a valid `state` does it proceed.
-- Exchanges `code` for `access_token` + `refresh_token`, resolves the Harvest **account id**, and stores all three **encrypted at rest** in `harvest_credentials`, scoped to the org (FR-022). Tokens are never returned to the browser or logged.
+- Exchanges `code` for `access_token` + `refresh_token`, resolves the Harvest **account id**, and stores the tokens **encrypted at rest** alongside the account ID in `harvest_credentials`, scoped to the org (FR-022). Tokens are never returned to the browser or logged; the account ID is non-secret metadata.
 - On success, redirects back into the admin "Import from Harvest" screen showing a connected state.
+
+The organization is permanently bound to the first connected Harvest account.
+Reconnect may replace credentials for that same account (including after key
+rotation), but cannot switch accounts. Account mismatch or unidentified legacy
+provenance returns a plain-text `409 Conflict` with recovery instructions; only
+these known policy errors and the import-busy message are exposed, never tokens
+or arbitrary upstream errors. Return to the import screen and reconnect the
+original account, or ask the operator to verify legacy identity.
+
+Credential storage and disconnect acquire the same organization lock as imports.
+If an import is running, they reject with `CONFLICT` rather than replacing or
+removing credentials underneath its token refresh or data transaction. OAuth
+code exchange/account discovery precedes credential storage; a rejected callback
+must start a fresh connect attempt when the conflicting operation has finished.
+
+```
+harvest_disconnect() -> Result<(), ServerFnError>
+```
+
+Admin-only. Removes stored OAuth credentials but preserves account binding,
+provenance and imported records. It does not revoke tokens at Harvest. A later
+connection must use the original account. Disconnect removes the watermark with
+the credential row; the next sync replays data through existing provenance.
 
 ```
 harvest_connection_status() -> Result<ConnectionStatus, ServerFnError>   // connected? account id, token freshness — never the tokens
 ```
 
 ## 2. Import from the Harvest API (PRIMARY) — admin-only
+
+API and CSV imports share one PostgreSQL advisory lock per organization, across
+server processes. Both previews and committing runs hold it. A competing run is
+rejected with `CONFLICT` and a retry message before resolving or applying rows; API
+runs acquire it before loading credentials, refreshing tokens, or fetching data.
+Other organizations can import independently. This does not impose uniqueness
+on time-entry fields: distinct Harvest IDs and repeated CSV occurrences remain
+distinct entries.
+
+The lock uses one pooled connection for the whole run, including token refresh
+outside the data transaction. The connection is closed after the run and on
+errors or cancellation, so a session lock cannot return to the shared pool.
+Cancellation rolls back uncommitted data; a blocking HTTP call already in flight
+keeps the lock until it finishes, but its cancelled importer cannot apply the
+result. Successfully persisted refreshed OAuth tokens remain stored even if
+later data work is rolled back. Use a direct PostgreSQL connection or a pooler
+with session affinity; transaction-mode pooling cannot preserve session locks.
 
 ```
 import_harvest_api(
@@ -36,6 +76,22 @@ import_harvest_api(
 - **Authorization**: rejects non-administrators with `FORBIDDEN` (FR-001). Reads the acting admin + single org from the session/`AppState`.
 - **Precondition**: requires a usable Harvest connection; with none, rejects up front with a clear "connect Harvest" message and no writes (FR-003). Refreshes an expired access token transparently; a failed refresh → reject with "reconnect Harvest" (FR-024).
 - **Pull**: fetches clients → projects → tasks/assignments → users(reference) → time entries, following pagination and respecting the rate limit (FR-023), then feeds the normalized rows through the shared engine.
+
+API clients, projects and tasks are applied as independent catalog records before
+time entries, including records with no time. They reuse the same provenance-first
+resolvers as denormalized time/CSV rows. The catalog and time phases share one
+run cache, report and outer transaction: parents are counted once, dry-run rolls
+back both phases, and a watermark-write failure also rolls back catalog writes.
+An import containing only parents does not invent a time-entry watermark.
+
+Each catalog record has its own savepoint. A failed parent is reported by type
+and Harvest ID; dependent projects/time entries fail visibly instead of creating
+placeholder parents. Independent records continue. A project whose client is
+absent from the client collection may resolve existing provenance or use its
+embedded client name. An ID without either is not enough to create a client.
+Parent errors retain the previous incremental watermark, so a corrected retry
+can recover dependent time. Existing matched records remain unchanged (FR-017).
+
 - **`mode = DryRun`**: full pull → resolve → plan against live data, returns the report with **zero writes** — no data, no provenance, no watermark update (FR-014). `mode = Commit`: applies the plan and writes provenance + advances the watermark on success (FR-015, FR-025, FR-026).
 - **`SyncScope`** is a plainly named two-state enum (not `Option<bool>`); `Incremental` sends `updated_since` from `harvest_credentials.synced_watermark`.
 

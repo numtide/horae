@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "CREATE FUNCTION public.plugin_test_unknown() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "4f9518ab91bdada616fee28b904732c2e46086a1e51809628588864aeb927fa9"
+}
