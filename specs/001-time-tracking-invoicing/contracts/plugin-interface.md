@@ -1,8 +1,8 @@
 # Plugin Interface Contract
 
-**Status: Planned (User Story 5).** The plugin subsystem is **not yet implemented**
-in the codebase. This document is a forward-looking interface contract derived from
-PLAN.md's "Plugin System" section and functional requirements **FR-018..FR-022**. It
+**Status: Runtime implemented (User Story 5); hot reload remains planned.**
+This interface contract is derived from PLAN.md's "Plugin System" section and
+functional requirements **FR-018..FR-022**. It
 defines the plugin manifest, the event catalog, the host functions, the
 dashboard-widget return shape, and the sandbox / failure-isolation guarantees so that
 implementation and plugin authors share one contract.
@@ -15,7 +15,7 @@ Plugins are **WASM modules loaded at runtime via
 operator-trusted but **sandboxed**: they may only call the host functions Horae
 explicitly exposes and can never write to the datastore or render arbitrary UI code.
 
-Planned module layout (`crates/horae/src/plugin/`):
+Module layout (`crates/horae/src/plugin/`):
 
 1. `registry.rs` — `PluginRegistry`: scans the `plugins/` data directory, loads each
    `*.wasm` at startup, holds a handle per plugin.
@@ -24,8 +24,10 @@ Planned module layout (`crates/horae/src/plugin/`):
 1. `event.rs` — the `AppEvent` enum, serialized to JSON and passed to plugins.
 1. `manifest.rs` — the `plugin.toml` schema.
 
-At startup the registry loads every plugin and registers it for the hooks it
-declares (FR-018). `AppState` gains `plugins: Arc<PluginRegistry>`; on each business
+At startup the registry loads plugins sequentially on a blocking worker and
+registers each valid plugin for the hooks it declares (FR-018). Directory access,
+compilation, and instantiation do not run on an async runtime worker.
+`AppState` holds `plugins: Arc<PluginRegistry>`; on each business
 event, `registry.dispatch(event)` invokes all subscribed plugins concurrently
 (FR-019).
 
@@ -187,18 +189,18 @@ ______________________________________________________________________
 
 ## Host functions
 
-Horae exposes exactly these host functions to plugins via extism's `host_fn!` macro.
-A plugin's capabilities are limited to this set (FR-020) — there is no filesystem,
-no arbitrary syscalls, and **no data-write access**.
+Horae exposes these host functions through Extism. SQL access requires a separate,
+restricted PostgreSQL login configured through `HORAE_PLUGIN_DATABASE_URL`.
+Without it, `horae_db_query` returns a configuration error; it never falls back to
+the application's writer pool. Other plugin capabilities remain available.
 
 1. `horae_log(level, message)` — structured logging. `level` is one of
    `"error" | "warn" | "info" | "debug"`; `message` is a string. Returns nothing.
    Entries are written to the host log annotated with the plugin name.
 1. `horae_db_query(sql, params_json) -> rows_json` — **read-only** SQL lookup. `sql`
    is a query string; `params_json` is a JSON array of bind parameters; the result is
-   a JSON array of row objects. The connection is constrained to read-only
-   (SELECT-only); any attempt to mutate data is rejected (FR-020: plugins MUST NOT
-   modify stored data directly).
+   a JSON array of row objects. PostgreSQL grants and a read-only transaction
+   enforce the data boundary, including SELECTs that call functions.
 1. `horae_http_post(url, body_json) -> response_json` — outbound HTTP POST for
    webhooks and integrations. `url` is the target; `body_json` is the request body;
    the return is a JSON object with the response status and body. Subject to the
@@ -213,15 +215,74 @@ Each host function takes a single JSON-string argument and (except `horae_log`)
 returns a single JSON string, consistent across all four:
 
 - `horae_db_query` — in `{"sql": string, "params": [ ... ]}`; out a JSON array of row
-  objects, or `{"error": string}`. Read-only is enforced twice: a `SELECT`/`WITH`
+  objects, or `{"error": string}`. A `SELECT`/`WITH`
   prefix guard rejects a leading write or a second `;`-separated statement, and the
-  query is executed wrapped as `SELECT json_agg(_t) FROM (<sql>) _t`, a subquery form
-  Postgres accepts only for a `SELECT`. Postgres also does the row→JSON serialisation.
-- `horae_http_post` — in `{"url": string, "body": <json>}`; out `{"status": u16, "body": string}`, or `{"error": string}`. Bounded by a 10-second timeout.
+  query is wrapped as a bounded row-to-JSON SELECT. The syntax check supplements,
+  but does not replace, database permissions. Queries have a 5-second deadline
+  and statement timeout, at most 1,000 rows, and at most 1 MiB of serialized JSON.
+  Oversized results return an error, never silently truncated data. Rows are
+  streamed rather than aggregated into an unbounded JSON array; oversized rows
+  are rejected before transfer to the host. Every transaction is read-only and
+  rolled back; its connection is closed even on cancellation to discard session
+  settings and advisory locks. At most four database connections are admitted.
+- `horae_http_post` — in `{"url": string, "body": <json>}`; out `{"status": u16, "body": string}`, or `{"error": string}`. Bounded by a 10-second timeout and a 1 MiB response body. Invalid UTF-8 and oversized responses are reported as errors.
 - `horae_config_get` — in `{"key": string}`; out the JSON string value or JSON `null`.
 
 Per-plugin configuration lives in an optional top-level `[config]` table in the
 plugin's `plugin.toml` (string keys and values), read only by that plugin.
+
+### Provisioning SQL access
+
+Provision the login as a database administrator, after Horae's migrations. Grant
+only the business data your installed plugins need; this example allows time
+lookups without exposing authentication or import credentials:
+
+```sql
+CREATE ROLE horae_plugin LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE
+  NOREPLICATION NOBYPASSRLS;
+GRANT USAGE ON SCHEMA public TO horae_plugin;
+GRANT SELECT ON public.time_entries, public.projects, public.clients,
+  public.tasks, public.project_tasks TO horae_plugin;
+GRANT SELECT (id, org_id, email, name, org_role, active)
+  ON public.users TO horae_plugin;
+ALTER ROLE horae_plugin SET default_transaction_read_only = on;
+```
+
+Set its password using `\password horae_plugin` in psql or provision equivalent
+certificate/peer authentication. Put `HORAE_PLUGIN_DATABASE_URL` in the service's
+secret environment file (NixOS: `services.horae.secretKeyFile`), using that login
+and the Horae database. Do not put passwords in checked-in Nix expressions.
+
+Startup and each query validate the effective permissions. The login must have
+no elevated role attributes, role memberships, database/schema creation rights,
+relation ownership, or data-write grants. Read grants are limited to the `public`
+business tables: organizations, users, clients, projects, tasks, project_tasks,
+assignments, time_entries, approvals, invoices, and invoice_line_items. The
+`users.oidc_subject` column is excluded: do not grant table-wide SELECT on users.
+Session tables, Harvest credentials, audit logs, import provenance, and other
+non-business relations are not readable. Publicly updatable `pg_settings` is a
+session-configuration exception, not an application-data write capability.
+
+Executable SECURITY DEFINER functions are rejected. Outside PostgreSQL's system
+schemas, only Horae's `harvest_norm(text)`, `line_amount_cents(bigint,integer)`, and
+`set_updated_at()` functions are accepted. Additional functions/extensions may
+require revoking their default PUBLIC execution grants and restoring grants for
+their intended application roles. Likewise, older databases granting PUBLIC
+creation on the public schema need those grants reviewed. These are shared
+database permissions: review other consumers before changing them. Horae does
+not create roles or revoke operator permissions automatically.
+
+These controls limit data access and returned results, not every possible cost
+of arbitrary SQL inside PostgreSQL. Use database resource controls or a separate
+read replica when stronger CPU/memory isolation is required. Plugin HTTP access
+also remains subject to the deployment's network policy.
+
+Database security tests create and remove disposable login roles, so the test
+administrator needs CREATEROLE as well as CREATEDB (CI uses an isolated superuser).
+
+Host requests and serialized responses are limited to 1 MiB. Event payloads and
+plugin return values have the same limit. An oversized host request/response
+fails the invocation before copying it into another WASM/host buffer.
 
 ______________________________________________________________________
 
@@ -262,26 +323,51 @@ These guarantees implement FR-020 and FR-021 and the spec's plugin edge cases.
    no filesystem, no ambient capabilities (FR-020). A malformed, unsupported, or
    malicious module is rejected at load time and never gains capabilities beyond those
    explicitly granted.
-1. **Concurrent dispatch.** On each business event, `registry.dispatch(event)` invokes
-   all subscribed plugins concurrently; plugins do not block one another.
-1. **Timeouts.** Every plugin invocation is bounded by a host-enforced timeout. A
-   plugin that hangs is aborted when the timeout elapses (targets SC-006: an event
-   reaches subscribers within ~1 second and a slow plugin never stalls the core).
+1. **Concurrent dispatch.** On each business event, `registry.dispatch(event)` schedules
+   subscribed plugins on blocking workers, never on the async runtime's workers.
+   Each instance executes one invocation at a time. The registry admits at most
+   64 pending/running calls and runs at most 8 concurrently, shared by events and
+   widgets. Delivery is best-effort: exhausted capacity or an oversized payload is
+   logged and skipped, without delaying or undoing the core action.
+1. **Timeouts and memory.** Waiting for an instance and worker is limited to 5 seconds;
+   execution has a separate 5-second wait timeout. The engine additionally supplies
+   100,000,000 fuel units during construction and replenishes that budget for each
+   call, including guest initialization. This covers WASM start functions and
+   WASI/Haskell initializers that can run before Extism starts its call timer.
+   Fuel measures metered guest work, not elapsed time or native host instructions.
+   A plugin that exhausts fuel cannot execute subsequent calls until the server
+   restarts and loads a fresh instance; this avoids running a partially initialized
+   guest. Ordinary successful calls receive a fresh budget rather than consuming
+   one lifetime allowance.
+   Each linear memory is limited to
+   1,024 memory pages (64 MiB), including its initial allocation. The engine caps
+   memories, instances, and tables at four each, allowing for Extism's kernel and
+   auxiliary guest instances. On timeout, the host requests engine cancellation.
+   Already-running synchronous host I/O cannot be preempted: its own timeout still
+   applies, and its instance lock and capacity permits remain held until it exits.
+   Dropping an async waiter likewise does not release a still-running call's
+   capacity. These limits keep slow plugins off the async runtime's workers; they
+   are not a guarantee that a synchronous host call ends at exactly 5 seconds.
+   Compilation and local filesystem operations are not bounded by guest fuel;
+   operators must trust the installed plugin files. These are not hard native
+   process RSS/CPU limits.
 1. **Failure isolation.** A plugin that errors, panics, times out, or attempts a
    disallowed action does **not** block, delay, or corrupt the core action that
    triggered the event. The core mutation has already been committed before dispatch;
    plugin outcomes cannot roll it back (FR-021). Failures are caught, isolated to the
    offending plugin, and logged with the plugin name.
-1. **No direct datastore writes.** The only data access is `horae_db_query`
-   (read-only). There is no host function that lets a plugin write to the database,
-   satisfying FR-020 and the "cannot corrupt the core action" requirement of FR-021.
+1. **Datastore access.** `horae_db_query` uses only the validated restricted login,
+   with read-only transactions, bounded results, and a fresh session per query.
+   Missing or unsafe credentials never grant access to the application's writer.
 
 ______________________________________________________________________
 
-## Installation & lifecycle (planned)
+## Installation & lifecycle
 
-1. Plugins are dropped into `{dataDir}/plugins/`, each with its `*.wasm` module and a
-   `plugin.toml`. The registry scans this directory at startup.
+1. Plugins are dropped into the configured plugins directory, each in its own
+   subdirectory with a `*.wasm` module and `plugin.toml`. The registry scans this
+   directory at startup. Invalid plugins are logged and skipped; a failure of the
+   loading worker itself is returned to startup rather than silently ignored.
 1. A future admin UI page will list loaded plugins and allow enable/disable without a
    restart (hot-reload via `extism::Plugin` re-instantiation).
 1. Hook call sites live in the server functions: dispatch `time_entry_created` /
