@@ -136,7 +136,10 @@ async fn resolve_parent(
             ])
         }
         Parent::Task(task) => {
-            let rate = task.default_hourly_rate.as_ref().map(ToString::to_string);
+            let rate = task
+                .default_hourly_rate
+                .as_ref()
+                .map(super::api_source::decimal);
             let fields = TaskFields {
                 harvest_task_id: Some(task.id),
                 task_name: &task.name,

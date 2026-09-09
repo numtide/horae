@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT te.minutes, pt.rate_cents, t.default_rate_cents\n             FROM time_entries te\n             JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id\n             JOIN tasks t ON t.id = te.task_id\n             WHERE te.org_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "minutes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "rate_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "default_rate_cents",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "3174352e7d08a0cc45c8e6cf14406397360ddb3533ddbe1703d1e2300c27c904"
+}
