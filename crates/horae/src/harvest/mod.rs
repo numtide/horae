@@ -294,7 +294,7 @@ async fn time_entries_page(
         r#"SELECT te.id,
                te.spent_date as "spent_date: chrono::NaiveDate",
                te.minutes, te.start_minute, te.rounded_minutes, te.notes,
-               te.billable, te.is_running,
+               (te.billable AND (te.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable, t.billable_default)))) as "billable!", te.is_running,
                te.started_at as "started_at: chrono::DateTime<chrono::Utc>",
                te.state::text AS "state!: String", te.invoice_id,
                te.created_at as "created_at: chrono::DateTime<chrono::Utc>",
@@ -310,6 +310,7 @@ async fn time_entries_page(
          JOIN users u ON u.id = te.user_id
          JOIN projects p ON p.id = te.project_id
          JOIN tasks t ON t.id = te.task_id
+         LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
          JOIN clients c ON c.id = p.client_id
          WHERE te.org_id = $1
            AND ($2::uuid IS NULL OR te.user_id = $2)
@@ -369,7 +370,7 @@ async fn time_entry_by_id(db: &PgPool, caller: &AuthUser, id: Uuid) -> ApiResult
         r#"SELECT te.id,
                te.spent_date as "spent_date: chrono::NaiveDate",
                te.minutes, te.start_minute, te.rounded_minutes, te.notes,
-               te.billable, te.is_running,
+               (te.billable AND (te.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable, t.billable_default)))) as "billable!", te.is_running,
                te.started_at as "started_at: chrono::DateTime<chrono::Utc>",
                te.state::text AS "state!: String", te.invoice_id,
                te.created_at as "created_at: chrono::DateTime<chrono::Utc>",
@@ -386,6 +387,7 @@ async fn time_entry_by_id(db: &PgPool, caller: &AuthUser, id: Uuid) -> ApiResult
          JOIN projects p ON p.id = te.project_id
          JOIN tasks t ON t.id = te.task_id
          JOIN clients c ON c.id = p.client_id
+         LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
          WHERE te.id = $1 AND te.org_id = $2
            AND ($3::uuid IS NULL OR te.user_id = $3)"#,
         id,
@@ -914,6 +916,32 @@ mod tests {
             page: None,
             per_page: None,
             updated_since: None,
+        }
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn harvest_marks_unbilled_non_billable_contexts_consistently(pool: PgPool) {
+        for project_billable in [false, true] {
+            let ids = seed(&pool, OrgRole::Manager).await;
+            let id = insert_entry(&pool, &ids, ids.user_id, "Non-billable context").await;
+            sqlx::query!("UPDATE projects SET project_type = CASE WHEN $2 THEN 'time_and_materials'::project_type ELSE 'non_billable'::project_type END WHERE id = $1", ids.project_id, project_billable).execute(&pool).await.unwrap();
+            sqlx::query!(
+                "INSERT INTO project_tasks (project_id, task_id, billable) VALUES ($1, $2, $3)",
+                ids.project_id,
+                ids.task_id,
+                !project_billable
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            let caller = caller(&ids, OrgRole::Manager);
+            let Json(entry) = time_entry_by_id(&pool, &caller, id).await.unwrap();
+            let Json(page) = time_entries_page(&pool, &caller, no_time_entry_filters())
+                .await
+                .unwrap();
+            assert!(!entry.billable);
+            assert!(!page.data["time_entries"][0].billable);
+            assert_eq!(entry.hours, 1.0);
         }
     }
 

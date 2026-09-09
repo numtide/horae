@@ -3,6 +3,14 @@ use horae_core::types::EntryState;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+/// A project/task pair on which the session user may record new time.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TimeEntryContext {
+    pub project_id: Uuid,
+    pub task_id: Uuid,
+    pub billable: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "server", derive(sqlx::FromRow))]
 pub struct TimeEntry {

@@ -58,10 +58,11 @@ ______________________________________________________________________
 | Function | Inputs | Output | Errors | Required role |
 |---|---|---|---|---|
 | `list_time_entries` | `user_id: Option<Uuid>` (reserved; results scoped to session user), `project_id: Option<Uuid>`, `date_from: Option<Date>`, `date_to: Option<Date>`, `limit: Option<i64>` (default 50) | `Vec<TimeEntry>` | `ServerFnError` (`401`, `500`, invalid filter) | member (own entries) |
-| `create_time_entry` | `project_id: Uuid`, `task_id: Uuid`, `spent_date: Date`, `minutes: i32`, `notes: Option<String>`, `billable: bool` | `TimeEntry` | `ServerFnError` (`401`, `403` not assigned to project, `500`) | member (must be assigned; admins bypass) |
+| `create_time_entry` | `project_id: Uuid`, `task_id: Uuid`, `spent_date: Date`, `minutes: i32`, `notes: Option<String>`, `billable: bool` | `TimeEntry` | `ServerFnError` (`401`, `409` unavailable context, `500`) | member (must be assigned; admins bypass only assignment) |
+| `list_time_entry_contexts` | — | `Vec<TimeEntryContext>` (`project_id`, `task_id`, effective `billable`; no rates) | `ServerFnError` (`401`, `500`) | member (own eligible contexts) |
 | `update_time_entry` | `entry_id: Uuid`, `minutes: i32`, `notes: Option<String>`, `billable: bool` | `TimeEntry` | `ServerFnError` (`409` entry not found or not in `open` state) | member (own, open entries) |
 | `delete_time_entry` | `entry_id: Uuid` | `()` | `ServerFnError` (`409` entry not found or not in `open` state) | member (own, open entries) |
-| `start_timer` | `project_id: Uuid`, `task_id: Uuid`, `notes: Option<String>` | `TimeEntry` | `ServerFnError` (`409` a timer is already running) | member |
+| `start_timer` | `project_id: Uuid`, `task_id: Uuid`, `notes: Option<String>` | `TimeEntry` | `ServerFnError` (`409` unavailable context or a timer already running) | member |
 | `stop_timer` | `entry_id: Uuid` | `TimeEntry` | `ServerFnError` (`404` no running timer for this entry) | member (own) |
 | `get_current_timer` | — | `Option<TimeEntry>` | `ServerFnError` (`401`, `500`) | member |
 
@@ -69,6 +70,9 @@ Notes:
 
 1. **FR-004** (one running timer per user) is enforced both by `start_timer`
    (returns `409`) and by a DB partial unique index.
+1. New entries and all three project/task pickers use the `time_entry_contexts` view. The user, client, project, and task must be active and in the same organization, the task must be enabled on the project, and non-admin users (including managers) must be assigned. The insert resolves eligibility and billability in one SQL statement, without a separated pre-check. Admins cannot bypass activity, organization, or task enablement.
+1. Effective billability is the requested entry flag AND the project's billing type is not `non_billable` AND the project-task override allows billing. Timers request billable time but obey both restrictions. Editing existing open time remains possible after archiving, but cannot override non-billability. An old entry without a project-task link falls back to the task's catalog default when edited or reported; new entries require a link.
+1. Unbilled invoice selection, reports, project spend, and Harvest reads apply these billing restrictions. Already-invoiced entries retain their recorded billability; changing a project does not rewrite historical invoices. This does not change the separate rate-resolution policy.
 1. **FR-015 / edit-lock**: `update_time_entry` and `delete_time_entry` succeed only
    while the entry is in the `open` state; once an entry is `submitted`, `approved`,
    or attached to an invoice it is locked (returns `409`).
@@ -121,9 +125,9 @@ ______________________________________________________________________
 
 | Function | Inputs | Output | Errors | Required role |
 |---|---|---|---|---|
-| `list_tasks` | `project_id: Option<Uuid>` (accepted for back-compat; tasks are org-level) | `Vec<Task>` (active only) | `ServerFnError` (`500`) | member |
+| `list_tasks` | — | `Vec<Task>` (active, session organization only) | `ServerFnError` (`500`) | member |
 | `list_project_tasks` | `project_id: Uuid` | `Vec<Task>` (linked via `project_tasks`) | `ServerFnError` (`401`, `500`) | member |
-| `create_task` | `name: String`, `billable_default: bool` | `Task` | `ServerFnError` (`403` non-manager) | manager |
+| `create_task` | `name: String`, `billable_default: bool`, `project_id: Option<Uuid>` | `Task` | `ServerFnError` (`403` non-manager, `404` unavailable project, `409` empty name) | manager |
 | `update_task` | `task_id: Uuid`, `name: String`, `billable_default: bool`, `default_rate_cents: Option<i64>` | `Task` | `ServerFnError` (`403`, `404`) | manager |
 | `set_task_active` | `task_id: Uuid`, `active: bool` | `Task` | `ServerFnError` (`403`, `404`) | manager |
 | `link_project_task` | `project_id: Uuid`, `task_id: Uuid` | `()` | `ServerFnError` (`403`, `404`) | manager |
@@ -136,6 +140,7 @@ Notes:
    **manager**. `link_project_task` inherits the task's `billable_default` /
    `default_rate_cents` onto the new `project_tasks` row and is idempotent
    (`ON CONFLICT DO NOTHING`).
+1. Passing `project_id` to `create_task` creates and enables the task in one transaction. A linking failure rolls back the task, and the creation event is emitted only after commit. The project detail page offers both this action and enabling an existing catalog task. Linking checks the active client/project/task and organization even when a link already exists; repeating it preserves existing billability and rate overrides.
 
 ______________________________________________________________________
 

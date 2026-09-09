@@ -26,35 +26,75 @@ fn normalize_start(
     }
 }
 
-/// Ensure the user may log time on the project: admins may log anywhere,
-/// everyone else needs an assignment row. Shared by the manual-entry and
-/// timer-start paths so both enforce the same rule.
+/// Only the session user's active, assigned project/task combinations; no rates.
+#[server]
+pub async fn list_time_entry_contexts()
+-> Result<Vec<crate::models::time_entry::TimeEntryContext>, ServerFnError> {
+    let user = require_user().await?;
+    let state = crate::state::global_state().await;
+    fetch_time_entry_contexts(&state.db, user.id)
+        .await
+        .map_err(server_err)
+}
+
 #[cfg(feature = "server")]
-async fn ensure_assigned(
+async fn fetch_time_entry_contexts(
     db: &sqlx::PgPool,
     user_id: uuid::Uuid,
-    project_id: uuid::Uuid,
-    org_role: OrgRole,
-) -> Result<(), ServerFnError> {
-    if org_role == OrgRole::Admin {
-        return Ok(());
-    }
-
-    let assigned = sqlx::query_scalar!(
-        "SELECT EXISTS(SELECT 1 FROM assignments WHERE project_id = $1 AND user_id = $2)",
-        project_id,
+) -> Result<Vec<crate::models::time_entry::TimeEntryContext>, sqlx::Error> {
+    sqlx::query_as!(
+        crate::models::time_entry::TimeEntryContext,
+        r#"SELECT project_id as "project_id!", task_id as "task_id!", billable as "billable!"
+           FROM time_entry_contexts WHERE user_id = $1 ORDER BY project_id, task_id"#,
         user_id,
     )
-    .fetch_one(db)
+    .fetch_all(db)
     .await
-    .map_err(server_err)?
-    .unwrap_or(false);
+}
 
-    if assigned {
-        Ok(())
-    } else {
-        Err(forbidden("You are not assigned to this project"))
-    }
+#[cfg(feature = "server")]
+struct NewTimeEntry<'a> {
+    project_id: uuid::Uuid,
+    task_id: uuid::Uuid,
+    spent_date: chrono::NaiveDate,
+    minutes: i32,
+    notes: Option<&'a str>,
+    billable: bool,
+    start_minute: Option<i32>,
+    is_running: bool,
+}
+
+/// Eligibility and effective billability are resolved in the insert's snapshot,
+/// not in a pre-check separated from the write. The timer uniqueness index
+/// arbitrates competing starts without a racy existence check.
+#[cfg(feature = "server")]
+async fn insert_time_entry(
+    db: &sqlx::PgPool,
+    user_id: uuid::Uuid,
+    input: NewTimeEntry<'_>,
+) -> Result<TimeEntry, ServerFnError> {
+    sqlx::query_as!(
+        TimeEntry,
+        r#"INSERT INTO time_entries
+           (id, org_id, user_id, project_id, task_id, spent_date, minutes, notes,
+            billable, is_running, started_at, state, start_minute)
+           SELECT $1, org_id, user_id, project_id, task_id, $5, $6, $7,
+                  billable AND $8, $9, CASE WHEN $9 THEN now() END, 'open', $10
+           FROM time_entry_contexts
+           WHERE user_id = $2 AND project_id = $3 AND task_id = $4
+           ON CONFLICT (user_id) WHERE is_running DO NOTHING
+           RETURNING id, org_id, user_id, project_id, task_id,
+                     spent_date as "spent_date: chrono::NaiveDate",
+                     minutes, start_minute, sort_order, rounded_minutes, notes, billable, is_running,
+                     started_at as "started_at: chrono::DateTime<chrono::Utc>",
+                     state as "state: EntryState", invoice_id,
+                     created_at as "created_at: chrono::DateTime<chrono::Utc>",
+                     updated_at as "updated_at: chrono::DateTime<chrono::Utc>""#,
+        uuid::Uuid::now_v7(), user_id, input.project_id, input.task_id,
+        input.spent_date as chrono::NaiveDate, input.minutes, input.notes, input.billable,
+        input.is_running, input.start_minute,
+    ).fetch_optional(db).await.map_err(server_err)?
+    .ok_or_else(|| conflict("Project/task is unavailable or not assigned, or a timer is already running."))
 }
 
 // ── Time Entries ─────────────────────────────────────────────────────────────
@@ -142,40 +182,21 @@ pub async fn start_timer(
     let project_id = parse_uuid(&project_id, "project_id")?;
     let task_id = parse_uuid(&task_id, "task_id")?;
 
-    ensure_assigned(&state.db, user.id, project_id, user.org_role).await?;
-
-    let id = uuid::Uuid::now_v7();
-    let today = chrono::Utc::now().date_naive();
-
-    // The `one_running_timer_per_user` partial unique index is the real guard,
-    // so let it decide: a separate SELECT EXISTS pre-check leaves a window in
-    // which two concurrent starts both pass and the loser gets a raw
-    // unique-violation 500 instead of the conflict below.
-    let entry = sqlx::query_as!(
-        TimeEntry,
-        r#"INSERT INTO time_entries (id, org_id, user_id, project_id, task_id, spent_date, minutes, notes, billable, is_running, started_at, state)
-         VALUES ($1, $2, $3, $4, $5, $6, 0, $7, true, true, now(), $8)
-         ON CONFLICT (user_id) WHERE is_running DO NOTHING
-         RETURNING id, org_id, user_id, project_id, task_id,
-                   spent_date as "spent_date: chrono::NaiveDate",
-                   minutes, start_minute, sort_order, rounded_minutes, notes, billable, is_running,
-                   started_at as "started_at: chrono::DateTime<chrono::Utc>",
-                   state as "state: EntryState", invoice_id,
-                   created_at as "created_at: chrono::DateTime<chrono::Utc>",
-                   updated_at as "updated_at: chrono::DateTime<chrono::Utc>""#,
-        id,
-        user.org_id,
+    let entry = insert_time_entry(
+        &state.db,
         user.id,
-        project_id,
-        task_id,
-        today as chrono::NaiveDate,
-        notes.as_deref(),
-        EntryState::Open as EntryState,
+        NewTimeEntry {
+            project_id,
+            task_id,
+            spent_date: chrono::Utc::now().date_naive(),
+            minutes: 0,
+            notes: notes.as_deref(),
+            billable: true,
+            start_minute: None,
+            is_running: true,
+        },
     )
-    .fetch_optional(&state.db)
-    .await
-    .map_err(server_err)?
-    .ok_or_else(|| conflict("A timer is already running. Stop it first."))?;
+    .await?;
 
     dispatch_time_entry_event(&entry, TimeEntryEvent::Created).await;
     Ok(entry)
@@ -308,36 +329,21 @@ pub async fn create_time_entry(
     let spent_date = parse_date(&spent_date, "date")?;
     let (minutes, start_minute) = normalize_start(minutes, start_minute)?;
 
-    ensure_assigned(&state.db, user.id, project_id, user.org_role).await?;
-
-    let id = uuid::Uuid::now_v7();
-
-    let entry = sqlx::query_as!(
-        TimeEntry,
-        r#"INSERT INTO time_entries (id, org_id, user_id, project_id, task_id, spent_date, minutes, notes, billable, is_running, state, start_minute)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, false, $10, $11)
-         RETURNING id, org_id, user_id, project_id, task_id,
-                   spent_date as "spent_date: chrono::NaiveDate",
-                   minutes, start_minute, sort_order, rounded_minutes, notes, billable, is_running,
-                   started_at as "started_at: chrono::DateTime<chrono::Utc>",
-                   state as "state: EntryState", invoice_id,
-                   created_at as "created_at: chrono::DateTime<chrono::Utc>",
-                   updated_at as "updated_at: chrono::DateTime<chrono::Utc>""#,
-        id,
-        user.org_id,
+    let entry = insert_time_entry(
+        &state.db,
         user.id,
-        project_id,
-        task_id,
-        spent_date as chrono::NaiveDate,
-        minutes,
-        notes.as_deref(),
-        billable,
-        EntryState::Open as EntryState,
-        start_minute,
+        NewTimeEntry {
+            project_id,
+            task_id,
+            spent_date,
+            minutes,
+            notes: notes.as_deref(),
+            billable,
+            start_minute,
+            is_running: false,
+        },
     )
-    .fetch_one(&state.db)
-    .await
-    .map_err(server_err)?;
+    .await?;
 
     dispatch_time_entry_event(&entry, TimeEntryEvent::Created).await;
     tokio::spawn(check_project_budget(state, entry.project_id));
@@ -356,8 +362,35 @@ pub async fn update_time_entry(
     let user_id = require_user().await?.id;
     let state = crate::state::global_state().await;
     let entry_id = parse_uuid(&entry_id, "entry_id")?;
-    let (minutes, start_minute) = normalize_start(minutes, start_minute)?;
+    let (entry, changed) = update_entry(
+        &state.db,
+        user_id,
+        entry_id,
+        minutes,
+        notes.as_deref(),
+        billable,
+        start_minute,
+    )
+    .await?;
+    if changed {
+        dispatch_time_entry_event(&entry, TimeEntryEvent::Updated).await;
+    }
 
+    tokio::spawn(check_project_budget(state, entry.project_id));
+    Ok(entry)
+}
+
+#[cfg(feature = "server")]
+async fn update_entry(
+    db: &sqlx::PgPool,
+    user_id: uuid::Uuid,
+    entry_id: uuid::Uuid,
+    minutes: i32,
+    notes: Option<&str>,
+    billable: bool,
+    start_minute: Option<i32>,
+) -> Result<(TimeEntry, bool), ServerFnError> {
+    let (minutes, start_minute) = normalize_start(minutes, start_minute)?;
     // Read current values first so a no-op update emits no event (FR-012).
     let before = sqlx::query!(
         r#"SELECT minutes, start_minute, notes, billable FROM time_entries
@@ -366,14 +399,20 @@ pub async fn update_time_entry(
         user_id,
         EntryState::Open as EntryState,
     )
-    .fetch_optional(&state.db)
+    .fetch_optional(db)
     .await
     .map_err(server_err)?;
 
     let entry = sqlx::query_as!(
         TimeEntry,
         r#"UPDATE time_entries
-         SET minutes = $3, notes = $4, billable = $5, start_minute = $7
+         SET minutes = $3, notes = $4, start_minute = $7,
+             billable = $5 AND COALESCE((
+               SELECT p.project_type <> 'non_billable' AND COALESCE(pt.billable, t.billable_default)
+               FROM projects p JOIN tasks t ON t.id = time_entries.task_id
+               LEFT JOIN project_tasks pt ON pt.project_id = p.id AND pt.task_id = t.id
+               WHERE p.id = time_entries.project_id
+             ), false)
          WHERE id = $1 AND user_id = $2 AND state = $6
          RETURNING id, org_id, user_id, project_id, task_id,
                    spent_date as "spent_date: chrono::NaiveDate",
@@ -385,30 +424,24 @@ pub async fn update_time_entry(
         entry_id,
         user_id,
         minutes,
-        notes.as_deref(),
+        notes,
         billable,
         EntryState::Open as EntryState,
         start_minute,
     )
-    .fetch_optional(&state.db)
+    .fetch_optional(db)
     .await
     .map_err(server_err)?
     .ok_or_else(|| conflict("Entry not found or is locked (not in 'open' state)"))?;
 
     let changed = before.is_none_or(|b| {
         b.minutes != minutes
-            || b.notes.as_deref() != notes.as_deref()
-            || b.billable != billable
+            || b.notes.as_deref() != notes
+            || b.billable != entry.billable
             || b.start_minute != start_minute
     });
-    if changed {
-        dispatch_time_entry_event(&entry, TimeEntryEvent::Updated).await;
-    }
-
-    tokio::spawn(check_project_budget(state, entry.project_id));
-    Ok(entry)
+    Ok((entry, changed))
 }
-
 /// Delete a time entry. Only allowed while the entry state is 'open'.
 #[server]
 pub async fn delete_time_entry(entry_id: String) -> Result<(), ServerFnError> {
@@ -550,13 +583,294 @@ async fn reorder_entries(
 #[cfg(all(test, feature = "server"))]
 mod tests {
     use super::{
-        EntryState, FORBIDDEN, OrgRole, ensure_assigned, listing_is_bounded, normalize_start,
-        reorder_entries,
+        CONFLICT, EntryState, NewTimeEntry, OrgRole, fetch_time_entry_contexts, insert_time_entry,
+        listing_is_bounded, normalize_start, reorder_entries, update_entry,
     };
     use crate::server_fns::test_seed::{seed, time_entry};
     use dioxus::prelude::ServerFnError;
     use sqlx::PgPool;
     use uuid::Uuid;
+
+    async fn linked_seed(pool: &PgPool, role: OrgRole) -> crate::server_fns::test_seed::SeedIds {
+        let ids = seed(pool, role).await;
+        sqlx::query!(
+            "INSERT INTO project_tasks (project_id, task_id, billable) VALUES ($1, $2, true)",
+            ids.project_id,
+            ids.task_id
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+        ids
+    }
+
+    fn manual_entry(ids: &crate::server_fns::test_seed::SeedIds) -> NewTimeEntry<'static> {
+        NewTimeEntry {
+            project_id: ids.project_id,
+            task_id: ids.task_id,
+            spent_date: "2026-09-07".parse().unwrap(),
+            minutes: 60,
+            notes: None,
+            billable: true,
+            start_minute: None,
+            is_running: false,
+        }
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn new_time_and_picker_reject_inactive_or_foreign_contexts(pool: PgPool) {
+        let ids = linked_seed(&pool, OrgRole::Admin).await;
+        let other = linked_seed(&pool, OrgRole::Admin).await;
+        assert_eq!(
+            fetch_time_entry_contexts(&pool, ids.user_id)
+                .await
+                .unwrap()
+                .len(),
+            1
+        );
+        for (project_id, task_id) in [
+            (ids.project_id, other.task_id),
+            (other.project_id, other.task_id),
+            (ids.project_id, Uuid::now_v7()),
+        ] {
+            for is_running in [false, true] {
+                let input = NewTimeEntry {
+                    project_id,
+                    task_id,
+                    is_running,
+                    ..manual_entry(&ids)
+                };
+                assert!(insert_time_entry(&pool, ids.user_id, input).await.is_err());
+            }
+        }
+        for inactive in ["client", "project", "task", "user"] {
+            sqlx::query!(
+                "UPDATE clients SET active = ($2 <> 'client') WHERE id = $1",
+                ids.client_id,
+                inactive
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            sqlx::query!(
+                "UPDATE projects SET active = ($2 <> 'project') WHERE id = $1",
+                ids.project_id,
+                inactive
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            sqlx::query!(
+                "UPDATE tasks SET active = ($2 <> 'task') WHERE id = $1",
+                ids.task_id,
+                inactive
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            sqlx::query!(
+                "UPDATE users SET active = ($2 <> 'user') WHERE id = $1",
+                ids.user_id,
+                inactive
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            assert!(
+                fetch_time_entry_contexts(&pool, ids.user_id)
+                    .await
+                    .unwrap()
+                    .is_empty(),
+                "{inactive}"
+            );
+            for is_running in [false, true] {
+                assert!(
+                    insert_time_entry(
+                        &pool,
+                        ids.user_id,
+                        NewTimeEntry {
+                            is_running,
+                            ..manual_entry(&ids)
+                        }
+                    )
+                    .await
+                    .is_err(),
+                    "{inactive}"
+                );
+            }
+        }
+        assert_eq!(
+            sqlx::query_scalar!("SELECT count(*) FROM time_entries")
+                .fetch_one(&pool)
+                .await
+                .unwrap(),
+            Some(0)
+        );
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn new_time_and_picker_require_a_project_task_link(pool: PgPool) {
+        let ids = seed(&pool, OrgRole::Admin).await;
+        assert!(
+            fetch_time_entry_contexts(&pool, ids.user_id)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        for is_running in [false, true] {
+            assert!(
+                insert_time_entry(
+                    &pool,
+                    ids.user_id,
+                    NewTimeEntry {
+                        is_running,
+                        ..manual_entry(&ids)
+                    }
+                )
+                .await
+                .is_err()
+            );
+        }
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn new_time_uses_effective_billability_for_manual_entries_and_timers(pool: PgPool) {
+        for project_billable in [false, true] {
+            for task_billable in [false, true] {
+                for requested_billable in [false, true] {
+                    for is_running in [false, true] {
+                        let ids = linked_seed(&pool, OrgRole::Admin).await;
+                        sqlx::query!("UPDATE projects SET project_type = CASE WHEN $2 THEN 'time_and_materials'::project_type ELSE 'non_billable'::project_type END WHERE id = $1", ids.project_id, project_billable).execute(&pool).await.unwrap();
+                        sqlx::query!("UPDATE project_tasks SET billable = $3 WHERE project_id = $1 AND task_id = $2", ids.project_id, ids.task_id, task_billable).execute(&pool).await.unwrap();
+                        let context = fetch_time_entry_contexts(&pool, ids.user_id).await.unwrap();
+                        assert_eq!(context[0].billable, project_billable && task_billable);
+                        let entry = insert_time_entry(
+                            &pool,
+                            ids.user_id,
+                            NewTimeEntry {
+                                billable: requested_billable,
+                                is_running,
+                                ..manual_entry(&ids)
+                            },
+                        )
+                        .await
+                        .unwrap();
+                        assert_eq!(
+                            entry.billable,
+                            requested_billable && project_billable && task_billable
+                        );
+                        assert_eq!(entry.is_running, is_running);
+                        assert_eq!(entry.started_at.is_some(), is_running);
+                    }
+                }
+            }
+        }
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn concurrent_timer_starts_insert_exactly_one_entry(pool: PgPool) {
+        let ids = linked_seed(&pool, OrgRole::Admin).await;
+        let (first, second) = tokio::join!(
+            insert_time_entry(
+                &pool,
+                ids.user_id,
+                NewTimeEntry {
+                    is_running: true,
+                    ..manual_entry(&ids)
+                }
+            ),
+            insert_time_entry(
+                &pool,
+                ids.user_id,
+                NewTimeEntry {
+                    is_running: true,
+                    ..manual_entry(&ids)
+                }
+            ),
+        );
+        assert_eq!(usize::from(first.is_ok()) + usize::from(second.is_ok()), 1);
+        assert_eq!(
+            sqlx::query_scalar!("SELECT count(*) FROM time_entries")
+                .fetch_one(&pool)
+                .await
+                .unwrap(),
+            Some(1)
+        );
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn edits_preserve_archived_time_but_cannot_override_non_billability(pool: PgPool) {
+        for non_billable_project in [false, true] {
+            let ids = linked_seed(&pool, OrgRole::Admin).await;
+            let entry = insert_time_entry(&pool, ids.user_id, manual_entry(&ids))
+                .await
+                .unwrap();
+            sqlx::query!("UPDATE projects SET active = false, project_type = CASE WHEN $2 THEN 'non_billable'::project_type ELSE project_type END WHERE id = $1", ids.project_id, non_billable_project).execute(&pool).await.unwrap();
+            sqlx::query!(
+                "UPDATE project_tasks SET billable = $2 WHERE project_id = $1",
+                ids.project_id,
+                non_billable_project
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            let (updated, changed) = update_entry(
+                &pool,
+                ids.user_id,
+                entry.id,
+                90,
+                Some("Kept"),
+                true,
+                Some(540),
+            )
+            .await
+            .unwrap();
+            assert!(changed);
+            assert!(!updated.billable);
+            assert_eq!(
+                (
+                    updated.minutes,
+                    updated.start_minute,
+                    updated.notes.as_deref()
+                ),
+                (90, Some(540), Some("Kept"))
+            );
+            let (_, changed) = update_entry(
+                &pool,
+                ids.user_id,
+                entry.id,
+                90,
+                Some("Kept"),
+                true,
+                Some(540),
+            )
+            .await
+            .unwrap();
+            assert!(!changed, "effective no-op must not emit an update event");
+            let (updated, _) =
+                update_entry(&pool, ids.user_id, entry.id, 60, None, true, Some(1425))
+                    .await
+                    .unwrap();
+            assert_eq!((updated.minutes, updated.start_minute), (15, Some(1425)));
+        }
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn inactive_project_cannot_accept_new_time_even_for_admin(pool: PgPool) {
+        let ids = linked_seed(&pool, OrgRole::Admin).await;
+        sqlx::query!(
+            "UPDATE projects SET active = false WHERE id = $1",
+            ids.project_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        assert!(
+            insert_time_entry(&pool, ids.user_id, manual_entry(&ids))
+                .await
+                .is_err()
+        );
+    }
 
     #[sqlx::test(migrations = "./migrations")]
     async fn moving_locked_time_rejects_the_entire_reorder(pool: PgPool) {
@@ -727,26 +1041,24 @@ mod tests {
         assert!(!listing_is_bounded(None, None, None));
     }
 
-    // ── ensure_assigned (`#[sqlx::test]`, throwaway database per test) ──────
-    // These call the crate-internal guard directly — `tests/` cannot import a
-    // bin crate's modules, so the real behaviour is pinned here.
+    // New time is checked through the actual insert and the shared selector view.
 
     #[sqlx::test(migrations = "./migrations")]
     async fn unassigned_member_is_forbidden(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Member).await;
+        let ids = linked_seed(&pool, OrgRole::Member).await;
 
-        let err = ensure_assigned(&pool, ids.user_id, ids.project_id, OrgRole::Member)
+        let err = insert_time_entry(&pool, ids.user_id, manual_entry(&ids))
             .await
             .expect_err("an unassigned member must be refused");
         match err {
-            ServerFnError::ServerError { code, .. } => assert_eq!(code, FORBIDDEN),
-            other => panic!("expected a 403 ServerError, got {other:?}"),
+            ServerFnError::ServerError { code, .. } => assert_eq!(code, CONFLICT),
+            other => panic!("expected a 409 ServerError, got {other:?}"),
         }
     }
 
     #[sqlx::test(migrations = "./migrations")]
     async fn assigned_member_may_log_time(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Member).await;
+        let ids = linked_seed(&pool, OrgRole::Member).await;
         sqlx::query!(
             "INSERT INTO assignments (id, project_id, user_id) VALUES ($1, $2, $3)",
             Uuid::now_v7(),
@@ -758,7 +1070,7 @@ mod tests {
         .unwrap();
 
         assert!(
-            ensure_assigned(&pool, ids.user_id, ids.project_id, OrgRole::Member)
+            insert_time_entry(&pool, ids.user_id, manual_entry(&ids))
                 .await
                 .is_ok()
         );
@@ -766,10 +1078,10 @@ mod tests {
 
     #[sqlx::test(migrations = "./migrations")]
     async fn admin_may_log_time_without_assignment(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Admin).await;
+        let ids = linked_seed(&pool, OrgRole::Admin).await;
 
         assert!(
-            ensure_assigned(&pool, ids.user_id, ids.project_id, OrgRole::Admin)
+            insert_time_entry(&pool, ids.user_id, manual_entry(&ids))
                 .await
                 .is_ok()
         );

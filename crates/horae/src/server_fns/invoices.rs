@@ -157,6 +157,8 @@ async fn generate_invoice_for_period(
            WHERE te.org_id = $1
              AND p.client_id = $2
              AND te.billable = true
+             AND p.project_type <> 'non_billable'
+             AND COALESCE(pt.billable, t.billable_default)
              AND NOT te.is_running
              AND te.invoice_id IS NULL
              AND te.state IN ('open', 'approved')

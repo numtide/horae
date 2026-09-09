@@ -83,10 +83,11 @@ pub(crate) async fn fetch_entries(
                 p.name AS project_name, t.name AS task_name,
                 u.name AS user_name, te.minutes,
                 effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir) as "rounded_minutes?",
-                te.billable, te.notes
+                (te.billable AND (te.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable, t.billable_default)))) as "billable!", te.notes
          FROM time_entries te
          JOIN projects p ON te.project_id = p.id
          JOIN tasks t ON te.task_id = t.id
+         LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
          JOIN users u ON te.user_id = u.id
          JOIN organizations o ON o.id = te.org_id
          WHERE te.org_id = $6

@@ -1,0 +1,69 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT te.spent_date as \"spent_date: chrono::NaiveDate\",\n                p.name AS project_name, t.name AS task_name,\n                u.name AS user_name, te.minutes,\n                effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir) as \"rounded_minutes?\",\n                (te.billable AND (te.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable, t.billable_default)))) as \"billable!\", te.notes\n         FROM time_entries te\n         JOIN projects p ON te.project_id = p.id\n         JOIN tasks t ON te.task_id = t.id\n         LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id\n         JOIN users u ON te.user_id = u.id\n         JOIN organizations o ON o.id = te.org_id\n         WHERE te.org_id = $6\n           AND te.spent_date BETWEEN $1 AND $2\n           AND ($3::uuid IS NULL OR p.client_id = $3)\n           AND ($4::uuid IS NULL OR te.project_id = $4)\n           AND ($5::uuid IS NULL OR te.user_id = $5)\n         ORDER BY te.spent_date, p.name, t.name, te.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "spent_date: chrono::NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 1,
+        "name": "project_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "task_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "user_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "minutes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "rounded_minutes?",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "billable!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "notes",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Date",
+        "Date",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      true
+    ]
+  },
+  "hash": "7f26ebba4f3716f86effdaaed40b1395ad12d427fcf6f4d32c11d4d5dc5c1b9b"
+}

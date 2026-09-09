@@ -1,23 +1,24 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT EXISTS(SELECT 1 FROM project_tasks WHERE project_id = $1 AND task_id = $2)",
+  "query": "SELECT billable FROM time_entry_contexts WHERE user_id = $1 AND project_id = $2 AND task_id = $3",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "exists",
+        "name": "billable",
         "type_info": "Bool"
       }
     ],
     "parameters": {
       "Left": [
         "Uuid",
+        "Uuid",
         "Uuid"
       ]
     },
     "nullable": [
-      null
+      true
     ]
   },
-  "hash": "79d39b13fa10cb35351a0be0a7c530f99d4411e079dc7303733a60535404d408"
+  "hash": "3de4d8d3c6fe3bd691105160ca1520b7dbb67fec033d7bcb8fc8a28911faf6bb"
 }
