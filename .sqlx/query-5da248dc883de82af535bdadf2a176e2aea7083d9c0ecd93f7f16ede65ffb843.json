@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "CREATE FUNCTION public.effective_minutes(integer, integer, smallint, public.round_dir)\n                 RETURNS integer LANGUAGE sql IMMUTABLE AS $$ SELECT COALESCE($2, $1) $$",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "5da248dc883de82af535bdadf2a176e2aea7083d9c0ecd93f7f16ede65ffb843"
+}
