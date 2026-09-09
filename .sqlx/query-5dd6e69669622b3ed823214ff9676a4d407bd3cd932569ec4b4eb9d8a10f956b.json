@@ -1,24 +1,17 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, minutes FROM time_entries\n             WHERE user_id = $1 AND spent_date BETWEEN $2 AND $3 AND state = $4",
+  "query": "UPDATE time_entries SET state = $2 WHERE id = $1 RETURNING xmin::text",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "id",
-        "type_info": "Uuid"
-      },
-      {
-        "ordinal": 1,
-        "name": "minutes",
-        "type_info": "Int4"
+        "name": "xmin",
+        "type_info": "Text"
       }
     ],
     "parameters": {
       "Left": [
         "Uuid",
-        "Date",
-        "Date",
         {
           "Custom": {
             "name": "entry_state",
@@ -35,9 +28,8 @@
       ]
     },
     "nullable": [
-      false,
-      false
+      null
     ]
   },
-  "hash": "a0c9c9e7d8447e8aeb271ad5b6c94d7bf45a2dca41a4c1a541d81cbb277bce4e"
+  "hash": "5dd6e69669622b3ed823214ff9676a4d407bd3cd932569ec4b4eb9d8a10f956b"
 }

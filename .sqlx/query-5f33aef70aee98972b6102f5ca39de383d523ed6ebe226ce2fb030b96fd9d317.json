@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO harvest_credentials (id, org_id, harvest_account_id, access_token_enc, refresh_token_enc) VALUES ($1, $2, 'legacy', $3, $4)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bytea",
+        "Bytea"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5f33aef70aee98972b6102f5ca39de383d523ed6ebe226ce2fb030b96fd9d317"
+}

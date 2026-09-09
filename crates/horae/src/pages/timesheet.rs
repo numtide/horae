@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 
-use chrono::{Datelike, Duration, NaiveDate};
+use chrono::{Datelike, Duration, NaiveDate, Weekday};
 use dioxus::html::geometry::PixelsVector2D;
 use dioxus::prelude::*;
 use tracing::error;
 use uuid::Uuid;
 
 use horae_core::duration::format_hhmm;
-use horae_core::week::iso_week_monday;
+use horae_core::week::week_start as start_of_week;
 
 use super::loaded;
 use crate::components::controls::Segmented;
@@ -19,7 +19,7 @@ use crate::models::time_entry::TimeEntry;
 use crate::route::Route;
 use crate::server_fns;
 
-/// Offset (0 = Mon .. 6 = Sun) of `today` within the week starting `week_start`,
+/// Offset (0..=6) of `today` within the week starting `week_start`,
 /// or `None` when today falls outside that week.
 fn today_offset(today: NaiveDate, week_start: NaiveDate) -> Option<usize> {
     let o = (today - week_start).num_days();
@@ -27,10 +27,10 @@ fn today_offset(today: NaiveDate, week_start: NaiveDate) -> Option<usize> {
 }
 
 /// A weekday column's CSS class: `base`, plus a `today`/`weekend` modifier.
-fn day_col_class(base: &str, today_off: Option<usize>, i: usize) -> String {
+fn day_col_class(base: &str, today_off: Option<usize>, i: usize, weekday: Weekday) -> String {
     if today_off == Some(i) {
         format!("{base} today")
-    } else if i >= 5 {
+    } else if matches!(weekday, Weekday::Sat | Weekday::Sun) {
         format!("{base} weekend")
     } else {
         base.to_string()
@@ -200,13 +200,11 @@ impl std::str::FromStr for Anchor {
     }
 }
 
-const DAY_LABELS: [&str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
 /// How many days the Calendar view shows at once. Carried in the URL query
 /// (`?span=week|5day|day`) so the chosen span is shareable and survives reload.
 #[derive(Clone, Copy, PartialEq, Debug, Default)]
 pub enum CalSpan {
-    /// Mon–Sun.
+    /// The organization's full seven-day week.
     #[default]
     Week,
     /// Mon–Fri.
@@ -238,11 +236,13 @@ impl std::str::FromStr for CalSpan {
 }
 
 impl CalSpan {
-    /// Weekday indices (0 = Mon) to render, given the anchor day's own index.
-    fn visible_days(self, anchor: usize) -> Vec<usize> {
+    /// Offsets within the configured week, given the anchor day's own offset.
+    fn visible_days(self, anchor: usize, first_day: Weekday) -> Vec<usize> {
         match self {
             CalSpan::Week => (0..7).collect(),
-            CalSpan::WorkWeek => (0..5).collect(),
+            CalSpan::WorkWeek => (0..7)
+                .filter(|i| (i + first_day.num_days_from_monday() as usize) % 7 < 5)
+                .collect(),
             CalSpan::Day => vec![anchor.min(6)],
         }
     }
@@ -259,18 +259,28 @@ impl CalSpan {
 
 #[component]
 pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
+    let config = use_resource(server_fns::get_week_start);
+    loaded(&config.read(), |first_day| {
+        let Some(start) = start_of_week(date.0, *first_day)
+            .filter(|start| start.checked_add_days(chrono::Days::new(6)).is_some())
+        else {
+            return rsx! { div { class: "alert alert-danger", "This week is outside the supported date range." } };
+        };
+        rsx! { TimesheetContent { view, date, span, start } }
+    })
+}
+
+#[component]
+fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDate) -> Element {
     let today = chrono::Utc::now().date_naive();
     // View, week, selected day and calendar span all derive from the URL
     // (/timesheet/<view>/<date>?span=<span>), so switching views, changing the
     // calendar span or navigating is shareable and works with the browser's
     // back/forward. Actions push a new route.
     let view_mode = use_memo(use_reactive!(|(view,)| view));
-    let week_start = use_memo(use_reactive!(|(date,)| iso_week_monday(date.0)));
-    // Which day is selected within the week (0 = Monday .. 6 = Sunday) for Day view.
-    let selected_day_offset =
-        use_memo(use_reactive!(
-            |(date,)| date.0.weekday().num_days_from_monday() as i64
-        ));
+    let week_start = use_memo(use_reactive!(|(start,)| start));
+    // Which day is selected within the configured week for Day view.
+    let selected_day_offset = use_memo(use_reactive!(|(date,)| (date.0 - week_start()).num_days()));
 
     // Push a new view/anchor/span to the URL.
     let go = use_callback(move |(v, anchor, span): (ViewMode, NaiveDate, CalSpan)| {
@@ -720,7 +730,7 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
         Some((project_id, task_id, notes))
     });
 
-    // The "+" button adds for today when it's in the viewed week, else Monday.
+    // The "+" button adds for today when it's in the viewed week, else its first day.
     let add_default_date = if (0..7).contains(&(today - ws).num_days()) {
         today
     } else {
@@ -742,7 +752,7 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
         let delta = Duration::days(if forward { days } else { -days });
         go.call((current_mode, date.0 + delta, span));
     });
-    let is_this_week = ws == iso_week_monday(today);
+    let is_this_week = today_offset(today, ws).is_some();
     let range_label = format!("{} – {}", ws.format("%d %b"), week_end.format("%d %b %Y"));
 
     rsx! {
@@ -823,6 +833,7 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                         div { class: "menu-overlay", onclick: move |_| picker_open.set(false) }
                         div { class: "dp-pop",
                             DatePicker {
+                                first_day: ws.weekday(),
                                 selected: date.0,
                                 week: !day_paged,
                                 onpick: move |d| {
@@ -908,11 +919,11 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
                         }
                     },
                     ViewMode::Day => rsx! {
-                        {render_day_view(&by_day.read(), &daily_totals.read(), sel_offset, select_day, &project_names.read(), &task_names.read(), open_edit, start_entry)}
+                        {render_day_view(&by_day.read(), &daily_totals.read(), ws, sel_offset, select_day, &project_names.read(), &task_names.read(), open_edit, start_entry)}
                     },
                     ViewMode::Calendar => rsx! {
                         {
-                            let visible = span.visible_days(*selected_day_offset.read() as usize);
+                            let visible = span.visible_days(*selected_day_offset.read() as usize, ws.weekday());
                             render_calendar_view(&by_day.read(), &daily_totals.read(), &visible, ws, today, &CalLabels { projects: &project_names.read(), tasks: &task_names.read(), clients: &project_client.read() }, cal_drag, add_hint, drag_commit)
                         }
                     },
@@ -1307,8 +1318,22 @@ fn render_calendar_view(
     drag_commit: Callback<CalDrag>,
 ) -> Element {
     let today_off = today_offset(today, week_start);
-    let col_class = |i: usize| day_col_class("ts-cal-col", today_off, i);
-    let head_class = |i: usize| day_col_class("ts-cal-dayhead", today_off, i);
+    let col_class = |i: usize| {
+        day_col_class(
+            "ts-cal-col",
+            today_off,
+            i,
+            (week_start + Duration::days(i as i64)).weekday(),
+        )
+    };
+    let head_class = |i: usize| {
+        day_col_class(
+            "ts-cal-dayhead",
+            today_off,
+            i,
+            (week_start + Duration::days(i as i64)).weekday(),
+        )
+    };
 
     // Place entries: timed ones (with a start time) at their hour; untimed ones
     // stacked from the top of the day by cumulative duration (Harvest does the
@@ -1415,7 +1440,7 @@ fn render_calendar_view(
                             let d = week_start + Duration::days(i as i64);
                             rsx! {
                                 div { class: "{head_class(i)}",
-                                    div { class: "ts-cal-dayname", "{DAY_LABELS[i]} {d.day()}" }
+                                    div { class: "ts-cal-dayname", "{d.format(\"%a\")} {d.day()}" }
                                     div { class: "ts-cal-daytotal", "{format_hhmm(daily_totals[i].into())}" }
                                 }
                             }
@@ -1713,6 +1738,7 @@ fn render_calendar_view(
 fn render_day_view(
     by_day: &[Vec<TimeEntry>; 7],
     daily_totals: &[i32],
+    week_start: NaiveDate,
     selected_offset: i64,
     select_day: Callback<i64>,
     project_names: &HashMap<Uuid, String>,
@@ -1735,7 +1761,7 @@ fn render_day_view(
                         button {
                             class: "{cls}",
                             onclick: move |_| select_day.call(i),
-                            span { class: "ts-dayitem-name", "{DAY_LABELS[i as usize]}" }
+                            span { class: "ts-dayitem-name", "{(week_start + Duration::days(i)).format(\"%a\")}" }
                             span { class: "ts-dayitem-total", "{format_hhmm(daily_totals[i as usize].into())}" }
                         }
                     }
@@ -1873,7 +1899,14 @@ fn render_week_view(
     }
 
     let today_off = today_offset(today, week_start);
-    let day_class = |i: usize, base: &str| day_col_class(base, today_off, i);
+    let day_class = |i: usize, base: &str| {
+        day_col_class(
+            base,
+            today_off,
+            i,
+            (week_start + Duration::days(i as i64)).weekday(),
+        )
+    };
 
     rsx! {
         div { class: "ts-grid-card",
@@ -1886,7 +1919,7 @@ fn render_week_view(
                             let d = week_start + Duration::days(i as i64);
                             rsx! {
                                 span { class: "{day_class(i, \"ts-daycol\")}",
-                                    span { class: "ts-dayname", "{DAY_LABELS[i]}" }
+                                    span { class: "ts-dayname", "{d.format(\"%a\")}" }
                                     span { class: "ts-daynum", "{d.format(\"%d %b\")}" }
                                 }
                             }
@@ -2042,22 +2075,22 @@ mod tests {
 
     #[test]
     fn day_col_class_marks_today() {
-        assert_eq!(day_col_class("c", Some(2), 2), "c today");
+        assert_eq!(day_col_class("c", Some(2), 2, Weekday::Wed), "c today");
     }
 
     #[test]
     fn day_col_class_marks_weekend() {
-        assert_eq!(day_col_class("c", None, 5), "c weekend");
+        assert_eq!(day_col_class("c", None, 5, Weekday::Sat), "c weekend");
     }
 
     #[test]
     fn day_col_class_today_wins_over_weekend() {
-        assert_eq!(day_col_class("c", Some(6), 6), "c today");
+        assert_eq!(day_col_class("c", Some(6), 6, Weekday::Sun), "c today");
     }
 
     #[test]
     fn day_col_class_plain_weekday() {
-        assert_eq!(day_col_class("c", None, 1), "c");
+        assert_eq!(day_col_class("c", None, 1, Weekday::Tue), "c");
     }
 
     #[test]
@@ -2089,17 +2122,45 @@ mod tests {
 
     #[test]
     fn cal_span_day_shows_only_the_anchor_column() {
-        assert_eq!(CalSpan::Day.visible_days(3), vec![3]);
+        assert_eq!(CalSpan::Day.visible_days(3, Weekday::Mon), vec![3]);
     }
 
     #[test]
     fn cal_span_work_week_shows_monday_to_friday() {
-        assert_eq!(CalSpan::WorkWeek.visible_days(3), vec![0, 1, 2, 3, 4]);
+        assert_eq!(
+            CalSpan::WorkWeek.visible_days(3, Weekday::Mon),
+            vec![0, 1, 2, 3, 4]
+        );
     }
 
     #[test]
     fn cal_span_week_shows_all_seven_days() {
-        assert_eq!(CalSpan::Week.visible_days(3), vec![0, 1, 2, 3, 4, 5, 6]);
+        assert_eq!(
+            CalSpan::Week.visible_days(3, Weekday::Mon),
+            vec![0, 1, 2, 3, 4, 5, 6]
+        );
+    }
+
+    #[test]
+    fn cal_span_work_week_skips_sunday_when_it_is_the_first_column() {
+        assert_eq!(
+            CalSpan::WorkWeek.visible_days(0, Weekday::Sun),
+            vec![1, 2, 3, 4, 5]
+        );
+    }
+
+    #[test]
+    fn cal_span_work_week_preserves_date_order_across_weekends() {
+        assert_eq!(
+            CalSpan::WorkWeek.visible_days(0, Weekday::Wed),
+            vec![0, 1, 2, 5, 6]
+        );
+    }
+
+    #[test]
+    fn weekend_style_follows_the_date_not_the_column_offset() {
+        assert_eq!(day_col_class("c", None, 0, Weekday::Sun), "c weekend");
+        assert_eq!(day_col_class("c", None, 5, Weekday::Fri), "c");
     }
 
     fn timed_entry(start_minute: i32, minutes: i32) -> TimeEntry {

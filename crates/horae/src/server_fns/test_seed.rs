@@ -15,6 +15,22 @@ pub struct SeedIds {
     pub task_id: Uuid,
 }
 
+/// Wait for a real database lock dependency, rather than guessing task timing.
+pub async fn wait_for_blocked(pool: &PgPool, blocker: i32) {
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            let waiting = sqlx::query_scalar!(
+                "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname = current_database() AND $1 = ANY(pg_blocking_pids(pid)))",
+                blocker,
+            ).fetch_one(pool).await.unwrap().unwrap();
+            if waiting {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    }).await.expect("operation must wait for the competing transaction");
+}
+
 /// Seed the minimal tenant, giving the user `role`, and return its ids.
 pub async fn seed(pool: &PgPool, role: OrgRole) -> SeedIds {
     let org_id = Uuid::now_v7();

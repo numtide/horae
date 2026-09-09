@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE time_entries\n         SET minutes = $3, notes = $4, start_minute = $7,\n             billable = $5 AND COALESCE((\n               SELECT p.project_type <> 'non_billable' AND COALESCE(pt.billable, t.billable_default)\n               FROM projects p JOIN tasks t ON t.id = time_entries.task_id\n               LEFT JOIN project_tasks pt ON pt.project_id = p.id AND pt.task_id = t.id\n               WHERE p.id = time_entries.project_id\n             ), false)\n         WHERE id = $1 AND user_id = $2 AND state = $6\n         RETURNING id, org_id, user_id, project_id, task_id,\n                   spent_date as \"spent_date: chrono::NaiveDate\",\n                   minutes, start_minute, sort_order, rounded_minutes, notes, billable, is_running,\n                   started_at as \"started_at: chrono::DateTime<chrono::Utc>\",\n                   state as \"state: EntryState\", invoice_id,\n                   created_at as \"created_at: chrono::DateTime<chrono::Utc>\",\n                   updated_at as \"updated_at: chrono::DateTime<chrono::Utc>\"",
+  "query": "SELECT id, org_id, user_id, project_id, task_id,\n                  spent_date as \"spent_date: chrono::NaiveDate\",\n                  minutes, start_minute, sort_order, rounded_minutes, notes, billable, is_running,\n                  started_at as \"started_at: chrono::DateTime<chrono::Utc>\",\n                  state as \"state: EntryState\", invoice_id,\n                  created_at as \"created_at: chrono::DateTime<chrono::Utc>\",\n                  updated_at as \"updated_at: chrono::DateTime<chrono::Utc>\"\n           FROM time_entries\n           WHERE id = $1 AND user_id = $2 AND state = $3\n           FOR UPDATE",
   "describe": {
     "columns": [
       {
@@ -110,9 +110,6 @@
       "Left": [
         "Uuid",
         "Uuid",
-        "Int4",
-        "Text",
-        "Bool",
         {
           "Custom": {
             "name": "entry_state",
@@ -125,8 +122,7 @@
               ]
             }
           }
-        },
-        "Int4"
+        }
       ]
     },
     "nullable": [
@@ -150,5 +146,5 @@
       false
     ]
   },
-  "hash": "fde53bf79e8bd4ec7c0e97d080f88087f14ebda72ba6d1253e2bbee23b2a8d8a"
+  "hash": "282dc477d6e9b59d51af052f94e91282e74a1aee50bac06b7b2a5213e65e0edb"
 }

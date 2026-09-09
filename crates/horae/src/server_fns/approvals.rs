@@ -12,7 +12,7 @@ const RUNNING_TIMER_CONFLICT: &str = "A timer is running in this week. Stop it b
 /// True when the user has a running timer dated inside `[ws, we]`.
 #[cfg(feature = "server")]
 async fn week_has_running_timer(
-    db: &sqlx::PgPool,
+    db: impl sqlx::PgExecutor<'_>,
     user_id: uuid::Uuid,
     ws: chrono::NaiveDate,
     we: chrono::NaiveDate,
@@ -41,9 +41,51 @@ pub async fn submit_week(week_start: String) -> Result<Approval, ServerFnError> 
     let state = crate::state::global_state().await;
 
     let ws = parse_date(&week_start, "week_start")?;
-    let we = ws + chrono::Duration::days(6);
+    let (approval, total_minutes) = submit_user_week(&state.db, user_id, org_id, ws).await?;
+    state
+        .plugins
+        .dispatch(crate::plugin::AppEvent::TimesheetSubmitted {
+            occurred_at: chrono::Utc::now(),
+            org_id,
+            submission: submission_payload(&approval, total_minutes),
+        });
+    Ok(approval)
+}
 
-    let mut tx = state.db.begin().await.map_err(server_err)?;
+#[cfg(feature = "server")]
+async fn submit_user_week(
+    pool: &sqlx::PgPool,
+    user_id: uuid::Uuid,
+    org_id: uuid::Uuid,
+    ws: chrono::NaiveDate,
+) -> Result<(Approval, i32), ServerFnError> {
+    use chrono::Datelike;
+    let we = ws
+        .checked_add_days(chrono::Days::new(6))
+        .ok_or_else(|| err(BAD_REQUEST, "week_start is out of range"))?;
+
+    let mut tx = pool.begin().await.map_err(server_err)?;
+    // Writers acquire the shared form before changing any entries. Taking the
+    // user-wide lock first covers inserts and cross-week moves, not just rows
+    // that happened to exist when submission started.
+    sqlx::query!(
+        r#"SELECT pg_advisory_xact_lock(hashtextextended('horae.timesheet:' || $1::uuid::text, 0)) as "lock!: ()""#,
+        user_id,
+    ).execute(&mut *tx).await.map_err(server_err)?;
+    let config = sqlx::query!(
+        r#"SELECT week_start, round_minutes, round_dir as "round_dir: horae_core::types::RoundDir"
+           FROM organizations WHERE id = $1"#,
+        org_id,
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(server_err)?;
+    if ws.weekday().number_from_monday() as i16 != config.week_start {
+        return Err(err(
+            BAD_REQUEST,
+            "week_start must match the organization's first weekday",
+        ));
+    }
 
     // A week a manager has already approved cannot be resubmitted — silently
     // downgrading the approval back to pending would erase who approved it and
@@ -65,68 +107,21 @@ pub async fn submit_week(week_start: String) -> Result<Approval, ServerFnError> 
         ));
     }
 
-    // A running timer in the week would be locked with rounded_minutes frozen
-    // at 0 before its elapsed time is known, freezing that time's billable
-    // value at zero. Refuse rather than stop the timer (that would change data
-    // the user didn't ask to change) or skip the entry (that would split the
-    // week across two submissions). Checked inside the transaction so a refusal
-    // rolls back everything, rounding writes included; the transition UPDATE
-    // below keeps its NOT EXISTS predicate as the atomic backstop for a timer
-    // started after this check.
-    if week_has_running_timer(&state.db, user_id, ws, we).await? {
+    // A running timer cannot be frozen before its elapsed minutes are known.
+    // The write barrier prevents a timer from starting after this check.
+    if week_has_running_timer(&mut *tx, user_id, ws, we).await? {
         return Err(conflict(RUNNING_TIMER_CONFLICT));
     }
 
-    let (round_min, round_dir) = crate::db::org_rounding(&mut *tx, org_id)
-        .await
-        .map_err(server_err)?;
-
-    // Apply rounding per entry if rounding is configured
-    if round_min > 0 {
-        let entries = sqlx::query!(
-            "SELECT id, minutes FROM time_entries
-             WHERE user_id = $1 AND spent_date BETWEEN $2 AND $3 AND state = $4",
-            user_id,
-            ws as chrono::NaiveDate,
-            we as chrono::NaiveDate,
-            EntryState::Open as EntryState,
-        )
-        .fetch_all(&mut *tx)
-        .await
-        .map_err(server_err)?;
-
-        // Rounding stays in `horae-core` — it is the correctness-critical part
-        // and has no business being restated in SQL — but the writes go back as
-        // one array update instead of a round trip per entry.
-        let ids: Vec<uuid::Uuid> = entries.iter().map(|e| e.id).collect();
-        let rounded: Vec<i32> = entries
-            .iter()
-            .map(|e| horae_core::rounding::round(e.minutes as u32, round_min, round_dir) as i32)
-            .collect();
-
-        sqlx::query!(
-            "UPDATE time_entries AS t
-                SET rounded_minutes = v.rounded
-               FROM unnest($1::uuid[], $2::int4[]) AS v(id, rounded)
-              WHERE t.id = v.id",
-            &ids,
-            &rounded,
-        )
-        .execute(&mut *tx)
-        .await
-        .map_err(server_err)?;
-    }
-
-    // Transition open entries to submitted, using COALESCE so entries without
-    // explicit rounding (round_min=0) still get rounded_minutes set to minutes.
-    // The NOT EXISTS predicate re-checks the running-timer guard atomically, so
-    // a timer that starts between the guard above and this statement can't be
-    // locked mid-run.
+    // Freeze and transition in the same UPDATE, using the shared SQL rounding
+    // function already checked against horae-core. A competing row update is
+    // re-evaluated against its current minutes, not a previously fetched vector.
     let result = sqlx::query!(
         "UPDATE time_entries
          SET state = $4,
-             rounded_minutes = COALESCE(rounded_minutes, minutes)
+             rounded_minutes = effective_minutes(minutes, NULL, $7, $8)
          WHERE user_id = $1
+           AND org_id = $6
            AND spent_date BETWEEN $2 AND $3
            AND state = $5
            AND NOT EXISTS (SELECT 1 FROM time_entries r
@@ -138,22 +133,22 @@ pub async fn submit_week(week_start: String) -> Result<Approval, ServerFnError> 
         we as chrono::NaiveDate,
         EntryState::Submitted as EntryState,
         EntryState::Open as EntryState,
+        org_id,
+        config.round_minutes,
+        config.round_dir as horae_core::types::RoundDir,
     )
     .execute(&mut *tx)
     .await
     .map_err(server_err)?;
 
     if result.rows_affected() == 0 {
-        if week_has_running_timer(&state.db, user_id, ws, we).await? {
+        if week_has_running_timer(&mut *tx, user_id, ws, we).await? {
             return Err(conflict(RUNNING_TIMER_CONFLICT));
         }
         return Err(not_found("No open entries found for this week"));
     }
 
-    // Create approval row. The guard above already refused approved weeks, but
-    // when it found no row there was nothing to lock, so a concurrent
-    // submit+approve could land in between: the DO UPDATE's WHERE makes that
-    // window a conflict (no row returned) instead of a silent downgrade.
+    // Retain the conditional upsert as a backstop against downgrading approval.
     let id = uuid::Uuid::now_v7();
     let approval = sqlx::query_as!(
         Approval,
@@ -186,18 +181,9 @@ pub async fn submit_week(week_start: String) -> Result<Approval, ServerFnError> 
         )
     })?;
 
+    let total_minutes = week_total_minutes(&mut *tx, user_id, ws, we).await?;
     tx.commit().await.map_err(server_err)?;
-
-    let total_minutes = week_total_minutes(&state.db, user_id, ws, we).await?;
-    state
-        .plugins
-        .dispatch(crate::plugin::AppEvent::TimesheetSubmitted {
-            occurred_at: chrono::Utc::now(),
-            org_id,
-            submission: submission_payload(&approval, total_minutes),
-        });
-
-    Ok(approval)
+    Ok((approval, total_minutes))
 }
 
 /// List approvals, optionally filtered by state. Requires manager role.
@@ -541,3 +527,6 @@ mod tests {
         );
     }
 }
+
+#[cfg(all(test, feature = "server"))]
+mod submission_tests;
