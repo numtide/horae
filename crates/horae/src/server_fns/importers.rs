@@ -62,22 +62,16 @@ pub async fn harvest_connection_status() -> Result<ConnectionStatus, ServerFnErr
     })
 }
 
-/// Disconnect Harvest: delete the org's stored OAuth credentials so a fresh
-/// connect can be made (contracts/importer-api.md). Admin-only (FR-001).
+/// Disconnect Harvest: remove OAuth secrets, retaining the original account
+/// binding for a safe reconnect (contracts/importer-api.md). Admin-only (FR-001).
 #[server]
 pub async fn harvest_disconnect() -> Result<(), ServerFnError> {
     let admin = require_admin().await?;
     let state = crate::state::global_state().await;
 
-    sqlx::query!(
-        "DELETE FROM harvest_credentials WHERE org_id = $1",
-        admin.org_id,
-    )
-    .execute(&state.db)
-    .await
-    .map_err(server_err)?;
-
-    Ok(())
+    crate::importers::harvest::credentials::disconnect(&state.db, admin.org_id)
+        .await
+        .map_err(map_api_error)
 }
 
 /// Run an import from the Harvest API (primary source). Rejects up front when no
@@ -162,7 +156,21 @@ fn map_api_error(e: crate::importers::harvest::ApiImportError) -> ServerFnError 
     use crate::importers::harvest::ApiImportError;
     match e {
         ApiImportError::NotConnected => err(NOT_FOUND, e),
-        ApiImportError::ReconnectRequired => err(CONFLICT, e),
+        ApiImportError::ReconnectRequired | ApiImportError::Busy => err(CONFLICT, e),
         ApiImportError::Other(inner) => server_err(inner),
+    }
+}
+
+#[cfg(all(test, feature = "server"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn concurrent_api_import_returns_a_retryable_conflict() {
+        let error = map_api_error(crate::importers::harvest::ApiImportError::Busy);
+        assert!(matches!(
+            error,
+            ServerFnError::ServerError { code: CONFLICT, .. }
+        ));
     }
 }
