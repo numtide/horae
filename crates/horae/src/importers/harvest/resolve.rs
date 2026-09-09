@@ -58,6 +58,13 @@ pub enum ParentKind {
     Task,
 }
 
+/// Email and full-name matches occupy separate namespaces within one org run.
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub enum UserKey {
+    Email(String),
+    FullName(String),
+}
+
 /// What a committed row contributes to the [`RunCache`]. Collected while the
 /// row's savepoint is open and merged only after it commits, so a rolled-back
 /// row never poisons the cache.
@@ -65,20 +72,24 @@ pub enum ParentKind {
 pub struct PendingCache {
     /// Parents this row resolved or created.
     pub parents: Vec<(ParentKind, String, Uuid)>,
+    pub user: Option<(UserKey, Uuid)>,
+    pub project_task: Option<(Uuid, Uuid)>,
     /// The natural-key slot an id-less time entry consumed (see
     /// [`RunCache::entry_slot_offset`]); bumped on commit so the next identical
     /// row in the run maps to the next stored entry instead of the same one.
     pub entry_slot: Option<String>,
 }
 
-/// Ids of parents resolved so far in this run, plus the per-natural-key count of
-/// id-less time entries already consumed. Only merged after a row's savepoint
-/// commits, so a rolled-back creation never poisons the cache.
+/// Successful resolutions for one organization/run, plus consumed id-less
+/// occurrences. Only merged after a row's savepoint commits. First successful
+/// identity matches remain stable for the run; the next run resolves them anew.
 #[derive(Default)]
 pub struct RunCache {
     clients: HashMap<String, Uuid>,
     projects: HashMap<String, Uuid>,
     tasks: HashMap<String, Uuid>,
+    users: HashMap<UserKey, Uuid>,
+    project_tasks: HashSet<(Uuid, Uuid)>,
     entry_slots: keys::OccurrenceCounter,
     failed_parents: HashSet<(EntityType, i64)>,
 }
@@ -116,6 +127,12 @@ impl RunCache {
     pub fn merge(&mut self, pending: PendingCache) {
         for (kind, key, id) in pending.parents {
             self.map_mut(kind).insert(key, id);
+        }
+        if let Some((key, id)) = pending.user {
+            self.users.insert(key, id);
+        }
+        if let Some(pair) = pending.project_task {
+            self.project_tasks.insert(pair);
         }
         if let Some(key) = pending.entry_slot {
             self.entry_slots.bump(key);
@@ -471,11 +488,16 @@ pub async fn resolve_task(
 /// — it is a link, not one of the four entity levels.
 pub async fn ensure_project_task(
     conn: &mut sqlx::PgConnection,
+    cache: &RunCache,
     project_id: Uuid,
     task_id: Uuid,
     row: &SourceRow,
 ) -> Result<(), RowFailure> {
+    // A cached link must not hide a malformed rate on a later source row.
     let rate = rate_cents(row.billable_rate.as_deref())?;
+    if cache.project_tasks.contains(&(project_id, task_id)) {
+        return Ok(());
+    }
     sqlx::query!(
         "INSERT INTO project_tasks (project_id, task_id, billable, rate_cents)
          VALUES ($1, $2, $3, $4)
@@ -495,25 +517,18 @@ pub async fn ensure_project_task(
 /// Never provisions users or guesses between normalized duplicates.
 pub async fn resolve_user(
     conn: &mut sqlx::PgConnection,
+    cache: &RunCache,
     org_id: Uuid,
     row: &SourceRow,
     source: SourceKind,
-) -> Result<Uuid, RowFailure> {
+) -> Result<(UserKey, Uuid), RowFailure> {
     let email = row
         .user_email
         .as_deref()
         .map(keys::trim_ws)
         .filter(|e| !e.is_empty());
-    // Two matches are enough to prove ambiguity; do not arbitrarily select one.
-    let (matches, field, value) = if let Some(email) = email {
-        let matches = sqlx::query_scalar!(
-            "SELECT id FROM users WHERE org_id = $1 AND harvest_norm(email) = $2 LIMIT 2",
-            org_id,
-            keys::normalize(email),
-        )
-        .fetch_all(&mut *conn)
-        .await?;
-        (matches, "email", email)
+    let (key, field, value) = if let Some(email) = email {
+        (UserKey::Email(keys::normalize(email)), "email", email)
     } else {
         if source != SourceKind::Csv {
             return Err(RowFailure::new("time entry has no user email to match"));
@@ -524,17 +539,35 @@ pub async fn resolve_user(
             .map(keys::trim_ws)
             .filter(|n| !n.is_empty())
             .ok_or_else(|| RowFailure::new("time entry has no user email or full name to match"))?;
-        let matches = sqlx::query_scalar!(
-            "SELECT id FROM users WHERE org_id = $1 AND harvest_norm(name) = $2 LIMIT 2",
-            org_id,
-            keys::normalize(name),
-        )
-        .fetch_all(&mut *conn)
-        .await?;
-        (matches, "name", name)
+        (UserKey::FullName(keys::normalize(name)), "name", name)
+    };
+    if let Some(&id) = cache.users.get(&key) {
+        return Ok((key, id));
+    }
+    // Two matches are enough to prove ambiguity; do not arbitrarily select one.
+    // Missing/ambiguous identities and database errors are never cached.
+    let matches = match &key {
+        UserKey::Email(email) => {
+            sqlx::query_scalar!(
+                "SELECT id FROM users WHERE org_id = $1 AND harvest_norm(email) = $2 LIMIT 2",
+                org_id,
+                email,
+            )
+            .fetch_all(&mut *conn)
+            .await?
+        }
+        UserKey::FullName(name) => {
+            sqlx::query_scalar!(
+                "SELECT id FROM users WHERE org_id = $1 AND harvest_norm(name) = $2 LIMIT 2",
+                org_id,
+                name,
+            )
+            .fetch_all(&mut *conn)
+            .await?
+        }
     };
     match matches.as_slice() {
-        [id] => Ok(*id),
+        [id] => Ok((key, *id)),
         [] => Err(RowFailure::new(format!(
             "no Horae user matches {field} {value:?}"
         ))),
