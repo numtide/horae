@@ -137,6 +137,12 @@ Notes:
    management view passes `include_inactive = true` to `list_projects` to include
    inactive projects for reactivation. The `client_id` filter argument on
    `list_projects` is accepted but not yet applied.
+1. Project edits and activation changes lock the organization-owned row before
+   comparing values. Unchanged requests return the current project without
+   rewriting it or emitting an event. Budget and rate comparisons use parsed
+   values, retaining the difference between zero and unset. Edits preserve
+   inactive status; activation changes preserve details. Missing or foreign
+   projects return `404`, including after a concurrent deletion.
 
 ______________________________________________________________________
 
@@ -155,6 +161,11 @@ Notes:
 
 1. Tasks are **org-level** in the current schema; the per-project relationship is
    the `project_tasks` join table surfaced by `list_project_tasks`.
+1. Task edits and activation changes lock the organization-owned row before
+   comparing values. Unchanged requests return the current task without a write
+   or event, including when another request already made the requested change.
+   Edits preserve inactive status; activation changes preserve details. Missing
+   or foreign tasks return `404`, including after a concurrent deletion.
 1. Per FR-010 task create/edit/deactivate and project linking are gated at
    **manager**. `link_project_task` inherits the task's `billable_default` /
    `default_rate_cents` onto the new `project_tasks` row and is idempotent
