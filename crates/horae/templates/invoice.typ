@@ -11,7 +11,7 @@
 
 #let fmt-money(cents, currency) = {
   let abs = calc.abs(cents)
-  let whole = calc.floor(abs / 100)
+  let whole = calc.quo(abs, 100)
   let frac = calc.rem(abs, 100)
   let sign = if cents < 0 { "−" } else { "" }
   let frac-str = if frac < 10 { "0" + str(frac) } else { str(frac) }

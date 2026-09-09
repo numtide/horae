@@ -210,8 +210,11 @@ async fn generate_invoice_for_period(
         )
         .unwrap_or(0);
 
-        let amount = horae_core::invoice::line_amount_cents(rate, e.minutes);
-        total_cents += amount;
+        let amount = horae_core::invoice::line_amount_cents(rate, e.minutes)
+            .map_err(|_| conflict("Invoice line amount exceeds the supported range."))?;
+        total_cents = total_cents.checked_add(amount).ok_or_else(|| {
+            conflict("Invoice total exceeds the supported range; select a shorter period.")
+        })?;
 
         let description = if let Some(notes) = &e.notes {
             format!(

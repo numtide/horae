@@ -131,3 +131,25 @@ pub fn render_invoice_pdf(
 
     Ok(pdf_bytes)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn invoice_template_formats_large_minor_units_exactly() {
+        // Evaluate the actual template helpers without the document's table.
+        let (helpers, _) = INVOICE_TEMPLATE.split_once("#grid(").unwrap();
+        let source = format!(
+            "{helpers}\n\
+             #assert.eq(fmt-money(9223372036854775807, \"EUR\"), \"EUR 92233720368547758.07\")\n\
+             #assert.eq(fmt-money(9007199254740999, \"USD\"), \"USD 90071992547409.99\")\n\
+             #assert.eq(fmt-money(99, \"EUR\"), \"EUR 0.99\")\n\
+             #assert.eq(fmt-money(0, \"EUR\"), \"EUR 0.00\")"
+        );
+        let mut inputs = Dict::new();
+        inputs.insert("invoice_number".into(), "format-test".into_value());
+        let engine = TypstEngine::builder().main_file(source.as_str()).build();
+        let _: typst_layout::PagedDocument = engine.compile_with_input(inputs).output.unwrap();
+    }
+}

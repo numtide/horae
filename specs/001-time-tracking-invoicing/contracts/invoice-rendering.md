@@ -32,6 +32,23 @@ Historical discrepancies already recorded in invoice lines require a separate
 review; the migration does not silently correct issued documents. Rate and
 currency resolution are unchanged by this rounding correction.
 
+### Monetary limits
+
+Per-line amounts use `(rate_cents * minutes + 30) / 60`, with half-cent ties up
+for non-negative stored rates and durations, not banker's rounding. Rust uses
+an `i128` intermediate and SQL uses exact `numeric` integer division; both reject
+a final result outside `i64` instead of wrapping or clamping it. Migration
+`0018_checked_line_amount.sql` replaces only the SQL function implementation;
+it does not recalculate stored invoices or change function permissions.
+
+Invoice creation checks both each line and the accumulated total. An
+unrepresentable invoice returns a conflict without writing an invoice, lines,
+or changed entry states. Reports likewise reject an unrepresentable aggregate rather
+than returning a partial or wrapped total.
+
+The Typst money formatter also uses integer division, preserving every digit of
+large valid amounts instead of losing precision through a floating-point value.
+
 ### PDF
 
 - A single PDF per invoice whose line items and `total_cents` reconcile **exactly** with the invoice (FR-012/FR-023/SC-007).

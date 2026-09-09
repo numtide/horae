@@ -13,6 +13,14 @@ pub struct CurrencyMismatch {
     pub b: String,
 }
 
+#[derive(Debug, Error)]
+pub enum AddError {
+    #[error(transparent)]
+    CurrencyMismatch(#[from] CurrencyMismatch),
+    #[error("money total exceeds the supported range")]
+    Overflow,
+}
+
 impl Money {
     pub fn new(cents: i64, currency: [u8; 3]) -> Self {
         Self { cents, currency }
@@ -23,15 +31,16 @@ impl Money {
     }
 }
 
-pub fn add(a: Money, b: Money) -> Result<Money, CurrencyMismatch> {
+pub fn add(a: Money, b: Money) -> Result<Money, AddError> {
     if a.currency != b.currency {
         return Err(CurrencyMismatch {
             a: a.currency_str().to_owned(),
             b: b.currency_str().to_owned(),
-        });
+        }
+        .into());
     }
     Ok(Money {
-        cents: a.cents + b.cents,
+        cents: a.cents.checked_add(b.cents).ok_or(AddError::Overflow)?,
         currency: a.currency,
     })
 }
@@ -149,6 +158,29 @@ pub fn format_budget(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn addition_rejects_overflow_in_both_directions() {
+        for (a, b) in [(i64::MAX, 1), (i64::MIN, -1)] {
+            assert!(add(Money::new(a, *b"EUR"), Money::new(b, *b"EUR")).is_err());
+        }
+    }
+
+    #[test]
+    fn addition_retains_currency_checks_and_representable_boundaries() {
+        assert!(matches!(
+            add(Money::new(1, *b"EUR"), Money::new(1, *b"USD")),
+            Err(AddError::CurrencyMismatch(_))
+        ));
+        assert_eq!(
+            add(Money::new(i64::MAX - 1, *b"EUR"), Money::new(1, *b"EUR")).unwrap(),
+            Money::new(i64::MAX, *b"EUR")
+        );
+        assert_eq!(
+            add(Money::new(i64::MIN + 1, *b"EUR"), Money::new(-1, *b"EUR")).unwrap(),
+            Money::new(i64::MIN, *b"EUR")
+        );
+    }
 
     #[test]
     fn format_cents_groups_thousands_and_keeps_sign() {
