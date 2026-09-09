@@ -4,9 +4,14 @@ use thiserror::Error;
 pub enum DurationError {
     #[error("invalid duration format: {0}")]
     InvalidFormat(String),
+    #[error("duration or decimal precision out of range: {0}")]
+    OutOfRange(String),
 }
 
 /// Parse "H:MM" or decimal hours (e.g. "1:30" or "1.5") into minutes.
+/// Non-negative values only, rounded half up to at most `u32::MAX` minutes.
+/// Decimals support at most 38 fractional digits and an unscaled numerator
+/// up to `i128::MAX`; scientific notation and non-finite values are rejected.
 pub fn parse(s: &str) -> Result<u32, DurationError> {
     let s = s.trim();
     if let Some((h, m)) = s.split_once(':') {
@@ -21,12 +26,16 @@ pub fn parse(s: &str) -> Result<u32, DurationError> {
         if mins >= 60 {
             return Err(DurationError::InvalidFormat(s.to_owned()));
         }
-        Ok(hours * 60 + mins)
+        hours
+            .checked_mul(60)
+            .and_then(|minutes| minutes.checked_add(mins))
+            .ok_or_else(|| DurationError::OutOfRange(s.to_owned()))
     } else {
-        let hours: f64 = s
-            .parse()
-            .map_err(|_| DurationError::InvalidFormat(s.to_owned()))?;
-        Ok((hours * 60.0).round() as u32)
+        let minutes = crate::decimal::scale_decimal(s, 60).map_err(|err| match err {
+            crate::decimal::DecimalError::OutOfRange(_) => DurationError::OutOfRange(s.to_owned()),
+            _ => DurationError::InvalidFormat(s.to_owned()),
+        })?;
+        u32::try_from(minutes).map_err(|_| DurationError::OutOfRange(s.to_owned()))
     }
 }
 
@@ -68,6 +77,54 @@ pub fn minutes_between(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parse_rejects_negative_non_finite_and_malformed_values() {
+        for input in [
+            "-1", "-0", "NaN", "inf", "-inf", "1e3", "", ".", "1:60", "1:2:3",
+        ] {
+            assert!(parse(input).is_err(), "accepted {input:?}");
+        }
+    }
+
+    #[test]
+    fn parse_rejects_colon_overflow_without_panicking() {
+        assert!(parse("71582789:00").is_err());
+    }
+
+    #[test]
+    fn parse_preserves_u32_boundary_without_saturating() {
+        assert_eq!(parse("71582788:15").unwrap(), u32::MAX);
+        assert_eq!(parse("71582788.25").unwrap(), u32::MAX);
+        assert!(parse("71582788:16").is_err());
+        assert!(parse("71582788.26").is_err());
+    }
+
+    #[test]
+    fn parse_decimal_rounds_half_minutes_exactly() {
+        assert_eq!(
+            parse("0.00833333333333333333333333333333333333").unwrap(),
+            0
+        );
+        assert_eq!(
+            parse("0.00833333333333333333333333333333333334").unwrap(),
+            1
+        );
+    }
+
+    #[test]
+    fn parse_round_trips_each_minute_in_a_day() {
+        for minutes in 0..=1440u32 {
+            assert_eq!(parse(&format_hhmm(i64::from(minutes))).unwrap(), minutes);
+        }
+    }
+
+    #[test]
+    fn parse_rejects_excessive_decimal_precision_and_numerator() {
+        for input in [format!("0.{}1", "0".repeat(38)), format!("{}0", i128::MAX)] {
+            assert!(matches!(parse(&input), Err(DurationError::OutOfRange(_))));
+        }
+    }
 
     #[test]
     fn parse_colon() {

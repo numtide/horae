@@ -34,6 +34,7 @@ update_time_entry(
 ```
 
 - Clearing the start (`None`) converts the entry to untimed with duration unchanged (FR-007).
+- A Week-grid duration edit carries the existing start, notes, and billability into this call. It does not clear the start; the same server-side snapping and end-of-day clamp apply. Newly created Week-grid entries remain untimed.
 - Blocked when the entry is not `open` (FR-013).
 
 ### `stop_timer`
