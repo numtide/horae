@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COUNT(*) as \"rows!\", COALESCE(SUM(octet_length(description)::bigint), 0)::bigint as \"bytes!\",\n                  COALESCE(MAX(octet_length(description)), 0) as \"field_bytes!\"\n           FROM (SELECT description FROM invoice_line_items WHERE invoice_id = $1 LIMIT $2) bounded",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "rows!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "bytes!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "field_bytes!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "69acaca0d6b667d28eab9b6fd42bf6207a2a7d3a85eb7921dbab9ca38ad92191"
+}

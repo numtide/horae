@@ -1,13 +1,20 @@
 # Invoice Rendering Contract
 
-**Status: Planned.** Implements FR-025. Renders an invoice to a print-ready, reproducible PDF using **Typst** (see [research.md](../research.md)); fonts are supplied from nixpkgs for reproducible typography.
+**Status: Default invoice PDF implemented.** Implements FR-025 using **Typst**
+(see [research.md](../research.md)), the embedded invoice template, and embedded
+typst-kit fonts. Host font directories are not searched. Planned customization
+and review features below are not part of the current export endpoint.
+
+See [export execution and resource limits](exports.md) for admission, dataset
+and file limits, and the distinction between a request timeout and termination
+of a native renderer.
 
 ## Inputs
 
-1. **Invoice data** — the invoice and its line items (see [data-model.md](../data-model.md) and [contracts/server-functions.md](./server-functions.md)): number, client, issue/due dates, currency, line items (`description`, `minutes`, `rate_cents`, `amount_cents`), and `total_cents`. This mirrors the Harvest-shaped export data, so the same JSON that drives [contracts/harvest-api.md](./harvest-api.md) can drive rendering (as in `eureka-cpu/nvoice`).
-1. **Branding / provider settings** — from the organization: provider identity, bank/payment details, logo, and the default template selection.
-1. **Editable fields** — reviewer-adjustable values (notes, payment terms, provider identity overrides) captured before finalize/send.
-1. **Template** — a Typst `.typ` template (default `crates/horae/templates/invoice.typ`); operators MAY customize or supply their own.
+1. **Invoice data** — the stored invoice and line-item DTOs (see [data-model.md](../data-model.md) and [server-functions.md](server-functions.md)): number, client, issue/due dates, currency, line descriptions, minutes, rates, amounts, and total. This is separate from the read-only Harvest-style REST surface.
+1. **Branding / provider settings** — current organization provider identity and bank/payment details. Logo and template selection remain planned.
+1. **Editable fields (planned)** — reviewer-adjustable values captured before finalize/send. The current export reads stored invoice notes and current organization payment/provider settings.
+1. **Template** — `crates/horae/templates/invoice.typ`, embedded at compilation. Runtime-supplied templates are not implemented.
 
 ## Output
 
@@ -56,9 +63,9 @@ large valid amounts instead of losing precision through a floating-point value.
 
 ## Behavior
 
-1. The manager may review and adjust the invoice's editable fields; the preview reflects the same template that produces the final PDF.
+1. The planned review UI may adjust editable fields before finalization; the current endpoint renders the stored invoice without a separate preview workflow.
 1. Rendering does not mutate authoritative data — the invoice/line records are the source of truth; the PDF is a derived artifact and MAY be cached/regenerated.
-1. Fonts referenced by the template MUST be resolvable from the packaged font set (nixpkgs), so rendering never depends on host-installed fonts.
+1. Fonts are resolved from the embedded typst-kit font set, so rendering does not depend on host-installed fonts.
 
 ## Notes
 

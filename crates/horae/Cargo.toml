@@ -32,6 +32,7 @@ server = [
   "dep:toml",
   "dep:ureq",
   "dep:chacha20poly1305",
+  "dep:futures-util",
 ]
 web = ["dioxus/web", "dep:gloo-timers"]
 
@@ -53,6 +54,7 @@ tracing = "0.1"
 wasm-bindgen = "=0.2.126"
 
 # server-only
+futures-util = { version = "0.3", optional = true }
 tokio = { version = "1", features = ["full"], optional = true }
 axum = { version = "0.8", features = ["macros", "multipart"], optional = true }
 tower-http = { version = "0.6", features = [
@@ -113,3 +115,4 @@ gloo-timers = { version = "0.3", features = ["futures"], optional = true }
 serial_test = "3"
 tempfile = "3"
 tower = { version = "0.5", features = ["util"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }

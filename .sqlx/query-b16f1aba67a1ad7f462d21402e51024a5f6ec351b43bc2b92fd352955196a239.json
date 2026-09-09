@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM time_entries WHERE false",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "b16f1aba67a1ad7f462d21402e51024a5f6ec351b43bc2b92fd352955196a239"
+}

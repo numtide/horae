@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (octet_length(number)::bigint + octet_length(currency) + COALESCE(octet_length(notes), 0)) as \"bytes!\",\n                  GREATEST(octet_length(number), octet_length(currency), COALESCE(octet_length(notes), 0)) as \"field_bytes!\"\n           FROM invoices WHERE id = $1 AND org_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "bytes!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "field_bytes!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "b33fc8e835905ec75a4fdf6cb9ad8dd55573392e1e0103fc7e15441899f7fd6d"
+}

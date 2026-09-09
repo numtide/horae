@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DO $$ BEGIN PERFORM pg_sleep(10); END $$",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "9607e3dcedebd4248fd42eff3f64c6e16ea243dfc0ae9a287c6dc71eaa5f5fcd"
+}

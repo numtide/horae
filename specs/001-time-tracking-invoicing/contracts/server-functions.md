@@ -227,6 +227,9 @@ reported explicitly. This does not change currency authority or convert money.
 
 Export links (not `#[server]` functions):
 
+See [export execution and resource limits](exports.md) for XLSX/PDF admission,
+dataset/file caps, timeout semantics, and remaining CSV streaming work.
+
 1. Report/invoice **export** is served by plain Axum routes (CSV / XLSX via
    `reports.rs`), not by server functions, so the browser can download a file
    directly. Exported totals reconcile exactly with the on-screen figures
