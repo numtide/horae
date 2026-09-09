@@ -10,6 +10,8 @@ pub struct AppConfig {
     pub session_secret: String,
     /// Directory containing plugin subdirectories (each with plugin.toml + *.wasm).
     pub plugins_dir: String,
+    /// Separate unprivileged login for plugin SQL. Unset disables SQL access.
+    pub plugin_database_url: Option<String>,
     /// OIDC provider settings. `Some` only when all four env vars are set;
     /// production auth is enabled exactly when this is present and `dev_login`
     /// is false.
@@ -74,6 +76,7 @@ impl AppConfig {
             session_secret: std::env::var("SESSION_SECRET")
                 .unwrap_or_else(|_| "dev-secret-change-me-in-production".into()),
             plugins_dir: std::env::var("HORAE_PLUGINS_DIR").unwrap_or_else(|_| "plugins".into()),
+            plugin_database_url: non_empty("HORAE_PLUGIN_DATABASE_URL"),
             oidc: OidcConfig::from_env(),
             secure_cookies: std::env::var("HORAE_SECURE_COOKIES")
                 .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))

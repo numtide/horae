@@ -2,14 +2,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::Path;
 
-/// Known hook names that plugins may subscribe to.
-pub const KNOWN_HOOKS: &[&str] = &[
-    "time_entry_created",
-    "time_entry_stopped",
-    "invoice_created",
-    "invoice_sent",
-    "user_logged_in",
-];
+use super::event::KNOWN_HOOKS;
 
 #[derive(Debug, Deserialize)]
 struct ManifestFile {
@@ -63,6 +56,55 @@ impl PluginManifest {
 mod tests {
     use super::*;
     use std::io::Write;
+
+    #[test]
+    fn accepts_all_published_business_events() {
+        let hooks = [
+            "time_entry_created",
+            "time_entry_stopped",
+            "invoice_created",
+            "invoice_sent",
+            "user_logged_in",
+            "time_entry_updated",
+            "time_entry_deleted",
+            "timesheet_submitted",
+            "submission_approved",
+            "submission_rejected",
+            "invoice_paid",
+            "invoice_voided",
+            "client_created",
+            "client_updated",
+            "client_deactivated",
+            "client_reactivated",
+            "project_created",
+            "project_updated",
+            "project_deactivated",
+            "project_reactivated",
+            "task_created",
+            "task_updated",
+            "task_deactivated",
+            "task_reactivated",
+            "user_created",
+            "user_role_changed",
+            "user_deactivated",
+            "user_logged_out",
+            "user_assigned_to_project",
+            "assignment_removed",
+            "org_branding_updated",
+            "project_budget_threshold_reached",
+            "project_over_budget",
+            "timer_running_too_long",
+        ];
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("plugin.toml");
+        std::fs::write(
+            &path,
+            format!("[plugin]\nname = 'all-events'\nversion = '1.0.0'\nhooks = {hooks:?}\n"),
+        )
+        .unwrap();
+        let manifest = PluginManifest::from_file(&path).unwrap();
+        assert_eq!(manifest.hooks, hooks);
+    }
 
     #[test]
     fn parse_valid_manifest() {
