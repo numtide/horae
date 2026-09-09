@@ -29,7 +29,7 @@ The normalized record both source adapters produce; the engine is source-agnosti
 - Client: `client_name`.
 - Project: `project_name`, `project_code` (optional).
 - Task: `task_name`.
-- Person: `user_email` (API: resolved from the pulled Harvest users by `harvest_user_id`; CSV: the email column or first/last name).
+- Person: separate `user_email` and `user_name` fields. API email is resolved from the pulled Harvest users by `harvest_user_id`. CSV retains email and combined first/last name separately; only when email is absent may it resolve an unambiguous full name. Both paths require exactly one matching user in the importing organization, including inactive users for historical imports; neither creates users.
 - Entry: `spent_date`, `hours` (API: JSON number; CSV: decimal string), `notes` (optional), `billable` (flag), `invoiced` (flag, informational only).
 - Money: `billable_rate`, `billable_amount`, `cost_rate`, `cost_amount` (optional), `currency` (ISO code).
 - Provenance freshness (API only): `harvest_updated_at` — Harvest's `updated_at` for the record, stored on the mapping to drive `updated_since` incremental sync.
@@ -145,7 +145,7 @@ Horae keeps an **org-level task catalog** (`tasks`) with **per-project enablemen
 | Horae column | Source | Notes |
 |---|---|---|
 | `id` | generated | UUID v7 |
-| `org_id` / `user_id` / `project_id` / `task_id` | run / resolved | user matched by email (FR-010); parents resolved first |
+| `org_id` / `user_id` / `project_id` / `task_id` | run / resolved | unique email, or CSV-only unique full name when email is absent (FR-010); parents resolved first |
 | `spent_date` | `spent_date` | parsed date |
 | `minutes` | `round(hours * 60)` | exact integer minutes via `horae-core` (FR-005) |
 | `rounded_minutes` | — | left NULL (persisted at lock, not at import) |

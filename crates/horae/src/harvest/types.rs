@@ -28,7 +28,7 @@ impl<T: Serialize> HarvestPagination<T> {
         let total_pages = if total_entries == 0 {
             1
         } else {
-            (total_entries + per_page - 1) / per_page
+            (total_entries - 1) / per_page + 1
         };
         let next_page = if page < total_pages {
             Some(page + 1)
@@ -58,6 +58,35 @@ impl<T: Serialize> HarvestPagination<T> {
             previous_page,
             links,
         }
+    }
+
+    /// Keep the original filter values on every link, while the envelope owns
+    /// the canonical page window. Encoding parsed pairs preserves literal `+`,
+    /// delimiters, Unicode, and repeated extension parameters.
+    pub fn with_query(mut self, query: Option<&str>) -> Self {
+        let Some(query) = query else { return self };
+        let mut encoded = openidconnect::url::form_urlencoded::Serializer::new(String::new());
+        for (key, value) in openidconnect::url::form_urlencoded::parse(query.as_bytes()) {
+            if key != "page" && key != "per_page" {
+                encoded.append_pair(&key, &value);
+            }
+        }
+        let filters = encoded.finish();
+        if !filters.is_empty() {
+            for link in [
+                Some(&mut self.links.first),
+                Some(&mut self.links.last),
+                self.links.next.as_mut(),
+                self.links.previous.as_mut(),
+            ]
+            .into_iter()
+            .flatten()
+            {
+                link.push('&');
+                link.push_str(&filters);
+            }
+        }
+        self
     }
 }
 

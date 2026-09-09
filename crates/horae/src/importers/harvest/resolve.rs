@@ -19,7 +19,7 @@ use chrono::{DateTime, Utc};
 use fields::{ClientFields, ProjectFields, TaskFields};
 use horae_core::importers::harvest::convert;
 use horae_core::importers::harvest::keys;
-use horae_core::importers::harvest::types::{EntityType, RowOutcome, SourceRow};
+use horae_core::importers::harvest::types::{EntityType, RowOutcome, SourceKind, SourceRow};
 use uuid::Uuid;
 
 /// A per-record failure that errors the row and continues the run (FR-018).
@@ -490,29 +490,58 @@ pub async fn ensure_project_task(
     Ok(())
 }
 
-/// Resolve the Horae user for a row by email (FR-010). Never provisions; an
-/// unmatched user errors the row.
+/// Match one org user, including inactive historical users. Email is authoritative;
+/// only CSV rows without email may use an unambiguous full-name fallback.
+/// Never provisions users or guesses between normalized duplicates.
 pub async fn resolve_user(
     conn: &mut sqlx::PgConnection,
     org_id: Uuid,
     row: &SourceRow,
+    source: SourceKind,
 ) -> Result<Uuid, RowFailure> {
     let email = row
         .user_email
         .as_deref()
         .map(keys::trim_ws)
-        .filter(|e| !e.is_empty())
-        .ok_or_else(|| RowFailure::new("time entry has no user email to match"))?;
-
-    let id = sqlx::query_scalar!(
-        "SELECT id FROM users WHERE org_id = $1 AND harvest_norm(email) = $2",
-        org_id,
-        keys::normalize(email),
-    )
-    .fetch_optional(&mut *conn)
-    .await?;
-
-    id.ok_or_else(|| RowFailure::new(format!("no Horae user matches email {email:?}")))
+        .filter(|e| !e.is_empty());
+    // Two matches are enough to prove ambiguity; do not arbitrarily select one.
+    let (matches, field, value) = if let Some(email) = email {
+        let matches = sqlx::query_scalar!(
+            "SELECT id FROM users WHERE org_id = $1 AND harvest_norm(email) = $2 LIMIT 2",
+            org_id,
+            keys::normalize(email),
+        )
+        .fetch_all(&mut *conn)
+        .await?;
+        (matches, "email", email)
+    } else {
+        if source != SourceKind::Csv {
+            return Err(RowFailure::new("time entry has no user email to match"));
+        }
+        let name = row
+            .user_name
+            .as_deref()
+            .map(keys::trim_ws)
+            .filter(|n| !n.is_empty())
+            .ok_or_else(|| RowFailure::new("time entry has no user email or full name to match"))?;
+        let matches = sqlx::query_scalar!(
+            "SELECT id FROM users WHERE org_id = $1 AND harvest_norm(name) = $2 LIMIT 2",
+            org_id,
+            keys::normalize(name),
+        )
+        .fetch_all(&mut *conn)
+        .await?;
+        (matches, "name", name)
+    };
+    match matches.as_slice() {
+        [id] => Ok(*id),
+        [] => Err(RowFailure::new(format!(
+            "no Horae user matches {field} {value:?}"
+        ))),
+        _ => Err(RowFailure::new(format!(
+            "ambiguous user {field} {value:?}: multiple Horae users match; provide a unique email or resolve duplicate identities"
+        ))),
+    }
 }
 
 /// The row's currency when it is a plausible 3-letter code, else the org default.

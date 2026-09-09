@@ -17,15 +17,17 @@ CSV is the **secondary, offline source adapter** — the primary source is the l
 | `Hours` | yes | `time_entries.minutes` | `round(hours * 60)`, exact integer minutes |
 | `Billable?` | yes | entry/project-task `billable` | `Yes`/`No` → bool |
 | `Invoiced?` | no | informational only (FR-016) | not mapped to Horae invoice state |
-| `First Name` + `Last Name` | see note | user match key | combined for display; email preferred |
-| `Email` / user email | yes\* | resolve `users` by email (FR-010) | trim, case-fold |
+| `First Name` + `Last Name` | see note | separate full-name match key | combine nonblank parts with one space; only used without email |
+| `Email` / `User Email` | yes\* | resolve `users` by email (FR-010) | trim, ASCII case-fold |
 | `Billable Rate` | no | project-task / task default rate | `round(amount * 100)` → cents |
 | `Billable Amount` | no | reconciliation | `round(amount * 100)` → cents |
 | `Cost Rate` | no | (user cost rate, informational) | `round(amount * 100)` → cents |
 | `Cost Amount` | no | reconciliation | `round(amount * 100)` → cents |
 | `Currency` | yes | `clients.currency` / entry money | ISO 4217, 3 letters |
 
-\* **User identity**: an email column is the reliable match key. Harvest's detailed report includes the person's name and, depending on export options, an email. If only first/last name are present, the importer maps them to a user via the org's users by name as a fallback, and errors the row when no unambiguous user matches (FR-010). This is a documented parse expectation, not a schema change.
+\* **User identity**: at least one email or name column must be present. A nonblank email takes priority and must identify exactly one user in the importing organization. An unknown or ambiguous email is a row error; the importer does not retry it as a name match. If email is absent or blank, the combined name must match exactly one full `users.name` in that organization. A single supplied name part must still match the entire stored name, not a prefix. Matching uses `harvest_norm`: surrounding whitespace is trimmed and ASCII letters are case-folded; internal spacing and non-ASCII case are not normalized. Inactive users remain eligible for historical imports and count when detecting ambiguity. Neither path creates or edits users. This name fallback is CSV-only; API imports always require a unique email (FR-010).
+
+If both `Email` and `User Email` contain values, their normalized values must agree; otherwise that row errors while other valid rows continue. Duplicate identity headers (after trimming and case-folding header names) reject the entire file before writes. Rows with no identity, no matching user, or multiple matches report a clear error and leave no partial client/project/task writes.
 
 ## Recognition / rejection
 

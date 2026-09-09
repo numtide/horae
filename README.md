@@ -8,8 +8,8 @@ Self-hostable time tracking — a Harvest / Kimai alternative that stays fully y
 
 Horae is a time tracker you run on your own infrastructure. Log hours against clients and
 projects, submit and approve timesheets, and export billable reports — without handing your
-data to a SaaS vendor. It speaks a read-only, Harvest-compatible API so existing Harvest
-integrations and tooling keep working.
+data to a SaaS vendor. It exposes a read-only subset of the Harvest API shape for integrations
+adapted to Horae's authentication, identifiers, and supported filters.
 
 It is built as a single Rust + [Dioxus](https://dioxuslabs.com/) fullstack application
 (server-rendered plus a WebAssembly SPA) backed by PostgreSQL and Axum. Correctness-critical
@@ -25,7 +25,7 @@ core crate and is unit-tested in isolation.
 - **Approvals** — submit, approve, and reject time entries (manager and admin roles).
 - **Reports** — grouped time reports with CSV and XLSX export.
 - **Invoices** — draft invoices with CSV, XLSX, and PDF export.
-- **Harvest-compatible API** — a read-only `/harvest/v2/*` surface matching the Harvest v2 shape.
+- **Harvest-style API** — a read-only `/harvest/v2/*` subset with session authentication.
 - **Auth** — OIDC single sign-on in production; a one-click dev login for local work.
 
 The authenticated SPA is organized by route:
@@ -227,10 +227,10 @@ horae user create --email admin@example.com --name "Admin" --role admin
 
 ## API
 
-### Harvest-compatible (read-only)
+### Harvest-style subset (read-only)
 
-Endpoints under `/harvest/v2` mirror the [Harvest API v2](https://help.getharvest.com/api-v2/)
-response shape:
+Endpoints under `/harvest/v2` expose a subset of the
+[Harvest API v2](https://help.getharvest.com/api-v2/) response shape:
 
 ```
 GET /harvest/v2/users/me
@@ -243,6 +243,13 @@ GET /harvest/v2/users
 ```
 
 Authentication is session-cookie based. Bearer-token auth is planned but not yet implemented.
+IDs are UUID strings, not Harvest's numeric IDs. Lists use numbered pages with a default and
+maximum `per_page` of 100; follow the returned links to retain filters. Nonpositive page
+numbers, page sizes outside 1–100, and overflowing offsets return `400 Bad Request`.
+
+This is not a drop-in replacement for arbitrary Harvest clients. Check the
+[API contract and compatibility matrix](specs/001-time-tracking-invoicing/contracts/harvest-api.md)
+before connecting a tool; several filters, timestamp semantics, and response fields differ.
 
 ### Export
 

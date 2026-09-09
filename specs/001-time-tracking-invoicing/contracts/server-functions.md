@@ -102,6 +102,12 @@ Notes:
    `include_inactive = true` to also list deactivated clients for reactivation.
 1. Per FR-008 client create/edit/deactivate are gated at **manager** (managers or
    admins).
+1. Client edits and activation changes lock the organization's client before
+   comparing values. An unchanged request returns the current client without
+   rewriting the row or emitting an event. Concurrent requests report only the
+   changes they commit; missing or foreign clients return `404`, including when
+   the requested values would otherwise be unchanged. Editing details preserves
+   the active flag, and activation changes preserve the client's details.
 
 ______________________________________________________________________
 

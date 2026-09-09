@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE clients SET name = $3, currency = $4, address = $5, tax_id = $6\n         WHERE id = $1 AND org_id = $2\n         RETURNING id, org_id, name, currency, address, tax_id, active,\n                   created_at as \"created_at: chrono::DateTime<chrono::Utc>\"",
+  "query": "SELECT id, org_id, name, currency, address, tax_id, active,\n                  created_at as \"created_at: chrono::DateTime<chrono::Utc>\"\n           FROM clients WHERE id = $1",
   "describe": {
     "columns": [
       {
@@ -46,12 +46,7 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Uuid",
-        "Text",
-        "Bpchar",
-        "Text",
-        "Text"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -65,5 +60,5 @@
       false
     ]
   },
-  "hash": "a6ecea5cea04bf6fd0a1aa1d7f2ae2460758560387ffcd2c15061d7a3e2a0cd9"
+  "hash": "2e89f9d32317277f7d33a59c12836ead93dd4e1b6e4df59df0887e7f7db95b57"
 }
