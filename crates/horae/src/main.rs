@@ -248,7 +248,7 @@ fn main() -> anyhow::Result<()> {
                     )
                     .merge(auth::router(cfg.dev_login))
                     .merge(importers::harvest::callback_router())
-                    .merge(harvest::router())
+                    .merge(harvest::router(pool.clone()))
                     // Redirect signed-out page loads to /auth/login. Layered inside
                     // the session layer so the session is populated; the session
                     // layer stays outermost.

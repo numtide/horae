@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO tasks (id, org_id, name, active) VALUES ($1, $2, 'Dev', $3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "36eca3a6ac9efaa9762e9194df8537995dc2be98741bccf5c993bad471ce47ce"
+}
