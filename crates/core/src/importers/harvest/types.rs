@@ -96,7 +96,8 @@ pub struct SourceRow {
     pub task_name: String,
     pub task_billable_default: bool,
 
-    // Person — resolved to a Horae user by email (FR-010).
+    // Person — resolved by unique email; CSV alone permits a unique full-name
+    // fallback when email is absent. Neither source creates users (FR-010).
     pub user_email: Option<String>,
     pub user_name: Option<String>,
 
