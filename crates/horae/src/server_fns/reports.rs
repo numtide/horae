@@ -2,11 +2,14 @@
 
 use super::*;
 
+#[cfg(all(test, feature = "server"))]
+mod tests;
+
 // ── Reports (M8) ────────────────────────────────────────────────────────────
 
 /// Grouped time report. Groups by "project", "task", "client", or "person", with
 /// optional client/project/teammate filters. Each group carries billable and cost
-/// amounts (rates via FR-024); its `currency` is `None` when it mixes currencies.
+/// amounts (rates via FR-024), partitioned by entity identity and currency.
 /// Manager-only: reports span every user's time and money (SPEC §6).
 #[server]
 pub async fn report_time(
@@ -54,7 +57,7 @@ pub(super) async fn fetch_report(
     // survives the fold. The group key is a runtime choice but the query macro
     // takes a string literal, so the dimension rides in as a parameter and the
     // CASE picks the column — an unknown value falls through to the project
-    // name, as the Rust match did.
+    // identity and name.
     //
     // The CTE names each entry's derived values once so the aggregates below
     // read as the sums they are; Postgres inlines a CTE referenced once.
@@ -66,6 +69,12 @@ pub(super) async fn fetch_report(
         ReportRow,
         r#"WITH entry AS (
              SELECT
+               CASE $7::text
+                 WHEN 'task' THEN t.id
+                 WHEN 'client' THEN c.id
+                 WHEN 'person' THEN u.id
+                 ELSE p.id
+               END AS group_id,
                CASE $7::text
                  WHEN 'task' THEN t.name
                  WHEN 'client' THEN c.name
@@ -99,6 +108,7 @@ pub(super) async fn fetch_report(
                AND ($5::uuid IS NULL OR te.user_id = $5)
            )
            SELECT
+             group_id as "group_id!",
              label as "label!",
              SUM(minutes)::bigint as "total_minutes!",
              SUM(rounded_minutes)::bigint as "rounded_minutes!",
@@ -109,14 +119,11 @@ pub(super) async fn fetch_report(
                  FILTER (WHERE billable),
                0)::bigint as "billable_cents!",
              SUM(line_amount_cents(cost_rate_cents, minutes))::bigint as "cost_cents!",
-             -- A group that spans two currencies has no summable total, so it
-             -- reports none rather than a meaningless number.
-             CASE WHEN COUNT(DISTINCT currency) = 1 THEN MIN(currency) END as "currency?"
+             currency as "currency!"
            FROM entry
-           GROUP BY label
-           -- Byte order, so the row order matches the BTreeMap this replaced
-           -- rather than the database's default collation.
-           ORDER BY label COLLATE "C"
+           GROUP BY group_id, label, currency
+           -- Stable ties for duplicate labels and multi-currency entities.
+           ORDER BY label COLLATE "C", group_id, currency COLLATE "C"
         "#,
         period.0 as chrono::NaiveDate,
         period.1 as chrono::NaiveDate,

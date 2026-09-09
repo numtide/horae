@@ -3,6 +3,7 @@ use dioxus::prelude::*;
 // The report/export convention for hours (e.g. 90 → "1.50"), shared with the
 // CSV exporter.
 use horae_core::duration::format_hours2 as hours;
+use horae_core::money::format_cents as money;
 
 use super::{is_manager, loaded};
 use crate::components::badge::Badge;
@@ -10,12 +11,23 @@ use crate::components::form::{FormGroup, Input};
 use crate::components::table::DataTable;
 use crate::server_fns;
 
-/// Money for a group: formatted in its currency, or an em dash when the group
-/// mixes currencies (`currency` is `None`) and the amount isn't summable.
-fn money(cents: i64, currency: &Option<String>) -> String {
-    match currency {
-        Some(c) => horae_core::money::format_cents(cents, c),
-        None => "\u{2014}".to_string(),
+/// Do not add monetary values until their currencies have been checked.
+fn money_total(
+    rows: &[crate::models::ReportRow],
+    amount: fn(&crate::models::ReportRow) -> i64,
+) -> String {
+    let Some(first) = rows.first() else {
+        return "\u{2014}".into();
+    };
+    if rows.iter().any(|r| r.currency != first.currency) {
+        return "\u{2014}".into();
+    }
+    match rows
+        .iter()
+        .try_fold(0i64, |sum, row| sum.checked_add(amount(row)))
+    {
+        Some(total) => money(total, &first.currency),
+        None => "Amount exceeds supported range".into(),
     }
 }
 
@@ -255,16 +267,8 @@ pub fn Reports() -> Element {
                         let grand_total: i64 = rows.iter().map(|r| r.total_minutes).sum();
                         let grand_rounded: i64 = rows.iter().map(|r| r.rounded_minutes).sum();
                         let grand_billable: i64 = rows.iter().map(|r| r.billable_minutes).sum();
-                        let grand_bill_cents: i64 = rows.iter().map(|r| r.billable_cents).sum();
-                        let grand_cost_cents: i64 = rows.iter().map(|r| r.cost_cents).sum();
-                        // The grand total is only a real amount when every group is
-                        // in the same single currency; otherwise it's not summable.
-                        let total_currency: Option<String> = rows
-                            .first()
-                            .and_then(|r| r.currency.clone())
-                            .filter(|c| {
-                                rows.iter().all(|r| r.currency.as_deref() == Some(c.as_str()))
-                            });
+                        let grand_bill_amount = money_total(rows, |r| r.billable_cents);
+                        let grand_cost_amount = money_total(rows, |r| r.cost_cents);
                         rsx! {
                             DataTable {
                                 table {
@@ -280,7 +284,7 @@ pub fn Reports() -> Element {
                                     }
                                     tbody {
                                         for row in rows.iter() {
-                                            tr { key: "{row.label}",
+                                            tr { key: "{row.group_id}:{row.currency}",
                                                 td { "{row.label}" }
                                                 td { class: "text-mono text-right", "{hours(row.total_minutes)}" }
                                                 td { class: "text-mono text-right", "{hours(row.rounded_minutes)}" }
@@ -294,8 +298,8 @@ pub fn Reports() -> Element {
                                             td { class: "text-mono text-right", "{hours(grand_total)}" }
                                             td { class: "text-mono text-right", "{hours(grand_rounded)}" }
                                             td { class: "text-mono text-right", "{hours(grand_billable)}" }
-                                            td { class: "text-mono text-right", "{money(grand_bill_cents, &total_currency)}" }
-                                            td { class: "text-mono text-right", "{money(grand_cost_cents, &total_currency)}" }
+                                            td { class: "text-mono text-right", "{grand_bill_amount}" }
+                                            td { class: "text-mono text-right", "{grand_cost_amount}" }
                                         }
                                     }
                                 }
@@ -356,5 +360,46 @@ pub fn Reports() -> Element {
                 })}
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::ReportRow;
+
+    fn row(currency: &str, cents: i64) -> ReportRow {
+        ReportRow {
+            group_id: uuid::Uuid::nil(),
+            label: "Same label".into(),
+            total_minutes: 60,
+            rounded_minutes: 60,
+            billable_minutes: 60,
+            billable_cents: cents,
+            cost_cents: 0,
+            currency: currency.into(),
+        }
+    }
+
+    #[test]
+    fn mixed_currencies_are_not_added_even_when_the_numbers_would_overflow() {
+        let rows = [row("EUR", i64::MAX), row("USD", i64::MAX)];
+        assert_eq!(money_total(&rows, |r| r.billable_cents), "\u{2014}");
+    }
+
+    #[test]
+    fn monetary_total_overflow_is_visible_instead_of_panicking() {
+        let rows = [row("EUR", i64::MAX), row("EUR", 1)];
+        assert_eq!(
+            money_total(&rows, |r| r.billable_cents),
+            "Amount exceeds supported range"
+        );
+    }
+
+    #[test]
+    fn single_currency_totals_are_formatted_and_empty_reports_have_no_amount() {
+        let rows = [row("EUR", 100), row("EUR", 250)];
+        assert_eq!(money_total(&rows, |r| r.billable_cents), money(350, "EUR"));
+        assert_eq!(money_total(&[], |r| r.billable_cents), "\u{2014}");
     }
 }
