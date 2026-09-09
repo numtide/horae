@@ -28,6 +28,7 @@ server = [
   "dep:typst-pdf",
   "dep:typst-layout",
   "dep:extism",
+  "dep:wasmtime",
   "dep:toml",
   "dep:ureq",
   "dep:chacha20poly1305",
@@ -87,6 +88,11 @@ typst-as-lib = { version = "0.16", features = [
 typst-pdf = { version = "0.15", optional = true }
 typst-layout = { version = "0.15", optional = true }
 extism = { version = "1", optional = true }
+# Match Extism's engine major: its allocation budget alone does not cap each
+# linear memory, so configure the engine's hard memory limits as well.
+wasmtime = { version = "43", default-features = false, features = [
+  "pooling-allocator",
+], optional = true }
 toml = { version = "0.8", optional = true }
 # Blocking HTTP client for the `horae_http_post` plugin host function. extism host
 # functions are synchronous, so a blocking client avoids bridging to the async

@@ -1,0 +1,154 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH effective AS (\n           SELECT e.id, $5 AND COALESCE((\n               SELECT p.project_type <> 'non_billable' AND COALESCE(pt.billable, t.billable_default)\n               FROM projects p JOIN tasks t ON t.id = e.task_id\n               LEFT JOIN project_tasks pt ON pt.project_id = p.id AND pt.task_id = t.id\n               WHERE p.id = e.project_id\n             ), false) AS billable\n           FROM time_entries e WHERE e.id = $1\n         )\n         UPDATE time_entries e\n         SET minutes = $3, notes = $4, start_minute = $7, billable = effective.billable\n         FROM effective\n         WHERE e.id = effective.id AND e.id = $1 AND e.user_id = $2 AND e.state = $6\n           AND (e.minutes, e.notes, e.start_minute, e.billable)\n               IS DISTINCT FROM ($3, $4, $7, effective.billable)\n         RETURNING e.id, e.org_id, e.user_id, e.project_id, e.task_id,\n                   e.spent_date as \"spent_date: chrono::NaiveDate\",\n                   e.minutes, e.start_minute, e.sort_order, e.rounded_minutes, e.notes, e.billable, e.is_running,\n                   e.started_at as \"started_at: chrono::DateTime<chrono::Utc>\",\n                   e.state as \"state: EntryState\", e.invoice_id,\n                   e.created_at as \"created_at: chrono::DateTime<chrono::Utc>\",\n                   e.updated_at as \"updated_at: chrono::DateTime<chrono::Utc>\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "project_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "task_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "spent_date: chrono::NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 6,
+        "name": "minutes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "start_minute",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "sort_order",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "rounded_minutes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 10,
+        "name": "notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "billable",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 12,
+        "name": "is_running",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 13,
+        "name": "started_at: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "state: EntryState",
+        "type_info": {
+          "Custom": {
+            "name": "entry_state",
+            "kind": {
+              "Enum": [
+                "open",
+                "submitted",
+                "approved",
+                "invoiced"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "invoice_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 16,
+        "name": "created_at: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 17,
+        "name": "updated_at: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int4",
+        "Text",
+        "Bool",
+        {
+          "Custom": {
+            "name": "entry_state",
+            "kind": {
+              "Enum": [
+                "open",
+                "submitted",
+                "approved",
+                "invoiced"
+              ]
+            }
+          }
+        },
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "ad7049680c4c5ed509d7782dcae3a642784395f3bc6174388c16ed7f9a166776"
+}

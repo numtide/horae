@@ -194,7 +194,13 @@ fn main() -> anyhow::Result<()> {
 
                 // Load plugins from the configured directory (FR-018).
                 let plugins_dir = std::path::Path::new(&cfg.plugins_dir);
-                let registry = std::sync::Arc::new(plugin::PluginRegistry::load(plugins_dir));
+                let plugin_database = match cfg.plugin_database_url.as_deref() {
+                    Some(url) => Some(plugin::database::PluginDatabase::connect(url).await?),
+                    None => None,
+                };
+                let registry = std::sync::Arc::new(
+                    plugin::PluginRegistry::load(plugins_dir, plugin_database).await?,
+                );
                 state::init_state(
                     pool.clone(),
                     registry,
