@@ -65,6 +65,45 @@ pub async fn get_org_branding() -> Result<OrgBranding, ServerFnError> {
 pub async fn update_org_branding(branding: OrgBranding) -> Result<OrgBranding, ServerFnError> {
     let manager = require_manager().await?;
     let state = crate::state::global_state().await;
+    let (branding, changed) =
+        update_org_branding_record(&state.db, manager.org_id, &branding).await?;
+    if changed {
+        state
+            .plugins
+            .dispatch(crate::plugin::AppEvent::OrgBrandingUpdated {
+                occurred_at: chrono::Utc::now(),
+                org_id: manager.org_id,
+                org: crate::plugin::event::OrgBrandingPayload {
+                    org_id: manager.org_id,
+                    provider_name: branding.provider_name.clone(),
+                },
+            });
+    }
+    Ok(branding)
+}
+
+#[cfg(feature = "server")]
+async fn update_org_branding_record(
+    db: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    branding: &OrgBranding,
+) -> Result<(OrgBranding, bool), ServerFnError> {
+    let mut tx = db.begin().await.map_err(server_err)?;
+    // Compare with the latest locked row, including edits committed while
+    // this request waited. A missing organization is not an unchanged save.
+    let before = sqlx::query_as!(
+        OrgBranding,
+        r#"SELECT provider_name, provider_address, provider_tax_id,
+                  provider_email, provider_phone,
+                  bank_name, bank_iban, bank_bic, bank_routing, bank_account,
+                  invoice_notes, invoice_payment_terms
+           FROM organizations WHERE id = $1 FOR UPDATE"#,
+        org_id,
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(server_err)?
+    .ok_or_else(|| not_found("Organization not found"))?;
 
     let branding = sqlx::query_as!(
         OrgBranding,
@@ -82,11 +121,16 @@ pub async fn update_org_branding(branding: OrgBranding) -> Result<OrgBranding, S
              invoice_notes = $12,
              invoice_payment_terms = $13
            WHERE id = $1
+             AND (provider_name, provider_address, provider_tax_id,
+                  provider_email, provider_phone,
+                  bank_name, bank_iban, bank_bic, bank_routing, bank_account,
+                  invoice_notes, invoice_payment_terms)
+                 IS DISTINCT FROM ($2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
            RETURNING provider_name, provider_address, provider_tax_id,
                      provider_email, provider_phone,
                      bank_name, bank_iban, bank_bic, bank_routing, bank_account,
                      invoice_notes, invoice_payment_terms"#,
-        manager.org_id,
+        org_id,
         branding.provider_name,
         branding.provider_address,
         branding.provider_tax_id,
@@ -100,19 +144,14 @@ pub async fn update_org_branding(branding: OrgBranding) -> Result<OrgBranding, S
         branding.invoice_notes,
         branding.invoice_payment_terms,
     )
-    .fetch_one(&state.db)
+    .fetch_optional(&mut *tx)
     .await
     .map_err(server_err)?;
 
-    state
-        .plugins
-        .dispatch(crate::plugin::AppEvent::OrgBrandingUpdated {
-            occurred_at: chrono::Utc::now(),
-            org_id: manager.org_id,
-            org: crate::plugin::event::OrgBrandingPayload {
-                org_id: manager.org_id,
-                provider_name: branding.provider_name.clone(),
-            },
-        });
-    Ok(branding)
+    let changed = branding.is_some();
+    tx.commit().await.map_err(server_err)?;
+    Ok((branding.unwrap_or(before), changed))
 }
+
+#[cfg(all(test, feature = "server"))]
+mod tests;
