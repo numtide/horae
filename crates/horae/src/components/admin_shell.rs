@@ -14,14 +14,13 @@ use crate::server_fns;
 /// Audit log from the design are deferred until they have a backend.
 #[component]
 pub fn AdminShell() -> Element {
-    let me = use_resource(|| async move { server_fns::get_me().await });
+    let mut me = use_resource(|| async move { server_fns::get_me().await });
 
-    // Gate on the resolved user; server fns enforce this too, but a non-admin
-    // should never see the admin chrome.
-    if let Some(Ok(user)) = &*me.read()
-        && !user.is_admin()
-    {
-        return rsx! {
+    // Mount the workspace and its outlet only after authorization resolves.
+    // Server functions still independently enforce access to every operation.
+    match (&*me.read(), me.state()() == UseResourceState::Ready) {
+        (Some(Ok(user)), true) if user.is_admin() => rsx! { AdminWorkspace {} },
+        (Some(Ok(_)), true) => rsx! {
             div { class: "card flex flex-col items-start gap-3 max-w-md",
                 h1 { class: "page-title", "Admins only" }
                 p { class: "text-secondary", "You need an admin role to manage the workspace." }
@@ -31,9 +30,26 @@ pub fn AdminShell() -> Element {
                     "Back to Timesheet"
                 }
             }
-        };
+        },
+        (Some(Err(error)), true) => rsx! {
+            div { class: "card flex flex-col items-start gap-3 max-w-md",
+                div { class: "alert alert-danger", role: "alert", "{error}" }
+                button {
+                    class: "btn btn-secondary",
+                    r#type: "button",
+                    onclick: move |_| me.restart(),
+                    "Retry"
+                }
+            }
+        },
+        _ => rsx! {
+            div { class: "text-muted text-sm", role: "status", "Loading…" }
+        },
     }
+}
 
+#[component]
+fn AdminWorkspace() -> Element {
     // The workspace's real name for the header chip (no slug — the schema has no
     // such field, so we show the name only rather than inventing a URL).
     let org = use_resource(|| async move { server_fns::get_org_name().await });

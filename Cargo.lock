@@ -3238,6 +3238,7 @@ dependencies = [
  "clap",
  "csv",
  "dioxus",
+ "dioxus-html",
  "extism",
  "futures-util",
  "gloo-timers",
