@@ -180,6 +180,13 @@ pub fn InvoiceList() -> Element {
 
 #[component]
 pub fn InvoiceDetail(id: Uuid) -> Element {
+    // A keyed fragment resets invoice-local resources and actions when the
+    // router reuses this page for another ID.
+    rsx! { for id in [id] { InvoiceDetailContent { key: "{id}", id } } }
+}
+
+#[component]
+fn InvoiceDetailContent(id: Uuid) -> Element {
     let invoice_data =
         use_resource(move || async move { server_fns::get_invoice(id.to_string()).await });
     let clients = use_resource(|| async move { server_fns::list_clients(false).await });
