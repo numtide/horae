@@ -131,7 +131,12 @@ This bounds queued records, not total process memory. A record or body frame can
 be large, occurrence/cache keys and the complete error report still grow with
 input, and one outer transaction still spans the run. See [performance.md](../performance.md).
 
-## 4. CLI subcommands (operator, large-file / host-side)
+## 4. CLI subcommands (planned; not implemented)
+
+The current delivery surface is the admin screen at `/admin/importers`, backed
+by the server functions above. The server binary has no `import` subcommand.
+The commands and behavior below remain the intended operator/host-side contract,
+not runnable instructions. Use the [UI quickstart](../quickstart.md) today.
 
 ```
 horae import harvest-api  [--full | --incremental] [--dry-run]
