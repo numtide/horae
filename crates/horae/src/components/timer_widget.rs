@@ -90,19 +90,24 @@ pub fn TimerWidget() -> Element {
     // Task names are shared by the running label and the project-scoped picker.
     let all_tasks = use_resource(|| async move { server_fns::list_tasks().await });
 
-    let project_names: HashMap<Uuid, String> = projects
-        .read()
-        .as_ref()
-        .and_then(|r| r.as_ref().ok())
-        .map(|ps| ps.iter().map(|p| (p.id, p.name.clone())).collect())
-        .unwrap_or_default();
+    // Only resource changes rebuild these lookups, not the one-second tick.
+    let project_names = use_memo(move || -> HashMap<Uuid, String> {
+        projects
+            .read()
+            .as_ref()
+            .and_then(|r| r.as_ref().ok())
+            .map(|ps| ps.iter().map(|p| (p.id, p.name.clone())).collect())
+            .unwrap_or_default()
+    });
 
-    let task_names: HashMap<Uuid, String> = all_tasks
-        .read()
-        .as_ref()
-        .and_then(|r| r.as_ref().ok())
-        .map(|ts| ts.iter().map(|t| (t.id, t.name.clone())).collect())
-        .unwrap_or_default();
+    let task_names = use_memo(move || -> HashMap<Uuid, String> {
+        all_tasks
+            .read()
+            .as_ref()
+            .and_then(|r| r.as_ref().ok())
+            .map(|ts| ts.iter().map(|t| (t.id, t.name.clone())).collect())
+            .unwrap_or_default()
+    });
 
     let current_timer = timer_resource
         .read()
@@ -128,6 +133,8 @@ pub fn TimerWidget() -> Element {
     // The kit labels the running pill "Project · Task"; fall back to whichever
     // half resolves.
     let running_label = current_timer.as_ref().map(|e| {
+        let project_names = project_names.read();
+        let task_names = task_names.read();
         match (project_names.get(&e.project_id), task_names.get(&e.task_id)) {
             (Some(project), Some(task)) => format!("{project} · {task}"),
             (Some(project), None) => project.clone(),
