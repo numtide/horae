@@ -10,6 +10,7 @@
 //! (run under `spawn_blocking`), matching the OIDC stack's pattern.
 
 use chrono::{DateTime, Duration, Utc};
+use openidconnect::url::form_urlencoded;
 use serde::Deserialize;
 
 use crate::config::HarvestConfig;
@@ -20,12 +21,15 @@ const ID_HOST: &str = "https://id.getharvest.com";
 /// Build the authorization-code URL to redirect the admin to. `state` is the
 /// per-start nonce the callback validates.
 pub fn authorize_url(cfg: &HarvestConfig, state: &str) -> String {
-    format!(
-        "{ID_HOST}/oauth2/authorize?client_id={}&redirect_uri={}&state={}&response_type=code",
-        encode(&cfg.client_id),
-        encode(&cfg.redirect_url),
-        encode(state),
-    )
+    let query = form_urlencoded::Serializer::new(String::new())
+        .extend_pairs([
+            ("client_id", cfg.client_id.as_str()),
+            ("redirect_uri", cfg.redirect_url.as_str()),
+            ("state", state),
+            ("response_type", "code"),
+        ])
+        .finish();
+    format!("{ID_HOST}/oauth2/authorize?{query}")
 }
 
 /// Tokens returned by the token endpoint (exchange or refresh).
@@ -136,20 +140,6 @@ pub fn fetch_account_id(agent: &ureq::Agent, access_token: &str) -> anyhow::Resu
     Ok(account.id.to_string())
 }
 
-/// Percent-encode a query value (encode everything outside the unreserved set).
-fn encode(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for b in s.bytes() {
-        match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                out.push(b as char)
-            }
-            _ => out.push_str(&format!("%{b:02X}")),
-        }
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -179,9 +169,26 @@ mod tests {
     }
 
     #[test]
-    fn encode_escapes_reserved_but_keeps_unreserved() {
-        assert_eq!(encode("a-b_c.d~e"), "a-b_c.d~e");
-        assert_eq!(encode("a b"), "a%20b");
-        assert_eq!(encode("x/y:z"), "x%2Fy%3Az");
+    fn authorize_url_preserves_query_values_without_injecting_parameters() {
+        for value in ["", "a-b_c.d~e", "a+b c", "x/y:z?&=;%#", "mañana 東京 🕒"] {
+            let mut config = cfg();
+            config.client_id = value.into();
+            config.redirect_url = format!("https://horae.example.com/callback?next={value}");
+            let url = openidconnect::url::Url::parse(&authorize_url(&config, value)).unwrap();
+
+            assert_eq!(url.origin().ascii_serialization(), ID_HOST);
+            assert_eq!(url.path(), "/oauth2/authorize");
+            assert_eq!(url.fragment(), None);
+            assert_eq!(
+                url.query_pairs().collect::<Vec<_>>(),
+                vec![
+                    ("client_id".into(), value.into()),
+                    ("redirect_uri".into(), config.redirect_url.as_str().into()),
+                    ("state".into(), value.into()),
+                    ("response_type".into(), "code".into()),
+                ],
+                "query values must round-trip for {value:?}",
+            );
+        }
     }
 }
