@@ -630,6 +630,13 @@ pub fn ProjectList() -> Element {
 
 #[component]
 pub fn ProjectDetail(id: Uuid) -> Element {
+    // Reset assignments, tasks and form state together when the router reuses
+    // this page for another project. Keys take effect in a dynamic fragment.
+    rsx! { for id in [id] { ProjectDetailContent { key: "{id}", id } } }
+}
+
+#[component]
+fn ProjectDetailContent(id: Uuid) -> Element {
     let me = use_resource(|| async move { server_fns::get_me().await });
     let assignments = use_resource(move || {
         let pid = id.to_string();
@@ -673,7 +680,7 @@ pub fn ProjectDetail(id: Uuid) -> Element {
                 p { class: "text-muted p-5", "Project detail for {id}" }
             }
 
-            ProjectTasks { key: "{id}", project_id: id, can_manage: is_manager(&me) }
+            ProjectTasks { project_id: id, can_manage: is_manager(&me) }
 
             // ── Assignments section ─────────────────────────────────────
             div { class: "mt-6",
