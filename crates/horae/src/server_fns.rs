@@ -450,6 +450,7 @@ mod clients;
 mod importers;
 mod invoices;
 mod organization;
+mod plugins;
 mod projects;
 mod reports;
 mod time_entries;
@@ -463,6 +464,7 @@ pub use invoices::*;
 // Org-branding endpoints exist but no page consumes them yet.
 #[allow(unused_imports)]
 pub use organization::*;
+pub use plugins::*;
 pub use projects::*;
 pub use reports::*;
 pub use time_entries::*;
