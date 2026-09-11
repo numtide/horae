@@ -41,9 +41,51 @@ pub fn HarvestImport() -> Element {
     let mut source = use_signal(|| Source::Picker);
     let mut report = use_signal(|| None::<Result<ImportReport, String>>);
     let mut running = use_signal(|| false);
+    let mut active_job = use_signal(|| None::<uuid::Uuid>);
     let mut manage_open = use_signal(|| false);
     let mut csv_file = use_signal(|| None::<CsvFile>);
     let mut toast_msg = use_signal(|| None::<String>);
+
+    let job_status = use_resource(move || {
+        let id = active_job();
+        async move {
+            let Some(id) = id else {
+                return Ok::<Option<crate::models::JobStatus>, ServerFnError>(None);
+            };
+            loop {
+                let current = server_fns::get_harvest_import_job(id).await?;
+                match current.as_ref().map(|job| job.status.as_str()) {
+                    Some("succeeded") | Some("failed") | Some("cancelled") => return Ok(current),
+                    _ => {
+                        #[cfg(feature = "web")]
+                        gloo_timers::future::TimeoutFuture::new(1_000).await;
+                        #[cfg(feature = "server")]
+                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                    }
+                }
+            }
+        }
+    });
+
+    use_effect(move || {
+        let snapshot = job_status.read();
+        let Some(Ok(Some(job))) = snapshot.as_ref() else {
+            return;
+        };
+        running.set(false);
+        active_job.set(None);
+        if job.status == "succeeded" {
+            report.set(Some(
+                job.report
+                    .clone()
+                    .map(|value| serde_json::from_value(value).map_err(|e| e.to_string()))
+                    .unwrap_or_else(|| Err("Import completed without a report".into())),
+            ));
+            toast_msg.set(Some("Import complete".into()));
+        } else if let Some(error) = &job.last_error {
+            report.set(Some(Err(error.clone())));
+        }
+    });
 
     // Single runner for every trigger: clears the old report, awaits the import,
     // then publishes the new report and a completion toast.
@@ -51,12 +93,13 @@ pub fn HarvestImport() -> Element {
         running.set(true);
         report.set(None);
         let (res, mode) = match job {
-            Run::Api(mode, sync) => (
-                server_fns::import_harvest_api(mode, sync)
-                    .await
-                    .map_err(|e| e.to_string()),
-                mode,
-            ),
+            Run::Api(mode, sync) => match server_fns::start_harvest_api_import(mode, sync).await {
+                Ok(id) => {
+                    active_job.set(Some(id));
+                    return;
+                }
+                Err(error) => (Err(error.to_string()), mode),
+            },
             Run::Csv(mode, file) => (
                 server_fns::import_harvest_csv(mode, file.into())
                     .await
