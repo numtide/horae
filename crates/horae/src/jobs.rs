@@ -56,6 +56,43 @@ pub async fn enqueue(
     Ok(row.id)
 }
 
+pub async fn enqueue_csv(
+    pool: &sqlx::PgPool,
+    org_id: Uuid,
+    mode: ImportMode,
+    body: Vec<u8>,
+    idempotency_key: &str,
+) -> anyhow::Result<Uuid> {
+    let id = Uuid::now_v7();
+    let payload = serde_json::to_value(JobPayload::HarvestCsv { mode })?;
+    let mut tx = pool.begin().await?;
+    let row = sqlx::query!(
+        r#"INSERT INTO horae_jobs (id, org_id, kind, payload, idempotency_key)
+           VALUES ($1, $2, 'harvest_csv_import', $3, $4)
+           ON CONFLICT (org_id, kind, idempotency_key)
+           DO UPDATE SET updated_at = now()
+           RETURNING id"#,
+        id,
+        org_id,
+        payload,
+        idempotency_key,
+    )
+    .fetch_one(&mut *tx)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO horae_job_uploads (job_id, org_id, filename, content_type, body)
+           VALUES ($1, $2, 'harvest.csv', 'text/csv', $3)
+           ON CONFLICT (job_id) DO NOTHING"#,
+        row.id,
+        org_id,
+        body,
+    )
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(row.id)
+}
+
 pub async fn status(
     pool: &sqlx::PgPool,
     org_id: Uuid,
@@ -83,6 +120,34 @@ pub async fn status(
         created_at: r.created_at,
         finished_at: r.finished_at,
     }))
+}
+
+pub async fn cancel(pool: &sqlx::PgPool, org_id: Uuid, id: Uuid) -> anyhow::Result<bool> {
+    let result = sqlx::query!(
+        r#"UPDATE horae_jobs
+              SET status = 'cancelled', lease_until = NULL, worker_id = NULL,
+                  finished_at = now(), updated_at = now()
+            WHERE id = $1 AND org_id = $2 AND status IN ('queued', 'running')"#,
+        id,
+        org_id,
+    )
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected() == 1)
+}
+
+pub async fn retry(pool: &sqlx::PgPool, org_id: Uuid, id: Uuid) -> anyhow::Result<bool> {
+    let result = sqlx::query!(
+        r#"UPDATE horae_jobs
+              SET status = 'queued', available_at = now(), lease_until = NULL,
+                  worker_id = NULL, last_error = NULL, finished_at = NULL, updated_at = now()
+            WHERE id = $1 AND org_id = $2 AND status IN ('failed', 'cancelled')"#,
+        id,
+        org_id,
+    )
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected() == 1)
 }
 
 pub fn spawn(state: &'static AppState) {
@@ -161,9 +226,31 @@ async fn execute(state: &AppState, worker_id: &str, job: ClaimedJob) -> anyhow::
             .map(|report| serde_json::to_value(report).unwrap_or_default())
             .map_err(anyhow::Error::from)
         }
-        JobPayload::HarvestCsv { .. } => Err(anyhow::anyhow!(
-            "CSV durable job handler is not enabled yet"
-        )),
+        JobPayload::HarvestCsv { mode } => {
+            let currency = sqlx::query_scalar!(
+                "SELECT default_currency FROM organizations WHERE id = $1",
+                job.org_id
+            )
+            .fetch_one(&state.db)
+            .await?;
+            let upload = sqlx::query!(
+                "SELECT body FROM horae_job_uploads WHERE job_id = $1 AND org_id = $2",
+                job.id,
+                job.org_id,
+            )
+            .fetch_one(&state.db)
+            .await?;
+            crate::importers::harvest::csv_source::import_body(
+                &state.db,
+                job.org_id,
+                &currency,
+                axum::body::Body::from(upload.body),
+                *mode,
+            )
+            .await
+            .map(|report| serde_json::to_value(report).unwrap_or_default())
+            .map_err(anyhow::Error::from)
+        }
     };
 
     match result {
