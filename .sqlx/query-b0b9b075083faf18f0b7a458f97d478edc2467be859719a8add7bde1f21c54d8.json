@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE horae_jobs\n                      SET status = 'succeeded', report = $1, processed_count = $2,\n                          lease_until = NULL,\n                          worker_id = $4, finished_at = now(), updated_at = now()\n                    WHERE id = $3 AND worker_id = $4",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Jsonb",
+        "Int8",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b0b9b075083faf18f0b7a458f97d478edc2467be859719a8add7bde1f21c54d8"
+}

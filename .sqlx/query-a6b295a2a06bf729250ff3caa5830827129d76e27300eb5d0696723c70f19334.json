@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH candidate AS (\n             SELECT id\n               FROM horae_jobs\n              WHERE (status = 'queued' AND available_at <= now())\n                 OR (status = 'running' AND lease_until < now())\n              ORDER BY available_at, created_at\n              FOR UPDATE SKIP LOCKED\n              LIMIT 1\n           )\n           UPDATE horae_jobs j\n              SET status = 'running', attempts = j.attempts + 1,\n                  lease_until = now() + $1::int * interval '1 second', worker_id = $2,\n                  started_at = COALESCE(j.started_at, now()), updated_at = now()\n             FROM candidate\n            WHERE j.id = candidate.id\n        RETURNING j.id, j.org_id, j.payload",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "payload",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "a6b295a2a06bf729250ff3caa5830827129d76e27300eb5d0696723c70f19334"
+}

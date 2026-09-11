@@ -100,7 +100,9 @@ pub async fn status(
 ) -> anyhow::Result<Option<crate::models::JobStatus>> {
     let row = sqlx::query!(
         r#"SELECT id, kind, status, phase, processed_count, total_count,
-                  report, last_error, created_at, finished_at
+                  report, last_error,
+                  created_at as "created_at!: chrono::DateTime<chrono::Utc>",
+                  finished_at as "finished_at: chrono::DateTime<chrono::Utc>"
              FROM horae_jobs
             WHERE id = $1 AND org_id = $2"#,
         id,
@@ -129,7 +131,9 @@ pub async fn list(
 ) -> anyhow::Result<Vec<crate::models::JobStatus>> {
     let rows = sqlx::query!(
         r#"SELECT id, kind, status, phase, processed_count, total_count,
-                  report, last_error, created_at, finished_at
+                  report, last_error,
+                  created_at as "created_at!: chrono::DateTime<chrono::Utc>",
+                  finished_at as "finished_at: chrono::DateTime<chrono::Utc>"
              FROM horae_jobs
             WHERE org_id = $1
             ORDER BY created_at DESC
@@ -188,6 +192,9 @@ pub fn spawn(state: &'static AppState) {
     tokio::spawn(async move {
         let worker_id = Uuid::now_v7().to_string();
         loop {
+            if let Err(error) = cleanup(&state.db).await {
+                tracing::warn!(%error, "durable job cleanup failed");
+            }
             match claim(&state.db, &worker_id).await {
                 Ok(Some(job)) => {
                     if let Err(error) = execute(state, &worker_id, job).await {
@@ -202,6 +209,26 @@ pub fn spawn(state: &'static AppState) {
             }
         }
     });
+}
+
+async fn cleanup(pool: &sqlx::PgPool) -> anyhow::Result<()> {
+    sqlx::query!(
+        r#"DELETE FROM horae_job_uploads u
+             USING horae_jobs j
+            WHERE u.job_id = j.id
+              AND j.status IN ('succeeded', 'failed', 'cancelled')
+              AND j.finished_at < now() - interval '1 day'"#
+    )
+    .execute(pool)
+    .await?;
+    sqlx::query!(
+        r#"DELETE FROM horae_jobs
+            WHERE status IN ('succeeded', 'failed', 'cancelled')
+              AND finished_at < now() - interval '30 days'"#
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
 }
 
 struct ClaimedJob {
@@ -223,12 +250,12 @@ async fn claim(pool: &sqlx::PgPool, worker_id: &str) -> anyhow::Result<Option<Cl
            )
            UPDATE horae_jobs j
               SET status = 'running', attempts = j.attempts + 1,
-                  lease_until = now() + $1::interval, worker_id = $2,
+                  lease_until = now() + $1::int * interval '1 second', worker_id = $2,
                   started_at = COALESCE(j.started_at, now()), updated_at = now()
              FROM candidate
             WHERE j.id = candidate.id
         RETURNING j.id, j.org_id, j.payload"#,
-        format!("{} seconds", LEASE.as_secs()),
+        LEASE.as_secs() as i32,
         worker_id,
     )
     .fetch_optional(pool)
@@ -266,7 +293,13 @@ async fn execute(state: &AppState, worker_id: &str, job: ClaimedJob) -> anyhow::
                 &state.db, job.org_id, &currency, &cfg, *mode, *sync,
             )
             .await
-            .map(|report| serde_json::to_value(report).unwrap_or_default())
+            .map(|report| {
+                let processed = report.summary.clients.processed()
+                    + report.summary.projects.processed()
+                    + report.summary.tasks.processed()
+                    + report.summary.time_entries.processed();
+                (serde_json::to_value(report).unwrap_or_default(), processed as i64)
+            })
             .map_err(anyhow::Error::from)
         }
         JobPayload::HarvestCsv { mode } => {
@@ -291,21 +324,29 @@ async fn execute(state: &AppState, worker_id: &str, job: ClaimedJob) -> anyhow::
                 *mode,
             )
             .await
-            .map(|report| serde_json::to_value(report).unwrap_or_default())
+            .map(|report| {
+                let processed = report.summary.clients.processed()
+                    + report.summary.projects.processed()
+                    + report.summary.tasks.processed()
+                    + report.summary.time_entries.processed();
+                (serde_json::to_value(report).unwrap_or_default(), processed as i64)
+            })
             .map_err(anyhow::Error::from)
         }
     };
 
     match result {
-        Ok(report) => {
+        Ok((report, processed_count)) => {
             sqlx::query!(
                 r#"UPDATE horae_jobs
-                      SET status = 'succeeded', report = $1, lease_until = NULL,
-                          worker_id = $2, finished_at = now(), updated_at = now()
-                    WHERE id = $3 AND worker_id = $2"#,
+                      SET status = 'succeeded', report = $1, processed_count = $2,
+                          lease_until = NULL,
+                          worker_id = $4, finished_at = now(), updated_at = now()
+                    WHERE id = $3 AND worker_id = $4"#,
                 report,
-                worker_id,
+                processed_count,
                 job.id,
+                worker_id,
             )
             .execute(&state.db)
             .await?;

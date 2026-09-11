@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO horae_job_uploads (job_id, org_id, filename, content_type, body)\n           VALUES ($1, $2, 'harvest.csv', 'text/csv', $3)\n           ON CONFLICT (job_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bytea"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ca11b32046c7aa85ae0bf8f2c3ede50c9c08e20553062682eb6321a41e456187"
+}
