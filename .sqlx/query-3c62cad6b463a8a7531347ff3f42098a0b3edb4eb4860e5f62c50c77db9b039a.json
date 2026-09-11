@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE projects SET last_budget_alert_pct = NULL WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3c62cad6b463a8a7531347ff3f42098a0b3edb4eb4860e5f62c50c77db9b039a"
+}

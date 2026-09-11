@@ -337,6 +337,28 @@ pub(crate) fn user_payload(u: &crate::models::User) -> crate::plugin::event::Use
 /// errors are logged, not propagated. Amount budgets are not evaluated yet —
 /// they need FR-024 rate resolution.
 #[cfg(feature = "server")]
+async fn claim_budget_band(
+    pool: &sqlx::PgPool,
+    project_id: uuid::Uuid,
+    last: i32,
+    current: i32,
+) -> Result<bool, sqlx::Error> {
+    Ok(sqlx::query_scalar!(
+        r#"UPDATE projects
+           SET last_budget_alert_pct = $2
+           WHERE id = $1
+             AND COALESCE(last_budget_alert_pct, 0) = $3
+           RETURNING id"#,
+        project_id,
+        current,
+        last,
+    )
+    .fetch_optional(pool)
+    .await?
+    .is_some())
+}
+
+#[cfg(feature = "server")]
 pub(crate) async fn check_project_budget(
     state: &'static crate::state::AppState,
     project_id: uuid::Uuid,
@@ -388,8 +410,24 @@ pub(crate) async fn check_project_budget(
     let last = row.last_budget_alert_pct.unwrap_or(0);
     let current = horae_core::budget::current_band(consumed, budget, &thresholds);
 
-    // Announce every band newly crossed since `last`. `100` is always a band, so
-    // exceeding budget fires `project_over_budget` regardless of the configured
+    // Claim the new band before dispatching. The budget check is spawned after
+    // several entry mutations, so two checks can read the same old band. The
+    // conditional update makes only one of them responsible for the events.
+    if current != last {
+        let claimed = match claim_budget_band(&state.db, project_id, last, current).await {
+            Ok(claimed) => claimed,
+            Err(e) => {
+                tracing::warn!("budget check: claim band for {project_id} failed: {e}");
+                false
+            }
+        };
+        if !claimed {
+            return;
+        }
+    }
+
+    // Announce every band newly crossed since last. 100 is always a band, so
+    // exceeding budget fires project_over_budget regardless of the configured
     // warning thresholds, and a single large jump reports each band it passed.
     for band in horae_core::budget::newly_crossed_bands(consumed, budget, &thresholds, last) {
         let payload = crate::plugin::event::BudgetThresholdPayload {
@@ -423,24 +461,13 @@ pub(crate) async fn check_project_budget(
         };
         state.plugins.dispatch(event);
     }
-
-    // Advance (or reset) the stored band so each crossing fires at most once.
-    if current != last
-        && let Err(e) = sqlx::query!(
-            "UPDATE projects SET last_budget_alert_pct = $2 WHERE id = $1",
-            project_id,
-            current,
-        )
-        .execute(&state.db)
-        .await
-    {
-        tracing::warn!("budget check: store band for {project_id} failed: {e}");
-    }
 }
 
 // ── Feature modules ──────────────────────────────────────────────────────────
 // The #[server] endpoints grouped by feature; re-exported so call sites keep
 // using `server_fns::<fn>` regardless of which submodule a function lives in.
+#[cfg(all(test, feature = "server"))]
+mod budget_tests;
 #[cfg(all(test, feature = "server"))]
 pub(crate) mod test_seed;
 
