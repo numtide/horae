@@ -320,6 +320,35 @@ async fn execute(state: &AppState, worker_id: &str, job: ClaimedJob) -> anyhow::
     .execute(&state.db)
     .await?;
 
+    let (heartbeat_stop, mut heartbeat_rx) = tokio::sync::oneshot::channel();
+    let heartbeat_pool = state.db.clone();
+    let heartbeat_worker = worker_id.to_owned();
+    let heartbeat_job = job.id;
+    let heartbeat = tokio::spawn(async move {
+        let mut tick = tokio::time::interval(LEASE / 3);
+        tick.tick().await;
+        loop {
+            tokio::select! {
+                _ = &mut heartbeat_rx => break,
+                _ = tick.tick() => {
+                    if let Err(error) = sqlx::query!(
+                        r#"UPDATE horae_jobs
+                              SET lease_until = now() + $1::int * interval '1 second',
+                                  updated_at = now()
+                            WHERE id = $2 AND worker_id = $3 AND status = 'running'"#,
+                        LEASE.as_secs() as i32,
+                        heartbeat_job,
+                        heartbeat_worker,
+                    )
+                    .execute(&heartbeat_pool)
+                    .await {
+                        tracing::warn!(%error, job_id = %heartbeat_job, "durable job heartbeat failed");
+                    }
+                }
+            }
+        }
+    });
+
     let result = match &job.payload {
         JobPayload::HarvestApi { mode, sync } => {
             let cfg = state.harvest.clone().context("Harvest is not configured")?;
@@ -338,7 +367,10 @@ async fn execute(state: &AppState, worker_id: &str, job: ClaimedJob) -> anyhow::
                     + report.summary.projects.processed()
                     + report.summary.tasks.processed()
                     + report.summary.time_entries.processed();
-                (serde_json::to_value(report).unwrap_or_default(), processed as i64)
+                (
+                    serde_json::to_value(report).unwrap_or_default(),
+                    processed as i64,
+                )
             })
             .map_err(anyhow::Error::from)
         }
@@ -369,11 +401,17 @@ async fn execute(state: &AppState, worker_id: &str, job: ClaimedJob) -> anyhow::
                     + report.summary.projects.processed()
                     + report.summary.tasks.processed()
                     + report.summary.time_entries.processed();
-                (serde_json::to_value(report).unwrap_or_default(), processed as i64)
+                (
+                    serde_json::to_value(report).unwrap_or_default(),
+                    processed as i64,
+                )
             })
             .map_err(anyhow::Error::from)
         }
     };
+
+    let _ = heartbeat_stop.send(());
+    let _ = heartbeat.await;
 
     match result {
         Ok((report, processed_count)) => {

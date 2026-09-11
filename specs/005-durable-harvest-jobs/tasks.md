@@ -10,7 +10,7 @@
 
 - [x] T004 Add a registered job-kind envelope with versioned payload, idempotency key, org scope, and execution policy.
 - [x] T005 Persist CSV uploads safely for asynchronous execution without retaining request-body streams.
-- [ ] T006 Add worker startup, bounded concurrency, lease/heartbeat, retry backoff, and graceful shutdown.
+- [x] T006 Add worker startup, bounded concurrency, lease/heartbeat, retry backoff, and graceful shutdown.
 - [x] T007 Persist processed-record progress and phase transitions for Harvest imports.
 - [x] T008 Add outbox records and transactional enqueue support for future plugin/webhook/notification delivery.
 - [ ] T009 Ensure all job and outbox reads/mutations enforce organization and admin authorization.
