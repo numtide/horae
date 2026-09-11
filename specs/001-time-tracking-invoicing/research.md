@@ -1,12 +1,12 @@
 # Phase 0 Research: Time Tracking & Invoicing
 
-The spec is intentionally implementation-free; this document records the technical decisions that turn it into a buildable plan. Most were already pinned by `SPEC.md` and the existing codebase — captured here with rationale and the alternatives considered.
+The spec is intentionally implementation-free; this document records the technical decisions that turn it into a buildable plan. Most were already pinned by the constitution and the existing codebase — captured here with rationale and the alternatives considered.
 
 ## Decision: Dioxus fullstack, single crate, feature-gated
 
 - **Decision**: One `horae` app crate with `server` and `web` feature targets (three `cfg`-gated `main()`s), plus a pure `horae-core` library crate. All data mutations go through Dioxus `#[server]` functions on an Axum server.
 - **Rationale**: Shared Rust types across client and server; type-safe calls without hand-written REST plumbing; `dx serve` builds both targets with hot reload. Isolating correctness logic in `horae-core` keeps totals testable without I/O.
-- **Alternatives considered**: Separate Axum REST backend + standalone Dioxus SPA (SPEC.md's original §0 sketch) — more explicit boundary but more boilerplate and duplicated types; rejected in favor of the fullstack model already in the tree. A non-Rust frontend — rejected (loses shared types, single-language goal).
+- **Alternatives considered**: Separate Axum REST backend + standalone Dioxus SPA (the original architecture sketch) — more explicit boundary but more boilerplate and duplicated types; rejected in favor of the fullstack model already in the tree. A non-Rust frontend — rejected (loses shared types, single-language goal).
 
 ## Decision: Authentication via OIDC + session, with a dev bypass
 
@@ -30,18 +30,18 @@ The spec is intentionally implementation-free; this document records the technic
 
 - **Decision**: Billable, un-invoiced time is directly invoiceable; there is no submit→approve gate before billing in this feature.
 - **Rationale**: Matches `PLAN.md` and keeps the MVP focused (spec Assumptions). The schema keeps room for a richer entry lifecycle later (an `entry_state` enum can add `submitted`/`approved` without migration churn), and an "approvals" surface may be layered on in a future feature.
-- **Alternatives considered**: Full approval lifecycle now (as `SPEC.md` and some scaffolding hint at) — deferred to avoid scope creep; revisit via a follow-up spec.
+- **Alternatives considered**: Full approval lifecycle now (as early scaffolding hinted at) — deferred to avoid scope creep; revisit via a follow-up spec.
 
 ## Decision: Persistence, migrations, packaging, CI
 
 - **Decision**: PostgreSQL 15+ via `sqlx`; migrations in `crates/horae/migrations/*.sql` applied by `horae migrate run` (and eagerly on `serve`). Exports use `csv`/`rust_xlsxwriter`. Toolchain and builds via Nix (`fenix` toolchain, `numtide/blueprint`), formatted by `treefmt`, checked by `nix flake check` (formatting + a NixOS e2e VM test).
-- **Rationale**: Postgres is pinned by `SPEC.md`; sqlx gives async access and optional compile-time query checking. Nix gives reproducible dev shells, packages, and a deployable NixOS module.
-- **Alternatives considered**: SQLite — explicitly excluded by `SPEC.md` for Phase 1. An ORM (SeaORM/Diesel) — rejected in favor of sqlx's explicit SQL and migration model.
+- **Rationale**: Postgres is pinned by the constitution; sqlx gives async access and optional compile-time query checking. Nix gives reproducible dev shells, packages, and a deployable NixOS module.
+- **Alternatives considered**: SQLite — explicitly excluded by the constitution for Phase 1. An ORM (SeaORM/Diesel) — rejected in favor of sqlx's explicit SQL and migration model.
 
 ## Decision: Invoice & document rendering via Typst
 
 - **Decision**: Render invoices (and later timesheets/report PDFs) with **Typst**, from a customizable `.typ` template. Fonts are sourced from nixpkgs so any typeface is embeddable and the build stays reproducible. The invoice's editable fields (provider identity, bank details, notes, line adjustments) feed the template, and the manager can review/adjust them before finalizing/sending (FR-025).
-- **Rationale**: Typst is deterministic — the same invoice yields byte-identical output — which extends the exactness principle (Constitution I) from numbers to documents. It is WASM-friendly (consistent with the Dioxus/WASM stack and the sandboxed-plugin direction), has excellent typography, and pulls fonts from nixpkgs for reproducible packaging. `SPEC.md` §0 already pins `typst` for PDF (fallback `printpdf`). The approach is proven by [eureka-cpu/nvoice](https://github.com/eureka-cpu/nvoice) (Harvest-exporter JSON → one PDF per client), which is directly reusable because Horae already exposes Harvest-shaped data.
+- **Rationale**: Typst is deterministic — the same invoice yields byte-identical output — which extends the exactness principle (Constitution I) from numbers to documents. It is WASM-friendly (consistent with the Dioxus/WASM stack and the sandboxed-plugin direction), has excellent typography, and pulls fonts from nixpkgs for reproducible packaging. The feature plan pins `typst` for PDF (fallback `printpdf`). The approach is proven by [eureka-cpu/nvoice](https://github.com/eureka-cpu/nvoice) (Harvest-exporter JSON → one PDF per client), which is directly reusable because Horae already exposes Harvest-shaped data.
 - **Alternatives considered**: `printpdf` — low-level, no templating; kept only as the documented fallback. `rust_xlsxwriter` — spreadsheets only (already used for XLSX export), not documents. Headless HTML→PDF (browser engine) — non-deterministic and a heavy runtime dependency; rejected.
 
 ## Resolved unknowns
