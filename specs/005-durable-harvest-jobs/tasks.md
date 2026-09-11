@@ -2,13 +2,13 @@
 
 ## Phase 1 - Spike
 
-- [ ] T001 Verify `sqlxmq` 0.6.0 compiles with Horae’s Rust/SQLx versions in the feature worktree.
-- [ ] T002 Review and adapt the library migrations without colliding with Horae’s `_sqlx_migrations` table.
-- [ ] T003 Record the dependency decision and fallback to a small in-house queue adapter if the spike fails.
+- [x] T001 Verify `sqlxmq` 0.6.0 compiles with Horae’s Rust/SQLx versions in the feature worktree.
+- [x] T002 Review the library migrations and reject direct adoption because its UUIDv4/`uuid-ossp` schema violates Horae invariants.
+- [x] T003 Record the dependency decision and fallback to a small in-house queue adapter.
 
 ## Phase 2 - Persistence and worker
 
-- [ ] T004 Add a registered job-kind envelope with versioned payload, idempotency key, org scope, and execution policy.
+- [x] T004 Add a registered job-kind envelope with versioned payload, idempotency key, org scope, and execution policy.
 - [ ] T005 Persist CSV uploads safely for asynchronous execution without retaining request-body streams.
 - [ ] T006 Add worker startup, bounded concurrency, lease/heartbeat, retry backoff, and graceful shutdown.
 - [ ] T007 Add checkpoint/progress updates around existing Harvest import phases.
