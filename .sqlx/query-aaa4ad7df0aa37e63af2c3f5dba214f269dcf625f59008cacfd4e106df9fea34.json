@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE horae_jobs SET phase = 'importing', updated_at = now()\n            WHERE id = $1 AND worker_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "aaa4ad7df0aa37e63af2c3f5dba214f269dcf625f59008cacfd4e106df9fea34"
+}

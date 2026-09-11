@@ -77,6 +77,95 @@ pub async fn harvest_disconnect() -> Result<(), ServerFnError> {
         .map_err(map_api_error)
 }
 
+/// Enqueue an asynchronous Harvest API import and return its durable job ID.
+/// The existing synchronous entry point remains available until the importer
+/// page is migrated to the job-status contract.
+#[server]
+pub async fn start_harvest_api_import(
+    mode: ImportMode,
+    sync: SyncScope,
+) -> Result<uuid::Uuid, ServerFnError> {
+    let admin = require_admin().await?;
+    let state = crate::state::global_state().await;
+    let payload = crate::jobs::JobPayload::HarvestApi { mode, sync };
+    let key = format!("api:{}", uuid::Uuid::now_v7());
+    crate::jobs::enqueue(&state.db, admin.org_id, &payload, &key)
+        .await
+        .map_err(server_err)
+}
+
+/// Return a durable import's current state for the current organization.
+#[server]
+pub async fn get_harvest_import_job(
+    job_id: uuid::Uuid,
+) -> Result<Option<crate::models::JobStatus>, ServerFnError> {
+    let admin = require_admin().await?;
+    let state = crate::state::global_state().await;
+    crate::jobs::status(&state.db, admin.org_id, job_id)
+        .await
+        .map_err(server_err)
+}
+
+#[server]
+pub async fn list_harvest_import_jobs() -> Result<Vec<crate::models::JobStatus>, ServerFnError> {
+    let admin = require_admin().await?;
+    let state = crate::state::global_state().await;
+    crate::jobs::list(&state.db, admin.org_id, 20)
+        .await
+        .map_err(server_err)
+}
+
+/// Buffer and enqueue a CSV import so the request body is not tied to the
+/// lifetime of the background worker.
+#[dioxus_fullstack::post("/api/import/harvest/csv-job/{mode}")]
+pub async fn start_harvest_csv_import(
+    mode: ImportMode,
+    file: CsvUpload,
+) -> Result<uuid::Uuid, ServerFnError> {
+    let admin = require_admin().await?;
+    let body = axum::body::to_bytes(file.into_body()?, 50 * 1024 * 1024)
+        .await
+        .map_err(server_err)?;
+    let state = crate::state::global_state().await;
+    // Uploads have no stable source identifier; never deduplicate unrelated
+    // files merely because their byte lengths happen to match.
+    let key = format!("csv:{}", uuid::Uuid::now_v7());
+    crate::jobs::enqueue_csv(&state.db, admin.org_id, mode, body.to_vec(), &key)
+        .await
+        .map_err(server_err)
+}
+
+#[server]
+pub async fn cancel_harvest_import_job(job_id: uuid::Uuid) -> Result<(), ServerFnError> {
+    let admin = require_admin().await?;
+    let state = crate::state::global_state().await;
+    if crate::jobs::cancel(&state.db, admin.org_id, job_id)
+        .await
+        .map_err(server_err)?
+    {
+        Ok(())
+    } else {
+        Err(err(
+            NOT_FOUND,
+            "Import job not found or is already complete",
+        ))
+    }
+}
+
+#[server]
+pub async fn retry_harvest_import_job(job_id: uuid::Uuid) -> Result<(), ServerFnError> {
+    let admin = require_admin().await?;
+    let state = crate::state::global_state().await;
+    if crate::jobs::retry(&state.db, admin.org_id, job_id)
+        .await
+        .map_err(server_err)?
+    {
+        Ok(())
+    } else {
+        Err(err(NOT_FOUND, "Import job not found or is not retryable"))
+    }
+}
+
 /// Run an import from the Harvest API (primary source). Rejects up front when no
 /// connection exists (FR-003); refreshes an expired token, else asks to reconnect
 /// (FR-024). `DryRun` writes nothing (FR-014).

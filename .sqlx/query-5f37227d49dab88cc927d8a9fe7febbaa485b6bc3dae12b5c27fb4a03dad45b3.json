@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM horae_job_uploads u\n             USING horae_jobs j\n            WHERE u.job_id = j.id\n              AND j.status IN ('succeeded', 'failed', 'cancelled')\n              AND j.finished_at < now() - interval '1 day'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "5f37227d49dab88cc927d8a9fe7febbaa485b6bc3dae12b5c27fb4a03dad45b3"
+}

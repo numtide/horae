@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE horae_jobs\n              SET status = 'queued', available_at = now(), lease_until = NULL,\n                  worker_id = NULL, last_error = NULL, finished_at = NULL, updated_at = now()\n            WHERE id = $1 AND org_id = $2 AND status IN ('failed', 'cancelled')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b789358c41fb7592bbf868f263cb26531c0a53847513dc8e8d2b6b20efe47895"
+}
