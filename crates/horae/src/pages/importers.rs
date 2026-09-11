@@ -42,6 +42,7 @@ pub fn HarvestImport() -> Element {
     let mut report = use_signal(|| None::<Result<ImportReport, String>>);
     let mut running = use_signal(|| false);
     let mut active_job = use_signal(|| None::<uuid::Uuid>);
+    let mut job_progress = use_signal(|| None::<crate::models::JobStatus>);
     let mut manage_open = use_signal(|| false);
     let mut csv_file = use_signal(|| None::<CsvFile>);
     let mut toast_msg = use_signal(|| None::<String>);
@@ -54,6 +55,9 @@ pub fn HarvestImport() -> Element {
             };
             loop {
                 let current = server_fns::get_harvest_import_job(id).await?;
+                if let Some(snapshot) = current.clone() {
+                    job_progress.set(Some(snapshot));
+                }
                 match current.as_ref().map(|job| job.status.as_str()) {
                     Some("succeeded") | Some("failed") | Some("cancelled") => return Ok(current),
                     _ => {
@@ -409,7 +413,14 @@ pub fn HarvestImport() -> Element {
             if running() {
                 div { class: "card mt-4 flex items-center gap-3",
                     span { class: "himp-spinner" }
-                    span { class: "text-sm font-semibold", "Import in progress · nothing is written until you commit" }
+                    div { class: "text-sm font-semibold",
+                        div { "Import in progress · nothing is written until you commit" }
+                        if let Some(progress) = job_progress.read().as_ref() {
+                            if let Some(phase) = &progress.phase {
+                                div { class: "text-xs text-faint", "{phase} · {progress.processed_count} processed" }
+                            }
+                        }
+                    }
                     if let Some(job_id) = active_job() {
                         button {
                             r#type: "button",

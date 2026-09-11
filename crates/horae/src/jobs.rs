@@ -244,6 +244,15 @@ async fn claim(pool: &sqlx::PgPool, worker_id: &str) -> anyhow::Result<Option<Cl
 }
 
 async fn execute(state: &AppState, worker_id: &str, job: ClaimedJob) -> anyhow::Result<()> {
+    sqlx::query!(
+        r#"UPDATE horae_jobs SET phase = 'importing', updated_at = now()
+            WHERE id = $1 AND worker_id = $2"#,
+        job.id,
+        worker_id,
+    )
+    .execute(&state.db)
+    .await?;
+
     let result = match &job.payload {
         JobPayload::HarvestApi { mode, sync } => {
             let cfg = state.harvest.clone().context("Harvest is not configured")?;
