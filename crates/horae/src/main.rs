@@ -17,6 +17,8 @@ mod importers;
 #[cfg(feature = "server")]
 mod init;
 #[cfg(feature = "server")]
+mod jobs;
+#[cfg(feature = "server")]
 mod plugin;
 #[cfg(feature = "server")]
 mod render;
@@ -211,6 +213,7 @@ fn main() -> anyhow::Result<()> {
 
                 // Start the background poller for forgotten timers (US3).
                 scheduler::spawn(state::global_state().await);
+                jobs::spawn(state::global_state().await);
 
                 // Session middleware (Postgres-backed, idempotent migrate).
                 let session_layer =

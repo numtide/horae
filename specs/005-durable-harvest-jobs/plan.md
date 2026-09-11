@@ -2,7 +2,7 @@
 
 ## Summary
 
-Move Harvest API/CSV imports from request-bound execution to durable PostgreSQL-backed jobs. Use `sqlxmq` behind a small Horae adapter; preserve the existing importer engine, provenance, and idempotency behavior.
+Move Harvest API/CSV imports from request-bound execution to durable PostgreSQL-backed jobs. Use a small Horae-owned adapter with the queue semantics validated during the `sqlxmq` spike; preserve the existing importer engine, provenance, and idempotency behavior.
 
 ## Technical Context
 
@@ -10,7 +10,7 @@ Horae is a Rust/Dioxus/Axum application using PostgreSQL and SQLx. Current Harve
 
 **Language/Version**: Rust edition 2024 (Nix-pinned toolchain)
 
-**Primary Dependencies**: Dioxus fullstack, Axum, Tokio, SQLx 0.8, `sqlxmq` 0.6.0 pending spike
+**Primary Dependencies**: Dioxus fullstack, Axum, Tokio, SQLx 0.8; no queue dependency after the UUIDv7 schema spike
 
 **Storage**: PostgreSQL 15+, including queue tables and CSV upload retention data
 
@@ -36,7 +36,7 @@ Horae is a Rust/Dioxus/Axum application using PostgreSQL and SQLx. Current Harve
 
 ## Phases
 
-1. **Dependency spike**: compile a minimal `sqlxmq` runner against the pinned Horae toolchain; inspect and namespace its migrations; document any incompatibility.
+1. **Dependency spike**: compile a minimal `sqlxmq` runner against the pinned Horae toolchain; inspect its migrations; reject direct adoption because its UUIDv4/`uuid-ossp` schema violates Horae invariants.
 2. **Reusable job boundary**: define a registered job-kind envelope with versioned payload, org scope, idempotency key, execution policy, progress, and cancellation. Keep handlers in application modules.
 3. **Persistence and outbox**: define job/upload persistence and an outbox delivery model that can be written in the same transaction as domain mutations.
 4. **Worker**: start one bounded worker runner during server startup; configure lease, retry, shutdown, and cancellation behavior; invoke the existing importer engine.
