@@ -11,7 +11,9 @@ pub mod user;
 pub use approval::{Approval, ApprovalSummary};
 pub use assignment::Assignment;
 pub use client::Client;
-pub use invoice::{Invoice, InvoiceLine, InvoiceWithLines};
+#[cfg(feature = "server")]
+pub use invoice::InvoiceLine;
+pub use invoice::{Invoice, InvoiceWithLines};
 pub use organization::OrgBranding;
 pub use project::Project;
 pub use task::Task;
