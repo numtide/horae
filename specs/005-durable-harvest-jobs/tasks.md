@@ -24,9 +24,9 @@
 
 ## Phase 4 - Verification
 
-- [ ] T014 Test atomic claims with concurrent workers.
-- [ ] T015 Test lease recovery after a simulated worker failure.
-- [ ] T016 Test retry idempotency and cancellation semantics.
-- [ ] T017 Test a second synthetic job kind through the same worker boundary.
-- [ ] T018 Test transactional outbox insertion and idempotent delivery bookkeeping.
-- [ ] T019 Regenerate `.sqlx` cache and run targeted integration tests, clippy, and formatting.
+- [x] T014 Test atomic claims with concurrent workers.
+- [x] T015 Test lease recovery after a simulated worker failure.
+- [x] T016 Test retry idempotency and cancellation semantics.
+- [x] T017 Test a second synthetic job kind through the same worker boundary.
+- [x] T018 Test transactional outbox insertion and idempotent delivery bookkeeping.
+- [x] T019 Regenerate `.sqlx` cache and run targeted integration tests, clippy, and formatting.

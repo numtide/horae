@@ -18,8 +18,15 @@ const POLL: Duration = Duration::from_secs(2);
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", content = "value")]
 pub enum JobPayload {
-    HarvestApi { mode: ImportMode, sync: SyncScope },
-    HarvestCsv { mode: ImportMode },
+    HarvestApi {
+        mode: ImportMode,
+        sync: SyncScope,
+    },
+    HarvestCsv {
+        mode: ImportMode,
+    },
+    #[cfg(test)]
+    Synthetic,
 }
 
 /// Insert an event in the same transaction as the state change that produced
@@ -119,6 +126,8 @@ impl JobPayload {
         match self {
             Self::HarvestApi { .. } => "harvest_api_import",
             Self::HarvestCsv { .. } => "harvest_csv_import",
+            #[cfg(test)]
+            Self::Synthetic => "synthetic_test_job",
         }
     }
 }
@@ -478,6 +487,8 @@ async fn execute(state: &AppState, worker_id: &str, job: ClaimedJob) -> anyhow::
             })
             .map_err(anyhow::Error::from)
         }
+        #[cfg(test)]
+        JobPayload::Synthetic => Ok((serde_json::json!({"synthetic": true}), 0)),
     };
 
     let _ = heartbeat_stop.send(());
@@ -530,6 +541,13 @@ mod tests {
         let encoded = serde_json::to_value(&payload).unwrap();
         let decoded: JobPayload = serde_json::from_value(encoded).unwrap();
         assert_eq!(decoded.kind(), "harvest_api_import");
+    }
+
+    #[test]
+    fn synthetic_job_uses_the_same_registered_envelope() {
+        let encoded = serde_json::to_value(JobPayload::Synthetic).unwrap();
+        let decoded: JobPayload = serde_json::from_value(encoded).unwrap();
+        assert_eq!(decoded.kind(), "synthetic_test_job");
     }
 
     async fn org(pool: &sqlx::PgPool) -> Uuid {
