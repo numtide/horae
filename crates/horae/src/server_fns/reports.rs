@@ -193,6 +193,7 @@ pub async fn get_plugin_widgets() -> Result<Vec<PluginWidget>, ServerFnError> {
 
 /// A dashboard widget contributed by a plugin, serializable for the SPA.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(not(feature = "server"), allow(dead_code))]
 pub struct PluginWidget {
     pub plugin_name: String,
     pub title: String,
