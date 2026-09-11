@@ -37,11 +37,11 @@ Horae is a Rust/Dioxus/Axum application using PostgreSQL and SQLx. Current Harve
 ## Phases
 
 1. **Dependency spike**: compile a minimal `sqlxmq` runner against the pinned Horae toolchain; inspect its migrations; reject direct adoption because its UUIDv4/`uuid-ossp` schema violates Horae invariants.
-2. **Reusable job boundary**: define a registered job-kind envelope with versioned payload, org scope, idempotency key, execution policy, progress, and cancellation. Keep handlers in application modules.
-3. **Persistence and outbox**: define job/upload persistence and an outbox delivery model that can be written in the same transaction as domain mutations.
-4. **Worker**: start one bounded worker runner during server startup; configure lease, retry, shutdown, and cancellation behavior; invoke the existing importer engine.
-5. **Server/UI contract**: change start functions to return job status, add status/list/cancel/retry functions, and update the importer page to poll persisted state.
-6. **Verification**: add database tests for atomic claims, authorization, retry/recovery, cancellation, idempotency, and a second synthetic job kind; run formatting, clippy, and SQLx cache preparation.
+1. **Reusable job boundary**: define a registered job-kind envelope with versioned payload, org scope, idempotency key, execution policy, progress, and cancellation. Keep handlers in application modules.
+1. **Persistence and outbox**: define job/upload persistence and an outbox delivery model that can be written in the same transaction as domain mutations.
+1. **Worker**: start one bounded worker runner during server startup; configure lease, retry, shutdown, and cancellation behavior; invoke the existing importer engine.
+1. **Server/UI contract**: change start functions to return job status, add status/list/cancel/retry functions, and update the importer page to poll persisted state.
+1. **Verification**: add database tests for atomic claims, authorization, retry/recovery, cancellation, idempotency, and a second synthetic job kind; run formatting, clippy, and SQLx cache preparation.
 
 ## Project Structure
 
