@@ -1,6 +1,6 @@
 # Phase 1 Data Model: Time Tracking & Invoicing
 
-Derived from the spec's Key Entities and `SPEC.md` §2. Everything is scoped to a single `organizations` row, but every table keeps an `org_id` FK so multi-org is a later flip. Primary keys are UUID v7. Time is stored as **integer minutes**; money as **integer minor units (cents) + ISO 4217 currency code** — never floats.
+Derived from the spec's Key Entities and the Horae Constitution. Everything is scoped to a single `organizations` row, but every table keeps an `org_id` FK so multi-org is a later flip. Primary keys are UUID v7. Time is stored as **integer minutes**; money as **integer minor units (cents) + ISO 4217 currency code** — never floats.
 
 ## Enumerations
 
