@@ -9,7 +9,7 @@
 ## Phase 2 - Persistence and worker
 
 - [x] T004 Add a registered job-kind envelope with versioned payload, idempotency key, org scope, and execution policy.
-- [ ] T005 Persist CSV uploads safely for asynchronous execution without retaining request-body streams.
+- [x] T005 Persist CSV uploads safely for asynchronous execution without retaining request-body streams.
 - [ ] T006 Add worker startup, bounded concurrency, lease/heartbeat, retry backoff, and graceful shutdown.
 - [ ] T007 Add checkpoint/progress updates around existing Harvest import phases.
 - [ ] T008 Add outbox records and transactional enqueue support for future plugin/webhook/notification delivery.
@@ -17,9 +17,9 @@
 
 ## Phase 3 - API and UI
 
-- [ ] T010 Change API and CSV start functions to enqueue and return job identifiers.
-- [ ] T011 Add status, history, cancel, and retry server functions.
-- [ ] T012 Update the importer page to show queued/running progress and terminal reports.
+- [x] T010 Change API and CSV start functions to enqueue and return job identifiers.
+- [x] T011 Add status, history, cancel, and retry server functions.
+- [x] T012 Update the importer page to show queued/running progress and terminal reports.
 - [ ] T013 Add cleanup policy for old terminal jobs and stored upload data.
 
 ## Phase 4 - Verification

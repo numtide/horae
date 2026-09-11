@@ -100,12 +100,15 @@ pub fn HarvestImport() -> Element {
                 }
                 Err(error) => (Err(error.to_string()), mode),
             },
-            Run::Csv(mode, file) => (
-                server_fns::import_harvest_csv(mode, file.into())
-                    .await
-                    .map_err(|e| e.to_string()),
-                mode,
-            ),
+            Run::Csv(mode, file) => {
+                match server_fns::start_harvest_csv_import(mode, file.into()).await {
+                    Ok(id) => {
+                        active_job.set(Some(id));
+                        return;
+                    }
+                    Err(error) => (Err(error.to_string()), mode),
+                }
+            }
         };
         if res.is_ok() {
             toast_msg.set(Some(toast_for(&res, mode)));
