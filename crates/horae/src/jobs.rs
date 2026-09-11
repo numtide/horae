@@ -22,6 +22,28 @@ pub enum JobPayload {
     HarvestCsv { mode: ImportMode },
 }
 
+/// Insert an event in the same transaction as the state change that produced
+/// it. Consumers can claim undelivered rows independently of the job worker.
+pub async fn enqueue_outbox(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    org_id: Uuid,
+    event_kind: &str,
+    payload: serde_json::Value,
+) -> anyhow::Result<Uuid> {
+    let id = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO horae_outbox (id, org_id, event_kind, payload)
+           VALUES ($1, $2, $3, $4)"#,
+        id,
+        org_id,
+        event_kind,
+        payload,
+    )
+    .execute(&mut **tx)
+    .await?;
+    Ok(id)
+}
+
 impl JobPayload {
     fn kind(&self) -> &'static str {
         match self {
@@ -188,27 +210,45 @@ pub async fn retry(pool: &sqlx::PgPool, org_id: Uuid, id: Uuid) -> anyhow::Resul
     Ok(result.rows_affected() == 1)
 }
 
-pub fn spawn(state: &'static AppState) {
+pub fn spawn(state: &'static AppState) -> tokio::sync::watch::Sender<bool> {
+    let (shutdown, mut shutdown_rx) = tokio::sync::watch::channel(false);
     tokio::spawn(async move {
         let worker_id = Uuid::now_v7().to_string();
         loop {
+            if *shutdown_rx.borrow() {
+                break;
+            }
             if let Err(error) = cleanup(&state.db).await {
                 tracing::warn!(%error, "durable job cleanup failed");
             }
-            match claim(&state.db, &worker_id).await {
-                Ok(Some(job)) => {
-                    if let Err(error) = execute(state, &worker_id, job).await {
-                        tracing::warn!(%error, "durable job failed");
+            tokio::select! {
+                _ = shutdown_rx.changed() => break,
+                result = claim(&state.db, &worker_id) => {
+                    match result {
+                        Ok(Some(job)) => {
+                            if let Err(error) = execute(state, &worker_id, job).await {
+                                tracing::warn!(%error, "durable job failed");
+                            }
+                        }
+                        Ok(None) => {
+                            tokio::select! {
+                                _ = shutdown_rx.changed() => break,
+                                _ = tokio::time::sleep(POLL) => {}
+                            }
+                        }
+                        Err(error) => {
+                            tracing::warn!(%error, "durable job poll failed");
+                            tokio::select! {
+                                _ = shutdown_rx.changed() => break,
+                                _ = tokio::time::sleep(POLL) => {}
+                            }
+                        }
                     }
-                }
-                Ok(None) => tokio::time::sleep(POLL).await,
-                Err(error) => {
-                    tracing::warn!(%error, "durable job poll failed");
-                    tokio::time::sleep(POLL).await;
                 }
             }
         }
     });
+    shutdown
 }
 
 async fn cleanup(pool: &sqlx::PgPool) -> anyhow::Result<()> {

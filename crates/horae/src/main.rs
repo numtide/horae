@@ -213,7 +213,7 @@ fn main() -> anyhow::Result<()> {
 
                 // Start the background poller for forgotten timers (US3).
                 scheduler::spawn(state::global_state().await);
-                jobs::spawn(state::global_state().await);
+                let jobs_shutdown = jobs::spawn(state::global_state().await);
 
                 // Session middleware (Postgres-backed, idempotent migrate).
                 let session_layer =
@@ -260,7 +260,12 @@ fn main() -> anyhow::Result<()> {
 
                 let listener = tokio::net::TcpListener::bind(&addr).await?;
                 tracing::info!("Listening on {addr}");
-                axum::serve(listener, router).await?;
+                axum::serve(listener, router)
+                    .with_graceful_shutdown(async {
+                        let _ = tokio::signal::ctrl_c().await;
+                    })
+                    .await?;
+                let _ = jobs_shutdown.send(true);
                 anyhow::Ok(())
             })?;
         }
