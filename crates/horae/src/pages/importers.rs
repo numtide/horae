@@ -410,6 +410,18 @@ pub fn HarvestImport() -> Element {
                 div { class: "card mt-4 flex items-center gap-3",
                     span { class: "himp-spinner" }
                     span { class: "text-sm font-semibold", "Import in progress · nothing is written until you commit" }
+                    if let Some(job_id) = active_job() {
+                        button {
+                            r#type: "button",
+                            class: "btn btn-ghost btn-sm ml-auto",
+                            onclick: move |_| {
+                                spawn(async move {
+                                    let _ = server_fns::cancel_harvest_import_job(job_id).await;
+                                });
+                            },
+                            "Cancel"
+                        }
+                    }
                 }
             }
 
