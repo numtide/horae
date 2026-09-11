@@ -24,6 +24,7 @@ pub enum JobPayload {
 
 /// Insert an event in the same transaction as the state change that produced
 /// it. Consumers can claim undelivered rows independently of the job worker.
+#[allow(dead_code)]
 pub async fn enqueue_outbox(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     org_id: Uuid,
@@ -42,6 +43,75 @@ pub async fn enqueue_outbox(
     .execute(&mut **tx)
     .await?;
     Ok(id)
+}
+
+#[derive(Debug)]
+#[allow(dead_code)]
+pub struct OutboxEvent {
+    pub id: Uuid,
+    pub org_id: Uuid,
+    pub event_kind: String,
+    pub payload: serde_json::Value,
+    pub attempts: i32,
+}
+
+/// Claim one event for delivery. Moving `available_at` acts as a short lease,
+/// so a crashed consumer can safely retry it later.
+#[allow(dead_code)]
+pub async fn claim_outbox(pool: &sqlx::PgPool) -> anyhow::Result<Option<OutboxEvent>> {
+    let row = sqlx::query!(
+        r#"WITH candidate AS (
+             SELECT id FROM horae_outbox
+              WHERE delivered_at IS NULL AND available_at <= now()
+              ORDER BY available_at, created_at
+              FOR UPDATE SKIP LOCKED LIMIT 1
+           )
+           UPDATE horae_outbox o
+              SET attempts = o.attempts + 1,
+                  available_at = now() + interval '5 minutes'
+             FROM candidate
+            WHERE o.id = candidate.id
+        RETURNING o.id, o.org_id, o.event_kind, o.payload, o.attempts"#
+    )
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(|r| OutboxEvent {
+        id: r.id,
+        org_id: r.org_id,
+        event_kind: r.event_kind,
+        payload: r.payload,
+        attempts: r.attempts,
+    }))
+}
+
+#[allow(dead_code)]
+pub async fn mark_outbox_delivered(pool: &sqlx::PgPool, id: Uuid) -> anyhow::Result<bool> {
+    let result = sqlx::query!(
+        "UPDATE horae_outbox SET delivered_at = now(), last_error = NULL WHERE id = $1 AND delivered_at IS NULL",
+        id,
+    )
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected() == 1)
+}
+
+#[allow(dead_code)]
+pub async fn mark_outbox_failed(
+    pool: &sqlx::PgPool,
+    id: Uuid,
+    error: &str,
+) -> anyhow::Result<bool> {
+    let result = sqlx::query!(
+        r#"UPDATE horae_outbox
+              SET available_at = now() + LEAST(power(2::double precision, attempts), 300)::int * interval '1 second',
+                  last_error = $2
+            WHERE id = $1 AND delivered_at IS NULL"#,
+        id,
+        error,
+    )
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected() == 1)
 }
 
 impl JobPayload {
