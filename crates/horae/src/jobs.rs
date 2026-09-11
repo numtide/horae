@@ -122,6 +122,40 @@ pub async fn status(
     }))
 }
 
+pub async fn list(
+    pool: &sqlx::PgPool,
+    org_id: Uuid,
+    limit: i64,
+) -> anyhow::Result<Vec<crate::models::JobStatus>> {
+    let rows = sqlx::query!(
+        r#"SELECT id, kind, status, phase, processed_count, total_count,
+                  report, last_error, created_at, finished_at
+             FROM horae_jobs
+            WHERE org_id = $1
+            ORDER BY created_at DESC
+            LIMIT $2"#,
+        org_id,
+        limit.clamp(1, 100),
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|r| crate::models::JobStatus {
+            id: r.id,
+            kind: r.kind,
+            status: r.status,
+            phase: r.phase,
+            processed_count: r.processed_count,
+            total_count: r.total_count,
+            report: r.report,
+            last_error: r.last_error,
+            created_at: r.created_at,
+            finished_at: r.finished_at,
+        })
+        .collect())
+}
+
 pub async fn cancel(pool: &sqlx::PgPool, org_id: Uuid, id: Uuid) -> anyhow::Result<bool> {
     let result = sqlx::query!(
         r#"UPDATE horae_jobs

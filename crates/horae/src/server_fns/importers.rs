@@ -106,6 +106,15 @@ pub async fn get_harvest_import_job(
         .map_err(server_err)
 }
 
+#[server]
+pub async fn list_harvest_import_jobs() -> Result<Vec<crate::models::JobStatus>, ServerFnError> {
+    let admin = require_admin().await?;
+    let state = crate::state::global_state().await;
+    crate::jobs::list(&state.db, admin.org_id, 20)
+        .await
+        .map_err(server_err)
+}
+
 /// Buffer and enqueue a CSV import so the request body is not tied to the
 /// lifetime of the background worker.
 #[dioxus_fullstack::post("/api/import/harvest/csv-job/{mode}")]
