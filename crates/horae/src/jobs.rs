@@ -531,4 +531,81 @@ mod tests {
         let decoded: JobPayload = serde_json::from_value(encoded).unwrap();
         assert_eq!(decoded.kind(), "harvest_api_import");
     }
+
+    async fn org(pool: &sqlx::PgPool) -> Uuid {
+        let id = Uuid::now_v7();
+        sqlx::query!(
+            "INSERT INTO organizations (id, name) VALUES ($1, 'Jobs test')",
+            id
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+        id
+    }
+
+    #[sqlx::test]
+    async fn claims_are_atomic_and_expired_leases_recover(pool: sqlx::PgPool) {
+        let org_id = org(&pool).await;
+        let payload = JobPayload::HarvestApi {
+            mode: ImportMode::DryRun,
+            sync: SyncScope::Incremental,
+        };
+        let first = enqueue(&pool, org_id, &payload, "first").await.unwrap();
+        let second = enqueue(&pool, org_id, &payload, "second").await.unwrap();
+
+        let (left, right) = tokio::join!(claim(&pool, "worker-a"), claim(&pool, "worker-b"));
+        let left = left.unwrap().unwrap();
+        let right = right.unwrap().unwrap();
+        assert_ne!(left.id, right.id);
+        assert_eq!(
+            std::collections::HashSet::from([left.id, right.id]),
+            std::collections::HashSet::from([first, second])
+        );
+
+        sqlx::query!(
+            "UPDATE horae_jobs SET lease_until = now() - interval '1 second' WHERE id = $1",
+            left.id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let recovered = claim(&pool, "worker-c").await.unwrap().unwrap();
+        assert_eq!(recovered.id, left.id);
+    }
+
+    #[sqlx::test]
+    async fn cancellation_and_retry_are_scoped_and_idempotent(pool: sqlx::PgPool) {
+        let org_id = org(&pool).await;
+        let payload = JobPayload::HarvestApi {
+            mode: ImportMode::DryRun,
+            sync: SyncScope::Incremental,
+        };
+        let id = enqueue(&pool, org_id, &payload, "cancel-retry")
+            .await
+            .unwrap();
+        assert!(cancel(&pool, org_id, id).await.unwrap());
+        assert!(!cancel(&pool, org_id, id).await.unwrap());
+        assert!(retry(&pool, org_id, id).await.unwrap());
+        assert!(!retry(&pool, org_id, id).await.unwrap());
+    }
+
+    #[sqlx::test]
+    async fn outbox_delivery_is_idempotent(pool: sqlx::PgPool) {
+        let org_id = org(&pool).await;
+        let mut tx = pool.begin().await.unwrap();
+        let id = enqueue_outbox(
+            &mut tx,
+            org_id,
+            "jobs.test",
+            serde_json::json!({"ok": true}),
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+        let event = claim_outbox(&pool).await.unwrap().unwrap();
+        assert_eq!(event.id, id);
+        assert!(mark_outbox_delivered(&pool, id).await.unwrap());
+        assert!(!mark_outbox_delivered(&pool, id).await.unwrap());
+    }
 }
