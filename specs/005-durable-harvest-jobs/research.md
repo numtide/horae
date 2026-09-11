@@ -1,0 +1,40 @@
+# Research: Durable Harvest Import Jobs
+
+## Decision
+
+Use `sqlxmq` as the queue engine behind a small Horae-owned jobs adapter. Keep the worker inside `crates/horae` for the first implementation and continue using PostgreSQL as the only runtime service. The adapter should expose a stable registered-job boundary so future workloads can reuse queue mechanics without coupling the application to `sqlxmq` types.
+
+## Options considered
+
+### sqlxmq
+
+`sqlxmq` 0.6.0 is a PostgreSQL-backed queue built on SQLx. Its documented capabilities include transactional enqueue and completion, exponential-backoff retries, future scheduling, checkpointing, concurrency limits, automatic keep-alive, JSON/binary payloads, and PostgreSQL `NOTIFY` polling. It expects its migrations to be copied into the application migration set and prefixes its database objects with `mq`.
+
+This is the closest match for Horae’s current architecture: one PostgreSQL database, one SQLx pool, and one high-value background job family. It still requires Horae to define authorization, payload versioning, idempotency, progress semantics, and retention.
+
+### apalis-postgres
+
+`apalis-postgres` 1.0.0-rc.8 provides a broader worker framework with PostgreSQL polling and `NOTIFY` storage, codecs, heartbeats, orphaned-job re-enqueueing, shared storage, middleware, and optional `apalis-board` observability. The published package uses SQLx 0.8.x, while the upstream repository is actively moving through the 1.0 release-candidate line.
+
+Apalis is a stronger candidate if Horae later needs multiple job types, workflows, separate worker deployment, or its management ecosystem. For the first Harvest job it introduces more framework surface and a pre-1.0 API than necessary.
+
+## Risks and mitigations
+
+- External Harvest requests cannot be exactly-once; use persisted provenance and idempotent application writes.
+- A generic queue does not define tenant authorization; enforce `org_id` in every job query and status endpoint.
+- Library migrations must be reviewed and namespaced with Horae’s SQLx migration process.
+- Dependency compatibility must be verified in a spike against the repository’s pinned Rust and SQLx versions before adoption.
+
+## Reuse boundary
+
+The reusable primitive is a durable job envelope plus worker lifecycle: kind registration, versioned payloads, org scoping, idempotency, leases, retries, progress, cancellation, and retention. Domain handlers remain in Horae modules.
+
+Transactional outbox is related but distinct. A time-entry or invoice transaction may append an outbox event in the same database transaction; a delivery job then invokes plugins, webhooks, or notifications and records attempts. This prevents lost events while keeping interactive mutations synchronous.
+
+Candidate future kinds, intentionally out of this MVP, are large report exports, plugin event delivery, webhooks, email/notifications, and periodic cleanup/reconciliation.
+
+## References
+
+- [sqlxmq documentation](https://docs.rs/sqlxmq/latest/sqlxmq/)
+- [apalis-postgres documentation](https://docs.rs/apalis-postgres/latest/apalis_postgres/)
+- [apalis-postgres repository](https://github.com/apalis-dev/apalis-postgres)
