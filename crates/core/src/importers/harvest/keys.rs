@@ -91,7 +91,7 @@ pub fn time_entry_key(
 /// consumed. Two identical rows in one source are two real entries, so the Nth
 /// occurrence of a key is a distinct record that must match the Nth stored
 /// entry with that key — never silently collapse into the first (FR-012).
-#[derive(Debug, Default)]
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct OccurrenceCounter {
     seen: std::collections::HashMap<String, u64>,
 }

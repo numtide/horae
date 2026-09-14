@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO projects (id, org_id, client_id, code, name, currency, starts_on, ends_on, active)\n             SELECT r.id, r.org_id, r.client_id, r.code, r.name, r.currency, r.starts_on, r.ends_on, r.active\n             FROM jsonb_populate_recordset(NULL::projects, $1) r\n             WHERE r.org_id = $2\n               AND (SELECT org_id FROM clients WHERE id = r.client_id) = $2\n             ON CONFLICT (id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Jsonb",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a788ef301148520ec29b3d558c9face95958b97d24b2f6571009533e4c8bcede"
+}

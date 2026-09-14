@@ -105,7 +105,7 @@ mod tests {
         let bytes = b"Date,Notes\n2026-01-15,\"quoted, note\"\n";
         let request = Request::builder()
             .method("POST")
-            .uri("/api/import/harvest/csv/DryRun")
+            .uri("/api/import/harvest/csv-job/DryRun")
             .header("X-Horae-Import", "csv")
             .body(Body::from(bytes.as_slice()))
             .unwrap();

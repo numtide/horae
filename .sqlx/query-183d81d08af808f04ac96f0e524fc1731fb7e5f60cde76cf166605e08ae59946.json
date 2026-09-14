@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT harvest_id, horae_id FROM harvest_import_map\n             WHERE org_id = $1 AND harvest_entity_type = 'time_entry'\n               AND harvest_id = ANY($2)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "harvest_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "horae_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8Array"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "183d81d08af808f04ac96f0e524fc1731fb7e5f60cde76cf166605e08ae59946"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "ALTER TABLE horae_jobs DROP CONSTRAINT reject_second_batch",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "1d53b721bc295bbf783364916b4e66a3a60e406e02378a79bfb4c803c55f15cb"
+}

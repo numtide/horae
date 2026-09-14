@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "ALTER TABLE horae_job_report_error_chunks ADD CONSTRAINT reject_legacy_archive CHECK (sequence < 1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "2009bbbd503096eb5f01f1efbbeae8b4fbfad9468617aff6ff704ce78318153d"
+}

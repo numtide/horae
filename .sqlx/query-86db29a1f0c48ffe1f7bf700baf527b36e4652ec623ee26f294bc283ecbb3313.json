@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE horae_jobs SET report = $3,\n                 checkpoint = CASE WHEN checkpoint IS NULL THEN NULL\n                     WHEN $4 THEN jsonb_set(jsonb_set(checkpoint, '{report}', $3), '{version}', '2')\n                     ELSE jsonb_set(checkpoint, '{report}', $3) END,\n                 claim_token = NULL,\n                 lease_until = CASE WHEN status = 'running' THEN clock_timestamp() ELSE lease_until END\n               WHERE id = $1 AND org_id = $2 AND octet_length($3::jsonb::text) <= $5",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Jsonb",
+        "Bool",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "86db29a1f0c48ffe1f7bf700baf527b36e4652ec623ee26f294bc283ecbb3313"
+}

@@ -1,0 +1,812 @@
+# Durable jobs adversarial review
+
+Reviewed baseline: `86e93fcf1cbe2ed6650d4ebf11272d99870c6e0e`.
+
+The baseline CI passed, but the following requirements are not established by
+those checks. The PR must remain open until these cases are addressed.
+
+## Findings
+
+| Severity | Trigger and consequence | Evidence | Required regression |
+|---|---|---|---|
+| High | Cancel a running import: the row becomes cancelled while the importer continues applying work. Retrying can race the old execution. | `jobs::cancel` clears ownership without signalling or checking inside the importer. | Cancel during execution; prove no further batch begins after acknowledgement and retry cannot overlap it. |
+| High | Lose a lease during an import: the old handler keeps running while another instance can reclaim the job. | `execute` logs heartbeat errors, ignores zero affected rows, and does not stop the handler. | Expire and reclaim a live lease; prove the stale execution cannot commit or acknowledge subsequent work. |
+| High | Missing Harvest configuration or upload leaves the job running instead of recording a retryable error. | `execute` uses `?` before reaching its result handler. Payload decoding in `claim` has a similar failure path. | Exercise missing configuration, missing upload and invalid stored payload through claim and execution. |
+| High | Shutdown drops the Tokio runtime before the worker has drained; deployment SIGTERM is not handled. | `spawn` discards its join handle; `main` only sends a watch notification after HTTP exits. | Await a blocked active job, enforce a drain deadline, stop claiming, and handle SIGTERM. |
+| High | Crash after processing pages: retry repeats the whole import; live progress stays at zero. | `checkpoint` is never read or written. `processed_count` only changes on success; importers use an import-wide transaction. | Interrupt between durable batches, resume without repeating completed work, and observe progress before completion. |
+| Medium | Repeated crashes or invalid payloads can exceed the attempt limit; terminal errors lack retention timestamps. | `claim` does not check `max_attempts`; the error update does not set `finished_at`. | Exhaust crash and ordinary error retries; assert terminal status, timestamp and cleanup behavior. |
+| Medium | Reopen the importer: previously submitted jobs and reports are not displayed. A polling error leaves the screen running indefinitely. | `active_job` starts empty; the history endpoint has no UI caller; `use_effect` ignores polling errors. | Reopen, select history, resume polling, retry, and recover from a failed status request. |
+| Medium | A stale outbox consumer can acknowledge or reschedule a newer claim. | Delivery updates filter only by ID and undelivered state, with no claim token. | Reclaim an event, reject the old consumer's acknowledgement and retry, and verify transaction rollback. |
+| Medium | Future payload changes cannot be distinguished from old persisted jobs. | `JobPayload` has a kind tag but no payload version. | Decode supported versions and record a bounded terminal error for unsupported versions. |
+| Medium | Retrying a CSV after upload retention expires cannot succeed. | Cleanup deletes uploads after one day while failed/cancelled jobs remain retryable for thirty days. | Retry at the retention boundary, including concurrent cleanup. |
+
+## Coverage corrections
+
+- The baseline synthetic test only serializes and deserializes an enum. It does
+  not execute a job through the worker boundary.
+- The baseline cancellation test only changes a queued row; despite its name,
+  it does not test a foreign organization or running cancellation.
+- The baseline outbox test verifies duplicate database acknowledgements, not
+  idempotent external delivery, stale claims, or transactional rollback.
+- Future webhook/email/plugin consumers are explicitly deferred by FR-018.
+  Their absence alone is not a first-release defect; the shared outbox semantics
+  still require the tests above.
+
+## Follow-up verification
+
+The follow-up retains the worker join handle, drains it before runtime exit,
+enforces a deadline, and wires SIGTERM into the shutdown path. It also routes
+configuration and upload lookup failures through the persisted error/retry path.
+The subsequent recovery fixes below also address invalid payload decoding and
+terminal retry bookkeeping.
+
+The first follow-up passed 11 `jobs::tests` with a temporary PostgreSQL instance, including:
+
+- Waiting for active work and joining it after a drain deadline.
+- Leaving queued jobs unclaimed when shutdown is requested.
+- A full synthetic claim/execute/completion, with its persisted report checked.
+- Missing configuration and missing upload returning to queued state with errors.
+- Rejecting foreign-organization status, list, cancel and retry operations.
+
+The configuration regression failed before the fix with `Harvest is not configured` escaping from `execute`. SIGTERM is wired in the server entry point;
+these tests exercise worker shutdown directly, not operating-system signalling
+against a deployed server. Passing them does not close the remaining findings.
+
+## Recovery and outbox follow-up
+
+The expanded suite passes 18 tests against PostgreSQL. It verifies that expired
+final attempts become failed without being claimed again, terminal failures
+receive retention timestamps, manual retry resets the attempt budget, and
+malformed or unsupported stored payloads reach a recorded terminal error.
+
+Payloads now have a version-1 envelope with legacy read compatibility. CSV
+uploads remain available throughout the retryable retention window; deleting an
+expired terminal job also deletes its upload.
+
+Outbox claims now carry a UUIDv7 token. Acknowledgements require a current,
+unexpired token and matching organization. Tests reject stale, duplicate and
+foreign acknowledgements, retain failure details with backoff, and verify that
+rolling back the enqueue transaction publishes no event. This does not provide
+exactly-once external delivery.
+
+At that stage, open findings included cooperative running cancellation, fencing of import writes after
+lease loss, durable checkpoints and live progress,
+and history restoration/error recovery in the UI. Baseline CI success must not
+be used to close these findings.
+
+## Configurable execution policy
+
+API and CSV enqueue now persist the configured attempt limit rather than relying
+on the database default. `HORAE_JOB_MAX_ATTEMPTS` accepts 1–100 attempts, including
+the initial execution, and defaults to 5. Validation runs both at startup and at
+the enqueue boundary. Idempotent requests preserve the original job's limit and
+CSV body; manual retry resets consumed attempts without replacing the policy.
+
+The PostgreSQL jobs suite passes 21 tests. New regressions exercise API failures
+through a non-default attempt budget, a replacement server with different
+configuration, duplicate CSV enqueue, and rejection before any job or upload is
+stored. The configuration regression was observed failing before the fix: the
+requested environment value was ignored. This follow-up closes T004, not the
+remaining cancellation, lease-fencing, checkpoint, or UI findings.
+
+All 11 configuration tests pass, including the default, supported boundaries,
+and rejection of empty, out-of-range, overflowing, and non-numeric values. Server
+clippy passes with all targets and warnings denied; SQLx metadata is regenerated.
+
+## Execution fencing and cooperative cancellation
+
+Every claim now receives a UUIDv7 token separate from worker identity. Running
+cancellation is a persisted request, not an immediate terminal acknowledgement.
+The worker signals its SQL consumer, joins the blocking source producer, and
+flushes rollback before recording cancellation. Retry is unavailable while that
+cleanup is pending. Recovery honours a cancellation requested before a crash.
+
+Both API and CSV committing imports now write their terminal report in the same
+transaction as domain changes. The conditional update checks organization,
+claim token, running state, cancellation, and the current lease deadline. It
+locks the job through commit, preventing cancellation or reclaim from racing a
+separate ownership check. Lease checks use `clock_timestamp()`, not the import
+transaction's potentially old `now()`. Heartbeat monitoring is an owned future,
+so aborting the worker cannot leave a detached renewal task alive.
+
+Verification passes 26 jobs tests and 115 importer tests against PostgreSQL;
+three existing 100,000-record benchmarks remain explicitly ignored. Regressions
+cover same-name worker replacement, expired renewal, an expired lease inside an
+older transaction, cross-organization adapter calls, and cancellation recovery.
+Real CSV and API pipelines reject stale commits with heartbeat deliberately
+disabled, including API watermark writes. Running cancellation tests prove the
+producer stops before acknowledgement and preserve previously committed data;
+CSV retry then succeeds without duplicating those records. The initial
+cancellation-state regression was observed failing before this fix. Server
+clippy passes with all targets and warnings denied.
+
+This closes the worker lifecycle/fencing gaps in T006. Checkpoints and live
+progress are still missing: the current import uses one transaction, so a crash
+still restarts its uncommitted work. T007, T009, T012 and T016 remain open for
+checkpoint/resume behavior, the final authorization audit, and history/retry/error
+UI. The cancellation and fencing tests must also cover future batch boundaries
+before the feature is ready to merge.
+
+## Import history and status recovery
+
+The importer now restores queued/running work on reopening, displays stored
+phase/count/total/last-error values, and lets administrators select retained
+reports. History uses 20-row cursor pages ordered by creation time and UUID.
+Foreign, missing, and expired cursor IDs cannot expose another organization's
+history. Manual retry clears the previous cancellation phase.
+
+Status lookup failures and missing jobs stop the loading indicator and offer
+resuming monitoring without enqueuing another import. Results are tied to a
+request generation, so a previous result cannot overwrite a newer selection.
+Cancel and retry failures are visible; accepting a cancellation does not imply
+worker cleanup has finished. Pending mutations reject duplicate submissions.
+
+Historical previews are read-only. Newly submitted previews keep their original
+source for confirmation, including when the CSV picker changes while the
+preview runs. The report labels the original CSV filename.
+
+Ten production-component tests exercise these interactions through controlled
+server-function responses, including pagination, request replacement, and CSV
+source preservation. The initial reopening regression failed before the fix.
+Five existing admin-shell tests also pass. These are VirtualDom interaction
+tests, not a live browser/database end-to-end run.
+
+The PostgreSQL suites pass 27 jobs tests and 115 importer tests; three explicit
+scale benchmarks remain ignored. New database coverage checks tied-timestamp
+pagination, timestamp precedence, foreign/missing cursors, and retry phase reset.
+Server clippy passes with all targets and warnings denied. The WebAssembly target
+checks successfully, with existing warnings for InvoiceLine, OrgBranding, and
+PluginWidget. SQLx metadata is regenerated; only the two obsolete changed-query
+entries are removed.
+
+This completes the UI implementation in T012. It does not implement live
+checkpoint production: T007 and its crash/resume and batch cancellation coverage
+in T016 remain open, as does the final authorization audit in T009. The PR remains
+a draft until those requirements and the complete acceptance walkthrough hold.
+
+## CSV commit checkpoints
+
+Durable CSV commits now save version-1 checkpoints every 500 source records.
+Cursor, accumulated report, currency fallback, and resolution/occurrence cache
+commit with the batch's domain writes. The job update is fenced by organization,
+claim token, current lease deadline, running state, and cancellation request.
+Recovery skips the original upload's byte prefix and resumes parsing at the next
+record. Successful completion clears the checkpoint and records the final total.
+
+The initial production-pipeline regression failed because no commit occurred
+before EOF. Follow-up tests now interrupt an import after its first batch and
+verify that crash recovery and manual retry preserve counts, errors, and
+legitimate repeated CSV entries. A deliberately unmonitored obsolete worker
+cannot commit the next batch after its lease is reclaimed. Cancellation waits
+for producer cleanup and retains completed batches. A dry-run exceeding the
+batch size leaves no domain rows or durable checkpoint.
+
+Parser regressions cover multiline Unicode/CRLF records, original error
+locations after resume, EOF checkpoints, and offsets beyond the upload. Cache
+round-trip coverage includes distinct email/full-name namespaces, failed parents,
+project/task links, and occurrence counters.
+
+Verification passes 122 importer tests, 27 jobs tests, 86 domain tests, 10 importer
+UI tests, and five admin-shell tests. Three explicit scale benchmarks remain
+ignored. Server clippy passes with all targets and warnings denied; WebAssembly
+checks with the same three existing warnings. SQLx metadata is regenerated and
+the obsolete completion-query entry is replaced.
+
+T007 and T016 remain open: API and dry-run checkpoint integration is still
+missing, and full-cache snapshot size/large-import throughput needs validation.
+The final authorization audit in T009 and complete acceptance walkthrough also
+remain required. This follow-up does not establish the whole feature's readiness
+to merge.
+
+## Resumable HTTP pagination prerequisite
+
+The HTTP adapter now exposes a versioned, serializable cursor for its next
+unconsumed page and constant-space cycle detector. Replacement clients resume
+from the provider's exact cursor URL, using current credentials, and completed
+cursors issue no further requests. Unsupported versions, invalid cycle state,
+oversized URLs and destinations outside the configured collection endpoint are
+rejected before any authenticated request. A consumer error leaves its cursor
+unchanged.
+
+Five new regressions cover serialized recovery, EOF, consumer failure, invalid
+stored state, and cycles spanning repeated restarts. The missing-next-field
+regression failed before the deserializer was corrected: an absent optional
+field was silently treated as EOF. Only an explicit null now marks completion.
+All 127 importer tests pass against PostgreSQL, including the existing live
+API pipeline tests; three scale benchmarks remain ignored. Server clippy passes
+with all targets and warnings denied. No queries, migrations or dependencies
+changed in this follow-up.
+
+This is an HTTP adapter prerequisite, not completed durable API integration.
+The importer must still persist this cursor with catalog, account identity,
+report/cache and watermark state at its fenced batch boundaries. T007 and T016
+remain open, along with dry-run recovery, scale validation, T009 and the complete
+acceptance walkthrough.
+
+## Durable API commit checkpoints
+
+Leased API commits now persist each catalog page, then apply parent entities in
+500-record batches and time entries one provider page at a time. The checkpoint
+retains the original account, sync scope, filter, currency and capture time,
+alongside the catalog, parent offset, HTTP cursor, report and resolution cache.
+Every checkpoint commits under the same lease/cancellation fence as its domain
+writes. Source buffering alone never advances the persisted cursor.
+
+Retries preserve earlier row errors, missing timestamps and the maximum source
+timestamp. Watermark advancement remains gated by the accumulated result and
+capped by the original capture time; it commits with the terminal report. If
+that final transaction fails, an EOF checkpoint permits retry without fetching
+or applying any completed page. Inline commits and previews retain their
+existing whole-import transaction behavior.
+
+Eight production-HTTP/PostgreSQL regressions cover partial catalog recovery,
+entry-page recovery, errors and missing timestamps across retries, replacement
+of a live claim, cancellation followed by manual retry, finalization retry, and
+failure after a 500-parent batch commits. The first two tests failed before the
+implementation because completed API pages had no durable checkpoint. A stale
+worker is tested without heartbeat monitoring, so rejection relies on the
+database commit fence. The parent-batch test also verifies original counts and
+catalog precision after checkpoint deserialization.
+
+The importer suite passes 135 tests, with three explicit scale benchmarks still
+ignored; all 27 jobs tests pass. Server clippy passes with warnings denied.
+SQLx metadata is regenerated, adding only three failure-injection DDL queries
+used by tests. No production queries, migrations or dependencies change.
+
+T007 and T016 remain open for dry-run recovery and complete checkpoint
+validation. Snapshot size and large-import throughput, the final authorization
+audit in T009, and the complete acceptance walkthrough are still required.
+The feature is not ready to merge.
+
+## Administrator and organization boundary audit
+
+All six durable import endpoints derive the organization from `require_admin()`.
+The gate reloads the active user and current role for each request; a session
+does not preserve privileges after deactivation or demotion. CSV authorization
+runs before its upload body is consumed. Status, history (including cursor
+lookup), cancellation and retry queries constrain the requesting organization.
+Importer lease adapters also reject an organization mismatch.
+
+A registered-handler HTTP test uses actual PostgreSQL-backed session cookies
+for anonymous, member, manager, deactivated, missing and demoted users. It checks
+both API/CSV modes and all status/history/cancel/retry endpoints, including a
+body that panics if an unauthorized CSV request reads it. Authorized creation
+ignores a forged organization field; a second organization's administrator cannot
+read, cancel or retry the owner's API or CSV job, or use its history cursor.
+The owner can inspect, cancel and retry each job. Both CSV routes also reject
+invalid modes and headers before reading uploads. All five importer endpoint
+tests pass against the registered handlers, not mocked authorization responses.
+
+The audit found a schema invariant gap: separate job and organization foreign
+keys allowed an upload to name a job from another organization. Existing HTTP
+and worker scoping prevented that association through their normal paths; this
+is not evidence of a remotely exploitable disclosure. Migration 0026 adds a
+composite foreign key and preserves cascade deletion. The mismatched-upload
+regression failed before the constraint and now passes, together with valid
+enqueue/retry and existing retention/cascade coverage in all 28 jobs tests.
+Existing inconsistent rows cause migration failure, requiring operator review.
+
+Outbox enqueue/claim/acknowledgement primitives have no HTTP endpoint or
+production caller yet. Global claiming is a privileged internal worker operation,
+not an administrator-facing cross-tenant read. Delivery/failure acknowledgements
+require the event's organization and live claim token; regressions reject a
+different existing organization's acknowledgement as well as stale tokens.
+Future externally reachable consumers must establish their own session boundary.
+
+All 135 importer regressions also pass; three explicit scale benchmarks remain
+ignored. SQLx metadata is regenerated against migration 0026 without cache
+changes, and server clippy passes with all targets and warnings denied.
+
+This closes T009 for the implemented job endpoints and internal outbox boundary,
+not an independent security review of the entire application. T007 and T016,
+dry-run recovery, checkpoint scale validation and the full acceptance walkthrough
+remain open; the PR must remain a draft.
+
+## Resumable CSV previews
+
+Durable CSV previews now persist simulation checkpoints every 500 source records.
+The cursor, report, currency and occurrence cache survive alongside snapshots of
+cached parents and project/task links. Domain changes roll back before the
+checkpoint transaction commits. The next batch restores parent identities and
+attributes within a new rollback-only transaction, without parsing or applying
+completed source rows or recounting their outcomes. The final report is also
+fenced after the domain rollback; obsolete workers cannot complete it.
+
+Simulated time entries are not copied into checkpoints. For an ID-less CSV,
+existing-entry matching uses the stored occurrence count, so previously created
+simulation entries do not need replay. This rule is specific to CSV and must not
+be applied to API provenance/adoption semantics without additional state.
+
+The crash regression failed before implementation because a preview never
+persisted a batch before EOF. Crash, cancellation/manual retry and deliberately
+unmonitored stale-claim tests now cover preview boundaries, alongside their
+existing commit equivalents. Recovery tests poison the already-consumed byte
+prefix to prove it is skipped, retaining original counts, one row error and its
+location. Another test compares the complete report with an inline preview and
+subsequent real commit across 600 existing and 1,051 new entries; it uses a
+single-connection pool and verifies preview-only parents remain invisible.
+Foreign-organization parent snapshots are rejected before restoration.
+
+All 140 importer tests and 28 jobs tests pass. Three explicit scale benchmarks
+remain ignored. Server clippy passes with all targets and warnings denied;
+SQLx metadata includes the eight new capture/restore queries. Formatting passes.
+
+This does not close T007 or T016: API previews still lack resumable simulation
+state. Parent snapshots are captured/restored at each CSV batch boundary, so
+large-catalog snapshot size and throughput remain part of the required scale
+validation. Full acceptance and current-head CI remain required before merge.
+
+## Resumable API previews
+
+Durable API previews now use the same catalog, parent-batch and entry-page
+checkpoints as commits. Each applied batch runs in a nested transaction. Parent
+snapshots and successful entry associations are captured before rolling it back;
+only simulation state, cursor and progress commit under the live claim fence.
+Finalization persists the report without advancing the watermark. Existing
+version-1 committing checkpoints remain compatible without preview state.
+
+The shared parent snapshot replaces the CSV-specific module without changing
+its serialized shape. API previews additionally retain Harvest-ID to Horae-ID
+associations. These skip repeated source IDs and reserve adopted real entries
+against different IDs on later pages. Simulated time-entry rows are not replayed;
+failed row savepoints cannot publish new simulated associations.
+
+Eight new PostgreSQL/HTTP regressions cover partial catalog and entry recovery,
+row errors across retries, cancellation/manual retry, stale next-page checkpoints
+without heartbeat monitoring, interrupted parent batches and failed final-report
+writes. The recovery regression failed before implementation because previews
+had no durable checkpoint. The adoption test combines a real CSV entry with new
+and repeated API IDs across three pages and a failed request; the resumed report
+matches the inline preview and subsequent commit, without publishing preview
+domain data or provenance. Finalization retry performs no new HTTP request.
+
+All 148 importer tests and 28 jobs tests pass. Three explicit scale benchmarks
+remain ignored. SQLx metadata adds two simulation queries and two failure-injection
+DDL queries. Server clippy passes with all targets and warnings denied, including
+performance lints; formatting passes. No migration, dependency, service or
+additional connection is added.
+
+T007 remains open for checkpoint size/throughput measurements; T016 and full
+acceptance still require the complete end-to-end recovery walkthrough. Current
+head CI must be checked separately from local tests. The PR remains a draft.
+
+### Remaining terminal-report gap
+
+The acceptance audit also confirms an FR-012/SC-004 gap: `JobLease::save_checkpoint`
+retains accumulated outcomes only inside the private checkpoint, while status and
+history expose `report`. `fail_claimed` records the latest error but never publishes
+that accumulated report. Exhausting retries after completed batches can therefore
+leave an administrator without their partial import report. A regression must
+exhaust an import after confirmed work and verify the report through the public
+status/history boundary, including retention and retry behavior. Jobs failing
+before their first checkpoint also need an inspectable failure result. This is
+not closed by the successful-finalization tests above.
+
+## Retained reports for interrupted imports
+
+Harvest enqueue now initializes a source/mode-specific zero-outcome report.
+Configuration and upload failures before a checkpoint therefore retain an
+inspectable result alongside `last_error`. Checkpoint writes publish the public
+report in the same lease-fenced transaction as progress and confirmed work.
+Failure, cancellation, exhausted leases and manual retries preserve these outcomes;
+successful finalization replaces them with the complete report. Status/history
+also project older checkpoint-only reports without returning private cursor/cache
+state. No new table, migration or dependency is needed.
+
+The importer displays failed/cancelled outcomes as a partial report, alongside
+the interruption and confirmed progress. It never shows a success banner or
+offers confirmation of an interrupted preview, including a newly submitted one.
+Selecting a new file clears the previous result. Existing successful-preview
+confirmation and history behavior remain covered by the UI suite.
+
+Two CSV worker regressions failed before the fix because confirmed outcomes were
+missing from status/history. They now verify 499 confirmed entries and one row
+error, rollback of the final unconfirmed entry, actual report-column persistence,
+legacy checkpoint fallback, two-day retention, exhausted-lease recovery, manual
+retry and eventual thirty-day cleanup. Both preview and commit modes are covered.
+Two API regressions confirm that a failed later HTTP page retains the earlier
+page's outcomes in both modes, without advancing the watermark. Early API
+configuration and empty-CSV failures retain the correct zero-outcome reports.
+Existing unmonitored stale-worker tests assert that even the initial empty report
+cannot be replaced by unconfirmed work.
+
+All 30 jobs tests, 150 importer tests and five registered importer endpoint tests
+pass. Twelve production UI interaction tests pass, including the partial-report
+regression observed failing before the UI fix. Server clippy passes for all targets
+with warnings denied and performance lints enabled; formatting passes. The web
+target checks successfully with the existing InvoiceLine, OrgBranding and
+PluginWidget warnings. SQLx metadata replaces five changed queries and adds two
+report-persistence test queries; unrelated cached queries are preserved.
+
+This closes T020. The three explicit scale benchmarks are still ignored, T007
+and T016 remain open for scale and full acceptance verification, and the published
+head has no current CI checks. Older green workflow runs do not establish these
+remaining gates. The PR remains a draft.
+
+## Action responses and scale fixtures
+
+The endpoint audit found that start returned only a UUID, cancel/retry returned
+unit, and history fixed its limit at twenty despite the approved contract.
+These actions now return the public `JobStatus` projection, and history accepts
+an optional limit clamped to 1–100. The UI immediately displays the acknowledged
+snapshot, then polls normally. A cancellation response can still be running and
+cancelling; it does not imply that source cleanup has finished.
+
+The registered HTTP matrix verifies creation/cancellation/retry responses, limit
+handling and running cancellation followed by worker acknowledgement. A new UI
+regression holds the first status request pending and checks that submission
+already displays its queued state without submitting again. All 30 jobs tests,
+152 importer tests, five endpoint tests, thirteen UI tests and 86 core tests
+pass. SQLx metadata is regenerated. Web compilation, server all-target Clippy
+with warnings denied and performance lints, and formatting pass locally.
+
+Eight scale scenarios are explicitly ignored in the regular suite. The CSV
+fixtures now cover inline/durable preview, commit and reimport with either one
+or 5,000 parent sets, using the production database pool policy. Small API and
+CSV regressions verify EOF recovery across successive jobs. They exposed a
+failure-injection constraint that rejected previously completed jobs; `NOT VALID`
+keeps those existing rows valid while enforcing the intended future failure.
+
+See [performance.md](performance.md) for completed release measurements and
+their limits. The measured durable API preview takes approximately 2.72 times
+the inline preview time. Durable commit/reimport and CSV scale results remain
+pending; T007 and T016 are not closed. The merged-master commit `4532b90` passed
+both CI jobs, but subsequent changes require a fresh run.
+
+The final data-model audit also still needs to establish the requirement that
+reports are bounded and schema-versioned. The current public report retains an
+unversioned collection of row errors; limiting their UI display does not bound
+storage or transport. Any correction must preserve the importer's requirement
+to retain every failed record's location and reason, not silently truncate them.
+
+## Selective API preview restoration
+
+A focused regression demonstrated that a fresh page restored 10,000 old virtual
+entry mappings even though none had a remaining time-entry row to adopt. The
+restoration query now retains every mapping to a real entry, plus virtual source
+IDs present on the upcoming page. All other identities remain in the checkpoint
+for later repeated IDs. Parent restoration, row validation and checkpoint format
+are unchanged; no new service, dependency, migration or connection is introduced.
+
+The regression was observed failing with 10,000 restored mappings before the
+change. It now restores zero for an empty page and exactly the two known IDs in
+a page containing repeats and an unknown ID, without removing checkpoint state.
+All 153 importer tests and 30 jobs tests pass, including the multi-page
+adoption/repeated-ID preview, cancellation, stale-claim and recovery regressions.
+SQLx metadata replaces the restoration query and adds the regression's query.
+
+The durable commit/reimport scale comparison also passed at `fd36a53`: 242.264
+seconds for the first commit and 160.742 seconds for reimport, including controlled
+EOF finalization failure/recovery with no duplicate creates. These measurements
+do not validate the new preview optimization. A new release-mode preview sample,
+the pending CSV cases, full acceptance and bounded/versioned report handling
+remain required before merge.
+
+## Report schema compatibility
+
+Import reports now serialize an explicit version and reject unsupported or
+malformed versions on read. Reports written without a version remain readable
+with their complete original counts and row errors. The same shared type covers
+public reports and reports embedded in both importer checkpoints.
+
+The regression first failed because serialization omitted the version and
+deserialization accepted an unsupported version. All three schema tests now pass,
+alongside the full 156-test importer suite; eight scale cases remain separately
+invoked. The 30 jobs tests, 13 importer UI interaction tests and 86 core tests
+also pass, and the WebAssembly target compiles. No dependency, SQL query or
+migration changes are needed for versioning.
+
+This closes only the schema-versioning portion of the report invariant. Error
+details still accumulate without a storage/transport bound. They must remain
+fully inspectable when that bound is implemented; dropping errors to fit a cap
+would violate the importer contract. T007, T016 and full acceptance remain open.
+
+## Archived error details
+
+New durable reports keep at most 16 KiB of serialized metadata. Larger inline
+error lists move into append-only 64 KiB PostgreSQL fragments under the same
+transaction and ownership fence as their checkpoint or completion. The report
+retains archived-error and fragment counts; reconciliation includes the inline
+tail and all archived errors. Small reports preserve their existing inline shape.
+The new table has UUIDv7 keys, job/organization ownership and cascade retention.
+
+An administrator-only error download streams a captured report boundary in
+fixed-size reads, then appends that snapshot's inline tail. It rejects missing
+sequences rather than silently ending early. The UI displays total error counts,
+labels the inline subset and links to the complete download.
+
+The 999-error CSV regression first failed on oversized report metadata. Archival
+then passed both preview and commit EOF failure/recovery, reconstructing exactly
+the original inline error details. A second regression exposed that report
+versioning alone was insufficient for workers predating version-aware reports:
+archived checkpoints must also use outer version 2. Both adapters now write that
+version and reject archives mislabelled as checkpoint version 1.
+
+The live HTTP matrix covers missing/inactive/demoted/non-admin sessions, foreign
+jobs, rollback of appended fragments, stale appends after completion, large
+Unicode/quoted reasons, the inline tail and missing archive sequences. The UI
+regression checks archived-only totals, the job-specific link and partial reports.
+
+Verification passes 159 importer tests, 30 jobs tests, 87 core tests, 14 importer
+UI tests and five registered importer endpoint tests. The WebAssembly target
+compiles; the archive migration applies and SQLx metadata is regenerated. The
+checkpoint-version correction is included in the final importer-suite rerun.
+
+T021 remains open. Existing large version-1 reports still load their original
+JSON; they need bounded read/upgrade handling. Further API overflow, retention,
+failure/backpressure and memory stress coverage remains required, alongside
+T007's pending scale samples and T016's full server/browser acceptance.
+
+## Process restart acceptance
+
+The NixOS end-to-end test now includes actual SIGTERM and SIGKILL interruptions
+of an HTTP-enqueued CSV import. A PostgreSQL advisory-lock gate blocks record
+501, after the first 500 entries and their checkpoint have committed. The test
+checks that stopping the process preserves only those confirmed entries, then
+starts a new server process and advances the job's lease deadline to exercise
+recovery without a five-minute wait. It checks the final 1,000 entries, report
+counts, integer minutes, two execution attempts and duplicate-free reimport.
+
+Nix evaluation and the generated Python script's syntax pass. VM execution is
+pending; this is not yet evidence of successful process recovery. T016 remains
+open, including browser acceptance.
+
+## Legacy report upgrade
+
+The legacy regression reproduced oversized metadata after running the previous
+migration path. The separate retention regression passed: fragments survive an
+active job and a two-day-old terminal report, then cascade away with the expired
+job at thirty-one days.
+
+The new startup conversion reads bounded fragments under a per-job transaction,
+preserves checkpoint state and fences the old execution before normal recovery.
+The regression now also injects a fragment-write failure to verify rollback and
+uses a pool with one connection. PostgreSQL constraints prevent new oversized
+report writes; workers reserve whitespace headroom in the inline budget.
+
+The upgrade regression now passes, including complete Unicode error
+reconstruction, rollback, preserved cursors, stale-claim rejection and idempotent
+startup. A live replacement claim also fails when attempting to restore the old
+oversized report, and its last bounded checkpoint remains unchanged.
+
+Validation passes 159 importer tests, 32 jobs/report tests, two database tests,
+five registered importer endpoint tests and 14 UI tests. SQLx metadata is
+regenerated; server all-target Clippy and formatting pass. T021 remains open for
+the broader legacy state matrix, API overflow, stream failure/backpressure and
+memory stress coverage. Full process/browser acceptance and the optimized API
+preview measurement remain separate gates.
+
+## Download consumption and snapshot boundaries
+
+The production download body is now constructed by a private helper so tests
+can control consumption without relying on socket-buffer timing. Its streaming
+behavior is unchanged. Three database-backed characterization tests pass:
+
+- A download retains its captured archive boundary and inline tail when a later
+  checkpoint archives that tail together with new errors. The original errors
+  appear exactly once; later errors are excluded.
+- If retention deletes the owning job after the first read, the body yields only
+  the already-buffered sixteen fragments and then reports the missing archive.
+  Missing data is not a successful end of download.
+- Creating a body acquires no database connection. Consuming sixteen fragments
+  performs one page read; the next fragment triggers the second read. Dropping
+  the body releases its resources, and a single-connection pool closes cleanly
+  without reading the remaining archive.
+
+The five report tests and five registered importer endpoint tests pass, along
+with server all-target Clippy and formatting. The NixOS restart test now performs
+its database probes through the independent PostgreSQL account, not Horae's
+ephemeral DynamicUser while the service is stopped. Nix evaluation and Python
+syntax pass; actual VM execution remains pending in CI.
+
+CI run `34861106426` failed before VM execution: the export query string named
+`range` shadowed Python's builtin used by the new fixture. Renaming it to
+`date_range` fixes that call-site collision without disabling the type checker.
+The DynamicUser probe correction is an additional preventive test fix, not the
+cause reported by this CI run. Actual VM execution still needs to pass.
+Nix evaluation, Python syntax and isolated execution of the actual export binding
+and 1,000-row CSV fixture pass after the rename.
+
+The optimized API preview at `51ba18e` now passes its 100,000-record release
+measurement in 285.933 seconds, including EOF recovery without more HTTP
+requests. Checkpoint JSON size is unchanged and HWM is 58,244 KiB. See
+`performance.md` for the earlier sample and methodology limits. T007 remains
+open for the measured CSV preview overhead; T021 remains open for the broader
+legacy state matrix, API overflow and socket-level/memory stress. Full
+process/browser acceptance remains a separate gate.
+
+## API overflow recovery
+
+A database-backed HTTP fixture now supplies 1,000 API entries, including 500
+unmatched-user errors spread across ten pages. The durable test exercises
+preview, commit and reimport. Each run rejects final success, then recovers from
+its EOF checkpoint with an identical persisted report and no more HTTP requests.
+
+The test passes: report metadata remains at most 16 KiB, error details actually
+overflow into bounded archive fragments, and reconstruction of those fragments
+plus the inline tail exactly matches the uninterrupted preview's 500 errors.
+Preview leaves no entries or provenance; commit stores 500 entries and 30,000
+integer minutes; reimport skips all 500 without duplicates. Error outcomes keep
+the watermark unchanged. Server all-target Clippy and Rust formatting pass.
+This characterizes the existing archival behavior; no production code, SQL,
+migration or dependency changed.
+
+The remaining T021 gaps are the broader legacy state matrix, socket-level/memory
+stress and browser acceptance, alongside T007's CSV preview overhead and T016's
+actual restart acceptance.
+
+## Legacy state and archive compatibility
+
+The pre-budget migration fixture now covers 36 combinations: queued, running,
+running with cancellation requested, succeeded, failed and cancelled; reports
+without an explicit version, version 1 and version 2 with an existing archive;
+and presence or absence of a checkpoint. Every fixture contains oversized inline
+errors and starts at migration 0027, using a single-connection pool.
+
+All combinations pass the real startup migration. The test compares every job
+field except the intentionally replaced report/checkpoint, claim, lease and
+update timestamp. This verifies preservation of status, attempts/policy,
+cancellation, phase, progress, diagnostics, identity and lifecycle dates. Running
+claims are fenced and their leases expire. Null checkpoints remain null; existing
+cursors/caches survive and only report metadata/version change.
+
+All error details reconstruct exactly. Version-2 fixtures append their old inline
+errors after the existing archive, preserving the original fragment byte-for-byte.
+Public metadata stays within 16 KiB and status returns the upgraded report. A
+second startup succeeds with validated constraints. All six report tests pass,
+including the existing rollback, retention and streaming tests. Three test-query
+SQLx cache entries are regenerated; no production code or schema changes.
+
+This closes the broader legacy state coverage gap. T021 still requires
+socket-level/memory stress and live browser acceptance. T007's measured CSV
+preview overhead and T016's actual restart acceptance remain open.
+
+## Real HTTP streaming and memory stress
+
+The isolated release-mode test in `authorization_tests/report_stress.rs` passes
+through real sockets, the production download handler and PostgreSQL sessions.
+A 64-MiB archive is generated and checked one 64-KiB record at a time. All bytes
+match, and the observed process HWM increase is 1,712 KiB against a strict
+less-than-16-MiB allowance. The process includes both client and server, not
+PostgreSQL or kernel buffers; see `performance.md` for the command and raw figures.
+
+Dropping a download after its first chunk does not prevent a new request using
+the one-connection pool. Deleting the expired job through the retention query
+during the next transfer results in an HTTP body error after 1 MiB, not a
+successful EOF. The server task is joined and the pool closes under a five-second
+deadline. Server all-target Clippy and Rust formatting pass. No production code,
+SQL query or dependency changed.
+
+This closes the socket-level/memory stress gap in T021. Live browser acceptance,
+T016's actual restart checks, T007's CSV preview overhead and latest-head CI
+remain required before merge.
+
+## Live browser report acceptance
+
+The real SSR/WASM application now passes the browser walkthrough recorded in
+`acceptance.md`: queued response, refresh during an import, cooperative
+cancellation with no early retry, same-job preview recovery, explicit confirmation
+of a new preview, and complete error downloads from preview/commit/history.
+All three downloads contain the same 999 complete error records. The committed
+result contains exactly 1,000 entries and 60,000 integer minutes; preview and
+cancellation leave no persistent entries. Screenshots were inspected and the
+browser reported no page errors.
+
+The initial harness incorrectly awaited terminal cancellation while deliberately
+holding its SQL gate. FR-010 is cooperative: the correct check verifies
+`cancelling` and unavailable retry until the gate is released, then unchanged
+confirmed progress and completed cleanup. No production change was made to
+weaken that acknowledgement boundary. The harness also now respects the error
+panel's initially expanded state when finding its download link.
+
+This closes T021's final UI/download gate. T016 remains open for actual server
+termination/restart acceptance; T007 remains open for the CSV preview overhead.
+The latest commit still needs its own full CI result.
+
+## Process restart acceptance completed
+
+T016 now passes actual process termination and recovery, not merely lease
+simulation. The direct-server Chromium run observes 500 committed rows, kills
+the exact server process with SIGTERM/SIGKILL, observes the offline monitoring
+control, starts a replacement and verifies attempt 2, 1,000 final entries,
+60,000 minutes and duplicate-free reimport. The previously interrupted fixture
+also recovers without resetting its data. See `acceptance.md` for job/PID evidence
+and the harness corrections; no production changes were needed.
+
+CI run `34867024976` at `6bf66d6` also passes Format and Flake Check. Its NixOS
+log confirms both interruption scenarios actually execute and the VM test script
+finishes in 81.52 seconds, including successful systemd shutdown and reimport
+assertions. This closes the previously pending NixOS execution gate. T007's CSV
+preview overhead, latest-head CI and the final requirement audit remain open.
+
+## Preview snapshot query plans
+
+The large-catalog CSV SQL profile identifies three snapshot queries accounting
+for roughly 74% of recorded SQL execution. Committed table statistics can report
+zero live parents while a rollback-only simulation contains 5,000. EXPLAIN shows
+that the resulting one-row estimates can turn ownership joins into repeated
+full-catalog work. See `performance.md` for the measured queries and limitations.
+
+Snapshot capture now drives indexed link lookups from the selected pairs, and
+project/link restoration checks parent ownership through primary-key scalar
+lookups. No payload, checkpoint shape, batch size, organization requirement or
+domain transformation changes. All 30 job tests and 160 importer tests pass,
+alongside all-target Clippy and formatting. SQLx metadata is regenerated.
+The subsequent matched release profile passes in 621.68 seconds for preview,
+commit and reimport, including EOF recovery. Preview falls from 436.688 to
+264.349 seconds; the three targeted queries retain their call counts while
+recorded SQL execution falls substantially. Checkpoint JSON sizes are unchanged.
+Reimport is somewhat slower and cumulative HWM is higher in this single sample;
+see `performance.md` for the complete figures and limitations. T007 is closed
+with the remaining durability costs documented, not with a throughput-parity
+or memory-reduction claim.
+
+## Final entry-point audit
+
+FR-001 was not fully satisfied while the old `import_harvest_api` and
+`import_harvest_csv` server functions remained registered, even though the UI
+already used durable starts. The new
+`request_bound_import_endpoints_are_not_registered` regression failed with both
+legacy routes in Dioxus's actual registration inventory. Removing those functions
+and their unused currency helper makes the same regression pass. The inline
+engine wrappers remain test-only references for equivalence and scale checks.
+
+The registered CSV rejection test now expects not-found for the retired route,
+while retaining invalid-mode/header checks before body consumption on the durable
+route. The contract and quickstart document browser reload and custom-client
+migration to start/poll responses. No domain transformation, checkpoint, migration,
+dependency or job policy changes in this cleanup.
+
+## Requirement-to-evidence map
+
+This audit traces the feature requirements to production boundaries and runnable
+checks. Local validation and latest-head CI remain separate gates; earlier green
+commits do not certify a later head.
+
+| Requirement | Implementation and verification boundary |
+|---|---|
+| FR-001, SC-001 | Only durable start functions are registered; registration regression plus `job_endpoints_enforce_session_role_and_organization` checks returned queued jobs without a worker. Live browser start/refresh evidence is in `acceptance.md`. |
+| FR-002 | Every public job operation uses `require_admin`; registered HTTP tests cover anonymous/inactive/demoted/member/manager sessions, forged org input, foreign IDs/cursors, cancel/retry and error downloads. |
+| FR-003 | Migration 0023 constrains the five states; worker, cancellation, failure, retry and completion tests exercise transitions and retained timestamps. |
+| FR-004, FR-005 | Atomic `SKIP LOCKED` claims, expiring leases and UUIDv7 attempt tokens; concurrent claims, expired-lease recovery and stale results from an identically named worker are tested. Commit fencing uses the database clock, including old-transaction-timestamp regressions. |
+| FR-006 | Validated `JobPolicy`, persisted attempt budget, bounded backoff and terminal exhaustion; API/CSV policy preservation, invalid policy, missing configuration/upload, invalid payload and final-attempt tests. |
+| FR-007, FR-008, SC-003 | API page/parent-batch and CSV 500-record checkpoints cover preview and commit. Recovery tests preserve counts, errors, provenance, adoption and watermarks; scale tests check exact minutes, EOF recovery and duplicate-free reimport. See `performance.md`. |
+| FR-009 | `JobStatus` exposes phase, processed/optional total and latest error; confirmed progress and partial reports are checked through worker/status/history and production-component UI tests. Unknown source totals remain optional until completion. |
+| FR-010 | Running cancellation does not acknowledge until producer/transaction cleanup; CSV/API tests reject stale next-batch commits and preserve previous committed work. Browser acceptance verifies cancelling/retry controls. |
+| FR-011 | Versioned typed payloads contain only source mode/scope; credentials are loaded by the handler. Legacy/unknown-version tests cover decoding and persisted terminal errors. |
+| FR-012, SC-004 | Status/history retain zero-work and partial failure reports; thirty-day job retention preserves retryable uploads and cascades archives. UI tests and browser history/download acceptance cover inspection. |
+| FR-013, SC-002 | Worker shutdown joins or aborts/joins after its deadline, handles SIGTERM, stops claiming and leaves recoverable leases. Actual SIGTERM/SIGKILL recovery passes locally and in NixOS CI; see `acceptance.md`. |
+| FR-014, FR-015 | The typed job envelope and kind dispatch use shared enqueue, policy, claim, lease, cancellation, progress and retention code. Synthetic jobs execute through that boundary and exercise reclaimed attempts, cancellation and terminal exhaustion without Harvest execution. |
+| FR-016, FR-017 | `enqueue_outbox` accepts the domain transaction. Tests cover rollback before publication, duplicate delivery acknowledgement, stale/foreign/expired tokens, attempts, last error and backoff. External delivery is explicitly at-least-once, not exactly-once. |
+| FR-018 and non-goals | Production job variants are Harvest API/CSV only; Synthetic is test-only. No additional runtime service or workspace crate is added. Future consumers remain documented extension points. |
+| T001–T003 | The compiled dependency spike and schema rejection are recorded in `research.md`; the implementation has no `sqlxmq`/Apalis runtime dependency. |
+| T020–T021 | Report-budget constraints, legacy state/version matrix, atomic archive tests, one-connection streaming/failure checks, API overflow recovery and isolated 64-MiB HTTP stress; browser downloads preserve all error details. |
+| Cross-cutting invariants | New IDs use UUIDv7 and organization foreign keys; application SQL uses checked macros. Pure report representation changes stay in `horae-core`; queue I/O stays in the app. Exact-minute/cents importer and core tests remain required. |
+
+The reproducible build gate is `nix flake check`, including its fresh SQLx cache
+check and deployed NixOS restart tests, plus `nix fmt -- --ci`. These must pass
+on the final PR head before merge.
+
+### Final local validation
+
+The route cleanup passes the complete ordinary local suite in the Nix shell:
+87 core tests, 489 application-binary tests, 36 database integration tests and
+24 UI/component tests (including all 14 importer tests). Eleven explicitly
+manual tests are ignored: eight import scale scenarios and the HTTP archive
+stress have separate evidence above; two export measurements are unrelated to
+this feature. The six importer endpoint tests are included in the binary count.
+
+Commands: `cargo test -p horae-core --offline`,
+`cargo test -p horae --features server --offline -- --test-threads=1`,
+`cargo clippy -p horae --features server --all-targets --offline -- -D warnings -W clippy::perf`,
+`cargo check -p horae --features web --target wasm32-unknown-unknown --offline`,
+`cargo fmt --all --check` and `nix fmt` all pass. PostgreSQL is isolated on port
+55437 and stopped when validation completes. Logs are retained in
+`/tmp/horae-final-route-checks.hh9y2D/`.
+
+An initial validation attempt stopped at compilation because incremental SQLx
+preparation omitted cached integration-test queries. Restoring unchanged metadata
+from the pre-run backup allowed the complete offline suite to run; `.sqlx` has
+no diff in this route-only cleanup. No query or migration was added or changed.
+The fresh Nix SQLx check remains a required CI gate, not a claim established by
+that incremental preparation.

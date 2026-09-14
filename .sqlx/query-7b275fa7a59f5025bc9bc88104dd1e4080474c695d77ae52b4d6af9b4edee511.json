@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE horae_jobs SET status = $2, report = $3, checkpoint = $4,\n                         attempts = 3, processed_count = 500, phase = 'time_entries',\n                         cancellation_requested = $5, last_error = 'retained diagnostic',\n                         started_at = now() - interval '1 hour',\n                         finished_at = CASE WHEN $2 IN ('failed', 'cancelled', 'succeeded') THEN now() ELSE NULL END,\n                         claim_token = CASE WHEN $2 = 'running' THEN $6::uuid ELSE NULL END,\n                         lease_until = CASE WHEN $2 = 'running' THEN now() + interval '5 minutes' ELSE NULL END\n                     WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Jsonb",
+        "Jsonb",
+        "Bool",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7b275fa7a59f5025bc9bc88104dd1e4080474c695d77ae52b4d6af9b4edee511"
+}

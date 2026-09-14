@@ -1,0 +1,49 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH source AS MATERIALIZED (\n                     SELECT COALESCE(checkpoint->'report', report)->'row_errors' AS errors\n                     FROM horae_jobs WHERE id = $1 AND org_id = $2\n                   ), records AS MATERIALIZED (\n                     SELECT position, errors->position AS error\n                     FROM source, LATERAL generate_series(\n                         $3, LEAST($3 + 15, jsonb_array_length(errors) - 1)\n                     ) AS position\n                   ), encoded AS MATERIALIZED (\n                     SELECT position,\n                            convert_to(error::text, 'UTF8') || decode('0a', 'hex') AS body,\n                            COALESCE(jsonb_typeof(error) = 'object'\n                                AND jsonb_typeof(error->'source_location') = 'string'\n                                AND jsonb_typeof(error->'reason') = 'string'\n                                AND error->>'entity' IN ('client', 'project', 'task', 'time_entry'),\n                                false) AS valid\n                     FROM records\n                   )\n                   SELECT position AS \"position!\", start AS \"start!\",\n                          substring(body FROM start FOR 65536) AS \"body!\",\n                          octet_length(body) AS \"size!\", valid AS \"valid!\"\n                   FROM encoded, LATERAL generate_series(\n                       CASE WHEN position = $3 THEN $4 ELSE 1 END,\n                       octet_length(body), 65536\n                   ) AS start\n                   ORDER BY position, start LIMIT 16",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "position!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "start!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "body!",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 3,
+        "name": "size!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "valid!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "afba086ef9df915bc9b0bb65f90c16b08ec0459f3eaaa624e4db891585186722"
+}

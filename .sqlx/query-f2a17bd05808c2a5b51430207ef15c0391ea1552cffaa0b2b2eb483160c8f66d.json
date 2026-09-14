@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT pg_column_size(checkpoint) AS stored_bytes, octet_length(checkpoint::text) AS json_bytes\n         FROM horae_jobs WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "stored_bytes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "json_bytes",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "f2a17bd05808c2a5b51430207ef15c0391ea1552cffaa0b2b2eb483160c8f66d"
+}

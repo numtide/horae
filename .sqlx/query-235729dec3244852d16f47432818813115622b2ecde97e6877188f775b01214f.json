@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE horae_jobs\n              SET status = CASE WHEN cancellation_requested THEN 'cancelled' ELSE 'failed' END,\n                  lease_until = NULL, worker_id = NULL, claim_token = NULL,\n                  finished_at = now(), updated_at = now(),\n                  last_error = CASE WHEN cancellation_requested THEN NULL\n                      ELSE COALESCE(last_error, 'Job attempt limit reached after interruption') END\n            WHERE (attempts >= max_attempts OR cancellation_requested)\n              AND (status = 'queued' OR (status = 'running' AND lease_until < now()))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "235729dec3244852d16f47432818813115622b2ecde97e6877188f775b01214f"
+}

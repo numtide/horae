@@ -17,6 +17,8 @@ mod importers;
 #[cfg(feature = "server")]
 mod init;
 #[cfg(feature = "server")]
+mod jobs;
+#[cfg(feature = "server")]
 mod plugin;
 #[cfg(feature = "server")]
 mod render;
@@ -206,6 +208,7 @@ fn main() -> anyhow::Result<()> {
                     registry,
                     cfg.oidc.clone(),
                     cfg.harvest.clone(),
+                    cfg.job_policy,
                 )
                 .await;
 
@@ -248,6 +251,10 @@ fn main() -> anyhow::Result<()> {
                     )
                     .merge(auth::router(cfg.dev_login))
                     .merge(importers::harvest::callback_router())
+                    .route(
+                        "/api/import/harvest/jobs/{job_id}/errors",
+                        get(jobs::report::download),
+                    )
                     .merge(harvest::router(pool.clone()))
                     // Redirect signed-out page loads to /auth/login. Layered inside
                     // the session layer so the session is populated; the session
@@ -256,8 +263,17 @@ fn main() -> anyhow::Result<()> {
                     .layer(session_layer);
 
                 let listener = tokio::net::TcpListener::bind(&addr).await?;
+                let worker = jobs::spawn(state::global_state().await);
+                let stop_worker = worker.stop_sender();
                 tracing::info!("Listening on {addr}");
-                axum::serve(listener, router).await?;
+                let server_result = axum::serve(listener, router)
+                    .with_graceful_shutdown(async move {
+                        shutdown_signal().await;
+                        stop_worker.send_replace(true);
+                    })
+                    .await;
+                worker.shutdown(std::time::Duration::from_secs(30)).await?;
+                server_result?;
                 anyhow::Ok(())
             })?;
         }
@@ -269,6 +285,30 @@ fn main() -> anyhow::Result<()> {
 #[cfg(feature = "web")]
 fn main() {
     dioxus::launch(app::App);
+}
+
+#[cfg(feature = "server")]
+async fn shutdown_signal() {
+    let interrupt = async {
+        if let Err(error) = tokio::signal::ctrl_c().await {
+            tracing::error!(%error, "could not listen for Ctrl-C; shutting down");
+        }
+    };
+    #[cfg(unix)]
+    let terminate = async {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut signal) => {
+                signal.recv().await;
+            }
+            Err(error) => tracing::error!(%error, "could not listen for SIGTERM; shutting down"),
+        }
+    };
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+    tokio::select! {
+        _ = interrupt => {},
+        _ = terminate => {},
+    }
 }
 
 #[cfg(not(any(feature = "server", feature = "web")))]

@@ -2,6 +2,200 @@ use super::super::streaming::{self as pipeline, Page};
 use super::*;
 
 #[sqlx::test(migrations = "./migrations")]
+async fn durable_api_stale_commit_cannot_advance_data_or_watermark(pool: PgPool) {
+    use crate::jobs;
+    use std::time::Duration;
+
+    let org = setup(&pool).await;
+    let id = jobs::enqueue(
+        &pool,
+        org,
+        &jobs::JobPayload::HarvestApi {
+            mode: ImportMode::Commit,
+            sync: SyncScope::Full,
+        },
+        "stale-api",
+        Default::default(),
+    )
+    .await
+    .unwrap();
+    let (lease, _stop) = jobs::claim_lease_for_test(&pool).await;
+    let connection = lock_import(&pool, org).await.unwrap();
+    let mut catalog = valid_data();
+    let entry = catalog.time_entries.pop().unwrap();
+    let (started, ready) = tokio::sync::oneshot::channel();
+    let (release, wait) = std::sync::mpsc::channel();
+    // Bypass heartbeat observation so only the transaction's fence can stop it.
+    let run = tokio::spawn(async move {
+        pipeline::run(
+            connection,
+            org,
+            "USD",
+            ImportMode::Commit,
+            day(4),
+            move |send| {
+                send.blocking_send(Page::Catalog(catalog))?;
+                for n in 0..3 {
+                    let mut row = entry.clone();
+                    row.id += n;
+                    send.blocking_send(Page::Entries(vec![row]))?;
+                }
+                let _ = started.send(());
+                wait.recv_timeout(Duration::from_secs(10))?;
+                Ok(())
+            },
+            Some(&lease),
+        )
+        .await
+    });
+    tokio::time::timeout(Duration::from_secs(10), ready)
+        .await
+        .unwrap()
+        .unwrap();
+    sqlx::query!(
+        "UPDATE horae_jobs SET lease_until = clock_timestamp() WHERE id = $1",
+        id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let (_replacement, _replacement_stop) = jobs::claim_lease_for_test(&pool).await;
+    release.send(()).unwrap();
+    let error = tokio::time::timeout(Duration::from_secs(10), run)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap_err();
+    assert!(error.to_string().contains("lease lost"), "{error}");
+    assert_eq!(
+        sqlx::query_scalar!("SELECT count(*) FROM time_entries WHERE org_id = $1", org)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        Some(0)
+    );
+    assert_eq!(
+        sqlx::query_scalar!("SELECT count(*) FROM clients WHERE org_id = $1", org)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        Some(0)
+    );
+    assert_eq!(watermark(&pool, org).await, json!({}));
+    let pending = jobs::status(&pool, org, id).await.unwrap().unwrap();
+    assert_eq!(pending.status, "running");
+    assert_eq!(pending.processed_count, 0);
+    assert_eq!(
+        pending.report,
+        Some(
+            serde_json::to_value(ImportReport::new(
+                SourceKind::HarvestApi,
+                ImportMode::Commit
+            ))
+            .unwrap()
+        )
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn durable_api_cancel_waits_for_the_producer_before_acknowledging(pool: PgPool) {
+    use crate::jobs;
+    use std::time::Duration;
+
+    let org = setup(&pool).await;
+    apply_api_data(&pool, org, "USD", ImportMode::Commit, &valid_data(), day(4))
+        .await
+        .unwrap();
+    let old_watermark = watermark(&pool, org).await;
+    let id = jobs::enqueue(
+        &pool,
+        org,
+        &jobs::JobPayload::HarvestApi {
+            mode: ImportMode::Commit,
+            sync: SyncScope::Full,
+        },
+        "cancel-api",
+        Default::default(),
+    )
+    .await
+    .unwrap();
+    let (lease, stop) = jobs::claim_lease_for_test(&pool).await;
+    let connection = lock_import(&pool, org).await.unwrap();
+    let mut catalog = valid_data();
+    let entry = catalog.time_entries.pop().unwrap();
+    let (started, ready) = tokio::sync::oneshot::channel();
+    let (closed, consumer_closed) = tokio::sync::oneshot::channel();
+    let (release, wait) = std::sync::mpsc::channel();
+    let runtime = tokio::runtime::Handle::current();
+    let run_pool = pool.clone();
+    let run = tokio::spawn(async move {
+        jobs::run_claimed(&run_pool, &lease, stop, async {
+            let report = pipeline::run(
+                connection,
+                org,
+                "USD",
+                ImportMode::Commit,
+                day(4),
+                move |send| {
+                    send.blocking_send(Page::Catalog(catalog))?;
+                    for n in 1..=3 {
+                        let mut row = entry.clone();
+                        row.id += n;
+                        send.blocking_send(Page::Entries(vec![row]))?;
+                    }
+                    let _ = started.send(());
+                    runtime.block_on(send.closed());
+                    let _ = closed.send(());
+                    wait.recv_timeout(Duration::from_secs(10))?;
+                    Ok(())
+                },
+                Some(&lease),
+            )
+            .await?;
+            job_report(&report)
+        })
+        .await
+    });
+    tokio::time::timeout(Duration::from_secs(10), ready)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(jobs::cancel(&pool, org, id).await.unwrap());
+    tokio::time::timeout(Duration::from_secs(10), consumer_closed)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        jobs::status(&pool, org, id).await.unwrap().unwrap().status,
+        "running"
+    );
+    assert!(!jobs::retry(&pool, org, id).await.unwrap());
+    assert!(matches!(
+        lock_import(&pool, org).await,
+        Err(ApiImportError::Busy)
+    ));
+    release.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), run)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        jobs::status(&pool, org, id).await.unwrap().unwrap().status,
+        "cancelled"
+    );
+    assert_eq!(
+        sqlx::query_scalar!("SELECT count(*) FROM time_entries WHERE org_id = $1", org)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        Some(1)
+    );
+    assert_eq!(watermark(&pool, org).await, old_watermark);
+    assert!(jobs::retry(&pool, org, id).await.unwrap());
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn later_download_failure_rolls_back_parents_rows_and_watermark(pool: PgPool) {
     let org = setup(&pool).await;
     let connection = lock_import(&pool, org).await.unwrap();
@@ -18,6 +212,7 @@ async fn later_download_failure_rolls_back_parents_rows_and_watermark(pool: PgPo
             send.blocking_send(Page::Entries(entries))?;
             anyhow::bail!("fixture HTTP 500 on the next page")
         },
+        None,
     )
     .await
     .unwrap_err();
@@ -85,6 +280,7 @@ async fn cancelled_page_consumer_retains_lock_until_worker_exits_and_rolls_back(
             wait.recv_timeout(std::time::Duration::from_secs(10))?;
             Ok(())
         },
+        None,
     ));
     tokio::time::timeout(std::time::Duration::from_secs(5), ready)
         .await

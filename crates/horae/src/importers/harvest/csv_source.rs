@@ -9,6 +9,7 @@
 //! Column headers are matched case-insensitively with surrounding whitespace
 //! trimmed; an unrecognized or empty file is rejected up front with no writes.
 
+use anyhow::Context;
 use chrono::NaiveDate;
 #[cfg(test)]
 use horae_core::importers::harvest::types::ImportMode;
@@ -21,7 +22,9 @@ use uuid::Uuid;
 use super::report::ImportReport;
 
 mod upload;
+#[cfg(test)]
 pub use upload::import_body;
+pub(crate) use upload::import_body_with_lease;
 
 /// Columns that must be present for the file to be a recognizable export.
 const REQUIRED: &[&str] = &["date", "client", "project", "task", "hours"];
@@ -48,21 +51,67 @@ struct ParseErr {
     reason: String,
 }
 
-/// Deliver records as they are read. Transport failures reject the whole run;
+#[derive(Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
+struct Position {
+    byte: u64,
+    record: u64,
+}
+
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
+struct Cursor {
+    position: Position,
+    headers: Vec<String>,
+}
+
+enum Record {
+    Headers(Vec<String>),
+    Row(Box<Result<SourceRow, ParseErr>>, Position),
+    Complete,
+}
+
+/// Deliver records as they are read. Transport failures stop parsing;
 /// malformed records remain reportable row errors.
+#[cfg(test)]
 fn read_csv(
     input: impl std::io::Read,
     mut emit: impl FnMut(Result<SourceRow, ParseErr>) -> anyhow::Result<()>,
 ) -> Result<(), CsvError> {
+    read_csv_from(input, None, |record| {
+        if let Record::Row(row, _) = record {
+            emit(*row)?;
+        }
+        Ok(())
+    })
+}
+
+fn read_csv_from(
+    mut input: impl std::io::Read,
+    resume: Option<&Cursor>,
+    mut emit_record: impl FnMut(Record) -> anyhow::Result<()>,
+) -> Result<(), CsvError> {
+    let start = resume.map_or(Position::default(), |cursor| cursor.position);
+    if start.byte > 0 {
+        let skipped = std::io::copy(
+            &mut std::io::Read::take(&mut input, start.byte),
+            &mut std::io::sink(),
+        )
+        .map_err(anyhow::Error::from)?;
+        if skipped != start.byte {
+            return Err(anyhow::anyhow!("CSV checkpoint is beyond the stored upload").into());
+        }
+    }
     let mut reader = csv::ReaderBuilder::new()
-        .has_headers(true)
+        .has_headers(resume.is_none())
         .flexible(true)
         .from_reader(input);
 
-    let headers = reader
-        .headers()
-        .map_err(|e| CsvError::Other(e.into()))?
-        .clone();
+    let headers = match resume {
+        Some(cursor) => csv::StringRecord::from(cursor.headers.clone()),
+        None => reader
+            .headers()
+            .map_err(|e| CsvError::Other(e.into()))?
+            .clone(),
+    };
     if headers.iter().all(|header| header.trim().is_empty()) {
         return Err(CsvError::Empty);
     }
@@ -91,6 +140,8 @@ fn read_csv(
         ));
     }
 
+    emit_record(Record::Headers(headers.iter().map(str::to_owned).collect()))?;
+
     let get = |rec: &csv::StringRecord, col: &str| -> Option<String> {
         index
             .get(col)
@@ -99,15 +150,31 @@ fn read_csv(
             .filter(|s| !s.is_empty())
     };
 
-    let mut seen_record = false;
-
-    for (i, record) in reader.records().enumerate() {
-        seen_record = true;
+    let mut records = start.record;
+    let mut record = csv::StringRecord::new();
+    loop {
+        let read = reader.read_record(&mut record);
+        if matches!(read, Ok(false)) {
+            break;
+        }
+        records = records
+            .checked_add(1)
+            .context("CSV record offset overflow")?;
+        let position = Position {
+            byte: start
+                .byte
+                .checked_add(reader.position().byte())
+                .context("CSV byte offset overflow")?,
+            record: records,
+        };
+        let mut emit = |row| emit_record(Record::Row(Box::new(row), position));
         // Harvest's data rows start at CSV line 2 (after the header).
-        let line = i + 2;
+        let line = records
+            .checked_add(1)
+            .context("CSV record offset overflow")?;
         let location = format!("CSV line {line}");
-        let record = match record {
-            Ok(r) => r,
+        match read {
+            Ok(_) => {}
             Err(e) if e.is_io_error() => return Err(CsvError::Other(e.into())),
             Err(e) => {
                 emit(Err(ParseErr {
@@ -116,7 +183,7 @@ fn read_csv(
                 }))?;
                 continue;
             }
-        };
+        }
 
         let date_str = get(&record, "date");
         let spent_date = match date_str.as_deref().map(parse_date) {
@@ -195,9 +262,10 @@ fn read_csv(
         }))?;
     }
 
-    if !seen_record {
+    if records == 0 {
         return Err(CsvError::Empty);
     }
+    emit_record(Record::Complete)?;
     Ok(())
 }
 
@@ -239,6 +307,69 @@ pub async fn import_csv(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cursor_resumes_after_multiline_unicode_and_preserves_error_locations() {
+        let csv = "Date,Client,Project,Task,Hours,Email,Notes\r\n2026-01-15,Acme,P,T,1,u@x.com,\"café\n東京\"\r\nbad-date,Acme,P,T,1,u@x.com,broken\r\n2026-01-16,Acme,P,T,1,u@x.com,last\r\n";
+        let mut cursor = Cursor::default();
+        read_csv_from(csv.as_bytes(), None, |record| {
+            match record {
+                Record::Headers(headers) => cursor.headers = headers,
+                Record::Row(_, position) if position.record == 1 => cursor.position = position,
+                _ => {}
+            }
+            Ok(())
+        })
+        .unwrap();
+        assert!(cursor.position.byte > 0);
+        let mut rows = Vec::new();
+        let mut errors = Vec::new();
+        let mut end = cursor.clone();
+        read_csv_from(csv.as_bytes(), Some(&cursor), |record| {
+            if let Record::Row(row, position) = record {
+                match *row {
+                    Ok(row) => rows.push(row),
+                    Err(error) => errors.push(error),
+                }
+                end.position = position;
+            }
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].notes.as_deref(), Some("last"));
+        assert_eq!(rows[0].source_location, "CSV line 4");
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors[0].source_location, "CSV line 3");
+        let mut resumed_rows = 0;
+        read_csv_from(csv.as_bytes(), Some(&end), |record| {
+            if matches!(record, Record::Row(..)) {
+                resumed_rows += 1;
+            }
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(
+            resumed_rows, 0,
+            "an EOF checkpoint must complete without replay"
+        );
+    }
+
+    #[test]
+    fn cursor_beyond_upload_is_rejected_without_parsing_rows() {
+        let cursor = Cursor {
+            position: Position {
+                byte: 100,
+                record: 1,
+            },
+            headers: Vec::new(),
+        };
+        let error = read_csv_from(&b"short"[..], Some(&cursor), |_| {
+            panic!("invalid cursor reached parser")
+        })
+        .unwrap_err();
+        assert!(error.to_string().contains("beyond the stored upload"));
+    }
 
     fn parse_csv(bytes: &[u8]) -> Result<(Vec<SourceRow>, Vec<ParseErr>), CsvError> {
         let mut rows = Vec::new();

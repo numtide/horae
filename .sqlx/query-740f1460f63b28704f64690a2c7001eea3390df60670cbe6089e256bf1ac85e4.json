@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "ALTER TABLE horae_jobs VALIDATE CONSTRAINT horae_jobs_report_budget, VALIDATE CONSTRAINT horae_jobs_checkpoint_report_budget",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "740f1460f63b28704f64690a2c7001eea3390df60670cbe6089e256bf1ac85e4"
+}

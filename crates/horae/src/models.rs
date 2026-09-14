@@ -2,6 +2,7 @@ pub mod approval;
 pub mod assignment;
 pub mod client;
 pub mod invoice;
+mod jobs;
 pub mod organization;
 pub mod project;
 pub mod task;
@@ -14,6 +15,7 @@ pub use client::Client;
 #[cfg(feature = "server")]
 pub use invoice::InvoiceLine;
 pub use invoice::{Invoice, InvoiceWithLines};
+pub use jobs::JobStatus;
 pub use organization::OrgBranding;
 pub use project::Project;
 pub use task::Task;

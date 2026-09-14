@@ -4,9 +4,9 @@
 //!
 //! Both source adapters drive normalized [`SourceRow`]s through the shared
 //! resolve → [`apply::apply_row`] → report pipeline. Each row is applied in its
-//! own savepoint; a `DryRun` runs the whole stream inside a
-//! transaction that is rolled back, so nothing persists — not data, not
-//! provenance, not the watermark (FR-014, research.md §7).
+//! own savepoint; a `DryRun` rolls back all domain transactions, so no domain
+//! data, provenance or watermark persists (FR-014, research.md §7). Durable
+//! previews retain simulation checkpoints separately from those transactions.
 
 pub mod api_source;
 pub mod apply;
@@ -39,6 +39,37 @@ use report::ImportReport;
 use resolve::{OrgDefaults, RunCache};
 
 use crate::config::HarvestConfig;
+use crate::jobs::JobLease;
+
+pub(crate) fn job_report(report: &ImportReport) -> anyhow::Result<(serde_json::Value, i64)> {
+    let processed = report.summary.clients.processed()
+        + report.summary.projects.processed()
+        + report.summary.tasks.processed()
+        + report.summary.time_entries.processed();
+    Ok((serde_json::to_value(report)?, i64::try_from(processed)?))
+}
+
+async fn finish_import(
+    mut tx: sqlx::Transaction<'_, sqlx::Postgres>,
+    report: &mut ImportReport,
+    lease: Option<&JobLease>,
+) -> anyhow::Result<()> {
+    match report.mode {
+        ImportMode::DryRun => tx.rollback().await?,
+        ImportMode::Commit => {
+            if let Some(lease) = lease {
+                lease.archive_report(&mut tx, report).await?;
+                let (report, processed) = job_report(report)?;
+                anyhow::ensure!(
+                    lease.complete(&mut tx, &report, processed).await?,
+                    "job execution interrupted or lease lost"
+                );
+            }
+            tx.commit().await?;
+        }
+    }
+    Ok(())
+}
 
 /// A source of normalized rows consumed lazily by the API adapter and engine
 /// tests. Returning `None` ends the source; this interface alone does not imply
@@ -188,6 +219,7 @@ async fn blocking_import_call<T: Send + 'static>(
 /// (FR-023–FR-026). Loads the org's stored connection, refreshes an expired token
 /// transparently, indexes catalogs, streams time-entry pages through the engine, and —
 /// only on an error-free committing run — advances the incremental watermark.
+#[cfg(test)]
 pub async fn run_api_import(
     pool: &PgPool,
     org_id: Uuid,
@@ -204,10 +236,37 @@ pub async fn run_api_import(
         mode,
         sync,
         api_source::http::ApiHttp::new()?,
+        None,
     )
     .await
 }
 
+pub(crate) async fn run_api_import_with_lease(
+    pool: &PgPool,
+    org_id: Uuid,
+    default_currency: &str,
+    cfg: &HarvestConfig,
+    mode: ImportMode,
+    sync: SyncScope,
+    lease: &JobLease,
+) -> Result<ImportReport, ApiImportError> {
+    run_api_import_with_http(
+        pool,
+        org_id,
+        default_currency,
+        cfg,
+        mode,
+        sync,
+        api_source::http::ApiHttp::new()?,
+        Some(lease),
+    )
+    .await
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "shares the HTTP test seam with synchronous and leased imports"
+)]
 async fn run_api_import_with_http(
     pool: &PgPool,
     org_id: Uuid,
@@ -216,7 +275,11 @@ async fn run_api_import_with_http(
     mode: ImportMode,
     sync: SyncScope,
     http: api_source::http::ApiHttp,
+    lease: Option<&JobLease>,
 ) -> Result<ImportReport, ApiImportError> {
+    if let Some(lease) = lease {
+        lease.check_organization(org_id)?;
+    }
     let mut connection = lock_import(pool, org_id).await?;
     let key = &cfg.encryption_key_hex;
     let loaded = credentials::load(&mut *connection, org_id, key)
@@ -276,6 +339,25 @@ async fn run_api_import_with_http(
 
     // A bounded queue joins blocking HTTP pages to the async row pipeline.
     let capture_started_at = Utc::now();
+    if let Some(lease) = lease {
+        return streaming::durable::run(
+            connection,
+            org_id,
+            streaming::durable::Request {
+                account_id: conn.account_id,
+                currency: default_currency.to_owned(),
+                sync,
+                since,
+                captured_at: capture_started_at,
+            },
+            mode,
+            conn.access_token,
+            http,
+            lease,
+        )
+        .await
+        .map_err(Into::into);
+    }
     streaming::run(
         connection,
         org_id,
@@ -283,6 +365,7 @@ async fn run_api_import_with_http(
         mode,
         capture_started_at,
         move |pages| streaming::fetch(http, &conn.access_token, &conn.account_id, since, pages),
+        lease,
     )
     .await
     .map_err(Into::into)

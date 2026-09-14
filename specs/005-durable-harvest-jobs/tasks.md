@@ -1,0 +1,45 @@
+# Tasks: Durable Harvest Import Jobs
+
+## Phase 1 - Spike
+
+- [x] T001 Verify `sqlxmq` 0.6.0 compiles with Horae’s Rust/SQLx versions in the feature worktree.
+- [x] T002 Review the library migrations and reject direct adoption because its UUIDv4/`uuid-ossp` schema violates Horae invariants.
+- [x] T003 Record the dependency decision and fallback to a small in-house queue adapter.
+
+## Phase 2 - Persistence and worker
+
+- [x] T004 Add a registered job-kind envelope with versioned payload, idempotency key, org scope, and execution policy.
+- [x] T005 Persist CSV uploads safely for asynchronous execution without retaining request-body streams.
+- [x] T006 Add worker startup, bounded concurrency, lease/heartbeat, retry backoff, and graceful shutdown.
+- [x] T007 Add checkpoint/progress updates around existing Harvest import phases.
+  - Durable CSV commits checkpoint every 500 records. API commits persist catalog pages, 500-entity parent batches and individual time-entry pages, with report/cache and watermark state.
+  - CSV previews checkpoint rollback-only simulation state every 500 records. API previews retain parent snapshots and entry associations at the same boundaries as API commits. All planned scale scenarios and optimized API/CSV previews pass. The matched CSV SQL profile reduces preview time from 436.688 to 264.349 seconds without changing checkpoint contents or frequency; remaining durability and memory costs are explicit in `performance.md`, not throughput-parity claims.
+- [x] T008 Add outbox records and transactional enqueue support for future plugin/webhook/notification delivery.
+- [x] T009 Ensure all job and outbox reads/mutations enforce organization and admin authorization.
+  - Registered HTTP handlers enforce live administrator sessions and tenant isolation; uploads have a composite job/organization foreign key. Outbox primitives are internal worker APIs, with organization and claim-token checks on acknowledgements.
+
+## Phase 3 - API and UI
+
+- [x] T010 Change API and CSV start functions to enqueue and return job identifiers.
+  - Only durable starts remain registered. The retired-route regression fails before removal and passes afterward; all six importer endpoint tests pass, including real queued responses, authorization before upload consumption and not-found responses on the old CSV route. The contract documents client upgrades.
+- [x] T011 Add status, history, cancel, and retry server functions.
+- [x] T012 Update the importer page to show queued/running progress and terminal reports.
+- [x] T013 Add cleanup policy for old terminal jobs and stored upload data.
+
+## Phase 4 - Verification
+
+- [x] T014 Test atomic claims with concurrent workers.
+- [x] T015 Test lease recovery after a simulated worker failure.
+- [x] T016 Test retry idempotency and cancellation semantics.
+  - Live browser refresh, cooperative cancellation, retry, preview confirmation and report/history downloads pass. Actual SIGTERM/SIGKILL recovery and duplicate-free reimport pass both in NixOS CI at `6bf66d6` and against the local server with Chromium. See `acceptance.md`; latest-head full CI remains a separate merge gate.
+- [x] T017 Test a second synthetic job kind through the same worker boundary.
+- [x] T018 Test transactional outbox insertion and idempotent delivery bookkeeping.
+- [x] T019 Regenerate `.sqlx` cache and run targeted integration tests, clippy, and formatting.
+- [x] T020 Preserve inspectable reports for terminal failures (FR-012/SC-004), including failures after confirmed batches and before the first checkpoint; verify status/history, retention and manual retry.
+- [x] T021 Bound report metadata, checkpoint error state and error retrieval without discarding individual error details; cover legacy reports, atomic archival/recovery, authorization, retention and the complete UI/download path. See the bounded-report follow-up in `plan.md`.
+  - Verified: bounded new reports, legacy upgrade/rollback with one connection, 36 legacy state/version/checkpoint combinations including existing archives, claim fencing, retention, authorization, captured download boundaries, lazy page reads, missing-fragment errors and API overflow recovery/reimport.
+  - Verified HTTP stress: a 64-MiB archive streams byte-for-byte through the authenticated route with less than 16 MiB additional process HWM; abandoned downloads do not block a size-one pool, and retention during transfer produces an HTTP body error.
+  - Live browser acceptance passes: all 999 errors download identically from a recovered preview, its separately confirmed commit and reopened history. See `acceptance.md`.
+
+See [adversarial-review.md](adversarial-review.md) for uncovered cases and the
+evidence required to close the reopened tasks.

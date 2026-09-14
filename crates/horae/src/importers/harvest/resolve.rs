@@ -12,6 +12,7 @@
 //! provenance matches by Harvest id.
 
 pub mod fields;
+pub(super) mod preview;
 
 use std::collections::{HashMap, HashSet};
 
@@ -59,7 +60,7 @@ pub enum ParentKind {
 }
 
 /// Email and full-name matches occupy separate namespaces within one org run.
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum UserKey {
     Email(String),
     FullName(String),
@@ -83,15 +84,34 @@ pub struct PendingCache {
 /// Successful resolutions for one organization/run, plus consumed id-less
 /// occurrences. Only merged after a row's savepoint commits. First successful
 /// identity matches remain stable for the run; the next run resolves them anew.
-#[derive(Default)]
+#[derive(Default, serde::Serialize, serde::Deserialize)]
 pub struct RunCache {
     clients: HashMap<String, Uuid>,
     projects: HashMap<String, Uuid>,
     tasks: HashMap<String, Uuid>,
+    #[serde(
+        serialize_with = "serialize_users",
+        deserialize_with = "deserialize_users"
+    )]
     users: HashMap<UserKey, Uuid>,
     project_tasks: HashSet<(Uuid, Uuid)>,
     entry_slots: keys::OccurrenceCounter,
     failed_parents: HashSet<(EntityType, i64)>,
+}
+
+// JSON object keys cannot represent the email/full-name enum namespaces.
+fn serialize_users<S: serde::Serializer>(
+    users: &HashMap<UserKey, Uuid>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    serde::Serialize::serialize(&users.iter().collect::<Vec<_>>(), serializer)
+}
+
+fn deserialize_users<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<HashMap<UserKey, Uuid>, D::Error> {
+    let pairs: Vec<(UserKey, Uuid)> = serde::Deserialize::deserialize(deserializer)?;
+    Ok(pairs.into_iter().collect())
 }
 
 impl RunCache {
@@ -582,5 +602,45 @@ fn currency_or(row_currency: Option<&str>, default: &str) -> String {
     match row_currency.map(str::trim).filter(|c| c.len() == 3) {
         Some(c) => c.to_uppercase(),
         None => default.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod checkpoint_tests {
+    use super::*;
+
+    #[test]
+    fn run_cache_round_trip_preserves_identity_namespaces_and_occurrences() {
+        let client = Uuid::now_v7();
+        let project = Uuid::now_v7();
+        let task = Uuid::now_v7();
+        let email_user = Uuid::now_v7();
+        let named_user = Uuid::now_v7();
+        let mut cache = RunCache::default();
+        cache.merge(PendingCache {
+            parents: vec![
+                (ParentKind::Client, "client".into(), client),
+                (ParentKind::Project, "project".into(), project),
+                (ParentKind::Task, "task".into(), task),
+            ],
+            user: Some((UserKey::Email("same-key".into()), email_user)),
+            project_task: Some((project, task)),
+            entry_slot: Some("identical-entry".into()),
+        });
+        cache.merge(PendingCache {
+            user: Some((UserKey::FullName("same-key".into()), named_user)),
+            entry_slot: Some("identical-entry".into()),
+            ..Default::default()
+        });
+        cache.mark_failed(EntityType::Project, 42);
+        let restored: RunCache =
+            serde_json::from_value(serde_json::to_value(&cache).unwrap()).unwrap();
+        assert_eq!(restored.clients, cache.clients);
+        assert_eq!(restored.projects, cache.projects);
+        assert_eq!(restored.tasks, cache.tasks);
+        assert_eq!(restored.users, cache.users);
+        assert_eq!(restored.project_tasks, cache.project_tasks);
+        assert_eq!(restored.entry_slot_offset("identical-entry"), 2);
+        assert!(restored.parent_failed(EntityType::Project, 42));
     }
 }

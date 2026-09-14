@@ -35,40 +35,192 @@ enum Run {
     Csv(ImportMode, FileData),
 }
 
+impl Run {
+    fn commit(&self) -> Self {
+        match self {
+            Self::Api(_, sync) => Self::Api(ImportMode::Commit, *sync),
+            Self::Csv(_, file) => Self::Csv(ImportMode::Commit, file.clone()),
+        }
+    }
+}
+
 #[component]
 pub fn HarvestImport() -> Element {
     let mut status = use_resource(|| async move { server_fns::harvest_connection_status().await });
     let mut source = use_signal(|| Source::Picker);
     let mut report = use_signal(|| None::<Result<ImportReport, String>>);
     let mut running = use_signal(|| false);
+    let mut active_job = use_signal(|| None::<uuid::Uuid>);
+    let mut job_progress = use_signal(|| None::<crate::models::JobStatus>);
     let mut manage_open = use_signal(|| false);
     let mut csv_file = use_signal(|| None::<CsvFile>);
     let mut toast_msg = use_signal(|| None::<String>);
-
-    // Single runner for every trigger: clears the old report, awaits the import,
-    // then publishes the new report and a completion toast.
-    let execute = move |job: Run| async move {
-        running.set(true);
-        report.set(None);
-        let (res, mode) = match job {
-            Run::Api(mode, sync) => (
-                server_fns::import_harvest_api(mode, sync)
-                    .await
-                    .map_err(|e| e.to_string()),
-                mode,
-            ),
-            Run::Csv(mode, file) => (
-                server_fns::import_harvest_csv(mode, file.into())
-                    .await
-                    .map_err(|e| e.to_string()),
-                mode,
-            ),
-        };
-        if res.is_ok() {
-            toast_msg.set(Some(toast_for(&res, mode)));
+    let mut history_pages = use_signal(|| vec![None::<uuid::Uuid>]);
+    let history_cursor = use_memo(move || history_pages.read().last().copied().flatten());
+    let mut history = use_resource(move || {
+        let before = history_cursor();
+        async move {
+            (
+                before,
+                server_fns::list_harvest_import_jobs(before, None).await,
+            )
         }
-        report.set(Some(res));
+    });
+    let mut restore_history = use_signal(|| true);
+    let mut poll_version = use_signal(|| 0_u64);
+    let mut poll_error = use_signal(|| None::<(uuid::Uuid, String)>);
+    let mut action_error = use_signal(|| None::<String>);
+    let mut action_pending = use_signal(|| false);
+    let mut run_origin = use_signal(|| None::<(uuid::Uuid, Run)>);
+
+    let mut watch_job = move |id| {
+        restore_history.set(false);
+        poll_version += 1;
+        poll_error.set(None);
+        action_error.set(None);
+        report.set(None);
+        toast_msg.set(None);
+        job_progress.set(None);
+        running.set(true);
+        active_job.set(Some(id));
+    };
+
+    use_effect(move || {
+        let loaded = history.read();
+        if !*restore_history.peek() {
+            return;
+        }
+        if let Some((None, Ok(jobs))) = loaded.as_ref() {
+            restore_history.set(false);
+            if let Some(job) = jobs.iter().find(|job| job.is_active()) {
+                watch_job(job.id);
+            }
+        }
+    });
+
+    let job_status = use_resource(move || {
+        let id = active_job();
+        let version = poll_version();
+        async move {
+            let id = id?;
+            loop {
+                let current = server_fns::get_harvest_import_job(id)
+                    .await
+                    .map_err(|error| error.to_string())
+                    .and_then(|job| {
+                        job.ok_or_else(|| "Import job not found or no longer available".to_string())
+                    });
+                if *active_job.peek() != Some(id) || *poll_version.peek() != version {
+                    return None;
+                }
+                match current {
+                    Ok(job) if job.is_active() => {
+                        job_progress.set(Some(job));
+                        #[cfg(feature = "web")]
+                        gloo_timers::future::TimeoutFuture::new(1_000).await;
+                        #[cfg(feature = "server")]
+                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                    }
+                    terminal => return Some((id, version, terminal)),
+                }
+            }
+        }
+    });
+
+    use_effect(move || {
+        let snapshot = job_status.read();
+        let Some(Some((id, version, result))) = snapshot.as_ref() else {
+            return;
+        };
+        // A resource retains its previous result while a new request is pending.
+        if *active_job.peek() != Some(*id) || *poll_version.peek() != *version {
+            return;
+        }
         running.set(false);
+        active_job.set(None);
+        match result {
+            Err(error) => poll_error.set(Some((*id, error.clone()))),
+            Ok(job) => {
+                job_progress.set(Some(job.clone()));
+                if job.status == "succeeded" || job.report.is_some() {
+                    let decoded = job
+                        .report
+                        .clone()
+                        .ok_or_else(|| "Import completed without a report".to_string())
+                        .and_then(|value| {
+                            serde_json::from_value::<ImportReport>(value).map_err(|e| e.to_string())
+                        });
+                    if job.status == "succeeded"
+                        && let Ok(import) = &decoded
+                    {
+                        toast_msg.set(Some(toast_for(&decoded, import.mode)));
+                    }
+                    report.set(Some(decoded));
+                } else {
+                    report.set(Some(Err(job.last_error.clone().unwrap_or_else(|| {
+                        if job.status == "cancelled" {
+                            "Import cancelled".into()
+                        } else {
+                            "Import failed".into()
+                        }
+                    }))));
+                }
+                history.restart();
+            }
+        }
+    });
+
+    // Keep the submitted source with its preview; the picker may change later.
+    let execute = move |job: Run| async move {
+        if *running.peek() || *action_pending.peek() {
+            return;
+        }
+        restore_history.set(false);
+        action_pending.set(true);
+        running.set(true);
+        active_job.set(None);
+        job_progress.set(None);
+        poll_error.set(None);
+        action_error.set(None);
+        report.set(None);
+        run_origin.set(None);
+        let submitted = job.clone();
+        let result = match job {
+            Run::Api(mode, sync) => server_fns::start_harvest_api_import(mode, sync).await,
+            Run::Csv(mode, file) => server_fns::start_harvest_csv_import(mode, file.into()).await,
+        };
+        action_pending.set(false);
+        match result {
+            Ok(job) => {
+                run_origin.set(Some((job.id, submitted)));
+                watch_job(job.id);
+                job_progress.set(Some(job));
+                history_pages.set(vec![None]);
+                history.restart();
+            }
+            Err(error) => {
+                report.set(Some(Err(error.to_string())));
+                running.set(false);
+            }
+        }
+    };
+
+    let retry_job = move |id| async move {
+        if *running.peek() || *action_pending.peek() {
+            return;
+        }
+        action_pending.set(true);
+        action_error.set(None);
+        match server_fns::retry_harvest_import_job(id).await {
+            Ok(job) => {
+                run_origin.set(None);
+                watch_job(job.id);
+                job_progress.set(Some(job));
+                history.restart();
+            }
+            Err(error) => action_error.set(Some(format!("Could not retry import: {error}"))),
+        }
+        action_pending.set(false);
     };
 
     // Fetch the OAuth authorize URL and hand the browser to Harvest.
@@ -121,7 +273,15 @@ pub fn HarvestImport() -> Element {
     };
     let connected = matches!(&conn, Conn::Ready(s) if s.connected);
     let src = source();
+    let history_loading = !matches!(*history.state().read(), UseResourceState::Ready);
     let has_report = report.read().is_some();
+    let can_commit = run_origin.read().as_ref().is_some_and(|(id, _)| {
+        job_progress
+            .read()
+            .as_ref()
+            .is_some_and(|job| job.id == *id && job.status == "succeeded")
+    });
+    let show_resync = can_commit && matches!(run_origin.read().as_ref(), Some((_, Run::Api(..))));
     let (title, subtitle) = match src {
         Source::Picker => (
             "Importers",
@@ -216,6 +376,7 @@ pub fn HarvestImport() -> Element {
                     button {
                         r#type: "button",
                         class: "imp-source",
+                        "data-testid": "choose-csv".to_owned(),
                         onclick: move |_| {
                             source.set(Source::Csv);
                             report.set(None);
@@ -266,7 +427,7 @@ pub fn HarvestImport() -> Element {
                             button {
                                 r#type: "button",
                                 class: "btn btn-primary",
-                                disabled: running(),
+                                disabled: running() || action_pending(),
                                 onclick: move |_| execute(Run::Api(ImportMode::DryRun, SyncScope::Full)),
                                 "Preview import (dry-run)"
                             }
@@ -310,6 +471,7 @@ pub fn HarvestImport() -> Element {
                                 r#type: "file",
                                 accept: ".csv,text/csv",
                                 class: "hidden",
+                                "data-testid": "csv-file".to_owned(),
                                 onchange: on_file,
                             }
                             div { class: "text-2xl", "↥" }
@@ -335,6 +497,7 @@ pub fn HarvestImport() -> Element {
                                     r#type: "file",
                                     accept: ".csv,text/csv",
                                     class: "hidden",
+                                    "data-testid": "csv-file".to_owned(),
                                     onchange: on_file,
                                 }
                                 "Replace file"
@@ -344,11 +507,12 @@ pub fn HarvestImport() -> Element {
                             button {
                                 r#type: "button",
                                 class: "btn btn-primary",
-                                disabled: running(),
+                                disabled: running() || action_pending(),
                                 onclick: {
                                     let selected = file.file.clone();
                                     move |_| execute(Run::Csv(ImportMode::DryRun, selected.clone()))
                                 },
+                                "data-testid": "preview-csv".to_owned(),
                                 "Preview file (dry-run)"
                             }
                             span { class: "text-faint text-sm",
@@ -363,29 +527,91 @@ pub fn HarvestImport() -> Element {
             if running() {
                 div { class: "card mt-4 flex items-center gap-3",
                     span { class: "himp-spinner" }
-                    span { class: "text-sm font-semibold", "Import in progress · nothing is written until you commit" }
+                    div { class: "text-sm font-semibold",
+                        div { "Following import" }
+                        if let Some(progress) = job_progress.read().as_ref() {
+                            div { "{progress.status}" }
+                            if let Some(phase) = &progress.phase {
+                                div { class: "text-xs text-faint", "{phase}" }
+                            }
+                            div { class: "text-xs text-faint",
+                                "{progress.processed_count} processed"
+                                if let Some(total) = progress.total_count { " of {total}" }
+                            }
+                            if let Some(error) = &progress.last_error {
+                                div { class: "text-xs text-warning", "Last attempt: {error}" }
+                            }
+                        }
+                    }
+                    if let Some(job_id) = active_job() {
+                        button {
+                            r#type: "button",
+                            class: "btn btn-ghost btn-sm ml-auto",
+                            "data-testid": "cancel-import".to_owned(),
+                            disabled: action_pending() || job_progress.read().as_ref().is_some_and(|job| job.phase.as_deref() == Some("cancelling")),
+                            onclick: move |_| async move {
+                                if *action_pending.peek() { return; }
+                                action_pending.set(true);
+                                action_error.set(None);
+                                match server_fns::cancel_harvest_import_job(job_id).await {
+                                    Ok(job) => {
+                                        if *active_job.peek() == Some(job_id) {
+                                            job_progress.set(Some(job));
+                                        }
+                                        history.restart();
+                                    }
+                                    Err(error) => action_error.set(Some(format!("Could not cancel import: {error}"))),
+                                }
+                                action_pending.set(false);
+                            },
+                            "Cancel"
+                        }
+                    }
                 }
             }
 
+            if let Some((id, error)) = poll_error.read().as_ref() {
+                div { class: "alert alert-danger mt-4", role: "alert",
+                    p { "Status unavailable: {error}. The import may still be running." }
+                    button {
+                        r#type: "button", class: "btn btn-secondary btn-sm",
+                        "data-testid": "resume-monitoring".to_owned(),
+                        disabled: action_pending(),
+                        onclick: { let id = *id; move |_| watch_job(id) },
+                        "Resume monitoring"
+                    }
+                }
+            }
+            if let Some(error) = action_error.read().as_ref() {
+                div { class: "alert alert-danger mt-4", role: "alert", "{error}" }
+            }
+
             // ── Shared report ───────────────────────────────────────────
+            if has_report && let Some(job) = job_progress.read().as_ref()
+                && job.can_retry() && job.report.is_some()
+            {
+                div { class: "alert alert-danger mt-4", role: "alert",
+                    p { if job.status == "cancelled" { "Import cancelled" } else { "Import failed" } }
+                    if let Some(error) = &job.last_error { p { "{error}" } }
+                    p { "{job.processed_count} processed in confirmed batches" }
+                }
+            }
             if let Some(result) = report.read().as_ref() {
                 match result {
                     Ok(r) => rsx! {
+                        if let Some((_, Run::Csv(_, file))) = run_origin.read().as_ref() {
+                            p { class: "text-xs text-faint mt-4", "Report source: {file.name()}" }
+                        }
                         ReportView {
                             report: r.clone(),
-                            busy: running(),
-                            show_resync: src == Source::Api,
+                            job_id: job_progress.read().as_ref().map(|job| job.id),
+                            busy: running() || action_pending(),
+                            can_commit,
+                            show_resync,
+                            partial: job_progress.read().as_ref().is_some_and(|job| job.can_retry()),
                             oncommit: move |_| {
-                                let job = match src {
-                                    Source::Api => Run::Api(ImportMode::Commit, SyncScope::Full),
-                                    Source::Csv => match csv_file.read().as_ref() {
-                                        Some(f) => Run::Csv(ImportMode::Commit, f.file.clone()),
-                                        None => return,
-                                    },
-                                    // No report exists on the landing list.
-                                    Source::Picker => return,
-                                };
-                                spawn(execute(job));
+                                let job = run_origin.read().as_ref().map(|(_, job)| job.commit());
+                                if let Some(job) = job { spawn(execute(job)); }
                             },
                             onresync: move |_| {
                                 spawn(execute(Run::Api(ImportMode::Commit, SyncScope::Incremental)));
@@ -394,6 +620,75 @@ pub fn HarvestImport() -> Element {
                     },
                     Err(e) => rsx! {
                         div { class: "alert alert-danger mt-4", "{e}" }
+                    },
+                }
+            }
+
+            section { class: "card mt-6", aria_label: "Import history",
+                div { class: "flex items-center justify-between gap-3",
+                    h2 { class: "text-sm font-semibold", "Import history" }
+                    button {
+                        r#type: "button", class: "btn btn-ghost btn-sm",
+                        "data-testid": "refresh-history".to_owned(),
+                        onclick: move |_| {
+                            if history_cursor().is_none() { history.restart(); }
+                            else { history_pages.set(vec![None]); }
+                        },
+                        "Refresh history"
+                    }
+                }
+                p { class: "text-xs text-faint", "Select an import to view its report or follow its progress." }
+                if history_pages.read().len() > 1 {
+                    button {
+                        r#type: "button", class: "btn btn-ghost btn-sm",
+                        "data-testid": "newer-history".to_owned(),
+                        disabled: history_loading,
+                        onclick: move |_| { history_pages.write().pop(); },
+                        "Newer imports"
+                    }
+                }
+                match &*history.read() {
+                    None => rsx! { p { "Loading import history…" } },
+                    Some((key, _)) if *key != history_cursor() || history_loading => rsx! { p { "Loading import history…" } },
+                    Some((_, Err(error))) => rsx! { p { role: "alert", "Could not load import history: {error}" } },
+                    Some((_, Ok(jobs))) if jobs.is_empty() => rsx! { p { "No imports on this page." } },
+                    Some((_, Ok(jobs))) => rsx! {
+                        ul { class: "flex flex-col gap-3 mt-4",
+                            for job in jobs {
+                                li { key: "{job.id}", class: "flex items-center gap-3 flex-wrap",
+                                    button {
+                                        r#type: "button", class: "btn btn-ghost btn-sm",
+                                        "data-testid": "select-{job.id}",
+                                        disabled: action_pending(),
+                                        onclick: { let id = job.id; move |_| {
+                                            run_origin.set(None);
+                                            watch_job(id);
+                                        } },
+                                        "{job.kind} · {job.created_at} · {job.status}"
+                                    }
+                                    if job.can_retry() {
+                                        button {
+                                            r#type: "button", class: "btn btn-secondary btn-sm",
+                                            "data-testid": "retry-{job.id}",
+                                            disabled: action_pending() || running(),
+                                            onclick: { let id = job.id; move |_| retry_job(id) },
+                                            "Retry import"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if jobs.len() == 20 {
+                            if let Some(last) = jobs.last() {
+                                button {
+                                    r#type: "button", class: "btn btn-ghost btn-sm",
+                                    "data-testid": "older-history".to_owned(),
+                                    disabled: history_loading,
+                                    onclick: { let id = last.id; move |_| history_pages.write().push(Some(id)) },
+                                    "Older imports"
+                                }
+                            }
+                        }
                     },
                 }
             }
@@ -489,13 +784,17 @@ fn ConnectionChip(
 #[component]
 fn ReportView(
     report: ImportReport,
+    job_id: Option<uuid::Uuid>,
     busy: bool,
+    can_commit: bool,
     show_resync: bool,
+    partial: bool,
     oncommit: EventHandler<MouseEvent>,
     onresync: EventHandler<MouseEvent>,
 ) -> Element {
     let mut errors_open = use_signal(|| true);
-    let error_count = report.row_errors.len();
+    let error_count = report.error_count();
+    let shown_errors = report.row_errors.len().min(ERROR_ROW_LIMIT);
     let is_dry = report.mode == ImportMode::DryRun;
     let committed = !is_dry;
 
@@ -503,22 +802,37 @@ fn ReportView(
         div { class: "flex flex-col gap-4 mt-4",
 
             // Status banner
-            if is_dry {
+            if partial {
+                div { class: "banner banner-warning",
+                    span { class: "banner-icon", "◔" }
+                    div { class: "banner-body",
+                        div { class: "banner-title", "Partial report — confirmed batches only" }
+                        div { class: "banner-detail",
+                            if is_dry { "Preview stopped before completion. No domain data was written." }
+                            else { "Only confirmed work is included. Unconfirmed work was rolled back." }
+                        }
+                    }
+                }
+            } else if is_dry {
                 div { class: "banner banner-warning",
                     span { class: "banner-icon", "◔" }
                     div { class: "banner-body",
                         div { class: "banner-title", "Preview only — nothing was written" }
-                        div { class: "banner-detail", "Review the numbers, then commit." }
+                        div { class: "banner-detail",
+                            if can_commit { "Review the numbers, then commit." }
+                            else { "Historical preview. Start a new preview to commit this import." }
+                        }
                     }
-                    div { class: "banner-action",
+                    if can_commit { div { class: "banner-action",
                         button {
                             r#type: "button",
                             class: "btn btn-primary btn-sm",
+                            "data-testid": "commit-preview".to_owned(),
                             disabled: busy,
                             onclick: move |e| oncommit.call(e),
                             "Commit this import"
                         }
-                    }
+                    } }
                 }
             } else if error_count > 0 {
                 div { class: "banner banner-danger",
@@ -576,9 +890,17 @@ fn ReportView(
                                     }
                                 }
                             }
-                            if error_count > ERROR_ROW_LIMIT {
+                            if error_count > shown_errors as u64 {
                                 div { class: "p-4 border-t text-faint text-sm",
-                                    "Showing {ERROR_ROW_LIMIT} of {error_count}."
+                                    "Showing {shown_errors} inline errors of {error_count}."
+                                }
+                            }
+                            if let Some(job_id) = job_id {
+                                div { class: "p-4 border-t",
+                                    a { class: "btn btn-secondary btn-sm",
+                                        href: format!("/api/import/harvest/jobs/{job_id}/errors"),
+                                        "Download all errors"
+                                    }
                                 }
                             }
                         }
@@ -587,7 +909,7 @@ fn ReportView(
             }
 
             // Re-sync (API only, once an import has run)
-            if show_resync && committed {
+            if show_resync && committed && !partial {
                 div { class: "flex items-center gap-3 flex-wrap",
                     button {
                         r#type: "button",
@@ -681,9 +1003,9 @@ fn entity_label(e: EntityType) -> &'static str {
 fn toast_for(res: &Result<ImportReport, String>, mode: ImportMode) -> String {
     match res {
         Err(_) => "Import failed".to_string(),
-        Ok(r) if !r.row_errors.is_empty() => match mode {
-            ImportMode::DryRun => format!("Dry-run finished · {} errors", r.row_errors.len()),
-            ImportMode::Commit => format!("Import complete · {} errors", r.row_errors.len()),
+        Ok(r) if r.error_count() > 0 => match mode {
+            ImportMode::DryRun => format!("Dry-run finished · {} errors", r.error_count()),
+            ImportMode::Commit => format!("Import complete · {} errors", r.error_count()),
         },
         Ok(_) => match mode {
             ImportMode::DryRun => "Dry-run finished · nothing written".to_string(),

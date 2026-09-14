@@ -2,6 +2,7 @@ use super::*;
 use chrono::{DateTime, TimeZone};
 use serde_json::json;
 
+mod checkpoints;
 mod paging;
 mod scale;
 
@@ -123,6 +124,7 @@ async fn apply_api_data_in_session(
             }
             Ok(())
         },
+        None,
     )
     .await
 }

@@ -6,23 +6,29 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use axum::body::{Body, Bytes, HttpBody};
-use horae_core::importers::harvest::types::{
-    EntityType, ImportMode, RowOutcome, SourceKind, SourceRow,
-};
+use horae_core::importers::harvest::types::{EntityType, ImportMode, RowOutcome, SourceKind};
 use sqlx::Acquire;
 use tokio::sync::{Mutex, mpsc};
 use uuid::Uuid;
 
 use super::super::{
-    apply, lock_import, release_import,
+    apply, finish_import, lock_import, release_import,
     report::ImportReport,
-    resolve::{OrgDefaults, RunCache},
+    resolve::{OrgDefaults, RunCache, preview::ParentSnapshot},
 };
-use super::{CsvError, ParseErr, read_csv};
+use super::{CsvError, Cursor, Record, read_csv_from};
 
-enum Record {
-    Row(Box<Result<SourceRow, ParseErr>>),
-    Complete,
+const BATCH_ROWS: u64 = 500;
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct Checkpoint {
+    version: u8,
+    default_currency: String,
+    cursor: Cursor,
+    report: ImportReport,
+    cache: RunCache,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    preview: Option<ParentSnapshot>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -66,6 +72,7 @@ impl Read for BodyReader<'_> {
 
 /// Import an unbuffered HTTP body. Only normal EOF permits a commit; a broken
 /// upload or cancelled parser rolls back the whole run, including parent rows.
+#[cfg(test)]
 pub async fn import_body(
     pool: &sqlx::PgPool,
     org_id: Uuid,
@@ -73,9 +80,56 @@ pub async fn import_body(
     body: Body,
     mode: ImportMode,
 ) -> Result<ImportReport, CsvError> {
-    let connection = lock_import(pool, org_id)
+    import_body_with_lease(pool, org_id, default_currency, body, mode, None).await
+}
+
+/// Durable imports checkpoint batches. A preview rolls back its domain changes
+/// before publishing simulation state; only committing imports publish data.
+pub(crate) async fn import_body_with_lease(
+    pool: &sqlx::PgPool,
+    org_id: Uuid,
+    default_currency: &str,
+    body: Body,
+    mode: ImportMode,
+    lease: Option<&crate::jobs::JobLease>,
+) -> Result<ImportReport, CsvError> {
+    if let Some(lease) = lease {
+        lease.check_organization(org_id)?;
+    }
+    let mut connection = lock_import(pool, org_id)
         .await
         .map_err(anyhow::Error::from)?;
+    let stored = match lease {
+        Some(lease) => lease.load_checkpoint(&mut connection).await?,
+        None => None,
+    };
+    let (mut checkpoint, resume) = match stored {
+        Some(value) => {
+            let checkpoint: Checkpoint =
+                serde_json::from_value(value).map_err(anyhow::Error::from)?;
+            if !matches!(checkpoint.version, 1 | 2)
+                || (checkpoint.version == 1 && checkpoint.report.archived_error_count() > 0)
+                || checkpoint.report.mode != mode
+                || checkpoint.report.source != SourceKind::Csv
+                || (mode == ImportMode::DryRun) != checkpoint.preview.is_some()
+            {
+                return Err(anyhow::anyhow!("unsupported CSV checkpoint").into());
+            }
+            let cursor = checkpoint.cursor.clone();
+            (checkpoint, Some(cursor))
+        }
+        None => (
+            Checkpoint {
+                version: 1,
+                default_currency: default_currency.to_owned(),
+                cursor: Cursor::default(),
+                report: ImportReport::new(SourceKind::Csv, mode),
+                cache: RunCache::default(),
+                preview: None,
+            },
+            None,
+        ),
+    };
     let session = Arc::new(Mutex::new(connection));
     let worker_session = session.clone();
     let runtime = tokio::runtime::Handle::current();
@@ -90,36 +144,44 @@ pub async fn import_body(
             runtime,
             rows: &send,
         };
-        read_csv(input, |row| {
-            send.blocking_send(Record::Row(Box::new(row)))
-                .context("CSV import cancelled")
+        read_csv_from(input, resume.as_ref(), |record| {
+            send.blocking_send(record).context("CSV import cancelled")
         })?;
-        send.blocking_send(Record::Complete)
-            .context("CSV import cancelled")?;
         Ok::<_, CsvError>(())
     });
-    let result = async {
+    let work = async {
         // Validate headers and reject header-only input before opening the TX.
+        let Some(Record::Headers(headers)) = receive.recv().await else {
+            return Err(IncompleteUpload.into());
+        };
+        checkpoint.cursor.headers = headers;
         let first = receive.recv().await.ok_or(IncompleteUpload)?;
         let mut connection = session.lock().await;
         let mut tx = connection.begin().await?;
+        if let Some(preview) = &checkpoint.preview {
+            preview.restore(&mut tx, org_id).await?;
+        }
         let org = OrgDefaults {
             org_id,
-            default_currency,
+            default_currency: &checkpoint.default_currency,
         };
-        let mut cache = RunCache::default();
-        let mut report = ImportReport::new(SourceKind::Csv, mode);
         let mut next = first;
-        while let Record::Row(record) = next {
+        while let Record::Row(record, position) = next {
             match *record {
                 Ok(row) => {
-                    let result =
-                        apply::apply_row(&mut tx, &mut cache, org, &row, SourceKind::Csv).await;
+                    let result = apply::apply_row(
+                        &mut tx,
+                        &mut checkpoint.cache,
+                        org,
+                        &row,
+                        SourceKind::Csv,
+                    )
+                    .await;
                     for (entity, outcome) in &result.outcomes {
-                        report.record(*entity, outcome);
+                        checkpoint.report.record(*entity, outcome);
                     }
                 }
-                Err(error) => report.record(
+                Err(error) => checkpoint.report.record(
                     EntityType::TimeEntry,
                     &RowOutcome::Errored {
                         source_location: error.source_location,
@@ -127,16 +189,63 @@ pub async fn import_body(
                     },
                 ),
             }
+            checkpoint.cursor.position = position;
+            if let Some(lease) = lease
+                && position.record.is_multiple_of(BATCH_ROWS)
+            {
+                if mode == ImportMode::DryRun {
+                    checkpoint.preview =
+                        Some(ParentSnapshot::capture(&mut tx, org_id, &checkpoint.cache).await?);
+                    tx.rollback().await?;
+                    tx = connection.begin().await?;
+                }
+                lease
+                    .archive_report(&mut tx, &mut checkpoint.report)
+                    .await?;
+                if checkpoint.report.archived_error_count() > 0 {
+                    checkpoint.version = 2;
+                }
+                let (report, processed) = super::super::job_report(&checkpoint.report)?;
+                lease
+                    .save_checkpoint(
+                        &mut tx,
+                        &serde_json::to_value(&checkpoint)?,
+                        &report,
+                        "time_entries",
+                        processed,
+                    )
+                    .await?;
+                tx.commit().await?;
+                tx = connection.begin().await?;
+                if let Some(preview) = &checkpoint.preview {
+                    preview.restore(&mut tx, org_id).await?;
+                }
+            }
             next = receive.recv().await.ok_or(IncompleteUpload)?;
         }
-        debug_assert!(report.reconciles());
-        match mode {
-            ImportMode::Commit => tx.commit().await?,
-            ImportMode::DryRun => tx.rollback().await?,
+        anyhow::ensure!(matches!(next, Record::Complete), "unexpected CSV headers");
+        debug_assert!(checkpoint.report.reconciles());
+        finish_import(tx, &mut checkpoint.report, lease).await?;
+        if mode == ImportMode::DryRun
+            && let Some(lease) = lease
+        {
+            let mut tx = connection.begin().await?;
+            lease
+                .archive_report(&mut tx, &mut checkpoint.report)
+                .await?;
+            let (report, processed) = super::super::job_report(&checkpoint.report)?;
+            anyhow::ensure!(
+                lease.complete(&mut tx, &report, processed).await?,
+                "job execution interrupted or lease lost"
+            );
+            tx.commit().await?;
         }
-        Ok::<_, anyhow::Error>(report)
-    }
-    .await;
+        Ok::<_, anyhow::Error>(checkpoint.report)
+    };
+    let result = match lease {
+        Some(lease) => lease.run(work).await,
+        None => work.await,
+    };
     drop(receive);
     let parsed = worker.await.context("CSV parser task failed");
     let connection = Arc::try_unwrap(session)

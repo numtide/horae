@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "ALTER TABLE horae_jobs DROP CONSTRAINT reject_job_completion",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "2292ad8a35e21a9f7946a522df3fb340d5d40235c433d0364997ea32ddd248ed"
+}

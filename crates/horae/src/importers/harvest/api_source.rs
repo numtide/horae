@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 use chrono::{DateTime, NaiveDate, Utc};
 use horae_core::importers::harvest::types::SourceRow;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use super::RowSource;
 
@@ -17,7 +17,7 @@ pub(super) mod http;
 
 // ── Harvest JSON shapes (only the fields the importer consumes) ───────────────
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiClient {
     pub id: i64,
     pub name: String,
@@ -28,14 +28,14 @@ pub struct ApiClient {
     pub updated_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiRef {
     pub id: i64,
     #[serde(default)]
     pub name: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiProject {
     pub id: i64,
     pub name: String,
@@ -48,7 +48,7 @@ pub struct ApiProject {
     pub updated_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiTask {
     pub id: i64,
     pub name: String,
@@ -60,7 +60,7 @@ pub struct ApiTask {
     pub updated_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiUser {
     pub id: i64,
     pub email: String,
@@ -97,13 +97,14 @@ fn yes() -> bool {
 
 /// Catalog metadata used to resolve source references. Tests may attach entries
 /// to the same fixture; production time entries arrive only through page buffers.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct HarvestData {
     pub clients: Vec<ApiClient>,
     pub projects: Vec<ApiProject>,
     pub tasks: Vec<ApiTask>,
     pub users: Vec<ApiUser>,
     #[cfg(test)]
+    #[serde(skip)]
     pub time_entries: Vec<ApiTimeEntry>,
 }
 

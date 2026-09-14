@@ -17,10 +17,23 @@ use super::report::ImportReport;
 use super::resolve::{OrgDefaults, RunCache};
 use super::{apply_rows, credentials, parents};
 
+pub(super) mod durable;
+
 pub(super) enum Page {
     Catalog(HarvestData),
     Entries(Vec<ApiTimeEntry>),
     Complete,
+    Batch(Box<durable::Batch>),
+    CatalogReady(Box<durable::Download>),
+}
+
+enum Settings<'a> {
+    Inline {
+        currency: &'a str,
+        mode: ImportMode,
+        captured_at: DateTime<Utc>,
+    },
+    Durable(Box<durable::Checkpoint>),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -108,6 +121,28 @@ pub(super) async fn run(
     mode: ImportMode,
     captured_at: DateTime<Utc>,
     fetch: impl FnOnce(&mpsc::Sender<Page>) -> anyhow::Result<()> + Send + 'static,
+    lease: Option<&crate::jobs::JobLease>,
+) -> anyhow::Result<ImportReport> {
+    run_inner(
+        connection,
+        org_id,
+        Settings::Inline {
+            currency,
+            mode,
+            captured_at,
+        },
+        fetch,
+        lease,
+    )
+    .await
+}
+
+async fn run_inner(
+    connection: PoolConnection<Postgres>,
+    org_id: Uuid,
+    settings: Settings<'_>,
+    fetch: impl FnOnce(&mpsc::Sender<Page>) -> anyhow::Result<()> + Send + 'static,
+    lease: Option<&crate::jobs::JobLease>,
 ) -> anyhow::Result<ImportReport> {
     let session = Arc::new(Mutex::new(connection));
     let worker_session = session.clone();
@@ -120,15 +155,40 @@ pub(super) async fn run(
     });
     let result = {
         let mut guard = session.lock().await;
-        apply(
-            &mut guard,
-            org_id,
-            currency,
-            mode,
-            captured_at,
-            &mut receive,
-        )
-        .await
+        let work = async {
+            match settings {
+                Settings::Inline {
+                    currency,
+                    mode,
+                    captured_at,
+                } => {
+                    apply(
+                        &mut guard,
+                        org_id,
+                        currency,
+                        mode,
+                        captured_at,
+                        &mut receive,
+                        lease,
+                    )
+                    .await
+                }
+                Settings::Durable(checkpoint) => {
+                    durable::apply(
+                        &mut guard,
+                        org_id,
+                        *checkpoint,
+                        &mut receive,
+                        lease.context("durable API import requires a lease")?,
+                    )
+                    .await
+                }
+            }
+        };
+        match lease {
+            Some(lease) => lease.run(work).await,
+            None => work.await,
+        }
     };
     // Wake a backpressured producer on every SQL/error path before joining it.
     drop(receive);
@@ -156,6 +216,7 @@ async fn apply(
     mode: ImportMode,
     captured_at: DateTime<Utc>,
     pages: &mut mpsc::Receiver<Page>,
+    lease: Option<&crate::jobs::JobLease>,
 ) -> anyhow::Result<ImportReport> {
     let Some(Page::Catalog(catalog)) = pages.recv().await else {
         return Err(IncompleteDownload.into());
@@ -193,7 +254,9 @@ async fn apply(
                 .await?;
             }
             Page::Complete => break,
-            Page::Catalog(_) => bail!("unexpected repeated Harvest catalog"),
+            Page::Catalog(_) | Page::Batch(_) | Page::CatalogReady(_) => {
+                bail!("unexpected Harvest catalog message")
+            }
         }
     }
     if mode == ImportMode::Commit
@@ -206,10 +269,7 @@ async fn apply(
     {
         credentials::advance_watermark(&mut *tx, org_id, &[(EntityType::TimeEntry, mark)]).await?;
     }
-    match mode {
-        ImportMode::Commit => tx.commit().await?,
-        ImportMode::DryRun => tx.rollback().await?,
-    }
+    super::finish_import(tx, &mut report, lease).await?;
     Ok(report)
 }
 

@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE horae_jobs\n                  SET status = 'succeeded', report = $1, processed_count = $2, total_count = $2,\n                      lease_until = NULL, worker_id = NULL, claim_token = NULL, checkpoint = NULL,\n                      finished_at = clock_timestamp(), updated_at = clock_timestamp()\n                WHERE id = $3 AND org_id = $4 AND claim_token = $5\n                  AND status = 'running' AND NOT cancellation_requested\n                  AND lease_until > clock_timestamp()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Jsonb",
+        "Int8",
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5dc2ae9a61e375e5fb8e69580929229ef1bbac589f1c8e9c9647f842ca15aabb"
+}

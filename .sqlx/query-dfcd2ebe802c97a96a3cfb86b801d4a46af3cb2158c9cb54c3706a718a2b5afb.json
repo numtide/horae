@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT harvest_id FROM harvest_import_map WHERE org_id = $1 ORDER BY harvest_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "harvest_id",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "dfcd2ebe802c97a96a3cfb86b801d4a46af3cb2158c9cb54c3706a718a2b5afb"
+}

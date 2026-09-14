@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT sequence, body FROM horae_job_report_error_chunks\n           WHERE job_id = $1 AND org_id = $2 AND sequence >= $3 AND sequence < $4\n           ORDER BY sequence LIMIT 16",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sequence",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "body",
+        "type_info": "Bytea"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "491904c0d2d10e670d497e051600ee14d3a775ea247f8b7954f5562341ff190c"
+}

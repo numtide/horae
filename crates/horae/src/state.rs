@@ -14,6 +14,7 @@ pub struct AppState {
     /// Harvest importer settings, `None` when the importer's API source is not
     /// configured.
     pub harvest: Option<crate::config::HarvestConfig>,
+    pub job_policy: crate::config::JobPolicy,
 }
 
 impl AppState {
@@ -23,6 +24,7 @@ impl AppState {
             plugins,
             oidc: None,
             harvest: None,
+            job_policy: crate::config::JobPolicy::default(),
         }
     }
 
@@ -33,6 +35,11 @@ impl AppState {
 
     pub fn with_harvest(mut self, harvest: Option<crate::config::HarvestConfig>) -> Self {
         self.harvest = harvest;
+        self
+    }
+
+    pub fn with_job_policy(mut self, policy: crate::config::JobPolicy) -> Self {
+        self.job_policy = policy;
         self
     }
 }
@@ -48,12 +55,14 @@ pub async fn init_state(
     plugins: Arc<PluginRegistry>,
     oidc: Option<crate::config::OidcConfig>,
     harvest: Option<crate::config::HarvestConfig>,
+    job_policy: crate::config::JobPolicy,
 ) {
     GLOBAL_STATE
         .get_or_init(|| async {
             AppState::new(pool, plugins)
                 .with_oidc(oidc)
                 .with_harvest(harvest)
+                .with_job_policy(job_policy)
         })
         .await;
 }
@@ -87,7 +96,7 @@ pub async fn global_state() -> &'static AppState {
                 std::process::exit(1);
             }
 
-            AppState::new(pool, Arc::new(PluginRegistry::empty()))
+            AppState::new(pool, Arc::new(PluginRegistry::empty())).with_job_policy(cfg.job_policy)
         })
         .await
 }
