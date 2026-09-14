@@ -197,11 +197,12 @@ pub(crate) async fn import_body_with_lease(
                     tx.rollback().await?;
                     tx = connection.begin().await?;
                 }
-                let (_, processed) = super::super::job_report(&checkpoint.report)?;
+                let (report, processed) = super::super::job_report(&checkpoint.report)?;
                 lease
                     .save_checkpoint(
                         &mut tx,
                         &serde_json::to_value(&checkpoint)?,
+                        &report,
                         "time_entries",
                         processed,
                     )

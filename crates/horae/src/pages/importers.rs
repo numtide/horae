@@ -137,7 +137,7 @@ pub fn HarvestImport() -> Element {
             Err(error) => poll_error.set(Some((*id, error.clone()))),
             Ok(job) => {
                 job_progress.set(Some(job.clone()));
-                if job.status == "succeeded" {
+                if job.status == "succeeded" || job.report.is_some() {
                     let decoded = job
                         .report
                         .clone()
@@ -145,7 +145,9 @@ pub fn HarvestImport() -> Element {
                         .and_then(|value| {
                             serde_json::from_value::<ImportReport>(value).map_err(|e| e.to_string())
                         });
-                    if let Ok(import) = &decoded {
+                    if job.status == "succeeded"
+                        && let Ok(import) = &decoded
+                    {
                         toast_msg.set(Some(toast_for(&decoded, import.mode)));
                     }
                     report.set(Some(decoded));
@@ -270,7 +272,7 @@ pub fn HarvestImport() -> Element {
         job_progress
             .read()
             .as_ref()
-            .is_some_and(|job| job.id == *id)
+            .is_some_and(|job| job.id == *id && job.status == "succeeded")
     });
     let show_resync = can_commit && matches!(run_origin.read().as_ref(), Some((_, Run::Api(..))));
     let (title, subtitle) = match src {
@@ -580,6 +582,15 @@ pub fn HarvestImport() -> Element {
             }
 
             // ── Shared report ───────────────────────────────────────────
+            if has_report && let Some(job) = job_progress.read().as_ref()
+                && job.can_retry() && job.report.is_some()
+            {
+                div { class: "alert alert-danger mt-4", role: "alert",
+                    p { if job.status == "cancelled" { "Import cancelled" } else { "Import failed" } }
+                    if let Some(error) = &job.last_error { p { "{error}" } }
+                    p { "{job.processed_count} processed in confirmed batches" }
+                }
+            }
             if let Some(result) = report.read().as_ref() {
                 match result {
                     Ok(r) => rsx! {
@@ -591,6 +602,7 @@ pub fn HarvestImport() -> Element {
                             busy: running() || action_pending(),
                             can_commit,
                             show_resync,
+                            partial: job_progress.read().as_ref().is_some_and(|job| job.can_retry()),
                             oncommit: move |_| {
                                 let job = run_origin.read().as_ref().map(|(_, job)| job.commit());
                                 if let Some(job) = job { spawn(execute(job)); }
@@ -769,6 +781,7 @@ fn ReportView(
     busy: bool,
     can_commit: bool,
     show_resync: bool,
+    partial: bool,
     oncommit: EventHandler<MouseEvent>,
     onresync: EventHandler<MouseEvent>,
 ) -> Element {
@@ -781,7 +794,18 @@ fn ReportView(
         div { class: "flex flex-col gap-4 mt-4",
 
             // Status banner
-            if is_dry {
+            if partial {
+                div { class: "banner banner-warning",
+                    span { class: "banner-icon", "◔" }
+                    div { class: "banner-body",
+                        div { class: "banner-title", "Partial report — confirmed batches only" }
+                        div { class: "banner-detail",
+                            if is_dry { "Preview stopped before completion. No domain data was written." }
+                            else { "Only confirmed work is included. Unconfirmed work was rolled back." }
+                        }
+                    }
+                }
+            } else if is_dry {
                 div { class: "banner banner-warning",
                     span { class: "banner-icon", "◔" }
                     div { class: "banner-body",
@@ -869,7 +893,7 @@ fn ReportView(
             }
 
             // Re-sync (API only, once an import has run)
-            if show_resync && committed {
+            if show_resync && committed && !partial {
                 div { class: "flex items-center gap-3 flex-wrap",
                     button {
                         r#type: "button",

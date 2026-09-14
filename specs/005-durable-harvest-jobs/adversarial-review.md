@@ -381,3 +381,44 @@ exhaust an import after confirmed work and verify the report through the public
 status/history boundary, including retention and retry behavior. Jobs failing
 before their first checkpoint also need an inspectable failure result. This is
 not closed by the successful-finalization tests above.
+
+## Retained reports for interrupted imports
+
+Harvest enqueue now initializes a source/mode-specific zero-outcome report.
+Configuration and upload failures before a checkpoint therefore retain an
+inspectable result alongside `last_error`. Checkpoint writes publish the public
+report in the same lease-fenced transaction as progress and confirmed work.
+Failure, cancellation, exhausted leases and manual retries preserve these outcomes;
+successful finalization replaces them with the complete report. Status/history
+also project older checkpoint-only reports without returning private cursor/cache
+state. No new table, migration or dependency is needed.
+
+The importer displays failed/cancelled outcomes as a partial report, alongside
+the interruption and confirmed progress. It never shows a success banner or
+offers confirmation of an interrupted preview, including a newly submitted one.
+Selecting a new file clears the previous result. Existing successful-preview
+confirmation and history behavior remain covered by the UI suite.
+
+Two CSV worker regressions failed before the fix because confirmed outcomes were
+missing from status/history. They now verify 499 confirmed entries and one row
+error, rollback of the final unconfirmed entry, actual report-column persistence,
+legacy checkpoint fallback, two-day retention, exhausted-lease recovery, manual
+retry and eventual thirty-day cleanup. Both preview and commit modes are covered.
+Two API regressions confirm that a failed later HTTP page retains the earlier
+page's outcomes in both modes, without advancing the watermark. Early API
+configuration and empty-CSV failures retain the correct zero-outcome reports.
+Existing unmonitored stale-worker tests assert that even the initial empty report
+cannot be replaced by unconfirmed work.
+
+All 30 jobs tests, 150 importer tests and five registered importer endpoint tests
+pass. Twelve production UI interaction tests pass, including the partial-report
+regression observed failing before the UI fix. Server clippy passes for all targets
+with warnings denied and performance lints enabled; formatting passes. The web
+target checks successfully with the existing InvoiceLine, OrgBranding and
+PluginWidget warnings. SQLx metadata replaces five changed queries and adds two
+report-persistence test queries; unrelated cached queries are preserved.
+
+This closes T020. The three explicit scale benchmarks are still ignored, T007
+and T016 remain open for scale and full acceptance verification, and the published
+head has no current CI checks. Older green workflow runs do not establish these
+remaining gates. The PR remains a draft.

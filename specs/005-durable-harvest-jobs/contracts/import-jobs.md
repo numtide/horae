@@ -19,6 +19,21 @@ the next page, or omit it for the latest jobs. The cursor is resolved inside the
 current organization; an unknown, expired, or foreign cursor returns no rows.
 Refreshing without a cursor returns to the latest retained history.
 
+## Reports and failed attempts
+
+`report` contains the last confirmed outcomes, not an assertion that the import
+finished. A new Harvest job starts with a zero-outcome report for its source/mode.
+Checkpoints publish updated outcomes atomically with progress; a later error or
+expired final attempt cannot erase them or include rolled-back work. Only a
+`succeeded` job's report covers the completed source. `last_error` describes the
+latest attempt failure separately from the report's per-record errors.
+
+Failed/cancelled reports remain readable from status and history throughout job
+retention, and manual retry retains confirmed outcomes. The UI marks them as
+partial, shows the interruption/error, and disallows confirming an interrupted
+preview. Older checkpoint-only reports remain readable without exposing private
+source cursors, caches, upload contents or credentials.
+
 ## Cancellation and acknowledgement
 
 A successful cancel request means the request was accepted, not that an active

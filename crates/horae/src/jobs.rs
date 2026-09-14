@@ -6,7 +6,7 @@
 use std::time::Duration;
 
 use anyhow::Context;
-use horae_core::importers::harvest::types::{ImportMode, SyncScope};
+use horae_core::importers::harvest::types::{ImportMode, ImportReport, SourceKind, SyncScope};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -168,6 +168,16 @@ pub async fn mark_outbox_failed(
 }
 
 impl JobPayload {
+    fn initial_report(&self) -> anyhow::Result<Option<serde_json::Value>> {
+        let (source, mode) = match self {
+            Self::HarvestApi { mode, .. } => (SourceKind::HarvestApi, *mode),
+            Self::HarvestCsv { mode } => (SourceKind::Csv, *mode),
+            #[cfg(test)]
+            Self::Synthetic => return Ok(None),
+        };
+        Ok(Some(serde_json::to_value(ImportReport::new(source, mode))?))
+    }
+
     fn kind(&self) -> &'static str {
         match self {
             Self::HarvestApi { .. } => "harvest_api_import",
@@ -188,9 +198,10 @@ pub async fn enqueue(
     let policy = policy.validate()?;
     let id = Uuid::now_v7();
     let encoded = encode_payload(payload)?;
+    let report = payload.initial_report()?;
     let row = sqlx::query!(
-        r#"INSERT INTO horae_jobs (id, org_id, kind, payload, idempotency_key, max_attempts)
-           VALUES ($1, $2, $3, $4, $5, $6)
+        r#"INSERT INTO horae_jobs (id, org_id, kind, payload, idempotency_key, max_attempts, report)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
            ON CONFLICT (org_id, kind, idempotency_key)
            DO UPDATE SET updated_at = now()
            RETURNING id"#,
@@ -200,6 +211,7 @@ pub async fn enqueue(
         encoded,
         idempotency_key,
         policy.max_attempts,
+        report,
     )
     .fetch_one(pool)
     .await?;
@@ -216,11 +228,13 @@ pub async fn enqueue_csv(
 ) -> anyhow::Result<Uuid> {
     let policy = policy.validate()?;
     let id = Uuid::now_v7();
-    let payload = encode_payload(&JobPayload::HarvestCsv { mode })?;
+    let payload = JobPayload::HarvestCsv { mode };
+    let report = payload.initial_report()?;
+    let payload = encode_payload(&payload)?;
     let mut tx = pool.begin().await?;
     let row = sqlx::query!(
-        r#"INSERT INTO horae_jobs (id, org_id, kind, payload, idempotency_key, max_attempts)
-           VALUES ($1, $2, 'harvest_csv_import', $3, $4, $5)
+        r#"INSERT INTO horae_jobs (id, org_id, kind, payload, idempotency_key, max_attempts, report)
+           VALUES ($1, $2, 'harvest_csv_import', $3, $4, $5, $6)
            ON CONFLICT (org_id, kind, idempotency_key)
            DO UPDATE SET updated_at = now()
            RETURNING id"#,
@@ -229,6 +243,7 @@ pub async fn enqueue_csv(
         payload,
         idempotency_key,
         policy.max_attempts,
+        report,
     )
     .fetch_one(&mut *tx)
     .await?;
@@ -253,7 +268,7 @@ pub async fn status(
 ) -> anyhow::Result<Option<crate::models::JobStatus>> {
     let row = sqlx::query!(
         r#"SELECT id, kind, status, phase, processed_count, total_count,
-                  report, last_error,
+                  COALESCE(checkpoint->'report', report) AS report, last_error,
                   created_at as "created_at!: chrono::DateTime<chrono::Utc>",
                   finished_at as "finished_at: chrono::DateTime<chrono::Utc>"
              FROM horae_jobs
@@ -285,7 +300,7 @@ pub async fn list(
 ) -> anyhow::Result<Vec<crate::models::JobStatus>> {
     let rows = sqlx::query!(
         r#"SELECT id, kind, status, phase, processed_count, total_count,
-                  report, last_error,
+                  COALESCE(checkpoint->'report', report) AS report, last_error,
                   created_at as "created_at!: chrono::DateTime<chrono::Utc>",
                   finished_at as "finished_at: chrono::DateTime<chrono::Utc>"
              FROM horae_jobs
@@ -960,6 +975,13 @@ mod tests {
         let failed = status(&pool, org_id, id).await.unwrap().unwrap();
         assert_eq!(failed.status, "failed");
         assert_eq!(failed.last_error.as_deref(), Some("the file is empty"));
+        assert_eq!(
+            failed.report,
+            Some(
+                serde_json::to_value(ImportReport::new(SourceKind::Csv, ImportMode::DryRun))
+                    .unwrap()
+            )
+        );
     }
 
     #[sqlx::test]
@@ -1070,6 +1092,24 @@ mod tests {
         assert_eq!(failed.status, "failed");
         assert!(failed.finished_at.is_some());
         assert!(retry(&pool, org_id, id).await.unwrap());
+        assert_eq!(
+            failed.report,
+            Some(
+                serde_json::to_value(ImportReport::new(
+                    SourceKind::HarvestApi,
+                    ImportMode::DryRun
+                ))
+                .unwrap()
+            )
+        );
+        assert_eq!(
+            failed.last_error.as_deref(),
+            Some("Harvest is not configured")
+        );
+        assert_eq!(
+            status(&pool, org_id, id).await.unwrap().unwrap().report,
+            failed.report
+        );
         assert_eq!(claim(&pool, "manual-retry").await.unwrap().unwrap().id, id);
     }
 
@@ -1337,6 +1377,164 @@ mod tests {
         .await
         .unwrap();
         id
+    }
+
+    async fn failed_csv_report(pool: sqlx::PgPool, mode: ImportMode) {
+        let org_id = org(&pool).await;
+        sqlx::query!(
+            "INSERT INTO users (id, org_id, email, name) VALUES ($1, $2, $3, 'Sync User')",
+            Uuid::now_v7(),
+            org_id,
+            "known@example.com",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let mut csv = String::from("Date,Client,Project,Task,Hours,Email\n");
+        csv.push_str(&"2026-01-01,Client,Project,Task,1,known@example.com\n".repeat(499));
+        csv.push_str("bad-date,Client,Project,Task,1,known@example.com\n");
+        csv.push_str("2026-01-01,Client,Project,Task,1,known@example.com\n");
+        let id = enqueue_csv(
+            &pool,
+            org_id,
+            mode,
+            csv.into_bytes(),
+            "partial-report",
+            JobPolicy { max_attempts: 1 },
+        )
+        .await
+        .unwrap();
+        sqlx::query!("ALTER TABLE horae_jobs ADD CONSTRAINT reject_job_completion CHECK (status <> 'succeeded')")
+            .execute(&pool).await.unwrap();
+        let job = claim(&pool, "report-worker").await.unwrap().unwrap();
+        execute(&state(pool.clone()), "report-worker", job)
+            .await
+            .unwrap();
+        let failed = status(&pool, org_id, id).await.unwrap().unwrap();
+        assert_eq!(failed.status, "failed");
+        assert!(
+            failed
+                .last_error
+                .as_deref()
+                .unwrap()
+                .contains("reject_job_completion")
+        );
+        let partial: ImportReport = serde_json::from_value(
+            failed
+                .report
+                .clone()
+                .expect("confirmed batches must have an inspectable report"),
+        )
+        .unwrap();
+        assert_eq!(partial.mode, mode);
+        assert_eq!(partial.summary.time_entries.created, 499);
+        assert_eq!(partial.summary.time_entries.errored, 1);
+        assert_eq!(partial.row_errors.len(), 1);
+        assert!(partial.reconciles());
+        assert_eq!(list(&pool, org_id, 20, None).await.unwrap()[0], failed);
+        let stored = sqlx::query!("SELECT report FROM horae_jobs WHERE id = $1", id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            stored.report, failed.report,
+            "the report must commit with its checkpoint"
+        );
+        // Older workers stored outcomes only in the checkpoint. Read those jobs
+        // without exposing the source cursor or private simulation state.
+        sqlx::query!("UPDATE horae_jobs SET report = NULL WHERE id = $1", id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            list(&pool, org_id, 20, None).await.unwrap()[0].report,
+            failed.report
+        );
+        sqlx::query!(
+            "UPDATE horae_jobs SET finished_at = now() - interval '2 days' WHERE id = $1",
+            id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        cleanup(&pool).await.unwrap();
+        assert_eq!(
+            status(&pool, org_id, id).await.unwrap().unwrap().report,
+            failed.report
+        );
+        assert!(retry(&pool, org_id, id).await.unwrap());
+        assert_eq!(
+            status(&pool, org_id, id).await.unwrap().unwrap().report,
+            failed.report
+        );
+        let _crashed = claim(&pool, "crashed-retry").await.unwrap().unwrap();
+        sqlx::query!(
+            "UPDATE horae_jobs SET lease_until = now() - interval '1 second' WHERE id = $1",
+            id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        assert!(claim(&pool, "recovery").await.unwrap().is_none());
+        let interrupted = status(&pool, org_id, id).await.unwrap().unwrap();
+        assert_eq!(interrupted.status, "failed");
+        assert_eq!(interrupted.report, failed.report);
+        assert_eq!(
+            interrupted.last_error.as_deref(),
+            Some("Job attempt limit reached after interruption")
+        );
+        assert!(retry(&pool, org_id, id).await.unwrap());
+        sqlx::query!("ALTER TABLE horae_jobs DROP CONSTRAINT reject_job_completion")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let job = claim(&pool, "retry-worker").await.unwrap().unwrap();
+        execute(&state(pool.clone()), "retry-worker", job)
+            .await
+            .unwrap();
+        let completed = status(&pool, org_id, id).await.unwrap().unwrap();
+        assert_eq!(completed.status, "succeeded");
+        assert!(completed.last_error.is_none());
+        let report: ImportReport = serde_json::from_value(completed.report.unwrap()).unwrap();
+        assert_eq!(report.summary.time_entries.created, 500);
+        assert_eq!(report.summary.time_entries.errored, 1);
+        assert_eq!(report.row_errors, partial.row_errors);
+        assert_eq!(
+            sqlx::query_scalar!(
+                "SELECT count(*) FROM time_entries WHERE org_id = $1",
+                org_id
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+            Some(if mode == ImportMode::Commit { 500 } else { 0 })
+        );
+        sqlx::query!(
+            "UPDATE horae_jobs SET finished_at = now() - interval '31 days' WHERE id = $1",
+            id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        cleanup(&pool).await.unwrap();
+        assert!(status(&pool, org_id, id).await.unwrap().is_none());
+        assert!(list(&pool, org_id, 20, None).await.unwrap().is_empty());
+    }
+
+    #[sqlx::test]
+    #[serial_test::serial]
+    async fn failed_csv_commit_retains_confirmed_report_through_history_and_retry(
+        pool: sqlx::PgPool,
+    ) {
+        failed_csv_report(pool, ImportMode::Commit).await;
+    }
+
+    #[sqlx::test]
+    #[serial_test::serial]
+    async fn failed_csv_preview_retains_confirmed_report_through_history_and_retry(
+        pool: sqlx::PgPool,
+    ) {
+        failed_csv_report(pool, ImportMode::DryRun).await;
     }
 
     #[sqlx::test]

@@ -84,7 +84,17 @@ async fn durable_api_stale_commit_cannot_advance_data_or_watermark(pool: PgPool)
     assert_eq!(watermark(&pool, org).await, json!({}));
     let pending = jobs::status(&pool, org, id).await.unwrap().unwrap();
     assert_eq!(pending.status, "running");
-    assert!(pending.report.is_none());
+    assert_eq!(pending.processed_count, 0);
+    assert_eq!(
+        pending.report,
+        Some(
+            serde_json::to_value(ImportReport::new(
+                SourceKind::HarvestApi,
+                ImportMode::Commit
+            ))
+            .unwrap()
+        )
+    );
 }
 
 #[sqlx::test(migrations = "./migrations")]

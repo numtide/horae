@@ -418,6 +418,63 @@ async fn selecting_another_job_drops_the_previous_pending_status_request() {
     assert!(!ui.html().contains("Import failed"));
 }
 
+#[tokio::test]
+async fn failed_and_cancelled_history_shows_partial_outcomes_without_success_actions() {
+    for state in ["failed", "cancelled"] {
+        for mode in [ImportMode::Commit, ImportMode::DryRun] {
+            let probe = Probe::default();
+            let mut snapshot = job(1, state);
+            let mut report = ImportReport::new(SourceKind::Csv, mode);
+            report.summary.time_entries.created = 499;
+            snapshot.report = Some(serde_json::to_value(report).unwrap());
+            snapshot.last_error = (state == "failed").then(|| "Source connection lost".to_string());
+            probe.history.borrow_mut().push(snapshot.clone());
+            let mut ui = Ui::start(&probe);
+            let response = probe.request();
+            ui.click(&format!("select-{}", snapshot.id));
+            response.send(Ok(Some(snapshot))).unwrap();
+            ui.settle();
+            let html = ui.html();
+            assert!(html.contains("Partial report"), "{html}");
+            assert!(html.contains("499"), "{html}");
+            assert!(
+                html.contains(if state == "failed" {
+                    "Source connection lost"
+                } else {
+                    "Import cancelled"
+                }),
+                "{html}"
+            );
+            assert!(!html.contains("Import complete"), "{html}");
+            assert!(!html.contains("Commit this import"), "{html}");
+            assert!(!html.contains("Re-sync changes"), "{html}");
+        }
+    }
+}
+
+#[tokio::test]
+async fn newly_submitted_failed_preview_cannot_be_confirmed() {
+    let probe = Probe::default();
+    let mut ui = Ui::start(&probe);
+    ui.click("choose-csv");
+    ui.choose_file("partial.csv");
+    let response = probe.request();
+    ui.click("preview-csv");
+    let mut snapshot = job(11, "failed");
+    snapshot.report =
+        Some(serde_json::to_value(ImportReport::new(SourceKind::Csv, ImportMode::DryRun)).unwrap());
+    snapshot.last_error = Some("Upload unavailable".into());
+    response.send(Ok(Some(snapshot))).unwrap();
+    ui.settle();
+    let html = ui.html();
+    assert!(html.contains("Partial report"), "{html}");
+    assert!(html.contains("Upload unavailable"), "{html}");
+    assert!(!html.contains("Commit this import"), "{html}");
+    ui.choose_file("another.csv");
+    assert!(!ui.html().contains("Partial report"));
+    assert!(!ui.html().contains("Upload unavailable"));
+}
+
 mod server_fns {
     use super::*;
 

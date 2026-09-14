@@ -38,16 +38,19 @@ impl JobLease {
 
     /// Save inside the handler's transaction, so cursor/progress and domain
     /// changes commit together under the same cancellation and ownership fence.
+    /// The public report contains only these confirmed outcomes, even if a later
+    /// batch fails or the final attempt's lease expires.
     pub(crate) async fn save_checkpoint(
         &self,
         connection: &mut PgConnection,
         checkpoint: &serde_json::Value,
+        report: &serde_json::Value,
         phase: &str,
         processed_count: i64,
     ) -> anyhow::Result<()> {
         let updated = sqlx::query!(
             r#"UPDATE horae_jobs
-                  SET checkpoint = $1, phase = $2, processed_count = $3,
+                  SET checkpoint = $1, phase = $2, processed_count = $3, report = $7,
                       updated_at = clock_timestamp()
                 WHERE id = $4 AND org_id = $5 AND claim_token = $6
                   AND status = 'running' AND NOT cancellation_requested
@@ -58,6 +61,7 @@ impl JobLease {
             self.id,
             self.org_id,
             self.token,
+            report,
         )
         .execute(connection)
         .await?;

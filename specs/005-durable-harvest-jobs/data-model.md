@@ -16,13 +16,27 @@ Represents one administrator-requested API or CSV import.
 - `cancellation_requested`: durable request flag. Running jobs remain running until the worker stops or their lease expires; retry is unavailable before terminal acknowledgement.
 - `phase`, `processed_count`, `total_count`: progress.
 - `checkpoint`: versioned importer cursor/checkpoint.
-- `report`, `last_error`: terminal report and latest failure details.
+- `report`, `last_error`: last confirmed outcomes and latest attempt failure details. Only `status = succeeded` means the report covers the completed source.
 - `created_at`, `started_at`, `finished_at`, `updated_at`: lifecycle timestamps.
 
 New jobs snapshot `HORAE_JOB_MAX_ATTEMPTS` (default 5, allowed 1–100) into
 `max_attempts`. Duplicate enqueues and manual retries preserve that limit,
 even if the server's current policy has changed. Existing rows retain their
 stored policy.
+
+Harvest jobs initialize an empty source/mode-specific report when enqueued, so
+configuration failures or invalid uploads before the first checkpoint still have
+an inspectable zero-confirmed-work result. Duplicate enqueue never replaces an
+existing report. Each checkpoint updates the public report in the same fenced
+transaction as its cursor and progress. Failed or cancelled batches cannot publish
+unconfirmed outcomes; previous confirmed outcomes survive bounded retry exhaustion,
+lease expiry, cancellation and manual retry. Final success replaces the partial
+report with the complete one and clears the checkpoint.
+
+Status and history also read the report embedded in older checkpoints, without
+returning the private source cursor or simulation cache. This supports jobs written
+before separate partial-report persistence. Report data follows the job's existing
+thirty-day retention policy; there is no separate report expiry.
 
 ### CSV commit checkpoint, version 1
 

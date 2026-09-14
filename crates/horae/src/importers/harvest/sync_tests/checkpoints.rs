@@ -285,6 +285,79 @@ struct Committed {
     ready: std::sync::Arc<tokio::sync::Notify>,
 }
 
+async fn failed_api_report(pool: PgPool, mode: ImportMode) {
+    let org = setup(&pool).await;
+    let id = jobs::enqueue(
+        &pool,
+        org,
+        &jobs::JobPayload::HarvestApi {
+            mode,
+            sync: SyncScope::Full,
+        },
+        "failed-page-report",
+        crate::config::JobPolicy { max_attempts: 1 },
+    )
+    .await
+    .unwrap();
+    let server = Server::start(|url| {
+        if url.path().ends_with("/time_entries")
+            && url.query_pairs().any(|(key, _)| key == "cursor")
+        {
+            return Response {
+                status: 500,
+                headers: vec![],
+                body: vec![],
+            };
+        }
+        fixture_page(url, FirstEntry::Valid)
+    });
+    let (lease, stop) = jobs::claim_lease_for_test(&pool).await;
+    jobs::run_claimed(&pool, &lease, stop, async {
+        let report = run_api_import_with_http(
+            &pool,
+            org,
+            "USD",
+            &config(),
+            mode,
+            SyncScope::Full,
+            ApiHttp::local(server.base.clone()),
+            Some(&lease),
+        )
+        .await?;
+        job_report(&report)
+    })
+    .await
+    .unwrap();
+    let failed = jobs::status(&pool, org, id).await.unwrap().unwrap();
+    assert_eq!(failed.status, "failed");
+    assert!(failed.last_error.as_deref().unwrap().contains("HTTP 500"));
+    assert_eq!(failed.processed_count, 5);
+    let partial: ImportReport = serde_json::from_value(failed.report.clone().unwrap()).unwrap();
+    assert_eq!(partial.mode, mode);
+    assert_eq!(partial.summary.clients.created, 2);
+    assert_eq!(partial.summary.time_entries.created, 1);
+    assert_eq!(partial.error_count(), 0);
+    assert_eq!(jobs::list(&pool, org, 20, None).await.unwrap()[0], failed);
+    assert_eq!(watermark(&pool, org).await, json!({}));
+    assert_eq!(
+        sqlx::query_scalar!("SELECT count(*) FROM time_entries WHERE org_id = $1", org)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        Some(if mode == ImportMode::Commit { 1 } else { 0 })
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn failed_api_commit_publishes_its_last_confirmed_page_report(pool: PgPool) {
+    failed_api_report(pool, ImportMode::Commit).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn failed_api_preview_publishes_its_last_confirmed_page_report(pool: PgPool) {
+    failed_api_report(pool, ImportMode::DryRun).await;
+}
+
 impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Committed {
     fn on_event(&self, event: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
         struct Statement(bool);

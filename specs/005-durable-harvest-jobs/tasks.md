@@ -33,7 +33,7 @@
 - [x] T017 Test a second synthetic job kind through the same worker boundary.
 - [x] T018 Test transactional outbox insertion and idempotent delivery bookkeeping.
 - [x] T019 Regenerate `.sqlx` cache and run targeted integration tests, clippy, and formatting.
-- [ ] T020 Preserve inspectable reports for terminal failures (FR-012/SC-004), including failures after confirmed batches and before the first checkpoint; verify status/history, retention and manual retry.
+- [x] T020 Preserve inspectable reports for terminal failures (FR-012/SC-004), including failures after confirmed batches and before the first checkpoint; verify status/history, retention and manual retry.
 
 See [adversarial-review.md](adversarial-review.md) for uncovered cases and the
 evidence required to close the reopened tasks.

@@ -98,9 +98,15 @@ impl Checkpoint {
         lease: &JobLease,
         phase: &str,
     ) -> anyhow::Result<()> {
-        let (_, count) = super::super::job_report(&self.report)?;
+        let (report, count) = super::super::job_report(&self.report)?;
         lease
-            .save_checkpoint(connection, &serde_json::to_value(self)?, phase, count)
+            .save_checkpoint(
+                connection,
+                &serde_json::to_value(self)?,
+                &report,
+                phase,
+                count,
+            )
             .await
     }
 }

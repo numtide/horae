@@ -8,7 +8,7 @@ use tokio::sync::{Notify, mpsc};
 use tracing::instrument::WithSubscriber;
 use tracing_subscriber::prelude::*;
 
-use super::super::csv_source::import_body;
+use super::super::{csv_source::import_body, report::ImportReport};
 use super::*;
 
 const HEADER: &str = "Date,Client,Project,Task,Hours,Email,Notes\n";
@@ -697,7 +697,11 @@ async fn durable_csv_stale_commit_is_fenced_without_a_heartbeat(pool: PgPool) {
     );
     let pending = jobs::status(&pool, org, id).await.unwrap().unwrap();
     assert_eq!(pending.status, "running");
-    assert!(pending.report.is_none());
+    assert_eq!(pending.processed_count, 0);
+    assert_eq!(
+        pending.report,
+        Some(serde_json::to_value(ImportReport::new(SourceKind::Csv, ImportMode::Commit)).unwrap())
+    );
     import_body_with_lease(
         &pool,
         org,

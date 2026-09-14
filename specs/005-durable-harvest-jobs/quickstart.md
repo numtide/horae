@@ -28,6 +28,14 @@ Historical previews are read-only: start a new preview to commit. A preview
 submitted in the current page keeps its original source for confirmation, even
 if a different CSV is selected before the report arrives.
 
+Failed and cancelled imports show the last confirmed report alongside their
+failure/cancellation state. The banner marks it as partial: unconfirmed batches
+are not included, and an interrupted preview cannot be confirmed as a full import.
+A failure before any checkpoint shows zero confirmed outcomes and the error.
+Retry preserves earlier confirmed counts; success replaces the partial report.
+Verify these reports remain inspectable through history during the thirty-day
+retention period.
+
 ## CSV commit recovery
 
 Use a CSV longer than 500 records to exercise durable batch commits. After a

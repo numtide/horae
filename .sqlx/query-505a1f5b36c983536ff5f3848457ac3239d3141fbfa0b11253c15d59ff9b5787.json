@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, kind, status, phase, processed_count, total_count,\n                  report, last_error,\n                  created_at as \"created_at!: chrono::DateTime<chrono::Utc>\",\n                  finished_at as \"finished_at: chrono::DateTime<chrono::Utc>\"\n             FROM horae_jobs\n            WHERE id = $1 AND org_id = $2",
+  "query": "SELECT id, kind, status, phase, processed_count, total_count,\n                  COALESCE(checkpoint->'report', report) AS report, last_error,\n                  created_at as \"created_at!: chrono::DateTime<chrono::Utc>\",\n                  finished_at as \"finished_at: chrono::DateTime<chrono::Utc>\"\n             FROM horae_jobs\n            WHERE org_id = $1\n              AND ($3::uuid IS NULL OR (created_at, id) < (\n                  SELECT created_at, id FROM horae_jobs WHERE id = $3 AND org_id = $1\n              ))\n            ORDER BY created_at DESC, id DESC\n            LIMIT $2",
   "describe": {
     "columns": [
       {
@@ -57,6 +57,7 @@
     "parameters": {
       "Left": [
         "Uuid",
+        "Int8",
         "Uuid"
       ]
     },
@@ -67,11 +68,11 @@
       true,
       false,
       true,
-      true,
+      null,
       true,
       false,
       true
     ]
   },
-  "hash": "84c180168cf19af955a56c74a808e56f923b76612fc1bd941738b80781f6d166"
+  "hash": "505a1f5b36c983536ff5f3848457ac3239d3141fbfa0b11253c15d59ff9b5787"
 }
