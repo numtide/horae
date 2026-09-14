@@ -1,3 +1,4 @@
+use anyhow::Context;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -21,6 +22,41 @@ pub struct AppConfig {
     /// secret, redirect URL, and encryption key are all set; the importer's API
     /// source is available exactly when this is present.
     pub harvest: Option<HarvestConfig>,
+    /// Execution limits copied into newly enqueued jobs.
+    pub job_policy: JobPolicy,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct JobPolicy {
+    /// Total attempts, including the initial execution; must be in 1..=100.
+    pub max_attempts: i32,
+}
+
+impl Default for JobPolicy {
+    fn default() -> Self {
+        Self { max_attempts: 5 }
+    }
+}
+
+impl JobPolicy {
+    pub fn validate(self) -> anyhow::Result<Self> {
+        anyhow::ensure!(
+            (1..=100).contains(&self.max_attempts),
+            "job max_attempts must be between 1 and 100"
+        );
+        Ok(self)
+    }
+
+    fn from_env() -> anyhow::Result<Self> {
+        let max_attempts = match std::env::var("HORAE_JOB_MAX_ATTEMPTS") {
+            Ok(value) => value.parse().context("invalid HORAE_JOB_MAX_ATTEMPTS")?,
+            Err(std::env::VarError::NotPresent) => Self::default().max_attempts,
+            Err(error) => return Err(error).context("invalid HORAE_JOB_MAX_ATTEMPTS"),
+        };
+        Self { max_attempts }
+            .validate()
+            .context("invalid HORAE_JOB_MAX_ATTEMPTS")
+    }
 }
 
 /// Harvest importer configuration, read from `HORAE_HARVEST_CLIENT_ID`,
@@ -78,6 +114,7 @@ impl AppConfig {
                 .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
                 .unwrap_or(false),
             harvest: HarvestConfig::from_env(),
+            job_policy: JobPolicy::from_env()?,
         })
     }
 }

@@ -70,6 +70,25 @@ rolling back the enqueue transaction publishes no event. This does not provide
 exactly-once external delivery.
 
 Still open: cooperative running cancellation, fencing of import writes after
-lease loss, durable checkpoints and live progress, configurable enqueue policy,
+lease loss, durable checkpoints and live progress,
 and history restoration/error recovery in the UI. Baseline CI success must not
 be used to close these findings.
+
+## Configurable execution policy
+
+API and CSV enqueue now persist the configured attempt limit rather than relying
+on the database default. `HORAE_JOB_MAX_ATTEMPTS` accepts 1–100 attempts, including
+the initial execution, and defaults to 5. Validation runs both at startup and at
+the enqueue boundary. Idempotent requests preserve the original job's limit and
+CSV body; manual retry resets consumed attempts without replacing the policy.
+
+The PostgreSQL jobs suite passes 21 tests. New regressions exercise API failures
+through a non-default attempt budget, a replacement server with different
+configuration, duplicate CSV enqueue, and rejection before any job or upload is
+stored. The configuration regression was observed failing before the fix: the
+requested environment value was ignored. This follow-up closes T004, not the
+remaining cancellation, lease-fencing, checkpoint, or UI findings.
+
+All 11 configuration tests pass, including the default, supported boundaries,
+and rejection of empty, out-of-range, overflowing, and non-numeric values. Server
+clippy passes with all targets and warnings denied; SQLx metadata is regenerated.

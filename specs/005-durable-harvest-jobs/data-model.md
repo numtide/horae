@@ -17,6 +17,11 @@ Represents one administrator-requested API or CSV import.
 - `report`, `last_error`: terminal report and latest failure details.
 - `created_at`, `started_at`, `finished_at`, `updated_at`: lifecycle timestamps.
 
+New jobs snapshot `HORAE_JOB_MAX_ATTEMPTS` (default 5, allowed 1–100) into
+`max_attempts`. Duplicate enqueues and manual retries preserve that limit,
+even if the server's current policy has changed. Existing rows retain their
+stored policy.
+
 ## CSV Upload Blob
 
 Stores an administrator-uploaded CSV owned by the same organization and job, with a bounded size. Successful uploads are eligible for deletion after one day. Failed and cancelled uploads remain available for retry until the job's thirty-day retention ends; deleting the job cascades to its upload. Retry refuses CSV jobs with a missing upload.

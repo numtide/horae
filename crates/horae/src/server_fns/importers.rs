@@ -89,7 +89,7 @@ pub async fn start_harvest_api_import(
     let state = crate::state::global_state().await;
     let payload = crate::jobs::JobPayload::HarvestApi { mode, sync };
     let key = format!("api:{}", uuid::Uuid::now_v7());
-    crate::jobs::enqueue(&state.db, admin.org_id, &payload, &key)
+    crate::jobs::enqueue(&state.db, admin.org_id, &payload, &key, state.job_policy)
         .await
         .map_err(server_err)
 }
@@ -130,9 +130,16 @@ pub async fn start_harvest_csv_import(
     // Uploads have no stable source identifier; never deduplicate unrelated
     // files merely because their byte lengths happen to match.
     let key = format!("csv:{}", uuid::Uuid::now_v7());
-    crate::jobs::enqueue_csv(&state.db, admin.org_id, mode, body.to_vec(), &key)
-        .await
-        .map_err(server_err)
+    crate::jobs::enqueue_csv(
+        &state.db,
+        admin.org_id,
+        mode,
+        body.to_vec(),
+        &key,
+        state.job_policy,
+    )
+    .await
+    .map_err(server_err)
 }
 
 #[server]

@@ -10,7 +10,7 @@ use horae_core::importers::harvest::types::{ImportMode, SyncScope};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::state::AppState;
+use crate::{config::JobPolicy, state::AppState};
 
 const LEASE: Duration = Duration::from_secs(300);
 const POLL: Duration = Duration::from_secs(2);
@@ -180,12 +180,14 @@ pub async fn enqueue(
     org_id: Uuid,
     payload: &JobPayload,
     idempotency_key: &str,
+    policy: JobPolicy,
 ) -> anyhow::Result<Uuid> {
+    let policy = policy.validate()?;
     let id = Uuid::now_v7();
     let encoded = encode_payload(payload)?;
     let row = sqlx::query!(
-        r#"INSERT INTO horae_jobs (id, org_id, kind, payload, idempotency_key)
-           VALUES ($1, $2, $3, $4, $5)
+        r#"INSERT INTO horae_jobs (id, org_id, kind, payload, idempotency_key, max_attempts)
+           VALUES ($1, $2, $3, $4, $5, $6)
            ON CONFLICT (org_id, kind, idempotency_key)
            DO UPDATE SET updated_at = now()
            RETURNING id"#,
@@ -194,6 +196,7 @@ pub async fn enqueue(
         payload.kind(),
         encoded,
         idempotency_key,
+        policy.max_attempts,
     )
     .fetch_one(pool)
     .await?;
@@ -206,13 +209,15 @@ pub async fn enqueue_csv(
     mode: ImportMode,
     body: Vec<u8>,
     idempotency_key: &str,
+    policy: JobPolicy,
 ) -> anyhow::Result<Uuid> {
+    let policy = policy.validate()?;
     let id = Uuid::now_v7();
     let payload = encode_payload(&JobPayload::HarvestCsv { mode })?;
     let mut tx = pool.begin().await?;
     let row = sqlx::query!(
-        r#"INSERT INTO horae_jobs (id, org_id, kind, payload, idempotency_key)
-           VALUES ($1, $2, 'harvest_csv_import', $3, $4)
+        r#"INSERT INTO horae_jobs (id, org_id, kind, payload, idempotency_key, max_attempts)
+           VALUES ($1, $2, 'harvest_csv_import', $3, $4, $5)
            ON CONFLICT (org_id, kind, idempotency_key)
            DO UPDATE SET updated_at = now()
            RETURNING id"#,
@@ -220,6 +225,7 @@ pub async fn enqueue_csv(
         org_id,
         payload,
         idempotency_key,
+        policy.max_attempts,
     )
     .fetch_one(&mut *tx)
     .await?;
@@ -647,18 +653,173 @@ mod tests {
 
     #[sqlx::test]
     #[serial_test::serial]
-    async fn expired_final_attempt_fails_without_claiming_again(pool: sqlx::PgPool) {
+    async fn api_job_keeps_its_policy_across_duplicate_enqueue_and_manual_retry(
+        pool: sqlx::PgPool,
+    ) {
         let org_id = org(&pool).await;
-        let id = enqueue(&pool, org_id, &JobPayload::Synthetic, "crashed")
+        let payload = JobPayload::HarvestApi {
+            mode: ImportMode::DryRun,
+            sync: SyncScope::Incremental,
+        };
+        let id = enqueue(
+            &pool,
+            org_id,
+            &payload,
+            "policy",
+            JobPolicy { max_attempts: 2 },
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            enqueue(
+                &pool,
+                org_id,
+                &payload,
+                "policy",
+                JobPolicy { max_attempts: 9 }
+            )
+            .await
+            .unwrap(),
+            id
+        );
+        // A replacement server's configuration must not alter an existing job.
+        let replacement = state(pool.clone()).with_job_policy(JobPolicy { max_attempts: 1 });
+        for expected in ["queued", "failed"] {
+            let job = claim(&pool, "replacement").await.unwrap().unwrap();
+            execute(&replacement, "replacement", job).await.unwrap();
+            assert_eq!(
+                status(&pool, org_id, id).await.unwrap().unwrap().status,
+                expected
+            );
+            sqlx::query!(
+                "UPDATE horae_jobs SET available_at = now() WHERE id = $1",
+                id
+            )
+            .execute(&pool)
             .await
             .unwrap();
+        }
+        assert!(claim(&pool, "replacement").await.unwrap().is_none());
+        assert!(retry(&pool, org_id, id).await.unwrap());
+        let job = claim(&pool, "replacement").await.unwrap().unwrap();
+        execute(&replacement, "replacement", job).await.unwrap();
+        assert_eq!(
+            status(&pool, org_id, id).await.unwrap().unwrap().status,
+            "queued"
+        );
+    }
+
+    #[sqlx::test]
+    #[serial_test::serial]
+    async fn csv_job_persists_its_policy_with_the_upload(pool: sqlx::PgPool) {
+        let org_id = org(&pool).await;
+        let id = enqueue_csv(
+            &pool,
+            org_id,
+            ImportMode::DryRun,
+            Vec::new(),
+            "csv-policy",
+            JobPolicy { max_attempts: 1 },
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            enqueue_csv(
+                &pool,
+                org_id,
+                ImportMode::DryRun,
+                b"replacement".to_vec(),
+                "csv-policy",
+                JobPolicy::default(),
+            )
+            .await
+            .unwrap(),
+            id
+        );
+        let stored = sqlx::query!(
+            "SELECT j.max_attempts, u.body FROM horae_jobs j JOIN horae_job_uploads u ON u.job_id = j.id WHERE j.id = $1",
+            id
+        ).fetch_one(&pool).await.unwrap();
+        assert_eq!(stored.max_attempts, 1);
+        assert!(stored.body.is_empty());
+        let job = claim(&pool, "csv-worker").await.unwrap().unwrap();
+        execute(&state(pool.clone()), "csv-worker", job)
+            .await
+            .unwrap();
+        let failed = status(&pool, org_id, id).await.unwrap().unwrap();
+        assert_eq!(failed.status, "failed");
+        assert_eq!(failed.last_error.as_deref(), Some("the file is empty"));
+    }
+
+    #[sqlx::test]
+    #[serial_test::serial]
+    async fn invalid_policy_cannot_enqueue_a_job_or_upload(pool: sqlx::PgPool) {
+        let org_id = org(&pool).await;
+        for max_attempts in [-1, 0, 101, i32::MAX] {
+            let policy = JobPolicy { max_attempts };
+            assert!(
+                enqueue(
+                    &pool,
+                    org_id,
+                    &JobPayload::Synthetic,
+                    "invalid-policy",
+                    policy
+                )
+                .await
+                .is_err()
+            );
+            assert!(
+                enqueue_csv(
+                    &pool,
+                    org_id,
+                    ImportMode::DryRun,
+                    b"csv".to_vec(),
+                    "invalid-policy",
+                    policy
+                )
+                .await
+                .is_err()
+            );
+        }
+        assert!(list(&pool, org_id, 100).await.unwrap().is_empty());
+        assert_eq!(
+            sqlx::query_scalar!(
+                "SELECT count(*) FROM horae_job_uploads WHERE org_id = $1",
+                org_id
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+            Some(0)
+        );
+    }
+
+    #[sqlx::test]
+    #[serial_test::serial]
+    async fn expired_final_attempt_fails_without_claiming_again(pool: sqlx::PgPool) {
+        let org_id = org(&pool).await;
+        let id = enqueue(
+            &pool,
+            org_id,
+            &JobPayload::Synthetic,
+            "crashed",
+            JobPolicy::default(),
+        )
+        .await
+        .unwrap();
         let _claimed = claim(&pool, "crashed-worker").await.unwrap().unwrap();
         sqlx::query!(
             "UPDATE horae_jobs SET attempts = max_attempts, lease_until = now() - interval '1 second' WHERE id = $1", id
         ).execute(&pool).await.unwrap();
-        let next_id = enqueue(&pool, org_id, &JobPayload::Synthetic, "next")
-            .await
-            .unwrap();
+        let next_id = enqueue(
+            &pool,
+            org_id,
+            &JobPayload::Synthetic,
+            "next",
+            JobPolicy::default(),
+        )
+        .await
+        .unwrap();
         assert_eq!(
             claim(&pool, "replacement").await.unwrap().unwrap().id,
             next_id
@@ -683,13 +844,15 @@ mod tests {
             mode: ImportMode::DryRun,
             sync: SyncScope::Incremental,
         };
-        let id = enqueue(&pool, org_id, &payload, "final-error")
-            .await
-            .unwrap();
-        sqlx::query!("UPDATE horae_jobs SET max_attempts = 1 WHERE id = $1", id)
-            .execute(&pool)
-            .await
-            .unwrap();
+        let id = enqueue(
+            &pool,
+            org_id,
+            &payload,
+            "final-error",
+            JobPolicy { max_attempts: 1 },
+        )
+        .await
+        .unwrap();
         let job = claim(&pool, "worker").await.unwrap().unwrap();
         execute(&state(pool.clone()), "worker", job).await.unwrap();
         let failed = status(&pool, org_id, id).await.unwrap().unwrap();
@@ -716,6 +879,7 @@ mod tests {
                 org_id,
                 &JobPayload::Synthetic,
                 &format!("invalid-{index}"),
+                JobPolicy::default(),
             )
             .await
             .unwrap();
@@ -749,6 +913,7 @@ mod tests {
             ImportMode::DryRun,
             b"csv".to_vec(),
             "retention",
+            JobPolicy::default(),
         )
         .await
         .unwrap();
@@ -832,9 +997,15 @@ mod tests {
     #[serial_test::serial]
     async fn stopped_worker_leaves_queued_jobs_unclaimed(pool: sqlx::PgPool) {
         let org_id = org(&pool).await;
-        let id = enqueue(&pool, org_id, &JobPayload::Synthetic, "shutdown")
-            .await
-            .unwrap();
+        let id = enqueue(
+            &pool,
+            org_id,
+            &JobPayload::Synthetic,
+            "shutdown",
+            JobPolicy::default(),
+        )
+        .await
+        .unwrap();
         let (stop, receiver) = tokio::sync::watch::channel(true);
         run_worker(&state(pool.clone()), receiver).await;
         drop(stop);
@@ -848,9 +1019,15 @@ mod tests {
     #[serial_test::serial]
     async fn synthetic_job_executes_through_claim_and_completion(pool: sqlx::PgPool) {
         let org_id = org(&pool).await;
-        let id = enqueue(&pool, org_id, &JobPayload::Synthetic, "execution")
-            .await
-            .unwrap();
+        let id = enqueue(
+            &pool,
+            org_id,
+            &JobPayload::Synthetic,
+            "execution",
+            JobPolicy::default(),
+        )
+        .await
+        .unwrap();
         let job = claim(&pool, "synthetic-worker").await.unwrap().unwrap();
         execute(&state(pool.clone()), "synthetic-worker", job)
             .await
@@ -872,9 +1049,15 @@ mod tests {
             mode: ImportMode::DryRun,
             sync: SyncScope::Incremental,
         };
-        let id = enqueue(&pool, org_id, &payload, "unconfigured")
-            .await
-            .unwrap();
+        let id = enqueue(
+            &pool,
+            org_id,
+            &payload,
+            "unconfigured",
+            JobPolicy::default(),
+        )
+        .await
+        .unwrap();
         let job = claim(&pool, "unconfigured-worker").await.unwrap().unwrap();
         execute(&state(pool.clone()), "unconfigured-worker", job)
             .await
@@ -902,6 +1085,7 @@ mod tests {
                 mode: ImportMode::DryRun,
             },
             "missing-upload",
+            JobPolicy::default(),
         )
         .await
         .unwrap();
@@ -951,8 +1135,12 @@ mod tests {
             mode: ImportMode::DryRun,
             sync: SyncScope::Incremental,
         };
-        let first = enqueue(&pool, org_id, &payload, "first").await.unwrap();
-        let second = enqueue(&pool, org_id, &payload, "second").await.unwrap();
+        let first = enqueue(&pool, org_id, &payload, "first", JobPolicy::default())
+            .await
+            .unwrap();
+        let second = enqueue(&pool, org_id, &payload, "second", JobPolicy::default())
+            .await
+            .unwrap();
 
         let (left, right) = tokio::join!(claim(&pool, "worker-a"), claim(&pool, "worker-b"));
         let left = left.unwrap().unwrap();
@@ -982,9 +1170,15 @@ mod tests {
             mode: ImportMode::DryRun,
             sync: SyncScope::Incremental,
         };
-        let id = enqueue(&pool, org_id, &payload, "cancel-retry")
-            .await
-            .unwrap();
+        let id = enqueue(
+            &pool,
+            org_id,
+            &payload,
+            "cancel-retry",
+            JobPolicy::default(),
+        )
+        .await
+        .unwrap();
         assert!(status(&pool, foreign_org, id).await.unwrap().is_none());
         assert!(list(&pool, foreign_org, 20).await.unwrap().is_empty());
         assert!(!cancel(&pool, foreign_org, id).await.unwrap());

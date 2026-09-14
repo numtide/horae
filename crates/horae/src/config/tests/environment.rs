@@ -82,13 +82,41 @@ fn partial_oidc_configuration_remains_disabled_without_a_callback() {
 }
 
 #[test]
+fn job_attempt_limit_uses_the_documented_environment_variable() {
+    for value in ["1", "3", "100"] {
+        probe("job-policy", &[("HORAE_JOB_MAX_ATTEMPTS", value)]);
+    }
+}
+
+#[test]
+fn invalid_job_attempt_limits_reject_startup() {
+    for value in ["", "0", "-1", "101", "2147483648", "three"] {
+        probe("invalid-job-policy", &[("HORAE_JOB_MAX_ATTEMPTS", value)]);
+    }
+}
+
+#[test]
 fn environment_probe() {
     let Ok(mode) = std::env::var("HORAE_CONFIG_TEST") else {
         return;
     };
-    let config = AppConfig::from_env().unwrap();
+    let result = AppConfig::from_env();
+    if mode == "invalid-job-policy" {
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("HORAE_JOB_MAX_ATTEMPTS")
+        );
+        return;
+    }
+    let config = result.unwrap();
     match mode.as_str() {
         "defaults" | "secure" => {
+            assert_eq!(
+                serde_json::to_value(&config).unwrap()["job_policy"]["max_attempts"],
+                5
+            );
             assert!(!config.dev_login);
             assert_eq!(config.secure_cookies, mode == "secure");
             assert!(config.oidc.is_none());
@@ -122,6 +150,13 @@ fn environment_probe() {
                 "https://horae.example.test/auth/harvest/callback"
             );
             assert_eq!(harvest.encryption_key_hex.len(), 64);
+        }
+        "job-policy" => {
+            let requested: i32 = std::env::var("HORAE_JOB_MAX_ATTEMPTS")
+                .unwrap()
+                .parse()
+                .unwrap();
+            assert_eq!(config.job_policy.max_attempts, requested);
         }
         _ => panic!("unknown configuration test mode"),
     }

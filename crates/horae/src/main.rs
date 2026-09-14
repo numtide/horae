@@ -208,6 +208,7 @@ fn main() -> anyhow::Result<()> {
                     registry,
                     cfg.oidc.clone(),
                     cfg.harvest.clone(),
+                    cfg.job_policy,
                 )
                 .await;
 
