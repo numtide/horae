@@ -79,10 +79,10 @@ pkgs.testers.nixosTest {
     # Exports are plain Axum routes under /api/, a prefix the login guard lets
     # through because everything else there is a server function that checks its
     # own session. They have to reject anonymous callers themselves.
-    range = "from=2000-01-01&to=2100-01-01"
+    date_range = "from=2000-01-01&to=2100-01-01"
     status = server.succeed(
       "curl -s -o /dev/null -w '%{http_code}' "
-      f"'http://localhost:3000/api/reports/export/csv?{range}'"
+      f"'http://localhost:3000/api/reports/export/csv?{date_range}'"
     ).strip()
     assert status == "401", f"Export served without a session: {status}"
 
@@ -93,19 +93,20 @@ pkgs.testers.nixosTest {
 
     # …and still serve the data to a signed-in caller.
     csv = server.succeed(
-      f"curl -s -b /tmp/cookies.txt 'http://localhost:3000/api/reports/export/csv?{range}'"
+      f"curl -s -b /tmp/cookies.txt 'http://localhost:3000/api/reports/export/csv?{date_range}'"
     )
     assert "Date,Project,Task" in csv, f"Authenticated export broken: {csv[:200]}"
 
     def sql(statement):
+        # Horae's DynamicUser can disappear while the service is stopped.
         return server.succeed(
-            "sudo -u horae psql -d horae -At -v ON_ERROR_STOP=1 -c "
+            "sudo -u postgres psql -d horae -At -v ON_ERROR_STOP=1 -c "
             + shlex.quote(statement)
         ).strip()
 
     def wait_sql(statement, expected):
         command = (
-            "sudo -u horae psql -d horae -At -v ON_ERROR_STOP=1 -c "
+            "sudo -u postgres psql -d horae -At -v ON_ERROR_STOP=1 -c "
             + shlex.quote(statement)
         )
         server.wait_until_succeeds(
@@ -140,7 +141,7 @@ pkgs.testers.nixosTest {
         # pg_sleep only keeps the gate connection alive; synchronization below
         # observes PostgreSQL locks, not a guessed delay.
         server.succeed(
-            "sudo -u horae env PGAPPNAME=horae-e2e-import-gate "
+            "sudo -u postgres env PGAPPNAME=horae-e2e-import-gate "
             "psql -d horae -v ON_ERROR_STOP=1 "
             "-c 'SELECT pg_advisory_lock(198, 500)' -c 'SELECT pg_sleep(300)' "
             "> /tmp/import-gate.log 2>&1 < /dev/null &"

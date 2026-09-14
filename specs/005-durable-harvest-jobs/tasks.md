@@ -13,7 +13,7 @@
 - [x] T006 Add worker startup, bounded concurrency, lease/heartbeat, retry backoff, and graceful shutdown.
 - [ ] T007 Add checkpoint/progress updates around existing Harvest import phases.
   - Durable CSV commits checkpoint every 500 records. API commits persist catalog pages, 500-entity parent batches and individual time-entry pages, with report/cache and watermark state.
-  - CSV previews checkpoint rollback-only simulation state every 500 records. API previews retain parent snapshots and entry associations at the same boundaries as API commits. Checkpoint snapshot-size/throughput validation remains pending.
+  - CSV previews checkpoint rollback-only simulation state every 500 records. API previews retain parent snapshots and entry associations at the same boundaries as API commits. All planned scale scenarios and the optimized API preview passed; measured CSV preview overhead remains unresolved. See `performance.md`.
 - [x] T008 Add outbox records and transactional enqueue support for future plugin/webhook/notification delivery.
 - [x] T009 Ensure all job and outbox reads/mutations enforce organization and admin authorization.
   - Registered HTTP handlers enforce live administrator sessions and tenant isolation; uploads have a composite job/organization foreign key. Outbox primitives are internal worker APIs, with organization and claim-token checks on acknowledgements.
@@ -35,6 +35,8 @@
 - [x] T019 Regenerate `.sqlx` cache and run targeted integration tests, clippy, and formatting.
 - [x] T020 Preserve inspectable reports for terminal failures (FR-012/SC-004), including failures after confirmed batches and before the first checkpoint; verify status/history, retention and manual retry.
 - [ ] T021 Bound report metadata, checkpoint error state and error retrieval without discarding individual error details; cover legacy reports, atomic archival/recovery, authorization, retention and the complete UI/download path. See the bounded-report follow-up in `plan.md`.
+  - Verified: bounded new reports, legacy upgrade/rollback with one connection, claim fencing, retention, authorization, captured download boundaries, lazy page reads and missing-fragment errors.
+  - Remaining: broader legacy state coverage, API overflow, socket-level/memory stress and full browser acceptance.
 
 See [adversarial-review.md](adversarial-review.md) for uncovered cases and the
 evidence required to close the reopened tasks.

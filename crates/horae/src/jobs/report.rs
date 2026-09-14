@@ -16,6 +16,9 @@ pub(crate) use legacy::upgrade_legacy_reports;
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+mod stream_tests;
+
 impl JobLease {
     /// Call within the checkpoint/completion transaction. The caller must roll
     /// back both chunks and report metadata if its final ownership fence fails.
@@ -143,11 +146,9 @@ pub(crate) async fn download(
     axum::extract::Path(job_id): axum::extract::Path<Uuid>,
 ) -> Result<axum::response::Response, axum::http::StatusCode> {
     use axum::{
-        body::Body,
         http::{StatusCode, header},
         response::IntoResponse,
     };
-    use std::collections::VecDeque;
 
     let user_id = crate::auth::session::get_session_user_id(&session)
         .await
@@ -178,14 +179,37 @@ pub(crate) async fn download(
         serde_json::to_writer(&mut tail, &error).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         tail.push(b'\n');
     }
-    let pool = state.db.clone();
+    Ok((
+        [
+            (header::CONTENT_TYPE, "application/x-ndjson".to_owned()),
+            (
+                header::CONTENT_DISPOSITION,
+                format!("attachment; filename=\"import-{job_id}-errors.jsonl\""),
+            ),
+            (header::CACHE_CONTROL, "no-store".to_owned()),
+            (header::X_CONTENT_TYPE_OPTIONS, "nosniff".to_owned()),
+        ],
+        download_body(state.db.clone(), user.org_id, job_id, end, tail),
+    )
+        .into_response())
+}
+
+fn download_body(
+    pool: sqlx::PgPool,
+    org_id: Uuid,
+    job_id: Uuid,
+    end: i64,
+    tail: Vec<u8>,
+) -> axum::body::Body {
+    use std::collections::VecDeque;
+
     let stream = futures_util::stream::try_unfold(
         (0_i64, VecDeque::<Vec<u8>>::new(), Some(tail)),
         move |(mut next, mut pending, mut tail)| {
             let pool = pool.clone();
             async move {
                 if pending.is_empty() && next < end {
-                    let page = chunks(&pool, user.org_id, job_id, next, end)
+                    let page = chunks(&pool, org_id, job_id, next, end)
                         .await
                         .map_err(std::io::Error::other)?;
                     next += page.len() as i64;
@@ -198,17 +222,5 @@ pub(crate) async fn download(
             }
         },
     );
-    Ok((
-        [
-            (header::CONTENT_TYPE, "application/x-ndjson".to_owned()),
-            (
-                header::CONTENT_DISPOSITION,
-                format!("attachment; filename=\"import-{job_id}-errors.jsonl\""),
-            ),
-            (header::CACHE_CONTROL, "no-store".to_owned()),
-            (header::X_CONTENT_TYPE_OPTIONS, "nosniff".to_owned()),
-        ],
-        Body::from_stream(stream),
-    )
-        .into_response())
+    axum::body::Body::from_stream(stream)
 }

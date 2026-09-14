@@ -1,8 +1,8 @@
 # Durable import scale validation
 
 These are local release-mode measurements, not production capacity guarantees.
-T007 remains open until the durable/inline comparison and large-catalog cases
-have completed. Run on an isolated PostgreSQL instance with a role that can
+The durable/inline comparison and large-catalog cases have completed. T007
+remains open for the measured CSV preview overhead. Run on an isolated PostgreSQL instance with a role that can
 create databases, inside the Nix development shell.
 
 ## API
@@ -81,6 +81,28 @@ shows no commit/reimport slowdown against the earlier inline measurements;
 it does not establish the same for previews or CSV, or guarantee production
 throughput. The two source revisions and single-sample methodology are not a
 controlled repeated-run speedup claim.
+
+### Selective preview restoration
+
+The optimized API preview completed at `51ba18e` on 2026-09-14. The frozen,
+clean worktree ran against a fresh PostgreSQL instance in release mode, after
+the CSV sequence and local validation builds had finished. No other local
+build or import benchmark ran during the measured phase.
+
+| Scenario | Elapsed seconds | Process HWM, KiB | EOF stored / JSON-text bytes |
+|---|---:|---:|---:|
+| Durable API preview plus EOF recovery | 285.933 | 58,244 | 2,815,525 / 5,110,782 |
+
+The first attempt reached EOF at 285.849 seconds (HWM 56,916 KiB, RSS 53,252
+KiB). All assertions passed: 100,000 outcomes including 100 errors, no domain
+writes, identical recovered report and no additional HTTP requests on recovery.
+The complete test took 286.48 seconds.
+
+Selective restoration reduced elapsed time from the earlier durable sample's
+1,451.289 seconds to 285.933 seconds, with unchanged checkpoint JSON length.
+It did not reduce the process high-water mark. This supports keeping the
+optimization, but distinct revisions and single samples do not establish a
+general speedup or throughput parity. CSV preview overhead remains unresolved.
 
 ## CSV
 
@@ -187,4 +209,6 @@ parent state after each 500-record rollback; attribution of the complete elapsed
 time would require profiling. Commit/reimport have different transaction
 boundaries, so their faster single-sample times are not a general speedup claim.
 
-The optimized API preview remains pending.
+The API preview optimization is measured above. The remaining scale follow-up
+is the CSV preview's repeated checkpoint state restoration and serialization;
+the measured regression must not be presented as throughput parity.

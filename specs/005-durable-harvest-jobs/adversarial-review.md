@@ -575,3 +575,42 @@ regenerated; server all-target Clippy and formatting pass. T021 remains open for
 the broader legacy state matrix, API overflow, stream failure/backpressure and
 memory stress coverage. Full process/browser acceptance and the optimized API
 preview measurement remain separate gates.
+
+## Download consumption and snapshot boundaries
+
+The production download body is now constructed by a private helper so tests
+can control consumption without relying on socket-buffer timing. Its streaming
+behavior is unchanged. Three database-backed characterization tests pass:
+
+- A download retains its captured archive boundary and inline tail when a later
+  checkpoint archives that tail together with new errors. The original errors
+  appear exactly once; later errors are excluded.
+- If retention deletes the owning job after the first read, the body yields only
+  the already-buffered sixteen fragments and then reports the missing archive.
+  Missing data is not a successful end of download.
+- Creating a body acquires no database connection. Consuming sixteen fragments
+  performs one page read; the next fragment triggers the second read. Dropping
+  the body releases its resources, and a single-connection pool closes cleanly
+  without reading the remaining archive.
+
+The five report tests and five registered importer endpoint tests pass, along
+with server all-target Clippy and formatting. The NixOS restart test now performs
+its database probes through the independent PostgreSQL account, not Horae's
+ephemeral DynamicUser while the service is stopped. Nix evaluation and Python
+syntax pass; actual VM execution remains pending in CI.
+
+CI run `34861106426` failed before VM execution: the export query string named
+`range` shadowed Python's builtin used by the new fixture. Renaming it to
+`date_range` fixes that call-site collision without disabling the type checker.
+The DynamicUser probe correction is an additional preventive test fix, not the
+cause reported by this CI run. Actual VM execution still needs to pass.
+Nix evaluation, Python syntax and isolated execution of the actual export binding
+and 1,000-row CSV fixture pass after the rename.
+
+The optimized API preview at `51ba18e` now passes its 100,000-record release
+measurement in 285.933 seconds, including EOF recovery without more HTTP
+requests. Checkpoint JSON size is unchanged and HWM is 58,244 KiB. See
+`performance.md` for the earlier sample and methodology limits. T007 remains
+open for the measured CSV preview overhead; T021 remains open for the broader
+legacy state matrix, API overflow and socket-level/memory stress. Full
+process/browser acceptance remains a separate gate.
