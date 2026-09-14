@@ -12,6 +12,8 @@ Represents one administrator-requested API or CSV import.
 - `attempts`, `max_attempts`: retry accounting. Both execution errors and expired claims consume the persisted attempt budget; manual retry starts a new budget on the same job.
 - `available_at`: earliest retry/start time.
 - `lease_until`, `worker_id`: active claim lease.
+- `claim_token`: UUIDv7 assigned on every claim; fences commits and acknowledgements independently of worker identity or reset attempt counts.
+- `cancellation_requested`: durable request flag. Running jobs remain running until the worker stops or their lease expires; retry is unavailable before terminal acknowledgement.
 - `phase`, `processed_count`, `total_count`: progress.
 - `checkpoint`: versioned importer cursor/checkpoint.
 - `report`, `last_error`: terminal report and latest failure details.

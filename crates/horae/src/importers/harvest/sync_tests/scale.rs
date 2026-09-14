@@ -43,6 +43,7 @@ async fn http_pages_preview_commit_and_reimport(pool: PgPool) {
             mode,
             SyncScope::Full,
             ApiHttp::local(server.base.clone()),
+            None,
         )
         .await
         .unwrap();
@@ -155,6 +156,7 @@ async fn measured_apply(
         mode,
         SyncScope::Full,
         ApiHttp::local(server.base.clone()),
+        None,
     )
     .await
     .unwrap();

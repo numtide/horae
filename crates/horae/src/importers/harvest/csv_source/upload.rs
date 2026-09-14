@@ -14,7 +14,7 @@ use tokio::sync::{Mutex, mpsc};
 use uuid::Uuid;
 
 use super::super::{
-    apply, lock_import, release_import,
+    apply, finish_import, lock_import, release_import,
     report::ImportReport,
     resolve::{OrgDefaults, RunCache},
 };
@@ -73,6 +73,20 @@ pub async fn import_body(
     body: Body,
     mode: ImportMode,
 ) -> Result<ImportReport, CsvError> {
+    import_body_with_lease(pool, org_id, default_currency, body, mode, None).await
+}
+
+pub(crate) async fn import_body_with_lease(
+    pool: &sqlx::PgPool,
+    org_id: Uuid,
+    default_currency: &str,
+    body: Body,
+    mode: ImportMode,
+    lease: Option<&crate::jobs::JobLease>,
+) -> Result<ImportReport, CsvError> {
+    if let Some(lease) = lease {
+        lease.check_organization(org_id)?;
+    }
     let connection = lock_import(pool, org_id)
         .await
         .map_err(anyhow::Error::from)?;
@@ -98,7 +112,7 @@ pub async fn import_body(
             .context("CSV import cancelled")?;
         Ok::<_, CsvError>(())
     });
-    let result = async {
+    let work = async {
         // Validate headers and reject header-only input before opening the TX.
         let first = receive.recv().await.ok_or(IncompleteUpload)?;
         let mut connection = session.lock().await;
@@ -130,13 +144,13 @@ pub async fn import_body(
             next = receive.recv().await.ok_or(IncompleteUpload)?;
         }
         debug_assert!(report.reconciles());
-        match mode {
-            ImportMode::Commit => tx.commit().await?,
-            ImportMode::DryRun => tx.rollback().await?,
-        }
+        finish_import(tx, &report, lease).await?;
         Ok::<_, anyhow::Error>(report)
-    }
-    .await;
+    };
+    let result = match lease {
+        Some(lease) => lease.run(work).await,
+        None => work.await,
+    };
     drop(receive);
     let parsed = worker.await.context("CSV parser task failed");
     let connection = Arc::try_unwrap(session)

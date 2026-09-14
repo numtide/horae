@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id FROM horae_jobs\n                            WHERE id = $1 AND org_id = $2 AND claim_token = $3\n                              AND status = 'running' AND NOT cancellation_requested\n                              AND lease_until > clock_timestamp()",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "07272448d00db0bfa764147c1a758c5c589edf5d6e191cf4a4d3e1a3cf62491a"
+}

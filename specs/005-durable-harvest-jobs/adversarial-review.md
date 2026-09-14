@@ -69,7 +69,7 @@ foreign acknowledgements, retain failure details with backoff, and verify that
 rolling back the enqueue transaction publishes no event. This does not provide
 exactly-once external delivery.
 
-Still open: cooperative running cancellation, fencing of import writes after
+At that stage, open findings included cooperative running cancellation, fencing of import writes after
 lease loss, durable checkpoints and live progress,
 and history restoration/error recovery in the UI. Baseline CI success must not
 be used to close these findings.
@@ -92,3 +92,37 @@ remaining cancellation, lease-fencing, checkpoint, or UI findings.
 All 11 configuration tests pass, including the default, supported boundaries,
 and rejection of empty, out-of-range, overflowing, and non-numeric values. Server
 clippy passes with all targets and warnings denied; SQLx metadata is regenerated.
+
+## Execution fencing and cooperative cancellation
+
+Every claim now receives a UUIDv7 token separate from worker identity. Running
+cancellation is a persisted request, not an immediate terminal acknowledgement.
+The worker signals its SQL consumer, joins the blocking source producer, and
+flushes rollback before recording cancellation. Retry is unavailable while that
+cleanup is pending. Recovery honours a cancellation requested before a crash.
+
+Both API and CSV committing imports now write their terminal report in the same
+transaction as domain changes. The conditional update checks organization,
+claim token, running state, cancellation, and the current lease deadline. It
+locks the job through commit, preventing cancellation or reclaim from racing a
+separate ownership check. Lease checks use `clock_timestamp()`, not the import
+transaction's potentially old `now()`. Heartbeat monitoring is an owned future,
+so aborting the worker cannot leave a detached renewal task alive.
+
+Verification passes 26 jobs tests and 115 importer tests against PostgreSQL;
+three existing 100,000-record benchmarks remain explicitly ignored. Regressions
+cover same-name worker replacement, expired renewal, an expired lease inside an
+older transaction, cross-organization adapter calls, and cancellation recovery.
+Real CSV and API pipelines reject stale commits with heartbeat deliberately
+disabled, including API watermark writes. Running cancellation tests prove the
+producer stops before acknowledgement and preserve previously committed data;
+CSV retry then succeeds without duplicating those records. The initial
+cancellation-state regression was observed failing before this fix. Server
+clippy passes with all targets and warnings denied.
+
+This closes the worker lifecycle/fencing gaps in T006. Checkpoints and live
+progress are still missing: the current import uses one transaction, so a crash
+still restarts its uncommitted work. T007, T009, T012 and T016 remain open for
+checkpoint/resume behavior, the final authorization audit, and history/retry/error
+UI. The cancellation and fencing tests must also cover future batch boundaries
+before the feature is ready to merge.

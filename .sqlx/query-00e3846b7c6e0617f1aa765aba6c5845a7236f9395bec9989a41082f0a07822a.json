@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE horae_jobs SET phase = 'importing', updated_at = now()\n                WHERE id = $1 AND worker_id = $2 AND claim_token = $3\n                  AND status = 'running' AND NOT cancellation_requested\n                  AND lease_until > clock_timestamp()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "00e3846b7c6e0617f1aa765aba6c5845a7236f9395bec9989a41082f0a07822a"
+}

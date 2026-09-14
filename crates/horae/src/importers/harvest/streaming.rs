@@ -108,6 +108,7 @@ pub(super) async fn run(
     mode: ImportMode,
     captured_at: DateTime<Utc>,
     fetch: impl FnOnce(&mpsc::Sender<Page>) -> anyhow::Result<()> + Send + 'static,
+    lease: Option<&crate::jobs::JobLease>,
 ) -> anyhow::Result<ImportReport> {
     let session = Arc::new(Mutex::new(connection));
     let worker_session = session.clone();
@@ -120,15 +121,19 @@ pub(super) async fn run(
     });
     let result = {
         let mut guard = session.lock().await;
-        apply(
+        let work = apply(
             &mut guard,
             org_id,
             currency,
             mode,
             captured_at,
             &mut receive,
-        )
-        .await
+            lease,
+        );
+        match lease {
+            Some(lease) => lease.run(work).await,
+            None => work.await,
+        }
     };
     // Wake a backpressured producer on every SQL/error path before joining it.
     drop(receive);
@@ -156,6 +161,7 @@ async fn apply(
     mode: ImportMode,
     captured_at: DateTime<Utc>,
     pages: &mut mpsc::Receiver<Page>,
+    lease: Option<&crate::jobs::JobLease>,
 ) -> anyhow::Result<ImportReport> {
     let Some(Page::Catalog(catalog)) = pages.recv().await else {
         return Err(IncompleteDownload.into());
@@ -206,10 +212,7 @@ async fn apply(
     {
         credentials::advance_watermark(&mut *tx, org_id, &[(EntityType::TimeEntry, mark)]).await?;
     }
-    match mode {
-        ImportMode::Commit => tx.commit().await?,
-        ImportMode::DryRun => tx.rollback().await?,
-    }
+    super::finish_import(tx, &report, lease).await?;
     Ok(report)
 }
 

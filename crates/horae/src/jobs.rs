@@ -15,6 +15,9 @@ use crate::{config::JobPolicy, state::AppState};
 const LEASE: Duration = Duration::from_secs(300);
 const POLL: Duration = Duration::from_secs(2);
 
+mod lease;
+pub(crate) use lease::JobLease;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", content = "value")]
 pub enum JobPayload {
@@ -313,9 +316,13 @@ pub async fn list(
 pub async fn cancel(pool: &sqlx::PgPool, org_id: Uuid, id: Uuid) -> anyhow::Result<bool> {
     let result = sqlx::query!(
         r#"UPDATE horae_jobs
-              SET status = 'cancelled', lease_until = NULL, worker_id = NULL,
-                  finished_at = now(), updated_at = now()
-            WHERE id = $1 AND org_id = $2 AND status IN ('queued', 'running')"#,
+              SET cancellation_requested = true,
+                  status = CASE WHEN status = 'queued' THEN 'cancelled' ELSE status END,
+                  phase = 'cancelling',
+                  finished_at = CASE WHEN status = 'queued' THEN now() ELSE finished_at END,
+                  updated_at = now()
+            WHERE id = $1 AND org_id = $2 AND status IN ('queued', 'running')
+              AND NOT cancellation_requested"#,
         id,
         org_id,
     )
@@ -329,6 +336,7 @@ pub async fn retry(pool: &sqlx::PgPool, org_id: Uuid, id: Uuid) -> anyhow::Resul
         r#"UPDATE horae_jobs
               SET status = 'queued', available_at = now(), lease_until = NULL,
                   attempts = 0, worker_id = NULL, last_error = NULL,
+                  claim_token = NULL, cancellation_requested = false,
                   finished_at = NULL, updated_at = now()
             WHERE id = $1 AND org_id = $2 AND status IN ('failed', 'cancelled')
               AND (kind <> 'harvest_csv_import' OR EXISTS (
@@ -443,24 +451,28 @@ struct ClaimedJob {
     id: Uuid,
     org_id: Uuid,
     payload: serde_json::Value,
+    claim_token: Uuid,
 }
 
 async fn claim(pool: &sqlx::PgPool, worker_id: &str) -> anyhow::Result<Option<ClaimedJob>> {
     sqlx::query!(
         r#"UPDATE horae_jobs
-              SET status = 'failed', lease_until = NULL, worker_id = NULL,
+              SET status = CASE WHEN cancellation_requested THEN 'cancelled' ELSE 'failed' END,
+                  lease_until = NULL, worker_id = NULL, claim_token = NULL,
                   finished_at = now(), updated_at = now(),
-                  last_error = COALESCE(last_error, 'Job attempt limit reached after interruption')
-            WHERE attempts >= max_attempts
+                  last_error = CASE WHEN cancellation_requested THEN NULL
+                      ELSE COALESCE(last_error, 'Job attempt limit reached after interruption') END
+            WHERE (attempts >= max_attempts OR cancellation_requested)
               AND (status = 'queued' OR (status = 'running' AND lease_until < now()))"#
     )
     .execute(pool)
     .await?;
+    let claim_token = Uuid::now_v7();
     let row = sqlx::query!(
         r#"WITH candidate AS (
              SELECT id
                FROM horae_jobs
-              WHERE attempts < max_attempts
+              WHERE attempts < max_attempts AND NOT cancellation_requested
                 AND ((status = 'queued' AND available_at <= now())
                   OR (status = 'running' AND lease_until < now()))
               ORDER BY available_at, created_at
@@ -470,12 +482,14 @@ async fn claim(pool: &sqlx::PgPool, worker_id: &str) -> anyhow::Result<Option<Cl
            UPDATE horae_jobs j
               SET status = 'running', attempts = j.attempts + 1,
                   lease_until = now() + $1::int * interval '1 second', worker_id = $2,
+                  claim_token = $3,
                   started_at = COALESCE(j.started_at, now()), updated_at = now()
              FROM candidate
             WHERE j.id = candidate.id
         RETURNING j.id, j.org_id, j.payload"#,
         LEASE.as_secs() as i32,
         worker_id,
+        claim_token,
     )
     .fetch_optional(pool)
     .await?;
@@ -483,49 +497,33 @@ async fn claim(pool: &sqlx::PgPool, worker_id: &str) -> anyhow::Result<Option<Cl
         id: r.id,
         org_id: r.org_id,
         payload: r.payload,
+        claim_token,
     }))
 }
 
 async fn execute(state: &AppState, worker_id: &str, job: ClaimedJob) -> anyhow::Result<()> {
-    sqlx::query!(
-        r#"UPDATE horae_jobs SET phase = 'importing', updated_at = now()
-            WHERE id = $1 AND worker_id = $2"#,
-        job.id,
-        worker_id,
-    )
-    .execute(&state.db)
-    .await?;
-
-    let (heartbeat_stop, mut heartbeat_rx) = tokio::sync::oneshot::channel();
-    let heartbeat_pool = state.db.clone();
-    let heartbeat_worker = worker_id.to_owned();
-    let heartbeat_job = job.id;
-    let heartbeat = tokio::spawn(async move {
-        let mut tick = tokio::time::interval(LEASE / 3);
-        tick.tick().await;
-        loop {
-            tokio::select! {
-                _ = &mut heartbeat_rx => break,
-                _ = tick.tick() => {
-                    if let Err(error) = sqlx::query!(
-                        r#"UPDATE horae_jobs
-                              SET lease_until = now() + $1::int * interval '1 second',
-                                  updated_at = now()
-                            WHERE id = $2 AND worker_id = $3 AND status = 'running'"#,
-                        LEASE.as_secs() as i32,
-                        heartbeat_job,
-                        heartbeat_worker,
-                    )
-                    .execute(&heartbeat_pool)
-                    .await {
-                        tracing::warn!(%error, job_id = %heartbeat_job, "durable job heartbeat failed");
-                    }
-                }
-            }
+    let (stop, receiver) = tokio::sync::watch::channel(false);
+    let lease = JobLease {
+        id: job.id,
+        org_id: job.org_id,
+        token: job.claim_token,
+        stop: receiver,
+    };
+    let work = async {
+        let started = sqlx::query!(
+            r#"UPDATE horae_jobs SET phase = 'importing', updated_at = now()
+                WHERE id = $1 AND worker_id = $2 AND claim_token = $3
+                  AND status = 'running' AND NOT cancellation_requested
+                  AND lease_until > clock_timestamp()"#,
+            job.id,
+            worker_id,
+            job.claim_token,
+        )
+        .execute(&state.db)
+        .await?;
+        if started.rows_affected() != 1 {
+            return Err(lease::Interrupted.into());
         }
-    });
-
-    let result = async {
         let payload = decode_payload(job.payload.clone())?;
         match &payload {
             JobPayload::HarvestApi { mode, sync } => {
@@ -536,21 +534,11 @@ async fn execute(state: &AppState, worker_id: &str, job: ClaimedJob) -> anyhow::
                 )
                 .fetch_one(&state.db)
                 .await?;
-                crate::importers::harvest::run_api_import(
-                    &state.db, job.org_id, &currency, &cfg, *mode, *sync,
+                let report = crate::importers::harvest::run_api_import_with_lease(
+                    &state.db, job.org_id, &currency, &cfg, *mode, *sync, &lease,
                 )
-                .await
-                .map(|report| {
-                    let processed = report.summary.clients.processed()
-                        + report.summary.projects.processed()
-                        + report.summary.tasks.processed()
-                        + report.summary.time_entries.processed();
-                    (
-                        serde_json::to_value(report).unwrap_or_default(),
-                        processed as i64,
-                    )
-                })
-                .map_err(anyhow::Error::from)
+                .await?;
+                crate::importers::harvest::job_report(&report)
             }
             JobPayload::HarvestCsv { mode } => {
                 let currency = sqlx::query_scalar!(
@@ -566,73 +554,291 @@ async fn execute(state: &AppState, worker_id: &str, job: ClaimedJob) -> anyhow::
                 )
                 .fetch_one(&state.db)
                 .await?;
-                crate::importers::harvest::csv_source::import_body(
+                let report = crate::importers::harvest::csv_source::import_body_with_lease(
                     &state.db,
                     job.org_id,
                     &currency,
                     axum::body::Body::from(upload.body),
                     *mode,
+                    Some(&lease),
                 )
-                .await
-                .map(|report| {
-                    let processed = report.summary.clients.processed()
-                        + report.summary.projects.processed()
-                        + report.summary.tasks.processed()
-                        + report.summary.time_entries.processed();
-                    (
-                        serde_json::to_value(report).unwrap_or_default(),
-                        processed as i64,
-                    )
-                })
-                .map_err(anyhow::Error::from)
+                .await?;
+                crate::importers::harvest::job_report(&report)
             }
             #[cfg(test)]
             JobPayload::Synthetic => Ok((serde_json::json!({"synthetic": true}), 0)),
         }
-    }
-    .await;
+    };
+    run_claimed(&state.db, &lease, stop, work).await
+}
 
-    let _ = heartbeat_stop.send(());
-    let _ = heartbeat.await;
-
+pub(crate) async fn run_claimed(
+    pool: &sqlx::PgPool,
+    lease: &JobLease,
+    stop: tokio::sync::watch::Sender<bool>,
+    work: impl Future<Output = anyhow::Result<(serde_json::Value, i64)>>,
+) -> anyhow::Result<()> {
+    tokio::pin!(work);
+    // No detached heartbeat survives an aborted worker. On cancellation, let
+    // the importer join its producer and flush rollback before recording ack.
+    let result = tokio::select! {
+        result = &mut work => result,
+        monitor = lease.monitor(pool) => {
+            tracing::info!(job_id = %lease.id, error = ?monitor.err(), "stopping durable execution");
+            stop.send_replace(true);
+            work.await
+        }
+    };
     match result {
         Ok((report, processed_count)) => {
-            sqlx::query!(
-                r#"UPDATE horae_jobs
-                      SET status = 'succeeded', report = $1, processed_count = $2,
-                          lease_until = NULL,
-                          worker_id = $4, finished_at = now(), updated_at = now()
-                    WHERE id = $3 AND worker_id = $4"#,
-                report,
-                processed_count,
-                job.id,
-                worker_id,
-            )
-            .execute(&state.db)
-            .await?;
+            let completed = {
+                let mut connection = pool.acquire().await?;
+                lease
+                    .complete(&mut connection, &report, processed_count)
+                    .await?
+            };
+            if !completed {
+                // Committing imports already completed atomically with their
+                // writes. Otherwise a concurrent cancellation still needs ack.
+                fail_claimed(pool, lease, &lease::Interrupted.into()).await?;
+            }
         }
-        Err(error) => {
-            sqlx::query!(
-                r#"UPDATE horae_jobs
-                      SET status = CASE WHEN attempts >= max_attempts THEN 'failed' ELSE 'queued' END,
-                          available_at = now() + LEAST(power(2::double precision, LEAST(attempts, 9)), 300)::int * interval '1 second',
-                          finished_at = CASE WHEN attempts >= max_attempts THEN now() ELSE NULL END,
-                          lease_until = NULL, worker_id = NULL, last_error = $1, updated_at = now()
-                    WHERE id = $2 AND worker_id = $3"#,
-                error.to_string(),
-                job.id,
-                worker_id,
-            )
-            .execute(&state.db)
-            .await?;
-        }
+        Err(error) => fail_claimed(pool, lease, &error).await?,
     }
     Ok(())
+}
+
+async fn fail_claimed(
+    pool: &sqlx::PgPool,
+    lease: &JobLease,
+    error: &anyhow::Error,
+) -> anyhow::Result<()> {
+    sqlx::query!(
+                r#"UPDATE horae_jobs
+                      SET status = CASE WHEN cancellation_requested THEN 'cancelled'
+                                        WHEN attempts >= max_attempts THEN 'failed' ELSE 'queued' END,
+                          available_at = now() + LEAST(power(2::double precision, LEAST(attempts, 9)), 300)::int * interval '1 second',
+                          finished_at = CASE WHEN cancellation_requested OR attempts >= max_attempts THEN now() ELSE NULL END,
+                          lease_until = NULL, worker_id = NULL, claim_token = NULL,
+                          last_error = CASE WHEN cancellation_requested THEN NULL ELSE $1 END,
+                          updated_at = now()
+                    WHERE id = $2 AND org_id = $3 AND claim_token = $4 AND status = 'running'
+                      AND lease_until > clock_timestamp()"#,
+                error.to_string(),
+                lease.id, lease.org_id, lease.token,
+    ).execute(pool).await?;
+    Ok(())
+}
+
+#[cfg(test)]
+pub(crate) async fn claim_lease_for_test(
+    pool: &sqlx::PgPool,
+) -> (JobLease, tokio::sync::watch::Sender<bool>) {
+    let job = claim(pool, "test-worker").await.unwrap().unwrap();
+    let (stop, receiver) = tokio::sync::watch::channel(false);
+    (
+        JobLease {
+            id: job.id,
+            org_id: job.org_id,
+            token: job.claim_token,
+            stop: receiver,
+        },
+        stop,
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[sqlx::test]
+    #[serial_test::serial]
+    async fn import_adapters_reject_a_lease_from_another_organization(pool: sqlx::PgPool) {
+        let org_id = org(&pool).await;
+        let foreign = org(&pool).await;
+        let id = enqueue(
+            &pool,
+            org_id,
+            &JobPayload::Synthetic,
+            "foreign-lease",
+            JobPolicy::default(),
+        )
+        .await
+        .unwrap();
+        let (lease, _stop) = claim_lease_for_test(&pool).await;
+        let csv = crate::importers::harvest::csv_source::import_body_with_lease(
+            &pool,
+            foreign,
+            "USD",
+            axum::body::Body::empty(),
+            ImportMode::Commit,
+            Some(&lease),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(csv.to_string(), "job organization mismatch");
+        let cfg = crate::config::HarvestConfig {
+            client_id: "test".into(),
+            client_secret: "test".into(),
+            redirect_url: "http://localhost/auth/harvest/callback".into(),
+            encryption_key_hex: "11".repeat(32),
+        };
+        let api = crate::importers::harvest::run_api_import_with_lease(
+            &pool,
+            foreign,
+            "USD",
+            &cfg,
+            ImportMode::Commit,
+            SyncScope::Full,
+            &lease,
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(api.to_string(), "job organization mismatch");
+        assert_eq!(
+            status(&pool, org_id, id).await.unwrap().unwrap().status,
+            "running"
+        );
+        assert!(list(&pool, foreign, 10).await.unwrap().is_empty());
+    }
+
+    #[sqlx::test]
+    #[serial_test::serial]
+    async fn reclaimed_attempt_rejects_stale_results_even_with_the_same_worker_name(
+        pool: sqlx::PgPool,
+    ) {
+        let org_id = org(&pool).await;
+        let id = enqueue(
+            &pool,
+            org_id,
+            &JobPayload::Synthetic,
+            "stale",
+            JobPolicy::default(),
+        )
+        .await
+        .unwrap();
+        let old = claim(&pool, "same-worker").await.unwrap().unwrap();
+        sqlx::query!(
+            "UPDATE horae_jobs SET lease_until = now() - interval '1 second' WHERE id = $1",
+            id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let current = claim(&pool, "same-worker").await.unwrap().unwrap();
+        assert_ne!(old.claim_token, current.claim_token);
+        execute(&state(pool.clone()), "same-worker", old)
+            .await
+            .unwrap();
+        let pending = status(&pool, org_id, id).await.unwrap().unwrap();
+        assert_eq!(pending.status, "running");
+        assert!(pending.report.is_none());
+        execute(&state(pool.clone()), "same-worker", current)
+            .await
+            .unwrap();
+        assert_eq!(
+            status(&pool, org_id, id).await.unwrap().unwrap().status,
+            "succeeded"
+        );
+    }
+
+    #[sqlx::test]
+    #[serial_test::serial]
+    async fn expired_lease_cannot_renew_or_commit_using_an_old_transaction_timestamp(
+        pool: sqlx::PgPool,
+    ) {
+        let org_id = org(&pool).await;
+        let id = enqueue(
+            &pool,
+            org_id,
+            &JobPayload::Synthetic,
+            "expired-transaction",
+            JobPolicy::default(),
+        )
+        .await
+        .unwrap();
+        let (lease, _stop) = claim_lease_for_test(&pool).await;
+        let mut tx = pool.begin().await.unwrap();
+        sqlx::query!("SELECT now()")
+            .fetch_one(&mut *tx)
+            .await
+            .unwrap();
+        sqlx::query!(
+            "UPDATE horae_jobs SET lease_until = clock_timestamp() WHERE id = $1",
+            id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        assert!(
+            !lease
+                .complete(&mut tx, &serde_json::json!({}), 0)
+                .await
+                .unwrap()
+        );
+        assert!(lease.renew(&pool).await.is_err());
+        tx.rollback().await.unwrap();
+    }
+
+    #[sqlx::test]
+    #[serial_test::serial]
+    async fn cancellation_survives_a_crash_before_the_worker_acknowledges(pool: sqlx::PgPool) {
+        let org_id = org(&pool).await;
+        let id = enqueue(
+            &pool,
+            org_id,
+            &JobPayload::Synthetic,
+            "cancelled-crash",
+            JobPolicy::default(),
+        )
+        .await
+        .unwrap();
+        let _old = claim(&pool, "crashed").await.unwrap().unwrap();
+        assert!(cancel(&pool, org_id, id).await.unwrap());
+        sqlx::query!(
+            "UPDATE horae_jobs SET lease_until = now() - interval '1 second' WHERE id = $1",
+            id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        assert!(claim(&pool, "recovery").await.unwrap().is_none());
+        let cancelled = status(&pool, org_id, id).await.unwrap().unwrap();
+        assert_eq!(cancelled.status, "cancelled");
+        assert!(cancelled.finished_at.is_some());
+        assert!(cancelled.report.is_none());
+        assert!(retry(&pool, org_id, id).await.unwrap());
+        assert_eq!(claim(&pool, "recovery").await.unwrap().unwrap().id, id);
+    }
+
+    #[sqlx::test]
+    #[serial_test::serial]
+    async fn cancellation_waits_for_the_claimed_execution_before_allowing_retry(
+        pool: sqlx::PgPool,
+    ) {
+        let org_id = org(&pool).await;
+        let id = enqueue(
+            &pool,
+            org_id,
+            &JobPayload::Synthetic,
+            "running-cancel",
+            JobPolicy::default(),
+        )
+        .await
+        .unwrap();
+        let job = claim(&pool, "worker").await.unwrap().unwrap();
+        assert!(cancel(&pool, org_id, id).await.unwrap());
+        assert_eq!(
+            status(&pool, org_id, id).await.unwrap().unwrap().status,
+            "running"
+        );
+        assert!(!retry(&pool, org_id, id).await.unwrap());
+        execute(&state(pool.clone()), "worker", job).await.unwrap();
+        let cancelled = status(&pool, org_id, id).await.unwrap().unwrap();
+        assert_eq!(cancelled.status, "cancelled");
+        assert!(cancelled.report.is_none());
+        assert!(retry(&pool, org_id, id).await.unwrap());
+    }
 
     #[test]
     fn payload_versions_preserve_legacy_jobs_and_reject_unknown_versions() {

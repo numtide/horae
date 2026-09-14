@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE horae_jobs\n              SET cancellation_requested = true,\n                  status = CASE WHEN status = 'queued' THEN 'cancelled' ELSE status END,\n                  phase = 'cancelling',\n                  finished_at = CASE WHEN status = 'queued' THEN now() ELSE finished_at END,\n                  updated_at = now()\n            WHERE id = $1 AND org_id = $2 AND status IN ('queued', 'running')\n              AND NOT cancellation_requested",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1964cd9fcfd8c30fb9c1493c8fe224177f4b39e7301dc3c5513fd4bf695f34a7"
+}

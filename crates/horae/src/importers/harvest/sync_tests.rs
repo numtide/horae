@@ -123,6 +123,7 @@ async fn apply_api_data_in_session(
             }
             Ok(())
         },
+        None,
     )
     .await
 }

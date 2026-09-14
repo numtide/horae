@@ -22,6 +22,7 @@ use super::report::ImportReport;
 
 mod upload;
 pub use upload::import_body;
+pub(crate) use upload::import_body_with_lease;
 
 /// Columns that must be present for the file to be a recognizable export.
 const REQUIRED: &[&str] = &["date", "client", "project", "task", "hours"];

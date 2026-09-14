@@ -192,6 +192,180 @@ async fn cancelling_a_csv_waiting_for_more_bytes_releases_its_session(pool: PgPo
     single.close().await;
 }
 
+#[sqlx::test(migrations = "./migrations")]
+async fn durable_csv_cancel_joins_parser_and_preserves_committed_rows(pool: PgPool) {
+    use super::super::csv_source::import_body_with_lease;
+    use crate::jobs;
+
+    let org = seed_org(&pool).await;
+    seed_user(&pool, org, "dev@acme.com").await;
+    import_body(
+        &pool,
+        org,
+        "USD",
+        Body::from(format!("{HEADER}{ROW}")),
+        ImportMode::Commit,
+    )
+    .await
+    .unwrap();
+    let csv = format!("{HEADER}{}", ROW.replace("2026-01-15", "2026-01-16"));
+    let id = jobs::enqueue_csv(
+        &pool,
+        org,
+        ImportMode::Commit,
+        csv.clone().into_bytes(),
+        "cancel-live",
+        Default::default(),
+    )
+    .await
+    .unwrap();
+    let (lease, stop) = jobs::claim_lease_for_test(&pool).await;
+    let (send, body) = upload_channel();
+    let applied = Applied::default();
+    let _registration = tracing::Dispatch::new(tracing_subscriber::registry());
+    let collector = tracing::Dispatch::new(tracing_subscriber::registry().with(applied.clone()));
+    let run_pool = pool.clone();
+    let run = tokio::spawn(
+        async move {
+            jobs::run_claimed(&run_pool, &lease, stop, async {
+                let report = import_body_with_lease(
+                    &run_pool,
+                    org,
+                    "USD",
+                    body,
+                    ImportMode::Commit,
+                    Some(&lease),
+                )
+                .await?;
+                super::super::job_report(&report)
+            })
+            .await
+        }
+        .with_subscriber(collector),
+    );
+    send.send(Ok(Bytes::from(csv.clone()))).await.unwrap();
+    tokio::time::timeout(Duration::from_secs(10), applied.0.notified())
+        .await
+        .unwrap();
+    assert!(jobs::cancel(&pool, org, id).await.unwrap());
+    tokio::time::timeout(Duration::from_secs(10), run)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert!(
+        send.send(Ok(Bytes::from_static(ROW.as_bytes())))
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        jobs::status(&pool, org, id).await.unwrap().unwrap().status,
+        "cancelled"
+    );
+    assert_eq!(entry_count(&pool, org).await, 1);
+
+    assert!(jobs::retry(&pool, org, id).await.unwrap());
+    let (lease, stop) = jobs::claim_lease_for_test(&pool).await;
+    jobs::run_claimed(&pool, &lease, stop, async {
+        let report = import_body_with_lease(
+            &pool,
+            org,
+            "USD",
+            Body::from(csv),
+            ImportMode::Commit,
+            Some(&lease),
+        )
+        .await?;
+        super::super::job_report(&report)
+    })
+    .await
+    .unwrap();
+    assert_eq!(entry_count(&pool, org).await, 2);
+    let completed = jobs::status(&pool, org, id).await.unwrap().unwrap();
+    assert_eq!(completed.status, "succeeded");
+    assert!(completed.report.is_some());
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn durable_csv_stale_commit_is_fenced_without_a_heartbeat(pool: PgPool) {
+    use super::super::csv_source::import_body_with_lease;
+    use crate::jobs;
+
+    let org = seed_org(&pool).await;
+    seed_user(&pool, org, "dev@acme.com").await;
+    let csv = format!("{HEADER}{ROW}");
+    let id = jobs::enqueue_csv(
+        &pool,
+        org,
+        ImportMode::Commit,
+        csv.clone().into_bytes(),
+        "stale-csv",
+        Default::default(),
+    )
+    .await
+    .unwrap();
+    let (old, _stop) = jobs::claim_lease_for_test(&pool).await;
+    let (send, body) = upload_channel();
+    let applied = Applied::default();
+    let _registration = tracing::Dispatch::new(tracing_subscriber::registry());
+    let collector = tracing::Dispatch::new(tracing_subscriber::registry().with(applied.clone()));
+    let run_pool = pool.clone();
+    // Deliberately omit the monitor: the transaction itself must reject a
+    // stale commit even when no process has noticed the lost lease yet.
+    let run = tokio::spawn(
+        async move {
+            import_body_with_lease(&run_pool, org, "USD", body, ImportMode::Commit, Some(&old))
+                .await
+        }
+        .with_subscriber(collector),
+    );
+    send.send(Ok(Bytes::from(csv.clone()))).await.unwrap();
+    tokio::time::timeout(Duration::from_secs(10), applied.0.notified())
+        .await
+        .unwrap();
+    sqlx::query!(
+        "UPDATE horae_jobs SET lease_until = clock_timestamp() WHERE id = $1",
+        id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let (current, _stop_current) = jobs::claim_lease_for_test(&pool).await;
+    drop(send);
+    let error = tokio::time::timeout(Duration::from_secs(10), run)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap_err();
+    assert!(error.to_string().contains("lease lost"), "{error}");
+    assert_eq!(entry_count(&pool, org).await, 0);
+    assert_eq!(
+        sqlx::query_scalar!("SELECT count(*) FROM clients WHERE org_id = $1", org)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        Some(0)
+    );
+    let pending = jobs::status(&pool, org, id).await.unwrap().unwrap();
+    assert_eq!(pending.status, "running");
+    assert!(pending.report.is_none());
+    import_body_with_lease(
+        &pool,
+        org,
+        "USD",
+        Body::from(csv),
+        ImportMode::Commit,
+        Some(&current),
+    )
+    .await
+    .unwrap();
+    assert_eq!(entry_count(&pool, org).await, 1);
+    assert_eq!(
+        jobs::status(&pool, org, id).await.unwrap().unwrap().status,
+        "succeeded"
+    );
+}
+
 fn scale_body() -> Body {
     let start = chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
     Body::from_stream(futures_util::stream::iter((0..1_000).map(move |page| {
