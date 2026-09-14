@@ -222,3 +222,38 @@ The importer must still persist this cursor with catalog, account identity,
 report/cache and watermark state at its fenced batch boundaries. T007 and T016
 remain open, along with dry-run recovery, scale validation, T009 and the complete
 acceptance walkthrough.
+
+## Durable API commit checkpoints
+
+Leased API commits now persist each catalog page, then apply parent entities in
+500-record batches and time entries one provider page at a time. The checkpoint
+retains the original account, sync scope, filter, currency and capture time,
+alongside the catalog, parent offset, HTTP cursor, report and resolution cache.
+Every checkpoint commits under the same lease/cancellation fence as its domain
+writes. Source buffering alone never advances the persisted cursor.
+
+Retries preserve earlier row errors, missing timestamps and the maximum source
+timestamp. Watermark advancement remains gated by the accumulated result and
+capped by the original capture time; it commits with the terminal report. If
+that final transaction fails, an EOF checkpoint permits retry without fetching
+or applying any completed page. Inline commits and previews retain their
+existing whole-import transaction behavior.
+
+Eight production-HTTP/PostgreSQL regressions cover partial catalog recovery,
+entry-page recovery, errors and missing timestamps across retries, replacement
+of a live claim, cancellation followed by manual retry, finalization retry, and
+failure after a 500-parent batch commits. The first two tests failed before the
+implementation because completed API pages had no durable checkpoint. A stale
+worker is tested without heartbeat monitoring, so rejection relies on the
+database commit fence. The parent-batch test also verifies original counts and
+catalog precision after checkpoint deserialization.
+
+The importer suite passes 135 tests, with three explicit scale benchmarks still
+ignored; all 27 jobs tests pass. Server clippy passes with warnings denied.
+SQLx metadata is regenerated, adding only three failure-injection DDL queries
+used by tests. No production queries, migrations or dependencies change.
+
+T007 and T016 remain open for dry-run recovery and complete checkpoint
+validation. Snapshot size and large-import throughput, the final authorization
+audit in T009, and the complete acceptance walkthrough are still required.
+The feature is not ready to merge.

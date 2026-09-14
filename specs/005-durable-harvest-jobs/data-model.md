@@ -40,7 +40,7 @@ prefix without parsing or applying completed records again. A failed or cancelle
 attempt retains the checkpoint for retry. Successful completion retains the
 report and final total count but clears the now-unneeded checkpoint cache.
 
-API imports and dry-runs do not yet use resumable checkpoints. Dry-runs retain
+Dry-runs do not yet use resumable checkpoints. They retain
 their rollback-only domain transaction; source and simulation checkpoint support
 remains required before FR-007 is complete. Snapshot size and large-import
 throughput also remain part of the final checkpoint validation.
@@ -57,9 +57,30 @@ authenticated request, and rejects unsupported versions or invalid cycle state.
 The consumer receives the proposed next cursor with each page. The in-memory
 cursor advances only after the consumer accepts that page. A durable consumer
 must save this cursor atomically with its applied batch, not when HTTP finishes
-downloading or buffering it. This adapter support is not yet connected to the
-job checkpoint: catalog snapshots, account binding, accumulated results and
-watermark state still need integration in the API importer.
+downloading or buffering it.
+
+### API commit checkpoint, version 1
+
+Durable API commits checkpoint each downloaded catalog page before moving on
+to parent application. The checkpoint retains the catalog, collection and HTTP
+cursor, original account ID, sync scope, incremental filter, currency fallback
+and capture start time. Resume rejects unsupported versions, another account or
+sync scope, and inconsistent parent offsets. Credentials are loaded afresh and
+are not part of the checkpoint.
+
+Once the catalog is complete, clients/projects/tasks apply in dependency order
+in batches of up to 500 entities. Each batch commits its parent offset,
+resolution cache, report and progress atomically with domain writes. Subsequent
+time-entry pages each commit with their next cursor and accumulated report/cache.
+Every checkpoint update checks the current organization, claim token, lease
+deadline and cancellation state, locking the job until the batch commits.
+
+The maximum observed source timestamp and any missing-timestamp flag survive
+retries. The watermark advances only after all pages finish without row errors
+or missing timestamps, capped by the original capture start time. Watermark and
+terminal report commit together. A finalization failure retains an EOF cursor,
+so retry can finish without downloading or applying completed pages again.
+Inline imports and dry-runs keep their existing import-wide transactions.
 
 ## CSV Upload Blob
 

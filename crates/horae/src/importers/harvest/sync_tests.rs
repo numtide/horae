@@ -2,6 +2,7 @@ use super::*;
 use chrono::{DateTime, TimeZone};
 use serde_json::json;
 
+mod checkpoints;
 mod paging;
 mod scale;
 

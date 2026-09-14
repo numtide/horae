@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "ALTER TABLE harvest_credentials DROP CONSTRAINT reject_sync_marker",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "4ef6c5fe22f47ad59abc0505219851a75ba19c9b19f6e8f6572ed2c2763b17e0"
+}

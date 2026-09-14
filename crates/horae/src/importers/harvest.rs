@@ -337,6 +337,26 @@ async fn run_api_import_with_http(
 
     // A bounded queue joins blocking HTTP pages to the async row pipeline.
     let capture_started_at = Utc::now();
+    if mode == ImportMode::Commit
+        && let Some(lease) = lease
+    {
+        return streaming::durable::run(
+            connection,
+            org_id,
+            streaming::durable::Request {
+                account_id: conn.account_id,
+                currency: default_currency.to_owned(),
+                sync,
+                since,
+                captured_at: capture_started_at,
+            },
+            conn.access_token,
+            http,
+            lease,
+        )
+        .await
+        .map_err(Into::into);
+    }
     streaming::run(
         connection,
         org_id,

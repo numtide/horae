@@ -46,6 +46,17 @@ pub(super) async fn apply(
     data: &HarvestData,
     report: &mut ImportReport,
 ) -> anyhow::Result<()> {
+    apply_batch(tx, cache, org, data, report, 0..usize::MAX).await
+}
+
+pub(super) async fn apply_batch(
+    tx: &mut Transaction<'_, Postgres>,
+    cache: &mut RunCache,
+    org: OrgDefaults<'_>,
+    data: &HarvestData,
+    report: &mut ImportReport,
+    range: std::ops::Range<usize>,
+) -> anyhow::Result<()> {
     let clients: HashMap<_, _> = data.clients.iter().map(|c| (c.id, c)).collect();
     let parents = data
         .clients
@@ -57,7 +68,7 @@ pub(super) async fn apply(
                 .map(|p| Parent::Project(p, clients.get(&p.client.id).copied())),
         )
         .chain(data.tasks.iter().map(Parent::Task));
-    for parent in parents {
+    for parent in parents.skip(range.start).take(range.len()) {
         let (entity, id) = parent.identity();
         let mut sp = tx.begin().await?;
         match resolve_parent(&mut sp, cache, org, parent).await {

@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "ALTER TABLE horae_jobs ADD CONSTRAINT reject_second_batch CHECK (processed_count <= 500)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "6f03b8d1d606865b1814ce99339eb96b53641ffd0d94d6a57623d32365837c53"
+}

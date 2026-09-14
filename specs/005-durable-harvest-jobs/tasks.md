@@ -12,8 +12,8 @@
 - [x] T005 Persist CSV uploads safely for asynchronous execution without retaining request-body streams.
 - [x] T006 Add worker startup, bounded concurrency, lease/heartbeat, retry backoff, and graceful shutdown.
 - [ ] T007 Add checkpoint/progress updates around existing Harvest import phases.
-  - Durable CSV commits checkpoint every 500 records; API/dry-run resume and checkpoint scale validation remain pending.
-  - The HTTP adapter supports versioned, validated resume cursors with persistent cycle detection; API job/catalog/watermark checkpoint integration remains pending.
+  - Durable CSV commits checkpoint every 500 records. API commits persist catalog pages, 500-entity parent batches and individual time-entry pages, with report/cache and watermark state.
+  - Dry-run recovery and checkpoint snapshot-size/throughput validation remain pending.
 - [x] T008 Add outbox records and transactional enqueue support for future plugin/webhook/notification delivery.
 - [ ] T009 Ensure all job and outbox reads/mutations enforce organization and admin authorization.
 

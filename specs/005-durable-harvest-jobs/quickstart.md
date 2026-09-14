@@ -38,9 +38,24 @@ identical entries and record errors. The next attempt resumes after the last
 committed record. The in-progress batch must not commit under an expired or
 replaced lease.
 
-This recovery path currently applies to durable CSV commits only. API imports
-and dry-runs still need their checkpoint integration; previews continue to write
-no domain data, including when they exceed the batch size.
+## API commit recovery
+
+Use an API source with multiple catalog and time-entry pages. Interrupt the
+worker after a catalog page, a parent batch, or a time-entry page is confirmed.
+The next attempt must resume the saved cursor and preserve earlier created,
+skipped and error counts. Parent application checkpoints every 500 entities;
+time-entry application checkpoints each provider page.
+
+Cancel a running import or replace its expired lease while another page is
+pending. Previously confirmed data must remain; the obsolete worker must not
+commit that next page. Cancellation is acknowledged only after source cleanup,
+then manual retry resumes the same job. The watermark must remain unchanged
+until successful finalization, including when a previous page had an error or
+lacked a timestamp. Retrying a failed finalization must not repeat downloads.
+
+Dry-runs still need resumable checkpoints. Previews continue to write no domain
+data, including when they exceed the batch size. Large-import checkpoint size
+and throughput still need validation before the feature is ready to merge.
 
 ## Retry configuration
 
