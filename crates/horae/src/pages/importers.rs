@@ -59,7 +59,12 @@ pub fn HarvestImport() -> Element {
     let history_cursor = use_memo(move || history_pages.read().last().copied().flatten());
     let mut history = use_resource(move || {
         let before = history_cursor();
-        async move { (before, server_fns::list_harvest_import_jobs(before).await) }
+        async move {
+            (
+                before,
+                server_fns::list_harvest_import_jobs(before, None).await,
+            )
+        }
     });
     let mut restore_history = use_signal(|| true);
     let mut poll_version = use_signal(|| 0_u64);
@@ -186,9 +191,10 @@ pub fn HarvestImport() -> Element {
         };
         action_pending.set(false);
         match result {
-            Ok(id) => {
-                run_origin.set(Some((id, submitted)));
-                watch_job(id);
+            Ok(job) => {
+                run_origin.set(Some((job.id, submitted)));
+                watch_job(job.id);
+                job_progress.set(Some(job));
                 history_pages.set(vec![None]);
                 history.restart();
             }
@@ -206,9 +212,10 @@ pub fn HarvestImport() -> Element {
         action_pending.set(true);
         action_error.set(None);
         match server_fns::retry_harvest_import_job(id).await {
-            Ok(()) => {
+            Ok(job) => {
                 run_origin.set(None);
-                watch_job(id);
+                watch_job(job.id);
+                job_progress.set(Some(job));
                 history.restart();
             }
             Err(error) => action_error.set(Some(format!("Could not retry import: {error}"))),
@@ -547,11 +554,9 @@ pub fn HarvestImport() -> Element {
                                 action_pending.set(true);
                                 action_error.set(None);
                                 match server_fns::cancel_harvest_import_job(job_id).await {
-                                    Ok(()) => {
-                                        if let Some(job) = job_progress.write().as_mut()
-                                            && job.id == job_id && job.is_active()
-                                        {
-                                            job.phase = Some("cancelling".into());
+                                    Ok(job) => {
+                                        if *active_job.peek() == Some(job_id) {
+                                            job_progress.set(Some(job));
                                         }
                                         history.restart();
                                     }

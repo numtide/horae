@@ -719,47 +719,86 @@ async fn durable_csv_stale_commit_is_fenced_without_a_heartbeat(pool: PgPool) {
     );
 }
 
-fn scale_body() -> Body {
+fn scale_body(records: u64, parents: u64) -> Body {
     let start = chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
-    Body::from_stream(futures_util::stream::iter((0..1_000).map(move |page| {
-        use std::fmt::Write;
-        let mut chunk = if page == 0 {
-            HEADER.to_owned()
-        } else {
-            String::new()
-        };
-        for index in page * 100..(page + 1) * 100 {
-            let date = start + chrono::Duration::days(index % 365);
-            let date = if index % 1_000 == 0 {
-                "bad-date".to_owned()
+    Body::from_stream(futures_util::stream::iter((0..records.div_ceil(100)).map(
+        move |page| {
+            use std::fmt::Write;
+            let mut chunk = if page == 0 {
+                HEADER.to_owned()
             } else {
-                date.to_string()
+                String::new()
             };
-            writeln!(
-                chunk,
-                "{date},Acme,Website,Design,1,dev@acme.com,entry {index}"
-            )
-            .unwrap();
-        }
-        Ok::<_, std::io::Error>(Bytes::from(chunk))
-    })))
+            for index in page * 100..((page + 1) * 100).min(records) {
+                let date = start + chrono::Duration::days((index % 365) as i64);
+                let date = if index % 1_000 == 0 {
+                    "bad-date".to_owned()
+                } else {
+                    date.to_string()
+                };
+                let suffix = if parents == 1 {
+                    String::new()
+                } else {
+                    ((index / 2) % parents).to_string()
+                };
+                writeln!(
+                    chunk,
+                    "{date},Acme{suffix},Website{suffix},Design{suffix},1,dev@acme.com,entry {index}"
+                )
+                .unwrap();
+            }
+            Ok::<_, std::io::Error>(Bytes::from(chunk))
+        },
+    )))
 }
 
 #[sqlx::test(migrations = "./migrations")]
 #[ignore = "100,000-row CSV measurement; run explicitly with --release --nocapture"]
 async fn measure_csv_streaming_100k(pool: PgPool) {
+    measured_csv_imports(pool, false, 1).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[ignore = "100,000-row durable CSV measurement; run explicitly with --release --nocapture"]
+async fn measure_csv_durable_100k(pool: PgPool) {
+    measured_csv_imports(pool, true, 1).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[ignore = "100,000-row CSV with 5,000 parent sets; run explicitly with --release --nocapture"]
+async fn measure_csv_streaming_large_catalog_100k(pool: PgPool) {
+    measured_csv_imports(pool, false, 5_000).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[ignore = "100,000-row durable CSV with 5,000 parent sets; run explicitly with --release --nocapture"]
+async fn measure_csv_durable_large_catalog_100k(pool: PgPool) {
+    measured_csv_imports(pool, true, 5_000).await;
+}
+
+fn require_release() {
+    #[cfg(debug_assertions)]
+    panic!("scale measurements require --release");
+}
+
+async fn measured_csv_imports(pool: PgPool, durable: bool, parents: u64) {
+    require_release();
+    let pool = csv_measurement_pool(&pool).await;
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@acme.com").await;
     for mode in [ImportMode::DryRun, ImportMode::Commit, ImportMode::Commit] {
         let before = entry_count(&pool, org).await;
         let started = std::time::Instant::now();
-        let report = import_body(&pool, org, "USD", scale_body(), mode)
-            .await
-            .unwrap();
+        let body = scale_body(100_000, parents);
+        let report = if durable {
+            measured_csv_job(&pool, org, body, mode).await
+        } else {
+            import_body(&pool, org, "USD", body, mode).await.unwrap()
+        };
         let elapsed = started.elapsed();
         let memory = std::fs::read_to_string("/proc/self/status").unwrap_or_default();
         eprintln!(
-            "CSV mode={mode:?} existing={before} elapsed={elapsed:?} {}",
+            "CSV mode={mode:?} durable={durable} parents={parents} existing={before} elapsed={elapsed:?} {}",
             memory
                 .lines()
                 .filter(|line| line.starts_with("VmRSS:") || line.starts_with("VmHWM:"))
@@ -805,6 +844,152 @@ async fn measure_csv_streaming_100k(pool: PgPool) {
         .await
         .unwrap();
         assert_eq!(mappings, Some(0));
+        let stored_parents =
+            sqlx::query_scalar!("SELECT count(*) FROM clients WHERE org_id = $1", org)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(
+            stored_parents,
+            Some(if mode == ImportMode::DryRun {
+                0
+            } else {
+                parents as i64
+            })
+        );
+    }
+}
+
+async fn csv_measurement_pool(pool: &PgPool) -> PgPool {
+    use sqlx::ConnectOptions;
+
+    // Include the application's planner policy, not SQLx's test-pool defaults.
+    crate::db::create_pool(pool.connect_options().to_url_lossy().as_str())
+        .await
+        .unwrap()
+}
+
+async fn measured_csv_job(pool: &PgPool, org: Uuid, body: Body, mode: ImportMode) -> ImportReport {
+    use super::super::{csv_source::import_body_with_lease, job_report};
+    use crate::{config::JobPolicy, jobs};
+
+    // Include the production upload buffering and database read, not just the
+    // streaming parser. Do not retain another copy while the worker is running.
+    let upload = axum::body::to_bytes(body, 50 * 1024 * 1024).await.unwrap();
+    let id = jobs::enqueue_csv(
+        pool,
+        org,
+        mode,
+        upload.to_vec(),
+        &Uuid::now_v7().to_string(),
+        JobPolicy { max_attempts: 1 },
+    )
+    .await
+    .unwrap();
+    drop(upload);
+    // Prior completed jobs remain valid; only subsequent transitions fail.
+    sqlx::query!(
+        "ALTER TABLE horae_jobs ADD CONSTRAINT reject_job_completion CHECK (status <> 'succeeded') NOT VALID"
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    let mut confirmed = None;
+    for attempt in 0..2 {
+        let (lease, stop) = jobs::claim_lease_for_test(pool).await;
+        jobs::run_claimed(pool, &lease, stop, async {
+            let upload = sqlx::query!(
+                "SELECT body FROM horae_job_uploads WHERE job_id = $1 AND org_id = $2",
+                id,
+                org,
+            )
+            .fetch_one(pool)
+            .await?;
+            let report = import_body_with_lease(
+                pool,
+                org,
+                "USD",
+                Body::from(upload.body),
+                mode,
+                Some(&lease),
+            )
+            .await?;
+            job_report(&report)
+        })
+        .await
+        .unwrap();
+        let status = jobs::status(pool, org, id).await.unwrap().unwrap();
+        if attempt == 0 {
+            assert_eq!(status.status, "failed");
+            assert!(
+                status
+                    .last_error
+                    .as_deref()
+                    .unwrap()
+                    .contains("reject_job_completion")
+            );
+            let checkpoint = sqlx::query!(
+                "SELECT pg_column_size(checkpoint) AS stored_bytes, octet_length(checkpoint::text) AS json_bytes
+         FROM horae_jobs WHERE id = $1",
+                id,
+            ).fetch_one(pool).await.unwrap();
+            eprintln!(
+                "CSV checkpoint mode={mode:?} processed={} stored_bytes={} json_bytes={}",
+                status.processed_count,
+                checkpoint.stored_bytes.unwrap(),
+                checkpoint.json_bytes.unwrap()
+            );
+            assert!(status.processed_count > 0);
+            confirmed = status.report;
+            sqlx::query!("ALTER TABLE horae_jobs DROP CONSTRAINT reject_job_completion")
+                .execute(pool)
+                .await
+                .unwrap();
+            assert!(jobs::retry(pool, org, id).await.unwrap());
+        } else {
+            assert_eq!(status.status, "succeeded");
+            assert_eq!(status.report, confirmed);
+            return serde_json::from_value(status.report.unwrap()).unwrap();
+        }
+    }
+    unreachable!("the second attempt returns its completed report")
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn csv_measurement_recovers_a_complete_batch_without_recounting(pool: PgPool) {
+    let pool = csv_measurement_pool(&pool).await;
+    assert_eq!(
+        sqlx::query_scalar!(r#"SELECT current_setting('plan_cache_mode') AS "mode!""#)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        "force_custom_plan"
+    );
+    let org = seed_org(&pool).await;
+    seed_user(&pool, org, "dev@acme.com").await;
+    for mode in [ImportMode::DryRun, ImportMode::Commit, ImportMode::Commit] {
+        let before = entry_count(&pool, org).await;
+        let report = measured_csv_job(&pool, org, scale_body(1_000, 100), mode).await;
+        assert!(report.reconciles());
+        assert_eq!(report.summary.time_entries.processed(), 1_000);
+        assert_eq!(report.summary.time_entries.errored, 1);
+        assert_eq!(
+            report.summary.time_entries.created,
+            if before == 0 { 999 } else { 0 }
+        );
+        assert_eq!(report.summary.time_entries.skipped, before as u64);
+        assert_eq!(
+            entry_count(&pool, org).await,
+            if mode == ImportMode::DryRun { 0 } else { 999 }
+        );
+        let parents = sqlx::query_scalar!("SELECT count(*) FROM clients WHERE org_id = $1", org)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            parents,
+            Some(if mode == ImportMode::DryRun { 0 } else { 100 })
+        );
     }
 }
 

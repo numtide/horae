@@ -80,20 +80,21 @@ pub async fn harvest_disconnect() -> Result<(), ServerFnError> {
         .map_err(map_api_error)
 }
 
-/// Enqueue an asynchronous Harvest API import and return its durable job ID.
+/// Enqueue an asynchronous Harvest API import and return its ID and current state.
 /// The organization is derived from the authenticated administrator's session.
 #[server]
 pub async fn start_harvest_api_import(
     mode: ImportMode,
     sync: SyncScope,
-) -> Result<uuid::Uuid, ServerFnError> {
+) -> Result<crate::models::JobStatus, ServerFnError> {
     let admin = require_admin().await?;
     let state = crate::state::global_state().await;
     let payload = crate::jobs::JobPayload::HarvestApi { mode, sync };
     let key = format!("api:{}", uuid::Uuid::now_v7());
-    crate::jobs::enqueue(&state.db, admin.org_id, &payload, &key, state.job_policy)
+    let id = crate::jobs::enqueue(&state.db, admin.org_id, &payload, &key, state.job_policy)
         .await
-        .map_err(server_err)
+        .map_err(server_err)?;
+    required_import_job(&state.db, admin.org_id, id).await
 }
 
 /// Return a durable import's current state for the current organization.
@@ -111,10 +112,11 @@ pub async fn get_harvest_import_job(
 #[server]
 pub async fn list_harvest_import_jobs(
     before: Option<uuid::Uuid>,
+    limit: Option<i64>,
 ) -> Result<Vec<crate::models::JobStatus>, ServerFnError> {
     let admin = require_admin().await?;
     let state = crate::state::global_state().await;
-    crate::jobs::list(&state.db, admin.org_id, 20, before)
+    crate::jobs::list(&state.db, admin.org_id, limit.unwrap_or(20), before)
         .await
         .map_err(server_err)
 }
@@ -125,7 +127,7 @@ pub async fn list_harvest_import_jobs(
 pub async fn start_harvest_csv_import(
     mode: ImportMode,
     file: CsvUpload,
-) -> Result<uuid::Uuid, ServerFnError> {
+) -> Result<crate::models::JobStatus, ServerFnError> {
     let admin = require_admin().await?;
     let body = axum::body::to_bytes(file.into_body()?, 50 * 1024 * 1024)
         .await
@@ -134,7 +136,7 @@ pub async fn start_harvest_csv_import(
     // Uploads have no stable source identifier; never deduplicate unrelated
     // files merely because their byte lengths happen to match.
     let key = format!("csv:{}", uuid::Uuid::now_v7());
-    crate::jobs::enqueue_csv(
+    let id = crate::jobs::enqueue_csv(
         &state.db,
         admin.org_id,
         mode,
@@ -143,18 +145,21 @@ pub async fn start_harvest_csv_import(
         state.job_policy,
     )
     .await
-    .map_err(server_err)
+    .map_err(server_err)?;
+    required_import_job(&state.db, admin.org_id, id).await
 }
 
 #[server]
-pub async fn cancel_harvest_import_job(job_id: uuid::Uuid) -> Result<(), ServerFnError> {
+pub async fn cancel_harvest_import_job(
+    job_id: uuid::Uuid,
+) -> Result<crate::models::JobStatus, ServerFnError> {
     let admin = require_admin().await?;
     let state = crate::state::global_state().await;
     if crate::jobs::cancel(&state.db, admin.org_id, job_id)
         .await
         .map_err(server_err)?
     {
-        Ok(())
+        required_import_job(&state.db, admin.org_id, job_id).await
     } else {
         Err(err(
             NOT_FOUND,
@@ -164,17 +169,31 @@ pub async fn cancel_harvest_import_job(job_id: uuid::Uuid) -> Result<(), ServerF
 }
 
 #[server]
-pub async fn retry_harvest_import_job(job_id: uuid::Uuid) -> Result<(), ServerFnError> {
+pub async fn retry_harvest_import_job(
+    job_id: uuid::Uuid,
+) -> Result<crate::models::JobStatus, ServerFnError> {
     let admin = require_admin().await?;
     let state = crate::state::global_state().await;
     if crate::jobs::retry(&state.db, admin.org_id, job_id)
         .await
         .map_err(server_err)?
     {
-        Ok(())
+        required_import_job(&state.db, admin.org_id, job_id).await
     } else {
         Err(err(NOT_FOUND, "Import job not found or is not retryable"))
     }
+}
+
+#[cfg(feature = "server")]
+async fn required_import_job(
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    job_id: uuid::Uuid,
+) -> Result<crate::models::JobStatus, ServerFnError> {
+    crate::jobs::status(pool, org_id, job_id)
+        .await
+        .map_err(server_err)?
+        .ok_or_else(|| err(NOT_FOUND, "Import job not found"))
 }
 
 /// Run an import from the Harvest API (primary source). Rejects up front when no

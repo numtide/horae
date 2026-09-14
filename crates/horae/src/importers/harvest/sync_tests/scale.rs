@@ -206,9 +206,10 @@ async fn measured_job(pool: &PgPool, org: Uuid, server: &Server, mode: ImportMod
     .await
     .unwrap();
     // Keep the EOF checkpoint available for size measurements and exercise its
-    // recovery. The worker's heartbeat remains active throughout the import.
+    // recovery. Prior completed jobs remain valid. The worker's heartbeat
+    // remains active throughout the import.
     sqlx::query!(
-        "ALTER TABLE horae_jobs ADD CONSTRAINT reject_job_completion CHECK (status <> 'succeeded')"
+        "ALTER TABLE horae_jobs ADD CONSTRAINT reject_job_completion CHECK (status <> 'succeeded') NOT VALID"
     )
     .execute(pool)
     .await
@@ -353,9 +354,21 @@ async fn api_durable_100k_dry_run(pool: PgPool) {
 async fn durable_measurement_finishes_from_its_eof_checkpoint(pool: PgPool) {
     let org = setup(&pool).await;
     let server = scale_server(205);
-    let report = measured_job(&pool, org, &server, ImportMode::DryRun).await;
-    assert_eq!(report.summary.time_entries.processed(), 205);
-    assert_eq!(report.summary.time_entries.created, 204);
-    assert_eq!(report.summary.time_entries.errored, 1);
-    assert_stored_rows(&pool, org, 0).await;
+    for (index, mode) in [ImportMode::DryRun, ImportMode::Commit, ImportMode::Commit]
+        .into_iter()
+        .enumerate()
+    {
+        let report = measured_job(&pool, org, &server, mode).await;
+        assert_eq!(report.summary.time_entries.processed(), 205);
+        assert_eq!(
+            report.summary.time_entries.created,
+            if index < 2 { 204 } else { 0 }
+        );
+        assert_eq!(
+            report.summary.time_entries.skipped,
+            if index < 2 { 0 } else { 204 }
+        );
+        assert_eq!(report.summary.time_entries.errored, 1);
+        assert_stored_rows(&pool, org, if mode == ImportMode::DryRun { 0 } else { 204 }).await;
+    }
 }

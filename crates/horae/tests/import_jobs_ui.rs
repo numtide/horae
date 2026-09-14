@@ -28,7 +28,7 @@ mod components {
 }
 
 type JobResponse = Result<Option<models::JobStatus>, ServerFnError>;
-type ActionResponse = Result<(), ServerFnError>;
+type ActionResponse = Result<models::JobStatus, ServerFnError>;
 
 #[derive(Clone, Default)]
 struct Probe {
@@ -273,7 +273,7 @@ async fn retry_errors_are_visible_and_success_restarts_monitoring() {
     let action = probe.action();
     let response = probe.request();
     ui.click(&target);
-    action.send(Ok(())).unwrap();
+    action.send(Ok(job(1, "queued"))).unwrap();
     ui.settle();
     assert!(ui.html().contains("Following import"));
     assert!(!ui.html().contains("Could not retry import"));
@@ -303,7 +303,9 @@ async fn cancellation_errors_are_visible_and_acceptance_does_not_acknowledge_com
     assert!(ui.html().contains("Following import"));
     let action = probe.action();
     ui.click("cancel-import");
-    action.send(Ok(())).unwrap();
+    let mut accepted = job(1, "running");
+    accepted.phase = Some("cancelling".into());
+    action.send(Ok(accepted)).unwrap();
     ui.settle();
     assert!(ui.html().contains("cancelling"));
     assert!(ui.html().contains("Following import"));
@@ -367,6 +369,20 @@ async fn history_can_page_back_and_return_to_the_latest_imports() {
             None,
         ]
     );
+}
+
+#[tokio::test]
+async fn submission_displays_its_acknowledged_state_before_status_polling_returns() {
+    let probe = Probe::default();
+    let mut ui = Ui::start(&probe);
+    ui.click("choose-csv");
+    ui.choose_file("import.csv");
+    let _pending_status = probe.request();
+    ui.click("preview-csv");
+    assert!(ui.html().contains("queued"));
+    assert!(ui.html().contains("Following import"));
+    assert_eq!(&*probe.requests.borrow(), &[Uuid::from_u128(11)]);
+    assert_eq!(probe.csv_submissions.borrow().len(), 1);
 }
 
 #[tokio::test]
@@ -489,6 +505,7 @@ mod server_fns {
 
     pub async fn list_harvest_import_jobs(
         before: Option<Uuid>,
+        limit: Option<i64>,
     ) -> Result<Vec<models::JobStatus>, ServerFnError> {
         let probe = consume_context::<Probe>();
         probe.history_cursors.borrow_mut().push(before);
@@ -503,7 +520,12 @@ mod server_fns {
                 .expect("unknown test cursor")
                 + 1
         });
-        Ok(history.iter().skip(start).take(20).cloned().collect())
+        Ok(history
+            .iter()
+            .skip(start)
+            .take(limit.unwrap_or(20).clamp(1, 100) as usize)
+            .cloned()
+            .collect())
     }
 
     pub async fn get_harvest_import_job(id: Uuid) -> JobResponse {
@@ -522,7 +544,7 @@ mod server_fns {
     pub async fn start_harvest_api_import(
         _: ImportMode,
         _: SyncScope,
-    ) -> Result<Uuid, ServerFnError> {
+    ) -> Result<models::JobStatus, ServerFnError> {
         panic!("unexpected API import")
     }
 
@@ -537,14 +559,14 @@ mod server_fns {
     pub async fn start_harvest_csv_import(
         mode: ImportMode,
         file: CsvUpload,
-    ) -> Result<Uuid, ServerFnError> {
+    ) -> Result<models::JobStatus, ServerFnError> {
         let probe = consume_context::<Probe>();
         let mut submitted = probe.csv_submissions.borrow_mut();
         submitted.push((mode, file.0.name()));
-        Ok(Uuid::from_u128(10 + submitted.len() as u128))
+        Ok(job(10 + submitted.len() as u128, "queued"))
     }
 
-    pub async fn cancel_harvest_import_job(id: Uuid) -> Result<(), ServerFnError> {
+    pub async fn cancel_harvest_import_job(id: Uuid) -> ActionResponse {
         let probe = consume_context::<Probe>();
         probe.cancellations.borrow_mut().push(id);
         let response = probe
@@ -554,7 +576,7 @@ mod server_fns {
             .expect("unexpected cancellation");
         response.await.unwrap()
     }
-    pub async fn retry_harvest_import_job(id: Uuid) -> Result<(), ServerFnError> {
+    pub async fn retry_harvest_import_job(id: Uuid) -> ActionResponse {
         let probe = consume_context::<Probe>();
         probe.retries.borrow_mut().push(id);
         let response = probe

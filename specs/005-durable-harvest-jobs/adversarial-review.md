@@ -422,3 +422,39 @@ This closes T020. The three explicit scale benchmarks are still ignored, T007
 and T016 remain open for scale and full acceptance verification, and the published
 head has no current CI checks. Older green workflow runs do not establish these
 remaining gates. The PR remains a draft.
+
+## Action responses and scale fixtures
+
+The endpoint audit found that start returned only a UUID, cancel/retry returned
+unit, and history fixed its limit at twenty despite the approved contract.
+These actions now return the public `JobStatus` projection, and history accepts
+an optional limit clamped to 1–100. The UI immediately displays the acknowledged
+snapshot, then polls normally. A cancellation response can still be running and
+cancelling; it does not imply that source cleanup has finished.
+
+The registered HTTP matrix verifies creation/cancellation/retry responses, limit
+handling and running cancellation followed by worker acknowledgement. A new UI
+regression holds the first status request pending and checks that submission
+already displays its queued state without submitting again. All 30 jobs tests,
+152 importer tests, five endpoint tests, thirteen UI tests and 86 core tests
+pass. SQLx metadata is regenerated. Web compilation, server all-target Clippy
+with warnings denied and performance lints, and formatting pass locally.
+
+Eight scale scenarios are explicitly ignored in the regular suite. The CSV
+fixtures now cover inline/durable preview, commit and reimport with either one
+or 5,000 parent sets, using the production database pool policy. Small API and
+CSV regressions verify EOF recovery across successive jobs. They exposed a
+failure-injection constraint that rejected previously completed jobs; `NOT VALID`
+keeps those existing rows valid while enforcing the intended future failure.
+
+See [performance.md](performance.md) for completed release measurements and
+their limits. The measured durable API preview takes approximately 2.72 times
+the inline preview time. Durable commit/reimport and CSV scale results remain
+pending; T007 and T016 are not closed. The merged-master commit `4532b90` passed
+both CI jobs, but subsequent changes require a fresh run.
+
+The final data-model audit also still needs to establish the requirement that
+reports are bounded and schema-versioned. The current public report retains an
+unversioned collection of row errors; limiting their UI display does not bound
+storage or transport. Any correction must preserve the importer's requirement
+to retain every failed record's location and reason, not silently truncate them.

@@ -236,7 +236,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
             .is_empty()
     );
     for name in ["start_harvest_api_import", "csv"] {
-        let id: Uuid = serde_json::from_value(
+        let started: crate::models::JobStatus = serde_json::from_value(
             api.json(
                 name,
                 json!({"mode":"DryRun","sync":"Full","org_id":foreign.org_id}),
@@ -245,6 +245,10 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
             .await,
         )
         .unwrap();
+        let id = started.id;
+        assert_eq!(started.status, "queued");
+        assert_eq!(started.processed_count, 0);
+        assert!(started.report.is_some());
         assert!(
             crate::jobs::status(&pool, owner.org_id, id)
                 .await
@@ -292,8 +296,13 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
                 .await["status"],
             "queued"
         );
-        api.json("cancel_harvest_import_job", json!({"job_id":id}), &admin)
+        let cancelled = api
+            .json("cancel_harvest_import_job", json!({"job_id":id}), &admin)
             .await;
+        assert_eq!(cancelled["id"], json!(id));
+        assert_eq!(cancelled["status"], "cancelled");
+        assert!(cancelled.get("payload").is_none());
+        assert!(cancelled.get("checkpoint").is_none());
         assert_eq!(
             api.call(
                 "retry_harvest_import_job",
@@ -310,8 +319,11 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
                 .await["status"],
             "cancelled"
         );
-        api.json("retry_harvest_import_job", json!({"job_id":id}), &admin)
+        let retried = api
+            .json("retry_harvest_import_job", json!({"job_id":id}), &admin)
             .await;
+        assert_eq!(retried["id"], json!(id));
+        assert_eq!(retried["status"], "queued");
         assert_eq!(
             api.json("get_harvest_import_job", json!({"job_id":id}), &admin)
                 .await["status"],
@@ -322,6 +334,52 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
         .json("list_harvest_import_jobs", json!({"before":null}), &admin)
         .await;
     assert_eq!(history.as_array().unwrap().len(), 2);
+    for limit in [0, 1] {
+        let limited = api
+            .json(
+                "list_harvest_import_jobs",
+                json!({"before":null,"limit":limit}),
+                &admin,
+            )
+            .await;
+        assert_eq!(
+            limited.as_array().unwrap(),
+            &history.as_array().unwrap()[..1]
+        );
+    }
+    let (lease, stop) = crate::jobs::claim_lease_for_test(&pool).await;
+    let running = crate::jobs::list(&pool, owner.org_id, 20, None)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|job| job.status == "running")
+        .unwrap();
+    let accepted = api
+        .json(
+            "cancel_harvest_import_job",
+            json!({"job_id":running.id}),
+            &admin,
+        )
+        .await;
+    assert_eq!(accepted["id"], json!(running.id));
+    assert_eq!(accepted["status"], "running");
+    assert_eq!(accepted["phase"], "cancelling");
+    tokio::time::timeout(
+        Duration::from_secs(10),
+        crate::jobs::run_claimed(&pool, &lease, stop, lease.run(std::future::pending())),
+    )
+    .await
+    .expect("cooperative cancellation must be acknowledged")
+    .unwrap();
+    assert_eq!(
+        api.json(
+            "get_harvest_import_job",
+            json!({"job_id":running.id}),
+            &admin
+        )
+        .await["status"],
+        "cancelled"
+    );
     server.abort_all();
     while server.join_next().await.is_some() {}
 }
