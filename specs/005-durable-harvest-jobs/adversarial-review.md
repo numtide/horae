@@ -536,3 +536,17 @@ T021 remains open. Existing large version-1 reports still load their original
 JSON; they need bounded read/upgrade handling. Further API overflow, retention,
 failure/backpressure and memory stress coverage remains required, alongside
 T007's pending scale samples and T016's full server/browser acceptance.
+
+## Process restart acceptance
+
+The NixOS end-to-end test now includes actual SIGTERM and SIGKILL interruptions
+of an HTTP-enqueued CSV import. A PostgreSQL advisory-lock gate blocks record
+501, after the first 500 entries and their checkpoint have committed. The test
+checks that stopping the process preserves only those confirmed entries, then
+starts a new server process and advances the job's lease deadline to exercise
+recovery without a five-minute wait. It checks the final 1,000 entries, report
+counts, integer minutes, two execution attempts and duplicate-free reimport.
+
+Nix evaluation and the generated Python script's syntax pass. VM execution is
+pending; this is not yet evidence of successful process recovery. T016 remains
+open, including browser acceptance.
