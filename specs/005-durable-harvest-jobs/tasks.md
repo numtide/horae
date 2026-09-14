@@ -13,7 +13,7 @@
 - [x] T006 Add worker startup, bounded concurrency, lease/heartbeat, retry backoff, and graceful shutdown.
 - [ ] T007 Add checkpoint/progress updates around existing Harvest import phases.
   - Durable CSV commits checkpoint every 500 records. API commits persist catalog pages, 500-entity parent batches and individual time-entry pages, with report/cache and watermark state.
-  - Dry-run recovery and checkpoint snapshot-size/throughput validation remain pending.
+  - CSV previews checkpoint rollback-only simulation state every 500 records. API dry-run recovery and checkpoint snapshot-size/throughput validation remain pending.
 - [x] T008 Add outbox records and transactional enqueue support for future plugin/webhook/notification delivery.
 - [x] T009 Ensure all job and outbox reads/mutations enforce organization and admin authorization.
   - Registered HTTP handlers enforce live administrator sessions and tenant isolation; uploads have a composite job/organization foreign key. Outbox primitives are internal worker APIs, with organization and claim-token checks on acknowledgements.

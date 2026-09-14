@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COALESCE(jsonb_agg(to_jsonb(pt)), '[]'::jsonb) AS \"rows!\"\n                   FROM project_tasks pt\n                   JOIN unnest($2::uuid[], $3::uuid[]) AS selected(project_id, task_id)\n                     USING (project_id, task_id)\n                   JOIN projects p ON p.id = pt.project_id\n                   JOIN tasks t ON t.id = pt.task_id\n                   WHERE p.org_id = $1 AND t.org_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "rows!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "01bc83ef8fd890abdda872279e5045293a00687d5fe5b81daa41a79e8fbf3a1c"
+}

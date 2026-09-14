@@ -301,3 +301,37 @@ This closes T009 for the implemented job endpoints and internal outbox boundary,
 not an independent security review of the entire application. T007 and T016,
 dry-run recovery, checkpoint scale validation and the full acceptance walkthrough
 remain open; the PR must remain a draft.
+
+## Resumable CSV previews
+
+Durable CSV previews now persist simulation checkpoints every 500 source records.
+The cursor, report, currency and occurrence cache survive alongside snapshots of
+cached parents and project/task links. Domain changes roll back before the
+checkpoint transaction commits. The next batch restores parent identities and
+attributes within a new rollback-only transaction, without parsing or applying
+completed source rows or recounting their outcomes. The final report is also
+fenced after the domain rollback; obsolete workers cannot complete it.
+
+Simulated time entries are not copied into checkpoints. For an ID-less CSV,
+existing-entry matching uses the stored occurrence count, so previously created
+simulation entries do not need replay. This rule is specific to CSV and must not
+be applied to API provenance/adoption semantics without additional state.
+
+The crash regression failed before implementation because a preview never
+persisted a batch before EOF. Crash, cancellation/manual retry and deliberately
+unmonitored stale-claim tests now cover preview boundaries, alongside their
+existing commit equivalents. Recovery tests poison the already-consumed byte
+prefix to prove it is skipped, retaining original counts, one row error and its
+location. Another test compares the complete report with an inline preview and
+subsequent real commit across 600 existing and 1,051 new entries; it uses a
+single-connection pool and verifies preview-only parents remain invisible.
+Foreign-organization parent snapshots are rejected before restoration.
+
+All 140 importer tests and 28 jobs tests pass. Three explicit scale benchmarks
+remain ignored. Server clippy passes with all targets and warnings denied;
+SQLx metadata includes the eight new capture/restore queries. Formatting passes.
+
+This does not close T007 or T016: API previews still lack resumable simulation
+state. Parent snapshots are captured/restored at each CSV batch boundary, so
+large-catalog snapshot size and throughput remain part of the required scale
+validation. Full acceptance and current-head CI remain required before merge.

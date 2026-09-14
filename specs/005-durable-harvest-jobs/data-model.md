@@ -40,10 +40,26 @@ prefix without parsing or applying completed records again. A failed or cancelle
 attempt retains the checkpoint for retry. Successful completion retains the
 report and final total count but clears the now-unneeded checkpoint cache.
 
-Dry-runs do not yet use resumable checkpoints. They retain
-their rollback-only domain transaction; source and simulation checkpoint support
-remains required before FR-007 is complete. Snapshot size and large-import
-throughput also remain part of the final checkpoint validation.
+### CSV preview checkpoint, version 1
+
+CSV previews use the same cursor, report and occurrence cache, with an additional
+`preview` snapshot of cached clients, projects, tasks and project/task links. Each
+500-record batch captures that simulation state, rolls back its domain transaction,
+then persists the checkpoint in a new lease-fenced transaction. The next batch
+restores parent identities and importer-relevant attributes only inside another
+rollback-only transaction. Existing domain rows are never updated by restoration.
+
+CSV time entries carry no source IDs or provenance: the occurrence counter already
+identifies which existing duplicate the next row should match. Simulated time
+entries need not be stored or replayed. Recovery skips the checkpointed source
+prefix and resumes with original counts and errors. At EOF the final domain
+transaction rolls back before the terminal job report commits under its lease.
+Commit checkpoints remain compatible and never contain preview state.
+
+API dry-run source/simulation recovery remains required before FR-007 is complete.
+CSV snapshots currently scale with the cached parent/link set and are restored at
+each batch boundary; their size and large-import throughput still need measurement
+alongside the existing full resolution-cache snapshots.
 
 ### API pagination cursor, version 1
 

@@ -4,9 +4,9 @@
 //!
 //! Both source adapters drive normalized [`SourceRow`]s through the shared
 //! resolve → [`apply::apply_row`] → report pipeline. Each row is applied in its
-//! own savepoint; a `DryRun` runs the whole stream inside a
-//! transaction that is rolled back, so nothing persists — not data, not
-//! provenance, not the watermark (FR-014, research.md §7).
+//! own savepoint; a `DryRun` rolls back all domain transactions, so no domain
+//! data, provenance or watermark persists (FR-014, research.md §7). Durable CSV
+//! previews retain simulation checkpoints separately from those transactions.
 
 pub mod api_source;
 pub mod apply;

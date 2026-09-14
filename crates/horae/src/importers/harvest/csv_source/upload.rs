@@ -14,7 +14,7 @@ use uuid::Uuid;
 use super::super::{
     apply, finish_import, lock_import, release_import,
     report::ImportReport,
-    resolve::{OrgDefaults, RunCache},
+    resolve::{OrgDefaults, RunCache, csv_preview::CsvPreview},
 };
 use super::{CsvError, Cursor, Record, read_csv_from};
 
@@ -27,6 +27,8 @@ struct Checkpoint {
     cursor: Cursor,
     report: ImportReport,
     cache: RunCache,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    preview: Option<CsvPreview>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -80,8 +82,8 @@ pub async fn import_body(
     import_body_with_lease(pool, org_id, default_currency, body, mode, None).await
 }
 
-/// Durable commits publish batches and their cursor atomically. Inline imports
-/// and previews retain their whole-run transaction; a preview never commits data.
+/// Durable imports checkpoint batches. A preview rolls back its domain changes
+/// before publishing simulation state; only committing imports publish data.
 pub(crate) async fn import_body_with_lease(
     pool: &sqlx::PgPool,
     org_id: Uuid,
@@ -96,8 +98,7 @@ pub(crate) async fn import_body_with_lease(
     let mut connection = lock_import(pool, org_id)
         .await
         .map_err(anyhow::Error::from)?;
-    let durable = lease.filter(|_| mode == ImportMode::Commit);
-    let stored = match durable {
+    let stored = match lease {
         Some(lease) => lease.load_checkpoint(&mut connection).await?,
         None => None,
     };
@@ -108,6 +109,7 @@ pub(crate) async fn import_body_with_lease(
             if checkpoint.version != 1
                 || checkpoint.report.mode != mode
                 || checkpoint.report.source != SourceKind::Csv
+                || (mode == ImportMode::DryRun) != checkpoint.preview.is_some()
             {
                 return Err(anyhow::anyhow!("unsupported CSV checkpoint").into());
             }
@@ -121,6 +123,7 @@ pub(crate) async fn import_body_with_lease(
                 cursor: Cursor::default(),
                 report: ImportReport::new(SourceKind::Csv, mode),
                 cache: RunCache::default(),
+                preview: None,
             },
             None,
         ),
@@ -153,6 +156,9 @@ pub(crate) async fn import_body_with_lease(
         let first = receive.recv().await.ok_or(IncompleteUpload)?;
         let mut connection = session.lock().await;
         let mut tx = connection.begin().await?;
+        if let Some(preview) = &checkpoint.preview {
+            preview.restore(&mut tx, org_id).await?;
+        }
         let org = OrgDefaults {
             org_id,
             default_currency: &checkpoint.default_currency,
@@ -182,9 +188,15 @@ pub(crate) async fn import_body_with_lease(
                 ),
             }
             checkpoint.cursor.position = position;
-            if let Some(lease) = durable
+            if let Some(lease) = lease
                 && position.record.is_multiple_of(BATCH_ROWS)
             {
+                if mode == ImportMode::DryRun {
+                    checkpoint.preview =
+                        Some(CsvPreview::capture(&mut tx, org_id, &checkpoint.cache).await?);
+                    tx.rollback().await?;
+                    tx = connection.begin().await?;
+                }
                 let (_, processed) = super::super::job_report(&checkpoint.report)?;
                 lease
                     .save_checkpoint(
@@ -196,12 +208,26 @@ pub(crate) async fn import_body_with_lease(
                     .await?;
                 tx.commit().await?;
                 tx = connection.begin().await?;
+                if let Some(preview) = &checkpoint.preview {
+                    preview.restore(&mut tx, org_id).await?;
+                }
             }
             next = receive.recv().await.ok_or(IncompleteUpload)?;
         }
         anyhow::ensure!(matches!(next, Record::Complete), "unexpected CSV headers");
         debug_assert!(checkpoint.report.reconciles());
         finish_import(tx, &checkpoint.report, lease).await?;
+        if mode == ImportMode::DryRun
+            && let Some(lease) = lease
+        {
+            let (report, processed) = super::super::job_report(&checkpoint.report)?;
+            let mut tx = connection.begin().await?;
+            anyhow::ensure!(
+                lease.complete(&mut tx, &report, processed).await?,
+                "job execution interrupted or lease lost"
+            );
+            tx.commit().await?;
+        }
         Ok::<_, anyhow::Error>(checkpoint.report)
     };
     let result = match lease {

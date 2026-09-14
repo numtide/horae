@@ -63,17 +63,118 @@ async fn entry_count(pool: &PgPool, org: Uuid) -> i64 {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn durable_csv_resumes_committed_batches_without_recounting_duplicate_rows(pool: PgPool) {
-    interrupted_csv_batches(pool, BatchInterruption::Crash).await;
+    interrupted_csv_batches(pool, BatchInterruption::Crash, ImportMode::Commit).await;
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn durable_csv_cancel_preserves_its_completed_batches_for_manual_retry(pool: PgPool) {
-    interrupted_csv_batches(pool, BatchInterruption::Cancel).await;
+    interrupted_csv_batches(pool, BatchInterruption::Cancel, ImportMode::Commit).await;
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn durable_csv_reclaimed_lease_cannot_commit_the_next_batch(pool: PgPool) {
-    interrupted_csv_batches(pool, BatchInterruption::Reclaim).await;
+    interrupted_csv_batches(pool, BatchInterruption::Reclaim, ImportMode::Commit).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn durable_csv_preview_resumes_after_a_crash_without_recounting_rows(pool: PgPool) {
+    interrupted_csv_batches(pool, BatchInterruption::Crash, ImportMode::DryRun).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn durable_csv_preview_cancel_preserves_simulation_for_manual_retry(pool: PgPool) {
+    interrupted_csv_batches(pool, BatchInterruption::Cancel, ImportMode::DryRun).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn durable_csv_preview_rejects_a_stale_next_batch(pool: PgPool) {
+    interrupted_csv_batches(pool, BatchInterruption::Reclaim, ImportMode::DryRun).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn durable_csv_preview_matches_existing_and_new_rows_with_one_connection(pool: PgPool) {
+    use super::super::csv_source::import_body_with_lease;
+    use crate::jobs;
+
+    let org = seed_org(&pool).await;
+    seed_user(&pool, org, "dev@acme.com").await;
+    import_body(
+        &pool,
+        org,
+        "USD",
+        Body::from(format!("{HEADER}{}", ROW.repeat(600))),
+        ImportMode::Commit,
+    )
+    .await
+    .unwrap();
+    let new_row = ROW.replace("Acme,Website,Design", "New client,New project,New task");
+    let csv = format!(
+        "{HEADER}{}{}{}bad-date,Acme,Website,Design,1,dev@acme.com,bad\n",
+        ROW.repeat(450),
+        new_row.repeat(650),
+        ROW.repeat(551)
+    );
+    let expected = import_body(
+        &pool,
+        org,
+        "USD",
+        Body::from(csv.clone()),
+        ImportMode::DryRun,
+    )
+    .await
+    .unwrap();
+    assert_eq!(expected.summary.time_entries.skipped, 600);
+    assert_eq!(expected.summary.time_entries.created, 1051);
+    assert_eq!(expected.summary.time_entries.errored, 1);
+    let id = jobs::enqueue_csv(
+        &pool,
+        org,
+        ImportMode::DryRun,
+        csv.clone().into_bytes(),
+        "preview-existing",
+        Default::default(),
+    )
+    .await
+    .unwrap();
+    let (lease, _stop) = jobs::claim_lease_for_test(&pool).await;
+    let single = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .connect_with((*pool.connect_options()).clone())
+        .await
+        .unwrap();
+    let actual = tokio::time::timeout(
+        Duration::from_secs(15),
+        import_body_with_lease(
+            &single,
+            org,
+            "USD",
+            Body::from(csv.clone()),
+            ImportMode::DryRun,
+            Some(&lease),
+        ),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(actual, expected);
+    assert_eq!(entry_count(&pool, org).await, 600);
+    assert_eq!(
+        sqlx::query_scalar!("SELECT count(*) FROM clients WHERE org_id = $1", org)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        Some(1)
+    );
+    assert_eq!(
+        jobs::status(&pool, org, id).await.unwrap().unwrap().status,
+        "succeeded"
+    );
+    let committed = import_body(&pool, org, "USD", Body::from(csv), ImportMode::Commit)
+        .await
+        .unwrap();
+    assert_eq!(committed.summary, expected.summary);
+    assert_eq!(entry_count(&pool, org).await, 1651);
+    single.close().await;
 }
 
 #[derive(Clone, Copy)]
@@ -114,8 +215,10 @@ async fn durable_csv_preview_crosses_batch_boundaries_without_committing_domain_
         .await?;
         assert_eq!(report.summary.time_entries.created, 501);
         assert_eq!(entry_count(&pool, org).await, 0);
-        let mut connection = pool.acquire().await?;
-        assert!(lease.load_checkpoint(&mut connection).await?.is_none());
+        assert_eq!(
+            jobs::status(&pool, org, id).await?.unwrap().status,
+            "succeeded"
+        );
         super::super::job_report(&report)
     })
     .await
@@ -127,7 +230,7 @@ async fn durable_csv_preview_crosses_batch_boundaries_without_committing_domain_
     assert_eq!(entry_count(&pool, org).await, 0);
 }
 
-async fn interrupted_csv_batches(pool: PgPool, interruption: BatchInterruption) {
+async fn interrupted_csv_batches(pool: PgPool, interruption: BatchInterruption, mode: ImportMode) {
     use super::super::csv_source::import_body_with_lease;
     use crate::jobs;
 
@@ -138,10 +241,13 @@ async fn interrupted_csv_batches(pool: PgPool, interruption: BatchInterruption) 
         ROW.repeat(499)
     );
     let csv = format!("{first_batch}{}", ROW.repeat(501));
+    // A recovered parser must skip the checkpointed byte prefix, not parse it
+    // again. Poison just that prefix while keeping its exact length and suffix.
+    let resumed_csv = format!("{}{}", "x".repeat(first_batch.len()), ROW.repeat(501));
     let id = jobs::enqueue_csv(
         &pool,
         org,
-        ImportMode::Commit,
+        mode,
         csv.clone().into_bytes(),
         "resume-csv",
         Default::default(),
@@ -157,15 +263,8 @@ async fn interrupted_csv_batches(pool: PgPool, interruption: BatchInterruption) 
     let run = tokio::spawn(
         async move {
             let work = async {
-                let report = import_body_with_lease(
-                    &run_pool,
-                    org,
-                    "USD",
-                    body,
-                    ImportMode::Commit,
-                    Some(&lease),
-                )
-                .await?;
+                let report =
+                    import_body_with_lease(&run_pool, org, "USD", body, mode, Some(&lease)).await?;
                 super::super::job_report(&report)
             };
             match interruption {
@@ -187,7 +286,18 @@ async fn interrupted_csv_batches(pool: PgPool, interruption: BatchInterruption) 
         batch.is_ok(),
         "a durable batch must commit before source EOF"
     );
-    assert_eq!(entry_count(&pool, org).await, 499);
+    let retained = if mode == ImportMode::Commit { 499 } else { 0 };
+    assert_eq!(entry_count(&pool, org).await, retained);
+    if mode == ImportMode::DryRun {
+        assert_eq!(
+            sqlx::query_scalar!("SELECT count(*) FROM clients WHERE org_id = $1", org)
+                .fetch_one(&pool)
+                .await
+                .unwrap(),
+            Some(0),
+            "checkpointing a preview must not publish simulated parents"
+        );
+    }
     let progress = jobs::status(&pool, org, id).await.unwrap().unwrap();
     assert_eq!(progress.status, "running");
     assert_eq!(progress.processed_count, 503);
@@ -247,7 +357,7 @@ async fn interrupted_csv_batches(pool: PgPool, interruption: BatchInterruption) 
     };
     assert_eq!(
         entry_count(&pool, org).await,
-        499,
+        retained,
         "only the committed batch must survive"
     );
     assert_eq!(
@@ -262,13 +372,16 @@ async fn interrupted_csv_batches(pool: PgPool, interruption: BatchInterruption) 
         &pool,
         org,
         "USD",
-        Body::from(csv),
-        ImportMode::Commit,
+        Body::from(resumed_csv),
+        mode,
         Some(&lease),
     )
     .await
     .unwrap();
-    assert_eq!(entry_count(&pool, org).await, 1000);
+    assert_eq!(
+        entry_count(&pool, org).await,
+        if mode == ImportMode::Commit { 1000 } else { 0 }
+    );
     assert_eq!(report.summary.time_entries.created, 1000);
     assert_eq!(report.summary.time_entries.errored, 1);
     assert_eq!(report.row_errors.len(), 1);

@@ -11,6 +11,7 @@
 //! this keeps a second run at zero creations and is edit-robust because
 //! provenance matches by Harvest id.
 
+pub(super) mod csv_preview;
 pub mod fields;
 
 use std::collections::{HashMap, HashSet};
