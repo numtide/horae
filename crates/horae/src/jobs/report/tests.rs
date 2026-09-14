@@ -93,20 +93,7 @@ async fn report_fragments_survive_until_the_owning_job_expires(pool: sqlx::PgPoo
 #[sqlx::test(migrations = false)]
 #[serial_test::serial]
 async fn upgrading_legacy_reports_preserves_errors_and_fences_old_attempts(pool: sqlx::PgPool) {
-    let mut connection = pool.acquire().await.unwrap();
-    connection.ensure_migrations_table().await.unwrap();
-    for migration in sqlx::migrate!("./migrations")
-        .iter()
-        .filter(|m| m.version <= 27)
-    {
-        connection.apply(migration).await.unwrap();
-    }
-    drop(connection);
-    let pool = sqlx::postgres::PgPoolOptions::new()
-        .max_connections(1)
-        .connect_with((*pool.connect_options()).clone())
-        .await
-        .unwrap();
+    let pool = legacy_pool(pool).await;
 
     let org_id = Uuid::now_v7();
     sqlx::query!(
@@ -255,4 +242,179 @@ async fn upgrading_legacy_reports_preserves_errors_and_fences_old_attempts(pool:
         Some(saved),
         "even a live claim cannot restore an oversized report after upgrading"
     );
+}
+
+async fn legacy_pool(pool: sqlx::PgPool) -> sqlx::PgPool {
+    let mut connection = pool.acquire().await.unwrap();
+    connection.ensure_migrations_table().await.unwrap();
+    for migration in sqlx::migrate!("./migrations")
+        .iter()
+        .filter(|m| m.version <= 27)
+    {
+        connection.apply(migration).await.unwrap();
+    }
+    drop(connection);
+    sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .connect_with((*pool.connect_options()).clone())
+        .await
+        .unwrap()
+}
+
+#[sqlx::test(migrations = false)]
+#[serial_test::serial]
+async fn legacy_upgrade_preserves_job_states_and_existing_archives(pool: sqlx::PgPool) {
+    use serde_json::json;
+
+    let pool = legacy_pool(pool).await;
+    let org = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO organizations (id, name) VALUES ($1, 'Jobs test')",
+        org
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let mut cases = Vec::new();
+    for (state, cancellation) in [
+        ("queued", false),
+        ("running", false),
+        ("running", true),
+        ("succeeded", false),
+        ("failed", false),
+        ("cancelled", true),
+    ] {
+        for version in 0..=2 {
+            for with_checkpoint in [false, true] {
+                let id = jobs::enqueue(
+                    &pool,
+                    org,
+                    &jobs::JobPayload::HarvestCsv {
+                        mode: ImportMode::Commit,
+                    },
+                    &Uuid::now_v7().to_string(),
+                    JobPolicy::default(),
+                )
+                .await
+                .unwrap();
+                let mut report = ImportReport::new(SourceKind::Csv, ImportMode::Commit);
+                let mut expected = Vec::new();
+                let mut prefix = Vec::new();
+                if version == 2 {
+                    report.record(
+                        EntityType::TimeEntry,
+                        &RowOutcome::Errored {
+                            source_location: "previously archived".into(),
+                            reason: "keep this fragment".into(),
+                        },
+                    );
+                    expected.extend(report.row_errors.clone());
+                    serde_json::to_writer(&mut prefix, &report.row_errors[0]).unwrap();
+                    prefix.push(b'\n');
+                    super::append_report_chunk(
+                        &mut pool.acquire().await.unwrap(),
+                        id,
+                        org,
+                        0,
+                        &prefix,
+                    )
+                    .await
+                    .unwrap();
+                    report.archive_errors(1).unwrap();
+                }
+                report.record(
+                    EntityType::TimeEntry,
+                    &RowOutcome::Errored {
+                        source_location: "legacy inline".into(),
+                        reason: "legacy overflow ".repeat(2_000),
+                    },
+                );
+                expected.extend(report.row_errors.clone());
+                let mut legacy = serde_json::to_value(&report).unwrap();
+                if version == 0 {
+                    legacy.as_object_mut().unwrap().remove("version");
+                }
+                assert!(serde_json::to_vec(&legacy).unwrap().len() > super::REPORT_BYTES);
+                let checkpoint = with_checkpoint.then(|| {
+                    json!({
+                        "version": if version == 2 { 2 } else { 1 },
+                        "report": legacy,
+                        "cursor": {"record": 500}, "cache": {"parent": "keep"},
+                    })
+                });
+                sqlx::query!(
+                    "UPDATE horae_jobs SET status = $2, report = $3, checkpoint = $4,
+                         attempts = 3, processed_count = 500, phase = 'time_entries',
+                         cancellation_requested = $5, last_error = 'retained diagnostic',
+                         started_at = now() - interval '1 hour',
+                         finished_at = CASE WHEN $2 IN ('failed', 'cancelled', 'succeeded') THEN now() ELSE NULL END,
+                         claim_token = CASE WHEN $2 = 'running' THEN $6::uuid ELSE NULL END,
+                         lease_until = CASE WHEN $2 = 'running' THEN now() + interval '5 minutes' ELSE NULL END
+                     WHERE id = $1",
+                    id, state, legacy, checkpoint, cancellation, Uuid::now_v7(),
+                ).execute(&pool).await.unwrap();
+                let original = legacy_job_metadata(&pool, id).await;
+                cases.push((id, state, checkpoint, original, expected, prefix));
+            }
+        }
+    }
+
+    crate::db::run_migrations(&pool).await.unwrap();
+    for (id, state, checkpoint, original, expected, prefix) in cases {
+        assert_eq!(
+            legacy_job_metadata(&pool, id).await,
+            original,
+            "state: {state}"
+        );
+        let stored = sqlx::query!(
+            "SELECT report, checkpoint, claim_token,
+                    lease_until <= clock_timestamp() AS expired
+             FROM horae_jobs WHERE id = $1",
+            id,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert!(stored.claim_token.is_none());
+        assert_eq!(stored.expired, (state == "running").then_some(true));
+        let metadata = stored.report.unwrap();
+        assert!(serde_json::to_vec(&metadata).unwrap().len() <= super::REPORT_BYTES);
+        if let Some(mut checkpoint) = checkpoint {
+            checkpoint["version"] = json!(2);
+            checkpoint["report"] = metadata.clone();
+            assert_eq!(stored.checkpoint, Some(checkpoint));
+        } else {
+            assert!(stored.checkpoint.is_none());
+        }
+        let report: ImportReport = serde_json::from_value(metadata.clone()).unwrap();
+        assert_eq!(report.error_count(), expected.len() as u64);
+        let end = i64::try_from(report.archived_error_chunks()).unwrap();
+        let fragments = super::chunks(&pool, org, id, 0, end).await.unwrap();
+        if !prefix.is_empty() {
+            assert_eq!(
+                fragments[0], prefix,
+                "existing archive must not be rewritten"
+            );
+        }
+        let bytes = fragments.concat();
+        let errors = serde_json::Deserializer::from_slice(&bytes)
+            .into_iter::<RowError>()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(errors, expected);
+        assert!(report.row_errors.is_empty());
+        assert_eq!(
+            jobs::status(&pool, org, id).await.unwrap().unwrap().report,
+            Some(metadata)
+        );
+    }
+    // Validated constraints and already-upgraded archives must survive a second startup.
+    crate::db::run_migrations(&pool).await.unwrap();
+}
+
+async fn legacy_job_metadata(pool: &sqlx::PgPool, id: Uuid) -> serde_json::Value {
+    sqlx::query_scalar!(
+        "SELECT to_jsonb(j) - ARRAY['report', 'checkpoint', 'claim_token', 'lease_until', 'updated_at'] AS \"metadata!\"
+         FROM horae_jobs j WHERE id = $1", id,
+    ).fetch_one(pool).await.unwrap()
 }

@@ -634,3 +634,29 @@ migration or dependency changed.
 The remaining T021 gaps are the broader legacy state matrix, socket-level/memory
 stress and browser acceptance, alongside T007's CSV preview overhead and T016's
 actual restart acceptance.
+
+## Legacy state and archive compatibility
+
+The pre-budget migration fixture now covers 36 combinations: queued, running,
+running with cancellation requested, succeeded, failed and cancelled; reports
+without an explicit version, version 1 and version 2 with an existing archive;
+and presence or absence of a checkpoint. Every fixture contains oversized inline
+errors and starts at migration 0027, using a single-connection pool.
+
+All combinations pass the real startup migration. The test compares every job
+field except the intentionally replaced report/checkpoint, claim, lease and
+update timestamp. This verifies preservation of status, attempts/policy,
+cancellation, phase, progress, diagnostics, identity and lifecycle dates. Running
+claims are fenced and their leases expire. Null checkpoints remain null; existing
+cursors/caches survive and only report metadata/version change.
+
+All error details reconstruct exactly. Version-2 fixtures append their old inline
+errors after the existing archive, preserving the original fragment byte-for-byte.
+Public metadata stays within 16 KiB and status returns the upgraded report. A
+second startup succeeds with validated constraints. All six report tests pass,
+including the existing rollback, retention and streaming tests. Three test-query
+SQLx cache entries are regenerated; no production code or schema changes.
+
+This closes the broader legacy state coverage gap. T021 still requires
+socket-level/memory stress and live browser acceptance. T007's measured CSV
+preview overhead and T016's actual restart acceptance remain open.
