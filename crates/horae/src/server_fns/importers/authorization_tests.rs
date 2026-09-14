@@ -22,6 +22,9 @@ use uuid::Uuid;
 
 use super::*;
 
+#[cfg(target_os = "linux")]
+mod report_stress;
+
 struct Api {
     base: String,
     client: reqwest::Client,

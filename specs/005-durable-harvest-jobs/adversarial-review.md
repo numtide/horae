@@ -660,3 +660,23 @@ SQLx cache entries are regenerated; no production code or schema changes.
 This closes the broader legacy state coverage gap. T021 still requires
 socket-level/memory stress and live browser acceptance. T007's measured CSV
 preview overhead and T016's actual restart acceptance remain open.
+
+## Real HTTP streaming and memory stress
+
+The isolated release-mode test in `authorization_tests/report_stress.rs` passes
+through real sockets, the production download handler and PostgreSQL sessions.
+A 64-MiB archive is generated and checked one 64-KiB record at a time. All bytes
+match, and the observed process HWM increase is 1,712 KiB against a strict
+less-than-16-MiB allowance. The process includes both client and server, not
+PostgreSQL or kernel buffers; see `performance.md` for the command and raw figures.
+
+Dropping a download after its first chunk does not prevent a new request using
+the one-connection pool. Deleting the expired job through the retention query
+during the next transfer results in an HTTP body error after 1 MiB, not a
+successful EOF. The server task drains and the pool closes under a five-second
+deadline. Server all-target Clippy and Rust formatting pass. No production code,
+SQL query or dependency changed.
+
+This closes the socket-level/memory stress gap in T021. Live browser acceptance,
+T016's actual restart checks, T007's CSV preview overhead and latest-head CI
+remain required before merge.

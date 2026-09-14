@@ -212,3 +212,35 @@ boundaries, so their faster single-sample times are not a general speedup claim.
 The API preview optimization is measured above. The remaining scale follow-up
 is the CSV preview's repeated checkpoint state restoration and serialization;
 the measured regression must not be presented as throughput parity.
+
+## Authenticated error-download memory stress
+
+Run this Linux-only test alone in a release-mode process with an isolated test
+database. It is explicitly ignored in the regular suite because AppState and
+the process high-water memory mark are global.
+
+```sh
+cargo test -p horae --features server --bin horae --release \
+  server_fns::importers::authorization_tests::report_stress::large_report_streams_over_http_without_buffering_the_archive \
+  -- --exact --ignored --nocapture --test-threads=1
+```
+
+The fixture archives 1,024 JSON-line errors of exactly 64 KiB each using the
+production lease-fenced writer. It retains only one expected record in memory.
+The client authenticates through a PostgreSQL-backed session, consumes the real
+Axum HTTP route incrementally and compares every byte against that record. The
+server uses a one-connection pool. Neither side collects the complete archive.
+
+On 2026-09-14, application code at `046d234` plus this test-only addition passed:
+67,108,864 bytes downloaded; baseline process HWM 19,756 KiB; post-download HWM
+21,468 KiB, an observed increase of 1,712 KiB. The assertion permits less than
+16 MiB of additional HWM, well below the 64-MiB archive. This includes the Rust
+HTTP server, client and fixture, but not PostgreSQL or kernel socket buffers.
+It is a single-process stress check, not a production capacity guarantee.
+
+A second request is dropped after its first chunk. A subsequent request still
+works with the one-connection pool. Applying the terminal-job retention query
+during that third transfer produces a client body error after 1,048,576 bytes,
+not successful EOF. The final HWM reading was 21,232 KiB and remained below the
+same budget. The complete test took 4.08 seconds; compilation finished before
+measurement, and no other local build/import/browser workload ran during it.

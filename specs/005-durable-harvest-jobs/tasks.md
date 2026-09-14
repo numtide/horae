@@ -36,7 +36,8 @@
 - [x] T020 Preserve inspectable reports for terminal failures (FR-012/SC-004), including failures after confirmed batches and before the first checkpoint; verify status/history, retention and manual retry.
 - [ ] T021 Bound report metadata, checkpoint error state and error retrieval without discarding individual error details; cover legacy reports, atomic archival/recovery, authorization, retention and the complete UI/download path. See the bounded-report follow-up in `plan.md`.
   - Verified: bounded new reports, legacy upgrade/rollback with one connection, 36 legacy state/version/checkpoint combinations including existing archives, claim fencing, retention, authorization, captured download boundaries, lazy page reads, missing-fragment errors and API overflow recovery/reimport.
-  - Remaining: socket-level/memory stress and full browser acceptance.
+  - Verified HTTP stress: a 64-MiB archive streams byte-for-byte through the authenticated route with less than 16 MiB additional process HWM; abandoned downloads do not block a size-one pool, and retention during transfer produces an HTTP body error.
+  - Remaining: full browser acceptance.
 
 See [adversarial-review.md](adversarial-review.md) for uncovered cases and the
 evidence required to close the reopened tasks.
