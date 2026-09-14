@@ -45,6 +45,22 @@ their rollback-only domain transaction; source and simulation checkpoint support
 remains required before FR-007 is complete. Snapshot size and large-import
 throughput also remain part of the final checkpoint validation.
 
+### API pagination cursor, version 1
+
+The HTTP adapter exposes a serializable cursor containing the next unconsumed
+URL and constant-space pagination cycle state (`anchor`, `distance`, `window`).
+An explicit null next URL means the collection is complete; an absent field is
+invalid. The cursor contains no supplied account credentials. Resuming validates
+both stored URLs against the configured collection endpoint before sending any
+authenticated request, and rejects unsupported versions or invalid cycle state.
+
+The consumer receives the proposed next cursor with each page. The in-memory
+cursor advances only after the consumer accepts that page. A durable consumer
+must save this cursor atomically with its applied batch, not when HTTP finishes
+downloading or buffering it. This adapter support is not yet connected to the
+job checkpoint: catalog snapshots, account binding, accumulated results and
+watermark state still need integration in the API importer.
+
 ## CSV Upload Blob
 
 Stores an administrator-uploaded CSV owned by the same organization and job, with a bounded size. Successful uploads are eligible for deletion after one day. Failed and cancelled uploads remain available for retry until the job's thirty-day retention ends; deleting the job cascades to its upload. Retry refuses CSV jobs with a missing upload.

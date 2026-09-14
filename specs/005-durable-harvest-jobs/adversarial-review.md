@@ -197,3 +197,28 @@ missing, and full-cache snapshot size/large-import throughput needs validation.
 The final authorization audit in T009 and complete acceptance walkthrough also
 remain required. This follow-up does not establish the whole feature's readiness
 to merge.
+
+## Resumable HTTP pagination prerequisite
+
+The HTTP adapter now exposes a versioned, serializable cursor for its next
+unconsumed page and constant-space cycle detector. Replacement clients resume
+from the provider's exact cursor URL, using current credentials, and completed
+cursors issue no further requests. Unsupported versions, invalid cycle state,
+oversized URLs and destinations outside the configured collection endpoint are
+rejected before any authenticated request. A consumer error leaves its cursor
+unchanged.
+
+Five new regressions cover serialized recovery, EOF, consumer failure, invalid
+stored state, and cycles spanning repeated restarts. The missing-next-field
+regression failed before the deserializer was corrected: an absent optional
+field was silently treated as EOF. Only an explicit null now marks completion.
+All 127 importer tests pass against PostgreSQL, including the existing live
+API pipeline tests; three scale benchmarks remain ignored. Server clippy passes
+with all targets and warnings denied. No queries, migrations or dependencies
+changed in this follow-up.
+
+This is an HTTP adapter prerequisite, not completed durable API integration.
+The importer must still persist this cursor with catalog, account identity,
+report/cache and watermark state at its fenced batch boundaries. T007 and T016
+remain open, along with dry-run recovery, scale validation, T009 and the complete
+acceptance walkthrough.
