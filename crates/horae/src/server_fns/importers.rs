@@ -1,13 +1,11 @@
 //! Admin-only server functions for the Harvest importer (contracts/importer-api.md).
 //!
 //! These are the SPA's entry points: start the OAuth connect, read connection
-//! status, and run an API or CSV import through the shared engine. All reject
+//! status, and enqueue durable API or CSV imports. All reject
 //! non-admins with `FORBIDDEN` (FR-001) and use named status codes.
 
 use super::*;
-use horae_core::importers::harvest::types::{
-    ConnectionStatus, ImportMode, ImportReport, SyncScope,
-};
+use horae_core::importers::harvest::types::{ConnectionStatus, ImportMode, SyncScope};
 
 mod csv_upload;
 pub use csv_upload::CsvUpload;
@@ -196,53 +194,6 @@ async fn required_import_job(
         .ok_or_else(|| err(NOT_FOUND, "Import job not found"))
 }
 
-/// Run an import from the Harvest API (primary source). Rejects up front when no
-/// connection exists (FR-003); refreshes an expired token, else asks to reconnect
-/// (FR-024). `DryRun` writes nothing (FR-014).
-#[server]
-pub async fn import_harvest_api(
-    mode: ImportMode,
-    sync: SyncScope,
-) -> Result<ImportReport, ServerFnError> {
-    let admin = require_admin().await?;
-    let cfg = harvest_config().await?;
-    let state = crate::state::global_state().await;
-    let default_currency = org_default_currency(admin.org_id).await?;
-
-    crate::importers::harvest::run_api_import(
-        &state.db,
-        admin.org_id,
-        &default_currency,
-        &cfg,
-        mode,
-        sync,
-    )
-    .await
-    .map_err(map_api_error)
-}
-
-/// Run an import from an uploaded Harvest CSV (secondary source). Rejects an
-/// unrecognized/empty file up front with no writes (FR-003).
-#[dioxus_fullstack::post("/api/import/harvest/csv/{mode}")]
-pub async fn import_harvest_csv(
-    mode: ImportMode,
-    file: CsvUpload,
-) -> Result<ImportReport, ServerFnError> {
-    let admin = require_admin().await?;
-    let state = crate::state::global_state().await;
-    let default_currency = org_default_currency(admin.org_id).await?;
-
-    crate::importers::harvest::csv_source::import_body(
-        &state.db,
-        admin.org_id,
-        &default_currency,
-        file.into_body()?,
-        mode,
-    )
-    .await
-    .map_err(|e| err(CONFLICT, e))
-}
-
 /// The configured Harvest settings, or a clear error when the importer's API
 /// source is not configured on this deployment.
 #[cfg(feature = "server")]
@@ -257,19 +208,6 @@ async fn harvest_config() -> Result<crate::config::HarvestConfig, ServerFnError>
                 "Harvest importer is not configured on this server",
             )
         })
-}
-
-#[cfg(feature = "server")]
-async fn org_default_currency(org_id: uuid::Uuid) -> Result<String, ServerFnError> {
-    let state = crate::state::global_state().await;
-    let currency = sqlx::query_scalar!(
-        "SELECT default_currency FROM organizations WHERE id = $1",
-        org_id,
-    )
-    .fetch_one(&state.db)
-    .await
-    .map_err(server_err)?;
-    Ok(currency)
 }
 
 /// Map a run-level API import failure onto a named server error.
@@ -331,6 +269,7 @@ mod tests {
                     .send()
                     .await
                     .unwrap();
+                let expected = if route == "csv" { NOT_FOUND } else { expected };
                 assert_eq!(response.status().as_u16(), expected, "{route}/{mode}");
             }
         }

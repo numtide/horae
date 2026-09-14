@@ -72,6 +72,7 @@ impl Read for BodyReader<'_> {
 
 /// Import an unbuffered HTTP body. Only normal EOF permits a commit; a broken
 /// upload or cancelled parser rolls back the whole run, including parent rows.
+#[cfg(test)]
 pub async fn import_body(
     pool: &sqlx::PgPool,
     org_id: Uuid,

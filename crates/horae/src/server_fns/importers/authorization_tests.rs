@@ -15,6 +15,7 @@ use dioxus::prelude::{
     dioxus_server::{FullstackState, ServerFunction},
 };
 use dioxus_fullstack::reqwest;
+use horae_core::importers::harvest::types::ImportReport;
 use serde_json::{Value, json};
 use sqlx::PgPool;
 use tower_sessions::Session;
@@ -24,6 +25,19 @@ use super::*;
 
 #[cfg(target_os = "linux")]
 mod report_stress;
+
+#[test]
+fn request_bound_import_endpoints_are_not_registered() {
+    let legacy: Vec<_> = ServerFunction::collect()
+        .into_iter()
+        .filter(|route| {
+            route.path().starts_with("/api/import_harvest_api")
+                || route.path().starts_with("/api/import/harvest/csv/")
+        })
+        .map(|route| route.path().to_owned())
+        .collect();
+    assert!(legacy.is_empty(), "request-bound import routes: {legacy:?}");
+}
 
 struct Api {
     base: String,

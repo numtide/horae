@@ -11,9 +11,9 @@
 - [x] T004 Add a registered job-kind envelope with versioned payload, idempotency key, org scope, and execution policy.
 - [x] T005 Persist CSV uploads safely for asynchronous execution without retaining request-body streams.
 - [x] T006 Add worker startup, bounded concurrency, lease/heartbeat, retry backoff, and graceful shutdown.
-- [ ] T007 Add checkpoint/progress updates around existing Harvest import phases.
+- [x] T007 Add checkpoint/progress updates around existing Harvest import phases.
   - Durable CSV commits checkpoint every 500 records. API commits persist catalog pages, 500-entity parent batches and individual time-entry pages, with report/cache and watermark state.
-  - CSV previews checkpoint rollback-only simulation state every 500 records. API previews retain parent snapshots and entry associations at the same boundaries as API commits. All planned scale scenarios and the optimized API preview passed; measured CSV preview overhead remains unresolved. See `performance.md`.
+  - CSV previews checkpoint rollback-only simulation state every 500 records. API previews retain parent snapshots and entry associations at the same boundaries as API commits. All planned scale scenarios and optimized API/CSV previews pass. The matched CSV SQL profile reduces preview time from 436.688 to 264.349 seconds without changing checkpoint contents or frequency; remaining durability and memory costs are explicit in `performance.md`, not throughput-parity claims.
 - [x] T008 Add outbox records and transactional enqueue support for future plugin/webhook/notification delivery.
 - [x] T009 Ensure all job and outbox reads/mutations enforce organization and admin authorization.
   - Registered HTTP handlers enforce live administrator sessions and tenant isolation; uploads have a composite job/organization foreign key. Outbox primitives are internal worker APIs, with organization and claim-token checks on acknowledgements.
@@ -21,6 +21,7 @@
 ## Phase 3 - API and UI
 
 - [x] T010 Change API and CSV start functions to enqueue and return job identifiers.
+  - Only durable starts remain registered. The retired-route regression fails before removal and passes afterward; all six importer endpoint tests pass, including real queued responses, authorization before upload consumption and not-found responses on the old CSV route. The contract documents client upgrades.
 - [x] T011 Add status, history, cancel, and retry server functions.
 - [x] T012 Update the importer page to show queued/running progress and terminal reports.
 - [x] T013 Add cleanup policy for old terminal jobs and stored upload data.

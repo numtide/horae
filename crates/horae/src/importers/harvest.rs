@@ -219,6 +219,7 @@ async fn blocking_import_call<T: Send + 'static>(
 /// (FR-023–FR-026). Loads the org's stored connection, refreshes an expired token
 /// transparently, indexes catalogs, streams time-entry pages through the engine, and —
 /// only on an error-free committing run — advances the incremental watermark.
+#[cfg(test)]
 pub async fn run_api_import(
     pool: &PgPool,
     org_id: Uuid,

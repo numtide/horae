@@ -732,5 +732,81 @@ project/link restoration checks parent ownership through primary-key scalar
 lookups. No payload, checkpoint shape, batch size, organization requirement or
 domain transformation changes. All 30 job tests and 160 importer tests pass,
 alongside all-target Clippy and formatting. SQLx metadata is regenerated.
-The optimized release measurement is still pending: this is correctness evidence,
-not a claim that T007's performance gate has passed.
+The subsequent matched release profile passes in 621.68 seconds for preview,
+commit and reimport, including EOF recovery. Preview falls from 436.688 to
+264.349 seconds; the three targeted queries retain their call counts while
+recorded SQL execution falls substantially. Checkpoint JSON sizes are unchanged.
+Reimport is somewhat slower and cumulative HWM is higher in this single sample;
+see `performance.md` for the complete figures and limitations. T007 is closed
+with the remaining durability costs documented, not with a throughput-parity
+or memory-reduction claim.
+
+## Final entry-point audit
+
+FR-001 was not fully satisfied while the old `import_harvest_api` and
+`import_harvest_csv` server functions remained registered, even though the UI
+already used durable starts. The new
+`request_bound_import_endpoints_are_not_registered` regression failed with both
+legacy routes in Dioxus's actual registration inventory. Removing those functions
+and their unused currency helper makes the same regression pass. The inline
+engine wrappers remain test-only references for equivalence and scale checks.
+
+The registered CSV rejection test now expects not-found for the retired route,
+while retaining invalid-mode/header checks before body consumption on the durable
+route. The contract and quickstart document browser reload and custom-client
+migration to start/poll responses. No domain transformation, checkpoint, migration,
+dependency or job policy changes in this cleanup.
+
+## Requirement-to-evidence map
+
+This audit traces the feature requirements to production boundaries and runnable
+checks. Local validation and latest-head CI remain separate gates; earlier green
+commits do not certify a later head.
+
+| Requirement | Implementation and verification boundary |
+|---|---|
+| FR-001, SC-001 | Only durable start functions are registered; registration regression plus `job_endpoints_enforce_session_role_and_organization` checks returned queued jobs without a worker. Live browser start/refresh evidence is in `acceptance.md`. |
+| FR-002 | Every public job operation uses `require_admin`; registered HTTP tests cover anonymous/inactive/demoted/member/manager sessions, forged org input, foreign IDs/cursors, cancel/retry and error downloads. |
+| FR-003 | Migration 0023 constrains the five states; worker, cancellation, failure, retry and completion tests exercise transitions and retained timestamps. |
+| FR-004, FR-005 | Atomic `SKIP LOCKED` claims, expiring leases and UUIDv7 attempt tokens; concurrent claims, expired-lease recovery and stale results from an identically named worker are tested. Commit fencing uses the database clock, including old-transaction-timestamp regressions. |
+| FR-006 | Validated `JobPolicy`, persisted attempt budget, bounded backoff and terminal exhaustion; API/CSV policy preservation, invalid policy, missing configuration/upload, invalid payload and final-attempt tests. |
+| FR-007, FR-008, SC-003 | API page/parent-batch and CSV 500-record checkpoints cover preview and commit. Recovery tests preserve counts, errors, provenance, adoption and watermarks; scale tests check exact minutes, EOF recovery and duplicate-free reimport. See `performance.md`. |
+| FR-009 | `JobStatus` exposes phase, processed/optional total and latest error; confirmed progress and partial reports are checked through worker/status/history and production-component UI tests. Unknown source totals remain optional until completion. |
+| FR-010 | Running cancellation does not acknowledge until producer/transaction cleanup; CSV/API tests reject stale next-batch commits and preserve previous committed work. Browser acceptance verifies cancelling/retry controls. |
+| FR-011 | Versioned typed payloads contain only source mode/scope; credentials are loaded by the handler. Legacy/unknown-version tests cover decoding and persisted terminal errors. |
+| FR-012, SC-004 | Status/history retain zero-work and partial failure reports; thirty-day job retention preserves retryable uploads and cascades archives. UI tests and browser history/download acceptance cover inspection. |
+| FR-013, SC-002 | Worker shutdown joins or aborts/joins after its deadline, handles SIGTERM, stops claiming and leaves recoverable leases. Actual SIGTERM/SIGKILL recovery passes locally and in NixOS CI; see `acceptance.md`. |
+| FR-014, FR-015 | The typed job envelope and kind dispatch use shared enqueue, policy, claim, lease, cancellation, progress and retention code. Synthetic jobs execute through that boundary and exercise reclaimed attempts, cancellation and terminal exhaustion without Harvest execution. |
+| FR-016, FR-017 | `enqueue_outbox` accepts the domain transaction. Tests cover rollback before publication, duplicate delivery acknowledgement, stale/foreign/expired tokens, attempts, last error and backoff. External delivery is explicitly at-least-once, not exactly-once. |
+| FR-018 and non-goals | Production job variants are Harvest API/CSV only; Synthetic is test-only. No additional runtime service or workspace crate is added. Future consumers remain documented extension points. |
+| T001–T003 | The compiled dependency spike and schema rejection are recorded in `research.md`; the implementation has no `sqlxmq`/Apalis runtime dependency. |
+| T020–T021 | Report-budget constraints, legacy state/version matrix, atomic archive tests, one-connection streaming/failure checks, API overflow recovery and isolated 64-MiB HTTP stress; browser downloads preserve all error details. |
+| Cross-cutting invariants | New IDs use UUIDv7 and organization foreign keys; application SQL uses checked macros. Pure report representation changes stay in `horae-core`; queue I/O stays in the app. Exact-minute/cents importer and core tests remain required. |
+
+The reproducible build gate is `nix flake check`, including its fresh SQLx cache
+check and deployed NixOS restart tests, plus `nix fmt -- --ci`. These must pass
+on the final PR head before merge.
+
+### Final local validation
+
+The route cleanup passes the complete ordinary local suite in the Nix shell:
+87 core tests, 489 application-binary tests, 36 database integration tests and
+24 UI/component tests (including all 14 importer tests). Eleven explicitly
+manual tests are ignored: eight import scale scenarios and the HTTP archive
+stress have separate evidence above; two export measurements are unrelated to
+this feature. The six importer endpoint tests are included in the binary count.
+
+Commands: `cargo test -p horae-core --offline`,
+`cargo test -p horae --features server --offline -- --test-threads=1`,
+`cargo clippy -p horae --features server --all-targets --offline -- -D warnings -W clippy::perf`,
+`cargo check -p horae --features web --target wasm32-unknown-unknown --offline`,
+`cargo fmt --all --check` and `nix fmt` all pass. PostgreSQL is isolated on port
+55437 and stopped when validation completes. Logs are retained in
+`/tmp/horae-final-route-checks.hh9y2D/`.
+
+An initial validation attempt stopped at compilation because incremental SQLx
+preparation omitted cached integration-test queries. Restoring unchanged metadata
+from the pre-run backup allowed the complete offline suite to run; `.sqlx` has
+no diff in this route-only cleanup. No query or migration was added or changed.
+The fresh Nix SQLx check remains a required CI gate, not a claim established by
+that incremental preparation.

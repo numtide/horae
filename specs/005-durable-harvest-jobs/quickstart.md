@@ -77,8 +77,18 @@ without another source request.
 
 The planned 100,000-record API and CSV scenarios have passed their correctness
 assertions, including recovery and reimport. See [performance.md](performance.md)
-for checkpoint sizes and timings. The measured large-catalog CSV preview overhead
-remains under investigation; latest-head CI is also required before merge.
+for checkpoint sizes and timings, including the measured preview query-plan
+improvement and remaining durability costs. Latest-head CI is required before merge.
+
+## Upgrading import clients
+
+The request-bound `import_harvest_api` and `import_harvest_csv` server functions
+are retired, including `POST /api/import/harvest/csv/{mode}`. Reload browser tabs
+after upgrading the server. Custom clients must use `start_harvest_api_import`
+or `start_harvest_csv_import` and poll the returned job ID; they must not expect
+an immediate `ImportReport`. The raw CSV upload route is now
+`POST /api/import/harvest/csv-job/{mode}`, with the existing `X-Horae-Import: csv`
+header and administrator session. See [the contract](contracts/import-jobs.md).
 
 ## Retry configuration
 

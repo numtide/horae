@@ -22,6 +22,7 @@ use uuid::Uuid;
 use super::report::ImportReport;
 
 mod upload;
+#[cfg(test)]
 pub use upload::import_body;
 pub(crate) use upload::import_body_with_lease;
 

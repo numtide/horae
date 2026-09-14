@@ -21,6 +21,13 @@ reply can show `running` / `cancelling`, never a promise of completed cleanup.
 
 The contract never returns credentials or raw CSV contents. Status reads must reject foreign-organization job IDs as not found or forbidden according to the existing server-function convention.
 
+The former synchronous `import_harvest_api` and `import_harvest_csv` functions
+are not registered. In particular, `/api/import/harvest/csv/{mode}` is no longer
+an import endpoint. CSV starts use `POST /api/import/harvest/csv-job/{mode}` with
+the `X-Horae-Import: csv` header and the administrator's session. Old browser
+tabs must reload after an upgrade; custom clients must use the start/poll
+contract above rather than await an `ImportReport` in the start response.
+
 `list_harvest_import_jobs(before, limit)` defaults to 20 jobs; an explicit limit
 is clamped to 1–100. Jobs are ordered by creation time and then UUID, both
 descending. Pass the last job ID as `before` to fetch

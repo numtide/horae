@@ -6,7 +6,7 @@ Move Harvest API/CSV imports from request-bound execution to durable PostgreSQL-
 
 ## Technical Context
 
-Horae is a Rust/Dioxus/Axum application using PostgreSQL and SQLx. Current Harvest server functions execute the import inline and the importer already provides bounded in-memory streaming, locking, retry, and idempotent provenance behavior. This feature changes delivery and lifecycle, not the importer’s domain transformations.
+Horae is a Rust/Dioxus/Axum application using PostgreSQL and SQLx. Before this feature, Harvest server functions executed imports inline; the importer already provided bounded in-memory streaming, locking, retry, and idempotent provenance behavior. This feature changes delivery and lifecycle, not the importer’s domain transformations.
 
 **Language/Version**: Rust edition 2024 (Nix-pinned toolchain)
 

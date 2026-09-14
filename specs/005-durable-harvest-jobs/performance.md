@@ -1,8 +1,9 @@
 # Durable import scale validation
 
 These are local release-mode measurements, not production capacity guarantees.
-The durable/inline comparison and large-catalog cases have completed. T007
-remains open for the measured CSV preview overhead. Run on an isolated PostgreSQL instance with a role that can
+The durable/inline comparison, large-catalog cases and preview SQL profiling
+have completed. Remaining durability costs are recorded below; these results
+do not establish throughput parity. Run on an isolated PostgreSQL instance with a role that can
 create databases, inside the Nix development shell.
 
 ## API
@@ -102,7 +103,7 @@ Selective restoration reduced elapsed time from the earlier durable sample's
 1,451.289 seconds to 285.933 seconds, with unchanged checkpoint JSON length.
 It did not reduce the process high-water mark. This supports keeping the
 optimization, but distinct revisions and single samples do not establish a
-general speedup or throughput parity. CSV preview overhead remains unresolved.
+general speedup or throughput parity. The CSV preview follow-up is recorded below.
 
 ## CSV
 
@@ -209,9 +210,9 @@ parent state after each 500-record rollback; attribution of the complete elapsed
 time would require profiling. Commit/reimport have different transaction
 boundaries, so their faster single-sample times are not a general speedup claim.
 
-The API preview optimization is measured above. The remaining scale follow-up
-is the CSV preview's repeated checkpoint state restoration and serialization;
-the measured regression must not be presented as throughput parity.
+The API preview optimization is measured above. The CSV SQL profile below
+investigates repeated snapshot restoration. The measured durability cost must
+not be presented as throughput parity.
 
 ## Authenticated error-download memory stress
 
@@ -281,7 +282,7 @@ statistics showed zero live rows after rollback and repeated autovacuum activity
 This is a cardinality-estimation issue even with the application's
 `force_custom_plan` policy, not evidence that the policy was omitted.
 
-The proposed query correction keeps selected pairs driving indexed link lookups
+The query correction keeps selected pairs driving indexed link lookups
 through a lateral subquery and checks each parent's organization by primary key.
 Restoration uses the same scalar ownership checks instead of catalog joins.
 EXPLAIN of the candidate keeps a 5,000-row driver and parameterized index scans.
@@ -290,5 +291,41 @@ The correction passes all 30 job tests and 160 importer tests, including CSV/API
 preview recovery, cancellation, stale-claim fencing and single-connection
 simulation. Eight explicit scale tests remain ignored in that ordinary run.
 Server all-target Clippy, Rust formatting and SQLx preparation pass; three query
-cache entries are regenerated. Repeat profiling is still required before this
-correction can close T007; no speedup is claimed yet.
+cache entries are regenerated.
+
+### Optimized CSV profile
+
+The same instrumented scenario completed with the application changes published
+as `cc9f876`, using fresh PostgreSQL 17.10 and the same release settings. The
+launcher recorded the preceding HEAD while the query changes were uncommitted;
+`/tmp/horae-preview-query-checks.MQj4fP/source.patch` captures those exact changes.
+The release binary was built before measurement. No concurrent local compilation
+or import workload ran during the measured phases; read-only diagnostics did.
+
+| Phase | Baseline seconds | Optimized seconds | Optimized HWM, KiB | EOF stored / JSON bytes |
+|---|---:|---:|---:|---:|
+| Preview plus EOF recovery | 436.688 | 264.349 | 206,052 | 3,107,056 / 21,979,301 |
+| First commit plus EOF recovery | 210.040 | 202.409 | 215,684 | 2,203,054 / 18,152,561 |
+| Reimport plus EOF recovery | 142.665 | 154.288 | 238,228 | 2,203,169 / 18,152,561 |
+
+All assertions passed in 621.68 seconds: 100,000 outcomes, all 100 errors,
+99,900 committed entries, 5,994,000 integer minutes, no preview domain writes,
+identical recovered reports and duplicate-free reimport. Artifacts are in
+`/tmp/horae-csv-profile.3JAzcW/`.
+
+The preview statistics snapshot `statements-1789407048200472422.csv` reports
+3.282 seconds for link capture, 15.540 seconds for project restoration and
+16.978 seconds for link restoration, with the same 200/201/201 call counts as
+the baseline. Total recorded SQL execution fell from 258.402 to 102.172 seconds.
+The same cumulative-snapshot caveats apply. This confirms the targeted query-plan
+correction, not a reduction in checkpoint contents or frequency.
+
+In these matched single samples, preview elapsed time fell by approximately 39%.
+Commit changed little and reimport was approximately 8% slower. The cumulative
+process HWM rose from the baseline's 204,980 KiB to 238,228 KiB; preview alone
+was similar (204,980 versus 206,052 KiB). This is not a memory optimization or
+a general speedup claim. Preview still pays for simulation snapshots and
+durable checkpoint serialization, and the earlier inline sample was faster.
+T007's checkpoint/recovery and planned scale checks are complete, with those
+costs explicit; production capacity must be measured on the deployment's data
+and hardware.

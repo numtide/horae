@@ -2,7 +2,7 @@
 
 **Feature Branch**: `feat/durable-harvest-jobs`
 **Created**: 2026-09-11
-**Status**: Draft
+**Status**: Implemented; final CI verification tracked in the pull request
 
 ## User Scenarios & Testing
 
