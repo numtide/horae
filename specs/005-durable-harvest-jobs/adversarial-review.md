@@ -163,3 +163,37 @@ This completes the UI implementation in T012. It does not implement live
 checkpoint production: T007 and its crash/resume and batch cancellation coverage
 in T016 remain open, as does the final authorization audit in T009. The PR remains
 a draft until those requirements and the complete acceptance walkthrough hold.
+
+## CSV commit checkpoints
+
+Durable CSV commits now save version-1 checkpoints every 500 source records.
+Cursor, accumulated report, currency fallback, and resolution/occurrence cache
+commit with the batch's domain writes. The job update is fenced by organization,
+claim token, current lease deadline, running state, and cancellation request.
+Recovery skips the original upload's byte prefix and resumes parsing at the next
+record. Successful completion clears the checkpoint and records the final total.
+
+The initial production-pipeline regression failed because no commit occurred
+before EOF. Follow-up tests now interrupt an import after its first batch and
+verify that crash recovery and manual retry preserve counts, errors, and
+legitimate repeated CSV entries. A deliberately unmonitored obsolete worker
+cannot commit the next batch after its lease is reclaimed. Cancellation waits
+for producer cleanup and retains completed batches. A dry-run exceeding the
+batch size leaves no domain rows or durable checkpoint.
+
+Parser regressions cover multiline Unicode/CRLF records, original error
+locations after resume, EOF checkpoints, and offsets beyond the upload. Cache
+round-trip coverage includes distinct email/full-name namespaces, failed parents,
+project/task links, and occurrence counters.
+
+Verification passes 122 importer tests, 27 jobs tests, 86 domain tests, 10 importer
+UI tests, and five admin-shell tests. Three explicit scale benchmarks remain
+ignored. Server clippy passes with all targets and warnings denied; WebAssembly
+checks with the same three existing warnings. SQLx metadata is regenerated and
+the obsolete completion-query entry is replaced.
+
+T007 and T016 remain open: API and dry-run checkpoint integration is still
+missing, and full-cache snapshot size/large-import throughput needs validation.
+The final authorization audit in T009 and complete acceptance walkthrough also
+remain required. This follow-up does not establish the whole feature's readiness
+to merge.

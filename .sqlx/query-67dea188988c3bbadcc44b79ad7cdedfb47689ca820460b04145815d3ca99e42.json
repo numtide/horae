@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT checkpoint FROM horae_jobs\n                WHERE id = $1 AND org_id = $2 AND claim_token = $3\n                  AND status = 'running' AND NOT cancellation_requested\n                  AND lease_until > clock_timestamp()",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "checkpoint",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "67dea188988c3bbadcc44b79ad7cdedfb47689ca820460b04145815d3ca99e42"
+}

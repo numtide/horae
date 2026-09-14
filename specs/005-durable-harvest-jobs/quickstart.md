@@ -28,6 +28,20 @@ Historical previews are read-only: start a new preview to commit. A preview
 submitted in the current page keeps its original source for confirmation, even
 if a different CSV is selected before the report arrives.
 
+## CSV commit recovery
+
+Use a CSV longer than 500 records to exercise durable batch commits. After a
+batch commits, progress is visible even though the import is still running.
+Interrupt the worker or request cancellation, then retry the same job. Previously
+committed records and report counts must remain intact, including legitimate
+identical entries and record errors. The next attempt resumes after the last
+committed record. The in-progress batch must not commit under an expired or
+replaced lease.
+
+This recovery path currently applies to durable CSV commits only. API imports
+and dry-runs still need their checkpoint integration; previews continue to write
+no domain data, including when they exceed the batch size.
+
 ## Retry configuration
 
 Set `HORAE_JOB_MAX_ATTEMPTS` in the server environment to an integer from 1 to

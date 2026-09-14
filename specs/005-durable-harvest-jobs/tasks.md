@@ -12,6 +12,7 @@
 - [x] T005 Persist CSV uploads safely for asynchronous execution without retaining request-body streams.
 - [x] T006 Add worker startup, bounded concurrency, lease/heartbeat, retry backoff, and graceful shutdown.
 - [ ] T007 Add checkpoint/progress updates around existing Harvest import phases.
+  - Durable CSV commits checkpoint every 500 records; API/dry-run resume and checkpoint scale validation remain pending.
 - [x] T008 Add outbox records and transactional enqueue support for future plugin/webhook/notification delivery.
 - [ ] T009 Ensure all job and outbox reads/mutations enforce organization and admin authorization.
 

@@ -17,6 +17,54 @@ pub(crate) struct JobLease {
 pub(super) struct Interrupted;
 
 impl JobLease {
+    pub(crate) async fn load_checkpoint(
+        &self,
+        connection: &mut PgConnection,
+    ) -> anyhow::Result<Option<serde_json::Value>> {
+        let row = sqlx::query!(
+            r#"SELECT checkpoint FROM horae_jobs
+                WHERE id = $1 AND org_id = $2 AND claim_token = $3
+                  AND status = 'running' AND NOT cancellation_requested
+                  AND lease_until > clock_timestamp()"#,
+            self.id,
+            self.org_id,
+            self.token,
+        )
+        .fetch_optional(connection)
+        .await?
+        .context(Interrupted)?;
+        Ok(row.checkpoint)
+    }
+
+    /// Save inside the handler's transaction, so cursor/progress and domain
+    /// changes commit together under the same cancellation and ownership fence.
+    pub(crate) async fn save_checkpoint(
+        &self,
+        connection: &mut PgConnection,
+        checkpoint: &serde_json::Value,
+        phase: &str,
+        processed_count: i64,
+    ) -> anyhow::Result<()> {
+        let updated = sqlx::query!(
+            r#"UPDATE horae_jobs
+                  SET checkpoint = $1, phase = $2, processed_count = $3,
+                      updated_at = clock_timestamp()
+                WHERE id = $4 AND org_id = $5 AND claim_token = $6
+                  AND status = 'running' AND NOT cancellation_requested
+                  AND lease_until > clock_timestamp()"#,
+            checkpoint,
+            phase,
+            processed_count,
+            self.id,
+            self.org_id,
+            self.token,
+        )
+        .execute(connection)
+        .await?;
+        anyhow::ensure!(updated.rows_affected() == 1, Interrupted);
+        Ok(())
+    }
+
     pub(crate) fn check_organization(&self, org_id: Uuid) -> anyhow::Result<()> {
         anyhow::ensure!(self.org_id == org_id, "job organization mismatch");
         Ok(())
@@ -91,8 +139,8 @@ impl JobLease {
     ) -> anyhow::Result<bool> {
         let updated = sqlx::query!(
             r#"UPDATE horae_jobs
-                  SET status = 'succeeded', report = $1, processed_count = $2,
-                      lease_until = NULL, worker_id = NULL, claim_token = NULL,
+                  SET status = 'succeeded', report = $1, processed_count = $2, total_count = $2,
+                      lease_until = NULL, worker_id = NULL, claim_token = NULL, checkpoint = NULL,
                       finished_at = clock_timestamp(), updated_at = clock_timestamp()
                 WHERE id = $3 AND org_id = $4 AND claim_token = $5
                   AND status = 'running' AND NOT cancellation_requested

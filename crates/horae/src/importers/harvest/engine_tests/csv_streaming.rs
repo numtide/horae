@@ -15,22 +15,29 @@ const HEADER: &str = "Date,Client,Project,Task,Hours,Email,Notes\n";
 const ROW: &str = "2026-01-15,Acme,Website,Design,1,dev@acme.com,kickoff\n";
 
 #[derive(Clone, Default)]
-struct Applied(Arc<Notify>);
+struct Applied(Arc<Notify>, bool);
 
 impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Applied {
     fn on_event(&self, event: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
-        struct Statement(bool);
-        impl tracing::field::Visit for Statement {
+        struct Statement<'a>(bool, &'a str);
+        impl tracing::field::Visit for Statement<'_> {
             fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
                 if matches!(field.name(), "summary" | "db.statement")
-                    && value.trim().starts_with("RELEASE SAVEPOINT")
+                    && value.trim().starts_with(self.1)
                 {
                     self.0 = true;
                 }
             }
             fn record_debug(&mut self, _: &tracing::field::Field, _: &dyn std::fmt::Debug) {}
         }
-        let mut statement = Statement(false);
+        let mut statement = Statement(
+            false,
+            if self.1 {
+                "COMMIT"
+            } else {
+                "RELEASE SAVEPOINT"
+            },
+        );
         event.record(&mut statement);
         if event.metadata().target() == "sqlx::query" && statement.0 {
             self.0.notify_one();
@@ -52,6 +59,235 @@ async fn entry_count(pool: &PgPool, org: Uuid) -> i64 {
         .await
         .unwrap()
         .unwrap()
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn durable_csv_resumes_committed_batches_without_recounting_duplicate_rows(pool: PgPool) {
+    interrupted_csv_batches(pool, BatchInterruption::Crash).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn durable_csv_cancel_preserves_its_completed_batches_for_manual_retry(pool: PgPool) {
+    interrupted_csv_batches(pool, BatchInterruption::Cancel).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn durable_csv_reclaimed_lease_cannot_commit_the_next_batch(pool: PgPool) {
+    interrupted_csv_batches(pool, BatchInterruption::Reclaim).await;
+}
+
+#[derive(Clone, Copy)]
+enum BatchInterruption {
+    Crash,
+    Cancel,
+    Reclaim,
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn durable_csv_preview_crosses_batch_boundaries_without_committing_domain_data(pool: PgPool) {
+    use super::super::csv_source::import_body_with_lease;
+    use crate::jobs;
+
+    let org = seed_org(&pool).await;
+    seed_user(&pool, org, "dev@acme.com").await;
+    let csv = format!("{HEADER}{}", ROW.repeat(501));
+    let id = jobs::enqueue_csv(
+        &pool,
+        org,
+        ImportMode::DryRun,
+        csv.clone().into_bytes(),
+        "preview-batches",
+        Default::default(),
+    )
+    .await
+    .unwrap();
+    let (lease, stop) = jobs::claim_lease_for_test(&pool).await;
+    jobs::run_claimed(&pool, &lease, stop, async {
+        let report = import_body_with_lease(
+            &pool,
+            org,
+            "USD",
+            Body::from(csv),
+            ImportMode::DryRun,
+            Some(&lease),
+        )
+        .await?;
+        assert_eq!(report.summary.time_entries.created, 501);
+        assert_eq!(entry_count(&pool, org).await, 0);
+        let mut connection = pool.acquire().await?;
+        assert!(lease.load_checkpoint(&mut connection).await?.is_none());
+        super::super::job_report(&report)
+    })
+    .await
+    .unwrap();
+    assert_eq!(
+        jobs::status(&pool, org, id).await.unwrap().unwrap().status,
+        "succeeded"
+    );
+    assert_eq!(entry_count(&pool, org).await, 0);
+}
+
+async fn interrupted_csv_batches(pool: PgPool, interruption: BatchInterruption) {
+    use super::super::csv_source::import_body_with_lease;
+    use crate::jobs;
+
+    let org = seed_org(&pool).await;
+    seed_user(&pool, org, "dev@acme.com").await;
+    let first_batch = format!(
+        "{HEADER}{}bad-date,Acme,Website,Design,1,dev@acme.com,broken\n",
+        ROW.repeat(499)
+    );
+    let csv = format!("{first_batch}{}", ROW.repeat(501));
+    let id = jobs::enqueue_csv(
+        &pool,
+        org,
+        ImportMode::Commit,
+        csv.clone().into_bytes(),
+        "resume-csv",
+        Default::default(),
+    )
+    .await
+    .unwrap();
+    let (lease, stop) = jobs::claim_lease_for_test(&pool).await;
+    let (send, body) = upload_channel();
+    let committed = Applied(Arc::new(Notify::new()), true);
+    let _registration = tracing::Dispatch::new(tracing_subscriber::registry());
+    let collector = tracing::Dispatch::new(tracing_subscriber::registry().with(committed.clone()));
+    let run_pool = pool.clone();
+    let run = tokio::spawn(
+        async move {
+            let work = async {
+                let report = import_body_with_lease(
+                    &run_pool,
+                    org,
+                    "USD",
+                    body,
+                    ImportMode::Commit,
+                    Some(&lease),
+                )
+                .await?;
+                super::super::job_report(&report)
+            };
+            match interruption {
+                BatchInterruption::Cancel => jobs::run_claimed(&run_pool, &lease, stop, work).await,
+                _ => {
+                    let _keep_stop = stop;
+                    work.await.map(|_| ())
+                }
+            }
+        }
+        .with_subscriber(collector),
+    );
+    send.send(Ok(Bytes::from(first_batch))).await.unwrap();
+    let batch = tokio::time::timeout(Duration::from_secs(10), committed.0.notified()).await;
+    if batch.is_err() {
+        run.abort();
+    }
+    assert!(
+        batch.is_ok(),
+        "a durable batch must commit before source EOF"
+    );
+    assert_eq!(entry_count(&pool, org).await, 499);
+    let progress = jobs::status(&pool, org, id).await.unwrap().unwrap();
+    assert_eq!(progress.status, "running");
+    assert_eq!(progress.processed_count, 503);
+
+    let (lease, _stop) = match interruption {
+        BatchInterruption::Crash => {
+            run.abort();
+            assert!(run.await.unwrap_err().is_cancelled());
+            tokio::time::timeout(Duration::from_secs(5), send.closed())
+                .await
+                .unwrap();
+            sqlx::query!(
+                "UPDATE horae_jobs SET lease_until = clock_timestamp() WHERE id = $1",
+                id
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            jobs::claim_lease_for_test(&pool).await
+        }
+        BatchInterruption::Cancel => {
+            assert!(jobs::cancel(&pool, org, id).await.unwrap());
+            tokio::time::timeout(Duration::from_secs(10), run)
+                .await
+                .unwrap()
+                .unwrap()
+                .unwrap();
+            tokio::time::timeout(Duration::from_secs(5), send.closed())
+                .await
+                .unwrap();
+            assert_eq!(
+                jobs::status(&pool, org, id).await.unwrap().unwrap().status,
+                "cancelled"
+            );
+            assert!(jobs::retry(&pool, org, id).await.unwrap());
+            jobs::claim_lease_for_test(&pool).await
+        }
+        BatchInterruption::Reclaim => {
+            sqlx::query!(
+                "UPDATE horae_jobs SET lease_until = clock_timestamp() WHERE id = $1",
+                id
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            let next = jobs::claim_lease_for_test(&pool).await;
+            send.send(Ok(Bytes::from(ROW.repeat(500)))).await.unwrap();
+            drop(send);
+            let error = tokio::time::timeout(Duration::from_secs(10), run)
+                .await
+                .unwrap()
+                .unwrap()
+                .unwrap_err();
+            assert!(error.to_string().contains("lease lost"), "{error}");
+            next
+        }
+    };
+    assert_eq!(
+        entry_count(&pool, org).await,
+        499,
+        "only the committed batch must survive"
+    );
+    assert_eq!(
+        jobs::status(&pool, org, id)
+            .await
+            .unwrap()
+            .unwrap()
+            .processed_count,
+        503
+    );
+    let report = import_body_with_lease(
+        &pool,
+        org,
+        "USD",
+        Body::from(csv),
+        ImportMode::Commit,
+        Some(&lease),
+    )
+    .await
+    .unwrap();
+    assert_eq!(entry_count(&pool, org).await, 1000);
+    assert_eq!(report.summary.time_entries.created, 1000);
+    assert_eq!(report.summary.time_entries.errored, 1);
+    assert_eq!(report.row_errors.len(), 1);
+    assert_eq!(report.row_errors[0].source_location, "CSV line 501");
+    assert_eq!(report.summary.time_entries.skipped, 0);
+    assert_eq!(report.summary.clients.created, 1);
+    assert_eq!(report.summary.clients.skipped, 0);
+    assert_eq!(
+        jobs::status(&pool, org, id)
+            .await
+            .unwrap()
+            .unwrap()
+            .total_count,
+        Some(1004)
+    );
+    assert_eq!(
+        jobs::status(&pool, org, id).await.unwrap().unwrap().status,
+        "succeeded"
+    );
 }
 
 #[sqlx::test(migrations = "./migrations")]
