@@ -1,4 +1,4 @@
-//! Parent state needed to continue a rollback-only CSV simulation.
+//! Parent state needed to continue a rollback-only import simulation.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -7,18 +7,17 @@ use uuid::Uuid;
 
 use super::RunCache;
 
-/// CSV entries have no source IDs or provenance. Their occurrence counter is
-/// sufficient to continue matching existing entries after rollback; only the
-/// cached parent rows and project/task links need materializing in the next TX.
+/// Restore cached parents and project/task links after a simulation rolls back.
+/// CSV occurrence counters and API entry provenance are retained separately.
 #[derive(Serialize, Deserialize)]
-pub(in crate::importers::harvest) struct CsvPreview {
+pub(in crate::importers::harvest) struct ParentSnapshot {
     clients: Value,
     projects: Value,
     tasks: Value,
     project_tasks: Value,
 }
 
-impl CsvPreview {
+impl ParentSnapshot {
     pub(in crate::importers::harvest) async fn capture(
         conn: &mut PgConnection,
         org_id: Uuid,
@@ -75,7 +74,7 @@ impl CsvPreview {
                 rows.as_array().is_some_and(|rows| rows.iter().all(|row| {
                     row.get("org_id").and_then(Value::as_str) == Some(owner.as_str())
                 })),
-                "CSV preview checkpoint organization mismatch"
+                "preview checkpoint organization mismatch"
             );
         }
         sqlx::query!(
@@ -134,7 +133,7 @@ mod tests {
                 "clients": [], "projects": [], "tasks": [], "project_tasks": []
             });
             value[field] = serde_json::json!([{"org_id": Uuid::now_v7()}]);
-            let snapshot: CsvPreview = serde_json::from_value(value).unwrap();
+            let snapshot: ParentSnapshot = serde_json::from_value(value).unwrap();
             let mut tx = pool.begin().await.unwrap();
             let error = snapshot.restore(&mut tx, owner).await.unwrap_err();
             assert!(

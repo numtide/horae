@@ -13,7 +13,7 @@
 - [x] T006 Add worker startup, bounded concurrency, lease/heartbeat, retry backoff, and graceful shutdown.
 - [ ] T007 Add checkpoint/progress updates around existing Harvest import phases.
   - Durable CSV commits checkpoint every 500 records. API commits persist catalog pages, 500-entity parent batches and individual time-entry pages, with report/cache and watermark state.
-  - CSV previews checkpoint rollback-only simulation state every 500 records. API dry-run recovery and checkpoint snapshot-size/throughput validation remain pending.
+  - CSV previews checkpoint rollback-only simulation state every 500 records. API previews retain parent snapshots and entry associations at the same boundaries as API commits. Checkpoint snapshot-size/throughput validation remains pending.
 - [x] T008 Add outbox records and transactional enqueue support for future plugin/webhook/notification delivery.
 - [x] T009 Ensure all job and outbox reads/mutations enforce organization and admin authorization.
   - Registered HTTP handlers enforce live administrator sessions and tenant isolation; uploads have a composite job/organization foreign key. Outbox primitives are internal worker APIs, with organization and claim-token checks on acknowledgements.
@@ -33,6 +33,7 @@
 - [x] T017 Test a second synthetic job kind through the same worker boundary.
 - [x] T018 Test transactional outbox insertion and idempotent delivery bookkeeping.
 - [x] T019 Regenerate `.sqlx` cache and run targeted integration tests, clippy, and formatting.
+- [ ] T020 Preserve inspectable reports for terminal failures (FR-012/SC-004), including failures after confirmed batches and before the first checkpoint; verify status/history, retention and manual retry.
 
 See [adversarial-review.md](adversarial-review.md) for uncovered cases and the
 evidence required to close the reopened tasks.

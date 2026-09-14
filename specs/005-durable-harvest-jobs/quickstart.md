@@ -53,9 +53,21 @@ then manual retry resumes the same job. The watermark must remain unchanged
 until successful finalization, including when a previous page had an error or
 lacked a timestamp. Retrying a failed finalization must not repeat downloads.
 
-Dry-runs still need resumable checkpoints. Previews continue to write no domain
-data, including when they exceed the batch size. Large-import checkpoint size
-and throughput still need validation before the feature is ready to merge.
+## Preview recovery
+
+Repeat the CSV and API interruption scenarios in dry-run mode. Preview progress
+and accumulated counts must survive recovery without committing domain data,
+provenance or watermarks. CSV previews checkpoint every 500 records; API previews
+checkpoint catalog pages, 500-parent batches and each time-entry page.
+
+For API previews, include entries that match an earlier CSV import and repeated
+Harvest IDs on different pages. A resumed preview must agree with an uninterrupted
+preview: distinct IDs cannot adopt the same existing entry, and repeated IDs must
+not be counted as new entries. A failed final-report write must retry from EOF
+without another source request.
+
+Large-import checkpoint size and throughput still need validation before the
+feature is ready to merge.
 
 ## Retry configuration
 

@@ -53,13 +53,18 @@ fn fixture_page(url: &openidconnect::url::Url, first: FirstEntry) -> Response {
     Response::json(json!({collection:items,"links":{"next":next}}))
 }
 
-async fn resumed_api(pool: PgPool, interrupted_collection: &'static str, first: FirstEntry) {
+async fn resumed_api(
+    pool: PgPool,
+    interrupted_collection: &'static str,
+    first: FirstEntry,
+    mode: ImportMode,
+) {
     let org = setup(&pool).await;
     let id = jobs::enqueue(
         &pool,
         org,
         &jobs::JobPayload::HarvestApi {
-            mode: ImportMode::Commit,
+            mode,
             sync: SyncScope::Incremental,
         },
         "resume-api",
@@ -89,7 +94,7 @@ async fn resumed_api(pool: PgPool, interrupted_collection: &'static str, first: 
         org,
         "USD",
         &config(),
-        ImportMode::Commit,
+        mode,
         SyncScope::Incremental,
         ApiHttp::local(server.base.clone()),
         Some(&lease),
@@ -112,11 +117,13 @@ async fn resumed_api(pool: PgPool, interrupted_collection: &'static str, first: 
                 .fetch_one(&pool)
                 .await
                 .unwrap(),
-            Some(if first == FirstEntry::InvalidUser {
-                0
-            } else {
-                1
-            })
+            Some(
+                if mode == ImportMode::DryRun || first == FirstEntry::InvalidUser {
+                    0
+                } else {
+                    1
+                }
+            )
         );
     }
     assert_eq!(watermark(&pool, org).await, json!({}));
@@ -134,7 +141,7 @@ async fn resumed_api(pool: PgPool, interrupted_collection: &'static str, first: 
         org,
         "EUR",
         &config(),
-        ImportMode::Commit,
+        mode,
         SyncScope::Incremental,
         ApiHttp::local(server.base.clone()),
         Some(&replacement),
@@ -166,12 +173,16 @@ async fn resumed_api(pool: PgPool, interrupted_collection: &'static str, first: 
             .fetch_one(&pool)
             .await
             .unwrap(),
-        Some(expected)
+        Some(if mode == ImportMode::Commit {
+            expected
+        } else {
+            0
+        })
     );
     let connection = credentials::load(&pool, org, KEY).await.unwrap().unwrap();
     assert_eq!(
         connection.watermark_for(EntityType::TimeEntry),
-        if first == FirstEntry::Valid {
+        if mode == ImportMode::Commit && first == FirstEntry::Valid {
             Some(day(3) - chrono::Duration::seconds(1))
         } else {
             None
@@ -181,6 +192,19 @@ async fn resumed_api(pool: PgPool, interrupted_collection: &'static str, first: 
         .fetch_all(&pool)
         .await
         .unwrap();
+    if mode == ImportMode::DryRun {
+        assert!(clients.is_empty());
+        assert_eq!(
+            sqlx::query_scalar!(
+                "SELECT count(*) FROM harvest_import_map WHERE org_id = $1",
+                org
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+            Some(0)
+        );
+    }
     assert!(
         clients.iter().all(|client| client.currency == "USD"),
         "retry must preserve the original currency fallback"
@@ -204,22 +228,55 @@ async fn resumed_api(pool: PgPool, interrupted_collection: &'static str, first: 
 
 #[sqlx::test(migrations = "./migrations")]
 async fn durable_api_resumes_committed_pages_and_preserves_the_high_watermark(pool: PgPool) {
-    resumed_api(pool, "time_entries", FirstEntry::Valid).await;
+    resumed_api(pool, "time_entries", FirstEntry::Valid, ImportMode::Commit).await;
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn durable_api_resumes_a_partially_downloaded_catalog(pool: PgPool) {
-    resumed_api(pool, "clients", FirstEntry::Valid).await;
+    resumed_api(pool, "clients", FirstEntry::Valid, ImportMode::Commit).await;
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn durable_api_resume_keeps_earlier_errors_and_does_not_advance_watermark(pool: PgPool) {
-    resumed_api(pool, "time_entries", FirstEntry::InvalidUser).await;
+    resumed_api(
+        pool,
+        "time_entries",
+        FirstEntry::InvalidUser,
+        ImportMode::Commit,
+    )
+    .await;
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn durable_api_resume_remembers_an_earlier_missing_timestamp(pool: PgPool) {
-    resumed_api(pool, "time_entries", FirstEntry::MissingTimestamp).await;
+    resumed_api(
+        pool,
+        "time_entries",
+        FirstEntry::MissingTimestamp,
+        ImportMode::Commit,
+    )
+    .await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn durable_api_preview_resumes_pages_without_publishing_domain_data(pool: PgPool) {
+    resumed_api(pool, "time_entries", FirstEntry::Valid, ImportMode::DryRun).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn durable_api_preview_resumes_catalog_download(pool: PgPool) {
+    resumed_api(pool, "clients", FirstEntry::Valid, ImportMode::DryRun).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn durable_api_preview_resume_preserves_row_errors(pool: PgPool) {
+    resumed_api(
+        pool,
+        "time_entries",
+        FirstEntry::InvalidUser,
+        ImportMode::DryRun,
+    )
+    .await;
 }
 
 #[derive(Clone)]
@@ -253,7 +310,7 @@ impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Committed {
     }
 }
 
-async fn interrupted_api_batch(pool: PgPool, cancel: bool) {
+async fn interrupted_api_batch(pool: PgPool, cancel: bool, mode: ImportMode) {
     use std::sync::{Arc, atomic::AtomicUsize};
     use std::time::Duration;
     use tracing::instrument::WithSubscriber;
@@ -264,7 +321,7 @@ async fn interrupted_api_batch(pool: PgPool, cancel: bool) {
         &pool,
         org,
         &jobs::JobPayload::HarvestApi {
-            mode: ImportMode::Commit,
+            mode,
             sync: SyncScope::Full,
         },
         "interrupt-api",
@@ -300,7 +357,7 @@ async fn interrupted_api_batch(pool: PgPool, cancel: bool) {
                 org,
                 "USD",
                 &config(),
-                ImportMode::Commit,
+                mode,
                 SyncScope::Full,
                 http,
                 Some(&lease),
@@ -366,7 +423,7 @@ async fn interrupted_api_batch(pool: PgPool, cancel: bool) {
             .fetch_one(&pool)
             .await
             .unwrap(),
-        Some(1)
+        Some(if mode == ImportMode::Commit { 1 } else { 0 })
     );
     assert_eq!(watermark(&pool, org).await, json!({}));
     let (replacement, _replacement_stop) = match replacement {
@@ -378,7 +435,7 @@ async fn interrupted_api_batch(pool: PgPool, cancel: bool) {
         org,
         "USD",
         &config(),
-        ImportMode::Commit,
+        mode,
         SyncScope::Full,
         ApiHttp::local(server.base.clone()),
         Some(&replacement),
@@ -388,6 +445,16 @@ async fn interrupted_api_batch(pool: PgPool, cancel: bool) {
     assert_eq!(report.summary.time_entries.created, 2);
     assert_eq!(report.summary.time_entries.skipped, 0);
     assert_eq!(
+        sqlx::query_scalar!("SELECT count(*) FROM time_entries WHERE org_id = $1", org)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        Some(if mode == ImportMode::Commit { 2 } else { 0 })
+    );
+    if mode == ImportMode::DryRun {
+        assert_eq!(watermark(&pool, org).await, json!({}));
+    }
+    assert_eq!(
         jobs::status(&pool, org, id).await.unwrap().unwrap().status,
         "succeeded"
     );
@@ -395,12 +462,22 @@ async fn interrupted_api_batch(pool: PgPool, cancel: bool) {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn durable_api_reclaimed_worker_cannot_commit_its_next_page(pool: PgPool) {
-    interrupted_api_batch(pool, false).await;
+    interrupted_api_batch(pool, false, ImportMode::Commit).await;
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn durable_api_cancellation_preserves_confirmed_pages_for_manual_retry(pool: PgPool) {
-    interrupted_api_batch(pool, true).await;
+    interrupted_api_batch(pool, true, ImportMode::Commit).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn durable_api_preview_reclaimed_worker_cannot_checkpoint_its_next_page(pool: PgPool) {
+    interrupted_api_batch(pool, false, ImportMode::DryRun).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn durable_api_preview_cancellation_preserves_confirmed_pages_for_manual_retry(pool: PgPool) {
+    interrupted_api_batch(pool, true, ImportMode::DryRun).await;
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -481,14 +558,13 @@ async fn durable_api_finalization_retry_does_not_repeat_completed_downloads(pool
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
-async fn durable_api_resumes_after_a_confirmed_parent_batch(pool: PgPool) {
+async fn resumed_parent_batch(pool: PgPool, mode: ImportMode) {
     let org = setup(&pool).await;
     let id = jobs::enqueue(
         &pool,
         org,
         &jobs::JobPayload::HarvestApi {
-            mode: ImportMode::Commit,
+            mode,
             sync: SyncScope::Full,
         },
         "parent-batch-api",
@@ -520,7 +596,7 @@ async fn durable_api_resumes_after_a_confirmed_parent_batch(pool: PgPool) {
         org,
         "USD",
         &config(),
-        ImportMode::Commit,
+        mode,
         SyncScope::Full,
         ApiHttp::local(server.base.clone()),
         Some(&lease),
@@ -541,7 +617,7 @@ async fn durable_api_resumes_after_a_confirmed_parent_batch(pool: PgPool) {
             .fetch_one(&pool)
             .await
             .unwrap(),
-        Some(500)
+        Some(if mode == ImportMode::Commit { 500 } else { 0 })
     );
     assert_eq!(
         sqlx::query_scalar!("SELECT count(*) FROM time_entries WHERE org_id = $1", org)
@@ -568,7 +644,7 @@ async fn durable_api_resumes_after_a_confirmed_parent_batch(pool: PgPool) {
         org,
         "USD",
         &config(),
-        ImportMode::Commit,
+        mode,
         SyncScope::Full,
         ApiHttp::local(server.base.clone()),
         Some(&replacement),
@@ -582,18 +658,23 @@ async fn durable_api_resumes_after_a_confirmed_parent_batch(pool: PgPool) {
     assert_eq!(report.summary.tasks.created, 1);
     assert_eq!(report.summary.time_entries.created, 2);
     let task = sqlx::query!("SELECT default_rate_cents, billable_default, active FROM tasks WHERE org_id = $1 AND name = 'Task'", org)
-        .fetch_one(&pool).await.unwrap();
-    assert_eq!(
-        task.default_rate_cents,
-        Some(100),
-        "checkpoint JSON must preserve the exact source decimal"
-    );
+        .fetch_optional(&pool).await.unwrap();
+    if mode == ImportMode::Commit {
+        assert_eq!(
+            task.unwrap().default_rate_cents,
+            Some(100),
+            "checkpoint JSON must preserve the exact source decimal"
+        );
+    } else {
+        assert!(task.is_none());
+        assert_eq!(watermark(&pool, org).await, json!({}));
+    }
     assert_eq!(
         sqlx::query_scalar!("SELECT count(*) FROM clients WHERE org_id = $1", org)
             .fetch_one(&pool)
             .await
             .unwrap(),
-        Some(502)
+        Some(if mode == ImportMode::Commit { 502 } else { 0 })
     );
     let requests = server.requests.lock().unwrap();
     assert!(
@@ -601,4 +682,294 @@ async fn durable_api_resumes_after_a_confirmed_parent_batch(pool: PgPool) {
             .iter()
             .all(|request| request.starts_with("GET /v2/time_entries?"))
     );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn durable_api_resumes_after_a_confirmed_parent_batch(pool: PgPool) {
+    resumed_parent_batch(pool, ImportMode::Commit).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn durable_api_preview_resumes_after_a_confirmed_parent_batch(pool: PgPool) {
+    resumed_parent_batch(pool, ImportMode::DryRun).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn durable_api_preview_preserves_adoptions_and_repeated_ids_across_recovery(pool: PgPool) {
+    let org = setup(&pool).await;
+    csv_source::import_csv(
+        &pool,
+        org,
+        "USD",
+        b"Date,Client,Project,Task,Hours,Email\n2026-01-01,Client,Project,Task,1,known@example.com\n",
+        ImportMode::Commit,
+    )
+    .await
+    .unwrap();
+    let id = jobs::enqueue(
+        &pool,
+        org,
+        &jobs::JobPayload::HarvestApi {
+            mode: ImportMode::DryRun,
+            sync: SyncScope::Full,
+        },
+        "preview-adoption",
+        Default::default(),
+    )
+    .await
+    .unwrap();
+    let mut failed = false;
+    let server = Server::start(move |url| {
+        let response = fixture_page(url, FirstEntry::Valid);
+        if !url.path().ends_with("/time_entries") {
+            return response;
+        }
+        let mut body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        if url
+            .query_pairs()
+            .any(|(key, value)| key == "cursor" && value == "three")
+        {
+            if !failed {
+                failed = true;
+                return Response {
+                    status: 500,
+                    headers: vec![],
+                    body: vec![],
+                };
+            }
+            let row = body["time_entries"][0].clone();
+            body["time_entries"] = json!([10, 11, 12].map(|id| {
+                let mut entry = row.clone();
+                entry["id"] = json!(id);
+                entry
+            }));
+            body["links"]["next"] = serde_json::Value::Null;
+        } else if url
+            .query_pairs()
+            .any(|(key, value)| key == "cursor" && value == "two")
+        {
+            let mut next = url.clone();
+            next.query_pairs_mut()
+                .clear()
+                .append_pair("cursor", "three");
+            body["links"]["next"] = json!(next.as_str());
+        }
+        Response::json(body)
+    });
+    let (lease, _stop) = jobs::claim_lease_for_test(&pool).await;
+    let error = run_api_import_with_http(
+        &pool,
+        org,
+        "USD",
+        &config(),
+        ImportMode::DryRun,
+        SyncScope::Full,
+        ApiHttp::local(server.base.clone()),
+        Some(&lease),
+    )
+    .await
+    .unwrap_err();
+    assert!(error.to_string().contains("HTTP 500"), "{error}");
+    assert_eq!(
+        jobs::status(&pool, org, id)
+            .await
+            .unwrap()
+            .unwrap()
+            .processed_count,
+        6
+    );
+    assert_eq!(
+        sqlx::query_scalar!("SELECT count(*) FROM time_entries WHERE org_id = $1", org)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        Some(1)
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM harvest_import_map WHERE org_id = $1",
+            org
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(0)
+    );
+    let before = server.count.load(std::sync::atomic::Ordering::Acquire);
+    sqlx::query!(
+        "UPDATE horae_jobs SET lease_until = clock_timestamp() WHERE id = $1",
+        id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let (replacement, _replacement_stop) = jobs::claim_lease_for_test(&pool).await;
+    let report = run_api_import_with_http(
+        &pool,
+        org,
+        "USD",
+        &config(),
+        ImportMode::DryRun,
+        SyncScope::Full,
+        ApiHttp::local(server.base.clone()),
+        Some(&replacement),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        server.count.load(std::sync::atomic::Ordering::Acquire),
+        before + 1
+    );
+    assert_eq!(report.error_count(), 0);
+    assert_eq!(report.summary.time_entries.created, 2);
+    assert_eq!(report.summary.time_entries.skipped, 3);
+    let inline = run_api_import_with_http(
+        &pool,
+        org,
+        "USD",
+        &config(),
+        ImportMode::DryRun,
+        SyncScope::Full,
+        ApiHttp::local(server.base.clone()),
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        serde_json::to_value(&report).unwrap(),
+        serde_json::to_value(&inline).unwrap()
+    );
+    assert_eq!(watermark(&pool, org).await, json!({}));
+    assert_eq!(
+        sqlx::query_scalar!("SELECT count(*) FROM time_entries WHERE org_id = $1", org)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        Some(1)
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM harvest_import_map WHERE org_id = $1",
+            org
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(0)
+    );
+    let commit = run_api_import_with_http(
+        &pool,
+        org,
+        "USD",
+        &config(),
+        ImportMode::Commit,
+        SyncScope::Full,
+        ApiHttp::local(server.base.clone()),
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        serde_json::to_value(commit.summary).unwrap(),
+        serde_json::to_value(report.summary).unwrap()
+    );
+    assert_eq!(
+        sqlx::query_scalar!("SELECT count(*) FROM time_entries WHERE org_id = $1", org)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        Some(3)
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn durable_api_preview_finalization_retry_does_not_repeat_completed_downloads(pool: PgPool) {
+    let org = setup(&pool).await;
+    let id = jobs::enqueue(
+        &pool,
+        org,
+        &jobs::JobPayload::HarvestApi {
+            mode: ImportMode::DryRun,
+            sync: SyncScope::Full,
+        },
+        "finalize-preview",
+        Default::default(),
+    )
+    .await
+    .unwrap();
+    sqlx::query!(
+        "ALTER TABLE horae_jobs ADD CONSTRAINT reject_job_completion CHECK (status <> 'succeeded')"
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let server = Server::start(|url| fixture_page(url, FirstEntry::Valid));
+    let (lease, _stop) = jobs::claim_lease_for_test(&pool).await;
+    let error = run_api_import_with_http(
+        &pool,
+        org,
+        "USD",
+        &config(),
+        ImportMode::DryRun,
+        SyncScope::Full,
+        ApiHttp::local(server.base.clone()),
+        Some(&lease),
+    )
+    .await
+    .unwrap_err();
+    assert!(
+        error.to_string().contains("reject_job_completion"),
+        "{error}"
+    );
+    assert_eq!(
+        jobs::status(&pool, org, id)
+            .await
+            .unwrap()
+            .unwrap()
+            .processed_count,
+        6
+    );
+    assert_eq!(watermark(&pool, org).await, json!({}));
+    assert_eq!(
+        sqlx::query_scalar!("SELECT count(*) FROM clients WHERE org_id = $1", org)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        Some(0)
+    );
+    let before = server.count.load(std::sync::atomic::Ordering::Acquire);
+    sqlx::query!("ALTER TABLE horae_jobs DROP CONSTRAINT reject_job_completion")
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query!(
+        "UPDATE horae_jobs SET lease_until = clock_timestamp() WHERE id = $1",
+        id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let (replacement, _replacement_stop) = jobs::claim_lease_for_test(&pool).await;
+    let report = run_api_import_with_http(
+        &pool,
+        org,
+        "USD",
+        &config(),
+        ImportMode::DryRun,
+        SyncScope::Full,
+        ApiHttp::local(server.base.clone()),
+        Some(&replacement),
+    )
+    .await
+    .unwrap();
+    assert_eq!(report.summary.time_entries.created, 2);
+    assert_eq!(
+        server.count.load(std::sync::atomic::Ordering::Acquire),
+        before
+    );
+    let status = jobs::status(&pool, org, id).await.unwrap().unwrap();
+    assert_eq!(status.status, "succeeded");
+    assert_eq!(status.report, Some(serde_json::to_value(report).unwrap()));
+    assert_eq!(status.total_count, Some(6));
+    assert_eq!(watermark(&pool, org).await, json!({}));
 }

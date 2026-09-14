@@ -335,3 +335,49 @@ This does not close T007 or T016: API previews still lack resumable simulation
 state. Parent snapshots are captured/restored at each CSV batch boundary, so
 large-catalog snapshot size and throughput remain part of the required scale
 validation. Full acceptance and current-head CI remain required before merge.
+
+## Resumable API previews
+
+Durable API previews now use the same catalog, parent-batch and entry-page
+checkpoints as commits. Each applied batch runs in a nested transaction. Parent
+snapshots and successful entry associations are captured before rolling it back;
+only simulation state, cursor and progress commit under the live claim fence.
+Finalization persists the report without advancing the watermark. Existing
+version-1 committing checkpoints remain compatible without preview state.
+
+The shared parent snapshot replaces the CSV-specific module without changing
+its serialized shape. API previews additionally retain Harvest-ID to Horae-ID
+associations. These skip repeated source IDs and reserve adopted real entries
+against different IDs on later pages. Simulated time-entry rows are not replayed;
+failed row savepoints cannot publish new simulated associations.
+
+Eight new PostgreSQL/HTTP regressions cover partial catalog and entry recovery,
+row errors across retries, cancellation/manual retry, stale next-page checkpoints
+without heartbeat monitoring, interrupted parent batches and failed final-report
+writes. The recovery regression failed before implementation because previews
+had no durable checkpoint. The adoption test combines a real CSV entry with new
+and repeated API IDs across three pages and a failed request; the resumed report
+matches the inline preview and subsequent commit, without publishing preview
+domain data or provenance. Finalization retry performs no new HTTP request.
+
+All 148 importer tests and 28 jobs tests pass. Three explicit scale benchmarks
+remain ignored. SQLx metadata adds two simulation queries and two failure-injection
+DDL queries. Server clippy passes with all targets and warnings denied, including
+performance lints; formatting passes. No migration, dependency, service or
+additional connection is added.
+
+T007 remains open for checkpoint size/throughput measurements; T016 and full
+acceptance still require the complete end-to-end recovery walkthrough. Current
+head CI must be checked separately from local tests. The PR remains a draft.
+
+### Remaining terminal-report gap
+
+The acceptance audit also confirms an FR-012/SC-004 gap: `JobLease::save_checkpoint`
+retains accumulated outcomes only inside the private checkpoint, while status and
+history expose `report`. `fail_claimed` records the latest error but never publishes
+that accumulated report. Exhausting retries after completed batches can therefore
+leave an administrator without their partial import report. A regression must
+exhaust an import after confirmed work and verify the report through the public
+status/history boundary, including retention and retry behavior. Jobs failing
+before their first checkpoint also need an inspectable failure result. This is
+not closed by the successful-finalization tests above.

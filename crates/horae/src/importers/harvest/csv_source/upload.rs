@@ -14,7 +14,7 @@ use uuid::Uuid;
 use super::super::{
     apply, finish_import, lock_import, release_import,
     report::ImportReport,
-    resolve::{OrgDefaults, RunCache, csv_preview::CsvPreview},
+    resolve::{OrgDefaults, RunCache, preview::ParentSnapshot},
 };
 use super::{CsvError, Cursor, Record, read_csv_from};
 
@@ -28,7 +28,7 @@ struct Checkpoint {
     report: ImportReport,
     cache: RunCache,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    preview: Option<CsvPreview>,
+    preview: Option<ParentSnapshot>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -193,7 +193,7 @@ pub(crate) async fn import_body_with_lease(
             {
                 if mode == ImportMode::DryRun {
                     checkpoint.preview =
-                        Some(CsvPreview::capture(&mut tx, org_id, &checkpoint.cache).await?);
+                        Some(ParentSnapshot::capture(&mut tx, org_id, &checkpoint.cache).await?);
                     tx.rollback().await?;
                     tx = connection.begin().await?;
                 }

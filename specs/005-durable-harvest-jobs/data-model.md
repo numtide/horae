@@ -56,7 +56,6 @@ prefix and resumes with original counts and errors. At EOF the final domain
 transaction rolls back before the terminal job report commits under its lease.
 Commit checkpoints remain compatible and never contain preview state.
 
-API dry-run source/simulation recovery remains required before FR-007 is complete.
 CSV snapshots currently scale with the cached parent/link set and are restored at
 each batch boundary; their size and large-import throughput still need measurement
 alongside the existing full resolution-cache snapshots.
@@ -96,7 +95,30 @@ retries. The watermark advances only after all pages finish without row errors
 or missing timestamps, capped by the original capture start time. Watermark and
 terminal report commit together. A finalization failure retains an EOF cursor,
 so retry can finish without downloading or applying completed pages again.
-Inline imports and dry-runs keep their existing import-wide transactions.
+Inline imports keep their existing import-wide transactions.
+
+### API preview checkpoint, version 1
+
+Durable API previews use the same catalog, parent-batch and entry-page cursors,
+with an additional `preview` field. Parent snapshots reuse the CSV representation.
+An entry map retains successful Harvest-ID to Horae-ID associations across pages,
+including adoption of real entries from an earlier CSV import. Restoring these
+associations reserves adopted entries against other source IDs and skips repeated
+IDs without recreating simulated time-entry rows. Failed row savepoints do not
+publish new simulated associations.
+
+Each batch applies inside a nested transaction. The parent snapshot and successful
+entry associations are captured before rolling that transaction back; only the
+checkpoint and progress commit in the outer lease-fenced transaction. Recovery
+restores simulated parents and associations inside the next rollback-only batch,
+not as permanent domain data. Finalization commits the report and clears the
+checkpoint without changing the sync watermark. An EOF checkpoint also allows a
+failed finalization to retry without downloading or applying any source pages.
+
+Loading rejects a mode/preview-state mismatch. Existing version-1 committing
+checkpoints remain readable without the optional preview field. Preview state
+grows with cached parents and distinct entry IDs; snapshot size and repeated
+restoration cost remain subject to large-import validation.
 
 ## CSV Upload Blob
 

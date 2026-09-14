@@ -4,7 +4,7 @@ use anyhow::{Context, bail, ensure};
 use chrono::{DateTime, Utc};
 use horae_core::importers::harvest::types::{EntityType, ImportMode, SourceKind, SyncScope};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use sqlx::{PgConnection, Postgres, pool::PoolConnection};
+use sqlx::{Acquire, PgConnection, Postgres, Transaction, pool::PoolConnection};
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
@@ -19,6 +19,9 @@ use super::{IncompleteDownload, Page, Settings, begin_transaction};
 use crate::jobs::JobLease;
 
 const PARENT_BATCH: usize = 500;
+
+mod preview;
+use preview::ApiPreview;
 
 #[derive(Serialize, Deserialize)]
 pub(in crate::importers::harvest) struct Request {
@@ -80,6 +83,8 @@ pub(super) struct Checkpoint {
     #[serde(deserialize_with = "Option::deserialize")]
     high_water: Option<DateTime<Utc>>,
     missing_timestamp: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    preview: Option<ApiPreview>,
 }
 
 impl Checkpoint {
@@ -100,6 +105,22 @@ impl Checkpoint {
     }
 }
 
+async fn finish_simulation(
+    preview: &mut Option<ApiPreview>,
+    cache: &RunCache,
+    mut batch: Transaction<'_, Postgres>,
+    org_id: Uuid,
+    page_ids: &[i64],
+) -> anyhow::Result<()> {
+    if let Some(preview) = preview {
+        preview.capture(&mut batch, org_id, cache, page_ids).await?;
+        batch.rollback().await?;
+    } else {
+        batch.commit().await?;
+    }
+    Ok(())
+}
+
 enum Rows {
     Clients(Vec<ApiClient>),
     Projects(Vec<ApiProject>),
@@ -117,6 +138,7 @@ pub(in crate::importers::harvest) async fn run(
     mut connection: PoolConnection<Postgres>,
     org_id: Uuid,
     request: Request,
+    mode: ImportMode,
     access: String,
     http: ApiHttp,
     lease: &JobLease,
@@ -136,7 +158,8 @@ pub(in crate::importers::harvest) async fn run(
             );
             ensure!(
                 saved.request.sync == request.sync
-                    && saved.report.mode == ImportMode::Commit
+                    && saved.report.mode == mode
+                    && saved.preview.is_some() == (mode == ImportMode::DryRun)
                     && saved.report.source == SourceKind::HarvestApi,
                 "API checkpoint request mismatch"
             );
@@ -159,10 +182,11 @@ pub(in crate::importers::harvest) async fn run(
                 },
                 catalog: HarvestData::default(),
                 parent_offset: 0,
-                report: ImportReport::new(SourceKind::HarvestApi, ImportMode::Commit),
+                report: ImportReport::new(SourceKind::HarvestApi, mode),
                 cache: RunCache::default(),
                 high_water: None,
                 missing_timestamp: false,
+                preview: (mode == ImportMode::DryRun).then(ApiPreview::default),
             })
         }
     }
@@ -315,26 +339,37 @@ pub(super) async fn apply(
             _ => return Err(IncompleteDownload.into()),
         }
     }
-    let org = OrgDefaults {
-        org_id,
-        default_currency: &checkpoint.request.currency,
-    };
     while checkpoint.parent_offset < checkpoint.parent_count() {
         let end = checkpoint
             .parent_offset
             .saturating_add(PARENT_BATCH)
             .min(checkpoint.parent_count());
         let mut tx = begin_transaction(connection).await?;
+        let mut batch = tx.begin().await?;
+        if let Some(preview) = &checkpoint.preview {
+            preview.restore(&mut batch, org_id).await?;
+        }
         parents::apply_batch(
-            &mut tx,
+            &mut batch,
             &mut checkpoint.cache,
-            org,
+            OrgDefaults {
+                org_id,
+                default_currency: &checkpoint.request.currency,
+            },
             &checkpoint.catalog,
             &mut checkpoint.report,
             checkpoint.parent_offset..end,
         )
         .await?;
         checkpoint.parent_offset = end;
+        finish_simulation(
+            &mut checkpoint.preview,
+            &checkpoint.cache,
+            batch,
+            org_id,
+            &[],
+        )
+        .await?;
         checkpoint.save(&mut tx, lease, "catalog").await?;
         tx.commit().await?;
     }
@@ -357,15 +392,31 @@ pub(super) async fn apply(
                     }
                 }
                 let mut tx = begin_transaction(connection).await?;
+                let mut simulation = tx.begin().await?;
+                if let Some(preview) = &checkpoint.preview {
+                    preview.restore(&mut simulation, org_id).await?;
+                }
                 apply_rows(
-                    &mut tx,
+                    &mut simulation,
                     &mut checkpoint.cache,
                     &mut checkpoint.report,
-                    org,
+                    OrgDefaults {
+                        org_id,
+                        default_currency: &checkpoint.request.currency,
+                    },
                     ApiSource::new(&lookup, &entries),
                 )
                 .await?;
                 checkpoint.download = batch.next;
+                let page_ids = entries.iter().map(|entry| entry.id).collect::<Vec<_>>();
+                finish_simulation(
+                    &mut checkpoint.preview,
+                    &checkpoint.cache,
+                    simulation,
+                    org_id,
+                    &page_ids,
+                )
+                .await?;
                 checkpoint.save(&mut tx, lease, "time_entries").await?;
                 tx.commit().await?;
             }
@@ -374,7 +425,8 @@ pub(super) async fn apply(
         }
     }
     let mut tx = begin_transaction(connection).await?;
-    if checkpoint.report.error_count() == 0
+    if checkpoint.report.mode == ImportMode::Commit
+        && checkpoint.report.error_count() == 0
         && !checkpoint.missing_timestamp
         && let Some(high_water) = checkpoint.high_water
         && let Some(mark) = high_water
@@ -383,6 +435,11 @@ pub(super) async fn apply(
     {
         credentials::advance_watermark(&mut *tx, org_id, &[(EntityType::TimeEntry, mark)]).await?;
     }
-    super::super::finish_import(tx, &checkpoint.report, Some(lease)).await?;
+    let (report, processed) = super::super::job_report(&checkpoint.report)?;
+    ensure!(
+        lease.complete(&mut tx, &report, processed).await?,
+        "job execution interrupted or lease lost"
+    );
+    tx.commit().await?;
     Ok(checkpoint.report)
 }

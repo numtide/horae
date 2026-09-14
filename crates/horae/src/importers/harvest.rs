@@ -5,7 +5,7 @@
 //! Both source adapters drive normalized [`SourceRow`]s through the shared
 //! resolve → [`apply::apply_row`] → report pipeline. Each row is applied in its
 //! own savepoint; a `DryRun` rolls back all domain transactions, so no domain
-//! data, provenance or watermark persists (FR-014, research.md §7). Durable CSV
+//! data, provenance or watermark persists (FR-014, research.md §7). Durable
 //! previews retain simulation checkpoints separately from those transactions.
 
 pub mod api_source;
@@ -337,9 +337,7 @@ async fn run_api_import_with_http(
 
     // A bounded queue joins blocking HTTP pages to the async row pipeline.
     let capture_started_at = Utc::now();
-    if mode == ImportMode::Commit
-        && let Some(lease) = lease
-    {
+    if let Some(lease) = lease {
         return streaming::durable::run(
             connection,
             org_id,
@@ -350,6 +348,7 @@ async fn run_api_import_with_http(
                 since,
                 captured_at: capture_started_at,
             },
+            mode,
             conn.access_token,
             http,
             lease,
