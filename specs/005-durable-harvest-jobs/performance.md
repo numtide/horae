@@ -244,3 +244,51 @@ during that third transfer produces a client body error after 1,048,576 bytes,
 not successful EOF. The final HWM reading was 21,232 KiB and remained below the
 same budget. The complete test took 4.08 seconds; compilation finished before
 measurement, and no other local build/import/browser workload ran during it.
+
+## CSV preview SQL profile
+
+On 2026-09-14, the release binary at `0b0c449` ran the existing
+`measure_csv_durable_large_catalog_100k` scenario against fresh PostgreSQL 17.10
+with `pg_stat_statements` and planning-time collection enabled. The preview
+completed in 436.688 seconds, including EOF recovery, with HWM 204,980 KiB and
+a 21,979,301-byte checkpoint JSON representation (3,094,671 stored bytes).
+This instrumented diagnostic is not a replacement for the earlier uninstrumented
+throughput samples. No overlapping local build or import ran during the preview.
+Commit and reimport then completed in 210.040 and 142.665 seconds. The complete
+scenario passed in 790.06 seconds, preserving 99,900 entries, 5,994,000 integer
+minutes and all 100 errors across EOF recovery and duplicate-free reimport.
+
+A cumulative statistics snapshot taken after the preview reports:
+
+| Statement | Calls | SQL execution time |
+| --------- | ----- | ------------------ |
+| Capture selected project/task links | 200 | 95.396 s |
+| Restore projects from snapshot | 201 | 59.558 s |
+| Restore project/task links from snapshot | 201 | 37.469 s |
+| Save job checkpoint | 200 | 12.717 s |
+
+The first three statements account for approximately 74% of the 258.402 seconds
+of recorded SQL execution. The snapshot also includes fixture setup and may
+include the beginning of the next phase. PostgreSQL statement execution time
+does not cover all client work, parameter transfer/conversion or wall-clock time.
+Artifacts are in `/tmp/horae-csv-profile.ca6t2d/`, with the preview statistics in
+`statements-1789405777303871839.csv`.
+
+During the preview, EXPLAIN showed an estimated single task/project row despite
+5,000 cached pairs. A task scan nested around the selected-pair join can therefore
+repeat that join thousands of times inside the simulation transaction. Catalog
+statistics showed zero live rows after rollback and repeated autovacuum activity.
+This is a cardinality-estimation issue even with the application's
+`force_custom_plan` policy, not evidence that the policy was omitted.
+
+The proposed query correction keeps selected pairs driving indexed link lookups
+through a lateral subquery and checks each parent's organization by primary key.
+Restoration uses the same scalar ownership checks instead of catalog joins.
+EXPLAIN of the candidate keeps a 5,000-row driver and parameterized index scans.
+Checkpoint contents, frequency and ownership requirements are unchanged.
+The correction passes all 30 job tests and 160 importer tests, including CSV/API
+preview recovery, cancellation, stale-claim fencing and single-connection
+simulation. Eight explicit scale tests remain ignored in that ordinary run.
+Server all-target Clippy, Rust formatting and SQLx preparation pass; three query
+cache entries are regenerated. Repeat profiling is still required before this
+correction can close T007; no speedup is claimed yet.

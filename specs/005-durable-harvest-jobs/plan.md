@@ -68,7 +68,8 @@ crates/horae/
 
 ## Bounded report storage follow-up
 
-Implementation in progress. The existing data-model invariant requires bounded report
+Implemented and verified under T021; see `acceptance.md` and
+`adversarial-review.md`. The data-model invariant requires bounded report
 storage and retrieval while the importer contract requires every failed record's
 complete location and reason. A cap that drops errors or aborts otherwise valid
 records does not satisfy both requirements.

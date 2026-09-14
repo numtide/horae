@@ -1,12 +1,13 @@
 # Quickstart: Durable Harvest Import Jobs
 
 This is the acceptance walkthrough for the complete feature. See
-[adversarial-review.md](adversarial-review.md) for cases still under implementation,
-including durable checkpoints and cancellation at resumable batch boundaries.
+[acceptance.md](acceptance.md) for observed browser and process-restart results,
+[adversarial-review.md](adversarial-review.md) for regression evidence, and
+[tasks.md](tasks.md) for remaining gates.
 
 1. Sign in as an organization administrator and open the Harvest importer.
 1. Connect Harvest or select a CSV, choose dry-run or commit, and start the import.
-1. Confirm the UI returns immediately with a queued job and then displays phase/progress.
+1. Confirm starting returns a job ID without waiting for completion and displays phase/progress. A fast worker may already have advanced the initial queued state.
 1. Refresh or reopen the page; the same organization’s job history remains available.
 1. Stop and restart the server during a running import; confirm the lease expires and the job resumes or reports a retryable failure.
 1. Retry the job and confirm provenance/idempotency prevents duplicate records.
@@ -74,8 +75,10 @@ preview: distinct IDs cannot adopt the same existing entry, and repeated IDs mus
 not be counted as new entries. A failed final-report write must retry from EOF
 without another source request.
 
-Large-import checkpoint size and throughput still need validation before the
-feature is ready to merge.
+The planned 100,000-record API and CSV scenarios have passed their correctness
+assertions, including recovery and reimport. See [performance.md](performance.md)
+for checkpoint sizes and timings. The measured large-catalog CSV preview overhead
+remains under investigation; latest-head CI is also required before merge.
 
 ## Retry configuration
 

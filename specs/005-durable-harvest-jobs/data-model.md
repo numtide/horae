@@ -79,8 +79,9 @@ writes from older workers. Startup validates those constraints after converting
 old rows. Malformed/unsupported reports fail startup rather than discard data.
 PostgreSQL still decodes the existing JSONB internally during conversion; the
 bounded transfers describe application memory, not PostgreSQL's legacy decoding
-cost. The one-connection upgrade/rollback regression passes; broader legacy
-state coverage and archive stress/failure-path coverage remain open in T021.
+cost. The one-connection upgrade/rollback regression, 36 legacy state/version/
+checkpoint combinations, HTTP memory stress and browser download acceptance pass.
+See `acceptance.md` and `adversarial-review.md` for T021's verification evidence.
 
 ### Report error chunks
 
@@ -128,9 +129,10 @@ prefix and resumes with original counts and errors. At EOF the final domain
 transaction rolls back before the terminal job report commits under its lease.
 Commit checkpoints remain compatible and never contain preview state.
 
-CSV snapshots currently scale with the cached parent/link set and are restored at
-each batch boundary; their size and large-import throughput still need measurement
-alongside the existing full resolution-cache snapshots.
+CSV snapshots scale with the cached parent/link set and are restored at each batch
+boundary. The 100,000-record measurements cover one and 5,000 parent sets,
+including full resolution-cache snapshots. The large-catalog preview's measured
+overhead remains open in T007; see `performance.md`.
 
 ### API pagination cursor, version 1
 
@@ -192,8 +194,9 @@ failed finalization to retry without downloading or applying any source pages.
 
 Loading rejects a mode/preview-state mismatch. Existing version-1 committing
 checkpoints remain readable without the optional preview field. Preview state
-grows with cached parents and distinct entry IDs; snapshot size and repeated
-restoration cost remain subject to large-import validation.
+grows with cached parents and distinct entry IDs. The 100,000-record API
+measurements, including selective restoration and EOF recovery, pass; checkpoint
+sizes and the measurements' limitations are recorded in `performance.md`.
 
 ## CSV Upload Blob
 

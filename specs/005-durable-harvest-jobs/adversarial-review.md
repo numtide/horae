@@ -718,3 +718,19 @@ log confirms both interruption scenarios actually execute and the VM test script
 finishes in 81.52 seconds, including successful systemd shutdown and reimport
 assertions. This closes the previously pending NixOS execution gate. T007's CSV
 preview overhead, latest-head CI and the final requirement audit remain open.
+
+## Preview snapshot query plans
+
+The large-catalog CSV SQL profile identifies three snapshot queries accounting
+for roughly 74% of recorded SQL execution. Committed table statistics can report
+zero live parents while a rollback-only simulation contains 5,000. EXPLAIN shows
+that the resulting one-row estimates can turn ownership joins into repeated
+full-catalog work. See `performance.md` for the measured queries and limitations.
+
+Snapshot capture now drives indexed link lookups from the selected pairs, and
+project/link restoration checks parent ownership through primary-key scalar
+lookups. No payload, checkpoint shape, batch size, organization requirement or
+domain transformation changes. All 30 job tests and 160 importer tests pass,
+alongside all-target Clippy and formatting. SQLx metadata is regenerated.
+The optimized release measurement is still pending: this is correctness evidence,
+not a claim that T007's performance gate has passed.

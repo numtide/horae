@@ -28,6 +28,8 @@ impl ParentSnapshot {
         let tasks: Vec<_> = cache.tasks.values().copied().collect();
         let (linked_projects, linked_tasks): (Vec<_>, Vec<_>) =
             cache.project_tasks.iter().copied().unzip();
+        // OFFSET 0 keeps the selected pairs driving indexed link lookups even
+        // when statistics cannot see the parents created by this simulation.
         Ok(Self {
             clients: sqlx::query_scalar!(
                 r#"SELECT COALESCE(jsonb_agg(to_jsonb(r)), '[]'::jsonb) AS "rows!"
@@ -49,12 +51,14 @@ impl ParentSnapshot {
             ).fetch_one(&mut *conn).await?,
             project_tasks: sqlx::query_scalar!(
                 r#"SELECT COALESCE(jsonb_agg(to_jsonb(pt)), '[]'::jsonb) AS "rows!"
-                   FROM project_tasks pt
-                   JOIN unnest($2::uuid[], $3::uuid[]) AS selected(project_id, task_id)
-                     USING (project_id, task_id)
-                   JOIN projects p ON p.id = pt.project_id
-                   JOIN tasks t ON t.id = pt.task_id
-                   WHERE p.org_id = $1 AND t.org_id = $1"#,
+                   FROM unnest($2::uuid[], $3::uuid[]) AS selected(project_id, task_id)
+                   JOIN LATERAL (
+                     SELECT pt.* FROM project_tasks pt
+                     WHERE pt.project_id = selected.project_id AND pt.task_id = selected.task_id
+                       AND (SELECT org_id FROM projects WHERE id = pt.project_id) = $1
+                       AND (SELECT org_id FROM tasks WHERE id = pt.task_id) = $1
+                     OFFSET 0
+                   ) pt ON true"#,
                 org_id, &linked_projects, &linked_tasks,
             ).fetch_one(&mut *conn).await?,
         })
@@ -87,12 +91,16 @@ impl ParentSnapshot {
         )
         .execute(&mut *conn)
         .await?;
+        // Rollback-only parents can have near-empty table statistics despite
+        // thousands of simulated rows. Scalar lookups keep ownership checks
+        // from becoming full-catalog nested loops under those estimates.
         sqlx::query!(
             "INSERT INTO projects (id, org_id, client_id, code, name, currency, starts_on, ends_on, active)
              SELECT r.id, r.org_id, r.client_id, r.code, r.name, r.currency, r.starts_on, r.ends_on, r.active
              FROM jsonb_populate_recordset(NULL::projects, $1) r
-             JOIN clients c ON c.id = r.client_id AND c.org_id = $2
-             WHERE r.org_id = $2 ON CONFLICT (id) DO NOTHING",
+             WHERE r.org_id = $2
+               AND (SELECT org_id FROM clients WHERE id = r.client_id) = $2
+             ON CONFLICT (id) DO NOTHING",
             &self.projects, org_id,
         ).execute(&mut *conn).await?;
         sqlx::query!(
@@ -109,8 +117,8 @@ impl ParentSnapshot {
             "INSERT INTO project_tasks (project_id, task_id, billable, rate_cents)
              SELECT r.project_id, r.task_id, r.billable, r.rate_cents
              FROM jsonb_populate_recordset(NULL::project_tasks, $1) r
-             JOIN projects p ON p.id = r.project_id AND p.org_id = $2
-             JOIN tasks t ON t.id = r.task_id AND t.org_id = $2
+             WHERE (SELECT org_id FROM projects WHERE id = r.project_id) = $2
+               AND (SELECT org_id FROM tasks WHERE id = r.task_id) = $2
              ON CONFLICT (project_id, task_id) DO NOTHING",
             &self.project_tasks,
             org_id,
