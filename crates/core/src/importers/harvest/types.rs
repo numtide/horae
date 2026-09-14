@@ -234,15 +234,37 @@ pub struct RowError {
 /// target as well as the server.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ImportReport {
+    #[serde(
+        default = "report_version",
+        deserialize_with = "deserialize_report_version"
+    )]
+    version: u16,
     pub source: SourceKind,
     pub mode: ImportMode,
     pub summary: ImportSummary,
     pub row_errors: Vec<RowError>,
 }
 
+fn report_version() -> u16 {
+    1
+}
+
+fn deserialize_report_version<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<u16, D::Error> {
+    let version = u16::deserialize(deserializer)?;
+    if version != report_version() {
+        return Err(serde::de::Error::custom(format!(
+            "unsupported import report version: {version}"
+        )));
+    }
+    Ok(version)
+}
+
 impl ImportReport {
     pub fn new(source: SourceKind, mode: ImportMode) -> Self {
         Self {
+            version: report_version(),
             source,
             mode,
             summary: ImportSummary::default(),

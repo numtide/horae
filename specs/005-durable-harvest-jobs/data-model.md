@@ -38,6 +38,17 @@ returning the private source cursor or simulation cache. This supports jobs writ
 before separate partial-report persistence. Report data follows the job's existing
 thirty-day retention policy; there is no separate report expiry.
 
+### Import report schema, version 1
+
+Reports include `version: 1` alongside their source, mode, summary and per-record
+errors. The shared report deserializer rejects unsupported or malformed explicit
+versions. Legacy reports without the field retain their existing version-1
+meaning, including all counts and error details. This applies to final reports,
+partial reports and reports embedded in importer checkpoints.
+
+Schema versioning does not bound the accumulated error list. Bounded report
+storage and retrieval, without losing individual error details, remain pending.
+
 ### CSV commit checkpoint, version 1
 
 Durable CSV commits save a checkpoint every 500 source records, including

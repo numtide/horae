@@ -108,4 +108,25 @@ Durable CSV also retains its last complete batch using the finalization-failure
 constraint, measures that checkpoint and retries to the identical final report.
 The input length is a multiple of the 500-record checkpoint interval. Elapsed
 time includes this recovery, and process HWM is cumulative across all three
-phases within each test. CSV measurements remain pending.
+phases within each test.
+
+### Observed CSV results
+
+The one-parent-set inline scenario completed at `fd36a53` with all count,
+error, minute, provenance, rollback and reimport assertions passing. Each phase
+processed 100,000 records, including 100 invalid dates; committed state contains
+99,900 entries and 5,994,000 minutes. No other local compilation or import
+measurement ran during this scenario. Lightweight read-only diagnostics included
+one representative `EXPLAIN (ANALYZE, BUFFERS)` query during reimport; it used
+the organization/date index and filtered 273 candidate rows in about 1 ms.
+That single query does not attribute the complete scenario's elapsed time.
+
+| Scenario | Elapsed seconds | Process HWM, KiB |
+|---|---:|---:|
+| Inline CSV preview, one parent set | 140.992 | 34,996 |
+| Inline CSV first commit, after preview | 650.712 | 41,508 |
+| Inline CSV reimport, same process/database | 764.014 | 52,976 |
+
+These phases share a database, so earlier rollback/commit activity and PostgreSQL
+statistics can influence later query planning. They are not isolated fresh-database
+samples. Durable CSV and both large-catalog comparisons remain pending.

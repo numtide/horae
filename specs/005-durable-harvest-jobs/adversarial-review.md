@@ -481,3 +481,22 @@ EOF finalization failure/recovery with no duplicate creates. These measurements
 do not validate the new preview optimization. A new release-mode preview sample,
 the pending CSV cases, full acceptance and bounded/versioned report handling
 remain required before merge.
+
+## Report schema compatibility
+
+Import reports now serialize an explicit version and reject unsupported or
+malformed versions on read. Reports written without a version remain readable
+with their complete original counts and row errors. The same shared type covers
+public reports and reports embedded in both importer checkpoints.
+
+The regression first failed because serialization omitted the version and
+deserialization accepted an unsupported version. All three schema tests now pass,
+alongside the full 156-test importer suite; eight scale cases remain separately
+invoked. The 30 jobs tests, 13 importer UI interaction tests and 86 core tests
+also pass, and the WebAssembly target compiles. No dependency, SQL query or
+migration changes are needed for versioning.
+
+This closes only the schema-versioning portion of the report invariant. Error
+details still accumulate without a storage/transport bound. They must remain
+fully inspectable when that bound is implemented; dropping errors to fit a cap
+would violate the importer contract. T007, T016 and full acceptance remain open.
