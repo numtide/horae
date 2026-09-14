@@ -312,8 +312,9 @@ GET /api/invoices/{id}/export/{csv,xlsx,pdf}
 Domain invariants worth knowing: durations are stored as integer minutes, money as integer minor
 units (cents) plus an ISO currency code (never floats), and primary keys are UUID v7.
 
-See [SPEC.md](SPEC.md) for the Phase-1 build spec and [DESIGN.md](DESIGN.md) for the design
-system and component conventions.
+See the [Speckit feature specifications](specs/) and [Horae Constitution](.specify/memory/constitution.md)
+for requirements and cross-cutting invariants, and [DESIGN.md](DESIGN.md) for the design system
+and component conventions.
 
 ## Development & testing
 
@@ -339,7 +340,7 @@ async patterns, and more) that capture the conventions this project follows.
 ## Contributing
 
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and
-guidelines, and [SPEC.md](SPEC.md) for the current build plan.
+guidelines, and the [Speckit feature specifications](specs/) for the current build plan.
 
 ## License
 

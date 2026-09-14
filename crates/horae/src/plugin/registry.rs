@@ -34,6 +34,14 @@ pub struct PluginRegistry {
     database: Option<super::database::PluginDatabase>,
 }
 
+/// Public metadata for the plugins loaded by the server.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PluginSummary {
+    pub name: String,
+    pub version: String,
+    pub hooks: Vec<String>,
+}
+
 impl PluginRegistry {
     /// Create an empty registry (no plugins loaded).
     pub fn empty() -> Self {
@@ -44,6 +52,18 @@ impl PluginRegistry {
             workers: Arc::new(Semaphore::new(MAX_RUNNING_CALLS)),
             database: None,
         }
+    }
+
+    /// Return manifest metadata without exposing plugin instances or secrets.
+    pub fn summaries(&self) -> Vec<PluginSummary> {
+        self.plugins
+            .iter()
+            .map(|plugin| PluginSummary {
+                name: plugin.manifest.name.clone(),
+                version: plugin.manifest.version.clone(),
+                hooks: plugin.manifest.hooks.clone(),
+            })
+            .collect()
     }
 
     /// Scan a directory for plugin subdirectories, each containing a

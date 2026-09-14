@@ -2,10 +2,12 @@ use dioxus::prelude::*;
 
 use crate::components::form::{FormGroup, Select};
 use crate::components::theme::Theme;
+use crate::server_fns;
 
 #[component]
 pub fn Settings() -> Element {
     let mut theme = use_signal(|| Theme::Dark);
+    let plugins = use_resource(server_fns::list_plugins);
 
     // The active theme lives in `<html data-theme>` / localStorage (set by
     // ThemeInit before first paint), not in Rust state, so read it back once
@@ -48,7 +50,23 @@ pub fn Settings() -> Element {
             }
             div { class: "card mt-4",
                 h2 { class: "card-title", "Plugins" }
-                p { class: "text-muted text-sm", "No plugins installed. Drop .wasm files into the plugins/ directory." }
+                {crate::pages::loaded(&plugins.read(), |items| rsx! {
+                    if items.is_empty() {
+                        p { class: "text-muted text-sm", "No plugins installed. Drop .wasm files into the plugins/ directory." }
+                    } else {
+                        div { class: "flex flex-col gap-3",
+                            for plugin in items {
+                                div { class: "plugin-summary",
+                                    div { class: "flex items-center justify-between gap-2",
+                                        strong { "{plugin.name}" }
+                                        span { class: "text-muted text-sm", "v{plugin.version}" }
+                                    }
+                                    p { class: "text-muted text-sm", "Hooks: {plugin.hooks}" }
+                                }
+                            }
+                        }
+                    }
+                })}
             }
         }
     }

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE organizations SET provider_name = 'Changed' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "adfc9f3e010f49cd6cfd0702c07ed6b0f32215deadb73505727bb6b6e3eecefa"
+}

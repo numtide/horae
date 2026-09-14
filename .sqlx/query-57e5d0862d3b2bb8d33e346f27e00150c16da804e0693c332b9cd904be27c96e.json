@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE projects\n           SET last_budget_alert_pct = $2\n           WHERE id = $1\n             AND COALESCE(last_budget_alert_pct, 0) = $3\n           RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "57e5d0862d3b2bb8d33e346f27e00150c16da804e0693c332b9cd904be27c96e"
+}

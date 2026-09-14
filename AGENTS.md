@@ -98,7 +98,7 @@ For custom PostgreSQL enum types, use type overrides in the SQL:
 
 **One app crate (`crates/horae/`), two build targets, feature-gated.** `crates/horae/src/main.rs` defines three `main()`s behind `cfg`: `server` (Axum + Tokio + the CLI), `web` (`dioxus::launch`, compiled to WASM), and a stub that errors if neither feature is set. Server-only modules (`auth`, `cli`, `config`, `db`, `harvest`, `reports`, `seed`, `state`) are `#[cfg(feature = "server")]`; the shared UI modules (`app`, `route`, `pages`, `components`, `server_fns`, `models`, `error`) compile for both targets. This is why a bare `cargo build`/`test` (empty default features) won't do what you expect.
 
-**The `core` crate (`horae-core`) is pure domain logic** — duration parsing, rounding, money, totals, the entry state machine — with no I/O dependencies (only serde/uuid/chrono/thiserror). Correctness-critical code belongs here and is unit-tested in isolation; SPEC.md §1 forbids sqlx/axum/dioxus deps in `core`.
+**The `core` crate (`horae-core`) is pure domain logic** — duration parsing, rounding, money, totals, the entry state machine — with no I/O dependencies (only serde/uuid/chrono/thiserror). Correctness-critical code belongs here and is unit-tested in isolation; the Horae Constitution forbids sqlx/axum/dioxus deps in `core`.
 
 **The server layers custom Axum routes on top of the Dioxus fullstack router** (`Commands::Serve` in `main.rs`): it calls `.serve_dioxus_application()`, then `.merge`s `/health`, CSV/XLSX export (`reports.rs`), the auth router (`auth::router()`), and the read-only Harvest-compatible API (`harvest::router()`, `/harvest/v2/*`), all under a Postgres-backed session layer. So there are **two API surfaces**:
 
@@ -109,14 +109,14 @@ For custom PostgreSQL enum types, use type overrides in the SQL:
 
 **Auth**: production uses OIDC (`openidconnect`); `DEV_LOGIN=1` enables a one-click admin login that bypasses OIDC (see `auth/`). Sessions are cookie-based, persisted in Postgres.
 
-## Domain invariants (from SPEC.md — do not violate)
+## Domain invariants (from the Horae Constitution — do not violate)
 
 - Durations are stored as **integer minutes**; money as **integer minor units (cents) + ISO currency code** — never floats.
 - Primary keys are **UUID v7** (time-ordered).
 - **PostgreSQL only** (no SQLite). Migrations live in `crates/horae/migrations/` and apply via `sqlx` / `migrate run`.
 - Single organization for now, but every table keeps an `org_id` FK so multi-org is a later flip.
 
-`SPEC.md` is the authoritative Phase-1 build spec (schema, milestones, API contract). `DESIGN.md` is the design system (Invoicer aesthetic; tokens in `crates/horae/assets/css/horae.css`; components are one-per-file `#[component]` functions using `use_signal`/`use_resource`, with no global mutable UI state).
+Feature requirements and implementation plans live under `specs/<NNN-feature>/`; `.specify/memory/constitution.md` is authoritative for cross-cutting invariants. `DESIGN.md` is the design system (Invoicer aesthetic; tokens in `crates/horae/assets/css/horae.css`; components are one-per-file `#[component]` functions using `use_signal`/`use_resource`, with no global mutable UI state).
 
 ## Skills
 
@@ -127,7 +127,7 @@ The repo ships agent skills in `.agents/skills/` (surfaced to Claude Code throug
 - **`rust-async-patterns`** — Tokio, async traits, and concurrency patterns. Use for async server code or when debugging async behaviour.
 - **`ponytail`** — enforces the smallest solution that works (YAGNI, stdlib before deps, one line before fifty). Use on any coding task, especially before adding a dependency or abstraction.
 
-A `speckit-*` suite (`specify`, `plan`, `tasks`, `implement`, `analyze`, `checklist`, `clarify`, `constitution`, `converge`, `taskstoissues`) supports spec-driven development against `SPEC.md`.
+A `speckit-*` suite (`specify`, `plan`, `tasks`, `implement`, `analyze`, `checklist`, `clarify`, `constitution`, `converge`, `taskstoissues`) supports spec-driven development against the feature artifacts under `specs/` and the constitution.
 
 ## Conventions
 

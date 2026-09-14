@@ -32,6 +32,7 @@ pub struct Organization {
 /// Branding-only DTO for invoice rendering and settings UI.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "server", derive(sqlx::FromRow))]
+#[cfg_attr(not(feature = "server"), allow(dead_code))]
 pub struct OrgBranding {
     pub provider_name: Option<String>,
     pub provider_address: Option<String>,

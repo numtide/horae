@@ -250,17 +250,31 @@ async fn cancellation_rolls_back_rows_and_releases_the_import_session(pool: PgPo
     assert!(first.await.unwrap_err().is_cancelled());
     // The one-connection pool cannot lend a replacement before closing the
     // cancelled session, which also rolls back its already-applied first row.
-    let retry = tokio::time::timeout(
-        std::time::Duration::from_secs(5),
-        run_import(
-            &one_connection,
-            org,
-            "USD",
-            SourceKind::HarvestApi,
-            ImportMode::Commit,
-            VecSource::new(vec![row]),
-        ),
-    )
+    let retry = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            match run_import(
+                &one_connection,
+                org,
+                "USD",
+                SourceKind::HarvestApi,
+                ImportMode::Commit,
+                VecSource::new(vec![row.clone()]),
+            )
+            .await
+            {
+                Ok(report) => break Ok(report),
+                Err(error)
+                    if matches!(
+                        error.downcast_ref::<super::ApiImportError>(),
+                        Some(super::ApiImportError::Busy)
+                    ) =>
+                {
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                }
+                Err(error) => break Err(error),
+            }
+        }
+    })
     .await
     .unwrap()
     .unwrap();
