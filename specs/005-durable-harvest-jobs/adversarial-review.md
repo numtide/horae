@@ -257,3 +257,47 @@ T007 and T016 remain open for dry-run recovery and complete checkpoint
 validation. Snapshot size and large-import throughput, the final authorization
 audit in T009, and the complete acceptance walkthrough are still required.
 The feature is not ready to merge.
+
+## Administrator and organization boundary audit
+
+All six durable import endpoints derive the organization from `require_admin()`.
+The gate reloads the active user and current role for each request; a session
+does not preserve privileges after deactivation or demotion. CSV authorization
+runs before its upload body is consumed. Status, history (including cursor
+lookup), cancellation and retry queries constrain the requesting organization.
+Importer lease adapters also reject an organization mismatch.
+
+A registered-handler HTTP test uses actual PostgreSQL-backed session cookies
+for anonymous, member, manager, deactivated, missing and demoted users. It checks
+both API/CSV modes and all status/history/cancel/retry endpoints, including a
+body that panics if an unauthorized CSV request reads it. Authorized creation
+ignores a forged organization field; a second organization's administrator cannot
+read, cancel or retry the owner's API or CSV job, or use its history cursor.
+The owner can inspect, cancel and retry each job. Both CSV routes also reject
+invalid modes and headers before reading uploads. All five importer endpoint
+tests pass against the registered handlers, not mocked authorization responses.
+
+The audit found a schema invariant gap: separate job and organization foreign
+keys allowed an upload to name a job from another organization. Existing HTTP
+and worker scoping prevented that association through their normal paths; this
+is not evidence of a remotely exploitable disclosure. Migration 0026 adds a
+composite foreign key and preserves cascade deletion. The mismatched-upload
+regression failed before the constraint and now passes, together with valid
+enqueue/retry and existing retention/cascade coverage in all 28 jobs tests.
+Existing inconsistent rows cause migration failure, requiring operator review.
+
+Outbox enqueue/claim/acknowledgement primitives have no HTTP endpoint or
+production caller yet. Global claiming is a privileged internal worker operation,
+not an administrator-facing cross-tenant read. Delivery/failure acknowledgements
+require the event's organization and live claim token; regressions reject a
+different existing organization's acknowledgement as well as stale tokens.
+Future externally reachable consumers must establish their own session boundary.
+
+All 135 importer regressions also pass; three explicit scale benchmarks remain
+ignored. SQLx metadata is regenerated against migration 0026 without cache
+changes, and server clippy passes with all targets and warnings denied.
+
+This closes T009 for the implemented job endpoints and internal outbox boundary,
+not an independent security review of the entire application. T007 and T016,
+dry-run recovery, checkpoint scale validation and the full acceptance walkthrough
+remain open; the PR must remain a draft.

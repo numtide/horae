@@ -86,6 +86,11 @@ Inline imports and dry-runs keep their existing import-wide transactions.
 
 Stores an administrator-uploaded CSV owned by the same organization and job, with a bounded size. Successful uploads are eligible for deletion after one day. Failed and cancelled uploads remain available for retry until the job's thirty-day retention ends; deleting the job cascades to its upload. Retry refuses CSV jobs with a missing upload.
 
+The composite foreign key `(job_id, org_id)` references the job's `(id, org_id)`;
+independent foreign keys alone do not enforce this ownership invariant. Migration
+0026 rejects existing mismatches for operator review rather than silently
+reassigning or deleting uploads.
+
 ## Invariants
 
 - A job can have at most one active lease.

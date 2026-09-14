@@ -1486,6 +1486,54 @@ mod tests {
     }
 
     #[sqlx::test]
+    async fn upload_organization_must_match_its_job(pool: sqlx::PgPool) {
+        let owner = org(&pool).await;
+        let foreign = org(&pool).await;
+        let id = enqueue(
+            &pool,
+            owner,
+            &JobPayload::HarvestCsv {
+                mode: ImportMode::DryRun,
+            },
+            "upload-owner",
+            JobPolicy::default(),
+        )
+        .await
+        .unwrap();
+        let result = sqlx::query!(
+            r#"INSERT INTO horae_job_uploads (job_id, org_id, filename, content_type, body)
+           VALUES ($1, $2, 'harvest.csv', 'text/csv', $3)
+           ON CONFLICT (job_id) DO NOTHING"#,
+            id,
+            foreign,
+            b"private upload".as_slice(),
+        )
+        .execute(&pool)
+        .await;
+        assert!(
+            result.is_err(),
+            "a foreign organization must not own another organization's upload"
+        );
+        let error = result.unwrap_err();
+        assert_eq!(
+            error.as_database_error().unwrap().code().as_deref(),
+            Some("23503")
+        );
+        enqueue_csv(
+            &pool,
+            owner,
+            ImportMode::DryRun,
+            b"owner upload".to_vec(),
+            "upload-owner",
+            JobPolicy::default(),
+        )
+        .await
+        .unwrap();
+        assert!(cancel(&pool, owner, id).await.unwrap());
+        assert!(retry(&pool, owner, id).await.unwrap());
+    }
+
+    #[sqlx::test]
     async fn outbox_delivery_is_idempotent(pool: sqlx::PgPool) {
         let org_id = org(&pool).await;
         let mut tx = pool.begin().await.unwrap();
@@ -1546,7 +1594,7 @@ mod tests {
                 .unwrap()
         );
         let mut foreign = replacement.clone();
-        foreign.org_id = Uuid::now_v7();
+        foreign.org_id = org(&pool).await;
         assert!(!mark_outbox_delivered(&pool, &foreign).await.unwrap());
         assert!(
             !mark_outbox_failed(&pool, &foreign, "foreign failure")

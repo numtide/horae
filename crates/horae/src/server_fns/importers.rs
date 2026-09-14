@@ -12,6 +12,9 @@ use horae_core::importers::harvest::types::{
 mod csv_upload;
 pub use csv_upload::CsvUpload;
 
+#[cfg(all(test, feature = "server"))]
+mod authorization_tests;
+
 /// Begin the Harvest OAuth2 connect: generate a per-start `state` nonce bound to
 /// the admin's session and return the authorization URL for the SPA to redirect
 /// to (contracts/importer-api.md §1).
@@ -78,8 +81,7 @@ pub async fn harvest_disconnect() -> Result<(), ServerFnError> {
 }
 
 /// Enqueue an asynchronous Harvest API import and return its durable job ID.
-/// The existing synchronous entry point remains available until the importer
-/// page is migrated to the job-status contract.
+/// The organization is derived from the authenticated administrator's session.
 #[server]
 pub async fn start_harvest_api_import(
     mode: ImportMode,
@@ -292,22 +294,26 @@ mod tests {
         let mut server = tokio::task::JoinSet::new();
         server.spawn(async move { axum::serve(listener, router).await.unwrap() });
         let client = dioxus_fullstack::ClientRequest::new_reqwest_client();
-        for (mode, header, expected) in [
-            ("invalid", "csv", 400),
-            ("dryrun", "csv", 400),
-            ("DryRun", "wrong", 403),
-            ("Commit", "wrong", 403),
-            ("DryRun/Commit", "csv", 404),
-        ] {
-            let response = client
-                .post(format!("http://{address}/api/import/harvest/csv/{mode}"))
-                .header("X-Horae-Import", header)
-                .body("not CSV")
-                .timeout(std::time::Duration::from_secs(5))
-                .send()
-                .await
-                .unwrap();
-            assert_eq!(response.status().as_u16(), expected, "{mode}");
+        for route in ["csv", "csv-job"] {
+            for (mode, header, expected) in [
+                ("invalid", "csv", BAD_REQUEST),
+                ("dryrun", "csv", BAD_REQUEST),
+                ("DryRun", "wrong", FORBIDDEN),
+                ("Commit", "wrong", FORBIDDEN),
+                ("DryRun/Commit", "csv", NOT_FOUND),
+            ] {
+                let response = client
+                    .post(format!(
+                        "http://{address}/api/import/harvest/{route}/{mode}"
+                    ))
+                    .header("X-Horae-Import", header)
+                    .body("not CSV")
+                    .timeout(std::time::Duration::from_secs(5))
+                    .send()
+                    .await
+                    .unwrap();
+                assert_eq!(response.status().as_u16(), expected, "{route}/{mode}");
+            }
         }
         server.abort_all();
         while server.join_next().await.is_some() {}
