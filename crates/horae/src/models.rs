@@ -2,6 +2,7 @@ pub mod approval;
 pub mod assignment;
 pub mod client;
 pub mod invoice;
+mod jobs;
 pub mod organization;
 pub mod project;
 pub mod task;
@@ -12,6 +13,7 @@ pub use approval::{Approval, ApprovalSummary};
 pub use assignment::Assignment;
 pub use client::Client;
 pub use invoice::{Invoice, InvoiceLine, InvoiceWithLines};
+pub use jobs::JobStatus;
 pub use organization::OrgBranding;
 pub use project::Project;
 pub use task::Task;
@@ -25,20 +27,6 @@ pub struct ProjectSpend {
     pub project_id: uuid::Uuid,
     pub spent_minutes: i64,
     pub spent_cents: i64,
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct JobStatus {
-    pub id: uuid::Uuid,
-    pub kind: String,
-    pub status: String,
-    pub phase: Option<String>,
-    pub processed_count: i64,
-    pub total_count: Option<i64>,
-    pub report: Option<serde_json::Value>,
-    pub last_error: Option<String>,
-    pub created_at: chrono::DateTime<chrono::Utc>,
-    pub finished_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 // ── Report DTOs ─────────────────────────────────────────────────────────────

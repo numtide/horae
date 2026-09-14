@@ -107,10 +107,12 @@ pub async fn get_harvest_import_job(
 }
 
 #[server]
-pub async fn list_harvest_import_jobs() -> Result<Vec<crate::models::JobStatus>, ServerFnError> {
+pub async fn list_harvest_import_jobs(
+    before: Option<uuid::Uuid>,
+) -> Result<Vec<crate::models::JobStatus>, ServerFnError> {
     let admin = require_admin().await?;
     let state = crate::state::global_state().await;
-    crate::jobs::list(&state.db, admin.org_id, 20)
+    crate::jobs::list(&state.db, admin.org_id, 20, before)
         .await
         .map_err(server_err)
 }

@@ -126,3 +126,40 @@ still restarts its uncommitted work. T007, T009, T012 and T016 remain open for
 checkpoint/resume behavior, the final authorization audit, and history/retry/error
 UI. The cancellation and fencing tests must also cover future batch boundaries
 before the feature is ready to merge.
+
+## Import history and status recovery
+
+The importer now restores queued/running work on reopening, displays stored
+phase/count/total/last-error values, and lets administrators select retained
+reports. History uses 20-row cursor pages ordered by creation time and UUID.
+Foreign, missing, and expired cursor IDs cannot expose another organization's
+history. Manual retry clears the previous cancellation phase.
+
+Status lookup failures and missing jobs stop the loading indicator and offer
+resuming monitoring without enqueuing another import. Results are tied to a
+request generation, so a previous result cannot overwrite a newer selection.
+Cancel and retry failures are visible; accepting a cancellation does not imply
+worker cleanup has finished. Pending mutations reject duplicate submissions.
+
+Historical previews are read-only. Newly submitted previews keep their original
+source for confirmation, including when the CSV picker changes while the
+preview runs. The report labels the original CSV filename.
+
+Ten production-component tests exercise these interactions through controlled
+server-function responses, including pagination, request replacement, and CSV
+source preservation. The initial reopening regression failed before the fix.
+Five existing admin-shell tests also pass. These are VirtualDom interaction
+tests, not a live browser/database end-to-end run.
+
+The PostgreSQL suites pass 27 jobs tests and 115 importer tests; three explicit
+scale benchmarks remain ignored. New database coverage checks tied-timestamp
+pagination, timestamp precedence, foreign/missing cursors, and retry phase reset.
+Server clippy passes with all targets and warnings denied. The WebAssembly target
+checks successfully, with existing warnings for InvoiceLine, OrgBranding, and
+PluginWidget. SQLx metadata is regenerated; only the two obsolete changed-query
+entries are removed.
+
+This completes the UI implementation in T012. It does not implement live
+checkpoint production: T007 and its crash/resume and batch cancellation coverage
+in T016 remain open, as does the final authorization audit in T009. The PR remains
+a draft until those requirements and the complete acceptance walkthrough hold.

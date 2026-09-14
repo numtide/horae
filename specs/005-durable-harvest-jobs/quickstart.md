@@ -2,7 +2,7 @@
 
 This is the acceptance walkthrough for the complete feature. See
 [adversarial-review.md](adversarial-review.md) for cases still under implementation,
-including history restoration, checkpoints, and cancellation while running.
+including durable checkpoints and cancellation at resumable batch boundaries.
 
 1. Sign in as an organization administrator and open the Harvest importer.
 1. Connect Harvest or select a CSV, choose dry-run or commit, and start the import.
@@ -11,6 +11,22 @@ including history restoration, checkpoints, and cancellation while running.
 1. Stop and restart the server during a running import; confirm the lease expires and the job resumes or reports a retryable failure.
 1. Retry the job and confirm provenance/idempotency prevents duplicate records.
 1. Cancel a running job and confirm committed data remains valid and no later batch starts.
+
+## Import history and recovery
+
+The importer restores an active job from its latest history page when opened.
+Select any history entry to follow it or view its terminal report. Use **Older
+imports** and **Newer imports** to page through retained jobs; **Refresh history**
+returns to the latest page. Failed and cancelled jobs expose **Retry import**.
+
+If a status request fails, the screen stops its loading indicator and offers
+**Resume monitoring**. This only resumes status reads; it does not enqueue a
+second import. Cancellation remains in progress until the worker acknowledges
+cleanup, and request errors are shown rather than silently ignored.
+
+Historical previews are read-only: start a new preview to commit. A preview
+submitted in the current page keeps its original source for confirmation, even
+if a different CSV is selected before the report arrives.
 
 ## Retry configuration
 

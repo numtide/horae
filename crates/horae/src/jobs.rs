@@ -281,6 +281,7 @@ pub async fn list(
     pool: &sqlx::PgPool,
     org_id: Uuid,
     limit: i64,
+    before: Option<Uuid>,
 ) -> anyhow::Result<Vec<crate::models::JobStatus>> {
     let rows = sqlx::query!(
         r#"SELECT id, kind, status, phase, processed_count, total_count,
@@ -289,10 +290,14 @@ pub async fn list(
                   finished_at as "finished_at: chrono::DateTime<chrono::Utc>"
              FROM horae_jobs
             WHERE org_id = $1
-            ORDER BY created_at DESC
+              AND ($3::uuid IS NULL OR (created_at, id) < (
+                  SELECT created_at, id FROM horae_jobs WHERE id = $3 AND org_id = $1
+              ))
+            ORDER BY created_at DESC, id DESC
             LIMIT $2"#,
         org_id,
         limit.clamp(1, 100),
+        before,
     )
     .fetch_all(pool)
     .await?;
@@ -335,7 +340,7 @@ pub async fn retry(pool: &sqlx::PgPool, org_id: Uuid, id: Uuid) -> anyhow::Resul
     let result = sqlx::query!(
         r#"UPDATE horae_jobs
               SET status = 'queued', available_at = now(), lease_until = NULL,
-                  attempts = 0, worker_id = NULL, last_error = NULL,
+                  attempts = 0, worker_id = NULL, last_error = NULL, phase = NULL,
                   claim_token = NULL, cancellation_requested = false,
                   finished_at = NULL, updated_at = now()
             WHERE id = $1 AND org_id = $2 AND status IN ('failed', 'cancelled')
@@ -699,7 +704,7 @@ mod tests {
             status(&pool, org_id, id).await.unwrap().unwrap().status,
             "running"
         );
-        assert!(list(&pool, foreign, 10).await.unwrap().is_empty());
+        assert!(list(&pool, foreign, 10, None).await.unwrap().is_empty());
     }
 
     #[sqlx::test]
@@ -987,7 +992,7 @@ mod tests {
                 .is_err()
             );
         }
-        assert!(list(&pool, org_id, 100).await.unwrap().is_empty());
+        assert!(list(&pool, org_id, 100, None).await.unwrap().is_empty());
         assert_eq!(
             sqlx::query_scalar!(
                 "SELECT count(*) FROM horae_job_uploads WHERE org_id = $1",
@@ -1335,6 +1340,83 @@ mod tests {
     }
 
     #[sqlx::test]
+    async fn history_paginates_tied_timestamps_and_rejects_foreign_cursors(pool: sqlx::PgPool) {
+        let org_id = org(&pool).await;
+        let foreign_org = org(&pool).await;
+        let mut ids = Vec::new();
+        for index in 0..24 {
+            ids.push(
+                enqueue(
+                    &pool,
+                    org_id,
+                    &JobPayload::Synthetic,
+                    &format!("history-{index}"),
+                    JobPolicy::default(),
+                )
+                .await
+                .unwrap(),
+            );
+        }
+        sqlx::query!(
+            "UPDATE horae_jobs SET created_at = '2000-01-01'::timestamptz WHERE org_id = $1",
+            org_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        ids.sort_unstable_by(|left, right| right.cmp(left));
+        let first = list(&pool, org_id, 20, None).await.unwrap();
+        assert_eq!(
+            first.iter().map(|job| job.id).collect::<Vec<_>>(),
+            ids[..20]
+        );
+        let second = list(&pool, org_id, 20, Some(first[19].id)).await.unwrap();
+        assert_eq!(
+            second.iter().map(|job| job.id).collect::<Vec<_>>(),
+            ids[20..]
+        );
+        assert!(
+            list(&pool, org_id, 20, Some(ids[23]))
+                .await
+                .unwrap()
+                .is_empty()
+        );
+
+        let foreign = enqueue(
+            &pool,
+            foreign_org,
+            &JobPayload::Synthetic,
+            "foreign",
+            JobPolicy::default(),
+        )
+        .await
+        .unwrap();
+        assert!(
+            list(&pool, org_id, 20, Some(foreign))
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            list(&pool, org_id, 20, Some(Uuid::now_v7()))
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(list(&pool, org_id, 0, None).await.unwrap().len(), 1);
+
+        // Timestamp ordering must take precedence over UUID order.
+        sqlx::query!(
+            "UPDATE horae_jobs SET created_at = '2001-01-01'::timestamptz WHERE id = $1",
+            ids[23]
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        assert_eq!(list(&pool, org_id, 1, None).await.unwrap()[0].id, ids[23]);
+    }
+
+    #[sqlx::test]
     async fn claims_are_atomic_and_expired_leases_recover(pool: sqlx::PgPool) {
         let org_id = org(&pool).await;
         let payload = JobPayload::HarvestApi {
@@ -1386,13 +1468,21 @@ mod tests {
         .await
         .unwrap();
         assert!(status(&pool, foreign_org, id).await.unwrap().is_none());
-        assert!(list(&pool, foreign_org, 20).await.unwrap().is_empty());
+        assert!(list(&pool, foreign_org, 20, None).await.unwrap().is_empty());
         assert!(!cancel(&pool, foreign_org, id).await.unwrap());
         assert!(cancel(&pool, org_id, id).await.unwrap());
         assert!(!cancel(&pool, org_id, id).await.unwrap());
         assert!(!retry(&pool, foreign_org, id).await.unwrap());
         assert!(retry(&pool, org_id, id).await.unwrap());
         assert!(!retry(&pool, org_id, id).await.unwrap());
+        assert!(
+            status(&pool, org_id, id)
+                .await
+                .unwrap()
+                .unwrap()
+                .phase
+                .is_none()
+        );
     }
 
     #[sqlx::test]

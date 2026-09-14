@@ -19,7 +19,7 @@
 
 - [x] T010 Change API and CSV start functions to enqueue and return job identifiers.
 - [x] T011 Add status, history, cancel, and retry server functions.
-- [ ] T012 Update the importer page to show queued/running progress and terminal reports.
+- [x] T012 Update the importer page to show queued/running progress and terminal reports.
 - [x] T013 Add cleanup policy for old terminal jobs and stored upload data.
 
 ## Phase 4 - Verification

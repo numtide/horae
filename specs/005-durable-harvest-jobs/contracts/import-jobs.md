@@ -13,6 +13,12 @@ All operations are authenticated server functions and restricted to organization
 
 The contract never returns credentials or raw CSV contents. Status reads must reject foreign-organization job IDs as not found or forbidden according to the existing server-function convention.
 
+`list_harvest_import_jobs(before)` returns up to 20 jobs, ordered by creation
+time and then UUID, both descending. Pass the last job ID as `before` to fetch
+the next page, or omit it for the latest jobs. The cursor is resolved inside the
+current organization; an unknown, expired, or foreign cursor returns no rows.
+Refreshing without a cursor returns to the latest retained history.
+
 ## Cancellation and acknowledgement
 
 A successful cancel request means the request was accepted, not that an active
