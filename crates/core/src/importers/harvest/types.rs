@@ -233,32 +233,63 @@ pub struct RowError {
 /// pure data type so it crosses the `#[server]` boundary and compiles on the web
 /// target as well as the server.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "ImportReportWire")]
 pub struct ImportReport {
-    #[serde(
-        default = "report_version",
-        deserialize_with = "deserialize_report_version"
-    )]
     version: u16,
     pub source: SourceKind,
     pub mode: ImportMode,
     pub summary: ImportSummary,
     pub row_errors: Vec<RowError>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error_archive: Option<ErrorArchive>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct ErrorArchive {
+    count: u64,
+    chunks: u64,
+}
+
+#[derive(Deserialize)]
+struct ImportReportWire {
+    #[serde(default = "report_version")]
+    version: u16,
+    source: SourceKind,
+    mode: ImportMode,
+    summary: ImportSummary,
+    row_errors: Vec<RowError>,
+    error_archive: Option<ErrorArchive>,
 }
 
 fn report_version() -> u16 {
     1
 }
 
-fn deserialize_report_version<'de, D: serde::Deserializer<'de>>(
-    deserializer: D,
-) -> Result<u16, D::Error> {
-    let version = u16::deserialize(deserializer)?;
-    if version != report_version() {
-        return Err(serde::de::Error::custom(format!(
-            "unsupported import report version: {version}"
-        )));
+impl TryFrom<ImportReportWire> for ImportReport {
+    type Error = &'static str;
+
+    fn try_from(wire: ImportReportWire) -> Result<Self, Self::Error> {
+        if !matches!(wire.version, 1 | 2) {
+            return Err("unsupported import report version");
+        }
+        if let Some(archive) = &wire.error_archive
+            && (wire.version != 2 || archive.count == 0 || archive.chunks == 0)
+        {
+            return Err("invalid import report error archive");
+        }
+        let report = Self {
+            version: wire.version,
+            source: wire.source,
+            mode: wire.mode,
+            summary: wire.summary,
+            row_errors: wire.row_errors,
+            error_archive: wire.error_archive,
+        };
+        if !report.reconciles() {
+            return Err("import report error counts do not reconcile");
+        }
+        Ok(report)
     }
-    Ok(version)
 }
 
 impl ImportReport {
@@ -269,6 +300,7 @@ impl ImportReport {
             mode,
             summary: ImportSummary::default(),
             row_errors: Vec::new(),
+            error_archive: None,
         }
     }
 
@@ -290,29 +322,92 @@ impl ImportReport {
     }
 
     /// True when the report's two independent error tallies agree: the per-entity
-    /// `errored` counts sum to the number of collected [`RowError`] details.
+    /// `errored` counts sum to the inline and archived [`RowError`] details.
     ///
     /// [`Self::record`] writes both from the same outcome — it bumps the entity's
     /// `errored` bucket and pushes a `RowError`. A mismatch therefore means a row
     /// was counted as errored without being reported, or reported without being
     /// counted, which would corrupt the run report (FR-019, FR-021, SC-005).
     pub fn reconciles(&self) -> bool {
-        let errored: u64 = EntityType::ALL
+        let errored = EntityType::ALL
             .iter()
             .map(|&e| self.summary.counts(e).errored)
-            .sum();
-        errored == self.row_errors.len() as u64
+            .try_fold(0_u64, u64::checked_add);
+        errored.is_some()
+            && errored
+                == self
+                    .archived_error_count()
+                    .checked_add(self.row_errors.len() as u64)
     }
 
     /// Total records that errored across all entity types.
-    pub fn error_count(&self) -> usize {
-        self.row_errors.len()
+    pub fn error_count(&self) -> u64 {
+        self.archived_error_count() + self.row_errors.len() as u64
+    }
+
+    pub fn archived_error_count(&self) -> u64 {
+        self.error_archive
+            .as_ref()
+            .map_or(0, |archive| archive.count)
+    }
+
+    pub fn archived_error_chunks(&self) -> u64 {
+        self.error_archive
+            .as_ref()
+            .map_or(0, |archive| archive.chunks)
+    }
+
+    /// Replace inline details only after the caller has persisted them with the
+    /// report. The returned metadata describes all archived details, not a delta.
+    pub fn archive_errors(&mut self, total_chunks: u64) -> Result<(), &'static str> {
+        if !self.reconciles()
+            || self.row_errors.is_empty()
+            || total_chunks <= self.archived_error_chunks()
+        {
+            return Err("invalid import report archive progress");
+        }
+        self.error_archive = Some(ErrorArchive {
+            count: self.error_count(),
+            chunks: total_chunks,
+        });
+        self.row_errors.clear();
+        self.version = 2;
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn archived_errors_and_new_inline_errors_reconcile_across_batches() {
+        let mut report = ImportReport::new(SourceKind::Csv, ImportMode::Commit);
+        let error = RowOutcome::Errored {
+            source_location: "record 1".into(),
+            reason: "invalid date".into(),
+        };
+        report.record(EntityType::TimeEntry, &error);
+        let summary = report.summary;
+        assert!(report.archive_errors(0).is_err());
+        assert_eq!(report.row_errors.len(), 1);
+        report.archive_errors(2).unwrap();
+        assert_eq!(report.summary, summary);
+        assert_eq!(report.archived_error_count(), 1);
+        assert_eq!(report.archived_error_chunks(), 2);
+        assert!(report.reconciles());
+        report.record(EntityType::Client, &error);
+        assert_eq!(report.error_count(), 2);
+        assert!(report.reconciles());
+        assert!(report.archive_errors(2).is_err());
+        assert_eq!(report.row_errors.len(), 1);
+        report.archive_errors(3).unwrap();
+        assert_eq!(report.error_count(), 2);
+        assert!(report.row_errors.is_empty());
+        assert!(report.reconciles());
+        report.summary.clients.errored += 1;
+        assert!(!report.reconciles());
+    }
 
     #[test]
     fn import_modes_display_their_wire_names() {

@@ -106,7 +106,8 @@ pub(crate) async fn import_body_with_lease(
         Some(value) => {
             let checkpoint: Checkpoint =
                 serde_json::from_value(value).map_err(anyhow::Error::from)?;
-            if checkpoint.version != 1
+            if !matches!(checkpoint.version, 1 | 2)
+                || (checkpoint.version == 1 && checkpoint.report.archived_error_count() > 0)
                 || checkpoint.report.mode != mode
                 || checkpoint.report.source != SourceKind::Csv
                 || (mode == ImportMode::DryRun) != checkpoint.preview.is_some()
@@ -197,6 +198,12 @@ pub(crate) async fn import_body_with_lease(
                     tx.rollback().await?;
                     tx = connection.begin().await?;
                 }
+                lease
+                    .archive_report(&mut tx, &mut checkpoint.report)
+                    .await?;
+                if checkpoint.report.archived_error_count() > 0 {
+                    checkpoint.version = 2;
+                }
                 let (report, processed) = super::super::job_report(&checkpoint.report)?;
                 lease
                     .save_checkpoint(
@@ -217,12 +224,15 @@ pub(crate) async fn import_body_with_lease(
         }
         anyhow::ensure!(matches!(next, Record::Complete), "unexpected CSV headers");
         debug_assert!(checkpoint.report.reconciles());
-        finish_import(tx, &checkpoint.report, lease).await?;
+        finish_import(tx, &mut checkpoint.report, lease).await?;
         if mode == ImportMode::DryRun
             && let Some(lease) = lease
         {
-            let (report, processed) = super::super::job_report(&checkpoint.report)?;
             let mut tx = connection.begin().await?;
+            lease
+                .archive_report(&mut tx, &mut checkpoint.report)
+                .await?;
+            let (report, processed) = super::super::job_report(&checkpoint.report)?;
             anyhow::ensure!(
                 lease.complete(&mut tx, &report, processed).await?,
                 "job execution interrupted or lease lost"

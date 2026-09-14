@@ -16,6 +16,7 @@ const LEASE: Duration = Duration::from_secs(300);
 const POLL: Duration = Duration::from_secs(2);
 
 mod lease;
+pub(crate) mod report;
 pub(crate) use lease::JobLease;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

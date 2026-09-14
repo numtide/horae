@@ -38,7 +38,7 @@ returning the private source cursor or simulation cache. This supports jobs writ
 before separate partial-report persistence. Report data follows the job's existing
 thirty-day retention policy; there is no separate report expiry.
 
-### Import report schema, version 1
+### Import report schemas
 
 Reports include `version: 1` alongside their source, mode, summary and per-record
 errors. The shared report deserializer rejects unsupported or malformed explicit
@@ -46,8 +46,42 @@ versions. Legacy reports without the field retain their existing version-1
 meaning, including all counts and error details. This applies to final reports,
 partial reports and reports embedded in importer checkpoints.
 
-Schema versioning does not bound the accumulated error list. Bounded report
-storage and retrieval, without losing individual error details, remain pending.
+Version 2 adds `error_archive: { count, chunks }` when error details have been
+archived. `count` is the number of archived errors; `chunks` is the exclusive
+end of their ordered byte stream. Summary error totals must equal archived
+errors plus the inline `row_errors` tail. A version-1 report cannot claim an
+archive. Unknown versions, invalid archive metadata and inconsistent error
+counts are rejected on read.
+
+New checkpoint/final reports serialize to at most 16 KiB. If inline error details
+exceed this budget, the worker appends all pending details to the archive within
+the checkpoint/completion transaction, then clears that inline list. Failed
+transactions publish neither fragments nor an advanced archive boundary.
+Preview archives are written after rollback of their domain simulation.
+
+API and CSV checkpoints containing archived errors use outer checkpoint version
+2 as well. Older workers that predate report-version validation already reject
+that checkpoint version, so they cannot resume using an incomplete inline error
+list. Readers still accept version-1 checkpoints without archived errors, but
+reject archives mislabelled as checkpoint version 1.
+
+Existing large version-1 reports still need bounded read/upgrade handling; this
+remains an open part of T021. Reading their original JSON is compatible but not
+yet bounded. Stress and failure-path coverage for archival also remain required.
+
+### Report error chunks
+
+`horae_job_report_error_chunks` stores the complete error JSON-lines byte stream.
+Each row has a UUIDv7 primary key, `job_id`, an `org_id` foreign key, a unique
+zero-based per-job `sequence`, `schema_version = 1`, and 1–65,536 `body` bytes.
+A composite foreign key enforces job/organization ownership. Job deletion
+cascades to every fragment; errors share the job's retention window.
+
+Fragments may split a JSON record or UTF-8 character. Consumers concatenate the
+ordered bytes before decoding records; writers never truncate long reasons.
+Reads fetch at most 16 fragments (1 MiB) within the captured report's archive
+boundary and reject missing sequences. A download appends that report's inline
+tail once, rather than observing the job's changing live archive end.
 
 ### CSV commit checkpoint, version 1
 

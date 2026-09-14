@@ -8,7 +8,7 @@ use axum::{
     extract::{Path, Request},
     http::StatusCode,
     middleware,
-    routing::post,
+    routing::{get, post},
 };
 use dioxus::prelude::{
     DioxusRouterExt,
@@ -28,6 +28,17 @@ struct Api {
 }
 
 impl Api {
+    async fn errors(&self, job_id: Uuid, cookie: Option<&str>) -> reqwest::Response {
+        let mut request = self.client.get(format!(
+            "{}/api/import/harvest/jobs/{job_id}/errors",
+            self.base
+        ));
+        if let Some(cookie) = cookie {
+            request = request.header("cookie", cookie);
+        }
+        request.send().await.unwrap()
+    }
+
     async fn cookie(&self, id: Uuid) -> String {
         let response = self
             .client
@@ -129,6 +140,10 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     let router = Router::new()
         .register_server_functions()
         .route(
+            "/api/import/harvest/jobs/{job_id}/errors",
+            get(crate::jobs::report::download),
+        )
+        .route(
             "/test/login/{id}",
             post(|session: Session, Path(id): Path<Uuid>| async move {
                 crate::auth::session::set_session_user_id(&session, id)
@@ -207,6 +222,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
         (Some(missing.as_str()), StatusCode::UNAUTHORIZED),
         (Some(demoted.as_str()), StatusCode::FORBIDDEN),
     ] {
+        assert_eq!(api.errors(target, cookie).await.status(), expected);
         for (name, body) in [
             (
                 "start_harvest_api_import",
@@ -379,6 +395,91 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
         )
         .await["status"],
         "cancelled"
+    );
+    // Exercise the real download route with an archive spanning UTF-8/JSON
+    // boundaries, not just a small inline fixture.
+    use horae_core::importers::harvest::types::{EntityType, RowOutcome, SourceKind};
+    let (lease, _stop) = crate::jobs::claim_lease_for_test(&pool).await;
+    let archived_job = crate::jobs::list(&pool, owner.org_id, 20, None)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|job| job.status == "running")
+        .unwrap();
+    let mut report = ImportReport::new(SourceKind::Csv, ImportMode::DryRun);
+    report.record(
+        EntityType::TimeEntry,
+        &RowOutcome::Errored {
+            source_location: "CSV line 3".into(),
+            reason: "界,\"quoted\"\n".repeat(20_000),
+        },
+    );
+    let mut expected = report.row_errors.clone();
+    let mut rolled_back = report.clone();
+    let mut tx = pool.begin().await.unwrap();
+    lease
+        .archive_report(&mut tx, &mut rolled_back)
+        .await
+        .unwrap();
+    tx.rollback().await.unwrap();
+    assert!(
+        crate::jobs::report::chunks(&pool, owner.org_id, archived_job.id, 0, 1)
+            .await
+            .is_err()
+    );
+    let mut tx = pool.begin().await.unwrap();
+    lease.archive_report(&mut tx, &mut report).await.unwrap();
+    assert!(report.archived_error_chunks() > 1);
+    report.record(
+        EntityType::TimeEntry,
+        &RowOutcome::Errored {
+            source_location: "CSV line 4".into(),
+            reason: "inline tail".into(),
+        },
+    );
+    expected.extend(report.row_errors.clone());
+    assert!(
+        lease
+            .complete(&mut tx, &serde_json::to_value(&report).unwrap(), 2)
+            .await
+            .unwrap()
+    );
+    tx.commit().await.unwrap();
+    // A stale append must not change the already completed archive.
+    rolled_back.record(
+        EntityType::TimeEntry,
+        &RowOutcome::Errored {
+            source_location: "CSV line 4".into(),
+            reason: "x".repeat(20_000),
+        },
+    );
+    let mut tx = pool.begin().await.unwrap();
+    assert!(
+        lease
+            .archive_report(&mut tx, &mut rolled_back)
+            .await
+            .is_err()
+    );
+    tx.rollback().await.unwrap();
+    assert_eq!(
+        api.errors(archived_job.id, Some(&outsider)).await.status(),
+        StatusCode::NOT_FOUND
+    );
+    let response = api.errors(archived_job.id, Some(&admin)).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["content-type"], "application/x-ndjson");
+    assert_eq!(response.headers()["cache-control"], "no-store");
+    let bytes = response.bytes().await.unwrap();
+    let actual = serde_json::Deserializer::from_slice(&bytes)
+        .into_iter::<horae_core::importers::harvest::types::RowError>()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    assert_eq!(actual, expected);
+    let end = i64::try_from(report.archived_error_chunks()).unwrap();
+    assert!(
+        crate::jobs::report::chunks(&pool, owner.org_id, archived_job.id, end, end + 1)
+            .await
+            .is_err()
     );
     server.abort_all();
     while server.join_next().await.is_some() {}

@@ -269,7 +269,7 @@ async fn apply(
     {
         credentials::advance_watermark(&mut *tx, org_id, &[(EntityType::TimeEntry, mark)]).await?;
     }
-    super::finish_import(tx, &report, lease).await?;
+    super::finish_import(tx, &mut report, lease).await?;
     Ok(report)
 }
 

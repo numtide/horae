@@ -604,6 +604,7 @@ pub fn HarvestImport() -> Element {
                         }
                         ReportView {
                             report: r.clone(),
+                            job_id: job_progress.read().as_ref().map(|job| job.id),
                             busy: running() || action_pending(),
                             can_commit,
                             show_resync,
@@ -783,6 +784,7 @@ fn ConnectionChip(
 #[component]
 fn ReportView(
     report: ImportReport,
+    job_id: Option<uuid::Uuid>,
     busy: bool,
     can_commit: bool,
     show_resync: bool,
@@ -791,7 +793,8 @@ fn ReportView(
     onresync: EventHandler<MouseEvent>,
 ) -> Element {
     let mut errors_open = use_signal(|| true);
-    let error_count = report.row_errors.len();
+    let error_count = report.error_count();
+    let shown_errors = report.row_errors.len().min(ERROR_ROW_LIMIT);
     let is_dry = report.mode == ImportMode::DryRun;
     let committed = !is_dry;
 
@@ -887,9 +890,17 @@ fn ReportView(
                                     }
                                 }
                             }
-                            if error_count > ERROR_ROW_LIMIT {
+                            if error_count > shown_errors as u64 {
                                 div { class: "p-4 border-t text-faint text-sm",
-                                    "Showing {ERROR_ROW_LIMIT} of {error_count}."
+                                    "Showing {shown_errors} inline errors of {error_count}."
+                                }
+                            }
+                            if let Some(job_id) = job_id {
+                                div { class: "p-4 border-t",
+                                    a { class: "btn btn-secondary btn-sm",
+                                        href: format!("/api/import/harvest/jobs/{job_id}/errors"),
+                                        "Download all errors"
+                                    }
                                 }
                             }
                         }
@@ -992,9 +1003,9 @@ fn entity_label(e: EntityType) -> &'static str {
 fn toast_for(res: &Result<ImportReport, String>, mode: ImportMode) -> String {
     match res {
         Err(_) => "Import failed".to_string(),
-        Ok(r) if !r.row_errors.is_empty() => match mode {
-            ImportMode::DryRun => format!("Dry-run finished · {} errors", r.row_errors.len()),
-            ImportMode::Commit => format!("Import complete · {} errors", r.row_errors.len()),
+        Ok(r) if r.error_count() > 0 => match mode {
+            ImportMode::DryRun => format!("Dry-run finished · {} errors", r.error_count()),
+            ImportMode::Commit => format!("Import complete · {} errors", r.error_count()),
         },
         Ok(_) => match mode {
             ImportMode::DryRun => "Dry-run finished · nothing written".to_string(),

@@ -1,6 +1,8 @@
 # Import Jobs Contract
 
-All operations are authenticated server functions and restricted to organization administrators.
+Job operations are authenticated server functions restricted to organization
+administrators. The error download is an additional read-only, session-checked
+file response with the same administrator and organization boundary.
 
 | Operation | Input | Result |
 |---|---|---|
@@ -40,6 +42,22 @@ retention, and manual retry retains confirmed outcomes. The UI marks them as
 partial, shows the interruption/error, and disallows confirming an interrupted
 preview. Older checkpoint-only reports remain readable without exposing private
 source cursors, caches, upload contents or credentials.
+
+## Complete error download
+
+`GET /api/import/harvest/jobs/{job_id}/errors` returns an attachment containing
+UTF-8 JSON lines (`application/x-ndjson`), one complete `RowError` per line.
+The filename is derived from the job UUID, not imported text. Responses disable
+caching and MIME sniffing. The handler checks the user's current active/admin
+state; foreign or missing jobs are not found.
+
+Version-2 reports may keep error details in an archive, with a bounded inline
+tail. Display totals include both; the UI identifies the inline subset and links
+to the complete download. A download captures one confirmed report boundary, so
+later progress cannot append errors to that response. Missing fragments fail the
+stream instead of producing successful truncated output.
+
+Large legacy report reads remain an open bounded-storage follow-up (T021).
 
 ## Cancellation and acknowledgement
 

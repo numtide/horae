@@ -34,6 +34,7 @@
 - [x] T018 Test transactional outbox insertion and idempotent delivery bookkeeping.
 - [x] T019 Regenerate `.sqlx` cache and run targeted integration tests, clippy, and formatting.
 - [x] T020 Preserve inspectable reports for terminal failures (FR-012/SC-004), including failures after confirmed batches and before the first checkpoint; verify status/history, retention and manual retry.
+- [ ] T021 Bound report metadata, checkpoint error state and error retrieval without discarding individual error details; cover legacy reports, atomic archival/recovery, authorization, retention and the complete UI/download path. See the bounded-report follow-up in `plan.md`.
 
 See [adversarial-review.md](adversarial-review.md) for uncovered cases and the
 evidence required to close the reopened tasks.

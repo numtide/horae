@@ -14,6 +14,59 @@ use super::*;
 const HEADER: &str = "Date,Client,Project,Task,Hours,Email,Notes\n";
 const ROW: &str = "2026-01-15,Acme,Website,Design,1,dev@acme.com,kickoff\n";
 
+#[sqlx::test(migrations = "./migrations")]
+async fn durable_csv_report_metadata_is_bounded_after_recovery(pool: PgPool) {
+    let org = seed_org(&pool).await;
+    seed_user(&pool, org, "dev@acme.com").await;
+    for mode in [ImportMode::DryRun, ImportMode::Commit] {
+        let body = format!(
+            "{HEADER}{ROW}{}",
+            "bad-date,Acme,Website,Design,1,dev@acme.com,invalid\n".repeat(999)
+        );
+        let reference = import_body(
+            &pool,
+            org,
+            "USD",
+            Body::from(body.clone()),
+            ImportMode::DryRun,
+        )
+        .await
+        .unwrap();
+        let report = measured_csv_job(&pool, org, Body::from(body), mode).await;
+        assert_eq!(report.summary.time_entries.errored, 999);
+        assert_eq!(report.summary.time_entries.created, 1);
+        assert!(report.reconciles());
+        assert!(
+            serde_json::to_vec(&report).unwrap().len() <= 16 * 1024,
+            "durable report metadata must remain bounded without dropping error counts"
+        );
+        let job = crate::jobs::list(&pool, org, 1, None)
+            .await
+            .unwrap()
+            .remove(0);
+        let end = i64::try_from(report.archived_error_chunks()).unwrap();
+        assert!(end > 0);
+        let mut next = 0;
+        let mut bytes = Vec::new();
+        while next < end {
+            let chunks = crate::jobs::report::chunks(&pool, org, job.id, next, end)
+                .await
+                .unwrap();
+            next += chunks.len() as i64;
+            for chunk in chunks {
+                assert!(chunk.len() <= 64 * 1024);
+                bytes.extend(chunk);
+            }
+        }
+        let mut errors = serde_json::Deserializer::from_slice(&bytes)
+            .into_iter::<horae_core::importers::harvest::types::RowError>()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        errors.extend(report.row_errors);
+        assert_eq!(errors, reference.row_errors);
+    }
+}
+
 #[derive(Clone, Default)]
 struct Applied(Arc<Notify>, bool);
 
@@ -897,6 +950,19 @@ async fn measured_csv_job(pool: &PgPool, org: Uuid, body: Body, mode: ImportMode
     let mut confirmed = None;
     for attempt in 0..2 {
         let (lease, stop) = jobs::claim_lease_for_test(pool).await;
+        if attempt == 1 {
+            let checkpoint = lease
+                .load_checkpoint(&mut pool.acquire().await.unwrap())
+                .await
+                .unwrap()
+                .unwrap();
+            if checkpoint["report"]["error_archive"].is_object() {
+                assert_eq!(
+                    checkpoint["version"], 2,
+                    "archived errors require a checkpoint version old workers reject"
+                );
+            }
+        }
         jobs::run_claimed(pool, &lease, stop, async {
             let upload = sqlx::query!(
                 "SELECT body FROM horae_job_uploads WHERE job_id = $1 AND org_id = $2",

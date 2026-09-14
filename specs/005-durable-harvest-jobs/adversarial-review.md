@@ -500,3 +500,39 @@ This closes only the schema-versioning portion of the report invariant. Error
 details still accumulate without a storage/transport bound. They must remain
 fully inspectable when that bound is implemented; dropping errors to fit a cap
 would violate the importer contract. T007, T016 and full acceptance remain open.
+
+## Archived error details
+
+New durable reports keep at most 16 KiB of serialized metadata. Larger inline
+error lists move into append-only 64 KiB PostgreSQL fragments under the same
+transaction and ownership fence as their checkpoint or completion. The report
+retains archived-error and fragment counts; reconciliation includes the inline
+tail and all archived errors. Small reports preserve their existing inline shape.
+The new table has UUIDv7 keys, job/organization ownership and cascade retention.
+
+An administrator-only error download streams a captured report boundary in
+fixed-size reads, then appends that snapshot's inline tail. It rejects missing
+sequences rather than silently ending early. The UI displays total error counts,
+labels the inline subset and links to the complete download.
+
+The 999-error CSV regression first failed on oversized report metadata. Archival
+then passed both preview and commit EOF failure/recovery, reconstructing exactly
+the original inline error details. A second regression exposed that report
+versioning alone was insufficient for workers predating version-aware reports:
+archived checkpoints must also use outer version 2. Both adapters now write that
+version and reject archives mislabelled as checkpoint version 1.
+
+The live HTTP matrix covers missing/inactive/demoted/non-admin sessions, foreign
+jobs, rollback of appended fragments, stale appends after completion, large
+Unicode/quoted reasons, the inline tail and missing archive sequences. The UI
+regression checks archived-only totals, the job-specific link and partial reports.
+
+Verification passes 159 importer tests, 30 jobs tests, 87 core tests, 14 importer
+UI tests and five registered importer endpoint tests. The WebAssembly target
+compiles; the archive migration applies and SQLx metadata is regenerated. The
+checkpoint-version correction is included in the final importer-suite rerun.
+
+T021 remains open. Existing large version-1 reports still load their original
+JSON; they need bounded read/upgrade handling. Further API overflow, retention,
+failure/backpressure and memory stress coverage remains required, alongside
+T007's pending scale samples and T016's full server/browser acceptance.

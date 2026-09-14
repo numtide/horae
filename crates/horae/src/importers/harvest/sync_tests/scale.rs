@@ -180,7 +180,7 @@ async fn measured_apply(
     assert!(report.reconciles());
     assert_eq!(report.summary.time_entries.processed(), RECORDS);
     assert_eq!(report.summary.time_entries.errored, INVALID);
-    assert_eq!(report.error_count(), INVALID as usize);
+    assert_eq!(report.error_count(), INVALID);
     assert!(
         report
             .row_errors

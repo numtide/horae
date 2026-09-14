@@ -155,7 +155,8 @@ pub(in crate::importers::harvest) async fn run(
             let saved: Checkpoint =
                 serde_json::from_value(saved).context("invalid API import checkpoint")?;
             ensure!(
-                saved.version == 1,
+                matches!(saved.version, 1 | 2)
+                    && (saved.version == 2 || saved.report.archived_error_count() == 0),
                 "unsupported API import checkpoint version"
             );
             ensure!(
@@ -376,6 +377,12 @@ pub(super) async fn apply(
             &[],
         )
         .await?;
+        lease
+            .archive_report(&mut tx, &mut checkpoint.report)
+            .await?;
+        if checkpoint.report.archived_error_count() > 0 {
+            checkpoint.version = 2;
+        }
         checkpoint.save(&mut tx, lease, "catalog").await?;
         tx.commit().await?;
     }
@@ -423,6 +430,12 @@ pub(super) async fn apply(
                     &page_ids,
                 )
                 .await?;
+                lease
+                    .archive_report(&mut tx, &mut checkpoint.report)
+                    .await?;
+                if checkpoint.report.archived_error_count() > 0 {
+                    checkpoint.version = 2;
+                }
                 checkpoint.save(&mut tx, lease, "time_entries").await?;
                 tx.commit().await?;
             }
@@ -441,6 +454,9 @@ pub(super) async fn apply(
     {
         credentials::advance_watermark(&mut *tx, org_id, &[(EntityType::TimeEntry, mark)]).await?;
     }
+    lease
+        .archive_report(&mut tx, &mut checkpoint.report)
+        .await?;
     let (report, processed) = super::super::job_report(&checkpoint.report)?;
     ensure!(
         lease.complete(&mut tx, &report, processed).await?,

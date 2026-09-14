@@ -251,6 +251,10 @@ fn main() -> anyhow::Result<()> {
                     )
                     .merge(auth::router(cfg.dev_login))
                     .merge(importers::harvest::callback_router())
+                    .route(
+                        "/api/import/harvest/jobs/{job_id}/errors",
+                        get(jobs::report::download),
+                    )
                     .merge(harvest::router(pool.clone()))
                     // Redirect signed-out page loads to /auth/login. Layered inside
                     // the session layer so the session is populated; the session

@@ -129,4 +129,28 @@ That single query does not attribute the complete scenario's elapsed time.
 
 These phases share a database, so earlier rollback/commit activity and PostgreSQL
 statistics can influence later query planning. They are not isolated fresh-database
-samples. Durable CSV and both large-catalog comparisons remain pending.
+samples.
+
+The matching durable scenario also passed at `fd36a53`, including controlled EOF
+failure/retry in all three phases, identical recovered reports and no duplicate
+creates. No other local build or import benchmark ran during its measured phases.
+
+| Scenario | Elapsed seconds | Process HWM, KiB | EOF checkpoint stored bytes | EOF checkpoint JSON bytes |
+|---|---:|---:|---:|---:|
+| Durable CSV preview, one parent set | 185.062 | 123,408 | 654,783 | 16,786,312 |
+| Durable CSV first commit, after preview | 159.004 | 152,220 | 654,161 | 16,785,488 |
+| Durable CSV reimport, same process/database | 111.803 | 158,348 | 654,161 | 16,785,488 |
+
+The complete durable test took 456.32 seconds. Each phase reported 99,900 valid
+entries and 100 error outcomes; committing phases retained 5,994,000 minutes and
+no CSV provenance. Preview left domain data unchanged. Its checkpoint processed count
+of 100,003 includes the three parent entities as well as the source records.
+Checkpoint values are measured at EOF, not peak database or WAL usage. PostgreSQL
+compression explains why the stored value is much smaller than its JSON form.
+Process HWM is cumulative across phases and does not include PostgreSQL memory.
+
+Durable preview was slower and used more process memory than inline preview in
+these single samples; the complete checkpoint cache still needs attention. Commit
+and reimport were faster in this run, but their transaction boundaries differ
+from inline imports and there are no repeated controlled samples establishing a
+general speedup. Both large-catalog comparisons remain pending.

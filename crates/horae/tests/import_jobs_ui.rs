@@ -491,6 +491,47 @@ async fn newly_submitted_failed_preview_cannot_be_confirmed() {
     assert!(!ui.html().contains("Upload unavailable"));
 }
 
+#[tokio::test]
+async fn archived_report_shows_total_errors_and_a_job_scoped_download() {
+    use horae_core::importers::harvest::types::{EntityType, RowOutcome};
+
+    for state in ["succeeded", "failed"] {
+        let probe = Probe::default();
+        let mut snapshot = job(17, state);
+        let mut report = ImportReport::new(SourceKind::Csv, ImportMode::Commit);
+        for line in 1..=2 {
+            report.record(
+                EntityType::TimeEntry,
+                &RowOutcome::Errored {
+                    source_location: format!("record {line}"),
+                    reason: "invalid date".into(),
+                },
+            );
+        }
+        report.archive_errors(1).unwrap();
+        snapshot.report = Some(serde_json::to_value(report).unwrap());
+        probe.history.borrow_mut().push(snapshot.clone());
+        let mut ui = Ui::start(&probe);
+        let response = probe.request();
+        ui.click(&format!("select-{}", snapshot.id));
+        response.send(Ok(Some(snapshot.clone()))).unwrap();
+        ui.settle();
+        let html = ui.html();
+        assert!(html.contains("Showing 0 inline errors of 2."), "{html}");
+        assert!(html.contains("Download all errors"), "{html}");
+        assert!(
+            html.contains(&format!("/api/import/harvest/jobs/{}/errors", snapshot.id)),
+            "{html}"
+        );
+        assert!(!html.contains("Every record was written"), "{html}");
+        if state == "succeeded" {
+            assert!(html.contains("Import complete with 2 errors"), "{html}");
+        } else {
+            assert!(html.contains("Partial report"), "{html}");
+        }
+    }
+}
+
 mod server_fns {
     use super::*;
 

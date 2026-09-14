@@ -151,7 +151,7 @@ async fn resumed_api(
     assert!(report.reconciles());
     assert_eq!(
         report.error_count(),
-        usize::from(first == FirstEntry::InvalidUser)
+        u64::from(first == FirstEntry::InvalidUser)
     );
     assert_eq!(report.summary.clients.created, 2);
     assert_eq!(report.summary.projects.created, 1);

@@ -66,6 +66,41 @@ crates/horae/
 
 **Structure Decision**: Keep the first implementation in `crates/horae`; the queue is application infrastructure and does not belong in `horae-core`. Extracting a worker crate is deferred until independent deployment is justified.
 
+## Bounded report storage follow-up
+
+Implementation in progress. The existing data-model invariant requires bounded report
+storage and retrieval while the importer contract requires every failed record's
+complete location and reason. A cap that drops errors or aborts otherwise valid
+records does not satisfy both requirements.
+
+- Keep the serialized public report at or below 16 KiB. Small reports retain their
+  inline errors; larger reports retain counts and a reference to archived errors,
+  plus only an inline tail that fits the same budget.
+- Append overflow error details as ordered JSON-lines bytes in PostgreSQL chunks
+  of at most 64 KiB. Use UUIDv7 primary keys, a composite job/organization foreign
+  key, a unique per-job sequence and cascade deletion with the owning job.
+- Archive inside the same lease-fenced transaction as checkpoint/progress or
+  completion. A rollback must not publish chunks or advance the archive cursor.
+  Preview archives commit only after the simulation transaction rolls back.
+- Extend the pure report representation with archived-error and chunk counts,
+  preserving reconciliation between all counted errors and inline/archived details.
+  Use report schema version 2 when archival metadata is present; version-1 reports
+  remain readable. Old workers must reject the changed report representation.
+- Provide an administrator-only, organization-scoped streaming error download.
+  Capture the report's archive boundary and inline tail once, so subsequent job
+  progress cannot duplicate or omit errors in that download. Bounded reads must
+  detect missing chunks as errors rather than treat them as successful EOF.
+- Keep UI totals based on all errors, clearly label any inline subset, and offer
+  the complete download. Do not return full archives in job history or polling.
+- Verify API and CSV, commit and preview, checkpoint recovery, stale claims,
+  cancellation, retention, Unicode/large individual reasons, download failures and
+  cross-organization access. Legacy large reports need bounded read/upgrade
+  handling too; compatibility must not silently reintroduce unbounded polling.
+
+No service, queue dependency or workspace crate is needed. PostgreSQL persistence
+stays in the application crate; only I/O-free report data and reconciliation belong
+in `horae-core`.
+
 ## Future Job Catalog
 
 | Job family | Queue-ready? | Initial implementation |

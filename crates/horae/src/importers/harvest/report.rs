@@ -47,7 +47,7 @@ mod tests {
     #[test]
     fn report_rejects_unsupported_and_invalid_versions() {
         for version in [
-            serde_json::json!(2),
+            serde_json::json!(3),
             serde_json::json!(0),
             serde_json::json!("1"),
             serde_json::Value::Null,
@@ -57,6 +57,41 @@ mod tests {
             assert!(
                 serde_json::from_value::<ImportReport>(encoded).is_err(),
                 "unsupported report version must be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn archived_report_round_trips_without_losing_error_accounting() {
+        let mut report = report();
+        report.archive_errors(1).unwrap();
+        assert!(report.row_errors.is_empty());
+        assert_eq!(report.error_count(), 1);
+        assert!(report.reconciles());
+        let encoded = serde_json::to_value(&report).unwrap();
+        assert_eq!(encoded["version"], 2);
+        assert_eq!(
+            serde_json::from_value::<ImportReport>(encoded).unwrap(),
+            report
+        );
+    }
+
+    #[test]
+    fn archive_metadata_cannot_masquerade_as_a_legacy_or_inconsistent_report() {
+        let mut report = report();
+        report.archive_errors(1).unwrap();
+        let encoded = serde_json::to_value(report).unwrap();
+        for (path, value) in [
+            ("/version", serde_json::json!(1)),
+            ("/error_archive/count", serde_json::json!(0)),
+            ("/error_archive/count", serde_json::json!(2)),
+            ("/error_archive/chunks", serde_json::json!(0)),
+        ] {
+            let mut invalid = encoded.clone();
+            *invalid.pointer_mut(path).unwrap() = value;
+            assert!(
+                serde_json::from_value::<ImportReport>(invalid).is_err(),
+                "{path}"
             );
         }
     }

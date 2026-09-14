@@ -51,13 +51,14 @@ pub(crate) fn job_report(report: &ImportReport) -> anyhow::Result<(serde_json::V
 
 async fn finish_import(
     mut tx: sqlx::Transaction<'_, sqlx::Postgres>,
-    report: &ImportReport,
+    report: &mut ImportReport,
     lease: Option<&JobLease>,
 ) -> anyhow::Result<()> {
     match report.mode {
         ImportMode::DryRun => tx.rollback().await?,
         ImportMode::Commit => {
             if let Some(lease) = lease {
+                lease.archive_report(&mut tx, report).await?;
                 let (report, processed) = job_report(report)?;
                 anyhow::ensure!(
                     lease.complete(&mut tx, &report, processed).await?,
