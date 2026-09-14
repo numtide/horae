@@ -10,6 +10,12 @@ use super::{JobLease, lease::Interrupted};
 pub(crate) const REPORT_BYTES: usize = 16 * 1024;
 const CHUNK_BYTES: usize = 64 * 1024;
 
+mod legacy;
+pub(crate) use legacy::upgrade_legacy_reports;
+
+#[cfg(test)]
+mod tests;
+
 impl JobLease {
     /// Call within the checkpoint/completion transaction. The caller must roll
     /// back both chunks and report metadata if its final ownership fence fails.
@@ -19,7 +25,9 @@ impl JobLease {
         report: &mut ImportReport,
     ) -> anyhow::Result<()> {
         anyhow::ensure!(report.reconciles(), "import report does not reconcile");
-        if serde_json::to_vec(&report)?.len() <= REPORT_BYTES {
+        // PostgreSQL adds whitespace when rendering JSONB. Reserving half the
+        // database budget bounds both encodings without another round trip.
+        if serde_json::to_vec(&report)?.len() <= REPORT_BYTES / 2 {
             return Ok(());
         }
         let live = sqlx::query_scalar!(
@@ -46,8 +54,7 @@ impl JobLease {
                 chunk.extend_from_slice(&bytes[..count]);
                 bytes = &bytes[count..];
                 if chunk.len() == CHUNK_BYTES {
-                    self.append_report_chunk(connection, sequence, &chunk)
-                        .await?;
+                    append_report_chunk(connection, self.id, self.org_id, sequence, &chunk).await?;
                     sequence = sequence
                         .checked_add(1)
                         .context("report archive is too large")?;
@@ -56,8 +63,7 @@ impl JobLease {
             }
         }
         if !chunk.is_empty() {
-            self.append_report_chunk(connection, sequence, &chunk)
-                .await?;
+            append_report_chunk(connection, self.id, self.org_id, sequence, &chunk).await?;
             sequence = sequence
                 .checked_add(1)
                 .context("report archive is too large")?;
@@ -71,26 +77,27 @@ impl JobLease {
         );
         Ok(())
     }
+}
 
-    async fn append_report_chunk(
-        &self,
-        connection: &mut PgConnection,
-        sequence: i64,
-        body: &[u8],
-    ) -> anyhow::Result<()> {
-        sqlx::query!(
-            r#"INSERT INTO horae_job_report_error_chunks (id, job_id, org_id, sequence, body)
+async fn append_report_chunk(
+    connection: &mut PgConnection,
+    job_id: Uuid,
+    org_id: Uuid,
+    sequence: i64,
+    body: &[u8],
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        r#"INSERT INTO horae_job_report_error_chunks (id, job_id, org_id, sequence, body)
                VALUES ($1, $2, $3, $4, $5)"#,
-            Uuid::now_v7(),
-            self.id,
-            self.org_id,
-            sequence,
-            body,
-        )
-        .execute(connection)
-        .await?;
-        Ok(())
-    }
+        Uuid::now_v7(),
+        job_id,
+        org_id,
+        sequence,
+        body,
+    )
+    .execute(connection)
+    .await?;
+    Ok(())
 }
 
 /// A fixed-size read at a captured report boundary, never the archive's live end.

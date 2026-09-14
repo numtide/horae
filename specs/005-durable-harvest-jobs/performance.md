@@ -153,4 +153,38 @@ Durable preview was slower and used more process memory than inline preview in
 these single samples; the complete checkpoint cache still needs attention. Commit
 and reimport were faster in this run, but their transaction boundaries differ
 from inline imports and there are no repeated controlled samples establishing a
-general speedup. Both large-catalog comparisons remain pending.
+general speedup.
+
+The inline 5,000-parent-set scenario also passed at `fd36a53`, including all
+100,000-record, 99,900-valid-entry, 100-error, 5,994,000-minute, parent-count,
+preview-rollback and duplicate-free reimport assertions. The complete test took
+1,861.77 seconds. No local compilation or second import benchmark ran during its
+measured phases; read-only diagnostics and Nix evaluation ran during reimport.
+
+| Scenario | Elapsed seconds | Process HWM, KiB |
+|---|---:|---:|
+| Inline CSV preview, 5,000 parent sets | 171.840 | 36,832 |
+| Inline CSV first commit, after preview | 747.560 | 41,664 |
+| Inline CSV reimport, same process/database | 941.932 | 42,036 |
+
+The matching durable large-catalog scenario passed at `fd36a53` in 891.83
+seconds, including EOF failure/recovery for each phase and identical recovered
+reports. All count, minute, parent, rollback and duplicate-free assertions passed.
+No other local compilation or import benchmark ran during its measured phases;
+read-only PostgreSQL progress queries and Rust formatting ran alongside it.
+
+| Scenario | Elapsed seconds | Process HWM, KiB | EOF checkpoint stored bytes | EOF checkpoint JSON bytes |
+|---|---:|---:|---:|---:|
+| Durable CSV preview, 5,000 parent sets | 550.320 | 206,456 | 3,095,305 | 21,987,537 |
+| Durable CSV first commit, after preview | 196.563 | 209,280 | 2,200,460 | 18,160,797 |
+| Durable CSV reimport, same process/database | 144.304 | 226,292 | 2,200,017 | 18,160,797 |
+
+The processed checkpoint count is 115,000: 100,000 source records and 15,000
+parent entities. Preview took about 3.2 times the inline sample's time and retained
+a larger checkpoint and process high-water mark. This is a measured durability
+cost, not evidence of a preview speedup. The preview adapter restores its saved
+parent state after each 500-record rollback; attribution of the complete elapsed
+time would require profiling. Commit/reimport have different transaction
+boundaries, so their faster single-sample times are not a general speedup claim.
+
+The optimized API preview remains pending.

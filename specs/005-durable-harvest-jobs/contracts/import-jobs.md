@@ -57,7 +57,10 @@ to the complete download. A download captures one confirmed report boundary, so
 later progress cannot append errors to that response. Missing fragments fail the
 stream instead of producing successful truncated output.
 
-Large legacy report reads remain an open bounded-storage follow-up (T021).
+Startup converts oversized legacy reports to the archive before serving these
+endpoints. Unsupported or malformed reports fail the upgrade without discarding
+their original data. Database constraints prevent older workers from publishing
+new oversized report values.
 
 ## Cancellation and acknowledgement
 

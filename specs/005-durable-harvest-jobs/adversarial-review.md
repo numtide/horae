@@ -550,3 +550,28 @@ counts, integer minutes, two execution attempts and duplicate-free reimport.
 Nix evaluation and the generated Python script's syntax pass. VM execution is
 pending; this is not yet evidence of successful process recovery. T016 remains
 open, including browser acceptance.
+
+## Legacy report upgrade
+
+The legacy regression reproduced oversized metadata after running the previous
+migration path. The separate retention regression passed: fragments survive an
+active job and a two-day-old terminal report, then cascade away with the expired
+job at thirty-one days.
+
+The new startup conversion reads bounded fragments under a per-job transaction,
+preserves checkpoint state and fences the old execution before normal recovery.
+The regression now also injects a fragment-write failure to verify rollback and
+uses a pool with one connection. PostgreSQL constraints prevent new oversized
+report writes; workers reserve whitespace headroom in the inline budget.
+
+The upgrade regression now passes, including complete Unicode error
+reconstruction, rollback, preserved cursors, stale-claim rejection and idempotent
+startup. A live replacement claim also fails when attempting to restore the old
+oversized report, and its last bounded checkpoint remains unchanged.
+
+Validation passes 159 importer tests, 32 jobs/report tests, two database tests,
+five registered importer endpoint tests and 14 UI tests. SQLx metadata is
+regenerated; server all-target Clippy and formatting pass. T021 remains open for
+the broader legacy state matrix, API overflow, stream failure/backpressure and
+memory stress coverage. Full process/browser acceptance and the optimized API
+preview measurement remain separate gates.

@@ -53,8 +53,9 @@ errors plus the inline `row_errors` tail. A version-1 report cannot claim an
 archive. Unknown versions, invalid archive metadata and inconsistent error
 counts are rejected on read.
 
-New checkpoint/final reports serialize to at most 16 KiB. If inline error details
-exceed this budget, the worker appends all pending details to the archive within
+New checkpoint/final reports serialize to at most 16 KiB. Workers archive above
+8 KiB of compact JSON, reserving room for PostgreSQL's JSONB rendering whitespace
+within the same 16 KiB database limit. The worker appends pending details within
 the checkpoint/completion transaction, then clears that inline list. Failed
 transactions publish neither fragments nor an advanced archive boundary.
 Preview archives are written after rollback of their domain simulation.
@@ -65,9 +66,21 @@ that checkpoint version, so they cannot resume using an incomplete inline error
 list. Readers still accept version-1 checkpoints without archived errors, but
 reject archives mislabelled as checkpoint version 1.
 
-Existing large version-1 reports still need bounded read/upgrade handling; this
-remains an open part of T021. Reading their original JSON is compatible but not
-yet bounded. Stress and failure-path coverage for archival also remain required.
+The startup upgrade converts existing oversized reports before exposing the
+server or starting its worker. It locks one job per transaction and transfers at
+most sixteen 64 KiB error fragments per read, never a complete legacy report or
+checkpoint. The checkpoint's cursor/cache and independent summary totals remain
+intact. Conversion invalidates the old claim and expires its running lease;
+normal recovery retains the attempt budget and cancellation request. Failed
+conversions roll back their fragments and leave the original report intact.
+
+Migration 0028 checks both report columns on new writes immediately, including
+writes from older workers. Startup validates those constraints after converting
+old rows. Malformed/unsupported reports fail startup rather than discard data.
+PostgreSQL still decodes the existing JSONB internally during conversion; the
+bounded transfers describe application memory, not PostgreSQL's legacy decoding
+cost. The one-connection upgrade/rollback regression passes; broader legacy
+state coverage and archive stress/failure-path coverage remain open in T021.
 
 ### Report error chunks
 

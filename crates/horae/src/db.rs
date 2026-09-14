@@ -50,6 +50,13 @@ pub async fn create_pool(database_url: &str) -> anyhow::Result<PgPool> {
 
 pub async fn run_migrations(pool: &PgPool) -> anyhow::Result<()> {
     sqlx::migrate!("./migrations").run(pool).await?;
+    crate::jobs::report::upgrade_legacy_reports(pool).await?;
+    sqlx::query!(
+        "ALTER TABLE horae_jobs VALIDATE CONSTRAINT horae_jobs_report_budget, \
+         VALIDATE CONSTRAINT horae_jobs_checkpoint_report_budget"
+    )
+    .execute(pool)
+    .await?;
     Ok(())
 }
 
