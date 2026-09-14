@@ -30,14 +30,15 @@
 - [x] T014 Test atomic claims with concurrent workers.
 - [x] T015 Test lease recovery after a simulated worker failure.
 - [ ] T016 Test retry idempotency and cancellation semantics.
+  - Live browser refresh, cooperative cancellation, retry, preview confirmation and report/history downloads pass. Actual server-process restart acceptance remains pending in CI.
 - [x] T017 Test a second synthetic job kind through the same worker boundary.
 - [x] T018 Test transactional outbox insertion and idempotent delivery bookkeeping.
 - [x] T019 Regenerate `.sqlx` cache and run targeted integration tests, clippy, and formatting.
 - [x] T020 Preserve inspectable reports for terminal failures (FR-012/SC-004), including failures after confirmed batches and before the first checkpoint; verify status/history, retention and manual retry.
-- [ ] T021 Bound report metadata, checkpoint error state and error retrieval without discarding individual error details; cover legacy reports, atomic archival/recovery, authorization, retention and the complete UI/download path. See the bounded-report follow-up in `plan.md`.
+- [x] T021 Bound report metadata, checkpoint error state and error retrieval without discarding individual error details; cover legacy reports, atomic archival/recovery, authorization, retention and the complete UI/download path. See the bounded-report follow-up in `plan.md`.
   - Verified: bounded new reports, legacy upgrade/rollback with one connection, 36 legacy state/version/checkpoint combinations including existing archives, claim fencing, retention, authorization, captured download boundaries, lazy page reads, missing-fragment errors and API overflow recovery/reimport.
   - Verified HTTP stress: a 64-MiB archive streams byte-for-byte through the authenticated route with less than 16 MiB additional process HWM; abandoned downloads do not block a size-one pool, and retention during transfer produces an HTTP body error.
-  - Remaining: full browser acceptance.
+  - Live browser acceptance passes: all 999 errors download identically from a recovered preview, its separately confirmed commit and reopened history. See `acceptance.md`.
 
 See [adversarial-review.md](adversarial-review.md) for uncovered cases and the
 evidence required to close the reopened tasks.

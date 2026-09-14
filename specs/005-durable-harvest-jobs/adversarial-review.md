@@ -482,6 +482,28 @@ do not validate the new preview optimization. A new release-mode preview sample,
 the pending CSV cases, full acceptance and bounded/versioned report handling
 remain required before merge.
 
+## Live browser report acceptance
+
+The real SSR/WASM application now passes the browser walkthrough recorded in
+`acceptance.md`: queued response, refresh during an import, cooperative
+cancellation with no early retry, same-job preview recovery, explicit confirmation
+of a new preview, and complete error downloads from preview/commit/history.
+All three downloads contain the same 999 complete error records. The committed
+result contains exactly 1,000 entries and 60,000 integer minutes; preview and
+cancellation leave no persistent entries. Screenshots were inspected and the
+browser reported no page errors.
+
+The initial harness incorrectly awaited terminal cancellation while deliberately
+holding its SQL gate. FR-010 is cooperative: the correct check verifies
+`cancelling` and unavailable retry until the gate is released, then unchanged
+confirmed progress and completed cleanup. No production change was made to
+weaken that acknowledgement boundary. The harness also now respects the error
+panel's initially expanded state when finding its download link.
+
+This closes T021's final UI/download gate. T016 remains open for actual server
+termination/restart acceptance; T007 remains open for the CSV preview overhead.
+The latest commit still needs its own full CI result.
+
 ## Report schema compatibility
 
 Import reports now serialize an explicit version and reject unsupported or
