@@ -59,11 +59,28 @@ retry added no HTTP requests and preserved the complete report. The approximatel
 2.72x elapsed-time increase is material: functional recovery passed, but this is
 not evidence of throughput parity. Repeated restoration of growing preview
 associations and checkpoint serialization need profiling before closing T007.
-The durable commit/reimport comparison is still pending. The failure-injection
-fixture now uses an unvalidated test-only constraint: it still rejects subsequent
+The failure-injection fixture now uses an unvalidated test-only constraint: it still rejects subsequent
 completion transitions without rejecting jobs completed by an earlier scenario.
 A small multi-run CSV regression exposed that fixture issue before CSV scale runs;
 the API helper now also exercises preview, commit and reimport in its regular test.
+
+The durable commit/reimport scenario completed at `fd36a53`, after the fixture
+correction and master integration. Both imports passed their complete assertions,
+including 99,900 stored entries, exact minutes/provenance and no duplicate creates.
+No other local builds or import measurements ran during this sample; a read-only
+job-progress query did run.
+
+| Scenario | Elapsed seconds | Process HWM, KiB | EOF stored / JSON-text bytes |
+|---|---:|---:|---:|
+| Durable first commit plus EOF recovery | 242.264 | 21,064 | 1,930 / 15,033 |
+| Durable reimport plus EOF recovery, same process | 160.742 | 21,088 | 1,932 / 15,033 |
+
+The first attempts reached EOF at 242.226 and 160.713 seconds respectively.
+Recovery preserved each report without additional HTTP requests. This sample
+shows no commit/reimport slowdown against the earlier inline measurements;
+it does not establish the same for previews or CSV, or guarantee production
+throughput. The two source revisions and single-sample methodology are not a
+controlled repeated-run speedup claim.
 
 ## CSV
 

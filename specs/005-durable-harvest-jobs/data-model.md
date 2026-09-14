@@ -116,10 +116,13 @@ Inline imports keep their existing import-wide transactions.
 Durable API previews use the same catalog, parent-batch and entry-page cursors,
 with an additional `preview` field. Parent snapshots reuse the CSV representation.
 An entry map retains successful Harvest-ID to Horae-ID associations across pages,
-including adoption of real entries from an earlier CSV import. Restoring these
-associations reserves adopted entries against other source IDs and skips repeated
-IDs without recreating simulated time-entry rows. Failed row savepoints do not
-publish new simulated associations.
+including adoption of real entries from an earlier CSV import. Restoration keeps
+all associations to real entries reserved against other source IDs, plus virtual
+associations whose source IDs appear on the upcoming page. Other virtual entries
+have no row left to adopt after rollback, so their mappings remain only in the
+checkpoint until needed by a repeated ID. This avoids replaying every old virtual
+mapping on every fresh page without recreating simulated time-entry rows. Failed
+row savepoints do not publish new simulated associations.
 
 Each batch applies inside a nested transaction. The parent snapshot and successful
 entry associations are captured before rolling that transaction back; only the

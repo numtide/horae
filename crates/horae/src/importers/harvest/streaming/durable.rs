@@ -353,7 +353,7 @@ pub(super) async fn apply(
         let mut tx = begin_transaction(connection).await?;
         let mut batch = tx.begin().await?;
         if let Some(preview) = &checkpoint.preview {
-            preview.restore(&mut batch, org_id).await?;
+            preview.restore(&mut batch, org_id, &[]).await?;
         }
         parents::apply_batch(
             &mut batch,
@@ -386,6 +386,7 @@ pub(super) async fn apply(
                 let Rows::Entries(entries) = batch.rows else {
                     bail!("unexpected repeated API catalog")
                 };
+                let page_ids = entries.iter().map(|entry| entry.id).collect::<Vec<_>>();
                 for entry in &entries {
                     if let Some(timestamp) = entry.updated_at {
                         checkpoint.high_water = Some(
@@ -400,7 +401,7 @@ pub(super) async fn apply(
                 let mut tx = begin_transaction(connection).await?;
                 let mut simulation = tx.begin().await?;
                 if let Some(preview) = &checkpoint.preview {
-                    preview.restore(&mut simulation, org_id).await?;
+                    preview.restore(&mut simulation, org_id, &page_ids).await?;
                 }
                 apply_rows(
                     &mut simulation,
@@ -414,7 +415,6 @@ pub(super) async fn apply(
                 )
                 .await?;
                 checkpoint.download = batch.next;
-                let page_ids = entries.iter().map(|entry| entry.id).collect::<Vec<_>>();
                 finish_simulation(
                     &mut checkpoint.preview,
                     &checkpoint.cache,

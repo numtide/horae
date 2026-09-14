@@ -458,3 +458,26 @@ reports are bounded and schema-versioned. The current public report retains an
 unversioned collection of row errors; limiting their UI display does not bound
 storage or transport. Any correction must preserve the importer's requirement
 to retain every failed record's location and reason, not silently truncate them.
+
+## Selective API preview restoration
+
+A focused regression demonstrated that a fresh page restored 10,000 old virtual
+entry mappings even though none had a remaining time-entry row to adopt. The
+restoration query now retains every mapping to a real entry, plus virtual source
+IDs present on the upcoming page. All other identities remain in the checkpoint
+for later repeated IDs. Parent restoration, row validation and checkpoint format
+are unchanged; no new service, dependency, migration or connection is introduced.
+
+The regression was observed failing with 10,000 restored mappings before the
+change. It now restores zero for an empty page and exactly the two known IDs in
+a page containing repeats and an unknown ID, without removing checkpoint state.
+All 153 importer tests and 30 jobs tests pass, including the multi-page
+adoption/repeated-ID preview, cancellation, stale-claim and recovery regressions.
+SQLx metadata replaces the restoration query and adds the regression's query.
+
+The durable commit/reimport scale comparison also passed at `fd36a53`: 242.264
+seconds for the first commit and 160.742 seconds for reimport, including controlled
+EOF finalization failure/recovery with no duplicate creates. These measurements
+do not validate the new preview optimization. A new release-mode preview sample,
+the pending CSV cases, full acceptance and bounded/versioned report handling
+remain required before merge.
