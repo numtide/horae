@@ -1,5 +1,9 @@
 # Quickstart: Durable Harvest Import Jobs
 
+This is the acceptance walkthrough for the complete feature. See
+[adversarial-review.md](adversarial-review.md) for cases still under implementation,
+including history restoration, checkpoints, and cancellation while running.
+
 1. Sign in as an organization administrator and open the Harvest importer.
 1. Connect Harvest or select a CSV, choose dry-run or commit, and start the import.
 1. Confirm the UI returns immediately with a queued job and then displays phase/progress.

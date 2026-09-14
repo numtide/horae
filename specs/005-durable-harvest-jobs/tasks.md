@@ -20,7 +20,7 @@
 - [x] T010 Change API and CSV start functions to enqueue and return job identifiers.
 - [x] T011 Add status, history, cancel, and retry server functions.
 - [ ] T012 Update the importer page to show queued/running progress and terminal reports.
-- [ ] T013 Add cleanup policy for old terminal jobs and stored upload data.
+- [x] T013 Add cleanup policy for old terminal jobs and stored upload data.
 
 ## Phase 4 - Verification
 
@@ -28,7 +28,7 @@
 - [x] T015 Test lease recovery after a simulated worker failure.
 - [ ] T016 Test retry idempotency and cancellation semantics.
 - [x] T017 Test a second synthetic job kind through the same worker boundary.
-- [ ] T018 Test transactional outbox insertion and idempotent delivery bookkeeping.
+- [x] T018 Test transactional outbox insertion and idempotent delivery bookkeeping.
 - [x] T019 Regenerate `.sqlx` cache and run targeted integration tests, clippy, and formatting.
 
 See [adversarial-review.md](adversarial-review.md) for uncovered cases and the

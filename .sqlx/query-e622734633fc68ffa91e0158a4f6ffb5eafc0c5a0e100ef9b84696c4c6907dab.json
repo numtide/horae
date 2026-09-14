@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE horae_jobs\n              SET status = 'queued', available_at = now(), lease_until = NULL,\n                  attempts = 0, worker_id = NULL, last_error = NULL,\n                  finished_at = NULL, updated_at = now()\n            WHERE id = $1 AND org_id = $2 AND status IN ('failed', 'cancelled')\n              AND (kind <> 'harvest_csv_import' OR EXISTS (\n                  SELECT 1 FROM horae_job_uploads u WHERE u.job_id = horae_jobs.id AND u.org_id = $2\n              ))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e622734633fc68ffa91e0158a4f6ffb5eafc0c5a0e100ef9b84696c4c6907dab"
+}

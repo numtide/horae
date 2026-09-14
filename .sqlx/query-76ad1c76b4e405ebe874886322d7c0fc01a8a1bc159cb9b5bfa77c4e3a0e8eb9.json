@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE horae_jobs SET finished_at = now() - interval '2 days' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "76ad1c76b4e405ebe874886322d7c0fc01a8a1bc159cb9b5bfa77c4e3a0e8eb9"
+}

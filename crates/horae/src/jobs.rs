@@ -29,6 +29,33 @@ pub enum JobPayload {
     Synthetic,
 }
 
+#[derive(Serialize, Deserialize)]
+struct JobEnvelope {
+    version: u16,
+    payload: JobPayload,
+}
+
+fn encode_payload(payload: &JobPayload) -> anyhow::Result<serde_json::Value> {
+    Ok(serde_json::to_value(JobEnvelope {
+        version: 1,
+        payload: payload.clone(),
+    })?)
+}
+
+fn decode_payload(value: serde_json::Value) -> anyhow::Result<JobPayload> {
+    // Jobs queued before payload versioning use the original tagged enum.
+    if value.get("version").is_none() {
+        return serde_json::from_value(value).context("invalid legacy durable job payload");
+    }
+    anyhow::ensure!(
+        value.get("version").and_then(serde_json::Value::as_u64) == Some(1),
+        "unsupported durable job payload version"
+    );
+    let envelope: JobEnvelope =
+        serde_json::from_value(value).context("invalid durable job payload")?;
+    Ok(envelope.payload)
+}
+
 /// Insert an event in the same transaction as the state change that produced
 /// it. Consumers can claim undelivered rows independently of the job worker.
 #[allow(dead_code)]
@@ -52,7 +79,7 @@ pub async fn enqueue_outbox(
     Ok(id)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct OutboxEvent {
     pub id: Uuid,
@@ -60,12 +87,14 @@ pub struct OutboxEvent {
     pub event_kind: String,
     pub payload: serde_json::Value,
     pub attempts: i32,
+    pub claim_token: Uuid,
 }
 
 /// Claim one event for delivery. Moving `available_at` acts as a short lease,
 /// so a crashed consumer can safely retry it later.
 #[allow(dead_code)]
 pub async fn claim_outbox(pool: &sqlx::PgPool) -> anyhow::Result<Option<OutboxEvent>> {
+    let claim_token = Uuid::now_v7();
     let row = sqlx::query!(
         r#"WITH candidate AS (
              SELECT id FROM horae_outbox
@@ -75,10 +104,13 @@ pub async fn claim_outbox(pool: &sqlx::PgPool) -> anyhow::Result<Option<OutboxEv
            )
            UPDATE horae_outbox o
               SET attempts = o.attempts + 1,
+                  claim_token = $1,
                   available_at = now() + interval '5 minutes'
              FROM candidate
             WHERE o.id = candidate.id
-        RETURNING o.id, o.org_id, o.event_kind, o.payload, o.attempts"#
+        RETURNING o.id, o.org_id, o.event_kind, o.payload, o.attempts,
+                  o.claim_token as "claim_token!""#,
+        claim_token,
     )
     .fetch_optional(pool)
     .await?;
@@ -88,14 +120,22 @@ pub async fn claim_outbox(pool: &sqlx::PgPool) -> anyhow::Result<Option<OutboxEv
         event_kind: r.event_kind,
         payload: r.payload,
         attempts: r.attempts,
+        claim_token: r.claim_token,
     }))
 }
 
 #[allow(dead_code)]
-pub async fn mark_outbox_delivered(pool: &sqlx::PgPool, id: Uuid) -> anyhow::Result<bool> {
+pub async fn mark_outbox_delivered(
+    pool: &sqlx::PgPool,
+    event: &OutboxEvent,
+) -> anyhow::Result<bool> {
     let result = sqlx::query!(
-        "UPDATE horae_outbox SET delivered_at = now(), last_error = NULL WHERE id = $1 AND delivered_at IS NULL",
-        id,
+        r#"UPDATE horae_outbox SET delivered_at = now(), last_error = NULL, claim_token = NULL
+            WHERE id = $1 AND org_id = $2 AND claim_token = $3
+              AND delivered_at IS NULL AND available_at > now()"#,
+        event.id,
+        event.org_id,
+        event.claim_token,
     )
     .execute(pool)
     .await?;
@@ -105,15 +145,18 @@ pub async fn mark_outbox_delivered(pool: &sqlx::PgPool, id: Uuid) -> anyhow::Res
 #[allow(dead_code)]
 pub async fn mark_outbox_failed(
     pool: &sqlx::PgPool,
-    id: Uuid,
+    event: &OutboxEvent,
     error: &str,
 ) -> anyhow::Result<bool> {
     let result = sqlx::query!(
         r#"UPDATE horae_outbox
-              SET available_at = now() + LEAST(power(2::double precision, attempts), 300)::int * interval '1 second',
-                  last_error = $2
-            WHERE id = $1 AND delivered_at IS NULL"#,
-        id,
+              SET available_at = now() + LEAST(power(2::double precision, LEAST(attempts, 9)), 300)::int * interval '1 second',
+                  last_error = $4, claim_token = NULL
+            WHERE id = $1 AND org_id = $2 AND claim_token = $3
+              AND delivered_at IS NULL AND available_at > now()"#,
+        event.id,
+        event.org_id,
+        event.claim_token,
         error,
     )
     .execute(pool)
@@ -139,7 +182,7 @@ pub async fn enqueue(
     idempotency_key: &str,
 ) -> anyhow::Result<Uuid> {
     let id = Uuid::now_v7();
-    let encoded = serde_json::to_value(payload)?;
+    let encoded = encode_payload(payload)?;
     let row = sqlx::query!(
         r#"INSERT INTO horae_jobs (id, org_id, kind, payload, idempotency_key)
            VALUES ($1, $2, $3, $4, $5)
@@ -165,7 +208,7 @@ pub async fn enqueue_csv(
     idempotency_key: &str,
 ) -> anyhow::Result<Uuid> {
     let id = Uuid::now_v7();
-    let payload = serde_json::to_value(JobPayload::HarvestCsv { mode })?;
+    let payload = encode_payload(&JobPayload::HarvestCsv { mode })?;
     let mut tx = pool.begin().await?;
     let row = sqlx::query!(
         r#"INSERT INTO horae_jobs (id, org_id, kind, payload, idempotency_key)
@@ -279,8 +322,12 @@ pub async fn retry(pool: &sqlx::PgPool, org_id: Uuid, id: Uuid) -> anyhow::Resul
     let result = sqlx::query!(
         r#"UPDATE horae_jobs
               SET status = 'queued', available_at = now(), lease_until = NULL,
-                  worker_id = NULL, last_error = NULL, finished_at = NULL, updated_at = now()
-            WHERE id = $1 AND org_id = $2 AND status IN ('failed', 'cancelled')"#,
+                  attempts = 0, worker_id = NULL, last_error = NULL,
+                  finished_at = NULL, updated_at = now()
+            WHERE id = $1 AND org_id = $2 AND status IN ('failed', 'cancelled')
+              AND (kind <> 'harvest_csv_import' OR EXISTS (
+                  SELECT 1 FROM horae_job_uploads u WHERE u.job_id = horae_jobs.id AND u.org_id = $2
+              ))"#,
         id,
         org_id,
     )
@@ -371,7 +418,7 @@ async fn cleanup(pool: &sqlx::PgPool) -> anyhow::Result<()> {
         r#"DELETE FROM horae_job_uploads u
              USING horae_jobs j
             WHERE u.job_id = j.id
-              AND j.status IN ('succeeded', 'failed', 'cancelled')
+              AND j.status = 'succeeded'
               AND j.finished_at < now() - interval '1 day'"#
     )
     .execute(pool)
@@ -389,16 +436,27 @@ async fn cleanup(pool: &sqlx::PgPool) -> anyhow::Result<()> {
 struct ClaimedJob {
     id: Uuid,
     org_id: Uuid,
-    payload: JobPayload,
+    payload: serde_json::Value,
 }
 
 async fn claim(pool: &sqlx::PgPool, worker_id: &str) -> anyhow::Result<Option<ClaimedJob>> {
+    sqlx::query!(
+        r#"UPDATE horae_jobs
+              SET status = 'failed', lease_until = NULL, worker_id = NULL,
+                  finished_at = now(), updated_at = now(),
+                  last_error = COALESCE(last_error, 'Job attempt limit reached after interruption')
+            WHERE attempts >= max_attempts
+              AND (status = 'queued' OR (status = 'running' AND lease_until < now()))"#
+    )
+    .execute(pool)
+    .await?;
     let row = sqlx::query!(
         r#"WITH candidate AS (
              SELECT id
                FROM horae_jobs
-              WHERE (status = 'queued' AND available_at <= now())
-                 OR (status = 'running' AND lease_until < now())
+              WHERE attempts < max_attempts
+                AND ((status = 'queued' AND available_at <= now())
+                  OR (status = 'running' AND lease_until < now()))
               ORDER BY available_at, created_at
               FOR UPDATE SKIP LOCKED
               LIMIT 1
@@ -415,14 +473,11 @@ async fn claim(pool: &sqlx::PgPool, worker_id: &str) -> anyhow::Result<Option<Cl
     )
     .fetch_optional(pool)
     .await?;
-    row.map(|r| {
-        Ok(ClaimedJob {
-            id: r.id,
-            org_id: r.org_id,
-            payload: serde_json::from_value(r.payload).context("invalid durable job payload")?,
-        })
-    })
-    .transpose()
+    Ok(row.map(|r| ClaimedJob {
+        id: r.id,
+        org_id: r.org_id,
+        payload: r.payload,
+    }))
 }
 
 async fn execute(state: &AppState, worker_id: &str, job: ClaimedJob) -> anyhow::Result<()> {
@@ -465,7 +520,8 @@ async fn execute(state: &AppState, worker_id: &str, job: ClaimedJob) -> anyhow::
     });
 
     let result = async {
-        match &job.payload {
+        let payload = decode_payload(job.payload.clone())?;
+        match &payload {
             JobPayload::HarvestApi { mode, sync } => {
                 let cfg = state.harvest.clone().context("Harvest is not configured")?;
                 let currency = sqlx::query_scalar!(
@@ -553,7 +609,8 @@ async fn execute(state: &AppState, worker_id: &str, job: ClaimedJob) -> anyhow::
             sqlx::query!(
                 r#"UPDATE horae_jobs
                       SET status = CASE WHEN attempts >= max_attempts THEN 'failed' ELSE 'queued' END,
-                          available_at = now() + LEAST(power(2::double precision, attempts), 300)::int * interval '1 second',
+                          available_at = now() + LEAST(power(2::double precision, LEAST(attempts, 9)), 300)::int * interval '1 second',
+                          finished_at = CASE WHEN attempts >= max_attempts THEN now() ELSE NULL END,
                           lease_until = NULL, worker_id = NULL, last_error = $1, updated_at = now()
                     WHERE id = $2 AND worker_id = $3"#,
                 error.to_string(),
@@ -570,6 +627,162 @@ async fn execute(state: &AppState, worker_id: &str, job: ClaimedJob) -> anyhow::
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn payload_versions_preserve_legacy_jobs_and_reject_unknown_versions() {
+        let payload = JobPayload::HarvestCsv {
+            mode: ImportMode::DryRun,
+        };
+        let versioned = encode_payload(&payload).unwrap();
+        assert_eq!(versioned["version"], 1);
+        assert_eq!(decode_payload(versioned).unwrap().kind(), payload.kind());
+        assert_eq!(
+            decode_payload(serde_json::to_value(&payload).unwrap())
+                .unwrap()
+                .kind(),
+            payload.kind()
+        );
+        assert!(decode_payload(serde_json::json!({"version": 2, "payload": payload})).is_err());
+    }
+
+    #[sqlx::test]
+    #[serial_test::serial]
+    async fn expired_final_attempt_fails_without_claiming_again(pool: sqlx::PgPool) {
+        let org_id = org(&pool).await;
+        let id = enqueue(&pool, org_id, &JobPayload::Synthetic, "crashed")
+            .await
+            .unwrap();
+        let _claimed = claim(&pool, "crashed-worker").await.unwrap().unwrap();
+        sqlx::query!(
+            "UPDATE horae_jobs SET attempts = max_attempts, lease_until = now() - interval '1 second' WHERE id = $1", id
+        ).execute(&pool).await.unwrap();
+        let next_id = enqueue(&pool, org_id, &JobPayload::Synthetic, "next")
+            .await
+            .unwrap();
+        assert_eq!(
+            claim(&pool, "replacement").await.unwrap().unwrap().id,
+            next_id
+        );
+        let failed = status(&pool, org_id, id).await.unwrap().unwrap();
+        assert_eq!(failed.status, "failed");
+        assert!(failed.finished_at.is_some());
+        assert!(
+            failed
+                .last_error
+                .as_deref()
+                .unwrap()
+                .contains("attempt limit")
+        );
+    }
+
+    #[sqlx::test]
+    #[serial_test::serial]
+    async fn final_failure_is_retained_and_manual_retry_gets_a_new_budget(pool: sqlx::PgPool) {
+        let org_id = org(&pool).await;
+        let payload = JobPayload::HarvestApi {
+            mode: ImportMode::DryRun,
+            sync: SyncScope::Incremental,
+        };
+        let id = enqueue(&pool, org_id, &payload, "final-error")
+            .await
+            .unwrap();
+        sqlx::query!("UPDATE horae_jobs SET max_attempts = 1 WHERE id = $1", id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        let job = claim(&pool, "worker").await.unwrap().unwrap();
+        execute(&state(pool.clone()), "worker", job).await.unwrap();
+        let failed = status(&pool, org_id, id).await.unwrap().unwrap();
+        assert_eq!(failed.status, "failed");
+        assert!(failed.finished_at.is_some());
+        assert!(retry(&pool, org_id, id).await.unwrap());
+        assert_eq!(claim(&pool, "manual-retry").await.unwrap().unwrap().id, id);
+    }
+
+    #[sqlx::test]
+    #[serial_test::serial]
+    async fn invalid_stored_payloads_reach_a_terminal_error(pool: sqlx::PgPool) {
+        let org_id = org(&pool).await;
+        for (index, payload) in [
+            serde_json::json!({"kind": "unknown"}),
+            serde_json::json!({"version": 999, "payload": {}}),
+            serde_json::json!({"version": 1, "payload": {}}),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let id = enqueue(
+                &pool,
+                org_id,
+                &JobPayload::Synthetic,
+                &format!("invalid-{index}"),
+            )
+            .await
+            .unwrap();
+            sqlx::query!(
+                "UPDATE horae_jobs SET payload = $2, max_attempts = 1 WHERE id = $1",
+                id,
+                payload
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            let job = claim(&pool, "invalid-worker").await.unwrap().unwrap();
+            execute(&state(pool.clone()), "invalid-worker", job)
+                .await
+                .unwrap();
+            let failed = status(&pool, org_id, id).await.unwrap().unwrap();
+            assert_eq!(failed.status, "failed");
+            assert!(failed.finished_at.is_some());
+            assert!(failed.last_error.is_some());
+            assert!(claim(&pool, "another-worker").await.unwrap().is_none());
+        }
+    }
+
+    #[sqlx::test]
+    #[serial_test::serial]
+    async fn cleanup_retains_retryable_uploads_and_deletes_expired_jobs(pool: sqlx::PgPool) {
+        let org_id = org(&pool).await;
+        let id = enqueue_csv(
+            &pool,
+            org_id,
+            ImportMode::DryRun,
+            b"csv".to_vec(),
+            "retention",
+        )
+        .await
+        .unwrap();
+        assert!(cancel(&pool, org_id, id).await.unwrap());
+        sqlx::query!(
+            "UPDATE horae_jobs SET finished_at = now() - interval '2 days' WHERE id = $1",
+            id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        cleanup(&pool).await.unwrap();
+        assert!(
+            retry(&pool, org_id, id).await.unwrap(),
+            "upload must survive while the job is retryable"
+        );
+        assert!(cancel(&pool, org_id, id).await.unwrap());
+        sqlx::query!(
+            "UPDATE horae_jobs SET finished_at = now() - interval '31 days' WHERE id = $1",
+            id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        cleanup(&pool).await.unwrap();
+        assert!(status(&pool, org_id, id).await.unwrap().is_none());
+        assert!(
+            sqlx::query!("SELECT job_id FROM horae_job_uploads WHERE job_id = $1", id)
+                .fetch_optional(&pool)
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
 
     fn state(pool: sqlx::PgPool) -> AppState {
         AppState::new(
@@ -797,7 +1010,82 @@ mod tests {
         tx.commit().await.unwrap();
         let event = claim_outbox(&pool).await.unwrap().unwrap();
         assert_eq!(event.id, id);
-        assert!(mark_outbox_delivered(&pool, id).await.unwrap());
-        assert!(!mark_outbox_delivered(&pool, id).await.unwrap());
+        assert!(mark_outbox_delivered(&pool, &event).await.unwrap());
+        assert!(!mark_outbox_delivered(&pool, &event).await.unwrap());
+    }
+
+    #[sqlx::test]
+    #[serial_test::serial]
+    async fn outbox_rollback_does_not_publish_an_event(pool: sqlx::PgPool) {
+        let org_id = org(&pool).await;
+        let mut tx = pool.begin().await.unwrap();
+        enqueue_outbox(&mut tx, org_id, "rollback", serde_json::json!({}))
+            .await
+            .unwrap();
+        assert!(claim_outbox(&pool).await.unwrap().is_none());
+        tx.rollback().await.unwrap();
+        assert!(claim_outbox(&pool).await.unwrap().is_none());
+    }
+
+    #[sqlx::test]
+    #[serial_test::serial]
+    async fn outbox_stale_claims_cannot_acknowledge_or_reschedule_delivery(pool: sqlx::PgPool) {
+        let org_id = org(&pool).await;
+        let mut tx = pool.begin().await.unwrap();
+        let id = enqueue_outbox(&mut tx, org_id, "delivery", serde_json::json!({}))
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+        let original = claim_outbox(&pool).await.unwrap().unwrap();
+        assert!(claim_outbox(&pool).await.unwrap().is_none());
+        sqlx::query!(
+            "UPDATE horae_outbox SET available_at = now() - interval '1 second' WHERE id = $1",
+            id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        assert!(!mark_outbox_delivered(&pool, &original).await.unwrap());
+        let replacement = claim_outbox(&pool).await.unwrap().unwrap();
+        assert_ne!(original.claim_token, replacement.claim_token);
+        assert_eq!(replacement.attempts, 2);
+        assert!(!mark_outbox_delivered(&pool, &original).await.unwrap());
+        assert!(
+            !mark_outbox_failed(&pool, &original, "stale failure")
+                .await
+                .unwrap()
+        );
+        let mut foreign = replacement.clone();
+        foreign.org_id = Uuid::now_v7();
+        assert!(!mark_outbox_delivered(&pool, &foreign).await.unwrap());
+        assert!(
+            !mark_outbox_failed(&pool, &foreign, "foreign failure")
+                .await
+                .unwrap()
+        );
+        assert!(
+            mark_outbox_failed(&pool, &replacement, "delivery failed")
+                .await
+                .unwrap()
+        );
+        assert!(!mark_outbox_delivered(&pool, &replacement).await.unwrap());
+        assert!(
+            !mark_outbox_failed(&pool, &replacement, "duplicate failure")
+                .await
+                .unwrap()
+        );
+        assert!(
+            claim_outbox(&pool).await.unwrap().is_none(),
+            "failure must back off"
+        );
+        let failure = sqlx::query!(
+            "SELECT last_error, attempts FROM horae_outbox WHERE id = $1",
+            id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(failure.last_error.as_deref(), Some("delivery failed"));
+        assert_eq!(failure.attempts, 2);
     }
 }

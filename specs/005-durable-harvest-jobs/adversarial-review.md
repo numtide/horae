@@ -37,9 +37,10 @@ those checks. The PR must remain open until these cases are addressed.
 The follow-up retains the worker join handle, drains it before runtime exit,
 enforces a deadline, and wires SIGTERM into the shutdown path. It also routes
 configuration and upload lookup failures through the persisted error/retry path.
-Invalid payload decoding and terminal retry bookkeeping remain open.
+The subsequent recovery fixes below also address invalid payload decoding and
+terminal retry bookkeeping.
 
-All 11 `jobs::tests` pass with a temporary PostgreSQL instance, including:
+The first follow-up passed 11 `jobs::tests` with a temporary PostgreSQL instance, including:
 
 - Waiting for active work and joining it after a drain deadline.
 - Leaving queued jobs unclaimed when shutdown is requested.
@@ -50,3 +51,25 @@ All 11 `jobs::tests` pass with a temporary PostgreSQL instance, including:
 The configuration regression failed before the fix with `Harvest is not configured` escaping from `execute`. SIGTERM is wired in the server entry point;
 these tests exercise worker shutdown directly, not operating-system signalling
 against a deployed server. Passing them does not close the remaining findings.
+
+## Recovery and outbox follow-up
+
+The expanded suite passes 18 tests against PostgreSQL. It verifies that expired
+final attempts become failed without being claimed again, terminal failures
+receive retention timestamps, manual retry resets the attempt budget, and
+malformed or unsupported stored payloads reach a recorded terminal error.
+
+Payloads now have a version-1 envelope with legacy read compatibility. CSV
+uploads remain available throughout the retryable retention window; deleting an
+expired terminal job also deletes its upload.
+
+Outbox claims now carry a UUIDv7 token. Acknowledgements require a current,
+unexpired token and matching organization. Tests reject stale, duplicate and
+foreign acknowledgements, retain failure details with backoff, and verify that
+rolling back the enqueue transaction publishes no event. This does not provide
+exactly-once external delivery.
+
+Still open: cooperative running cancellation, fencing of import writes after
+lease loss, durable checkpoints and live progress, configurable enqueue policy,
+and history restoration/error recovery in the UI. Baseline CI success must not
+be used to close these findings.
