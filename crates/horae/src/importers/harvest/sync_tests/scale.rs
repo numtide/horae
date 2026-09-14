@@ -73,6 +73,10 @@ fn memory_status() -> String {
 }
 
 fn scale_server(records: u64) -> Server {
+    scale_server_with_error_interval(records, 1000)
+}
+
+fn scale_server_with_error_interval(records: u64, invalid_every: u64) -> Server {
     let start = chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
     Server::start(move |url| {
         let collection = url.path().rsplit('/').next().unwrap();
@@ -101,7 +105,7 @@ fn scale_server(records: u64) -> Server {
                             "notes": format!("scale entry {n}"),
                             "project": {"id": 2},
                             "task": {"id": 3},
-                            "user": {"id": if n % 1000 == 0 { 5 } else { 4 }},
+                            "user": {"id": if n % invalid_every == 0 { 5 } else { 4 }},
                             "updated_at": day(3)
                         })
                     })
@@ -370,5 +374,70 @@ async fn durable_measurement_finishes_from_its_eof_checkpoint(pool: PgPool) {
         );
         assert_eq!(report.summary.time_entries.errored, 1);
         assert_stored_rows(&pool, org, if mode == ImportMode::DryRun { 0 } else { 204 }).await;
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn durable_api_report_preserves_overflow_errors_after_recovery(pool: PgPool) {
+    let org = setup(&pool).await;
+    let server = scale_server_with_error_interval(1000, 2);
+    let reference = run_api_import_with_http(
+        &pool,
+        org,
+        "USD",
+        &config(),
+        ImportMode::DryRun,
+        SyncScope::Full,
+        ApiHttp::local(server.base.clone()),
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(reference.row_errors.len(), 500);
+    for (index, mode) in [ImportMode::DryRun, ImportMode::Commit, ImportMode::Commit]
+        .into_iter()
+        .enumerate()
+    {
+        // The helper rejects final success, then recovers from EOF without
+        // additional HTTP requests and checks the persisted report is unchanged.
+        let report = measured_job(&pool, org, &server, mode).await;
+        assert!(report.reconciles());
+        assert_eq!(report.error_count(), 500);
+        assert_eq!(report.summary.time_entries.processed(), 1000);
+        assert_eq!(
+            report.summary.time_entries.created,
+            if index < 2 { 500 } else { 0 }
+        );
+        assert_eq!(
+            report.summary.time_entries.skipped,
+            if index < 2 { 0 } else { 500 }
+        );
+        assert!(serde_json::to_vec(&report).unwrap().len() <= 16 * 1024);
+        assert_stored_rows(&pool, org, if mode == ImportMode::DryRun { 0 } else { 500 }).await;
+
+        let job = crate::jobs::list(&pool, org, 1, None)
+            .await
+            .unwrap()
+            .remove(0);
+        let end = i64::try_from(report.archived_error_chunks()).unwrap();
+        assert!(end > 0, "the fixture must exercise archived errors");
+        let mut next = 0;
+        let mut bytes = Vec::new();
+        while next < end {
+            let chunks = crate::jobs::report::chunks(&pool, org, job.id, next, end)
+                .await
+                .unwrap();
+            next += chunks.len() as i64;
+            for chunk in chunks {
+                assert!(chunk.len() <= 64 * 1024);
+                bytes.extend(chunk);
+            }
+        }
+        let mut errors = serde_json::Deserializer::from_slice(&bytes)
+            .into_iter::<horae_core::importers::harvest::types::RowError>()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        errors.extend(report.row_errors);
+        assert_eq!(errors, reference.row_errors);
     }
 }

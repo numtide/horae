@@ -614,3 +614,23 @@ requests. Checkpoint JSON size is unchanged and HWM is 58,244 KiB. See
 open for the measured CSV preview overhead; T021 remains open for the broader
 legacy state matrix, API overflow and socket-level/memory stress. Full
 process/browser acceptance remains a separate gate.
+
+## API overflow recovery
+
+A database-backed HTTP fixture now supplies 1,000 API entries, including 500
+unmatched-user errors spread across ten pages. The durable test exercises
+preview, commit and reimport. Each run rejects final success, then recovers from
+its EOF checkpoint with an identical persisted report and no more HTTP requests.
+
+The test passes: report metadata remains at most 16 KiB, error details actually
+overflow into bounded archive fragments, and reconstruction of those fragments
+plus the inline tail exactly matches the uninterrupted preview's 500 errors.
+Preview leaves no entries or provenance; commit stores 500 entries and 30,000
+integer minutes; reimport skips all 500 without duplicates. Error outcomes keep
+the watermark unchanged. Server all-target Clippy and Rust formatting pass.
+This characterizes the existing archival behavior; no production code, SQL,
+migration or dependency changed.
+
+The remaining T021 gaps are the broader legacy state matrix, socket-level/memory
+stress and browser acceptance, alongside T007's CSV preview overhead and T016's
+actual restart acceptance.
