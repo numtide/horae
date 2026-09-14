@@ -143,29 +143,37 @@ async fn measured_apply(
     org: Uuid,
     server: &Server,
     mode: ImportMode,
+    durable: bool,
 ) -> ImportReport {
     let started = Instant::now();
-    eprintln!("apply_start mode={mode:?} {}", memory_status());
+    eprintln!(
+        "apply_start mode={mode:?} durable={durable} {}",
+        memory_status()
+    );
     let cfg = config();
     let requests_before = server.count.load(Ordering::Acquire);
-    let report = run_api_import_with_http(
-        pool,
-        org,
-        "USD",
-        &cfg,
-        mode,
-        SyncScope::Full,
-        ApiHttp::local(server.base.clone()),
-        None,
-    )
-    .await
-    .unwrap();
+    let report = if durable {
+        measured_job(pool, org, server, mode).await
+    } else {
+        run_api_import_with_http(
+            pool,
+            org,
+            "USD",
+            &cfg,
+            mode,
+            SyncScope::Full,
+            ApiHttp::local(server.base.clone()),
+            None,
+        )
+        .await
+        .unwrap()
+    };
     assert_eq!(
         server.count.load(Ordering::Acquire) - requests_before,
         RECORDS as usize / 100 + 4
     );
     eprintln!(
-        "apply_complete mode={mode:?} elapsed_s={:.3} {}",
+        "apply_complete mode={mode:?} durable={durable} elapsed_s={:.3} {}",
         started.elapsed().as_secs_f64(),
         memory_status()
     );
@@ -182,6 +190,99 @@ async fn measured_apply(
     report
 }
 
+async fn measured_job(pool: &PgPool, org: Uuid, server: &Server, mode: ImportMode) -> ImportReport {
+    use crate::{config::JobPolicy, jobs};
+
+    let id = jobs::enqueue(
+        pool,
+        org,
+        &jobs::JobPayload::HarvestApi {
+            mode,
+            sync: SyncScope::Full,
+        },
+        &Uuid::now_v7().to_string(),
+        JobPolicy { max_attempts: 1 },
+    )
+    .await
+    .unwrap();
+    // Keep the EOF checkpoint available for size measurements and exercise its
+    // recovery. The worker's heartbeat remains active throughout the import.
+    sqlx::query!(
+        "ALTER TABLE horae_jobs ADD CONSTRAINT reject_job_completion CHECK (status <> 'succeeded')"
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    let (lease, stop) = jobs::claim_lease_for_test(pool).await;
+    let started = Instant::now();
+    jobs::run_claimed(pool, &lease, stop, async {
+        let report = run_api_import_with_http(
+            pool,
+            org,
+            "USD",
+            &config(),
+            mode,
+            SyncScope::Full,
+            ApiHttp::local(server.base.clone()),
+            Some(&lease),
+        )
+        .await?;
+        job_report(&report)
+    })
+    .await
+    .unwrap();
+    let status = jobs::status(pool, org, id).await.unwrap().unwrap();
+    assert_eq!(status.status, "failed");
+    assert!(
+        status
+            .last_error
+            .as_deref()
+            .unwrap()
+            .contains("reject_job_completion")
+    );
+    let checkpoint = sqlx::query!(
+        "SELECT pg_column_size(checkpoint) AS stored_bytes, octet_length(checkpoint::text) AS json_bytes
+         FROM horae_jobs WHERE id = $1",
+        id,
+    ).fetch_one(pool).await.unwrap();
+    eprintln!(
+        "checkpoint_eof mode={mode:?} elapsed_s={:.3} stored_bytes={} json_bytes={} {}",
+        started.elapsed().as_secs_f64(),
+        checkpoint.stored_bytes.unwrap(),
+        checkpoint.json_bytes.unwrap(),
+        memory_status()
+    );
+    assert!(checkpoint.json_bytes.unwrap() > 0);
+    sqlx::query!("ALTER TABLE horae_jobs DROP CONSTRAINT reject_job_completion")
+        .execute(pool)
+        .await
+        .unwrap();
+    assert!(jobs::retry(pool, org, id).await.unwrap());
+    let before = server.count.load(Ordering::Acquire);
+    let (lease, stop) = jobs::claim_lease_for_test(pool).await;
+    jobs::run_claimed(pool, &lease, stop, async {
+        let report = run_api_import_with_http(
+            pool,
+            org,
+            "USD",
+            &config(),
+            mode,
+            SyncScope::Full,
+            ApiHttp::local(server.base.clone()),
+            Some(&lease),
+        )
+        .await?;
+        job_report(&report)
+    })
+    .await
+    .unwrap();
+    assert_eq!(server.count.load(Ordering::Acquire), before);
+    let complete = jobs::status(pool, org, id).await.unwrap().unwrap();
+    assert_eq!(complete.status, "succeeded");
+    assert_eq!(complete.report, status.report);
+    serde_json::from_value(complete.report.unwrap()).unwrap()
+}
+
 #[sqlx::test(migrations = "./migrations")]
 #[ignore = "100,000-entry scale measurement; run explicitly with --release --nocapture"]
 async fn api_100k_commit_and_reimport(pool: PgPool) {
@@ -189,10 +290,10 @@ async fn api_100k_commit_and_reimport(pool: PgPool) {
     let org = setup(&pool).await;
     eprintln!("baseline {}", memory_status());
     let server = scale_server(RECORDS);
-    let first = measured_apply(&pool, org, &server, ImportMode::Commit).await;
+    let first = measured_apply(&pool, org, &server, ImportMode::Commit, false).await;
     assert_eq!(first.summary.time_entries.created, RECORDS - INVALID);
     assert_stored_rows(&pool, org, (RECORDS - INVALID) as i64).await;
-    let repeated = measured_apply(&pool, org, &server, ImportMode::Commit).await;
+    let repeated = measured_apply(&pool, org, &server, ImportMode::Commit, false).await;
     assert_eq!(repeated.summary.time_entries.created, 0);
     assert_eq!(repeated.summary.time_entries.skipped, RECORDS - INVALID);
     assert_stored_rows(&pool, org, (RECORDS - INVALID) as i64).await;
@@ -205,7 +306,7 @@ async fn api_100k_dry_run(pool: PgPool) {
     let org = setup(&pool).await;
     eprintln!("baseline {}", memory_status());
     let server = scale_server(RECORDS);
-    let preview = measured_apply(&pool, org, &server, ImportMode::DryRun).await;
+    let preview = measured_apply(&pool, org, &server, ImportMode::DryRun, false).await;
     assert_eq!(preview.summary.time_entries.created, RECORDS - INVALID);
     assert_stored_rows(&pool, org, 0).await;
     let parents = sqlx::query_scalar!("SELECT count(*) FROM clients WHERE org_id = $1", org)
@@ -213,4 +314,48 @@ async fn api_100k_dry_run(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(parents, Some(0));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[ignore = "100,000-entry durable API measurement; run explicitly with --release --nocapture"]
+async fn api_durable_100k_commit_and_reimport(pool: PgPool) {
+    require_release();
+    let org = setup(&pool).await;
+    eprintln!("baseline {}", memory_status());
+    let server = scale_server(RECORDS);
+    let first = measured_apply(&pool, org, &server, ImportMode::Commit, true).await;
+    assert_eq!(first.summary.time_entries.created, RECORDS - INVALID);
+    assert_stored_rows(&pool, org, (RECORDS - INVALID) as i64).await;
+    let repeated = measured_apply(&pool, org, &server, ImportMode::Commit, true).await;
+    assert_eq!(repeated.summary.time_entries.created, 0);
+    assert_eq!(repeated.summary.time_entries.skipped, RECORDS - INVALID);
+    assert_stored_rows(&pool, org, (RECORDS - INVALID) as i64).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[ignore = "100,000-entry durable API measurement; run explicitly with --release --nocapture"]
+async fn api_durable_100k_dry_run(pool: PgPool) {
+    require_release();
+    let org = setup(&pool).await;
+    eprintln!("baseline {}", memory_status());
+    let server = scale_server(RECORDS);
+    let preview = measured_apply(&pool, org, &server, ImportMode::DryRun, true).await;
+    assert_eq!(preview.summary.time_entries.created, RECORDS - INVALID);
+    assert_stored_rows(&pool, org, 0).await;
+    let parents = sqlx::query_scalar!("SELECT count(*) FROM clients WHERE org_id = $1", org)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(parents, Some(0));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn durable_measurement_finishes_from_its_eof_checkpoint(pool: PgPool) {
+    let org = setup(&pool).await;
+    let server = scale_server(205);
+    let report = measured_job(&pool, org, &server, ImportMode::DryRun).await;
+    assert_eq!(report.summary.time_entries.processed(), 205);
+    assert_eq!(report.summary.time_entries.created, 204);
+    assert_eq!(report.summary.time_entries.errored, 1);
+    assert_stored_rows(&pool, org, 0).await;
 }
