@@ -213,7 +213,6 @@ fn main() -> anyhow::Result<()> {
 
                 // Start the background poller for forgotten timers (US3).
                 scheduler::spawn(state::global_state().await);
-                let jobs_shutdown = jobs::spawn(state::global_state().await);
 
                 // Session middleware (Postgres-backed, idempotent migrate).
                 let session_layer =
@@ -259,13 +258,17 @@ fn main() -> anyhow::Result<()> {
                     .layer(session_layer);
 
                 let listener = tokio::net::TcpListener::bind(&addr).await?;
+                let worker = jobs::spawn(state::global_state().await);
+                let stop_worker = worker.stop_sender();
                 tracing::info!("Listening on {addr}");
-                axum::serve(listener, router)
-                    .with_graceful_shutdown(async {
-                        let _ = tokio::signal::ctrl_c().await;
+                let server_result = axum::serve(listener, router)
+                    .with_graceful_shutdown(async move {
+                        shutdown_signal().await;
+                        stop_worker.send_replace(true);
                     })
-                    .await?;
-                let _ = jobs_shutdown.send(true);
+                    .await;
+                worker.shutdown(std::time::Duration::from_secs(30)).await?;
+                server_result?;
                 anyhow::Ok(())
             })?;
         }
@@ -277,6 +280,30 @@ fn main() -> anyhow::Result<()> {
 #[cfg(feature = "web")]
 fn main() {
     dioxus::launch(app::App);
+}
+
+#[cfg(feature = "server")]
+async fn shutdown_signal() {
+    let interrupt = async {
+        if let Err(error) = tokio::signal::ctrl_c().await {
+            tracing::error!(%error, "could not listen for Ctrl-C; shutting down");
+        }
+    };
+    #[cfg(unix)]
+    let terminate = async {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut signal) => {
+                signal.recv().await;
+            }
+            Err(error) => tracing::error!(%error, "could not listen for SIGTERM; shutting down"),
+        }
+    };
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+    tokio::select! {
+        _ = interrupt => {},
+        _ = terminate => {},
+    }
 }
 
 #[cfg(not(any(feature = "server", feature = "web")))]

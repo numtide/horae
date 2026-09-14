@@ -289,45 +289,81 @@ pub async fn retry(pool: &sqlx::PgPool, org_id: Uuid, id: Uuid) -> anyhow::Resul
     Ok(result.rows_affected() == 1)
 }
 
-pub fn spawn(state: &'static AppState) -> tokio::sync::watch::Sender<bool> {
-    let (shutdown, mut shutdown_rx) = tokio::sync::watch::channel(false);
-    tokio::spawn(async move {
-        let worker_id = Uuid::now_v7().to_string();
-        loop {
-            if *shutdown_rx.borrow() {
-                break;
-            }
-            if let Err(error) = cleanup(&state.db).await {
-                tracing::warn!(%error, "durable job cleanup failed");
-            }
-            tokio::select! {
-                _ = shutdown_rx.changed() => break,
-                result = claim(&state.db, &worker_id) => {
-                    match result {
-                        Ok(Some(job)) => {
-                            if let Err(error) = execute(state, &worker_id, job).await {
-                                tracing::warn!(%error, "durable job failed");
-                            }
-                        }
-                        Ok(None) => {
-                            tokio::select! {
-                                _ = shutdown_rx.changed() => break,
-                                _ = tokio::time::sleep(POLL) => {}
-                            }
-                        }
-                        Err(error) => {
-                            tracing::warn!(%error, "durable job poll failed");
-                            tokio::select! {
-                                _ = shutdown_rx.changed() => break,
-                                _ = tokio::time::sleep(POLL) => {}
-                            }
-                        }
+pub struct Worker {
+    stop: tokio::sync::watch::Sender<bool>,
+    task: tokio::task::JoinHandle<()>,
+}
+
+impl Worker {
+    pub fn stop_sender(&self) -> tokio::sync::watch::Sender<bool> {
+        self.stop.clone()
+    }
+
+    pub fn request_shutdown(&self) {
+        self.stop.send_replace(true);
+    }
+
+    /// Drain the current job before dropping the runtime. If the deadline is
+    /// exceeded, await task cancellation so its lease can expire without a
+    /// detached worker continuing to perform writes.
+    pub async fn shutdown(mut self, grace: Duration) -> anyhow::Result<()> {
+        self.request_shutdown();
+        match tokio::time::timeout(grace, &mut self.task).await {
+            Ok(result) => result.context("durable worker stopped unexpectedly"),
+            Err(_) => {
+                self.task.abort();
+                match (&mut self.task).await {
+                    Err(error) if error.is_cancelled() => {
+                        tracing::warn!("durable worker drain timed out; active lease will expire");
+                        Ok(())
                     }
+                    result => result.context("durable worker stopped unexpectedly"),
                 }
             }
         }
-    });
-    shutdown
+    }
+}
+
+impl Drop for Worker {
+    fn drop(&mut self) {
+        self.stop.send_replace(true);
+        self.task.abort();
+    }
+}
+
+pub fn spawn(state: &AppState) -> Worker {
+    let (stop, receiver) = tokio::sync::watch::channel(false);
+    let state = state.clone();
+    let task = tokio::spawn(async move { run_worker(&state, receiver).await });
+    Worker { stop, task }
+}
+
+async fn run_worker(state: &AppState, mut stop: tokio::sync::watch::Receiver<bool>) {
+    let worker_id = Uuid::now_v7().to_string();
+    while !*stop.borrow() && stop.has_changed().is_ok() {
+        if let Err(error) = cleanup(&state.db).await {
+            tracing::warn!(%error, "durable job cleanup failed");
+        }
+        if *stop.borrow() || stop.has_changed().is_err() {
+            break;
+        }
+        // Finish an in-flight claim instead of dropping a query which may
+        // already have assigned a lease in PostgreSQL.
+        match claim(&state.db, &worker_id).await {
+            Ok(Some(job)) => {
+                if let Err(error) = execute(state, &worker_id, job).await {
+                    tracing::warn!(%error, "durable job failed");
+                }
+                continue;
+            }
+            Ok(None) => {}
+            Err(error) => tracing::warn!(%error, "durable job poll failed"),
+        }
+        tokio::select! {
+            _ = stop.changed() => break,
+            _ = tokio::time::sleep(POLL) => {}
+        }
+    }
 }
 
 async fn cleanup(pool: &sqlx::PgPool) -> anyhow::Result<()> {
@@ -428,68 +464,71 @@ async fn execute(state: &AppState, worker_id: &str, job: ClaimedJob) -> anyhow::
         }
     });
 
-    let result = match &job.payload {
-        JobPayload::HarvestApi { mode, sync } => {
-            let cfg = state.harvest.clone().context("Harvest is not configured")?;
-            let currency = sqlx::query_scalar!(
-                "SELECT default_currency FROM organizations WHERE id = $1",
-                job.org_id
-            )
-            .fetch_one(&state.db)
-            .await?;
-            crate::importers::harvest::run_api_import(
-                &state.db, job.org_id, &currency, &cfg, *mode, *sync,
-            )
-            .await
-            .map(|report| {
-                let processed = report.summary.clients.processed()
-                    + report.summary.projects.processed()
-                    + report.summary.tasks.processed()
-                    + report.summary.time_entries.processed();
-                (
-                    serde_json::to_value(report).unwrap_or_default(),
-                    processed as i64,
+    let result = async {
+        match &job.payload {
+            JobPayload::HarvestApi { mode, sync } => {
+                let cfg = state.harvest.clone().context("Harvest is not configured")?;
+                let currency = sqlx::query_scalar!(
+                    "SELECT default_currency FROM organizations WHERE id = $1",
+                    job.org_id
                 )
-            })
-            .map_err(anyhow::Error::from)
-        }
-        JobPayload::HarvestCsv { mode } => {
-            let currency = sqlx::query_scalar!(
-                "SELECT default_currency FROM organizations WHERE id = $1",
-                job.org_id
-            )
-            .fetch_one(&state.db)
-            .await?;
-            let upload = sqlx::query!(
-                "SELECT body FROM horae_job_uploads WHERE job_id = $1 AND org_id = $2",
-                job.id,
-                job.org_id,
-            )
-            .fetch_one(&state.db)
-            .await?;
-            crate::importers::harvest::csv_source::import_body(
-                &state.db,
-                job.org_id,
-                &currency,
-                axum::body::Body::from(upload.body),
-                *mode,
-            )
-            .await
-            .map(|report| {
-                let processed = report.summary.clients.processed()
-                    + report.summary.projects.processed()
-                    + report.summary.tasks.processed()
-                    + report.summary.time_entries.processed();
-                (
-                    serde_json::to_value(report).unwrap_or_default(),
-                    processed as i64,
+                .fetch_one(&state.db)
+                .await?;
+                crate::importers::harvest::run_api_import(
+                    &state.db, job.org_id, &currency, &cfg, *mode, *sync,
                 )
-            })
-            .map_err(anyhow::Error::from)
+                .await
+                .map(|report| {
+                    let processed = report.summary.clients.processed()
+                        + report.summary.projects.processed()
+                        + report.summary.tasks.processed()
+                        + report.summary.time_entries.processed();
+                    (
+                        serde_json::to_value(report).unwrap_or_default(),
+                        processed as i64,
+                    )
+                })
+                .map_err(anyhow::Error::from)
+            }
+            JobPayload::HarvestCsv { mode } => {
+                let currency = sqlx::query_scalar!(
+                    "SELECT default_currency FROM organizations WHERE id = $1",
+                    job.org_id
+                )
+                .fetch_one(&state.db)
+                .await?;
+                let upload = sqlx::query!(
+                    "SELECT body FROM horae_job_uploads WHERE job_id = $1 AND org_id = $2",
+                    job.id,
+                    job.org_id,
+                )
+                .fetch_one(&state.db)
+                .await?;
+                crate::importers::harvest::csv_source::import_body(
+                    &state.db,
+                    job.org_id,
+                    &currency,
+                    axum::body::Body::from(upload.body),
+                    *mode,
+                )
+                .await
+                .map(|report| {
+                    let processed = report.summary.clients.processed()
+                        + report.summary.projects.processed()
+                        + report.summary.tasks.processed()
+                        + report.summary.time_entries.processed();
+                    (
+                        serde_json::to_value(report).unwrap_or_default(),
+                        processed as i64,
+                    )
+                })
+                .map_err(anyhow::Error::from)
+            }
+            #[cfg(test)]
+            JobPayload::Synthetic => Ok((serde_json::json!({"synthetic": true}), 0)),
         }
-        #[cfg(test)]
-        JobPayload::Synthetic => Ok((serde_json::json!({"synthetic": true}), 0)),
-    };
+    }
+    .await;
 
     let _ = heartbeat_stop.send(());
     let _ = heartbeat.await;
@@ -531,6 +570,136 @@ async fn execute(state: &AppState, worker_id: &str, job: ClaimedJob) -> anyhow::
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn state(pool: sqlx::PgPool) -> AppState {
+        AppState::new(
+            pool,
+            std::sync::Arc::new(crate::plugin::PluginRegistry::empty()),
+        )
+    }
+
+    #[tokio::test]
+    async fn shutdown_waits_for_in_flight_work() {
+        let (stop, mut receiver) = tokio::sync::watch::channel(false);
+        let (finish, finished) = tokio::sync::oneshot::channel();
+        let task = tokio::spawn(async move {
+            receiver.changed().await.unwrap();
+            finished.await.unwrap();
+        });
+        let worker = Worker { stop, task };
+        let shutdown = worker.shutdown(Duration::from_secs(5));
+        tokio::pin!(shutdown);
+        assert!(futures_util::poll!(&mut shutdown).is_pending());
+        finish.send(()).unwrap();
+        shutdown.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn shutdown_deadline_drops_and_joins_in_flight_work() {
+        let (stop, _receiver) = tokio::sync::watch::channel(false);
+        let (started, running) = tokio::sync::oneshot::channel();
+        let (completion, dropped) = tokio::sync::oneshot::channel::<()>();
+        let task = tokio::spawn(async move {
+            let _completion = completion;
+            started.send(()).unwrap();
+            std::future::pending::<()>().await;
+        });
+        running.await.unwrap();
+        Worker { stop, task }
+            .shutdown(Duration::ZERO)
+            .await
+            .unwrap();
+        assert!(
+            dropped.await.is_err(),
+            "shutdown returned before dropping the task"
+        );
+    }
+
+    #[sqlx::test]
+    #[serial_test::serial]
+    async fn stopped_worker_leaves_queued_jobs_unclaimed(pool: sqlx::PgPool) {
+        let org_id = org(&pool).await;
+        let id = enqueue(&pool, org_id, &JobPayload::Synthetic, "shutdown")
+            .await
+            .unwrap();
+        let (stop, receiver) = tokio::sync::watch::channel(true);
+        run_worker(&state(pool.clone()), receiver).await;
+        drop(stop);
+        assert_eq!(
+            status(&pool, org_id, id).await.unwrap().unwrap().status,
+            "queued"
+        );
+    }
+
+    #[sqlx::test]
+    #[serial_test::serial]
+    async fn synthetic_job_executes_through_claim_and_completion(pool: sqlx::PgPool) {
+        let org_id = org(&pool).await;
+        let id = enqueue(&pool, org_id, &JobPayload::Synthetic, "execution")
+            .await
+            .unwrap();
+        let job = claim(&pool, "synthetic-worker").await.unwrap().unwrap();
+        execute(&state(pool.clone()), "synthetic-worker", job)
+            .await
+            .unwrap();
+        let completed = status(&pool, org_id, id).await.unwrap().unwrap();
+        assert_eq!(completed.status, "succeeded");
+        assert_eq!(
+            completed.report,
+            Some(serde_json::json!({"synthetic": true}))
+        );
+        assert!(completed.finished_at.is_some());
+    }
+
+    #[sqlx::test]
+    #[serial_test::serial]
+    async fn missing_configuration_records_error_and_requeues(pool: sqlx::PgPool) {
+        let org_id = org(&pool).await;
+        let payload = JobPayload::HarvestApi {
+            mode: ImportMode::DryRun,
+            sync: SyncScope::Incremental,
+        };
+        let id = enqueue(&pool, org_id, &payload, "unconfigured")
+            .await
+            .unwrap();
+        let job = claim(&pool, "unconfigured-worker").await.unwrap().unwrap();
+        execute(&state(pool.clone()), "unconfigured-worker", job)
+            .await
+            .unwrap();
+        let failed = status(&pool, org_id, id).await.unwrap().unwrap();
+        assert_eq!(failed.status, "queued");
+        assert_eq!(
+            failed.last_error.as_deref(),
+            Some("Harvest is not configured")
+        );
+        assert!(
+            claim(&pool, "retry-worker").await.unwrap().is_none(),
+            "retry must respect backoff"
+        );
+    }
+
+    #[sqlx::test]
+    #[serial_test::serial]
+    async fn missing_csv_upload_records_error_and_requeues(pool: sqlx::PgPool) {
+        let org_id = org(&pool).await;
+        let id = enqueue(
+            &pool,
+            org_id,
+            &JobPayload::HarvestCsv {
+                mode: ImportMode::DryRun,
+            },
+            "missing-upload",
+        )
+        .await
+        .unwrap();
+        let job = claim(&pool, "csv-worker").await.unwrap().unwrap();
+        execute(&state(pool.clone()), "csv-worker", job)
+            .await
+            .unwrap();
+        let failed = status(&pool, org_id, id).await.unwrap().unwrap();
+        assert_eq!(failed.status, "queued");
+        assert!(failed.last_error.is_some());
+    }
 
     #[test]
     fn payload_kind_is_stable_and_round_trips() {
@@ -595,6 +764,7 @@ mod tests {
     #[sqlx::test]
     async fn cancellation_and_retry_are_scoped_and_idempotent(pool: sqlx::PgPool) {
         let org_id = org(&pool).await;
+        let foreign_org = org(&pool).await;
         let payload = JobPayload::HarvestApi {
             mode: ImportMode::DryRun,
             sync: SyncScope::Incremental,
@@ -602,8 +772,12 @@ mod tests {
         let id = enqueue(&pool, org_id, &payload, "cancel-retry")
             .await
             .unwrap();
+        assert!(status(&pool, foreign_org, id).await.unwrap().is_none());
+        assert!(list(&pool, foreign_org, 20).await.unwrap().is_empty());
+        assert!(!cancel(&pool, foreign_org, id).await.unwrap());
         assert!(cancel(&pool, org_id, id).await.unwrap());
         assert!(!cancel(&pool, org_id, id).await.unwrap());
+        assert!(!retry(&pool, foreign_org, id).await.unwrap());
         assert!(retry(&pool, org_id, id).await.unwrap());
         assert!(!retry(&pool, org_id, id).await.unwrap());
     }
