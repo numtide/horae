@@ -58,6 +58,13 @@ cargo run -p horae --features server -- <subcommand>     # run the server binary
 
 CLI subcommands: `serve`, `init --org-name … --admin-email … --admin-name …` (bootstrap: one org + one admin, refuses if an org exists), `migrate run`, `migrate reset --confirm`, `seed` (demo data), `user list`, `user create --email … --name … --role …`.
 
+Remote administrator commands: `import harvest-api`, `import harvest-csv FILE`,
+and `jobs status|list|report|errors|cancel|retry|wait`. They require a running
+server and a private session file selected by `--session-file` or
+`HORAE_SESSION_FILE`; they do not load deployment configuration, connect to
+PostgreSQL or start workers. See `specs/006-harvest-jobs-cli/quickstart.md` for
+authentication, preview/commit, waiting, JSON output and exit codes.
+
 These are for one-off tasks; `process-compose up` covers the normal run loop. Open
 http://localhost:8080/auth/login and "Sign in as Admin" (needs `DEV_LOGIN=1`, which the stack sets).
 

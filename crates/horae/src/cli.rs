@@ -1,8 +1,12 @@
 use clap::{Parser, Subcommand};
 
+pub mod imports;
+
 #[derive(Parser, Debug)]
 #[command(name = "horae", about = "Horae time tracking server", version)]
 pub struct Cli {
+    #[command(flatten)]
+    pub remote: RemoteOptions,
     #[command(subcommand)]
     pub command: Option<Commands>,
 }
@@ -18,6 +22,16 @@ impl Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
+    /// Submit a durable Harvest import to a running server
+    Import {
+        #[command(subcommand)]
+        action: ImportAction,
+    },
+    /// Inspect and control durable Harvest import jobs
+    Jobs {
+        #[command(subcommand)]
+        action: JobAction,
+    },
     /// Start the HTTP server
     Serve(ServeArgs),
     /// Bootstrap a fresh installation: one organization and one admin user
@@ -44,6 +58,94 @@ pub enum Commands {
     },
     /// Initialize an empty database with demo data; leave an existing demo unchanged
     Seed,
+}
+
+#[derive(clap::Args, Debug, Clone, Default)]
+pub struct RemoteOptions {
+    /// Private JSON file containing server_origin and the existing session_id
+    #[arg(long, global = true, env = "HORAE_SESSION_FILE")]
+    pub session_file: Option<std::path::PathBuf>,
+    /// Emit a single versioned JSON result for a remote command
+    #[arg(long, global = true)]
+    pub json: bool,
+}
+
+#[derive(clap::Args, Debug)]
+pub struct SubmitOptions {
+    /// Preview without persisting imported data (default: commit)
+    #[arg(long)]
+    pub dry_run: bool,
+    /// Reuse this UUIDv7 to resubmit identical input within 24 hours
+    #[arg(long)]
+    pub request_id: Option<uuid::Uuid>,
+    #[command(flatten)]
+    pub wait: WaitOptions,
+}
+
+#[derive(clap::Args, Debug)]
+pub struct WaitOptions {
+    /// Wait for the job's terminal outcome
+    #[arg(long)]
+    pub wait: bool,
+    /// Maximum waiting time in seconds; timing out does not cancel the job
+    #[arg(long, requires = "wait", value_parser = clap::value_parser!(u64).range(1..=86400))]
+    pub timeout: Option<u64>,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum ImportAction {
+    /// Import from the organization's existing Harvest connection
+    HarvestApi {
+        #[arg(long, conflicts_with = "incremental")]
+        full: bool,
+        #[arg(long)]
+        incremental: bool,
+        #[command(flatten)]
+        options: SubmitOptions,
+    },
+    /// Upload a Harvest CSV (at most 50 MiB)
+    HarvestCsv {
+        file: std::path::PathBuf,
+        #[command(flatten)]
+        options: SubmitOptions,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum JobAction {
+    /// Inspect a job's current state
+    Status { job_id: uuid::Uuid },
+    /// List a bounded page of retained jobs
+    List {
+        #[arg(long)]
+        before: Option<uuid::Uuid>,
+        #[arg(long, default_value_t = 20, value_parser = clap::value_parser!(u16).range(1..=100))]
+        limit: u16,
+    },
+    /// Read a job's confirmed outcome summary
+    Report { job_id: uuid::Uuid },
+    /// Download all retained record errors to a file
+    Errors {
+        job_id: uuid::Uuid,
+        #[arg(long)]
+        output: std::path::PathBuf,
+        #[arg(long)]
+        force: bool,
+    },
+    /// Request cooperative cancellation
+    Cancel { job_id: uuid::Uuid },
+    /// Retry an eligible failed or cancelled job
+    Retry {
+        job_id: uuid::Uuid,
+        #[command(flatten)]
+        options: WaitOptions,
+    },
+    /// Wait for a job without changing its execution
+    Wait {
+        job_id: uuid::Uuid,
+        #[arg(long, value_parser = clap::value_parser!(u64).range(1..=86400))]
+        timeout: Option<u64>,
+    },
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -87,6 +189,58 @@ pub enum UserAction {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn remote_import_and_job_commands_accept_the_documented_arguments() {
+        for args in [
+            vec![
+                "horae",
+                "--session-file",
+                "session.json",
+                "import",
+                "harvest-api",
+                "--dry-run",
+                "--full",
+                "--wait",
+                "--timeout",
+                "120",
+                "--json",
+            ],
+            vec![
+                "horae",
+                "import",
+                "harvest-csv",
+                "sample.csv",
+                "--session-file",
+                "session.json",
+            ],
+            vec![
+                "horae",
+                "jobs",
+                "list",
+                "--limit",
+                "100",
+                "--json",
+                "--session-file",
+                "session.json",
+            ],
+        ] {
+            let parsed = Cli::try_parse_from(&args);
+            assert!(parsed.is_ok(), "documented arguments {args:?}: {parsed:?}");
+        }
+    }
+
+    #[test]
+    fn remote_commands_reject_conflicting_or_unbounded_options() {
+        for args in [
+            vec!["horae", "import", "harvest-api", "--full", "--incremental"],
+            vec!["horae", "import", "harvest-api", "--timeout", "10"],
+            vec!["horae", "jobs", "list", "--limit", "101"],
+            vec!["horae", "jobs", "list", "--limit", "0"],
+        ] {
+            assert!(Cli::try_parse_from(args).is_err());
+        }
+    }
 
     #[test]
     fn default_command_uses_the_same_defaults_and_environment_as_serve() {

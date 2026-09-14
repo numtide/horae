@@ -1,6 +1,6 @@
 # Quickstart: Harvest Data Importer
 
-Manual validation guide for the importer. The **primary flow connects Harvest over OAuth2 and pulls via the API**; a CSV import is the secondary, offline fallback. Imports run through the admin screen at `/admin/importers`. The planned `horae import` CLI is not implemented; the [CLI contract](./contracts/importer-api.md#4-cli-subcommands-planned-not-implemented) is not a list of runnable commands. Contracts: [importer-api.md](./contracts/importer-api.md), [harvest-api.md](./contracts/harvest-api.md), [csv-format.md](./contracts/csv-format.md). Data model: [data-model.md](./data-model.md).
+Manual validation guide for the importer. The **primary flow connects Harvest over OAuth2 and pulls via the API**; a CSV import is the secondary, offline fallback. This guide uses the admin screen at `/admin/importers`. For terminal imports and job management, use the [feature-006 CLI quickstart](../006-harvest-jobs-cli/quickstart.md). Contracts: [importer-api.md](./contracts/importer-api.md), [harvest-api.md](./contracts/harvest-api.md), [csv-format.md](./contracts/csv-format.md). Data model: [data-model.md](./data-model.md).
 
 ## Prerequisites
 

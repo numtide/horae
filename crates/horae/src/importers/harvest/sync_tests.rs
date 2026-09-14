@@ -6,6 +6,63 @@ mod checkpoints;
 mod paging;
 mod scale;
 
+/// Drive a CLI-submitted durable job through the production API adapter using
+/// the existing loopback Harvest fixture, with no production URL override.
+pub(crate) async fn complete_cli_api_fixture(
+    pool: &PgPool,
+    org: Uuid,
+    id: Uuid,
+    email: String,
+    cfg: &HarvestConfig,
+    mode: ImportMode,
+) {
+    use api_source::http::{
+        ApiHttp,
+        test_server::{Response, Server},
+    };
+    let server = Server::start(move |url| {
+        let collection = url.path().rsplit('/').next().unwrap();
+        let items = match collection {
+            "clients" => json!([{"id":101,"name":"CLI API Client","currency":"USD"}]),
+            "projects" => json!([{"id":102,"name":"CLI API Project","client":{"id":101}}]),
+            "tasks" => json!([{"id":103,"name":"CLI API Task"}]),
+            "users" => json!([{"id":104,"email":email}]),
+            "time_entries" => json!([{
+                "id":105,"spent_date":"2026-09-14","hours":1,
+                "notes":"cli-api-acceptance","project":{"id":102},
+                "task":{"id":103},"user":{"id":104}
+            }]),
+            _ => panic!("unexpected collection {collection}"),
+        };
+        Response::json(json!({collection:items,"next_page":null,"links":{"next":null}}))
+    });
+    let (lease, stop) = crate::jobs::claim_lease_for_test(pool).await;
+    assert_eq!(
+        crate::jobs::status(pool, org, id)
+            .await
+            .unwrap()
+            .unwrap()
+            .status,
+        "running"
+    );
+    crate::jobs::run_claimed(pool, &lease, stop, async {
+        let report = run_api_import_with_http(
+            pool,
+            org,
+            "USD",
+            cfg,
+            mode,
+            SyncScope::Full,
+            ApiHttp::local(server.base.clone()),
+            Some(&lease),
+        )
+        .await?;
+        job_report(&report)
+    })
+    .await
+    .unwrap();
+}
+
 #[sqlx::test(migrations = "./migrations")]
 async fn exact_api_decimals_survive_preview_commit_and_reimport(pool: PgPool) {
     let org = setup(&pool).await;

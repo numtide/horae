@@ -80,7 +80,7 @@ pub async fn harvest_disconnect() -> Result<(), ServerFnError> {
 
 /// Enqueue an asynchronous Harvest API import and return its ID and current state.
 /// The organization is derived from the authenticated administrator's session.
-#[server]
+#[dioxus_fullstack::post("/api/import/harvest/start")]
 pub async fn start_harvest_api_import(
     mode: ImportMode,
     sync: SyncScope,
@@ -88,15 +88,27 @@ pub async fn start_harvest_api_import(
     let admin = require_admin().await?;
     let state = crate::state::global_state().await;
     let payload = crate::jobs::JobPayload::HarvestApi { mode, sync };
-    let key = format!("api:{}", uuid::Uuid::now_v7());
+    let key = submission_key("api").await?;
+    if !crate::jobs::request_exists(&state.db, admin.org_id, "harvest_api_import", &key)
+        .await
+        .map_err(server_err)?
+    {
+        let connection = harvest_connection_status().await?;
+        if !connection.configured || !connection.connected {
+            return Err(err(
+                NOT_FOUND,
+                "Connect Harvest before starting an API import",
+            ));
+        }
+    }
     let id = crate::jobs::enqueue(&state.db, admin.org_id, &payload, &key, state.job_policy)
         .await
-        .map_err(server_err)?;
+        .map_err(map_enqueue_error)?;
     required_import_job(&state.db, admin.org_id, id).await
 }
 
 /// Return a durable import's current state for the current organization.
-#[server]
+#[dioxus_fullstack::post("/api/import/harvest/status")]
 pub async fn get_harvest_import_job(
     job_id: uuid::Uuid,
 ) -> Result<Option<crate::models::JobStatus>, ServerFnError> {
@@ -107,7 +119,7 @@ pub async fn get_harvest_import_job(
         .map_err(server_err)
 }
 
-#[server]
+#[dioxus_fullstack::post("/api/import/harvest/history")]
 pub async fn list_harvest_import_jobs(
     before: Option<uuid::Uuid>,
     limit: Option<i64>,
@@ -127,13 +139,22 @@ pub async fn start_harvest_csv_import(
     file: CsvUpload,
 ) -> Result<crate::models::JobStatus, ServerFnError> {
     let admin = require_admin().await?;
+    let key = submission_key("csv").await?;
     let body = axum::body::to_bytes(file.into_body()?, 50 * 1024 * 1024)
         .await
-        .map_err(server_err)?;
+        .map_err(|_| err(BAD_REQUEST, "CSV upload is incomplete or exceeds 50 MiB"))?;
     let state = crate::state::global_state().await;
-    // Uploads have no stable source identifier; never deduplicate unrelated
-    // files merely because their byte lengths happen to match.
-    let key = format!("csv:{}", uuid::Uuid::now_v7());
+    if !crate::jobs::request_exists(&state.db, admin.org_id, "harvest_csv_import", &key)
+        .await
+        .map_err(server_err)?
+    {
+        crate::importers::harvest::csv_source::validate_upload_headers(&body).map_err(|_| {
+            err(
+                BAD_REQUEST,
+                "Not a recognizable Harvest CSV; check required columns",
+            )
+        })?;
+    }
     let id = crate::jobs::enqueue_csv(
         &state.db,
         admin.org_id,
@@ -143,30 +164,24 @@ pub async fn start_harvest_csv_import(
         state.job_policy,
     )
     .await
-    .map_err(server_err)?;
+    .map_err(map_enqueue_error)?;
     required_import_job(&state.db, admin.org_id, id).await
 }
 
-#[server]
+#[dioxus_fullstack::post("/api/import/harvest/cancel")]
 pub async fn cancel_harvest_import_job(
     job_id: uuid::Uuid,
 ) -> Result<crate::models::JobStatus, ServerFnError> {
     let admin = require_admin().await?;
     let state = crate::state::global_state().await;
-    if crate::jobs::cancel(&state.db, admin.org_id, job_id)
+    crate::jobs::cancel(&state.db, admin.org_id, job_id)
         .await
-        .map_err(server_err)?
-    {
-        required_import_job(&state.db, admin.org_id, job_id).await
-    } else {
-        Err(err(
-            NOT_FOUND,
-            "Import job not found or is already complete",
-        ))
-    }
+        .map_err(server_err)?;
+    // Completion can race cancellation; report the actual retained state.
+    required_import_job(&state.db, admin.org_id, job_id).await
 }
 
-#[server]
+#[dioxus_fullstack::post("/api/import/harvest/retry")]
 pub async fn retry_harvest_import_job(
     job_id: uuid::Uuid,
 ) -> Result<crate::models::JobStatus, ServerFnError> {
@@ -179,6 +194,58 @@ pub async fn retry_harvest_import_job(
         required_import_job(&state.db, admin.org_id, job_id).await
     } else {
         Err(err(NOT_FOUND, "Import job not found or is not retryable"))
+    }
+}
+
+#[cfg(feature = "server")]
+async fn submission_key(source: &str) -> Result<String, ServerFnError> {
+    let headers = dioxus_fullstack::FullstackContext::extract::<axum::http::HeaderMap, _>().await?;
+    if headers.get_all("X-Horae-Idempotency-Key").iter().count() > 1 {
+        return Err(err(BAD_REQUEST, "Supply a single request ID"));
+    }
+    let id = match headers.get("X-Horae-Idempotency-Key") {
+        None => uuid::Uuid::now_v7(),
+        Some(value) => {
+            let value = value
+                .to_str()
+                .map_err(|_| err(BAD_REQUEST, "Invalid request ID"))?;
+            let id =
+                uuid::Uuid::parse_str(value).map_err(|_| err(BAD_REQUEST, "Invalid request ID"))?;
+            validate_request_id(id, chrono::Utc::now().timestamp())?;
+            id
+        }
+    };
+    Ok(format!("{source}:{id}"))
+}
+
+#[cfg(feature = "server")]
+fn validate_request_id(id: uuid::Uuid, now: i64) -> Result<(), ServerFnError> {
+    let seconds = id.get_timestamp().map(|stamp| stamp.to_unix().0);
+    if id.get_version_num() != 7
+        || seconds.is_none_or(|seconds| {
+            i64::try_from(seconds).map_or(true, |seconds| {
+                seconds < now - 86_400 || seconds > now + 300
+            })
+        })
+    {
+        return Err(err(
+            BAD_REQUEST,
+            "Request ID must be UUIDv7 from the past 24 hours (at most five minutes ahead)",
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(feature = "server")]
+fn map_enqueue_error(error: anyhow::Error) -> ServerFnError {
+    if error.is::<crate::jobs::RequestConflict>() {
+        err(
+            CONFLICT,
+            "Request ID already belongs to different import input",
+        )
+    } else {
+        tracing::error!(%error, "durable import submission failed");
+        err(INTERNAL_ERROR, "Unable to submit import")
     }
 }
 
@@ -224,6 +291,16 @@ fn map_api_error(e: crate::importers::harvest::ApiImportError) -> ServerFnError 
 #[cfg(all(test, feature = "server"))]
 mod tests {
     use super::*;
+
+    #[test]
+    fn submission_identity_rejects_expired_future_and_non_v7_keys() {
+        let id = uuid::Uuid::now_v7();
+        let now = chrono::Utc::now().timestamp();
+        assert!(validate_request_id(id, now).is_ok());
+        assert!(validate_request_id(id, now + 86_401).is_err());
+        assert!(validate_request_id(id, now - 301).is_err());
+        assert!(validate_request_id(uuid::Uuid::nil(), now).is_err());
+    }
 
     #[tokio::test]
     async fn csv_route_rejects_invalid_modes_and_headers_without_reading_uploads() {

@@ -84,6 +84,44 @@ fn read_csv(
     })
 }
 
+pub(crate) fn validate_upload_headers(body: &[u8]) -> Result<(), CsvError> {
+    let mut reader = csv::ReaderBuilder::new().flexible(true).from_reader(body);
+    let headers = reader
+        .headers()
+        .map_err(|error| CsvError::Other(error.into()))?;
+    header_index(headers).map(|_| ())
+}
+
+fn header_index(headers: &csv::StringRecord) -> Result<HashMap<String, usize>, CsvError> {
+    if headers.iter().all(|header| header.trim().is_empty()) {
+        return Err(CsvError::Empty);
+    }
+    let mut index = HashMap::new();
+    for (i, header) in headers.iter().enumerate() {
+        let header = header.trim().to_lowercase();
+        if index.insert(header.clone(), i).is_some() && USER_COLUMNS.contains(&header.as_str()) {
+            return Err(CsvError::Identity(format!("duplicate column {header:?}")));
+        }
+    }
+    let missing: Vec<&str> = REQUIRED
+        .iter()
+        .copied()
+        .filter(|c| !index.contains_key(*c))
+        .collect();
+    if !missing.is_empty() {
+        return Err(CsvError::Unrecognized(missing.join(", ")));
+    }
+    if !USER_COLUMNS
+        .iter()
+        .any(|column| index.contains_key(*column))
+    {
+        return Err(CsvError::Unrecognized(
+            "Email or First Name/Last Name".into(),
+        ));
+    }
+    Ok(index)
+}
+
 fn read_csv_from(
     mut input: impl std::io::Read,
     resume: Option<&Cursor>,
@@ -112,33 +150,7 @@ fn read_csv_from(
             .map_err(|e| CsvError::Other(e.into()))?
             .clone(),
     };
-    if headers.iter().all(|header| header.trim().is_empty()) {
-        return Err(CsvError::Empty);
-    }
-    let mut index = HashMap::new();
-    for (i, header) in headers.iter().enumerate() {
-        let header = header.trim().to_lowercase();
-        if index.insert(header.clone(), i).is_some() && USER_COLUMNS.contains(&header.as_str()) {
-            return Err(CsvError::Identity(format!("duplicate column {header:?}")));
-        }
-    }
-
-    let missing: Vec<&str> = REQUIRED
-        .iter()
-        .copied()
-        .filter(|c| !index.contains_key(*c))
-        .collect();
-    if !missing.is_empty() {
-        return Err(CsvError::Unrecognized(missing.join(", ")));
-    }
-    if !USER_COLUMNS
-        .iter()
-        .any(|column| index.contains_key(*column))
-    {
-        return Err(CsvError::Unrecognized(
-            "Email or First Name/Last Name".into(),
-        ));
-    }
+    let index = header_index(&headers)?;
 
     emit_record(Record::Headers(headers.iter().map(str::to_owned).collect()))?;
 

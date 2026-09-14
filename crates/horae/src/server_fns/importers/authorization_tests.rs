@@ -23,6 +23,8 @@ use uuid::Uuid;
 
 use super::*;
 
+mod cli;
+
 #[cfg(target_os = "linux")]
 mod report_stress;
 
@@ -37,6 +39,25 @@ fn request_bound_import_endpoints_are_not_registered() {
         .map(|route| route.path().to_owned())
         .collect();
     assert!(legacy.is_empty(), "request-bound import routes: {legacy:?}");
+}
+
+#[test]
+fn cli_job_endpoints_have_stable_registered_paths() {
+    let routes = ServerFunction::collect();
+    for path in [
+        "/api/import/harvest/start",
+        "/api/import/harvest/status",
+        "/api/import/harvest/history",
+        "/api/import/harvest/cancel",
+        "/api/import/harvest/retry",
+    ] {
+        assert!(
+            routes
+                .iter()
+                .any(|route| route.path() == path && route.method() == axum::http::Method::POST),
+            "missing {path}"
+        );
+    }
 }
 
 struct Api {
@@ -86,10 +107,23 @@ impl Api {
                 body["mode"].as_str().unwrap()
             )
         } else {
+            let explicit = match name {
+                "start_harvest_api_import" => Some("/api/import/harvest/start"),
+                "get_harvest_import_job" => Some("/api/import/harvest/status"),
+                "list_harvest_import_jobs" => Some("/api/import/harvest/history"),
+                "cancel_harvest_import_job" => Some("/api/import/harvest/cancel"),
+                "retry_harvest_import_job" => Some("/api/import/harvest/retry"),
+                _ => None,
+            };
             let routes = ServerFunction::collect();
             let matches: Vec<_> = routes
                 .iter()
-                .filter(|route| route.path().contains(&format!("/{name}")))
+                .filter(|route| {
+                    explicit.map_or_else(
+                        || route.path().contains(&format!("/{name}")),
+                        |path| route.path() == path,
+                    )
+                })
                 .collect();
             assert_eq!(matches.len(), 1, "registered endpoint {name}");
             assert_eq!(matches[0].method(), axum::http::Method::POST);
@@ -150,7 +184,12 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
         pool.clone(),
         Arc::new(crate::plugin::PluginRegistry::empty()),
         None,
-        None,
+        Some(crate::config::HarvestConfig {
+            client_id: "test".into(),
+            client_secret: "test".into(),
+            redirect_url: "http://localhost/auth/harvest/callback".into(),
+            encryption_key_hex: "11".repeat(32),
+        }),
         Default::default(),
     )
     .await;
@@ -166,6 +205,16 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
                 crate::auth::session::set_session_user_id(&session, id)
                     .await
                     .unwrap();
+                StatusCode::NO_CONTENT
+            }),
+        )
+        .route(
+            "/test/expire",
+            post(|session: Session| async move {
+                session.set_expiry(Some(tower_sessions::Expiry::AtDateTime(
+                    session.expiry_date() - Duration::from_secs(365 * 24 * 60 * 60),
+                )));
+                session.save().await.unwrap();
                 StatusCode::NO_CONTENT
             }),
         )
@@ -205,6 +254,17 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     let mut server = tokio::task::JoinSet::new();
     server.spawn(async move { axum::serve(listener, router).await.unwrap() });
     let admin = api.cookie(owner.user_id).await;
+    let expired = api.cookie(owner.user_id).await;
+    assert_eq!(
+        api.client
+            .post(format!("{}/test/expire", api.base))
+            .header("cookie", &expired)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::NO_CONTENT
+    );
     let outsider = api.cookie(foreign.user_id).await;
     let member = api
         .cookie(user(&pool, owner.org_id, OrgRole::Member).await)
@@ -268,6 +328,29 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
             .unwrap()
             .is_empty()
     );
+    assert_eq!(
+        api.call(
+            "start_harvest_api_import",
+            json!({"mode":"DryRun","sync":"Full"}),
+            Some(&admin),
+            false
+        )
+        .await
+        .status(),
+        StatusCode::NOT_FOUND
+    );
+    crate::importers::harvest::credentials::store(
+        &pool,
+        owner.org_id,
+        &"11".repeat(32),
+        "test-account",
+        "test-access",
+        "test-refresh",
+        None,
+        None,
+    )
+    .await
+    .unwrap();
     for name in ["start_harvest_api_import", "csv"] {
         let started: crate::models::JobStatus = serde_json::from_value(
             api.json(
@@ -498,6 +581,16 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
             .await
             .is_err()
     );
+    cli::exercise(
+        &api,
+        &pool,
+        &owner,
+        &admin,
+        &[&member, &manager, &inactive, &demoted, &missing, &expired],
+        &outsider,
+        (archived_job.id, &bytes),
+    )
+    .await;
     server.abort_all();
     while server.join_next().await.is_some() {}
 }

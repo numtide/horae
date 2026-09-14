@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO horae_jobs (id, org_id, kind, payload, idempotency_key, max_attempts, report)\n           VALUES ($1, $2, $3, $4, $5, $6, $7)\n           ON CONFLICT (org_id, kind, idempotency_key)\n           DO UPDATE SET updated_at = now()\n           WHERE horae_jobs.payload = EXCLUDED.payload\n           RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Jsonb",
+        "Text",
+        "Int4",
+        "Jsonb"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6e8f15ead962f4120366ea11d7b6d770c5ea07d729cbb7d5dc7bdc6824a58f80"
+}

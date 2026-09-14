@@ -23,6 +23,8 @@ mod streaming;
 mod engine_tests;
 #[cfg(test)]
 mod sync_tests;
+#[cfg(test)]
+pub(crate) use sync_tests::complete_cli_api_fixture;
 
 use chrono::Utc;
 #[cfg(test)]

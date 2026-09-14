@@ -19,6 +19,22 @@ They do not wait for import completion. The returned snapshot can already show
 worker progress; clients continue polling the returned ID. A running cancel
 reply can show `running` / `cancelling`, never a promise of completed cleanup.
 
+Feature 006 gives the existing API start, status, history, cancel and retry
+functions explicit POST paths under `/api/import/harvest/`: respectively
+`start`, `status`, `history`, `cancel` and `retry`. JSON parameters and active
+administrator checks are unchanged. Deploy the rebuilt web bundle with the
+server and reload old tabs; clients must not reconstruct implicit route hashes.
+
+Both starts accept an optional `X-Horae-Idempotency-Key` UUIDv7. Keys are scoped
+to organization and source kind, accepted for 24 hours with five minutes of
+future clock skew, and bound atomically to mode/scope and exact CSV bytes.
+Identical requests return the existing job without replacing its upload,
+policy or checkpoints; conflicting input returns HTTP 409. CSV identity
+survives upload cleanup. Omit the header for a fresh web submission. Expired
+keys are rejected; resubmission is distinct from retrying a failed job.
+New API submissions require a configured, connected Harvest account; CSV
+submissions validate the existing required headers before accepting work.
+
 The contract never returns credentials or raw CSV contents. Status reads must reject foreign-organization job IDs as not found or forbidden according to the existing server-function convention.
 
 The former synchronous `import_harvest_api` and `import_harvest_csv` functions
@@ -76,6 +92,10 @@ import has already stopped. Queued jobs become `cancelled` immediately. Running
 jobs remain `running` with phase `cancelling`; retry is rejected until they reach
 the terminal `cancelled` state. The worker stops the SQL consumer, joins its
 source producer, and flushes rollback before recording that acknowledgement.
+
+If completion wins the cancellation race, return the retained terminal job
+instead of claiming cancellation or rejecting an otherwise valid observation.
+Missing or foreign jobs remain not found.
 
 If the worker crashes before acknowledging, recovery marks the expired claim
 cancelled instead of executing it again. Each claim has a new UUIDv7 token.

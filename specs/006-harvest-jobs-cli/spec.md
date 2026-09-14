@@ -4,9 +4,20 @@
 
 **Created**: 2026-09-14
 
-**Status**: Draft — access model requires clarification before planning
+**Status**: Implementation and acceptance in progress
 
 **Input**: Add command-line Harvest API/CSV imports and job management: preview, full/incremental synchronization, status, history, report download, cancellation, retry, structured output and optional waiting. Reuse durable jobs; closing the terminal must not cancel accepted work.
+
+## Clarifications
+
+### Session 2026-09-14
+
+The implementation request follows the recommended server-client design. The following are explicit implementation assumptions, not separately answered user questions.
+
+- Access model: use the running server with an active administrator session; never use direct database authority or start an implicit worker.
+- Credential provisioning: reuse an existing web-authenticated session in an explicitly selected private, origin-bound file. Do not add a login protocol, browser automation, raw credential argument or long-lived token system. Expired/revoked sessions require renewed credentials through the existing login flow.
+- Automation: distinguish command acceptance, completed success with record errors, job failure, cancellation, timeout, interruption and indeterminate submission. Keep partial-success exit status zero, as specified in feature 004.
+- Resubmission: an explicit key is scoped to organization and source kind, bound to mode/scope and exact CSV contents. Keys are time-bounded so retention cannot silently turn an old retry into a new import; exact bounds belong in the CLI contract.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -25,6 +36,9 @@ An authorized operator starts a Harvest import without opening the importer page
 1. **Given** unchanged source and destination data, **When** a full preview is followed by a full commit, **Then** their outcome counts agree and the preview leaves no imported domain changes.
 1. **Given** previously imported source records, **When** the same source is imported again, **Then** no duplicate entries are created.
 1. **Given** invalid arguments, an unreadable or oversized file, missing Harvest connection, or insufficient authority, **When** submission is attempted, **Then** a clear failure is reported without accepting an import.
+1. **Given** an expired session or an inactive, demoted or non-administrator user, **When** a command runs, **Then** it fails without revealing another user's job data or submitting work.
+1. **Given** a stopped server, **When** submission is attempted, **Then** the command reports unavailability without opening a database connection or running work locally.
+1. **Given** an insecure credential file or a non-local plaintext server address, **When** a command runs, **Then** it refuses to send the credential. Redirects must not forward credentials to another destination.
 
 ### User Story 2 - Inspect and export job outcomes (Priority: P1)
 
@@ -81,14 +95,14 @@ An operator can request cancellation, retry eligible jobs and optionally wait fo
 - **FR-007**: Provide optional waiting for submission and retry, plus waiting on an existing identifier, with an optional deadline. Interrupting observation must not cancel work.
 - **FR-008**: Provide readable terminal output and a documented versioned JSON result contract. Document exit semantics for acknowledgement, success, partial success, rejected commands, failed/cancelled jobs, wait timeout and interruption.
 - **FR-009**: Preserve organization isolation and credential confidentiality for every operation, including downloads. Do not introduce an implicit privilege bypass.
-- **FR-010**: Define the supported access model: [NEEDS CLARIFICATION: Is this a server-client CLI using an active administrator identity, or a deployment-operator CLI with direct database authority? The former is recommended to preserve Constitution IV; the latter requires an explicitly approved exception or amendment and separate operator safeguards.]
+- **FR-010**: Operate as a client of the running server with an active administrator session. Read credentials only from an explicitly selected private file bound to that server's origin; enforce secure transport except on loopback, refuse redirects, and never expose credential values in errors or logs. Session renewal uses the existing web login; a CLI login protocol is out of scope.
 - **FR-011**: Support safe resubmission after uncertain acknowledgement using an explicit idempotency identity and reject conflicting reuse. Documentation must distinguish resubmission from retrying an existing job.
 - **FR-012**: Reuse existing Harvest credentials, source validation, numeric exactness, user matching and import semantics. Do not reconnect accounts or weaken source-account binding.
-- **FR-013**: Never launch a worker implicitly. Service unavailability must produce an actionable command failure; worker unavailability must not turn an accepted queued job into a fabricated failure or success. Whether submission requires a running server follows FR-010.
+- **FR-013**: Never launch a worker implicitly. Submission requires the running server. Service unavailability must produce an actionable command failure; worker unavailability must not turn an accepted queued job into a fabricated failure or success.
 
 ### Key Entities
 
-- **Operator**: The authorized actor requesting terminal operations; authority and credential acquisition remain subject to FR-010.
+- **Operator**: An active organization administrator authenticated with an existing server session, supplied through the private credential file described in FR-010.
 - **Import request**: Source, preview/commit mode, API synchronization scope where applicable, and resubmission identity.
 - **Durable job**: The existing organization-scoped identifier, state, progress, attempt policy and confirmed outcomes shared with the web surface.
 - **Command result**: Versioned machine-readable acknowledgement, observation or failure, separate from the job's eventual state.
@@ -115,6 +129,6 @@ An operator can request cancellation, retry eligible jobs and optionally wait fo
 
 ## Dependencies and Specification Boundaries
 
-- [Harvest importer](../004-harvest-importer/spec.md) and its [pending CLI contract](../004-harvest-importer/contracts/importer-api.md#4-cli-subcommands-planned-not-implemented): source behavior and unfinished CLI tasks T023, T029, T031, T035 and T039. These remain pending until implementation is verified.
+- [Harvest importer](../004-harvest-importer/spec.md) and its [CLI contract](../004-harvest-importer/contracts/importer-api.md#4-cli-subcommands): source behavior and CLI tasks T023, T029, T031, T035 and T039. Their implementation evidence is recorded in this feature's acceptance report; release gates remain tracked here.
 - [Durable Harvest jobs](../005-durable-harvest-jobs/spec.md) and [job contract](../005-durable-harvest-jobs/contracts/import-jobs.md): shared lifecycle, authorized operations and reports.
-- [Horae Constitution](../../.specify/memory/constitution.md): mandatory invariants and the access-model decision required by FR-010. This draft does not amend the constitution or authorize a bypass.
+- [Horae Constitution](../../.specify/memory/constitution.md): mandatory invariants, including the authenticated mutation boundary preserved by FR-010. No amendment or privilege bypass is required.

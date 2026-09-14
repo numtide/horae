@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM horae_job_uploads WHERE job_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b877d89d249dd1d3b29a36b6b31e64c9fa6acfc4ff2ef4ceb12a88a30d5a2e7a"
+}
