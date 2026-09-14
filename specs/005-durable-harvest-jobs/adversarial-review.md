@@ -482,28 +482,6 @@ do not validate the new preview optimization. A new release-mode preview sample,
 the pending CSV cases, full acceptance and bounded/versioned report handling
 remain required before merge.
 
-## Live browser report acceptance
-
-The real SSR/WASM application now passes the browser walkthrough recorded in
-`acceptance.md`: queued response, refresh during an import, cooperative
-cancellation with no early retry, same-job preview recovery, explicit confirmation
-of a new preview, and complete error downloads from preview/commit/history.
-All three downloads contain the same 999 complete error records. The committed
-result contains exactly 1,000 entries and 60,000 integer minutes; preview and
-cancellation leave no persistent entries. Screenshots were inspected and the
-browser reported no page errors.
-
-The initial harness incorrectly awaited terminal cancellation while deliberately
-holding its SQL gate. FR-010 is cooperative: the correct check verifies
-`cancelling` and unavailable retry until the gate is released, then unchanged
-confirmed progress and completed cleanup. No production change was made to
-weaken that acknowledgement boundary. The harness also now respects the error
-panel's initially expanded state when finding its download link.
-
-This closes T021's final UI/download gate. T016 remains open for actual server
-termination/restart acceptance; T007 remains open for the CSV preview overhead.
-The latest commit still needs its own full CI result.
-
 ## Report schema compatibility
 
 Import reports now serialize an explicit version and reject unsupported or
@@ -695,10 +673,48 @@ PostgreSQL or kernel buffers; see `performance.md` for the command and raw figur
 Dropping a download after its first chunk does not prevent a new request using
 the one-connection pool. Deleting the expired job through the retention query
 during the next transfer results in an HTTP body error after 1 MiB, not a
-successful EOF. The server task drains and the pool closes under a five-second
+successful EOF. The server task is joined and the pool closes under a five-second
 deadline. Server all-target Clippy and Rust formatting pass. No production code,
 SQL query or dependency changed.
 
 This closes the socket-level/memory stress gap in T021. Live browser acceptance,
 T016's actual restart checks, T007's CSV preview overhead and latest-head CI
 remain required before merge.
+
+## Live browser report acceptance
+
+The real SSR/WASM application now passes the browser walkthrough recorded in
+`acceptance.md`: queued response, refresh during an import, cooperative
+cancellation with no early retry, same-job preview recovery, explicit confirmation
+of a new preview, and complete error downloads from preview/commit/history.
+All three downloads contain the same 999 complete error records. The committed
+result contains exactly 1,000 entries and 60,000 integer minutes; preview and
+cancellation leave no persistent entries. Screenshots were inspected and the
+browser reported no page errors.
+
+The initial harness incorrectly awaited terminal cancellation while deliberately
+holding its SQL gate. FR-010 is cooperative: the correct check verifies
+`cancelling` and unavailable retry until the gate is released, then unchanged
+confirmed progress and completed cleanup. No production change was made to
+weaken that acknowledgement boundary. The harness also now respects the error
+panel's initially expanded state when finding its download link.
+
+This closes T021's final UI/download gate. T016 remains open for actual server
+termination/restart acceptance; T007 remains open for the CSV preview overhead.
+The latest commit still needs its own full CI result.
+
+## Process restart acceptance completed
+
+T016 now passes actual process termination and recovery, not merely lease
+simulation. The direct-server Chromium run observes 500 committed rows, kills
+the exact server process with SIGTERM/SIGKILL, observes the offline monitoring
+control, starts a replacement and verifies attempt 2, 1,000 final entries,
+60,000 minutes and duplicate-free reimport. The previously interrupted fixture
+also recovers without resetting its data. See `acceptance.md` for job/PID evidence
+and the harness corrections; no production changes were needed.
+
+CI run `34867024976` at `6bf66d6` also passes Format and Flake Check. Its NixOS
+log confirms both interruption scenarios actually execute and the VM test script
+finishes in 81.52 seconds, including successful systemd shutdown and reimport
+assertions. This closes the previously pending NixOS execution gate. T007's CSV
+preview overhead, latest-head CI and the final requirement audit remain open.

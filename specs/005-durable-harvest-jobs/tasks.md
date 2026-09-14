@@ -29,8 +29,8 @@
 
 - [x] T014 Test atomic claims with concurrent workers.
 - [x] T015 Test lease recovery after a simulated worker failure.
-- [ ] T016 Test retry idempotency and cancellation semantics.
-  - Live browser refresh, cooperative cancellation, retry, preview confirmation and report/history downloads pass. Actual server-process restart acceptance remains pending in CI.
+- [x] T016 Test retry idempotency and cancellation semantics.
+  - Live browser refresh, cooperative cancellation, retry, preview confirmation and report/history downloads pass. Actual SIGTERM/SIGKILL recovery and duplicate-free reimport pass both in NixOS CI at `6bf66d6` and against the local server with Chromium. See `acceptance.md`; latest-head full CI remains a separate merge gate.
 - [x] T017 Test a second synthetic job kind through the same worker boundary.
 - [x] T018 Test transactional outbox insertion and idempotent delivery bookkeeping.
 - [x] T019 Regenerate `.sqlx` cache and run targeted integration tests, clippy, and formatting.
