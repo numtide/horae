@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-15
 
-**Status**: Specification
+**Status**: Implemented
 
 **Input**: Provide an explicit Change account flow in the Harvest importer. Disconnect currently removes credentials but preserves the original account binding, leaving administrators unable to recover from connecting the wrong account without operator intervention.
 

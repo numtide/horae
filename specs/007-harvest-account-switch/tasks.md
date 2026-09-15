@@ -34,15 +34,17 @@
 
 ## Phase 6: Validation and delivery
 
-- [ ] T016 Regenerate .sqlx/ against the isolated migrated database and pass core/server tests, Clippy, WASM build and nix fmt without modifying the live preview database.
-- [ ] T017 Update affected specs/004-*/contracts/, specs/005-*/contracts/ and specs/006-\*/contracts/ with compatibility notes; record actual checks and remaining limits in specs/007-harvest-account-switch/acceptance.md and quickstart.md.
-- [ ] T018 Review the complete diff for races, authorization, preservation and scope; run applicable Nix checks and open the stacked PR against feat/harvest-jobs-cli (no automatic merge).
+- [X] T016 Regenerate .sqlx/ against the isolated migrated database and pass core/server tests, Clippy, WASM build and nix fmt without modifying the live preview database.
+- [X] T017 Update affected importer, durable-job and CLI contracts with compatibility notes; record actual checks and remaining limits in specs/007-harvest-account-switch/acceptance.md and quickstart.md.
+- [X] T018 Review the complete diff for races, authorization, preservation and scope; run applicable Nix checks and open the stacked PR against feat/harvest-jobs-cli (no automatic merge).
 
 ## Dependencies and execution
 
 Execute setup and foundation first. US1 supplies the status/change contract used by US2. US3 shares the gate and must complete before any account-switch flow is delivered. Add tests before each implementation change; run focused tests at each checkpoint and mark tasks only after evidence. Tasks touching the same files execute sequentially. Independent read-only checks may run concurrently; no implementation delegation is required.
 
 All three P1 stories constitute the minimum safe delivery; do not ship the UI without stale-work fencing.
+
+Execution note: cross-layer database/OAuth/job tests are consolidated in `importers/harvest/account_switch.rs`, with real-session cases in `server_fns/importers/authorization_tests.rs`. The initial policy tests preceded implementation; the remaining acceptance matrix was expanded alongside it. These locations supersede the neighboring test locations suggested above.
 
 ## Traceability
 

@@ -12,7 +12,7 @@
 
 ## Validation evidence
 
-Implementation is complete; final Nix validation and PR delivery are pending. No successful real-account import or live deployment is claimed by this feature.
+Implementation and validation are complete. PR: https://github.com/numtide/horae/pull/200, stacked on #199. No successful real-account import, live deployment or automatic merge is claimed by this feature.
 
 - Initial RED: the pure eligibility test failed to compile before the new policy/metadata existed. Core suite subsequently passes: 88 tests.
 - Initial database checkpoint: six generation/change/concurrency tests passed. Further acceptance cases cover all 12 business-table snapshots, rollback after credential deletion, running-work exclusion, old-generation execution and retry races.
@@ -30,3 +30,18 @@ Implementation is complete; final Nix validation and PR delivery are pending. No
 - `cargo build -p horae --features web --target wasm32-unknown-unknown`: passed.
 - Existing live preview `/health`: `{"status":"ok"}`; root worktree's tracked files unchanged.
 - SQLx metadata is regenerated against `horae_account_switch_dev_20260915`. Incremental preparation omitted unchanged integration-test metadata; a package-scoped clean followed by preparation rebuilds all query callsites. Only generated temporary build artifacts are cleared, never source or live database records.
+
+## Reproducible validation and review
+
+- `nix flake check --keep-going -L --max-jobs 2 --cores 2`: exit 0, all checks passed on x86_64-linux. Other architectures were not executed.
+- Includes clean-room SQLx cache validation, Clippy, the full core/server/integration suite, formatting, the production package, NixOS import/crash-recovery acceptance and NixOS/OIDC authentication acceptance.
+- Production package derivation: `/nix/store/2aa52wz97jvi18kx86dy5084hlynz74k-horae-0.1.0.drv`.
+- NixOS scenarios: `/nix/store/7zf0256azyya2m92n9y2kig2c9zf5k86-vm-test-run-horae-e2e.drv` and `/nix/store/ykv2w4hjsi4qqj3i6f6hwi46zbi8982d-vm-test-run-horae-e2e-oidc.drv`.
+- Final diff review covered lock ordering, queued/running work, terminal retries, duplicate identity preservation, OAuth storage after exchange, actor/organization boundaries, rollback and preserved business/report data. No new dependency, imported-data migration or imported-data deletion was introduced.
+- No extension hooks are configured; implementation post-hooks do not apply.
+
+## Delivery limits
+
+The existing live preview remains on feature 006 and is healthy. Deploy this feature separately using the coordinated upgrade in quickstart.md; stop/drain older workers and reload browser tabs. Account changes with imported provenance remain blocked and require a separate migration feature.
+
+The PR's base remains `feat/harvest-jobs-cli` while #199 is open. The repository's GitHub CI workflow targets master, so retarget after the parent merges to obtain normal required remote checks. Neither PR was merged by this work.
