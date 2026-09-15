@@ -186,7 +186,14 @@ pub fn HarvestImport() -> Element {
         run_origin.set(None);
         let submitted = job.clone();
         let result = match job {
-            Run::Api(mode, sync) => server_fns::start_harvest_api_import(mode, sync).await,
+            Run::Api(mode, sync) => {
+                let generation = status
+                    .read()
+                    .as_ref()
+                    .and_then(|result| result.as_ref().ok())
+                    .map(|status| status.account_generation);
+                server_fns::start_harvest_api_import(mode, sync, generation).await
+            }
             Run::Csv(mode, file) => server_fns::start_harvest_csv_import(mode, file.into()).await,
         };
         action_pending.set(false);
@@ -344,6 +351,7 @@ pub fn HarvestImport() -> Element {
                         button {
                             r#type: "button",
                             class: "imp-source",
+                            "data-testid": "choose-api".to_owned(),
                             onclick: move |_| {
                                 source.set(Source::Api);
                                 report.set(None);
@@ -444,21 +452,28 @@ pub fn HarvestImport() -> Element {
                             }
                         }
                     },
-                    Conn::Ready(_) => rsx! {
+                    Conn::Ready(s) => rsx! {
                         div { class: "flex flex-col items-center text-center gap-4 p-8 card",
                             span { class: "himp-logo", "h" }
                             div { class: "text-lg font-semibold", "Connect your Harvest account" }
                             div { class: "text-faint text-sm max-w-md",
                                 "Read-only access. Horae never writes anything back to Harvest."
                             }
+                            if let Some(account) = &s.account_id {
+                                p { "Disconnected. This organization is still bound to Harvest account {account}." }
+                            }
                             button {
                                 r#type: "button",
                                 class: "btn btn-primary mt-2",
                                 onclick: connect,
-                                "Connect Harvest"
+                                if s.account_id.is_some() { "Reconnect original account" } else { "Connect Harvest" }
                             }
                         }
                     },
+                }
+                ChangeAccount {
+                    connection: match &conn { Conn::Ready(s) => s.clone(), _ => ConnectionStatus::default() },
+                    on_changed: move |_| { manage_open.set(false); status.restart(); run_origin.set(None); }
                 }
             }
 
@@ -765,12 +780,96 @@ fn ConnectionChip(
                         }
                     }
                     div { class: "mt-4",
+                        p { class: "text-sm text-faint", "Disconnect removes credentials but retains the original account binding and imported data." }
                         button {
                             r#type: "button",
                             class: "btn btn-danger btn-sm",
                             onclick: move |e| ondisconnect.call(e),
                             "Disconnect"
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[component]
+fn ChangeAccount(connection: ConnectionStatus, on_changed: EventHandler<()>) -> Element {
+    let mut inspected = use_signal(|| None::<ConnectionStatus>);
+    let mut busy = use_signal(|| false);
+    let mut error = use_signal(|| None::<String>);
+    let blocker = connection.change_account_blocker();
+    let bound = connection.account_id.is_some();
+    let confirm = move |_| async move {
+        if busy() {
+            return;
+        }
+        let Some(snapshot) = inspected.peek().clone() else {
+            return;
+        };
+        let Some(account) = snapshot.account_id else {
+            return;
+        };
+        busy.set(true);
+        error.set(None);
+        match server_fns::harvest_change_account(
+            account,
+            snapshot.account_generation,
+            snapshot.connection_revision,
+        )
+        .await
+        {
+            Err(e) => {
+                error.set(Some(e.to_string()));
+                busy.set(false);
+            }
+            Ok(()) => {
+                inspected.set(None);
+                on_changed.call(());
+                match server_fns::harvest_connect_start().await {
+                    Ok(url) => {
+                        let _ = document::eval(&format!(
+                            "window.location.href = {};",
+                            serde_json::json!(url)
+                        ))
+                        .await;
+                    }
+                    Err(e) => error.set(Some(format!(
+                        "Account released. Use Connect Harvest to try authorization again: {e}"
+                    ))),
+                }
+                busy.set(false);
+            }
+        }
+    };
+    rsx! {
+        if bound {
+            div { class: "mt-4",
+                button { r#type: "button", class: "btn btn-secondary btn-sm", "data-testid": "change-account".to_owned(),
+                    disabled: busy() || blocker.is_some(),
+                    onclick: move |_| { error.set(None); inspected.set(Some(connection.clone())); },
+                    "Change account"
+                }
+                if let Some(reason) = blocker { p { class: "text-sm text-faint", "{reason}" } }
+            }
+        }
+        if inspected().is_none() {
+            if let Some(message) = error() { div { role: "alert", class: "alert alert-danger", "{message}" } }
+        }
+        crate::components::modal::Modal {
+            id: "harvest-change-account", labelledby: "harvest-change-account-title", open: inspected().is_some(), busy: busy(),
+            on_dismiss: move |_| { if !busy() { inspected.set(None); } },
+            h2 { id: "harvest-change-account-title", "Change Harvest account?" }
+            if let Some(snapshot) = inspected() {
+                p { "Disconnect and release account {snapshot.account_id.clone().unwrap_or_default()} before authorizing a different account." }
+                p { "Business data and retained reports are kept. Old import attempts cannot be retried against the replacement account. Cancelling authorization afterward leaves Horae disconnected." }
+                if let Some(message) = error() { p { role: "alert", "{message}" } }
+                div { class: "flex gap-3 mt-4",
+                    button { r#type: "button", class: "btn btn-secondary", "data-testid": "cancel-change-account".to_owned(), disabled: busy(),
+                        onclick: move |_| { inspected.set(None); error.set(None); }, "Cancel" }
+                    button { r#type: "button", class: "btn btn-danger", "data-testid": "confirm-change-account".to_owned(), disabled: busy(), onclick: confirm,
+                        if busy() { "Changing account…" } else { "Change account and connect" }
                     }
                 }
             }

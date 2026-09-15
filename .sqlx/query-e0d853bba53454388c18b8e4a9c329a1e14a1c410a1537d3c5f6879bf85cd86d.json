@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT report, checkpoint, claim_token,\n                    lease_until <= clock_timestamp() AS expired\n             FROM horae_jobs WHERE id = $1",
+  "query": "SELECT report, checkpoint, claim_token, account_generation,\n                    lease_until <= clock_timestamp() AS expired\n             FROM horae_jobs WHERE id = $1",
   "describe": {
     "columns": [
       {
@@ -20,6 +20,11 @@
       },
       {
         "ordinal": 3,
+        "name": "account_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
         "name": "expired",
         "type_info": "Bool"
       }
@@ -33,8 +38,9 @@
       true,
       true,
       true,
+      false,
       null
     ]
   },
-  "hash": "45eaddd0a27d5010e3059ee3bedcfdec7e386ae82a521957f54bb8df26120d80"
+  "hash": "e0d853bba53454388c18b8e4a9c329a1e14a1c410a1537d3c5f6879bf85cd86d"
 }

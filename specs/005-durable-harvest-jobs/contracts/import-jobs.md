@@ -6,7 +6,7 @@ file response with the same administrator and organization boundary.
 
 | Operation | Input | Result |
 |---|---|---|
-| `start_harvest_api_import` | mode, sync scope | job ID + initial status |
+| `start_harvest_api_import` | mode, sync scope, optional generation | job ID + initial status |
 | `start_harvest_csv_import` | mode, upload | job ID + initial status |
 | `get_harvest_import_job` | job ID | status, progress, report/error |
 | `list_harvest_import_jobs` | optional limit/cursor | recent jobs for current organization |
@@ -34,6 +34,8 @@ survives upload cleanup. Omit the header for a fresh web submission. Expired
 keys are rejected; resubmission is distinct from retrying a failed job.
 New API submissions require a configured, connected Harvest account; CSV
 submissions validate the existing required headers before accepting work.
+
+Feature 007 captures the account generation on API jobs. Missing client generation means zero, never the current generation. Enqueue and retry share a short organization gate with explicit account changes; running work retains the existing import lock. Changing accounts preserves terminal history but prevents old-generation retries, identity replay and execution. Identical identity replay must match both payload and generation; the unique key is not relaxed across generations. Status metadata is available at POST `/api/import/harvest/connection` to active administrators only.
 
 The contract never returns credentials or raw CSV contents. Status reads must reject foreign-organization job IDs as not found or forbidden according to the existing server-function convention.
 

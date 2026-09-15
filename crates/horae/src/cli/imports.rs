@@ -205,11 +205,18 @@ async fn execute(
                     } else {
                         SyncScope::Incremental
                     };
+                    // Submission is bound to the inspected connection, not the one at arrival.
+                    let connection = client
+                        .post("/api/import/harvest/connection", &json!({}), None)
+                        .await?;
+                    let generation = connection.get("account_generation").and_then(Value::as_i64)
+                        .filter(|generation| *generation >= 0)
+                        .ok_or_else(|| CliError::failure("protocol", "Server does not provide a valid Harvest connection generation; upgrade server and CLI together"))?;
                     (
                         client
                             .post(
                                 "/api/import/harvest/start",
-                                &json!({"mode":mode,"sync":sync}),
+                                &json!({"mode":mode,"sync":sync,"generation":generation}),
                                 Some(key),
                             )
                             .await?,

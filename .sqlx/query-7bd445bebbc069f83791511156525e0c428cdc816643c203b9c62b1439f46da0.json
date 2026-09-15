@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT account_generation, connection_revision FROM harvest_connection_generations WHERE org_id = $1 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "connection_revision",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "7bd445bebbc069f83791511156525e0c428cdc816643c203b9c62b1439f46da0"
+}

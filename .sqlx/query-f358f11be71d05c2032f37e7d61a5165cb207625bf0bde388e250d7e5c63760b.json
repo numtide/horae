@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT b.harvest_account_id AS \"harvest_account_id?\", c.org_id IS NOT NULL AS \"connected!\",\n                  COALESCE(c.token_expires_at <= now(), false) AS \"expired!\",\n                  COALESCE(g.account_generation, 0) AS \"generation!\",\n                  COALESCE(g.connection_revision, 0) AS \"revision!\",\n                  EXISTS(SELECT 1 FROM harvest_import_map WHERE org_id = o.id) AS \"provenance!\",\n                  (SELECT count(*) FROM horae_jobs WHERE org_id = o.id\n                    AND kind IN ('harvest_api_import', 'harvest_csv_import')\n                    AND status IN ('queued', 'running')) AS \"active!\"\n           FROM organizations o\n           LEFT JOIN harvest_account_bindings b ON b.org_id = o.id\n           LEFT JOIN harvest_credentials c ON c.org_id = o.id\n           LEFT JOIN harvest_connection_generations g ON g.org_id = o.id\n           WHERE o.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "harvest_account_id?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "connected!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "expired!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "generation!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "revision!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "provenance!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "active!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "f358f11be71d05c2032f37e7d61a5165cb207625bf0bde388e250d7e5c63760b"
+}

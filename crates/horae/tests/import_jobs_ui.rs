@@ -18,20 +18,27 @@ use uuid::Uuid;
 
 #[path = "../src/pages/importers.rs"]
 mod importers;
+#[path = "../src/components/modal.rs"]
+pub mod modal;
 #[path = "../src/models/jobs.rs"]
 mod models;
 #[path = "../src/components/toast.rs"]
 pub mod toast;
 
 mod components {
+    pub use crate::modal;
     pub use crate::toast;
 }
 
 type JobResponse = Result<Option<models::JobStatus>, ServerFnError>;
 type ActionResponse = Result<models::JobStatus, ServerFnError>;
+type ChangeResponse = oneshot::Receiver<Result<(), ServerFnError>>;
 
 #[derive(Clone, Default)]
 struct Probe {
+    connection: Rc<RefCell<ConnectionStatus>>,
+    changes: Rc<RefCell<Vec<(String, i64, i64)>>>,
+    change_responses: Rc<RefCell<VecDeque<ChangeResponse>>>,
     history: Rc<RefCell<Vec<models::JobStatus>>>,
     requests: Rc<RefCell<Vec<Uuid>>>,
     responses: Rc<RefCell<VecDeque<oneshot::Receiver<JobResponse>>>>,
@@ -83,11 +90,12 @@ impl Ui {
     fn record(&mut self, mutations: Vec<Mutation>) {
         for mutation in mutations {
             if let Mutation::SetAttribute {
-                name: "data-testid",
+                name: attribute,
                 value: AttributeValue::Text(name),
                 id,
                 ..
             } = mutation
+                && matches!(attribute, "data-testid" | "id")
             {
                 self.targets.insert(name, id);
             }
@@ -120,6 +128,16 @@ impl Ui {
 
     fn html(&self) -> String {
         dioxus::ssr::render(&self.dom)
+    }
+
+    fn cancel_dialog(&mut self) {
+        let id = self.targets["harvest-change-account"];
+        let event = Event::new(
+            Rc::new(PlatformEventData::new(Box::new(SerializedCancelData {}))) as Rc<dyn Any>,
+            false,
+        );
+        self.dom.runtime().handle_event("cancel", event, id);
+        self.settle();
     }
 
     fn choose_file(&mut self, name: &str) {
@@ -532,16 +550,124 @@ async fn archived_report_shows_total_errors_and_a_job_scoped_download() {
     }
 }
 
+#[test]
+fn account_change_confirmation_can_cancel_without_mutation_in_both_binding_states() {
+    for connected in [false, true] {
+        let probe = Probe::default();
+        *probe.connection.borrow_mut() = ConnectionStatus {
+            configured: true,
+            connected,
+            account_id: Some("account-A".into()),
+            account_generation: 2,
+            connection_revision: 4,
+            ..ConnectionStatus::default()
+        };
+        let mut ui = Ui::start(&probe);
+        ui.click("choose-api");
+        if !connected {
+            assert!(ui.html().contains("Reconnect original account"));
+        }
+        ui.click("change-account");
+        let html = ui.html();
+        assert!(
+            html.contains("aria-labelledby=\"harvest-change-account-title\""),
+            "{html}"
+        );
+        assert!(html.contains("account-A"));
+        assert!(html.contains("Business data and retained reports are kept"));
+        ui.click("cancel-change-account");
+        assert!(!ui.html().contains("Change account and connect"));
+        assert!(probe.changes.borrow().is_empty());
+        ui.click("change-account");
+        ui.cancel_dialog();
+        assert!(!ui.html().contains("Change account and connect"));
+        assert!(probe.changes.borrow().is_empty());
+    }
+}
+
+#[test]
+fn account_change_explains_every_blocker() {
+    for (provenance, active, reason) in [(true, 0, "migration"), (false, 1, "cancel")] {
+        let probe = Probe::default();
+        *probe.connection.borrow_mut() = ConnectionStatus {
+            configured: true,
+            account_id: Some("A".into()),
+            has_provenance: provenance,
+            active_imports: active,
+            ..ConnectionStatus::default()
+        };
+        let mut ui = Ui::start(&probe);
+        ui.click("choose-api");
+        let html = ui.html();
+        assert!(html.contains(reason), "{html}");
+        assert!(html.contains("disabled"));
+        assert!(probe.changes.borrow().is_empty());
+    }
+}
+
+#[test]
+fn account_change_is_busy_then_reports_recoverable_authorization_failure() {
+    let probe = Probe::default();
+    *probe.connection.borrow_mut() = ConnectionStatus {
+        configured: true,
+        connected: true,
+        account_id: Some("A".into()),
+        account_generation: 2,
+        connection_revision: 4,
+        ..ConnectionStatus::default()
+    };
+    let (send, receive) = oneshot::channel();
+    probe.change_responses.borrow_mut().push_back(receive);
+    let mut ui = Ui::start(&probe);
+    ui.click("choose-api");
+    ui.click("change-account");
+    ui.click("confirm-change-account");
+    assert!(ui.html().contains("Changing account…"));
+    ui.cancel_dialog();
+    assert!(ui.html().contains("Changing account…"));
+    assert_eq!(probe.changes.borrow().as_slice(), &[("A".into(), 2, 4)]);
+    *probe.connection.borrow_mut() = ConnectionStatus {
+        configured: true,
+        account_generation: 3,
+        connection_revision: 5,
+        ..ConnectionStatus::default()
+    };
+    send.send(Ok(())).unwrap();
+    ui.settle();
+    let html = ui.html();
+    assert!(
+        html.contains("Account released. Use Connect Harvest"),
+        "{html}"
+    );
+    assert!(!html.contains("Reconnect original account"));
+}
+
+#[test]
+fn stale_confirmation_keeps_the_dialog_and_shows_the_error() {
+    let probe = Probe::default();
+    *probe.connection.borrow_mut() = ConnectionStatus {
+        configured: true,
+        account_id: Some("A".into()),
+        ..ConnectionStatus::default()
+    };
+    let (send, receive) = oneshot::channel();
+    probe.change_responses.borrow_mut().push_back(receive);
+    let mut ui = Ui::start(&probe);
+    ui.click("choose-api");
+    ui.click("change-account");
+    ui.click("confirm-change-account");
+    send.send(Err(ServerFnError::new("Reload the importer")))
+        .unwrap();
+    ui.settle();
+    assert!(ui.html().contains("Reload the importer"));
+    assert!(ui.html().contains("Change account and connect"));
+}
+
 mod server_fns {
     use super::*;
 
     pub async fn harvest_connection_status() -> Result<ConnectionStatus, ServerFnError> {
-        Ok(ConnectionStatus {
-            configured: false,
-            connected: false,
-            account_id: None,
-            token_expired: false,
-        })
+        Ok(consume_context::<Probe>().connection.borrow().clone())
     }
 
     pub async fn list_harvest_import_jobs(
@@ -585,8 +711,27 @@ mod server_fns {
     pub async fn start_harvest_api_import(
         _: ImportMode,
         _: SyncScope,
+        _: Option<i64>,
     ) -> Result<models::JobStatus, ServerFnError> {
         panic!("unexpected API import")
+    }
+
+    pub async fn harvest_change_account(
+        account: String,
+        generation: i64,
+        revision: i64,
+    ) -> Result<(), ServerFnError> {
+        let probe = consume_context::<Probe>();
+        probe
+            .changes
+            .borrow_mut()
+            .push((account, generation, revision));
+        let response = probe
+            .change_responses
+            .borrow_mut()
+            .pop_front()
+            .expect("unexpected account change");
+        response.await.unwrap()
     }
 
     pub struct CsvUpload(FileData);
@@ -628,7 +773,7 @@ mod server_fns {
         response.await.unwrap()
     }
     pub async fn harvest_connect_start() -> Result<String, ServerFnError> {
-        panic!("unexpected connect")
+        Err(ServerFnError::new("authorization unavailable"))
     }
     pub async fn harvest_disconnect() -> Result<(), ServerFnError> {
         panic!("unexpected disconnect")

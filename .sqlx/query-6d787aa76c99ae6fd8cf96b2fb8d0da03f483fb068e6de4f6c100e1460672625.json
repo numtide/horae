@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT to_jsonb(j) - ARRAY['report', 'checkpoint', 'claim_token', 'lease_until', 'updated_at'] AS \"metadata!\"\n         FROM horae_jobs j WHERE id = $1",
+  "query": "SELECT to_jsonb(j) - ARRAY['report', 'checkpoint', 'claim_token', 'lease_until', 'updated_at', 'account_generation'] AS \"metadata!\"\n         FROM horae_jobs j WHERE id = $1",
   "describe": {
     "columns": [
       {
@@ -18,5 +18,5 @@
       null
     ]
   },
-  "hash": "9a3977c246df5abc3cac64c883bda7b70e78f1b54b36704631793c87a69ab02e"
+  "hash": "6d787aa76c99ae6fd8cf96b2fb8d0da03f483fb068e6de4f6c100e1460672625"
 }

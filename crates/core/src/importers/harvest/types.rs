@@ -219,6 +219,60 @@ pub struct ConnectionStatus {
     /// True when the stored access token is known to be past expiry (a re-sync
     /// will refresh it transparently, or ask to reconnect if refresh fails).
     pub token_expired: bool,
+    #[serde(default)]
+    pub account_generation: i64,
+    #[serde(default)]
+    pub connection_revision: i64,
+    #[serde(default)]
+    pub has_provenance: bool,
+    #[serde(default)]
+    pub active_imports: i64,
+}
+
+impl ConnectionStatus {
+    /// A snapshot for presentation; the server rechecks it at confirmation.
+    pub fn change_account_blocker(&self) -> Option<&'static str> {
+        if self.account_id.is_none() {
+            Some("No Harvest account is bound. Use Connect Harvest.")
+        } else if self.has_provenance {
+            Some(
+                "Harvest data has already been imported. Changing accounts requires a separate data migration.",
+            )
+        } else if self.active_imports > 0 {
+            Some(
+                "Finish or explicitly cancel queued and running Harvest imports before changing account.",
+            )
+        } else {
+            None
+        }
+    }
+}
+
+#[cfg(test)]
+mod account_switch_tests {
+    use super::ConnectionStatus;
+
+    #[test]
+    fn account_switch_requires_binding_and_no_imports_or_active_work() {
+        let mut status = ConnectionStatus::default();
+        assert!(status.change_account_blocker().is_some());
+        status.account_id = Some("original".into());
+        assert!(status.change_account_blocker().is_none());
+        status.has_provenance = true;
+        assert!(
+            status
+                .change_account_blocker()
+                .unwrap()
+                .contains("migration")
+        );
+        status.has_provenance = false;
+        status.active_imports = 1;
+        assert!(status.change_account_blocker().unwrap().contains("cancel"));
+        status.active_imports = 0;
+        status.connected = true;
+        status.token_expired = true;
+        assert!(status.change_account_blocker().is_none());
+    }
 }
 
 /// A single per-record error for the report (FR-019).

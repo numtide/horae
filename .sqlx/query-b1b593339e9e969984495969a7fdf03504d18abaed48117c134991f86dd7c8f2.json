@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO horae_jobs (id, org_id, kind, payload, idempotency_key, max_attempts, report) VALUES ($1, $2, 'harvest_csv_import', $3, $4, $6, $5)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Jsonb",
+        "Text",
+        "Jsonb",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b1b593339e9e969984495969a7fdf03504d18abaed48117c134991f86dd7c8f2"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO harvest_account_bindings (org_id, harvest_account_id) VALUES ($1, 'A')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f56cfc4664999e642dd73db6b3ca096af445527a7a14fd99c81067131675a50e"
+}
