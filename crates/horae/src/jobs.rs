@@ -189,6 +189,27 @@ impl JobPayload {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+#[error("Idempotency key conflicts with another import request")]
+pub struct RequestConflict;
+
+pub async fn request_exists(
+    pool: &sqlx::PgPool,
+    org_id: Uuid,
+    kind: &str,
+    key: &str,
+) -> anyhow::Result<bool> {
+    Ok(sqlx::query_scalar!(
+        r#"SELECT EXISTS(SELECT 1 FROM horae_jobs
+             WHERE org_id = $1 AND kind = $2 AND idempotency_key = $3) AS "exists!""#,
+        org_id,
+        kind,
+        key,
+    )
+    .fetch_one(pool)
+    .await?)
+}
+
 pub async fn enqueue(
     pool: &sqlx::PgPool,
     org_id: Uuid,
@@ -205,6 +226,7 @@ pub async fn enqueue(
            VALUES ($1, $2, $3, $4, $5, $6, $7)
            ON CONFLICT (org_id, kind, idempotency_key)
            DO UPDATE SET updated_at = now()
+           WHERE horae_jobs.payload = EXCLUDED.payload
            RETURNING id"#,
         id,
         org_id,
@@ -214,8 +236,9 @@ pub async fn enqueue(
         policy.max_attempts,
         report,
     )
-    .fetch_one(pool)
-    .await?;
+    .fetch_optional(pool)
+    .await?
+    .ok_or(RequestConflict)?;
     Ok(row.id)
 }
 
@@ -235,9 +258,12 @@ pub async fn enqueue_csv(
     let mut tx = pool.begin().await?;
     let row = sqlx::query!(
         r#"INSERT INTO horae_jobs (id, org_id, kind, payload, idempotency_key, max_attempts, report)
-           VALUES ($1, $2, 'harvest_csv_import', $3, $4, $5, $6)
+           VALUES ($1, $2, 'harvest_csv_import',
+                   $3::jsonb || jsonb_build_object('upload_sha256', encode(sha256($7::bytea), 'hex')),
+                   $4, $5, $6)
            ON CONFLICT (org_id, kind, idempotency_key)
            DO UPDATE SET updated_at = now()
+           WHERE horae_jobs.payload = EXCLUDED.payload
            RETURNING id"#,
         id,
         org_id,
@@ -245,19 +271,25 @@ pub async fn enqueue_csv(
         idempotency_key,
         policy.max_attempts,
         report,
+        &body,
     )
-    .fetch_one(&mut *tx)
-    .await?;
-    sqlx::query!(
-        r#"INSERT INTO horae_job_uploads (job_id, org_id, filename, content_type, body)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or(RequestConflict)?;
+    // An identical resubmission must not restore an upload already removed by
+    // successful-job retention, or replace an accepted source.
+    if row.id == id {
+        sqlx::query!(
+            r#"INSERT INTO horae_job_uploads (job_id, org_id, filename, content_type, body)
            VALUES ($1, $2, 'harvest.csv', 'text/csv', $3)
            ON CONFLICT (job_id) DO NOTHING"#,
-        row.id,
-        org_id,
-        body,
-    )
-    .execute(&mut *tx)
-    .await?;
+            row.id,
+            org_id,
+            body,
+        )
+        .execute(&mut *tx)
+        .await?;
+    }
     tx.commit().await?;
     Ok(row.id)
 }
@@ -670,6 +702,157 @@ pub(crate) async fn claim_lease_for_test(
 
 #[cfg(test)]
 mod tests {
+    #[sqlx::test]
+    #[serial_test::serial]
+    async fn concurrent_csv_resubmission_preserves_identity_after_upload_cleanup(
+        pool: sqlx::PgPool,
+    ) {
+        let org_id = org(&pool).await;
+        let submit = || {
+            enqueue_csv(
+                &pool,
+                org_id,
+                ImportMode::DryRun,
+                b"original".to_vec(),
+                "concurrent-csv-key",
+                JobPolicy::default(),
+            )
+        };
+        let (first, second) = tokio::join!(submit(), submit());
+        let id = first.unwrap();
+        assert_eq!(second.unwrap(), id);
+        // Simulate upload retention without changing the retained job identity.
+        sqlx::query!("DELETE FROM horae_job_uploads WHERE job_id = $1", id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert_eq!(submit().await.unwrap(), id);
+        assert!(
+            sqlx::query!("SELECT job_id FROM horae_job_uploads WHERE job_id = $1", id)
+                .fetch_optional(&pool)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        let error = enqueue_csv(
+            &pool,
+            org_id,
+            ImportMode::DryRun,
+            b"modified".to_vec(),
+            "concurrent-csv-key",
+            JobPolicy::default(),
+        )
+        .await
+        .unwrap_err();
+        assert!(error.is::<RequestConflict>());
+    }
+
+    #[sqlx::test]
+    #[serial_test::serial]
+    async fn submission_key_cannot_change_csv_bytes_or_mode(pool: sqlx::PgPool) {
+        let org_id = org(&pool).await;
+        let id = enqueue_csv(
+            &pool,
+            org_id,
+            ImportMode::DryRun,
+            b"original".to_vec(),
+            "csv-content-key",
+            JobPolicy::default(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            enqueue_csv(
+                &pool,
+                org_id,
+                ImportMode::DryRun,
+                b"original".to_vec(),
+                "csv-content-key",
+                JobPolicy::default()
+            )
+            .await
+            .unwrap(),
+            id
+        );
+        assert!(
+            enqueue_csv(
+                &pool,
+                org_id,
+                ImportMode::DryRun,
+                b"modified".to_vec(),
+                "csv-content-key",
+                JobPolicy::default()
+            )
+            .await
+            .is_err()
+        );
+        assert!(
+            enqueue_csv(
+                &pool,
+                org_id,
+                ImportMode::Commit,
+                b"original".to_vec(),
+                "csv-content-key",
+                JobPolicy::default()
+            )
+            .await
+            .is_err()
+        );
+    }
+
+    #[sqlx::test]
+    #[serial_test::serial]
+    async fn submission_key_cannot_change_api_mode_or_scope(pool: sqlx::PgPool) {
+        let org_id = org(&pool).await;
+        let payload = JobPayload::HarvestApi {
+            mode: ImportMode::DryRun,
+            sync: horae_core::importers::harvest::types::SyncScope::Full,
+        };
+        let id = enqueue(
+            &pool,
+            org_id,
+            &payload,
+            "api-content-key",
+            JobPolicy::default(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            enqueue(
+                &pool,
+                org_id,
+                &payload,
+                "api-content-key",
+                JobPolicy::default()
+            )
+            .await
+            .unwrap(),
+            id
+        );
+        for payload in [
+            JobPayload::HarvestApi {
+                mode: ImportMode::Commit,
+                sync: horae_core::importers::harvest::types::SyncScope::Full,
+            },
+            JobPayload::HarvestApi {
+                mode: ImportMode::DryRun,
+                sync: horae_core::importers::harvest::types::SyncScope::Incremental,
+            },
+        ] {
+            assert!(
+                enqueue(
+                    &pool,
+                    org_id,
+                    &payload,
+                    "api-content-key",
+                    JobPolicy::default()
+                )
+                .await
+                .is_err()
+            );
+        }
+    }
+
     use super::*;
 
     #[sqlx::test]
@@ -955,7 +1138,7 @@ mod tests {
                 &pool,
                 org_id,
                 ImportMode::DryRun,
-                b"replacement".to_vec(),
+                Vec::new(),
                 "csv-policy",
                 JobPolicy::default(),
             )
@@ -1718,14 +1901,15 @@ mod tests {
             error.as_database_error().unwrap().code().as_deref(),
             Some("23503")
         );
-        enqueue_csv(
-            &pool,
+        sqlx::query!(
+            r#"INSERT INTO horae_job_uploads (job_id, org_id, filename, content_type, body)
+           VALUES ($1, $2, 'harvest.csv', 'text/csv', $3)
+           ON CONFLICT (job_id) DO NOTHING"#,
+            id,
             owner,
-            ImportMode::DryRun,
-            b"owner upload".to_vec(),
-            "upload-owner",
-            JobPolicy::default(),
+            b"owner upload".as_slice(),
         )
+        .execute(&pool)
         .await
         .unwrap();
         assert!(cancel(&pool, owner, id).await.unwrap());

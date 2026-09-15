@@ -46,10 +46,27 @@ fn main() -> anyhow::Result<()> {
     use cli::{Cli, Commands, MigrateAction};
     use config::AppConfig;
 
-    let cli = Cli::parse();
+    let cli = match Cli::try_parse() {
+        Ok(cli) => cli,
+        Err(error) => {
+            if error.use_stderr() && std::env::args_os().any(|arg| arg == "--json") {
+                std::process::exit(i32::from(cli::imports::argument_error()));
+            }
+            error.exit();
+        }
+    };
+    let remote = cli.remote.clone();
+    let command = cli.command();
+    if matches!(&command, Commands::Import { .. } | Commands::Jobs { .. }) {
+        let code = cli::imports::run(&command, &remote);
+        std::process::exit(i32::from(code));
+    }
     let cfg = AppConfig::from_env()?;
 
-    match cli.command() {
+    match command {
+        Commands::Import { .. } | Commands::Jobs { .. } => {
+            anyhow::bail!("Remote command was not dispatched");
+        }
         Commands::Init {
             org_name,
             admin_email,

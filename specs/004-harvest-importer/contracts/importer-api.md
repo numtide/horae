@@ -131,21 +131,21 @@ This bounds queued records, not total process memory. A record or body frame can
 be large, occurrence/cache keys and the complete error report still grow with
 input, and one outer transaction still spans the run. See [performance.md](../performance.md).
 
-## 4. CLI subcommands (planned; not implemented)
+## 4. CLI subcommands
 
-The current delivery surface is the admin screen at `/admin/importers`, backed
-by the server functions above. The server binary has no `import` subcommand.
-The commands and behavior below remain the intended operator/host-side contract,
-not runnable instructions. Use the [UI quickstart](../quickstart.md) today.
+Feature 006 adds a remote administrator client to the server binary. It calls
+the same authenticated durable-job endpoints as the admin screen; it does not
+open PostgreSQL or start a worker. See the [CLI quickstart](../../006-harvest-jobs-cli/quickstart.md)
+for private session-file setup and the [complete command contract](../../006-harvest-jobs-cli/contracts/cli.md).
 
 ```
-horae import harvest-api  [--full | --incremental] [--dry-run]
-horae import harvest-csv  <FILE> [--dry-run]
+horae import harvest-api  [--full | --incremental] [--dry-run] [--wait]
+horae import harvest-csv  <FILE> [--dry-run] [--wait]
 ```
 
-- Run on the `server` binary, sharing the same engine and DB layer as the server functions. `harvest-api` requires an existing connection (established via the UI's OAuth flow).
+- Run on the `server` binary with an active administrator session and a running Horae server. The server owns the engine and DB layer. `harvest-api` requires an existing connection (established via the UI's OAuth flow).
 - `--dry-run` selects `ImportMode::DryRun`; default is `Commit`. `--incremental` uses the stored watermark; default for `harvest-api` is `--incremental` when a watermark exists, else full.
-- Prints the summary table and the per-record error report; exits non-zero if the source is rejected up front (bad file, no/expired connection), zero when the run completes even with per-record errors (partial success is success — FR-018).
+- Detached submission prints the job ID; `--wait` prints the completed outcome. Use `jobs report` for summaries and `jobs errors --output FILE` for every retained record error. Completed partial success remains exit zero (FR-018); command rejection, failed/cancelled jobs and interrupted/timed-out waits have distinct exits in the feature-006 contract.
 
 ## Return shape: `ImportReport`
 

@@ -8,7 +8,7 @@
 
 **Organization**: Tasks are grouped by user story (spec.md priorities) to enable independent implementation and testing.
 
-**Delivery status**: The admin screen and server functions are implemented. The CLI is not; tasks that also require CLI behavior remain incomplete even where their server/UI portions are available. See the [UI quickstart](quickstart.md) for the runnable workflow.
+**Delivery status**: The admin screen and server functions are implemented. Feature 006 adds the remote administrator CLI using the same durable jobs; see its [acceptance evidence](../006-harvest-jobs-cli/acceptance.md) and [CLI quickstart](../006-harvest-jobs-cli/quickstart.md). Feature 006's remaining release gates are tracked separately.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -73,7 +73,7 @@ ______________________________________________________________________
 - [X] T020 [US1] Register the plain Axum OAuth callback route `GET /auth/harvest/callback` beside `auth::router()` in the server wiring (`crates/horae/src/main.rs` / `auth/`), performing the token exchange + credential store then redirecting into the admin screen (Constitution IV note in plan.md).
 - [X] T021 [US1] Implement the primary source adapter `crates/horae/src/harvest_import/api_source.rs`: fetch `clients`, `projects`, `tasks` + `task_assignments`, `users` (reference), `time_entries` with `Authorization`/`Harvest-Account-Id`/`User-Agent` headers, following pagination to completion, backing off on HTTP 429, and refreshing an expired token mid-run — yielding the shared `SourceRow` stream (FR-023/FR-024, research.md §11).
 - [X] T022 [US1] Add admin-only `#[server]` functions in `crates/horae/src/server_fns.rs`: `harvest_connect_start`, `harvest_connection_status`, and `import_harvest_api(mode, sync)` — reject non-admins with `FORBIDDEN`, reject when no usable connection exists (FR-001/FR-003), calling the shared engine.
-- [ ] T023 [US1] Add the CLI subcommand `import harvest-api [--full|--incremental] [--dry-run]` in `crates/horae/src/cli.rs`, sharing the same engine and DB layer.
+- [x] T023 [US1] Add `import harvest-api [--full|--incremental] [--dry-run]` in `crates/horae/src/cli.rs`. Feature 006 invokes the authenticated durable-job server functions; the server owns the shared engine and DB layer.
 - [X] T024 [US1] Add the admin "Import from Harvest" screen in `crates/horae/src/pages/` (+ route): Connect button, connection status, run button, and the summary + per-record error report.
 
 **Checkpoint**: An admin can connect and run a full API import that populates Horae exactly — MVP is demonstrable.
@@ -95,7 +95,7 @@ ______________________________________________________________________
 
 - [X] T027 [US2] Wire skip/update counting into `crates/horae/src/harvest_import/apply.rs`: a provenance/natural-key match counts as `Skipped` (default) or `Updated` for a defined safe attribute subset, never a new creation (FR-017), and confirms/refreshes the provenance row.
 - [X] T028 [US2] Implement the incremental watermark in `crates/horae/src/harvest_import/credentials.rs` + `api_source.rs`: read the per-entity `synced_watermark` and send `updated_since`, and advance it only after a successful committing run (FR-025).
-- [ ] T029 [US2] Thread `SyncScope::{Full,Incremental}` through `import_harvest_api` (`crates/horae/src/server_fns.rs`) and the `--full|--incremental` CLI flag (`crates/horae/src/cli.rs`), defaulting to incremental when a watermark exists. Server/UI sync selection is implemented; CLI flags remain pending.
+- [x] T029 [US2] Thread `SyncScope::{Full,Incremental}` through the durable API start and CLI flags. Default Incremental falls back to full without a watermark; contradictory flags are rejected before submission.
 
 **Checkpoint**: Re-runs and incremental syncs are safe and edit-robust; US1 + US2 both demonstrable.
 
@@ -113,7 +113,7 @@ ______________________________________________________________________
 
 ### Implementation for User Story 3
 
-- [ ] T031 [US3] Harden the `DryRun` path in `crates/horae/src/harvest_import.rs`: guarantee the rolled-back transaction also suppresses provenance writes and the watermark advance, and that `import_harvest_api`/`import_harvest_csv` + the `--dry-run` flag surface the would-\* summary distinctly (research.md §7). Server/UI previews are implemented; the CLI flag remains pending.
+- [x] T031 [US3] Preserve preview rollback of domain/provenance/watermark changes and expose `--dry-run` outcomes through the CLI. Feature-006 actual-binary API/CSV preview/commit/reimport fixtures verify 0/1/1 stored entries; source-level rollback tests remain green.
 
 **Checkpoint**: Dry-run preview is trustworthy across both sources.
 
@@ -133,7 +133,7 @@ ______________________________________________________________________
 
 - [X] T033 [US4] Capture per-record failures in `crates/horae/src/harvest_import/apply.rs`: on a savepoint rollback, record a `RowOutcome::Errored{source_location, reason}` (Harvest id for API, CSV line for CSV) and continue the run (FR-018/FR-019).
 - [X] T034 [US4] Add user resolution in `crates/horae/src/harvest_import/resolve.rs`: match each entry's person to a Horae user by email (from pulled Harvest users, or the CSV email/name), erroring the record when unmatched and never writing `users` (FR-010).
-- [ ] T035 [US4] Surface the per-record error report in the CLI (`crates/horae/src/cli.rs`, non-zero exit only on up-front rejection) and the admin screen (`crates/horae/src/pages/`), keeping partial success a success (FR-018). The admin report is implemented; CLI reporting remains pending.
+- [x] T035 [US4] Surface confirmed summaries and complete record errors through `jobs report`, `jobs errors --output FILE` and the admin screen. Completed partial success remains exit zero; command/job failure and interrupted waits follow the feature-006 exit contract.
 
 **Checkpoint**: Migration-scale resilience is demonstrable on both sources.
 
@@ -153,7 +153,7 @@ ______________________________________________________________________
 
 - [X] T037 [US5] Implement the secondary adapter `crates/horae/src/harvest_import/csv_source.rs`: stream-parse the detailed-time-report CSV (per contracts/csv-format.md) into the shared `SourceRow` stream with Harvest ids `None`, matching headers case-insensitively (research.md §1/§9).
 - [X] T038 [US5] Add CSV recognition/rejection: validate required columns and reject an unrecognized/empty file up front with a clear message and no writes (FR-003, contracts/csv-format.md).
-- [ ] T039 [US5] Add the `import_harvest_csv(file, mode)` `#[server]` function (`crates/horae/src/server_fns.rs`), the `import harvest-csv <FILE> [--dry-run]` CLI subcommand (`crates/horae/src/cli.rs`), and the upload control on the admin screen (`crates/horae/src/pages/`). The server function and upload control are implemented; the CLI remains pending.
+- [x] T039 [US5] Provide the durable CSV start, admin upload control and `import harvest-csv FILE [--dry-run]`. Feature-006 acceptance completes jobs after the submitting process exits and the local file is removed.
 
 **Checkpoint**: All five stories independently functional; API primary + CSV secondary share one engine.
 
