@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-14
 
-**Status**: Implementation and acceptance in progress
+**Status**: Implemented and validated (PR #199)
 
 **Input**: Add command-line Harvest API/CSV imports and job management: preview, full/incremental synchronization, status, history, report download, cancellation, retry, structured output and optional waiting. Reuse durable jobs; closing the terminal must not cancel accepted work.
 

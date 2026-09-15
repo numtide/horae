@@ -44,7 +44,7 @@
 - [x] T016 Exercise every operation with actual admin/member/manager/inactive/demoted/foreign/expired sessions in `crates/horae/src/server_fns/importers/authorization_tests.rs`; verify secret-safe errors and client parity (SC-005).
 - [x] T017 Run actual CLI source/mode, interruption/restart/retry and complete-report scenarios from `specs/006-harvest-jobs-cli/quickstart.md`; record requirement-by-requirement evidence in `specs/006-harvest-jobs-cli/acceptance.md`.
 - [x] T018 Update `specs/004-harvest-importer/tasks.md`, `specs/004-harvest-importer/contracts/importer-api.md`, `specs/005-durable-harvest-jobs/contracts/import-jobs.md` and `AGENTS.md` with verified commands, route upgrade notes and current completion state.
-- [ ] T019 Run core/server suites, all-target Clippy, WASM compilation, Nix formatting, fresh offline SQLx verification and full flake CI; audit the diff and publish verified work to PR #199. Record results in `specs/006-harvest-jobs-cli/acceptance.md`.
+- [x] T019 Run core/server suites, all-target Clippy, WASM compilation, Nix formatting, fresh offline SQLx verification and full flake CI; audit the diff and publish verified work to PR #199. Record results in `specs/006-harvest-jobs-cli/acceptance.md`.
 
 ## Dependencies and Execution Order
 

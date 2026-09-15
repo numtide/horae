@@ -1,6 +1,6 @@
 # Acceptance Evidence: Harvest Jobs CLI
 
-**Status**: In progress; this file does not establish feature completion.
+**Status**: Implemented and validated; all 19 tasks complete. Delivered in PR #199.
 
 ## Environment and workflow
 
@@ -11,7 +11,7 @@
 - Default PostgreSQL port 5432 was unavailable; feature database tests use an isolated instance on 55440, not production/development data.
 - Spec Kit: read specify/clarify/plan/tasks/analyze/implement skills; ran prerequisite resolution, setup-plan and setup-tasks scripts. No extension hooks configured. Standalone CLI and agent-context update script are absent; no invocation of those is claimed.
 - Clarify: zero new interactive answers; implementation uses the recommended server-client design with explicit documented assumptions. Requirement checklist 16/16.
-- Analyze: 13 FR and 6 SC mapped to 19 tasks; no uncovered requirement or constitutional exception. Implementation evidence remains pending.
+- Analyze: 13 FR and 6 SC mapped to 19 tasks; no uncovered requirement or constitutional exception. Implementation evidence is recorded below.
 
 ## Test evidence
 
@@ -36,11 +36,14 @@
 - CSV preview/commit/reimport finish with 0/1/1 stored entries after the submitting process exits and the local CSV is removed. Each run starts a fresh worker after submission, then observes completion from a new process. Existing checkpoint/recovery tests cover interrupted attempts; no production worker or URL override is added.
 - Final expanded server suite passed: 512 unit tests, 11 existing manual probes ignored; all integration binaries passed (5 admin, 5 CLI, 4 navigation, 14 import UI, 36 database, 1 timer). The real-session matrix used the actual executable. All-target Clippy and WASM compilation passed.
 - `cli_restart` passed against a disposable database and real `horae serve` processes: block domain writes, submit CSV, kill the server, delete the local file, restart, and observe the same job succeed with exactly one entry. The test advances only the dead claim's expiry to avoid a five-minute wait.
-- SQLx metadata regenerated after cleaning only the app's development artifacts and disabling incremental compilation. An earlier incremental run emitted only touched queries and was not accepted as the final cache. Fresh preparation also removed three obsolete preview-query entries from the baseline; current preview queries remain cached. Fresh offline/SQLx Nix verification and full flake CI remain pending.
+- SQLx metadata regenerated after cleaning only the app's development artifacts and disabling incremental compilation. An earlier incremental run emitted only touched queries and was not accepted as the final cache. Fresh preparation also removed three obsolete preview-query entries from the baseline; current preview queries remain cached.
+- Full local `nix flake check -L` passed on x86_64-linux (exit 0): fresh SQLx cache verification, offline builds, core/server/integration tests including `cli_restart`, Clippy, formatting, production server/WASM package, NixOS e2e and OIDC e2e. Other platform checks were not run.
+- GitHub [CI run 34910899078](https://github.com/numtide/horae/actions/runs/34910899078) passed for implementation commit `40ab6fc`: Format and full Flake Check, including their cache/cleanup steps. The final acceptance update changes documentation only.
+- Final scope audit preserves the root worktree and introduces no dependency, crate, migration, scheduler or new job kind. No `after_implement` extension hooks are configured.
 
 ## Completion audit
 
-Every FR-001–FR-013 and SC-001–SC-006 requires implementation and passing acceptance evidence before closure. Task checkboxes remain open until their corresponding checks pass.
+Every FR-001–FR-013 and SC-001–SC-006 has implementation and passing acceptance evidence below. All task checks and local/CI release gates passed before closure.
 
 | Requirement | Implementation and evidence |
 |---|---|
