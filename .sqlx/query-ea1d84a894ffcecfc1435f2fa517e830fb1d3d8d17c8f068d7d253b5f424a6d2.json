@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT jsonb_agg(value ORDER BY value::text) AS \"snapshot!\" FROM (\n            SELECT jsonb_build_array('organizations', to_jsonb(t)) AS value FROM organizations t\n            UNION ALL SELECT jsonb_build_array('users', to_jsonb(t)) FROM users t\n            UNION ALL SELECT jsonb_build_array('clients', to_jsonb(t)) FROM clients t\n            UNION ALL SELECT jsonb_build_array('projects', to_jsonb(t)) FROM projects t\n            UNION ALL SELECT jsonb_build_array('tasks', to_jsonb(t)) FROM tasks t\n            UNION ALL SELECT jsonb_build_array('project_tasks', to_jsonb(t)) FROM project_tasks t\n            UNION ALL SELECT jsonb_build_array('assignments', to_jsonb(t)) FROM assignments t\n            UNION ALL SELECT jsonb_build_array('time_entries', to_jsonb(t)) FROM time_entries t\n            UNION ALL SELECT jsonb_build_array('approvals', to_jsonb(t)) FROM approvals t\n            UNION ALL SELECT jsonb_build_array('audit_log', to_jsonb(t)) FROM audit_log t\n            UNION ALL SELECT jsonb_build_array('invoices', to_jsonb(t)) FROM invoices t\n            UNION ALL SELECT jsonb_build_array('invoice_line_items', to_jsonb(t)) FROM invoice_line_items t\n        ) records",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "snapshot!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ea1d84a894ffcecfc1435f2fa517e830fb1d3d8d17c8f068d7d253b5f424a6d2"
+}

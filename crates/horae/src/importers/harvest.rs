@@ -8,6 +8,7 @@
 //! data, provenance or watermark persists (FR-014, research.md §7). Durable
 //! previews retain simulation checkpoints separately from those transactions.
 
+pub mod account_switch;
 pub mod api_source;
 pub mod apply;
 pub mod credentials;
@@ -284,6 +285,12 @@ async fn run_api_import_with_http(
     }
     let mut connection = lock_import(pool, org_id).await?;
     let key = &cfg.encryption_key_hex;
+    if let Some(lease) = lease
+        && let Err(error) = lease.check_account_generation(&mut connection).await
+    {
+        release_import(connection).await?;
+        return Err(error.into());
+    }
     let loaded = credentials::load(&mut *connection, org_id, key)
         .await
         .map_err(ApiImportError::from)
@@ -379,6 +386,14 @@ async fn run_api_import_with_http(
 /// and the callback, bound to the initiating admin's session (research.md §10).
 pub const OAUTH_STATE_KEY: &str = "harvest_oauth_state";
 
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct OAuthAttempt {
+    pub nonce: String,
+    pub user_id: Uuid,
+    pub org_id: Uuid,
+    pub version: account_switch::Version,
+}
+
 /// The plain Axum route the browser is redirected to after authorizing on
 /// Harvest — a redirect target, so it cannot be a `#[server]` fn (Constitution
 /// IV). Registered beside `auth::router()`.
@@ -404,15 +419,23 @@ async fn oauth_callback(
     use axum::response::{IntoResponse, Redirect};
 
     // The nonce is single-use: consume it regardless of outcome.
-    let stored: Option<String> = session.get(OAUTH_STATE_KEY).await.ok().flatten();
-    let _ = session.remove::<String>(OAUTH_STATE_KEY).await;
+    // Legacy nonce-only sessions deliberately fail closed after deployment.
+    let stored = session
+        .remove::<String>(OAUTH_STATE_KEY)
+        .await
+        .ok()
+        .flatten()
+        .and_then(|encoded| serde_json::from_str::<OAuthAttempt>(&encoded).ok());
 
     let dest_ok = "/admin/importers?connected=1";
     let dest_err = "/admin/importers?error=1";
 
     // Validate `state` and extract the code; a missing/mismatched state or error
     // yields no code, so we never reach the exchange (research.md §10).
-    let code = match authorized_code(&params, stored.as_deref()) {
+    let code = match authorized_code(
+        &params,
+        stored.as_ref().map(|attempt| attempt.nonce.as_str()),
+    ) {
         Ok(code) => code,
         Err(reason) => {
             tracing::warn!("Harvest callback rejected before exchange: {reason}");
@@ -420,7 +443,10 @@ async fn oauth_callback(
         }
     };
 
-    match complete_connect(&session, code).await {
+    let Some(attempt) = stored else {
+        return Redirect::to(dest_err).into_response();
+    };
+    match complete_connect(&session, code, &attempt).await {
         Ok(()) => Redirect::to(dest_ok).into_response(),
         Err(e) => {
             if let Some(response) = connection_conflict_response(&e) {
@@ -436,6 +462,8 @@ async fn oauth_callback(
 fn connection_conflict_response(error: &anyhow::Error) -> Option<axum::response::Response> {
     use axum::response::IntoResponse;
     let message = if let Some(policy) = error.downcast_ref::<credentials::ConnectionError>() {
+        policy.to_string()
+    } else if let Some(policy) = error.downcast_ref::<account_switch::ChangeError>() {
         policy.to_string()
     } else if matches!(
         error.downcast_ref::<ApiImportError>(),
@@ -469,7 +497,11 @@ fn authorized_code(
 
 /// Exchange the code, resolve the account id, and persist the encrypted tokens
 /// for the acting admin's org. Errors leave no credentials written.
-async fn complete_connect(session: &tower_sessions::Session, code: String) -> anyhow::Result<()> {
+async fn complete_connect(
+    session: &tower_sessions::Session,
+    code: String,
+    attempt: &OAuthAttempt,
+) -> anyhow::Result<()> {
     let state = crate::state::global_state().await;
     let cfg = state
         .harvest
@@ -487,9 +519,18 @@ async fn complete_connect(session: &tower_sessions::Session, code: String) -> an
     .fetch_optional(&state.db)
     .await?
     .ok_or_else(|| anyhow::anyhow!("user not found"))?;
-    if user.role != "admin" {
+    if user.role != "admin" || user_id != attempt.user_id || user.org_id != attempt.org_id {
         anyhow::bail!("admin access required to connect Harvest");
     }
+    let current = account_switch::status(&state.db, user.org_id, true).await?;
+    anyhow::ensure!(
+        attempt.version
+            == account_switch::Version {
+                account_generation: current.account_generation,
+                connection_revision: current.connection_revision
+            },
+        account_switch::ChangeError::Stale
+    );
 
     // Exchange + account lookup off the async runtime (blocking ureq).
     let cfg_owned = cfg.clone();
@@ -501,7 +542,11 @@ async fn complete_connect(session: &tower_sessions::Session, code: String) -> an
     })
     .await??;
 
-    credentials::store(
+    // The external exchange may outlive an administrator's permissions.
+    let still_admin = sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM users WHERE id = $1 AND org_id = $2 AND active AND org_role = 'admin') AS "allowed!""#, attempt.user_id, attempt.org_id)
+        .fetch_one(&state.db).await?;
+    anyhow::ensure!(still_admin, "admin access required to connect Harvest");
+    credentials::store_for_attempt(
         &state.db,
         user.org_id,
         &cfg.encryption_key_hex,
@@ -510,6 +555,7 @@ async fn complete_connect(session: &tower_sessions::Session, code: String) -> an
         &tokens.refresh_token,
         tokens.expires_at,
         tokens.scope.as_deref(),
+        attempt.version,
     )
     .await?;
     Ok(())

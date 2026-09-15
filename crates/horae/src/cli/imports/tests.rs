@@ -279,10 +279,17 @@ async fn archived_errors_publish_without_clobbering_and_preserve_the_prior_file_
 
 #[tokio::test]
 async fn malformed_submission_acknowledgement_retains_its_request_identity() {
-    let server = MockServer::start(axum::Router::new().route(
-        "/api/import/harvest/start",
-        axum::routing::post(|| async { "not json" }),
-    ))
+    let server = MockServer::start(
+        axum::Router::new()
+            .route(
+                "/api/import/harvest/start",
+                axum::routing::post(|| async { "not json" }),
+            )
+            .route(
+                "/api/import/harvest/connection",
+                axum::routing::post(|| async { axum::Json(json!({"account_generation": 2})) }),
+            ),
+    )
     .await;
     let id = Uuid::now_v7();
     let result = server
@@ -290,6 +297,50 @@ async fn malformed_submission_acknowledgement_retains_its_request_identity() {
         .await;
     assert_eq!(result.code, 6);
     assert_eq!(result.request_id, Some(id));
+}
+
+#[tokio::test]
+async fn api_submission_captures_generation_without_retrying_uncertain_acceptance() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    let reads = Arc::new(AtomicUsize::new(0));
+    let writes = Arc::new(AtomicUsize::new(0));
+    let observed_reads = reads.clone();
+    let observed_writes = writes.clone();
+    let router = axum::Router::new()
+        .route(
+            "/api/import/harvest/connection",
+            axum::routing::post(move || {
+                let reads = observed_reads.clone();
+                async move {
+                    axum::Json(
+                        json!({"account_generation": reads.fetch_add(1, Ordering::SeqCst) + 3}),
+                    )
+                }
+            }),
+        )
+        .route(
+            "/api/import/harvest/start",
+            axum::routing::post(move |axum::Json(body): axum::Json<Value>| {
+                let writes = observed_writes.clone();
+                async move {
+                    use axum::response::IntoResponse;
+                    assert_eq!(body["generation"], 3);
+                    if writes.fetch_add(1, Ordering::SeqCst) == 0 {
+                        axum::http::StatusCode::SERVICE_UNAVAILABLE.into_response()
+                    } else {
+                        axum::Json(job("queued")).into_response()
+                    }
+                }
+            }),
+        );
+    let server = MockServer::start(router).await;
+    let result = server.run(&["import", "harvest-api"]).await;
+    assert_eq!(result.code, 6);
+    assert_eq!(reads.load(Ordering::SeqCst), 1);
+    assert_eq!(writes.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test]

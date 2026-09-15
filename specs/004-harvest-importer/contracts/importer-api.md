@@ -20,9 +20,10 @@ GET /auth/harvest/callback?code=…&state=…      (plain Axum route, beside aut
 - Exchanges `code` for `access_token` + `refresh_token`, resolves the Harvest **account id**, and stores the tokens **encrypted at rest** alongside the account ID in `harvest_credentials`, scoped to the org (FR-022). Tokens are never returned to the browser or logged; the account ID is non-secret metadata.
 - On success, redirects back into the admin "Import from Harvest" screen showing a connected state.
 
-The organization is permanently bound to the first connected Harvest account.
+The organization remains bound to the first connected Harvest account unless an
+administrator explicitly confirms the safe Change account flow (feature 007).
 Reconnect may replace credentials for that same account (including after key
-rotation), but cannot switch accounts. Account mismatch or unidentified legacy
+rotation), but cannot implicitly switch accounts. Account mismatch or unidentified legacy
 provenance returns a plain-text `409 Conflict` with recovery instructions; only
 these known policy errors and the import-busy message are exposed, never tokens
 or arbitrary upstream errors. Return to the import screen and reconnect the
@@ -46,6 +47,10 @@ the credential row; the next sync replays data through existing provenance.
 ```
 harvest_connection_status() -> Result<ConnectionStatus, ServerFnError>   // connected? account id, token freshness — never the tokens
 ```
+
+Feature 007 gives status the stable POST path `/api/import/harvest/connection`, including the retained bound account while disconnected, account generation, connection revision, provenance and active-work blockers. `harvest_change_account(expected_account, expected_generation, expected_revision)` requires an active administrator and explicit confirmation. It rejects stale context, imported API provenance and queued/running Harvest work. Success atomically removes only credentials/binding and advances both counters, preserving business records and reports, before normal authorization starts again.
+
+OAuth state also captures the initiating actor/organization and both counters. Callback storage rechecks them after exchange; Disconnect advances connection revision while retaining account generation. Old callbacks cannot undo a disconnect or account change; nonce-only legacy state requires a fresh Connect. No lock is held across the external OAuth exchange.
 
 ## 2. Import from the Harvest API (PRIMARY) — admin-only
 

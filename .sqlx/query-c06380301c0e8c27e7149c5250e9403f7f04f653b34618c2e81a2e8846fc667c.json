@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT account_generation FROM horae_jobs WHERE id = $1 AND org_id = $2 AND kind = 'harvest_api_import'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_generation",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c06380301c0e8c27e7149c5250e9403f7f04f653b34618c2e81a2e8846fc667c"
+}

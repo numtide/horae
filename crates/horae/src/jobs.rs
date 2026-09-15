@@ -210,6 +210,7 @@ pub async fn request_exists(
     .await?)
 }
 
+#[cfg(test)]
 pub async fn enqueue(
     pool: &sqlx::PgPool,
     org_id: Uuid,
@@ -217,16 +218,69 @@ pub async fn enqueue(
     idempotency_key: &str,
     policy: JobPolicy,
 ) -> anyhow::Result<Uuid> {
+    let mut tx = pool.begin().await?;
+    let current = crate::importers::harvest::account_switch::gate(&mut tx, org_id).await?;
+    anyhow::ensure!(
+        current.account_generation == 0,
+        crate::importers::harvest::account_switch::ChangeError::OldImport
+    );
+    let id = enqueue_in(&mut tx, org_id, payload, idempotency_key, policy, 0).await?;
+    tx.commit().await?;
+    Ok(id)
+}
+
+pub async fn enqueue_api(
+    pool: &sqlx::PgPool,
+    org_id: Uuid,
+    payload: &JobPayload,
+    idempotency_key: &str,
+    policy: JobPolicy,
+    generation: i64,
+) -> anyhow::Result<Uuid> {
+    use crate::importers::harvest::account_switch::{self, ChangeError};
+    let mut tx = pool.begin().await?;
+    let current = account_switch::gate(&mut tx, org_id).await?;
+    anyhow::ensure!(
+        generation == current.account_generation,
+        ChangeError::OldImport
+    );
+    let existing = sqlx::query_scalar!("SELECT id FROM horae_jobs WHERE org_id = $1 AND kind = 'harvest_api_import' AND idempotency_key = $2", org_id, idempotency_key)
+        .fetch_optional(&mut *tx).await?;
+    if existing.is_none() {
+        let connection = account_switch::status(&mut *tx, org_id, true).await?;
+        anyhow::ensure!(connection.connected, ChangeError::NotConnected);
+    }
+    let id = enqueue_in(
+        &mut tx,
+        org_id,
+        payload,
+        idempotency_key,
+        policy,
+        generation,
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(id)
+}
+
+async fn enqueue_in(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    org_id: Uuid,
+    payload: &JobPayload,
+    idempotency_key: &str,
+    policy: JobPolicy,
+    generation: i64,
+) -> anyhow::Result<Uuid> {
     let policy = policy.validate()?;
     let id = Uuid::now_v7();
     let encoded = encode_payload(payload)?;
     let report = payload.initial_report()?;
     let row = sqlx::query!(
-        r#"INSERT INTO horae_jobs (id, org_id, kind, payload, idempotency_key, max_attempts, report)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)
+        r#"INSERT INTO horae_jobs (id, org_id, kind, payload, idempotency_key, max_attempts, report, account_generation)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
            ON CONFLICT (org_id, kind, idempotency_key)
            DO UPDATE SET updated_at = now()
-           WHERE horae_jobs.payload = EXCLUDED.payload
+           WHERE horae_jobs.payload = EXCLUDED.payload AND horae_jobs.account_generation = EXCLUDED.account_generation
            RETURNING id"#,
         id,
         org_id,
@@ -235,8 +289,9 @@ pub async fn enqueue(
         idempotency_key,
         policy.max_attempts,
         report,
+        generation,
     )
-    .fetch_optional(pool)
+    .fetch_optional(&mut **tx)
     .await?
     .ok_or(RequestConflict)?;
     Ok(row.id)
@@ -256,6 +311,7 @@ pub async fn enqueue_csv(
     let report = payload.initial_report()?;
     let payload = encode_payload(&payload)?;
     let mut tx = pool.begin().await?;
+    crate::importers::harvest::account_switch::gate(&mut tx, org_id).await?;
     let row = sqlx::query!(
         r#"INSERT INTO horae_jobs (id, org_id, kind, payload, idempotency_key, max_attempts, report)
            VALUES ($1, $2, 'harvest_csv_import',
@@ -385,6 +441,14 @@ pub async fn cancel(pool: &sqlx::PgPool, org_id: Uuid, id: Uuid) -> anyhow::Resu
 }
 
 pub async fn retry(pool: &sqlx::PgPool, org_id: Uuid, id: Uuid) -> anyhow::Result<bool> {
+    let mut tx = pool.begin().await?;
+    let current = crate::importers::harvest::account_switch::gate(&mut tx, org_id).await?;
+    let generation = sqlx::query_scalar!("SELECT account_generation FROM horae_jobs WHERE id = $1 AND org_id = $2 AND kind = 'harvest_api_import'", id, org_id)
+        .fetch_optional(&mut *tx).await?;
+    anyhow::ensure!(
+        generation.is_none_or(|generation| generation == current.account_generation),
+        crate::importers::harvest::account_switch::ChangeError::OldImport
+    );
     let result = sqlx::query!(
         r#"UPDATE horae_jobs
               SET status = 'queued', available_at = now(), lease_until = NULL,
@@ -398,8 +462,9 @@ pub async fn retry(pool: &sqlx::PgPool, org_id: Uuid, id: Uuid) -> anyhow::Resul
         id,
         org_id,
     )
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
+    tx.commit().await?;
     Ok(result.rows_affected() == 1)
 }
 

@@ -26,7 +26,8 @@ Explicit POST paths for existing administrator-checked Dioxus functions:
 
 | Function | Path | JSON fields |
 |---|---|---|
-| start_harvest_api_import | `/api/import/harvest/start` | mode, sync |
+| harvest_connection_status | `/api/import/harvest/connection` | none |
+| start_harvest_api_import | `/api/import/harvest/start` | mode, sync, generation |
 | get_harvest_import_job | `/api/import/harvest/status` | job_id |
 | list_harvest_import_jobs | `/api/import/harvest/history` | before, limit |
 | cancel_harvest_import_job | `/api/import/harvest/cancel` | job_id |
@@ -35,6 +36,8 @@ Explicit POST paths for existing administrator-checked Dioxus functions:
 CSV remains raw `POST /api/import/harvest/csv-job/{DryRun|Commit}` with `X-Horae-Import: csv`. Both starts accept optional `X-Horae-Idempotency-Key`; absence retains fresh web submissions. Errors remain `GET /api/import/harvest/jobs/{job_id}/errors`.
 
 No inline endpoint restored. Rebuild web bundle with the server when upgrading routes; old tabs reload. CLI/server must support this contract; version/route mismatch fails, never falls back to local execution.
+
+Feature 007 reads the connection's `account_generation` before API submission. Missing generation on legacy requests means zero; after an explicit account change old clients fail closed. Upgrade CLI/server/web together. Accepted request identities remain tied to their original generation even after a later CLI invocation reads newer status; use a new request ID for genuinely new work. Uncertain submissions are not automatically retried.
 
 ## Security and output
 

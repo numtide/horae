@@ -18,7 +18,7 @@ use uuid::Uuid;
 #[derive(Debug, thiserror::Error)]
 pub enum ConnectionError {
     #[error(
-        "This organization is bound to another Harvest account. Reconnect the original account; changing accounts requires an explicit data migration."
+        "This organization is bound to another Harvest account. Reconnect the original account, or use Change account in the importer to review whether switching is safe."
     )]
     AccountChange,
     #[error(
@@ -121,7 +121,7 @@ where
 /// (v1); reconnecting the same account overwrites only its credentials. The
 /// parameters mirror the persisted columns one-to-one, hence the count.
 #[allow(clippy::too_many_arguments)]
-pub async fn store(
+pub async fn store_for_attempt(
     pool: &sqlx::PgPool,
     org_id: Uuid,
     key_hex: &str,
@@ -130,12 +130,15 @@ pub async fn store(
     refresh_token: &str,
     token_expires_at: Option<DateTime<Utc>>,
     scope: Option<&str>,
+    expected: super::account_switch::Version,
 ) -> anyhow::Result<()> {
     let access_enc = encrypt(key_hex, access_token)?;
     let refresh_enc = encrypt(key_hex, refresh_token)?;
     let mut connection = super::lock_import(pool, org_id).await?;
     let result = async {
         let mut tx = connection.begin().await?;
+        let current = super::account_switch::gate(&mut tx, org_id).await?;
+        anyhow::ensure!(current == expected, super::account_switch::ChangeError::Stale);
         let bound_account = sqlx::query_scalar!(
             "SELECT harvest_account_id FROM harvest_account_bindings WHERE org_id = $1",
             org_id,
@@ -189,6 +192,8 @@ pub async fn store(
         if saved.rows_affected() != 1 {
             return Err(ConnectionError::AccountChange.into());
         }
+        sqlx::query!("UPDATE harvest_connection_generations SET connection_revision = connection_revision + 1 WHERE org_id = $1", org_id)
+            .execute(&mut *tx).await?;
         tx.commit().await?;
         Ok(())
     }
@@ -197,14 +202,51 @@ pub async fn store(
     result
 }
 
+/// Test fixtures connect without an external OAuth exchange.
+#[cfg(test)]
+#[allow(clippy::too_many_arguments)]
+pub async fn store(
+    pool: &sqlx::PgPool,
+    org_id: Uuid,
+    key_hex: &str,
+    account_id: &str,
+    access_token: &str,
+    refresh_token: &str,
+    token_expires_at: Option<DateTime<Utc>>,
+    scope: Option<&str>,
+) -> anyhow::Result<()> {
+    let status = super::account_switch::status(pool, org_id, true).await?;
+    store_for_attempt(
+        pool,
+        org_id,
+        key_hex,
+        account_id,
+        access_token,
+        refresh_token,
+        token_expires_at,
+        scope,
+        super::account_switch::Version {
+            account_generation: status.account_generation,
+            connection_revision: status.connection_revision,
+        },
+    )
+    .await
+}
+
 /// Remove OAuth secrets, retaining account identity and all imported records.
 /// Like connecting, this must not race with import or token refresh.
 pub async fn disconnect(pool: &sqlx::PgPool, org_id: Uuid) -> Result<(), super::ApiImportError> {
     let mut connection = super::lock_import(pool, org_id).await?;
-    let result = sqlx::query!("DELETE FROM harvest_credentials WHERE org_id = $1", org_id)
-        .execute(&mut *connection)
-        .await
-        .map_err(anyhow::Error::from);
+    let result: anyhow::Result<()> = async {
+        let mut tx = connection.begin().await?;
+        super::account_switch::gate(&mut tx, org_id).await?;
+        sqlx::query!("DELETE FROM harvest_credentials WHERE org_id = $1", org_id)
+            .execute(&mut *tx).await?;
+        sqlx::query!("UPDATE harvest_connection_generations SET connection_revision = connection_revision + 1 WHERE org_id = $1", org_id)
+            .execute(&mut *tx).await?;
+        tx.commit().await?;
+        Ok(())
+    }.await;
     super::release_import(connection).await?;
     result?;
     Ok(())

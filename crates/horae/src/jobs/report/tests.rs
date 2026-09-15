@@ -6,6 +6,23 @@ use uuid::Uuid;
 
 use crate::{config::JobPolicy, jobs};
 
+/// Migration fixtures must use the pre-generation schema, not today's enqueue path.
+async fn legacy_csv_job(pool: &sqlx::PgPool, org: Uuid) -> Uuid {
+    let id = Uuid::now_v7();
+    let payload = jobs::JobPayload::HarvestCsv {
+        mode: ImportMode::Commit,
+    };
+    let encoded = jobs::encode_payload(&payload).unwrap();
+    let report = payload.initial_report().unwrap();
+    let key = id.to_string();
+    let attempts = JobPolicy::default().max_attempts;
+    sqlx::query!(
+        "INSERT INTO horae_jobs (id, org_id, kind, payload, idempotency_key, max_attempts, report) VALUES ($1, $2, 'harvest_csv_import', $3, $4, $6, $5)",
+        id, org, encoded, key, report, attempts
+    ).execute(pool).await.unwrap();
+    id
+}
+
 #[sqlx::test]
 #[serial_test::serial]
 async fn report_fragments_survive_until_the_owning_job_expires(pool: sqlx::PgPool) {
@@ -103,17 +120,7 @@ async fn upgrading_legacy_reports_preserves_errors_and_fences_old_attempts(pool:
     .execute(&pool)
     .await
     .unwrap();
-    let id = jobs::enqueue(
-        &pool,
-        org_id,
-        &jobs::JobPayload::HarvestCsv {
-            mode: ImportMode::Commit,
-        },
-        "legacy-report-upgrade",
-        JobPolicy::default(),
-    )
-    .await
-    .unwrap();
+    let id = legacy_csv_job(&pool, org_id).await;
     let (old_lease, _stop) = jobs::claim_lease_for_test(&pool).await;
     let mut report = ImportReport::new(SourceKind::Csv, ImportMode::Commit);
     for index in 0..1_000 {
@@ -286,17 +293,7 @@ async fn legacy_upgrade_preserves_job_states_and_existing_archives(pool: sqlx::P
     ] {
         for version in 0..=2 {
             for with_checkpoint in [false, true] {
-                let id = jobs::enqueue(
-                    &pool,
-                    org,
-                    &jobs::JobPayload::HarvestCsv {
-                        mode: ImportMode::Commit,
-                    },
-                    &Uuid::now_v7().to_string(),
-                    JobPolicy::default(),
-                )
-                .await
-                .unwrap();
+                let id = legacy_csv_job(&pool, org).await;
                 let mut report = ImportReport::new(SourceKind::Csv, ImportMode::Commit);
                 let mut expected = Vec::new();
                 let mut prefix = Vec::new();
@@ -367,7 +364,7 @@ async fn legacy_upgrade_preserves_job_states_and_existing_archives(pool: sqlx::P
             "state: {state}"
         );
         let stored = sqlx::query!(
-            "SELECT report, checkpoint, claim_token,
+            "SELECT report, checkpoint, claim_token, account_generation,
                     lease_until <= clock_timestamp() AS expired
              FROM horae_jobs WHERE id = $1",
             id,
@@ -375,6 +372,7 @@ async fn legacy_upgrade_preserves_job_states_and_existing_archives(pool: sqlx::P
         .fetch_one(&pool)
         .await
         .unwrap();
+        assert_eq!(stored.account_generation, 0);
         assert!(stored.claim_token.is_none());
         assert_eq!(stored.expired, (state == "running").then_some(true));
         let metadata = stored.report.unwrap();
@@ -414,7 +412,7 @@ async fn legacy_upgrade_preserves_job_states_and_existing_archives(pool: sqlx::P
 
 async fn legacy_job_metadata(pool: &sqlx::PgPool, id: Uuid) -> serde_json::Value {
     sqlx::query_scalar!(
-        "SELECT to_jsonb(j) - ARRAY['report', 'checkpoint', 'claim_token', 'lease_until', 'updated_at'] AS \"metadata!\"
+        "SELECT to_jsonb(j) - ARRAY['report', 'checkpoint', 'claim_token', 'lease_until', 'updated_at', 'account_generation'] AS \"metadata!\"
          FROM horae_jobs j WHERE id = $1", id,
     ).fetch_one(pool).await.unwrap()
 }

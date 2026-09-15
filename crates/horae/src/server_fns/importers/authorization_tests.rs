@@ -45,6 +45,7 @@ fn request_bound_import_endpoints_are_not_registered() {
 fn cli_job_endpoints_have_stable_registered_paths() {
     let routes = ServerFunction::collect();
     for path in [
+        "/api/import/harvest/connection",
         "/api/import/harvest/start",
         "/api/import/harvest/status",
         "/api/import/harvest/history",
@@ -109,6 +110,7 @@ impl Api {
         } else {
             let explicit = match name {
                 "start_harvest_api_import" => Some("/api/import/harvest/start"),
+                "harvest_connection_status" => Some("/api/import/harvest/connection"),
                 "get_harvest_import_job" => Some("/api/import/harvest/status"),
                 "list_harvest_import_jobs" => Some("/api/import/harvest/history"),
                 "cancel_harvest_import_job" => Some("/api/import/harvest/cancel"),
@@ -219,6 +221,24 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
             }),
         )
         .with_state(FullstackState::headless())
+        .merge(crate::importers::harvest::callback_router())
+        .route(
+            "/test/harvest-attempt",
+            get(|session: Session| async move {
+                axum::Json(
+                    session
+                        .get::<String>(crate::importers::harvest::OAUTH_STATE_KEY)
+                        .await
+                        .unwrap()
+                        .map(|encoded| {
+                            serde_json::from_str::<crate::importers::harvest::OAuthAttempt>(
+                                &encoded,
+                            )
+                            .unwrap()
+                        }),
+                )
+            }),
+        )
         .layer(middleware::from_fn(
             |request: Request, next: middleware::Next| async move {
                 let request = if request.headers().contains_key("X-Test-Unread-Upload") {
@@ -247,6 +267,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
         base: format!("http://{}", listener.local_addr().unwrap()),
         client: reqwest::Client::builder()
             .cookie_store(false)
+            .redirect(reqwest::redirect::Policy::none())
             .timeout(Duration::from_secs(5))
             .build()
             .unwrap(),
@@ -297,10 +318,18 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
         (Some(manager.as_str()), StatusCode::FORBIDDEN),
         (Some(inactive.as_str()), StatusCode::UNAUTHORIZED),
         (Some(missing.as_str()), StatusCode::UNAUTHORIZED),
+        (Some(expired.as_str()), StatusCode::UNAUTHORIZED),
         (Some(demoted.as_str()), StatusCode::FORBIDDEN),
     ] {
         assert_eq!(api.errors(target, cookie).await.status(), expected);
         for (name, body) in [
+            ("harvest_connection_status", json!({})),
+            ("harvest_connect_start", json!({})),
+            ("harvest_disconnect", json!({})),
+            (
+                "harvest_change_account",
+                json!({"expected_account":"test-account","expected_generation":0,"expected_revision":1}),
+            ),
             (
                 "start_harvest_api_import",
                 json!({"mode":"DryRun","sync":"Full"}),
@@ -351,6 +380,142 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     )
     .await
     .unwrap();
+    let private_status = api
+        .json("harvest_connection_status", json!({}), &admin)
+        .await;
+    assert_eq!(private_status["account_id"], "test-account");
+    assert_eq!(private_status["account_generation"], 0);
+    assert_eq!(private_status["connection_revision"], 1);
+    assert!(!private_status.to_string().contains("test-access"));
+    assert!(!private_status.to_string().contains("test-refresh"));
+    let foreign_status = api
+        .json(
+            "harvest_connection_status",
+            json!({"org_id":owner.org_id}),
+            &outsider,
+        )
+        .await;
+    assert_eq!(foreign_status["account_id"], Value::Null);
+    assert_eq!(api.call("harvest_change_account", json!({"org_id":owner.org_id,"expected_account":"test-account","expected_generation":0,"expected_revision":1}), Some(&outsider), false).await.status(), StatusCode::CONFLICT);
+    // Another browser's pending OAuth must not undo Disconnect.
+    let oauth_session = api.cookie(owner.user_id).await;
+    let authorize = api
+        .json("harvest_connect_start", json!({}), &oauth_session)
+        .await;
+    let authorize = openidconnect::url::Url::parse(authorize.as_str().unwrap()).unwrap();
+    let nonce = authorize
+        .query_pairs()
+        .find(|(key, _)| key == "state")
+        .unwrap()
+        .1
+        .into_owned();
+    let saved_attempt: Value = api
+        .client
+        .get(format!("{}/test/harvest-attempt", api.base))
+        .header("cookie", &oauth_session)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(
+        saved_attempt["nonce"], nonce,
+        "OAuth attempt must persist in its initiating session"
+    );
+    api.json("harvest_disconnect", json!({}), &admin).await;
+    let callback = api
+        .client
+        .get(format!("{}/auth/harvest/callback", api.base))
+        .header("cookie", &oauth_session)
+        .query(&[("state", nonce.as_str()), ("code", "must-not-be-exchanged")])
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(callback.status(), StatusCode::CONFLICT);
+    assert!(
+        callback
+            .text()
+            .await
+            .unwrap()
+            .contains("connection changed")
+    );
+    assert!(
+        !crate::importers::harvest::account_switch::status(&pool, owner.org_id, true)
+            .await
+            .unwrap()
+            .connected
+    );
+    crate::importers::harvest::credentials::store(
+        &pool,
+        owner.org_id,
+        &"11".repeat(32),
+        "test-account",
+        "test-access",
+        "test-refresh",
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+
+    // Exercise a real successful change in another organization without disturbing owner jobs.
+    crate::importers::harvest::credentials::store(
+        &pool,
+        foreign.org_id,
+        &"11".repeat(32),
+        "foreign-account",
+        "foreign-access",
+        "foreign-refresh",
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+    let old_authorize = api
+        .json("harvest_connect_start", json!({}), &outsider)
+        .await;
+    let old_authorize = openidconnect::url::Url::parse(old_authorize.as_str().unwrap()).unwrap();
+    let old_nonce = old_authorize
+        .query_pairs()
+        .find(|(key, _)| key == "state")
+        .unwrap()
+        .1
+        .into_owned();
+    api.json(
+        "harvest_change_account",
+        json!({"expected_account":"foreign-account","expected_generation":0,"expected_revision":1}),
+        &outsider,
+    )
+    .await;
+    let changed = api
+        .json("harvest_connection_status", json!({}), &outsider)
+        .await;
+    assert_eq!(changed["account_generation"], 1);
+    assert_eq!(changed["account_id"], Value::Null);
+    let stale = api
+        .client
+        .get(format!("{}/auth/harvest/callback", api.base))
+        .header("cookie", &outsider)
+        .query(&[
+            ("state", old_nonce.as_str()),
+            ("code", "must-not-be-exchanged"),
+        ])
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(stale.status(), StatusCode::CONFLICT);
+    assert_eq!(
+        api.call(
+            "start_harvest_api_import",
+            json!({"mode":"DryRun","sync":"Full"}),
+            Some(&outsider),
+            false
+        )
+        .await
+        .status(),
+        StatusCode::CONFLICT
+    );
     for name in ["start_harvest_api_import", "csv"] {
         let started: crate::models::JobStatus = serde_json::from_value(
             api.json(

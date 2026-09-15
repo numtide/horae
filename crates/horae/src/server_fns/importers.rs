@@ -18,15 +18,28 @@ mod authorization_tests;
 /// to (contracts/importer-api.md §1).
 #[server]
 pub async fn harvest_connect_start() -> Result<String, ServerFnError> {
-    require_admin().await?;
+    let admin = require_admin().await?;
     let cfg = harvest_config().await?;
+    let current = harvest_connection_status().await?;
 
     // A random, session-bound nonce validated on the callback (CSRF, FR-022).
     let nonce = uuid::Uuid::now_v7().simple().to_string();
     let session: tower_sessions::Session =
         dioxus_fullstack::FullstackContext::extract::<tower_sessions::Session, _>().await?;
+    let attempt = crate::importers::harvest::OAuthAttempt {
+        nonce: nonce.clone(),
+        user_id: admin.id,
+        org_id: admin.org_id,
+        version: crate::importers::harvest::account_switch::Version {
+            account_generation: current.account_generation,
+            connection_revision: current.connection_revision,
+        },
+    };
+    // The session store uses MessagePack for serde_json::Value. Keep this as
+    // JSON text so arbitrary-precision JSON numbers round-trip as integers.
+    let encoded = serde_json::to_string(&attempt).map_err(server_err)?;
     session
-        .insert(crate::importers::harvest::OAUTH_STATE_KEY, &nonce)
+        .insert(crate::importers::harvest::OAUTH_STATE_KEY, &encoded)
         .await
         .map_err(server_err)?;
 
@@ -36,34 +49,57 @@ pub async fn harvest_connect_start() -> Result<String, ServerFnError> {
 }
 
 /// Report whether the org has a usable Harvest connection (never the tokens).
-#[server]
+#[dioxus_fullstack::post("/api/import/harvest/connection")]
 pub async fn harvest_connection_status() -> Result<ConnectionStatus, ServerFnError> {
     let admin = require_admin().await?;
     let state = crate::state::global_state().await;
-    let configured = state.harvest.is_some();
-
-    let row = sqlx::query!(
-        r#"SELECT harvest_account_id,
-                  token_expires_at as "token_expires_at: chrono::DateTime<chrono::Utc>"
-           FROM harvest_credentials WHERE org_id = $1"#,
+    crate::importers::harvest::account_switch::status(
+        &state.db,
         admin.org_id,
+        state.harvest.is_some(),
     )
-    .fetch_optional(&state.db)
     .await
-    .map_err(server_err)?;
+    .map_err(server_err)
+}
 
-    Ok(match row {
-        Some(r) => ConnectionStatus {
-            configured,
-            connected: true,
-            account_id: Some(r.harvest_account_id),
-            token_expired: r.token_expires_at.is_some_and(|e| e <= chrono::Utc::now()),
-        },
-        None => ConnectionStatus {
-            configured,
-            ..ConnectionStatus::default()
-        },
-    })
+/// Explicit confirmation of the exact connection inspected by an administrator.
+#[server]
+pub async fn harvest_change_account(
+    expected_account: String,
+    expected_generation: i64,
+    expected_revision: i64,
+) -> Result<(), ServerFnError> {
+    let admin = require_admin().await?;
+    let state = crate::state::global_state().await;
+    crate::importers::harvest::account_switch::change(
+        &state.db,
+        admin.org_id,
+        &expected_account,
+        expected_generation,
+        expected_revision,
+    )
+    .await
+    .map_err(map_connection_error)
+}
+
+#[cfg(feature = "server")]
+fn map_connection_error(error: anyhow::Error) -> ServerFnError {
+    if let Some(policy) =
+        error.downcast_ref::<crate::importers::harvest::account_switch::ChangeError>()
+    {
+        err(CONFLICT, policy)
+    } else if matches!(
+        error.downcast_ref::<crate::importers::harvest::ApiImportError>(),
+        Some(crate::importers::harvest::ApiImportError::Busy)
+    ) {
+        err(
+            CONFLICT,
+            "Finish or cancel the active Harvest import before changing account",
+        )
+    } else {
+        tracing::error!(%error, "Harvest connection change failed");
+        err(INTERNAL_ERROR, "Unable to change Harvest connection")
+    }
 }
 
 /// Disconnect Harvest: remove OAuth secrets, retaining the original account
@@ -84,26 +120,25 @@ pub async fn harvest_disconnect() -> Result<(), ServerFnError> {
 pub async fn start_harvest_api_import(
     mode: ImportMode,
     sync: SyncScope,
+    generation: Option<i64>,
 ) -> Result<crate::models::JobStatus, ServerFnError> {
     let admin = require_admin().await?;
     let state = crate::state::global_state().await;
     let payload = crate::jobs::JobPayload::HarvestApi { mode, sync };
     let key = submission_key("api").await?;
-    if !crate::jobs::request_exists(&state.db, admin.org_id, "harvest_api_import", &key)
-        .await
-        .map_err(server_err)?
-    {
-        let connection = harvest_connection_status().await?;
-        if !connection.configured || !connection.connected {
-            return Err(err(
-                NOT_FOUND,
-                "Connect Harvest before starting an API import",
-            ));
-        }
+    if state.harvest.is_none() {
+        return Err(err(NOT_FOUND, "Harvest is not configured"));
     }
-    let id = crate::jobs::enqueue(&state.db, admin.org_id, &payload, &key, state.job_policy)
-        .await
-        .map_err(map_enqueue_error)?;
+    let id = crate::jobs::enqueue_api(
+        &state.db,
+        admin.org_id,
+        &payload,
+        &key,
+        state.job_policy,
+        generation.unwrap_or(0),
+    )
+    .await
+    .map_err(map_enqueue_error)?;
     required_import_job(&state.db, admin.org_id, id).await
 }
 
@@ -189,7 +224,7 @@ pub async fn retry_harvest_import_job(
     let state = crate::state::global_state().await;
     if crate::jobs::retry(&state.db, admin.org_id, job_id)
         .await
-        .map_err(server_err)?
+        .map_err(map_enqueue_error)?
     {
         required_import_job(&state.db, admin.org_id, job_id).await
     } else {
@@ -238,7 +273,19 @@ fn validate_request_id(id: uuid::Uuid, now: i64) -> Result<(), ServerFnError> {
 
 #[cfg(feature = "server")]
 fn map_enqueue_error(error: anyhow::Error) -> ServerFnError {
-    if error.is::<crate::jobs::RequestConflict>() {
+    if let Some(policy) =
+        error.downcast_ref::<crate::importers::harvest::account_switch::ChangeError>()
+    {
+        let code = if matches!(
+            policy,
+            crate::importers::harvest::account_switch::ChangeError::NotConnected
+        ) {
+            NOT_FOUND
+        } else {
+            CONFLICT
+        };
+        err(code, policy)
+    } else if error.is::<crate::jobs::RequestConflict>() {
         err(
             CONFLICT,
             "Request ID already belongs to different import input",
@@ -299,6 +346,10 @@ mod tests {
         assert!(validate_request_id(id, now).is_ok());
         assert!(validate_request_id(id, now + 86_401).is_err());
         assert!(validate_request_id(id, now - 301).is_err());
+        // Even a key accepted at the maximum future skew is long expired when
+        // its retained job can be removed by the fixed 30-day cleanup policy.
+        assert!(validate_request_id(id, now - 300).is_ok());
+        assert!(validate_request_id(id, now - 300 + 30 * 86_400).is_err());
         assert!(validate_request_id(uuid::Uuid::nil(), now).is_err());
     }
 

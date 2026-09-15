@@ -89,6 +89,10 @@ async fn executable_commands_use_the_documented_authenticated_wire_contract() {
                 .await
                 .unwrap();
             calls.lock().unwrap().push(path.clone());
+            if path == "/api/import/harvest/connection" {
+                assert!(key.is_none());
+                return axum::Json(json!({"account_generation": 4})).into_response();
+            }
             if path == "/api/import/harvest/start" {
                 assert_eq!(
                     uuid::Uuid::parse_str(key.unwrap().to_str().unwrap())
@@ -97,6 +101,7 @@ async fn executable_commands_use_the_documented_authenticated_wire_contract() {
                     7
                 );
                 let body: Value = serde_json::from_slice(&body).unwrap();
+                assert_eq!(body["generation"], 4);
                 assert!(matches!(
                     body["sync"].as_str(),
                     Some("Full" | "Incremental")
@@ -277,13 +282,16 @@ async fn executable_wait_and_failure_exit_codes_match_the_json_contract() {
         ("forbidden", 1, "error"),
     ] {
         let id = uuid::Uuid::now_v7();
-        let router = Router::new().fallback(move |_request: Request| async move {
+        let router = Router::new().fallback(move |request: Request| async move {
             if state == "forbidden" {
                 return (
                     axum::http::StatusCode::FORBIDDEN,
                     "secret-server-diagnostic",
                 )
                     .into_response();
+            }
+            if request.uri().path() == "/api/import/harvest/connection" {
+                return axum::Json(json!({"account_generation": 0})).into_response();
             }
             let mut value = job(
                 id,
