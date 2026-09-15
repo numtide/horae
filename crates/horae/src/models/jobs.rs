@@ -1,3 +1,16 @@
+/// Advisory retry prerequisites; write-side validation remains authoritative.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RetryAvailability {
+    Available,
+    UnavailableState,
+    PreviousAccount,
+    MissingUpload,
+    #[default]
+    #[serde(other)]
+    Unknown,
+}
+
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct JobStatus {
     pub id: uuid::Uuid,
@@ -10,6 +23,8 @@ pub struct JobStatus {
     pub last_error: Option<String>,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub finished_at: Option<chrono::DateTime<chrono::Utc>>,
+    #[serde(default)]
+    pub retry_availability: RetryAvailability,
 }
 
 impl JobStatus {

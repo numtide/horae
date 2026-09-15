@@ -41,6 +41,14 @@ Feature 007 reads the connection's `account_generation` before API submission. M
 
 ## Security and output
 
+Feature 008 adds advisory `retry_availability` to returned job snapshots. Older
+clients ignore the additive field; updated clients default missing/future values
+to `unknown`. Its values and projection are defined in the
+[import jobs contract](../../005-durable-harvest-jobs/contracts/import-jobs.md#reports-and-failed-attempts).
+CLI kind/state validation, retry requests, `can_retry()` semantics and exit codes
+are unchanged. No raw payload, account generation or upload bytes are added to
+job responses. The server's transactional retry validation remains authoritative.
+
 See [data-model.md](../data-model.md) for file schema and exits. HTTPS except loopback, no redirects, no raw secrets in arguments, active admin/org checks per request. Missing/expired/foreign jobs never create replacements.
 
 Success is the raw Dioxus result value. Classify failures by HTTP status without printing arbitrary remote bodies. JSON mode emits one version-1 envelope to stdout; diagnostics/progress go to stderr. Completed imports with record errors are explicitly partial success.

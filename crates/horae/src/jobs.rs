@@ -350,6 +350,33 @@ pub async fn enqueue_csv(
     Ok(row.id)
 }
 
+fn retry_availability(
+    kind: &str,
+    state: &str,
+    payload: serde_json::Value,
+    generation: i64,
+    current_generation: i64,
+    has_upload: bool,
+) -> crate::models::RetryAvailability {
+    use crate::models::RetryAvailability;
+    let Ok(payload) = decode_payload(payload) else {
+        return RetryAvailability::Unknown;
+    };
+    if payload.kind() != kind || !matches!(kind, "harvest_api_import" | "harvest_csv_import") {
+        return RetryAvailability::Unknown;
+    }
+    if !matches!(state, "failed" | "cancelled") {
+        return RetryAvailability::UnavailableState;
+    }
+    match payload {
+        JobPayload::HarvestApi { .. } if generation != current_generation => {
+            RetryAvailability::PreviousAccount
+        }
+        JobPayload::HarvestCsv { .. } if !has_upload => RetryAvailability::MissingUpload,
+        _ => RetryAvailability::Available,
+    }
+}
+
 pub async fn status(
     pool: &sqlx::PgPool,
     org_id: Uuid,
@@ -359,7 +386,12 @@ pub async fn status(
         r#"SELECT id, kind, status, phase, processed_count, total_count,
                   COALESCE(checkpoint->'report', report) AS report, last_error,
                   created_at as "created_at!: chrono::DateTime<chrono::Utc>",
-                  finished_at as "finished_at: chrono::DateTime<chrono::Utc>"
+                  finished_at as "finished_at: chrono::DateTime<chrono::Utc>",
+                  payload, account_generation,
+                  COALESCE((SELECT g.account_generation FROM harvest_connection_generations g
+                            WHERE g.org_id = horae_jobs.org_id), 0) AS "current_generation!",
+                  EXISTS(SELECT 1 FROM horae_job_uploads u
+                         WHERE u.job_id = horae_jobs.id AND u.org_id = horae_jobs.org_id) AS "has_upload!"
              FROM horae_jobs
             WHERE id = $1 AND org_id = $2"#,
         id,
@@ -368,6 +400,14 @@ pub async fn status(
     .fetch_optional(pool)
     .await?;
     Ok(row.map(|r| crate::models::JobStatus {
+        retry_availability: retry_availability(
+            &r.kind,
+            &r.status,
+            r.payload,
+            r.account_generation,
+            r.current_generation,
+            r.has_upload,
+        ),
         id: r.id,
         kind: r.kind,
         status: r.status,
@@ -391,7 +431,12 @@ pub async fn list(
         r#"SELECT id, kind, status, phase, processed_count, total_count,
                   COALESCE(checkpoint->'report', report) AS report, last_error,
                   created_at as "created_at!: chrono::DateTime<chrono::Utc>",
-                  finished_at as "finished_at: chrono::DateTime<chrono::Utc>"
+                  finished_at as "finished_at: chrono::DateTime<chrono::Utc>",
+                  payload, account_generation,
+                  COALESCE((SELECT g.account_generation FROM harvest_connection_generations g
+                            WHERE g.org_id = horae_jobs.org_id), 0) AS "current_generation!",
+                  EXISTS(SELECT 1 FROM horae_job_uploads u
+                         WHERE u.job_id = horae_jobs.id AND u.org_id = horae_jobs.org_id) AS "has_upload!"
              FROM horae_jobs
             WHERE org_id = $1
               AND ($3::uuid IS NULL OR (created_at, id) < (
@@ -408,6 +453,14 @@ pub async fn list(
     Ok(rows
         .into_iter()
         .map(|r| crate::models::JobStatus {
+            retry_availability: retry_availability(
+                &r.kind,
+                &r.status,
+                r.payload,
+                r.account_generation,
+                r.current_generation,
+                r.has_upload,
+            ),
             id: r.id,
             kind: r.kind,
             status: r.status,
@@ -767,6 +820,101 @@ pub(crate) async fn claim_lease_for_test(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn retry_snapshot_does_not_guess_unknown_payloads_or_sources() {
+        use crate::models::RetryAvailability;
+        let payload = JobPayload::HarvestCsv {
+            mode: ImportMode::DryRun,
+        };
+        for (kind, encoded) in [
+            (
+                "harvest_csv_import",
+                serde_json::json!({"version": 2, "payload": payload}),
+            ),
+            (
+                "harvest_csv_import",
+                serde_json::json!({"kind": "HarvestCsv"}),
+            ),
+            ("future_import", encode_payload(&payload).unwrap()),
+            ("harvest_api_import", encode_payload(&payload).unwrap()),
+        ] {
+            assert_eq!(
+                retry_availability(kind, "failed", encoded, 0, 0, true),
+                RetryAvailability::Unknown
+            );
+        }
+        assert_eq!(
+            retry_availability(
+                "harvest_csv_import",
+                "failed",
+                serde_json::to_value(&payload).unwrap(),
+                0,
+                9,
+                true
+            ),
+            RetryAvailability::Available
+        );
+    }
+
+    #[sqlx::test]
+    async fn retry_snapshot_matches_status_and_list_without_exposing_payload(pool: sqlx::PgPool) {
+        let org_id = org(&pool).await;
+        let api = enqueue(
+            &pool,
+            org_id,
+            &JobPayload::HarvestApi {
+                mode: ImportMode::DryRun,
+                sync: SyncScope::Full,
+            },
+            "projection-api",
+            JobPolicy::default(),
+        )
+        .await
+        .unwrap();
+        let csv = enqueue_csv(
+            &pool,
+            org_id,
+            ImportMode::DryRun,
+            b"fixture".to_vec(),
+            "projection-csv",
+            JobPolicy::default(),
+        )
+        .await
+        .unwrap();
+        for id in [api, csv] {
+            let snapshot =
+                serde_json::to_value(status(&pool, org_id, id).await.unwrap().unwrap()).unwrap();
+            assert_eq!(snapshot["retry_availability"], "unavailable_state");
+            assert!(cancel(&pool, org_id, id).await.unwrap());
+        }
+        for snapshot in list(&pool, org_id, 20, None).await.unwrap() {
+            assert_eq!(
+                Some(snapshot.clone()),
+                status(&pool, org_id, snapshot.id).await.unwrap()
+            );
+            let encoded = serde_json::to_value(snapshot).unwrap();
+            assert_eq!(encoded["retry_availability"], "available");
+            assert!(encoded.get("payload").is_none());
+        }
+        sqlx::query!("DELETE FROM horae_job_uploads WHERE job_id = $1", csv)
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(status(&pool, org_id, csv).await.unwrap().unwrap()).unwrap()["retry_availability"],
+            "missing_upload"
+        );
+        sqlx::query!("UPDATE harvest_connection_generations SET account_generation = account_generation + 1 WHERE org_id = $1", org_id).execute(&pool).await.unwrap();
+        assert_eq!(
+            serde_json::to_value(status(&pool, org_id, api).await.unwrap().unwrap()).unwrap()["retry_availability"],
+            "previous_account"
+        );
+        assert_eq!(
+            serde_json::to_value(status(&pool, org_id, csv).await.unwrap().unwrap()).unwrap()["retry_availability"],
+            "missing_upload"
+        );
+    }
+
     #[sqlx::test]
     #[serial_test::serial]
     async fn concurrent_csv_resubmission_preserves_identity_after_upload_cleanup(

@@ -11,6 +11,9 @@ use horae_core::importers::harvest::types::{
 use crate::components::toast::{Toast, ToastContainer};
 use crate::server_fns;
 
+#[path = "importers/presentation.rs"]
+mod presentation;
+
 /// Which import source the admin is working with. `Picker` is the landing list;
 /// choosing a source drills into its flow.
 #[derive(Clone, Copy, PartialEq)]
@@ -31,14 +34,14 @@ struct CsvFile {
 /// One unit of import work, so the four trigger buttons share a single runner.
 #[derive(Clone)]
 enum Run {
-    Api(ImportMode, SyncScope),
+    Api(ImportMode, SyncScope, Option<i64>),
     Csv(ImportMode, FileData),
 }
 
 impl Run {
     fn commit(&self) -> Self {
         match self {
-            Self::Api(_, sync) => Self::Api(ImportMode::Commit, *sync),
+            Self::Api(_, sync, generation) => Self::Api(ImportMode::Commit, *sync, *generation),
             Self::Csv(_, file) => Self::Csv(ImportMode::Commit, file.clone()),
         }
     }
@@ -52,7 +55,7 @@ pub fn HarvestImport() -> Element {
     let mut running = use_signal(|| false);
     let mut active_job = use_signal(|| None::<uuid::Uuid>);
     let mut job_progress = use_signal(|| None::<crate::models::JobStatus>);
-    let mut manage_open = use_signal(|| false);
+    let manage_open = use_signal(|| false);
     let mut csv_file = use_signal(|| None::<CsvFile>);
     let mut toast_msg = use_signal(|| None::<String>);
     let mut history_pages = use_signal(|| vec![None::<uuid::Uuid>]);
@@ -70,6 +73,7 @@ pub fn HarvestImport() -> Element {
     let mut poll_version = use_signal(|| 0_u64);
     let mut poll_error = use_signal(|| None::<(uuid::Uuid, String)>);
     let mut action_error = use_signal(|| None::<String>);
+    let mut connection_error = use_signal(|| None::<(&'static str, String)>);
     let mut action_pending = use_signal(|| false);
     let mut run_origin = use_signal(|| None::<(uuid::Uuid, Run)>);
 
@@ -184,14 +188,19 @@ pub fn HarvestImport() -> Element {
         action_error.set(None);
         report.set(None);
         run_origin.set(None);
-        let submitted = job.clone();
+        let mut submitted = job.clone();
         let result = match job {
-            Run::Api(mode, sync) => {
-                let generation = status
-                    .read()
-                    .as_ref()
-                    .and_then(|result| result.as_ref().ok())
-                    .map(|status| status.account_generation);
+            Run::Api(mode, sync, generation) => {
+                let generation = generation.or_else(|| {
+                    status
+                        .read()
+                        .as_ref()
+                        .and_then(|result| result.as_ref().ok())
+                        .map(|status| status.account_generation)
+                });
+                // A confirmation must retain the preview's account even if another
+                // tab changes the connection before the server validates it.
+                submitted = Run::Api(mode, sync, generation);
                 server_fns::start_harvest_api_import(mode, sync, generation).await
             }
             Run::Csv(mode, file) => server_fns::start_harvest_csv_import(mode, file.into()).await,
@@ -225,13 +234,21 @@ pub fn HarvestImport() -> Element {
                 job_progress.set(Some(job));
                 history.restart();
             }
-            Err(error) => action_error.set(Some(format!("Could not retry import: {error}"))),
+            Err(error) => {
+                action_error.set(Some(format!("Could not retry import: {error}. History has been refreshed; check the reason before trying again.")));
+                history.restart();
+            }
         }
         action_pending.set(false);
     };
 
     // Fetch the OAuth authorize URL and hand the browser to Harvest.
     let connect = move |_| async move {
+        if *action_pending.peek() {
+            return;
+        }
+        action_pending.set(true);
+        connection_error.set(None);
         match server_fns::harvest_connect_start().await {
             Ok(url) => {
                 let js = format!(
@@ -240,20 +257,33 @@ pub fn HarvestImport() -> Element {
                 );
                 let _ = document::eval(&js).await;
             }
-            Err(e) => report.set(Some(Err(format!("Could not start Harvest connect: {e}")))),
+            Err(e) => connection_error.set(Some((
+                "Could not start Harvest connection. Try connecting again.",
+                e.to_string(),
+            ))),
         }
+        action_pending.set(false);
     };
 
     let disconnect = move |_: MouseEvent| {
         spawn(async move {
+            if *action_pending.peek() {
+                return;
+            }
+            action_pending.set(true);
+            connection_error.set(None);
             match server_fns::harvest_disconnect().await {
                 Ok(()) => {
                     report.set(None);
-                    manage_open.set(false);
+                    run_origin.set(None);
                     status.restart();
                 }
-                Err(e) => report.set(Some(Err(e.to_string()))),
+                Err(e) => connection_error.set(Some((
+                    "Could not disconnect Harvest. Check the connection before trying again.",
+                    e.to_string(),
+                ))),
             }
+            action_pending.set(false);
         });
     };
 
@@ -269,37 +299,49 @@ pub fn HarvestImport() -> Element {
         }
     };
 
-    let conn = match &*status.read_unchecked() {
-        None => Conn::Loading,
-        Some(Ok(s)) => Conn::Ready(s.clone()),
-        Some(Err(e)) => Conn::Err(e.to_string()),
+    let conn = match (&*status.state().read(), &*status.read_unchecked()) {
+        (UseResourceState::Pending, _) => Conn::Loading,
+        (_, None) => Conn::Loading,
+        (_, Some(Ok(s))) => Conn::Ready(s.clone()),
+        (_, Some(Err(e))) => Conn::Err(e.to_string()),
     };
     let configured = match &conn {
         Conn::Ready(s) => s.configured,
         _ => true,
     };
-    let connected = matches!(&conn, Conn::Ready(s) if s.connected);
     let src = source();
     let history_loading = !matches!(*history.state().read(), UseResourceState::Ready);
     let has_report = report.read().is_some();
-    let can_commit = run_origin.read().as_ref().is_some_and(|(id, _)| {
-        job_progress
-            .read()
-            .as_ref()
-            .is_some_and(|job| job.id == *id && job.status == "succeeded")
+    let can_commit = run_origin.read().as_ref().is_some_and(|(id, origin)| {
+        let same_account = match origin {
+            Run::Csv(..) => true,
+            Run::Api(_, _, generation) => matches!(&conn, Conn::Ready(s)
+                if s.configured && s.connected && Some(s.account_generation) == *generation),
+        };
+        same_account
+            && job_progress
+                .read()
+                .as_ref()
+                .is_some_and(|job| job.id == *id && job.status == "succeeded")
     });
     let show_resync = can_commit && matches!(run_origin.read().as_ref(), Some((_, Run::Api(..))));
+    let current_preview = can_commit
+        && report.read().as_ref().is_some_and(|result| {
+            result
+                .as_ref()
+                .is_ok_and(|report| report.mode == ImportMode::DryRun)
+        });
     let (title, subtitle) = match src {
         Source::Picker => (
             "Importers",
-            "Bring data in from another tracker. Every import is reversible until you commit — start with a dry-run.",
+            "Bring data in from another tracker. Start with a preview before importing business data.",
         ),
         Source::Api => ("Import from Harvest", IMPORT_SUB),
         Source::Csv => ("Import from CSV", IMPORT_SUB),
     };
 
     rsx! {
-        div {
+        div { class: "himp-page min-w-0",
             div { class: "page-header",
                 h1 { class: "page-title", "{title}" }
             }
@@ -312,9 +354,11 @@ pub fn HarvestImport() -> Element {
                     button {
                         r#type: "button",
                         class: "imp-back text-primary text-sm",
+                        "data-testid": "all-importers".to_owned(),
                         onclick: move |_| {
                             source.set(Source::Picker);
                             report.set(None);
+                            run_origin.set(None);
                         },
                         "← All importers"
                     }
@@ -326,6 +370,7 @@ pub fn HarvestImport() -> Element {
                             onclick: move |_| {
                                 source.set(Source::Csv);
                                 report.set(None);
+                                run_origin.set(None);
                             },
                             "Use a CSV instead"
                         }
@@ -337,6 +382,7 @@ pub fn HarvestImport() -> Element {
                             onclick: move |_| {
                                 source.set(Source::Api);
                                 report.set(None);
+                                run_origin.set(None);
                             },
                             "Use the Harvest API instead"
                         }
@@ -347,7 +393,6 @@ pub fn HarvestImport() -> Element {
             // ── Importer list (landing) ─────────────────────────────────
             if src == Source::Picker {
                 div { class: "flex flex-col gap-3",
-                    if configured {
                         button {
                             r#type: "button",
                             class: "imp-source",
@@ -355,31 +400,18 @@ pub fn HarvestImport() -> Element {
                             onclick: move |_| {
                                 source.set(Source::Api);
                                 report.set(None);
+                                run_origin.set(None);
                             },
                             span { class: "imp-source-icon imp-icon-harvest", "h" }
                             div { class: "flex-1 min-w-0",
                                 div { class: "flex items-center gap-2 flex-wrap",
                                     span { class: "text-sm font-semibold", "Harvest" }
-                                    if connected {
-                                        span { class: "badge badge-success badge-sm", "Connected" }
-                                    }
+                                    span { class: "badge badge-neutral badge-sm", "{conn.label()}" }
                                 }
                                 div { class: "text-faint text-sm", "Read-only sync via the Harvest API." }
                             }
                             span { class: "text-faint", "›" }
                         }
-                    } else {
-                        div { class: "imp-source imp-source-off",
-                            span { class: "imp-source-icon imp-icon-harvest", "h" }
-                            div { class: "flex-1 min-w-0",
-                                div { class: "flex items-center gap-2 flex-wrap",
-                                    span { class: "text-sm font-semibold text-faint", "Harvest" }
-                                    span { class: "badge badge-neutral badge-sm", "Unavailable" }
-                                }
-                                div { class: "text-faint text-sm", "API not configured — use CSV." }
-                            }
-                        }
-                    }
 
                     button {
                         r#type: "button",
@@ -388,12 +420,13 @@ pub fn HarvestImport() -> Element {
                         onclick: move |_| {
                             source.set(Source::Csv);
                             report.set(None);
+                            run_origin.set(None);
                         },
                         span { class: "imp-source-icon imp-icon-csv text-mono text-xs", "CSV" }
                         div { class: "flex-1 min-w-0",
                             div { class: "text-sm font-semibold", "CSV file" }
                             div { class: "text-faint text-sm",
-                                "Upload a Detailed time report exported from Harvest or any tracker."
+                                "Upload a supported Detailed time report exported from Harvest."
                             }
                         }
                         span { class: "text-faint", "›" }
@@ -406,74 +439,43 @@ pub fn HarvestImport() -> Element {
 
             // ── API branch ──────────────────────────────────────────────
             if src == Source::Api {
+                ConnectionChip {
+                    connection: conn.clone(), manage_open, busy: action_pending,
+                    onconnect: connect, ondisconnect: disconnect,
+                    onrefresh: move |_| { connection_error.set(None); status.restart(); },
+                    on_changed: move |_| { status.restart(); run_origin.set(None); },
+                }
+                if let Some((message, detail)) = connection_error.read().as_ref() {
+                    div { class: "alert alert-danger mt-4", role: "alert",
+                        p { "{message}" }
+                        details { summary { "Details" } p { "{detail}" } }
+                    }
+                }
                 match &conn {
-                    Conn::Loading => rsx! {
-                        p { class: "text-faint text-sm", "Checking connection…" }
-                    },
-                    Conn::Err(e) => rsx! {
-                        div { class: "alert alert-danger", "{e}" }
-                    },
-                    Conn::Ready(s) if s.connected => rsx! {
-                        ConnectionChip {
-                            account: s.account_id.clone().unwrap_or_default(),
-                            token_expired: s.token_expired,
-                            manage_open,
-                            ondisconnect: disconnect,
-                        }
-                        if s.token_expired {
-                            div { class: "banner banner-warning mt-4",
-                                span { class: "banner-icon", "◔" }
-                                div { class: "banner-body",
-                                    div { class: "banner-title", "Imports paused while the token refreshes" }
-                                    div { class: "banner-detail",
-                                        "This usually resolves itself within a minute."
-                                    }
-                                }
-                            }
-                        }
+                    Conn::Ready(s) if s.configured && s.connected => rsx! {
                         div { class: "flex items-center gap-4 flex-wrap mt-4",
                             button {
                                 r#type: "button",
-                                class: "btn btn-primary",
+                                class: if current_preview { "btn btn-secondary" } else { "btn btn-primary" },
+                                "data-testid": "preview-api".to_owned(),
                                 disabled: running() || action_pending(),
-                                onclick: move |_| execute(Run::Api(ImportMode::DryRun, SyncScope::Full)),
+                                onclick: move |_| execute(Run::Api(ImportMode::DryRun, SyncScope::Full, None)),
                                 "Preview import (dry-run)"
                             }
                             span { class: "text-faint text-sm",
-                                "A dry-run previews everything without writing a single row."
+                                "Preview leaves business data unchanged. Its job and report are retained."
                             }
                         }
                         if !has_report && !running() {
                             div { class: "flex flex-col items-center text-center gap-3 p-8 mt-4 bg-secondary border rounded-lg",
-                                div { class: "text-sm", "Nothing imported yet" }
+                                div { class: "text-sm", "{presentation::empty_selection()}" }
                                 div { class: "text-faint text-sm max-w-md",
-                                    "Your account is linked. A dry-run is free and reversible — start there."
+                                    "Start a preview, or select an existing import from history below."
                                 }
                             }
                         }
                     },
-                    Conn::Ready(s) => rsx! {
-                        div { class: "flex flex-col items-center text-center gap-4 p-8 card",
-                            span { class: "himp-logo", "h" }
-                            div { class: "text-lg font-semibold", "Connect your Harvest account" }
-                            div { class: "text-faint text-sm max-w-md",
-                                "Read-only access. Horae never writes anything back to Harvest."
-                            }
-                            if let Some(account) = &s.account_id {
-                                p { "Disconnected. This organization is still bound to Harvest account {account}." }
-                            }
-                            button {
-                                r#type: "button",
-                                class: "btn btn-primary mt-2",
-                                onclick: connect,
-                                if s.account_id.is_some() { "Reconnect original account" } else { "Connect Harvest" }
-                            }
-                        }
-                    },
-                }
-                ChangeAccount {
-                    connection: match &conn { Conn::Ready(s) => s.clone(), _ => ConnectionStatus::default() },
-                    on_changed: move |_| { manage_open.set(false); status.restart(); run_origin.set(None); }
+                    _ => rsx! {},
                 }
             }
 
@@ -481,11 +483,12 @@ pub fn HarvestImport() -> Element {
             if src == Source::Csv {
                 match csv_file.read().as_ref() {
                     None => rsx! {
-                        label { class: "dropzone",
+                        label { class: "dropzone himp-file-picker relative",
                             input {
                                 r#type: "file",
                                 accept: ".csv,text/csv",
-                                class: "hidden",
+                                class: "himp-file-input absolute w-full h-full cursor-pointer",
+                                aria_label: "Choose Harvest CSV file",
                                 "data-testid": "csv-file".to_owned(),
                                 onchange: on_file,
                             }
@@ -495,7 +498,7 @@ pub fn HarvestImport() -> Element {
                                 span { class: "text-primary font-semibold", "browse" }
                                 "."
                             }
-                            div { class: "text-mono text-xs text-faint", "UTF-8 · comma-separated" }
+                            div { class: "text-xs text-faint", "Harvest Detailed time report · CSV" }
                         }
                     },
                     Some(file) => rsx! {
@@ -507,11 +510,12 @@ pub fn HarvestImport() -> Element {
                             }
                             span { class: "badge badge-success badge-sm", "Ready" }
                             div { class: "flex-1" }
-                            label { class: "btn btn-ghost btn-sm",
+                            label { class: "btn btn-ghost btn-sm himp-file-picker relative",
                                 input {
                                     r#type: "file",
                                     accept: ".csv,text/csv",
-                                    class: "hidden",
+                                    class: "himp-file-input absolute w-full h-full cursor-pointer",
+                                    aria_label: "Replace Harvest CSV file",
                                     "data-testid": "csv-file".to_owned(),
                                     onchange: on_file,
                                 }
@@ -521,7 +525,7 @@ pub fn HarvestImport() -> Element {
                         div { class: "flex items-center gap-4 flex-wrap mt-4",
                             button {
                                 r#type: "button",
-                                class: "btn btn-primary",
+                                class: if current_preview { "btn btn-secondary" } else { "btn btn-primary" },
                                 disabled: running() || action_pending(),
                                 onclick: {
                                     let selected = file.file.clone();
@@ -531,7 +535,7 @@ pub fn HarvestImport() -> Element {
                                 "Preview file (dry-run)"
                             }
                             span { class: "text-faint text-sm",
-                                "A dry-run previews everything without writing a single row."
+                                "Preview leaves business data unchanged. Its job and report are retained."
                             }
                         }
                     },
@@ -540,14 +544,15 @@ pub fn HarvestImport() -> Element {
 
             // ── Running ─────────────────────────────────────────────────
             if running() {
-                div { class: "card mt-4 flex items-center gap-3",
+                div { class: "card mt-4 flex items-center gap-3 flex-wrap",
                     span { class: "himp-spinner" }
                     div { class: "text-sm font-semibold",
                         div { "Following import" }
                         if let Some(progress) = job_progress.read().as_ref() {
-                            div { "{progress.status}" }
-                            if let Some(phase) = &progress.phase {
-                                div { class: "text-xs text-faint", "{phase}" }
+                            div { role: "status", aria_live: "polite", aria_atomic: "true",
+                                "{presentation::state_label(&progress.status)} · {presentation::phase_label(progress.phase.as_deref())}"
+                                if progress.status == "queued" { p { "Waiting to start." } }
+                                if progress.phase.as_deref() == Some("cancelling") { p { "Cancellation requested; waiting for the current batch to finish." } }
                             }
                             div { class: "text-xs text-faint",
                                 "{progress.processed_count} processed"
@@ -557,6 +562,7 @@ pub fn HarvestImport() -> Element {
                                 div { class: "text-xs text-warning", "Last attempt: {error}" }
                             }
                         }
+                        p { class: "text-xs text-faint", "Leaving this page does not stop the import." }
                     }
                     if let Some(job_id) = active_job() {
                         button {
@@ -587,7 +593,8 @@ pub fn HarvestImport() -> Element {
 
             if let Some((id, error)) = poll_error.read().as_ref() {
                 div { class: "alert alert-danger mt-4", role: "alert",
-                    p { "Status unavailable: {error}. The import may still be running." }
+                    p { "Status unavailable. The import may still be running. Resume monitoring to check the same import." }
+                    details { summary { "Details" } p { "{error}" } }
                     button {
                         r#type: "button", class: "btn btn-secondary btn-sm",
                         "data-testid": "resume-monitoring".to_owned(),
@@ -603,7 +610,7 @@ pub fn HarvestImport() -> Element {
 
             // ── Shared report ───────────────────────────────────────────
             if has_report && let Some(job) = job_progress.read().as_ref()
-                && job.can_retry() && job.report.is_some()
+                && presentation::partial_report(&job.status) && job.report.is_some()
             {
                 div { class: "alert alert-danger mt-4", role: "alert",
                     p { if job.status == "cancelled" { "Import cancelled" } else { "Import failed" } }
@@ -623,18 +630,21 @@ pub fn HarvestImport() -> Element {
                             busy: running() || action_pending(),
                             can_commit,
                             show_resync,
-                            partial: job_progress.read().as_ref().is_some_and(|job| job.can_retry()),
+                            partial: job_progress.read().as_ref().is_some_and(|job| presentation::partial_report(&job.status)),
                             oncommit: move |_| {
                                 let job = run_origin.read().as_ref().map(|(_, job)| job.commit());
                                 if let Some(job) = job { spawn(execute(job)); }
                             },
                             onresync: move |_| {
-                                spawn(execute(Run::Api(ImportMode::Commit, SyncScope::Incremental)));
+                                spawn(execute(Run::Api(ImportMode::Commit, SyncScope::Incremental, None)));
                             },
                         }
                     },
                     Err(e) => rsx! {
-                        div { class: "alert alert-danger mt-4", "{e}" }
+                        div { class: "alert alert-danger mt-4", role: "alert",
+                            p { "Could not show a complete import report. Check history and the details before starting another import." }
+                            details { summary { "Details" } p { "{e}" } }
+                        }
                     },
                 }
             }
@@ -666,29 +676,35 @@ pub fn HarvestImport() -> Element {
                     None => rsx! { p { "Loading import history…" } },
                     Some((key, _)) if *key != history_cursor() || history_loading => rsx! { p { "Loading import history…" } },
                     Some((_, Err(error))) => rsx! { p { role: "alert", "Could not load import history: {error}" } },
-                    Some((_, Ok(jobs))) if jobs.is_empty() => rsx! { p { "No imports on this page." } },
+                    Some((_, Ok(jobs))) if jobs.is_empty() => rsx! { p {
+                        if history_cursor().is_none() { "No retained imports. Start a preview to create a new report." }
+                        else { "No imports on this page." }
+                    } },
                     Some((_, Ok(jobs))) => rsx! {
                         ul { class: "flex flex-col gap-3 mt-4",
                             for job in jobs {
                                 li { key: "{job.id}", class: "flex items-center gap-3 flex-wrap",
                                     button {
-                                        r#type: "button", class: "btn btn-ghost btn-sm",
+                                        r#type: "button", class: "btn btn-ghost btn-sm flex-wrap text-left himp-history",
                                         "data-testid": "select-{job.id}",
+                                        aria_pressed: job_progress.read().as_ref().is_some_and(|selected| selected.id == job.id).to_string(),
                                         disabled: action_pending(),
                                         onclick: { let id = job.id; move |_| {
                                             run_origin.set(None);
                                             watch_job(id);
                                         } },
-                                        "{job.kind} · {job.created_at} · {job.status}"
+                                        span { "{presentation::source_label(&job.kind)} · {presentation::mode_label(job.report.as_ref())}" }
+                                        time { datetime: job.created_at.to_rfc3339(), class: "text-xs text-faint", {job.created_at.format("%d %b %Y, %H:%M UTC").to_string()} }
+                                        span { class: "badge badge-neutral badge-sm", "{presentation::state_label(&job.status)}" }
                                     }
                                     if job.can_retry() {
-                                        button {
+                                        if job.retry_availability == crate::models::RetryAvailability::Available { button {
                                             r#type: "button", class: "btn btn-secondary btn-sm",
                                             "data-testid": "retry-{job.id}",
                                             disabled: action_pending() || running(),
                                             onclick: { let id = job.id; move |_| retry_job(id) },
                                             "Retry import"
-                                        }
+                                        } } else { p { class: "text-xs text-faint", "{presentation::retry_reason(job.retry_availability)}" } }
                                     }
                                 }
                             }
@@ -725,69 +741,123 @@ pub fn HarvestImport() -> Element {
 
 /// Loaded/loading/error view of the connection resource, kept out of the render
 /// branches for readability.
+#[derive(Clone, PartialEq)]
 enum Conn {
     Loading,
     Err(String),
     Ready(ConnectionStatus),
 }
 
+impl Conn {
+    fn label(&self) -> &'static str {
+        match self {
+            Self::Loading => "Checking connection…",
+            Self::Err(_) => "Status unavailable",
+            Self::Ready(s) if !s.configured => "Not configured",
+            Self::Ready(s) if s.connected && s.token_expired => "Token expired",
+            Self::Ready(s) if s.connected => "Connected",
+            Self::Ready(s) if s.account_id.is_some() => "Disconnected",
+            Self::Ready(_) => "Not connected",
+        }
+    }
+}
+
 /// Compact one-line "Connected" chip with an expandable management panel.
 #[component]
 fn ConnectionChip(
-    account: String,
-    token_expired: bool,
+    connection: Conn,
     manage_open: Signal<bool>,
+    busy: Signal<bool>,
+    onconnect: EventHandler<MouseEvent>,
     ondisconnect: EventHandler<MouseEvent>,
+    onrefresh: EventHandler<MouseEvent>,
+    on_changed: EventHandler<()>,
 ) -> Element {
+    let loaded = match &connection {
+        Conn::Ready(s) => Some(s),
+        _ => None,
+    };
+    let account = loaded.and_then(|s| s.account_id.as_deref());
+    let connected = loaded.is_some_and(|s| s.connected);
+    let expired = loaded.is_some_and(|s| s.connected && s.token_expired);
+    let tone = if expired {
+        "badge-warning"
+    } else if connected {
+        "badge-success"
+    } else {
+        "badge-neutral"
+    };
     rsx! {
         div { class: "card",
             div { class: "flex items-center gap-3 flex-wrap",
                 span { class: "integration-logo harvest", "h" }
                 div { class: "integration-body",
                     div { class: "integration-name", "Harvest" }
-                    div { class: "integration-meta truncate", "{account} · Read-only" }
+                    div { class: "integration-meta",
+                        if let Some(account) = account { "Account {account} · " }
+                        "Read-only access to Harvest"
+                    }
                 }
-                if token_expired {
-                    span { class: "badge badge-warning badge-sm", "Token expired" }
-                } else {
-                    span { class: "badge badge-success badge-sm", "Connected" }
-                }
-                button {
+                span { class: "badge {tone} badge-sm", "{connection.label()}" }
+                if account.is_some() { button {
                     r#type: "button",
                     class: "btn btn-ghost btn-sm",
+                    "data-testid": "manage-connection".to_owned(),
+                    aria_expanded: manage_open().to_string(),
+                    aria_controls: "harvest-connection-management",
+                    disabled: busy(),
                     onclick: move |_| manage_open.set(!manage_open()),
                     "Manage connection"
+                } }
+            }
+            match &connection {
+                Conn::Loading => rsx! { p { class: "text-sm text-secondary mt-4", role: "status", "Checking connection… CSV import remains available." } },
+                Conn::Err(error) => rsx! {
+                    div { class: "alert alert-danger mt-4", role: "alert",
+                        p { "Could not check Harvest connection. Try checking again." }
+                        details { summary { "Details" } p { "{error}" } }
+                    }
+                },
+                Conn::Ready(s) if !s.configured => rsx! {
+                    p { class: "text-sm text-secondary mt-4", "Deployment setup required. Ask the deployment administrator to configure Harvest OAuth, or use CSV import." }
+                },
+                Conn::Ready(s) => rsx! {
+                    if !s.connected || s.token_expired {
+                        p { class: "text-sm text-secondary mt-4",
+                            if s.token_expired { "The stored token has expired. Reconnect the original account, or check the connection again after a refresh." }
+                            else if account.is_some() { "Disconnected. Imported data and the original account binding are retained." }
+                            else { "Connect your Harvest account. Horae never writes anything back to Harvest." }
+                        }
+                        button { r#type: "button", class: if s.connected { "btn btn-secondary mt-4" } else { "btn btn-primary mt-4" }, "data-testid": "connect-harvest".to_owned(),
+                            disabled: busy(), onclick: move |e| onconnect.call(e),
+                            if busy() { "Connecting…" } else if account.is_some() { "Reconnect original account" } else { "Connect Harvest" }
+                        }
+                    }
+                },
+            }
+            if !matches!(connection, Conn::Loading) {
+                button { r#type: "button", class: "btn btn-ghost btn-sm mt-4", "data-testid": "refresh-connection".to_owned(),
+                    disabled: busy(), onclick: move |e| onrefresh.call(e), "Check connection again"
                 }
             }
-            if manage_open() {
-                div { class: "border-t mt-4",
-                    div { class: "grid grid-cols-3 gap-4 mt-4",
-                        div {
-                            div { class: "text-xs uppercase tracking-wide text-faint mb-1", "Account" }
-                            div { class: "text-sm truncate", "{account}" }
-                        }
-                        div {
-                            div { class: "text-xs uppercase tracking-wide text-faint mb-1", "Token" }
-                            if token_expired {
-                                div { class: "text-sm text-warning", "Expired · refreshes automatically" }
-                            } else {
-                                div { class: "text-sm", "Valid" }
-                            }
-                        }
-                        div {
-                            div { class: "text-xs uppercase tracking-wide text-faint mb-1", "Scope" }
-                            div { class: "text-sm", "Read-only" }
-                        }
-                    }
-                    div { class: "mt-4",
+            div { id: "harvest-connection-management",
+                if manage_open() && account.is_some() {
+                    div { class: "border-t mt-4 pt-4",
                         p { class: "text-sm text-faint", "Disconnect removes credentials but retains the original account binding and imported data." }
-                        button {
+                        if connected { button {
                             r#type: "button",
                             class: "btn btn-danger btn-sm",
+                            "data-testid": "disconnect-harvest".to_owned(),
+                            disabled: busy(),
                             onclick: move |e| ondisconnect.call(e),
-                            "Disconnect"
-                        }
+                            if busy() { "Disconnecting…" } else { "Disconnect" }
+                        } }
                     }
+                }
+                ChangeAccount {
+                    connection: loaded.cloned().unwrap_or_default(),
+                    visible: manage_open(), busy,
+                    on_changed,
                 }
             }
         }
@@ -795,9 +865,13 @@ fn ConnectionChip(
 }
 
 #[component]
-fn ChangeAccount(connection: ConnectionStatus, on_changed: EventHandler<()>) -> Element {
+fn ChangeAccount(
+    connection: ConnectionStatus,
+    visible: bool,
+    mut busy: Signal<bool>,
+    on_changed: EventHandler<()>,
+) -> Element {
     let mut inspected = use_signal(|| None::<ConnectionStatus>);
-    let mut busy = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
     let blocker = connection.change_account_blocker();
     let bound = connection.account_id.is_some();
@@ -844,7 +918,7 @@ fn ChangeAccount(connection: ConnectionStatus, on_changed: EventHandler<()>) -> 
         }
     };
     rsx! {
-        if bound {
+        if bound && visible {
             div { class: "mt-4",
                 button { r#type: "button", class: "btn btn-secondary btn-sm", "data-testid": "change-account".to_owned(),
                     disabled: busy() || blocker.is_some(),
@@ -865,7 +939,7 @@ fn ChangeAccount(connection: ConnectionStatus, on_changed: EventHandler<()>) -> 
                 p { "Disconnect and release account {snapshot.account_id.clone().unwrap_or_default()} before authorizing a different account." }
                 p { "Business data and retained reports are kept. Old import attempts cannot be retried against the replacement account. Cancelling authorization afterward leaves Horae disconnected." }
                 if let Some(message) = error() { p { role: "alert", "{message}" } }
-                div { class: "flex gap-3 mt-4",
+                div { class: "flex gap-3 flex-wrap mt-4",
                     button { r#type: "button", class: "btn btn-secondary", "data-testid": "cancel-change-account".to_owned(), disabled: busy(),
                         onclick: move |_| { inspected.set(None); error.set(None); }, "Cancel" }
                     button { r#type: "button", class: "btn btn-danger", "data-testid": "confirm-change-account".to_owned(), disabled: busy(), onclick: confirm,
@@ -907,7 +981,7 @@ fn ReportView(
                     div { class: "banner-body",
                         div { class: "banner-title", "Partial report — confirmed batches only" }
                         div { class: "banner-detail",
-                            if is_dry { "Preview stopped before completion. No domain data was written." }
+                            if is_dry { "Preview stopped before completion. No business data was written. Its job and partial report are retained." }
                             else { "Only confirmed work is included. Unconfirmed work was rolled back." }
                         }
                     }
@@ -916,8 +990,9 @@ fn ReportView(
                 div { class: "banner banner-warning",
                     span { class: "banner-icon", "◔" }
                     div { class: "banner-body",
-                        div { class: "banner-title", "Preview only — nothing was written" }
+                        div { class: "banner-title", "Preview complete — no business data changed" }
                         div { class: "banner-detail",
+                            "No business data was written. The job and report are retained. "
                             if can_commit { "Review the numbers, then commit." }
                             else { "Historical preview. Start a new preview to commit this import." }
                         }
@@ -946,10 +1021,12 @@ fn ReportView(
                     span { class: "banner-icon", "✓" }
                     div { class: "banner-body",
                         div { class: "banner-title", "Import complete" }
-                        div { class: "banner-detail", "Every record was written." }
+                        div { class: "banner-detail", "Review the created, updated and skipped counts below." }
                     }
                 }
             }
+
+            p { class: "text-sm text-secondary", "{presentation::result_summary(&report)}" }
 
             // Entity stat tiles
             div { class: "himp-tiles",
@@ -964,12 +1041,15 @@ fn ReportView(
                     button {
                         r#type: "button",
                         class: "flex items-center gap-3 w-full p-4 bg-secondary border-0 cursor-pointer text-left",
+                        "data-testid": "toggle-import-errors".to_owned(),
+                        aria_expanded: errors_open().to_string(),
+                        aria_controls: "import-record-errors",
                         onclick: move |_| errors_open.set(!errors_open()),
                         span { class: "text-faint text-xs", if errors_open() { "▾" } else { "▸" } }
                         span { class: "text-sm font-semibold text-default", "Record errors" }
                         span { class: "badge badge-danger badge-sm", "{error_count}" }
                     }
-                    if errors_open() {
+                    div { id: "import-record-errors", hidden: !errors_open(),
                         div { class: "overflow-x-auto border-t",
                             table { class: "table",
                                 thead {
@@ -998,7 +1078,7 @@ fn ReportView(
                                 div { class: "p-4 border-t",
                                     a { class: "btn btn-secondary btn-sm",
                                         href: format!("/api/import/harvest/jobs/{job_id}/errors"),
-                                        "Download all errors"
+                                        "Download all errors (NDJSON)"
                                     }
                                 }
                             }
@@ -1084,7 +1164,7 @@ fn PlannedSource(icon: String, name: String) -> Element {
 }
 
 /// The subtitle shared by both source flows once a source is chosen.
-const IMPORT_SUB: &str = "Bring your clients, projects, tasks and time entries across. Every import is reversible until you commit — start with a dry-run.";
+const IMPORT_SUB: &str = "Bring your clients, projects, tasks and time entries across. Preview first; confirm only after reviewing the results.";
 
 /// Cap the inline error table; the full set is available in the run record.
 const ERROR_ROW_LIMIT: usize = 50;
@@ -1107,7 +1187,7 @@ fn toast_for(res: &Result<ImportReport, String>, mode: ImportMode) -> String {
             ImportMode::Commit => format!("Import complete · {} errors", r.error_count()),
         },
         Ok(_) => match mode {
-            ImportMode::DryRun => "Dry-run finished · nothing written".to_string(),
+            ImportMode::DryRun => "Preview complete · no business data changed".to_string(),
             ImportMode::Commit => "Import complete".to_string(),
         },
     }

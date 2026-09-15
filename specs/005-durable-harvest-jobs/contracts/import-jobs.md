@@ -55,6 +55,18 @@ Refreshing without a cursor returns to the latest retained history.
 
 ## Reports and failed attempts
 
+Feature 008 adds the read-only `retry_availability` snapshot to every `JobStatus`
+reply: `available`, `unavailable_state`, `previous_account`, `missing_upload`, or
+`unknown`. Missing and future values deserialize to `unknown`. Unsupported
+payload versions/kinds/shapes also produce `unknown`; payloads remain private.
+Status and bounded history queries derive the same prerequisites without
+per-row network requests. CSV eligibility ignores Harvest generation; a
+same-generation disconnected API job is not automatically generation-ineligible.
+The snapshot is advisory: the transactional retry endpoint remains authoritative,
+including when a formerly available snapshot becomes stale. Existing `can_retry()`
+state semantics are unchanged. Completeness still depends on job state, never
+retry availability, so a previous-account report remains partial and readable.
+
 `report` contains the last confirmed outcomes, not an assertion that the import
 finished. A new Harvest job starts with a zero-outcome report for its source/mode.
 Checkpoints publish updated outcomes atomically with progress; a later error or
