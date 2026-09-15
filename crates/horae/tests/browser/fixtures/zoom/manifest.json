@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Importer browser zoom fixture",
+  "version": "1.0",
+  "permissions": [
+    "tabs"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}

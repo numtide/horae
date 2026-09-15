@@ -528,6 +528,10 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
         .unwrap();
         let id = started.id;
         assert_eq!(started.status, "queued");
+        assert_eq!(
+            serde_json::to_value(&started).unwrap()["retry_availability"],
+            "unavailable_state"
+        );
         assert_eq!(started.processed_count, 0);
         assert!(started.report.is_some());
         assert!(
@@ -582,6 +586,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
             .await;
         assert_eq!(cancelled["id"], json!(id));
         assert_eq!(cancelled["status"], "cancelled");
+        assert_eq!(cancelled["retry_availability"], "available");
         assert!(cancelled.get("payload").is_none());
         assert!(cancelled.get("checkpoint").is_none());
         assert_eq!(

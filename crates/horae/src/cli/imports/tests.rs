@@ -158,6 +158,27 @@ fn job(status: &str) -> JobStatus {
         last_error: None,
         created_at: chrono::Utc::now(),
         finished_at: None,
+        retry_availability: crate::models::RetryAvailability::Unknown,
+    }
+}
+
+#[test]
+fn retry_snapshot_is_compatible_with_missing_and_future_values() {
+    for value in [None, Some(json!("future_policy"))] {
+        let mut encoded = serde_json::to_value(job("failed")).unwrap();
+        encoded
+            .as_object_mut()
+            .unwrap()
+            .remove("retry_availability");
+        if let Some(value) = value {
+            encoded["retry_availability"] = value;
+        }
+        let decoded: JobStatus = serde_json::from_value(encoded).unwrap();
+        assert!(decoded.can_retry(), "CLI state semantics must not change");
+        assert_eq!(
+            serde_json::to_value(decoded).unwrap()["retry_availability"],
+            "unknown"
+        );
     }
 }
 

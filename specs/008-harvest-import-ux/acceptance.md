@@ -2,27 +2,71 @@
 
 ## Current delivery
 
-Specification/planning only, based on master `d32d56f`. No application, schema, credential or live-data change.
+Implementation on `feat/harvest-import-ui`, based on planning commit `5c9955b`, validated on 2026-09-15. No schema, credential, real-account or live-data change. The operator authorized this implementation commit without a signature because the SSH/FIDO key is unavailable; persistent Git signing configuration remains unchanged. Publication is a draft while the remaining acceptance gates are incomplete. The real Harvest acceptance remains a separate operator gate.
+
+## Implementation baseline
+
+Implementation starts from planning commit `5c9955b` on `feat/harvest-import-ui`, in an isolated worktree. No real-account operations are authorized by fixture validation.
+
+- Read the complete Importers handoff, Design System, Components and supporting runtime source, plus `DESIGN.md` and the applicable implementation/Rust/testing skills.
+- Reuse the existing admin shell, native `Modal`, `.card`, `.badge`, `.banner`, `.integration-*`, `.counter-*` and utility classes. Map panel spacing to `p-4`/`gap-3`/`gap-4`, secondary copy to text utilities, and borders/radii to existing tokens.
+- Baseline source problems: picker assumes availability while loading; connection errors lack a recheck action; account change is separate from management; disconnect/connect lack pending guards; expiry copy promises fixed-time recovery; results claim every record was written; history exposes wire identifiers.
+- Keep actual OAuth redirects, account identifiers, server blockers, retained reports and NDJSON errors. Do not copy the prototype secret editor, popup, invented last-sync values, 25 MB limit or arbitrary-tracker promise. No global shell redesign.
+- Existing tests deliberately preserve the submitted CSV file when another file is selected during a preview. Preserve that captured-source behavior and label the report source explicitly; do not silently confirm the replacement file.
+- Spec Kit prerequisites and requirements checklist pass (16/16); no extension hooks are installed. Existing ignore rules cover build outputs, local state and worktrees; no unrelated ignore/config changes are needed.
 
 ## Spec Kit execution
 
 - `specify`: local template resolved, feature 008 created, quality checklist 16/16.
 - `clarify`: prerequisite paths checked; zero questions needed. Scope, actors, entities/lifecycle, interaction/error/accessibility, quality bounds, integration failures, constraints, terminology and completion criteria are covered. Read-model details are resolved in planning.
 - `plan`: setup script executed; research, model, UI contract and validation guide created. Pre/post constitution gates pass. Bounded read-only read-model investigation completed.
-- `tasks`: setup script executed; 26 dependency-ordered implementation tasks created, all pending. Story counts: US1 4, US2 4, US3 6, US4 4; setup/foundation 3 and final verification/delivery 5.
+- `tasks`: setup script executed; 26 dependency-ordered implementation tasks created. Execution progress is tracked in `tasks.md`, not inferred from planning artifacts.
+- `implement`: prerequisites and requirements checklist checked before changes; presentation/connection/result/history/retry/browser cases observed failing before the matching implementation. Changes stay in `feat/harvest-import-ui` and its own worktree.
 - No extension hooks or preset overrides are installed. The agent-context update script is absent; technical context is recorded in the plan.
 - Workflow uses checked-in `.claude/skills/speckit-*` instructions and `.specify/scripts/bash/`; no standalone `specify` executable is installed.
 
-## Implementation gates — not executed
+## Implementation evidence
+
+Environment: Nix development shell; isolated PostgreSQL `horae_account_switch_dev_20260915` for compile-time validation and SQLx-managed throwaway test databases. Browser fixtures use separately created/seeded `horae_import_ux_dev_20260915`, port 8092, matching Dioxus server/WASM, and no Harvest environment credentials. Browser importer/provider operations are intercepted. The user's port 8080 app and database were not migrated or restarted.
+
+- Red/green: five pure presentation cases; four connection cases; result copy/primary action/source navigation; missing/future retry metadata and status/list projection; history/progress/retry prerequisites; browser keyboard/error-disclosure/long-identifier regressions.
+- Final review added a reproduced cross-tab account-change regression: refreshing connection metadata must not retarget an earlier API preview. Accepted API origins now retain their original generation; refreshed mismatches remove confirmation, and requests remain server-fenced.
+- Existing CSV replacement behavior is retained: an in-flight preview of `original.csv` never commits a newly selected replacement file. History/reload/navigation cannot confirm a historical preview. Polling still follows the same ID every second and keeps its existing version guard; history still uses 20-row keyset pages.
+- Connection tests cover checking, unavailable, unconfigured, unbound, connected, expired and disconnected/bound states, both change blockers, cancelled/busy/stale confirmations and release-then-authorization failure. The ten existing account-preservation/race tests pass; authorization tests retain non-admin, inactive and foreign-organization boundaries.
+- Retry projection is advisory and computed in each existing bounded status/list query. Two prior SQL cache entries were replaced and one test-query entry added; there are no migrations, new dependencies or per-row client requests. Existing `can_retry()` and write-side policy are unchanged. The preservation test explicitly allows only this derived availability to change while asserting every retained job/report field is identical.
+- Browser harness passes six scenarios: native modal focus/dismissal/pending safeguards, keyboard CSV choice and one primary confirmation, old-account partial report plus error disclosure/download, same-ID monitoring recovery, layout at 360/768/1440 × 640, and actual 200% browser zoom. An isolated test-only extension uses `chrome.tabs.setZoom`; the browser reports 2.0 zoom, layout width 1440→720 and DPR 1→2. This is not device-scale-factor emulation.
+- Main-panel alignment reuses existing semantic cards, banners, counters, badges and utilities. Scoped structural CSS handles unbroken identifiers, shrinking tiles, selected history and native file-input focus. No inline palette or global shell changes. OAuth redirects, operational report retention and NDJSON downloads intentionally differ from unsupported prototype promises.
+
+## Gate status
 
 | Gate | Status |
 |---|---|
-| Read-model/UI implementation | Pending |
-| Red/green presentation and interaction tests | Pending |
-| Projection/authorization and CLI compatibility | Pending |
-| Core/server tests, Clippy, WASM, SQLx, full Nix | Pending implementation |
-| Browser layout, keyboard and zoom | Pending |
-| Design comparison/deviation evidence | Pending |
-| Real Harvest dry-run and data comparison | Pending implementation and separate operator go-ahead |
+| Read-model/UI implementation | Implemented |
+| Red/green presentation and interaction tests | Passed; final UI suite 35/35 |
+| Projection/authorization and CLI compatibility | Passed |
+| Core/server tests | Core 88 passed; final server suite 618 passed across all targets, 11 pre-existing ignored tests |
+| Clippy / WASM / formatting | Final all-target Clippy with `-D warnings -W clippy::perf`, explicit WASM build and `nix fmt` passed |
+| SQLx | Passed: forced online/non-incremental regeneration reproduced the reviewed 574-entry cache exactly |
+| Full Nix | Incomplete: parallel builds were cancelled after host load exceeded 130; rerun with bounded build resources |
+| Browser layout, keyboard and zoom | All six scenarios passed again after the final UI guard |
+| Design comparison/deviation evidence | Recorded above |
+| Real Harvest dry-run and data comparison | **Blocked: separate operator go-ahead required (T025)** |
+| Commit / implementation PR | Unsigned implementation commit authorized; draft publication only until remaining acceptance gates pass (T026) |
+
+Commands executed in the Nix shell (shared compiled artifacts only; isolated database URL as above):
+
+```sh
+cargo test -p horae-core
+SQLX_OFFLINE=true cargo test -q -p horae --features server -- --test-threads=2
+SQLX_OFFLINE=true cargo clippy -p horae --features server --all-targets -- -D warnings -W clippy::perf
+SQLX_OFFLINE=true cargo build -p horae --features web --target wasm32-unknown-unknown
+SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo sqlx prepare --workspace -- --features server --all-targets
+nix fmt
+HORAE_TEST_URL=http://127.0.0.1:8092 node crates/horae/tests/browser/importers.cjs
+```
+
+The browser command used existing Playwright and Chromium 152 through the documented environment overrides. A repeated SQLx invocation on the warm target found zero queries; its working-tree cache removal was restored from the staged index, then forced regeneration reproduced all 574 entries without a diff. No metadata loss is included in this change.
+
+The full Nix attempt evaluated the checks and started builds, but is not a passing gate. During that attempt, the ten-second synchronization wait in `durable_api_reclaimed_worker_cannot_commit_its_next_page` timed out under contention. The complete suite subsequently passed with two test threads and no heavy parallel Nix builds; no timeout or assertion was weakened. Resume the remaining gate with `nix flake check --no-update-lock-file --max-jobs 1 --cores 4` after publication prerequisites are resolved.
 
 Record the tested commit, scenario/command, actual result and limitations for every executed gate. Never substitute another check's success for an unavailable check. Do not commit credentials, sessions or real data.

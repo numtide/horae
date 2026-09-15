@@ -591,7 +591,11 @@ mod tests {
         .await
         .unwrap();
         jobs::cancel(&pool, org, job).await.unwrap();
-        let before = jobs::status(&pool, org, job).await.unwrap();
+        let mut before = jobs::status(&pool, org, job).await.unwrap().unwrap();
+        assert_eq!(
+            before.retry_availability,
+            crate::models::RetryAvailability::Available
+        );
         let inspected = status(&pool, org, true).await.unwrap();
         change(
             &pool,
@@ -606,10 +610,14 @@ mod tests {
         assert_eq!(after.account_id, None);
         assert_eq!(after.account_generation, 1);
         assert_eq!(after.connection_revision, 1);
+        let retained = jobs::status(&pool, org, job).await.unwrap().unwrap();
         assert_eq!(
-            serde_json::to_value(before).unwrap(),
-            serde_json::to_value(jobs::status(&pool, org, job).await.unwrap()).unwrap()
+            retained.retry_availability,
+            crate::models::RetryAvailability::PreviousAccount
         );
+        // Only the advisory prerequisites change; every retained job/report field is preserved.
+        before.retry_availability = crate::models::RetryAvailability::PreviousAccount;
+        assert_eq!(before, retained);
         assert!(change(&pool, org, "A", 0, 0).await.is_err());
     }
 
