@@ -5,3 +5,4 @@
 - [x] T003 Align the existing page and token-based structural styles.
 - [x] T004 Verify server/WASM builds, formatting and isolated browser checks.
 - [x] T005 Record evidence and deviations for a scoped review PR.
+- [x] T006 Correct the navigation fixture dependencies and validate all targets.

@@ -44,3 +44,24 @@ listed in the specification.
 This is a scoped list-page alignment, not pixel-perfect acceptance of every
 prototype state. Prototypes were inspected as source, not rendered or captured.
 Full Nix CI must pass before this delivery is merged.
+
+## CI fixture correction
+
+The first CI run exposed a compile failure in `detail_navigation`: its reduced
+test crate includes the production Projects page but did not expose the icon
+module or importer route added to that page. The application build and browser
+checks alone did not compile this integration-test target.
+
+The fixture now reuses the production icons and declares the importer route with
+a minimal destination component. A new regression renders the empty Projects
+list, checks both importer links and navigates to that destination and back.
+The production UI and backend are unchanged by this correction.
+
+- Reproduced the original missing-module/missing-route errors locally.
+- `cargo test -p horae --features server --test detail_navigation --locked`:
+  all five tests passed.
+- `cargo clippy -p horae --features server --all-targets --locked -- -D warnings`:
+  passed, including integration-test targets omitted from the earlier check.
+- `cargo sqlx prepare --check --workspace -- --features server --all-targets`:
+  passed against the isolated design-test database with `SQLX_OFFLINE=false`;
+  the committed query cache is unchanged.
