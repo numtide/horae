@@ -8,6 +8,7 @@
 <body>
 <x-dc>
 <helmet>
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -18,192 +19,114 @@
   button:active:not(:disabled) { transform: translateY(1px); }
   button:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(79,183,154,.35) !important; }
   button:disabled { cursor: not-allowed; transform: none !important; }
-  .hb-primary:hover:not(:disabled) { background:#63c9ac !important; box-shadow:0 6px 18px -8px rgba(79,183,154,.65) !important; }
-  .hb-secondary:hover:not(:disabled) { background:#2A2620 !important; border-color:#5a5446 !important; }
-  .hb-ghost:hover:not(:disabled) { background:rgba(79,183,154,.10) !important; color:#6ecab0 !important; }
-  .hb-danger:hover:not(:disabled) { background:rgba(224,102,97,.12) !important; border-color:#8d4441 !important; color:#ec8683 !important; }
-  .hb-icon:hover:not(:disabled) { background:#2A2620 !important; border-color:#5a5446 !important; color:#EFEAE0 !important; }
+  .hb-primary:hover:not(:disabled) { background:#63C9AC !important; box-shadow:0 6px 18px -8px rgba(79,183,154,.65) !important; }
+  .hb-secondary:hover:not(:disabled) { background:#2A2620 !important; border-color:#5A5446 !important; }
+  .hb-ghost:hover:not(:disabled) { background:rgba(79,183,154,.10) !important; color:#6ECAB0 !important; }
+  .hb-danger:hover:not(:disabled) { background:rgba(224,102,97,.12) !important; border-color:#8D4441 !important; color:#EC8683 !important; }
+  .hb-icon:hover:not(:disabled) { background:#2A2620 !important; border-color:#5A5446 !important; color:#EFEAE0 !important; }
   .hb-seg:not(.hb-seg-on):hover:not(:disabled) { background:#232019 !important; color:#EFEAE0 !important; }
   .hm-row:hover { background:#2A2620 !important; }
   .hm-row:hover .hm-ico { color:#EFEAE0 !important; }
-  .hm-danger:hover { background:rgba(224,102,97,.12) !important; color:#ec8683 !important; }
+  .hm-danger:hover { background:rgba(224,102,97,.12) !important; color:#EC8683 !important; }
   .hm-ws:hover { background:#2A2620 !important; }
-  .hm-chip:hover { background:#2A2620 !important; }
-  .hz-nav:hover { background:#161510 !important; color:#EFEAE0 !important; }
+  .hm-chip:hover { background:#2C2820 !important; border-color:#5A5446 !important; }
   .hz-row:hover { background:#161510 !important; }
   .hz-tab:hover { color:#EFEAE0 !important; }
-  input.hf, textarea.hf { transition: border-color .14s ease, background .14s ease, box-shadow .16s ease; width:100%; padding:12px 12px; background:#100F0C; border:1px solid #3d382e; border-radius:8px; font-family:'Instrument Sans',sans-serif; font-size:14px; color:#EFEAE0; outline:none; }
-  input.hf::placeholder, textarea.hf::placeholder { color:#5a5446; }
-  input.hf:hover:not(:focus), textarea.hf:hover:not(:focus) { border-color:#5a5446; background:#161510; }
+  input.hf, textarea.hf { transition: border-color .14s ease, background .14s ease, box-shadow .16s ease; width:100%; padding:12px 12px; background:#100F0C; border:1px solid #3D382E; border-radius:8px; font-family:'Instrument Sans',sans-serif; font-size:14px; color:#EFEAE0; outline:none; }
+  input.hf::placeholder, textarea.hf::placeholder { color:#5A5446; }
+  input.hf:hover:not(:focus), textarea.hf:hover:not(:focus) { border-color:#5A5446; background:#161510; }
   input.hf:focus, textarea.hf:focus { border-color:#4FB79A; box-shadow:0 0 0 3px rgba(79,183,154,.18); }
   input.hf.mono { font-family:'IBM Plex Mono',monospace; }
-  input.hf:disabled { background:#161510; color:#8f8676; cursor:not-allowed; }
+  input.hf:disabled { background:#161510; color:#8F8676; cursor:not-allowed; }
   ::selection { background:#1F5C4D; color:#F6F2E9; }
-  * { scrollbar-width: thin; scrollbar-color: #3d382e transparent; }
+  * { scrollbar-width: thin; scrollbar-color: #3D382E transparent; }
   ::-webkit-scrollbar { width:10px; height:10px; }
   ::-webkit-scrollbar-track { background:transparent; }
-  ::-webkit-scrollbar-thumb { background:#3d382e; border-radius:999px; border:2px solid transparent; background-clip:content-box; }
-  ::-webkit-scrollbar-thumb:hover { background:#5a5446; background-clip:content-box; }
+  ::-webkit-scrollbar-thumb { background:#3D382E; border-radius:999px; border:2px solid transparent; background-clip:content-box; }
+  ::-webkit-scrollbar-thumb:hover { background:#5A5446; background-clip:content-box; }
   a { color:#4FB79A; text-decoration:none; }
-  a:hover { color:#6ecab0; }
+  a:hover { color:#6ECAB0; }
+  .hz-opt { transition: box-shadow .14s ease; }
+  .hz-opt:hover { box-shadow: inset 0 0 0 999px rgba(239,234,224,.05); }
+  .hz-link { transition: color .14s ease; }
+  .hz-link:hover { color:#6ECAB0 !important; }
+  .hz-link-muted { transition: color .14s ease; }
+  .hz-link-muted:hover { color:#EFEAE0 !important; }
+  .hz-row-link { transition: color .14s ease; }
+  .hz-row-link:hover { color:#4FB79A !important; }
+  .hz-nav { transition: background .14s ease, color .14s ease; }
+  .hz-nav:hover { background:#232019 !important; color:#EFEAE0 !important; }
+  .hz-nav:hover .hm-ico { color:#EFEAE0 !important; }
+  .hz-back { transition: background .14s ease, color .14s ease; }
+  .hz-back:hover { background:#1A1813; color:#EFEAE0; }
+  .hz-back:hover .hz-back-arrow { transform:translateX(-3px); }
+  @media (max-width: 1320px) {
+    .hz-rail { width:216px !important; flex-basis:216px !important; }
+    .hz-split { gap:32px !important; padding-left:24px !important; padding-right:24px !important; }
+    .hz-pad { padding-left:24px !important; padding-right:24px !important; }
+  }
+  @media (max-width: 1180px) {
+    .hz-split { flex-direction:column !important; gap:24px !important; }
+    .hz-subnav { width:100% !important; flex:none !important; }
+    .hz-subnav > div:first-child { max-width:420px; }
+    .hz-subnav > div:not(:first-child) { flex-direction:row !important; flex-wrap:wrap !important; gap:8px !important; }
+  }
+  @media (max-width: 900px) {
+    .hz-rail { display:none !important; }
+    .hz-shell { height:auto !important; min-height:100vh !important; }
+    .hz-pad { padding-left:20px !important; padding-right:20px !important; }
+  }
 </style>
 </helmet>
 
-<div style="display:flex; height:100vh; min-height:820px; font-family:'Instrument Sans',sans-serif; color:#EFEAE0; background:#100F0C;">
+<div class="hz-shell" style="display:flex; height:100vh; min-height:820px; font-family:'Instrument Sans',sans-serif; color:#EFEAE0; background:#100F0C;">
 
-  <!-- ================= COMPACT RAIL ================= -->
-  <sc-if value="{{ collapsed }}" hint-placeholder-val="{{ false }}">
-  <div style="width:76px; flex:0 0 76px; background:#1A1813; border-right:1px solid #322E26; display:flex; flex-direction:column; align-items:center; padding:20px 12px;">
-    <div style="position:relative; width:34px; height:34px; flex:0 0 34px; border-radius:8px; background:#1F5C4D; overflow:hidden; margin-bottom:8px;">
-      <div style="position:absolute; left:50%; top:5px; width:1.5px; height:6px; background:#E7C079; transform:translateX(-50%);"></div>
-      <div style="position:absolute; left:50%; bottom:8px; width:16px; height:16px; border-radius:50%; background:#D99A3C; transform:translateX(-50%);"></div>
-      <div style="position:absolute; left:0; right:0; bottom:0; height:11px; background:#164034;"></div>
-    </div>
-    <button class="hb-icon" onClick="{{ toggleRail }}" title="Expand" style="width:30px; height:30px; background:#232019; border:1px solid #3d382e; border-radius:8px; color:#A29C8D; cursor:pointer; margin-bottom:20px; font-size:14px;">»</button>
-    <button class="hb-primary" title="Start timer" style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; background:#4FB79A; color:#0d211b; border:none; border-radius:11px; cursor:pointer; margin-bottom:20px;"><span style="width:16px; height:16px; border-radius:50%; border:2px solid #0d211b; position:relative; display:inline-block;"><span style="position:absolute; left:50%; top:3px; width:1.5px; height:5px; background:#0d211b; transform:translateX(-50%);"></span></span></button>
-    <div style="display:flex; flex-direction:column; gap:8px; align-items:center;">
-      <a href="04_Timesheet.dc.html" title="Timesheet" style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; border-radius:11px; color:#8f8676; font-size:16px;">◷</a>
-      <div title="Projects" style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; border-radius:11px; background:#232019; border:1px solid #322E26; color:#4FB79A; font-size:16px;">▤</div>
-      <a href="06_Approvals.dc.html" title="Approvals" style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; border-radius:11px; color:#8f8676; font-size:16px;">✓</a>
-      <a href="07_Reports.dc.html" title="Reports" style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; border-radius:11px; color:#8f8676; font-size:16px;">▦</a>
-    </div>
-    <div style="flex:1;"></div>
-    <div title="Mira Kovač" style="width:38px; height:38px; flex:0 0 38px; border-radius:50%; background:#1F5C4D; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:16px; color:#EFEAE0;">M</div>
-  </div>
-  </sc-if>
-
-  <!-- ================= LEFT RAIL ================= -->
-  <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}">
-  <div style="width:264px; flex:0 0 264px; background:#1A1813; border-right:1px solid #322E26; display:flex; flex-direction:column; padding:20px 16px;">
-    <div style="display:flex; align-items:center; gap:12px; padding:4px 8px 20px;">
-      <div style="position:relative; width:34px; height:34px; flex:0 0 34px; border-radius:8px; background:#1F5C4D; overflow:hidden;">
-        <div style="position:absolute; left:50%; top:5px; width:1.5px; height:6px; background:#E7C079; transform:translateX(-50%);"></div>
-        <div style="position:absolute; left:50%; bottom:8px; width:16px; height:16px; border-radius:50%; background:#D99A3C; transform:translateX(-50%);"></div>
-        <div style="position:absolute; left:0; right:0; bottom:0; height:11px; background:#164034;"></div>
-      </div>
-      <div style="display:flex; align-items:baseline;">
-        <span style="font-family:'Newsreader',serif; font-size:24px; font-weight:600; letter-spacing:-.01em; color:#F6F2E9;">Horae</span>
-        <span style="width:4px; height:4px; border-radius:50%; background:#D99A3C; margin-left:4px; align-self:flex-end; margin-bottom:4px;"></span>
-      </div>
-      <div style="flex:1;"></div>
-      <button class="hb-icon" onClick="{{ toggleRail }}" title="Collapse" style="width:30px; height:30px; background:transparent; border:1px solid #322E26; border-radius:8px; color:#8f8676; cursor:pointer; font-size:14px;">«</button>
-    </div>
-
-    <button class="hb-primary" style="display:flex; align-items:center; justify-content:center; gap:8px; padding:12px 16px; background:#4FB79A; color:#0d211b; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer; margin-bottom:24px;">
-      <span style="width:16px; height:16px; border-radius:50%; border:2px solid #0d211b; position:relative; display:inline-block;"><span style="position:absolute; left:50%; top:2px; width:1.5px; height:4px; background:#0d211b; transform:translateX(-50%);"></span></span>
-      Start timer
-    </button>
-
-    <div style="font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353; padding:0 8px 8px;">Track</div>
-    <div style="display:flex; flex-direction:column; gap:4px; margin-bottom:20px;">
-      <a href="04_Timesheet.dc.html" class="hz-nav" style="display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; color:#A29C8D;"><span style="width:8px; height:8px; border-radius:50%; border:1.5px solid #5a5446;"></span><span style="font-size:14px;">Timesheet</span></a>
-    </div>
-    <div style="font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353; padding:0 8px 8px;">Organize</div>
-    <div style="display:flex; flex-direction:column; gap:4px; margin-bottom:20px;">
-      <a href="05_Projects.dc.html" style="display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; background:#232019; border:1px solid #322E26;"><span style="width:8px; height:8px; border-radius:2px; background:#4FB79A;"></span><span style="font-size:14px; font-weight:600; color:#F6F2E9;">Projects</span></a>
-    </div>
-    <div style="font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353; padding:0 8px 8px;">Review</div>
-    <div style="display:flex; flex-direction:column; gap:4px;">
-      <a href="06_Approvals.dc.html" class="hz-nav" style="display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; color:#A29C8D;"><span style="width:8px; height:8px; border-radius:50%; border:1.5px solid #5a5446;"></span><span style="font-size:14px;">Approvals</span></a>
-      <a href="07_Reports.dc.html" class="hz-nav" style="display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; color:#A29C8D;"><span style="display:inline-flex; align-items:flex-end; gap:2px; height:12px;"><span style="width:2.5px; height:6px; background:#5a5446;"></span><span style="width:2.5px; height:12px; background:#5a5446;"></span><span style="width:2.5px; height:8px; background:#5a5446;"></span></span><span style="font-size:14px;">Reports</span></a>
-    </div>
-
-    <div style="flex:1;"></div>
-
-    <div style="position:relative;">
-      <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
-      <div style="position:absolute; bottom:56px; left:0; width:252px; background:#201D17; border:1px solid #3d382e; border-radius:11px; overflow:hidden; box-shadow:0 24px 60px -18px rgba(0,0,0,.8); z-index:40;">
-        <div style="display:flex; align-items:center; gap:12px; padding:16px 16px 12px; border-bottom:1px solid #322E26;">
-          <div style="width:40px; height:40px; flex:0 0 40px; border-radius:50%; background:#1F5C4D; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:18px; color:#EFEAE0;">M</div>
-          <div style="min-width:0;"><div style="font-size:14px; font-weight:600; color:#F6F2E9;">Mira Kovač</div><div style="font-size:12px; color:#8f8676;">mira@fieldstone.studio</div></div>
-        </div>
-        <div style="padding:8px;">
-          <a href="08_Settings.dc.html" class="hm-row" style="display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; font-size:14px; color:#EFEAE0;"><span class="hm-ico" style="color:#8f8676; width:15px;">◔</span> My profile</a>
-          <a href="09_Workspace.dc.html" class="hm-row" style="display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; font-size:14px; color:#EFEAE0;"><span class="hm-ico" style="color:#8f8676; width:15px;">◍</span> Workspace settings</a>
-          <a href="10_Importers.dc.html" class="hm-row" style="display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; font-size:14px; color:#EFEAE0;"><span class="hm-ico" style="color:#8f8676; width:15px;">↧</span> Importers</a>
-        </div>
-        <div style="padding:8px; border-top:1px solid #322E26;">
-          <a href="01_Sign In.dc.html" class="hm-row hm-danger" style="display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; font-size:14px; color:#E06661;"><span style="width:15px;">→</span> Sign out</a>
-        </div>
-      </div>
-      </sc-if>
-      <div onClick="{{ toggleMenu }}" class="hm-chip" style="display:flex; align-items:center; gap:12px; padding:8px; border-radius:11px; background:#232019; border:1px solid #3d382e; cursor:pointer;">
-        <div style="width:34px; height:34px; flex:0 0 34px; border-radius:50%; background:#1F5C4D; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; color:#EFEAE0;">M</div>
-        <div style="min-width:0;"><div style="font-size:14px; font-weight:600; color:#F6F2E9;">Mira Kovač</div><div style="font-size:12px; color:#8f8676;">Fieldstone Studio</div></div>
-        <div style="flex:1;"></div>
-        <span style="color:#6a6353; font-size:14px;">◔</span>
-      </div>
-    </div>
-  </div>
-  </sc-if>
+  <dc-import name="Rail" active="projects" hint-size="264px,100%" style="display:flex; flex:0 0 auto; align-self:stretch;"></dc-import>
 
   <!-- ================= MAIN ================= -->
   <div style="flex:1; min-width:0; display:flex; flex-direction:column; overflow:hidden;">
 
-    <!-- prototype page controls -->
-    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:12px 44px; background:#161510; border-bottom:1px solid #262219;">
-      <span style="display:inline-flex; align-items:center; gap:8px; padding:4px 8px; background:#2b2413; color:#e0b45f; border:1px solid #453818; border-radius:999px; font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.1em; text-transform:uppercase; font-weight:600;"><span style="width:6px; height:6px; border-radius:999px; background:#D6A24A;"></span>Dev mode</span>
-      <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353;">Page state</span>
-      <div style="display:inline-flex; background:#100F0C; border:1px solid #322E26; border-radius:8px; padding:4px;">
-        <button onClick="{{ showDetail }}" class="hb-seg" style="{{ segDetail }}">Project detail</button>
-        <button onClick="{{ showEdit }}" class="hb-seg" style="{{ segEdit }}">Edit project</button>
-      </div>
-    </div>
+    <dc-import name="DevBar" groups="{{ devGroups }}" hint-size="100%,52px" style="display:block;"></dc-import>
 
     <div style="flex:1; overflow-y:auto; min-height:0;">
 
     <!-- ============================ DETAIL ============================ -->
     <sc-if value="{{ isDetail }}" hint-placeholder-val="{{ true }}">
-    <div style="padding:24px 44px 64px;">
-      <a href="05_Projects.dc.html" style="display:inline-flex; align-items:center; gap:8px; font-size:14px; color:#A29C8D;"><span style="font-size:16px;">←</span> Back to Projects</a>
+    <div class="hz-pad" style="padding:24px 40px 64px;">
+      <a href="05_Projects.dc.html" class="hz-back" style="display:inline-flex; align-items:center; gap:8px; font-size:14px; color:#A29C8D; padding:6px 10px; margin-left:-10px; border-radius:8px;"><span class="hz-back-arrow" style="display:inline-flex; font-size:16px; display:inline-block; transition:transform .14s ease;"><i class="ph ph-arrow-left" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span> Back to Projects</a>
 
       <div style="display:flex; align-items:flex-end; gap:16px; flex-wrap:wrap; margin-top:20px; padding-bottom:24px; border-bottom:1px solid #262219;">
         <div style="min-width:280px;">
-          <a href="#" style="font-size:14px; font-weight:600; text-decoration:underline; text-underline-offset:3px;">Rún Collective</a>
+          <a href="12_Client Detail.dc.html" style="font-size:14px; font-weight:600;">Rún Collective</a>
           <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:8px;">
             <h1 style="font-family:'Newsreader',serif; font-size:34px; font-weight:600; color:#F6F2E9; margin:0; letter-spacing:-.015em;">[OSS] Self-hosting fund</h1>
-            <span style="display:inline-flex; padding:4px 8px; background:#232019; border:1px solid #3d382e; border-radius:999px; font-size:12px; color:#A29C8D; white-space:nowrap;">Fixed Fee</span>
+            <span style="display:inline-flex; padding:4px 8px; background:#232019; border:1px solid #3D382E; border-radius:999px; font-size:12px; color:#A29C8D; white-space:nowrap;">Fixed Fee</span>
           </div>
         </div>
         <div style="flex:1;"></div>
-        <button onClick="{{ showEdit }}" class="hb-secondary" style="display:flex; align-items:center; gap:8px; padding:8px 16px; background:#232019; border:1px solid #3d382e; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer;">✎ Edit project</button>
-        <div style="position:relative;">
-          <button onClick="{{ toggleActions }}" class="hb-secondary" style="display:flex; align-items:center; gap:8px; padding:8px 16px; background:#232019; border:1px solid #3d382e; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer;">Actions <span style="color:#8f8676; font-size:12px;">▾</span></button>
-          <sc-if value="{{ actionsOpen }}" hint-placeholder-val="{{ false }}">
-          <div style="position:absolute; right:0; top:48px; width:180px; background:#201D17; border:1px solid #3d382e; border-radius:11px; box-shadow:0 24px 60px -18px rgba(0,0,0,.75); padding:8px; z-index:40;">
-            <div class="hm-row" style="padding:8px 12px; border-radius:6px; font-size:14px; color:#EFEAE0; cursor:pointer;">Pin</div>
-            <div class="hm-row" style="padding:8px 12px; border-radius:6px; font-size:14px; color:#EFEAE0; cursor:pointer;">Duplicate</div>
-            <div style="height:1px; background:#322E26; margin:8px 0;"></div>
-            <div class="hm-row" style="padding:8px 12px; border-radius:6px; font-size:14px; color:#EFEAE0; cursor:pointer;">Archive</div>
-            <div class="hm-row hm-danger" style="padding:8px 12px; border-radius:6px; font-size:14px; color:#E06661; cursor:pointer;">Delete</div>
-          </div>
-          </sc-if>
-        </div>
+        <button onClick="{{ showEdit }}" class="hb-secondary" style="display:flex; align-items:center; gap:8px; padding:8px 16px; background:#232019; border:1px solid #3D382E; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap;">✎ Edit project</button>
+        <dc-import name="Dropdown" mode="actions" label="Actions" items="{{ projectActions }}" on-select="{{ onProjectAction }}" align="right" width="180" surface="#232019" hint-size="100px,40px"></dc-import>
       </div>
 
       <!-- chart -->
-      <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; padding:20px; margin-top:24px;">
+      <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; padding:20px; margin-top:24px;">
         <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:20px;">
           <div style="display:inline-flex; background:#100F0C; border:1px solid #322E26; border-radius:8px; padding:4px;">
-            <button onClick="{{ showProgress }}" class="hb-seg" style="{{ segProgress }}">Project progress</button>
-            <button onClick="{{ showWeekly }}" class="hb-seg" style="{{ segWeekly }}">Hours per week</button>
+            <button onClick="{{ showProgress }}" class="hb-seg" style="{{ segProgress }}; white-space:nowrap;">Project progress</button>
+            <button onClick="{{ showWeekly }}" class="hb-seg" style="{{ segWeekly }}; white-space:nowrap;">Hours per week</button>
           </div>
           <div style="flex:1;"></div>
-          <div style="display:flex; align-items:center; background:#100F0C; border:1px solid #322E26; border-radius:11px; overflow:hidden;">
-            <button class="hb-secondary" style="width:44px; height:44px; background:transparent; border:none; border-right:1px solid #322E26; color:#A29C8D; cursor:pointer; font-size:16px;">←</button>
-            <div style="display:flex; align-items:center; gap:8px; padding:0 16px; font-size:14px; color:#EFEAE0;"><span style="color:#8f8676;">▦</span><span style="font-weight:600;">This week</span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">06 – 12 Jul 2026</span></div>
-            <button class="hb-secondary" style="width:44px; height:44px; background:transparent; border:none; border-left:1px solid #322E26; color:#5a5446; cursor:not-allowed; font-size:16px;">→</button>
-          </div>
+          <dc-import name="PeriodNav" unit="week" value="{{ periodValue }}" on-change="{{ setPeriod }}" no-future="{{ true }}" surface="#100F0C" hint-size="300px,44px"></dc-import>
         </div>
         <div style="display:flex; gap:16px;">
-          <div style="display:flex; flex-direction:column; justify-content:space-between; padding:4px 0 24px; font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6a6353;">
+          <div style="display:flex; flex-direction:column; justify-content:space-between; padding:4px 0 24px; font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6A6353;">
             <span>150</span><span>100</span><span>50</span><span>0</span>
           </div>
           <div style="flex:1; min-width:0;">
             <div style="position:relative; height:220px; border-bottom:1px solid #322E26;">
-              <div style="position:absolute; left:0; right:0; top:0; height:1px; background:#201d17;"></div>
-              <div style="position:absolute; left:0; right:0; top:33%; height:1px; background:#201d17;"></div>
-              <div style="position:absolute; left:0; right:0; top:66%; height:1px; background:#201d17;"></div>
+              <div style="position:absolute; left:0; right:0; top:0; height:1px; background:#201D17;"></div>
+              <div style="position:absolute; left:0; right:0; top:33%; height:1px; background:#201D17;"></div>
+              <div style="position:absolute; left:0; right:0; top:66%; height:1px; background:#201D17;"></div>
               <div style="position:absolute; left:0; right:0; bottom:0; top:0; display:flex; align-items:flex-end; gap:4px;">
                 <sc-for list="{{ bars }}" as="bar" hint-placeholder-count="24">
                   <div style="flex:1; display:flex; flex-direction:column; justify-content:flex-end; height:100%;">
@@ -212,7 +135,7 @@
                 </sc-for>
               </div>
             </div>
-            <div style="display:flex; justify-content:space-between; margin-top:8px; font-size:12px; color:#6a6353;">
+            <div style="display:flex; justify-content:space-between; margin-top:8px; font-size:12px; color:#6A6353;">
               <span>Apr 2026</span><span>May 2026</span><span>Jun 2026</span><span>Jul 2026</span>
             </div>
           </div>
@@ -221,32 +144,32 @@
 
       <!-- stat tiles -->
       <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; margin-top:16px;">
-        <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; padding:20px;">
+        <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; padding:20px;">
           <div style="font-size:14px; color:#A29C8D;">Total hours</div>
           <div style="font-family:'IBM Plex Mono',monospace; font-size:30px; font-weight:600; color:#F6F2E9; margin:8px 0 16px;">119.85</div>
           <div style="display:flex; justify-content:space-between; font-size:14px; padding:4px 0;"><span style="color:#EFEAE0;">Billable</span><span style="font-family:'IBM Plex Mono',monospace; color:#A29C8D;">119.85</span></div>
           <div style="display:flex; justify-content:space-between; font-size:14px; padding:4px 0;"><span style="color:#EFEAE0;">Non-billable</span><span style="font-family:'IBM Plex Mono',monospace; color:#A29C8D;">0.00</span></div>
         </div>
-        <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; padding:20px;">
+        <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; padding:20px;">
           <div style="font-size:14px; color:#A29C8D;">Budget remaining</div>
-          <div style="font-size:14px; color:#8f8676; margin:8px 0 12px; line-height:1.5;">No budget is set on this project.</div>
-          <span onClick="{{ showEdit }}" style="font-size:14px; font-weight:600; color:#4FB79A; cursor:pointer;">Set up a budget</span>
+          <div style="font-size:14px; color:#8F8676; margin:8px 0 12px; line-height:1.5;">No budget is set on this project.</div>
+          <span onClick="{{ showEdit }}" class="hz-link" style="font-size:14px; font-weight:600; color:#4FB79A; cursor:pointer;">Set up a budget</span>
         </div>
-        <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; padding:20px;">
+        <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; padding:20px;">
           <div style="font-size:14px; color:#A29C8D;">Internal costs</div>
-          <div style="font-family:'IBM Plex Mono',monospace; font-size:30px; font-weight:600; color:#5a5446; margin-top:8px;">N/A</div>
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:30px; font-weight:600; color:#5A5446; margin-top:8px;">N/A</div>
           <div style="font-size:12px; color:#7C7565; margin-top:12px;">No cost rates set for this team.</div>
         </div>
-        <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; padding:20px;">
+        <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; padding:20px;">
           <div style="font-size:14px; color:#A29C8D;">Invoiced</div>
           <div style="font-family:'IBM Plex Mono',monospace; font-size:30px; font-weight:600; color:#F6F2E9; margin-top:8px;">€5,350.00</div>
           <div style="font-size:12px; color:#7C7565; margin-top:12px;">Across 3 invoices.</div>
         </div>
-        <div style="background:rgba(224,102,97,.06); border:1px solid #4d2523; border-radius:20px; padding:20px;">
+        <div style="background:rgba(224,102,97,.06); border:1px solid #4D2523; border-radius:16px; padding:20px;">
           <div style="font-size:14px; color:#A29C8D;">Uninvoiced</div>
-          <div style="font-family:'IBM Plex Mono',monospace; font-size:30px; font-weight:600; color:#ec8683; margin-top:8px;">−€5,300.00</div>
+          <div style="font-family:'IBM Plex Mono',monospace; font-size:30px; font-weight:600; color:#EC8683; margin-top:8px;">−€5,300.00</div>
           <div style="display:flex; align-items:baseline; justify-content:space-between; margin-top:12px;"><span style="font-size:12px; color:#7C7565;">Total project fees</span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">€50.00</span></div>
-          <a href="#" style="display:inline-block; font-size:14px; font-weight:600; margin-top:12px;">New invoice →</a>
+          <a href="#" style="display:inline-block; font-size:14px; font-weight:600; margin-top:12px;">New invoice <i class="ph ph-arrow-right" aria-hidden="true" style="font-size:14px; line-height:1; display:inline-block; vertical-align:-2px;"></i></a>
         </div>
       </div>
 
@@ -260,18 +183,18 @@
       <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:24px 0 16px;">
         <span style="font-family:'Newsreader',serif; font-size:24px; font-weight:600; color:#F6F2E9;">All time</span>
         <div style="flex:1;"></div>
-        <button class="hb-secondary" style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:#1A1813; border:1px solid #322E26; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer;">All time <span style="color:#8f8676; font-size:12px;">▾</span></button>
-        <button class="hb-secondary" style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:#1A1813; border:1px solid #322E26; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer;">Export <span style="color:#8f8676; font-size:12px;">▾</span></button>
+        <button class="hb-secondary" style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:#1A1813; border:1px solid #322E26; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap;">All time <span style="display:inline-flex; align-items:center; justify-content:center; color:#8F8676; font-size:12px;"><i class="ph ph-caret-down" aria-hidden="true" style="font-size:12px; line-height:1; display:block;"></i></span></button>
+        <button class="hb-secondary" style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:#1A1813; border:1px solid #322E26; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap;">Export <span style="display:inline-flex; align-items:center; justify-content:center; color:#8F8676; font-size:12px;"><i class="ph ph-caret-down" aria-hidden="true" style="font-size:12px; line-height:1; display:block;"></i></span></button>
       </div>
 
       <sc-if value="{{ isTasks }}" hint-placeholder-val="{{ true }}">
-      <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; overflow:hidden;">
-        <div style="display:grid; grid-template-columns:1fr 120px 120px; padding:12px 20px; background:#161510; border-bottom:1px solid #262219; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:#6a6353;">
+      <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; overflow:hidden;">
+        <div style="display:grid; grid-template-columns:1fr 120px 120px; padding:12px 20px; background:#161510; border-bottom:1px solid #262219; font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353;">
           <span>Billable tasks</span><span style="text-align:right;">Hours</span><span style="text-align:right;">Costs</span>
         </div>
         <sc-for list="{{ tasks }}" as="task" hint-placeholder-count="6">
-          <div class="hz-row" style="display:grid; grid-template-columns:1fr 120px 120px; align-items:center; padding:12px 20px; border-bottom:1px solid #201d17;">
-            <div style="display:flex; align-items:center; gap:12px;"><span style="color:#6a6353; font-size:12px;">{{ task.caret }}</span><span style="font-size:14px; color:#EFEAE0;">{{ task.name }}</span></div>
+          <div class="hz-row" style="display:grid; grid-template-columns:1fr 120px 120px; align-items:center; padding:12px 20px; border-bottom:1px solid #201D17;">
+            <div style="display:flex; align-items:center; gap:12px;"><span style="color:#6A6353; font-size:12px;">{{ task.caret }}</span><span style="font-size:14px; color:#EFEAE0;">{{ task.name }}</span></div>
             <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:{{ task.hoursColor }};">{{ task.hours }}</span>
             <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#A29C8D;">€0.00</span>
           </div>
@@ -285,17 +208,17 @@
       </sc-if>
 
       <sc-if value="{{ isTeam }}" hint-placeholder-val="{{ false }}">
-      <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; overflow:hidden;">
-        <div style="display:grid; grid-template-columns:1fr 140px 120px; padding:12px 20px; background:#161510; border-bottom:1px solid #262219; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:#6a6353;">
+      <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; overflow:hidden;">
+        <div style="display:grid; grid-template-columns:1fr 140px 120px; padding:12px 20px; background:#161510; border-bottom:1px solid #262219; font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353;">
           <span>Member</span><span>Cost rate</span><span style="text-align:right;">Hours</span>
         </div>
-        <div class="hz-row" style="display:grid; grid-template-columns:1fr 140px 120px; align-items:center; padding:12px 20px; border-bottom:1px solid #201d17;">
-          <div style="display:flex; align-items:center; gap:12px;"><span style="width:34px; height:34px; flex:0 0 34px; border-radius:50%; background:#1F5C4D; display:inline-flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; color:#EFEAE0;">M</span><span style="font-size:14px; color:#F6F2E9;">Mira Kovač</span></div>
-          <span style="font-size:14px; color:#8f8676;">Missing rate</span>
+        <div class="hz-row" style="display:grid; grid-template-columns:1fr 140px 120px; align-items:center; padding:12px 20px; border-bottom:1px solid #201D17;">
+          <div style="display:flex; align-items:center; gap:12px;"><span style="width:38px; height:38px; flex:0 0 34px; border-radius:50%; background:#1F5C4D; display:inline-flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; color:#EFEAE0;">M</span><span style="font-size:14px; color:#F6F2E9;">Mira Kovač</span></div>
+          <span style="font-size:14px; color:#8F8676;">Missing rate</span>
           <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">96.40</span>
         </div>
         <div class="hz-row" style="display:grid; grid-template-columns:1fr 140px 120px; align-items:center; padding:12px 20px;">
-          <div style="display:flex; align-items:center; gap:12px;"><span style="width:34px; height:34px; flex:0 0 34px; border-radius:50%; background:#6b4a1a; display:inline-flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; color:#EFEAE0;">A</span><span style="font-size:14px; color:#F6F2E9;">Aisha Rahmani</span></div>
+          <div style="display:flex; align-items:center; gap:12px;"><span style="width:34px; height:34px; flex:0 0 34px; border-radius:50%; background:#6B4A1A; display:inline-flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; color:#EFEAE0;">A</span><span style="font-size:14px; color:#F6F2E9;">Aisha Rahmani</span></div>
           <span style="font-family:'IBM Plex Mono',monospace; font-size:14px; color:#A29C8D;">€65.00 / h</span>
           <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">23.45</span>
         </div>
@@ -303,24 +226,19 @@
       </sc-if>
 
       <sc-if value="{{ isInvoices }}" hint-placeholder-val="{{ false }}">
-      <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:64px 24px; background:#1A1813; border:1px solid #322E26; border-radius:20px; text-align:center;">
-        <div style="width:52px; height:52px; border-radius:50%; background:#232019; border:1px solid #3d382e; display:flex; align-items:center; justify-content:center; color:#5a5446; font-size:20px;">▤</div>
-        <div style="font-family:'Newsreader',serif; font-size:20px; font-weight:600; color:#F6F2E9;">No invoices yet</div>
-        <div style="font-size:14px; color:#8f8676; max-width:360px; line-height:1.55;">€5,300.00 of tracked work is waiting to be billed.</div>
-        <button class="hb-primary" style="margin-top:4px; padding:12px 20px; background:#4FB79A; color:#0d211b; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer;">New invoice</button>
-      </div>
+      <dc-import name="EmptyState" icon="briefcase" title="No invoices yet" body="€5,300.00 of tracked work is waiting to be billed." action-label="New invoice" hint-size="100%,320px" style="display:block;"></dc-import>
       </sc-if>
     </div>
     </sc-if>
 
     <!-- ============================ EDIT ============================ -->
     <sc-if value="{{ isEdit }}" hint-placeholder-val="{{ false }}">
-    <div style="padding:24px 44px 64px; max-width:960px;">
-      <span onClick="{{ showDetail }}" style="display:inline-flex; align-items:center; gap:8px; font-size:14px; color:#A29C8D; cursor:pointer;"><span style="font-size:16px;">←</span> Back to project</span>
+    <div class="hz-pad" style="padding:24px 40px 64px; max-width:960px;">
+      <span onClick="{{ showDetail }}" class="hz-link-muted" style="display:inline-flex; align-items:center; gap:8px; font-size:14px; color:#A29C8D; cursor:pointer;"><span style="display:inline-flex; font-size:16px;"><i class="ph ph-arrow-left" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span> Back to project</span>
       <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin:20px 0 32px;">
         <h1 style="font-family:'Newsreader',serif; font-size:34px; font-weight:600; color:#F6F2E9; margin:0; letter-spacing:-.015em;">Edit project</h1>
         <sc-if value="{{ dirty }}" hint-placeholder-val="{{ false }}">
-        <span style="display:inline-flex; align-items:center; gap:8px; padding:4px 8px; background:#2b2413; color:#e0b45f; border:1px solid #453818; border-radius:999px; font-size:12px; font-weight:600;"><span style="width:6px; height:6px; border-radius:999px; background:#D6A24A;"></span>Unsaved changes</span>
+        <span style="display:inline-flex; align-items:center; gap:8px; padding:4px 8px; background:#2B2413; color:#E0B45F; border:1px solid #453818; border-radius:999px; font-size:12px; font-weight:600;"><span style="width:6px; height:6px; border-radius:999px; background:#D6A24A;"></span>Unsaved changes</span>
         </sc-if>
       </div>
 
@@ -348,7 +266,7 @@
           <div>
             <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
               <input class="hf mono" placeholder="Starts on" style="max-width:180px;" />
-              <span style="font-size:14px; color:#8f8676;">to</span>
+              <span style="font-size:14px; color:#8F8676;">to</span>
               <input class="hf mono" placeholder="Ends on" style="max-width:180px;" />
             </div>
             <div style="font-size:12px; color:#7C7565; margin-top:8px;">Optional — time can still be tracked outside this range.</div>
@@ -357,9 +275,9 @@
         <div style="display:grid; grid-template-columns:160px 1fr; gap:20px; align-items:start;">
           <label style="font-size:14px; color:#EFEAE0; padding-top:12px;">Tags</label>
           <div>
-            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:8px; background:#100F0C; border:1px solid #3d382e; border-radius:8px;">
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:8px; background:#100F0C; border:1px solid #3D382E; border-radius:8px;">
               <sc-for list="{{ tags }}" as="tag" hint-placeholder-count="2">
-                <span style="display:inline-flex; align-items:center; gap:8px; padding:4px 8px; background:#232019; border:1px solid #3d382e; border-radius:999px; font-size:12px; color:#EFEAE0; white-space:nowrap;">{{ tag.name }}<span onClick="{{ tag.remove }}" style="color:#8f8676; cursor:pointer;">×</span></span>
+                <span style="display:inline-flex; align-items:center; gap:8px; padding:4px 8px; background:#232019; border:1px solid #3D382E; border-radius:999px; font-size:12px; color:#EFEAE0; white-space:nowrap;">{{ tag.name }}<span onClick="{{ tag.remove }}" class="hz-link-muted" style="display:inline-flex; align-items:center; justify-content:center; color:#8F8676; cursor:pointer;"><i class="ph ph-x" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span></span>
               </sc-for>
               <input value="{{ tagDraft }}" onChange="{{ setTagDraft }}" onKeyDown="{{ addTag }}" placeholder="Add a tag…" style="flex:1; min-width:120px; padding:4px; background:transparent; border:none; color:#EFEAE0; font-family:inherit; font-size:14px; outline:none;" />
             </div>
@@ -396,54 +314,54 @@
           <label style="font-size:14px; color:#EFEAE0;">Project type</label>
           <div>
             <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px;">
-              <div onClick="{{ pickTM }}" style="{{ typeTM }}">
+              <div onClick="{{ pickTM }}" class="hz-opt" style="{{ typeTM }}">
                 <div style="font-size:14px; font-weight:600; color:#F6F2E9;">Time &amp; Materials</div>
-                <div style="font-size:12px; color:#8f8676; margin-top:4px; line-height:1.5;">Bill by the hour, at billable rates.</div>
+                <div style="font-size:12px; color:#8F8676; margin-top:4px; line-height:1.5;">Bill by the hour, at billable rates.</div>
               </div>
-              <div onClick="{{ pickFixed }}" style="{{ typeFixed }}">
+              <div onClick="{{ pickFixed }}" class="hz-opt" style="{{ typeFixed }}">
                 <div style="font-size:14px; font-weight:600; color:#F6F2E9;">Fixed Fee</div>
-                <div style="font-size:12px; color:#8f8676; margin-top:4px; line-height:1.5;">A set price, whatever the hours.</div>
+                <div style="font-size:12px; color:#8F8676; margin-top:4px; line-height:1.5;">A set price, whatever the hours.</div>
               </div>
-              <div onClick="{{ pickNonBill }}" style="{{ typeNonBill }}">
+              <div onClick="{{ pickNonBill }}" class="hz-opt" style="{{ typeNonBill }}">
                 <div style="font-size:14px; font-weight:600; color:#F6F2E9;">Non-billable</div>
-                <div style="font-size:12px; color:#8f8676; margin-top:4px; line-height:1.5;">Internal work, never invoiced.</div>
+                <div style="font-size:12px; color:#8F8676; margin-top:4px; line-height:1.5;">Internal work, never invoiced.</div>
               </div>
             </div>
 
             <sc-if value="{{ isFixed }}" hint-placeholder-val="{{ true }}">
-            <div style="margin-top:16px; padding:20px; background:rgba(31,92,77,.14); border:1px solid #24402f; border-radius:11px;">
+            <div style="margin-top:16px; padding:20px; background:rgba(31,92,77,.14); border:1px solid #24402F; border-radius:12px;">
               <div style="font-size:14px; font-weight:600; color:#F6F2E9;">Project fees</div>
-              <div style="font-size:12px; color:#8f8676; margin:4px 0 16px;">How this fee gets invoiced.</div>
+              <div style="font-size:12px; color:#8F8676; margin:4px 0 16px;">How this fee gets invoiced.</div>
               <div style="display:inline-flex; background:#100F0C; border:1px solid #322E26; border-radius:8px; padding:4px;">
-                <button onClick="{{ pickSingle }}" class="hb-seg" style="{{ feeSingle }}">Single fee</button>
-                <button onClick="{{ pickMilestone }}" class="hb-seg" style="{{ feeMilestone }}">Milestones</button>
-                <button onClick="{{ pickMonthly }}" class="hb-seg" style="{{ feeMonthly }}">Monthly</button>
+                <button onClick="{{ pickSingle }}" class="hb-seg" style="{{ feeSingle }}; white-space:nowrap;">Single fee</button>
+                <button onClick="{{ pickMilestone }}" class="hb-seg" style="{{ feeMilestone }}; white-space:nowrap;">Milestones</button>
+                <button onClick="{{ pickMonthly }}" class="hb-seg" style="{{ feeMonthly }}; white-space:nowrap;">Monthly</button>
               </div>
-              <div style="display:flex; align-items:stretch; border:1px solid #3d382e; border-radius:8px; overflow:hidden; max-width:220px; margin-top:16px;">
-                <span style="display:flex; align-items:center; padding:0 12px; background:#161510; border-right:1px solid #3d382e; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#8f8676;">€</span>
+              <div style="display:flex; align-items:stretch; border:1px solid #3D382E; border-radius:8px; overflow:hidden; max-width:220px; margin-top:16px;">
+                <span style="display:flex; align-items:center; padding:0 12px; background:#161510; border-right:1px solid #3D382E; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#8F8676;">€</span>
                 <input value="12,000.00" style="flex:1; min-width:0; padding:12px 12px; background:#100F0C; border:none; color:#EFEAE0; font-family:'IBM Plex Mono',monospace; font-size:14px; outline:none;" />
               </div>
             </div>
             </sc-if>
-            <div style="margin-top:16px; padding:20px; background:#1A1813; border:1px solid #322E26; border-radius:11px;">
+            <div style="margin-top:16px; padding:20px; background:#1A1813; border:1px solid #322E26; border-radius:12px;">
               <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
                 <div style="flex:1; min-width:200px;">
                   <div style="font-size:14px; font-weight:600; color:#F6F2E9;">Budget</div>
-                  <div style="font-size:12px; color:#8f8676; margin-top:4px;">Track progress and warn before the project runs over.</div>
+                  <div style="font-size:12px; color:#8F8676; margin-top:4px;">Track progress and warn before the project runs over.</div>
                 </div>
-                <span onClick="{{ toggleBudget }}" style="{{ budgetTrack }}"><span style="{{ budgetKnob }}"></span></span>
+                <dc-import name="Toggle" on="{{ budgetOn }}" on-change="{{ toggleBudget }}" hint-size="40px,22px"></dc-import>
               </div>
               <sc-if value="{{ budgetOn }}" hint-placeholder-val="{{ false }}">
               <div style="margin-top:16px; padding-top:16px; border-top:1px solid #262219; display:flex; flex-direction:column; gap:16px;">
                 <div style="display:flex; flex-wrap:wrap; gap:8px;">
-                  <button onClick="{{ bTotalHours }}" class="hb-seg" style="{{ bsTotalHours }}">Total hours</button>
-                  <button onClick="{{ bTotalFees }}" class="hb-seg" style="{{ bsTotalFees }}">Total fees</button>
-                  <button onClick="{{ bPerTask }}" class="hb-seg" style="{{ bsPerTask }}">Hours per task</button>
-                  <button onClick="{{ bPerPerson }}" class="hb-seg" style="{{ bsPerPerson }}">Hours per person</button>
+                  <button onClick="{{ bTotalHours }}" class="hb-seg" style="{{ bsTotalHours }}; white-space:nowrap;">Total hours</button>
+                  <button onClick="{{ bTotalFees }}" class="hb-seg" style="{{ bsTotalFees }}; white-space:nowrap;">Total fees</button>
+                  <button onClick="{{ bPerTask }}" class="hb-seg" style="{{ bsPerTask }}; white-space:nowrap;">Hours per task</button>
+                  <button onClick="{{ bPerPerson }}" class="hb-seg" style="{{ bsPerPerson }}; white-space:nowrap;">Hours per person</button>
                 </div>
                 <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
-                  <div style="display:flex; align-items:stretch; border:1px solid #3d382e; border-radius:8px; overflow:hidden; max-width:200px;">
-                    <span style="display:flex; align-items:center; padding:0 12px; background:#161510; border-right:1px solid #3d382e; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#8f8676;">{{ budgetUnit }}</span>
+                  <div style="display:flex; align-items:stretch; border:1px solid #3D382E; border-radius:8px; overflow:hidden; max-width:200px;">
+                    <span style="display:flex; align-items:center; padding:0 12px; background:#161510; border-right:1px solid #3D382E; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#8F8676;">{{ budgetUnit }}</span>
                     <input value="160" style="flex:1; min-width:0; padding:12px 12px; background:#100F0C; border:none; color:#EFEAE0; font-family:'IBM Plex Mono',monospace; font-size:14px; outline:none;" />
                   </div>
                   <span style="font-size:12px; color:#7C7565;">{{ budgetHint }}</span>
@@ -459,17 +377,17 @@
         </div>
 
         <!-- tasks -->
-        <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; overflow:hidden;">
+        <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; overflow:hidden;">
           <div style="display:flex; align-items:center; gap:12px; padding:16px 20px; border-bottom:1px solid #262219;">
             <span style="font-family:'Newsreader',serif; font-size:20px; font-weight:600; color:#F6F2E9;">Tasks</span>
             <div style="flex:1;"></div>
-            <div style="display:flex; align-items:center; gap:8px; font-size:12px; color:#7C7565;">Billable<span style="color:#4FB79A; cursor:pointer;">all</span><span style="color:#3d382e;">/</span><span style="color:#4FB79A; cursor:pointer;">none</span></div>
+            <div style="display:flex; align-items:center; gap:8px; font-size:12px; color:#7C7565;">Billable<span style="color:#4FB79A; cursor:pointer;">all</span><span style="color:#3D382E;">/</span><span style="color:#4FB79A; cursor:pointer;">none</span></div>
           </div>
           <sc-for list="{{ editTasks }}" as="row" hint-placeholder-count="5">
-            <div class="hz-row" style="display:flex; align-items:center; gap:12px; padding:12px 20px; border-bottom:1px solid #201d17;">
-              <span style="width:20px; height:20px; flex:0 0 20px; border-radius:4px; border:1px solid #3d382e; display:inline-flex; align-items:center; justify-content:center; color:#8f8676; font-size:12px; cursor:pointer;">×</span>
+            <div class="hz-row" style="display:flex; align-items:center; gap:12px; padding:12px 20px; border-bottom:1px solid #201D17;">
+              <span style="width:20px; height:20px; flex:0 0 20px; border-radius:4px; border:1px solid #3D382E; display:inline-flex; align-items:center; justify-content:center; color:#8F8676; font-size:12px; cursor:pointer;"><i class="ph ph-x" aria-hidden="true" style="font-size:12px; line-height:1; display:block;"></i></span>
               <span style="flex:1; font-size:14px; color:#EFEAE0;">{{ row.name }}</span>
-              <span style="width:18px; height:18px; border-radius:4px; background:#4FB79A; display:inline-flex; align-items:center; justify-content:center; color:#0d211b; font-size:12px; font-weight:700; cursor:pointer;">✓</span>
+              <span style="width:18px; height:18px; border-radius:4px; background:#4FB79A; display:inline-flex; align-items:center; justify-content:center; color:#0D211B; font-size:12px; font-weight:700; cursor:pointer;"><i class="ph ph-check" aria-hidden="true" style="font-size:12px; line-height:1; display:block;"></i></span>
             </div>
           </sc-for>
           <div style="padding:16px 20px;">
@@ -478,28 +396,28 @@
         </div>
 
         <!-- team -->
-        <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; overflow:hidden;">
+        <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; overflow:hidden;">
           <div style="display:flex; align-items:center; gap:12px; padding:16px 20px; border-bottom:1px solid #262219;">
             <span style="font-family:'Newsreader',serif; font-size:20px; font-weight:600; color:#F6F2E9;">Team</span>
             <div style="flex:1;"></div>
             <span style="font-size:12px; color:#7C7565;">Manages this project</span>
           </div>
-          <div class="hz-row" style="display:flex; align-items:center; gap:12px; padding:12px 20px; border-bottom:1px solid #201d17; flex-wrap:wrap;">
-            <span style="width:20px; height:20px; flex:0 0 20px; border-radius:4px; border:1px solid #3d382e; display:inline-flex; align-items:center; justify-content:center; color:#8f8676; font-size:12px; cursor:pointer;">×</span>
-            <span style="width:34px; height:34px; flex:0 0 34px; border-radius:50%; background:#1F5C4D; display:inline-flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; color:#EFEAE0;">M</span>
+          <div class="hz-row" style="display:flex; align-items:center; gap:12px; padding:12px 20px; border-bottom:1px solid #201D17; flex-wrap:wrap;">
+            <span style="width:20px; height:20px; flex:0 0 20px; border-radius:4px; border:1px solid #3D382E; display:inline-flex; align-items:center; justify-content:center; color:#8F8676; font-size:12px; cursor:pointer;"><i class="ph ph-x" aria-hidden="true" style="font-size:12px; line-height:1; display:block;"></i></span>
+            <span style="width:38px; height:38px; flex:0 0 34px; border-radius:50%; background:#1F5C4D; display:inline-flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; color:#EFEAE0;">M</span>
             <span style="flex:1; min-width:120px; font-size:14px; color:#EFEAE0;">Mira Kovač</span>
             <sc-if value="{{ rateOpen }}" hint-placeholder-val="{{ false }}">
-            <div style="display:flex; align-items:stretch; border:1px solid #3d382e; border-radius:8px; overflow:hidden; max-width:160px;">
-              <span style="display:flex; align-items:center; padding:0 8px; background:#161510; border-right:1px solid #3d382e; font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8f8676;">€</span>
+            <div style="display:flex; align-items:stretch; border:1px solid #3D382E; border-radius:8px; overflow:hidden; max-width:160px;">
+              <span style="display:flex; align-items:center; padding:0 8px; background:#161510; border-right:1px solid #3D382E; font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8F8676;">€</span>
               <input value="85.00" style="flex:1; min-width:0; padding:8px; background:#100F0C; border:none; color:#EFEAE0; font-family:'IBM Plex Mono',monospace; font-size:14px; outline:none;" />
-              <span style="display:flex; align-items:center; padding:0 8px; background:#161510; border-left:1px solid #3d382e; font-size:12px; color:#8f8676;">/ h</span>
+              <span style="display:flex; align-items:center; padding:0 8px; background:#161510; border-left:1px solid #3D382E; font-size:12px; color:#8F8676;">/ h</span>
             </div>
             </sc-if>
             <sc-if value="{{ rateClosed }}" hint-placeholder-val="{{ true }}">
-            <span style="font-size:14px; color:#8f8676;">Missing rate</span>
-            <span onClick="{{ openRate }}" style="font-size:14px; font-weight:600; color:#4FB79A; cursor:pointer;">Apply custom rate</span>
+            <span style="font-size:14px; color:#8F8676;">Missing rate</span>
+            <span onClick="{{ openRate }}" class="hz-link" style="font-size:14px; font-weight:600; color:#4FB79A; cursor:pointer;">Apply custom rate</span>
             </sc-if>
-            <span style="width:18px; height:18px; border-radius:4px; background:#4FB79A; display:inline-flex; align-items:center; justify-content:center; color:#0d211b; font-size:12px; font-weight:700; cursor:pointer;">✓</span>
+            <span style="width:18px; height:18px; border-radius:4px; background:#4FB79A; display:inline-flex; align-items:center; justify-content:center; color:#0D211B; font-size:12px; font-weight:700; cursor:pointer;"><i class="ph ph-check" aria-hidden="true" style="font-size:12px; line-height:1; display:block;"></i></span>
           </div>
           <div style="padding:16px 20px;">
             <input class="hf" placeholder="Add a teammate…" style="max-width:320px;" />
@@ -514,7 +432,7 @@
               <label style="font-size:14px; color:#EFEAE0;">Due date</label>
               <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
                 <input class="hf" value="Net 30" style="max-width:180px;" />
-                <span style="font-size:14px; color:#8f8676;">days after issue</span>
+                <span style="font-size:14px; color:#8F8676;">days after issue</span>
               </div>
             </div>
             <div style="display:grid; grid-template-columns:160px 1fr; gap:20px; align-items:center;">
@@ -524,9 +442,9 @@
             <div style="display:grid; grid-template-columns:160px 1fr; gap:20px; align-items:center;">
               <label style="font-size:14px; color:#EFEAE0;">Tax</label>
               <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-                <div style="display:flex; align-items:stretch; border:1px solid #3d382e; border-radius:8px; overflow:hidden; max-width:120px;">
+                <div style="display:flex; align-items:stretch; border:1px solid #3D382E; border-radius:8px; overflow:hidden; max-width:120px;">
                   <input value="21" style="flex:1; min-width:0; padding:12px 12px; background:#100F0C; border:none; color:#EFEAE0; font-family:'IBM Plex Mono',monospace; font-size:14px; outline:none;" />
-                  <span style="display:flex; align-items:center; padding:0 12px; background:#161510; border-left:1px solid #3d382e; font-size:14px; color:#8f8676;">%</span>
+                  <span style="display:flex; align-items:center; padding:0 12px; background:#161510; border-left:1px solid #3D382E; font-size:14px; color:#8F8676;">%</span>
                 </div>
                 <span style="font-size:14px; font-weight:600; color:#4FB79A; cursor:pointer;">Add second tax</span>
               </div>
@@ -535,10 +453,10 @@
         </div>
 
         <div style="display:flex; align-items:center; gap:12px; padding-top:8px; flex-wrap:wrap;">
-          <button onClick="{{ saveProject }}" class="hb-primary" style="{{ saveStyle }}">{{ saveLabel }}</button>
-          <button onClick="{{ showDetail }}" class="hb-secondary" style="padding:12px 16px; background:#232019; color:#EFEAE0; border:1px solid #3d382e; border-radius:8px; font-family:inherit; font-size:14px; cursor:pointer;">{{ cancelLabel }}</button>
+          <button onClick="{{ saveProject }}" class="hb-primary" style="{{ saveStyle }}; white-space:nowrap;">{{ saveLabel }}</button>
+          <button onClick="{{ showDetail }}" class="hb-secondary" style="padding:12px 16px; background:#232019; color:#EFEAE0; border:1px solid #3D382E; border-radius:8px; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap;">{{ cancelLabel }}</button>
           <div style="flex:1;"></div>
-          <button class="hb-danger" style="padding:12px 16px; background:transparent; color:#E06661; border:1px solid #6e3634; border-radius:8px; font-family:inherit; font-size:14px; cursor:pointer;">Archive project</button>
+          <button onClick="{{ askArchive }}" class="hb-danger" style="padding:12px 16px; background:transparent; color:#E06661; border:1px solid #6E3634; border-radius:8px; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap;">Archive project</button>
         </div>
       </div>
     </div>
@@ -547,17 +465,16 @@
     </div>
   </div>
 
-  <sc-if value="{{ savedToast }}" hint-placeholder-val="{{ false }}">
-  <div style="position:fixed; left:50%; bottom:24px; transform:translateX(-50%); display:flex; align-items:center; gap:12px; background:#000; border:1px solid #322E26; border-radius:11px; padding:12px 16px; box-shadow:0 24px 60px -18px rgba(0,0,0,.9); z-index:60;">
-    <span style="color:#4FB79A; font-size:14px;">✓</span>
-    <span style="font-size:14px; color:#EFEAE0;">Project updated</span>
-  </div>
-  </sc-if>
+  <dc-import name="Toast" open="{{ savedToast }}" message="Project saved" on-close="{{ hideSavedToast }}" hint-size="0,0"></dc-import>
+
+  
+  <dc-import name="ConfirmDialog" open="{{ confirmArchive }}" title="Archive this project?" body="Time already tracked stays in reports and invoices. Nobody can log new time until it is reactivated." confirm-label="Archive project" danger="{{ false }}" icon="archive" on-confirm="{{ doArchive }}" on-cancel="{{ cancelArchive }}" hint-size="0,0"></dc-import>
+  <dc-import name="Toast" open="{{ archivedToast }}" message="Project archived" action-label="Undo" on-action="{{ undoArchive }}" on-close="{{ hideArchivedToast }}" hint-size="0,0"></dc-import>
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:1000}}">
 class Component extends DCLogic {
-  state = { page: 'detail', collapsed: false, menuOpen: false, actionsOpen: false, chart: 'progress',
+  state = { running: false, page: 'detail', collapsed: false, menuOpen: false, actionsOpen: false, chart: 'progress',
             tab: 'tasks', perm: 'admin', type: 'fixed', fee: 'single', notes: '',
             tags: ['open-source', 'infra'], tagDraft: '', budget: false, budgetKind: 'hours',
             warn: true, rate: false, dirty: false, savedToast: false };
@@ -567,19 +484,19 @@ class Component extends DCLogic {
   renderVals() {
     const s = this.state;
     const pseg = (on) => on
-      ? 'padding:8px 12px; background:#1F5C4D; color:#F6F2E9; border:none; border-radius:6px; font-family:inherit; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;'
-      : 'padding:8px 12px; background:transparent; color:#8f8676; border:none; border-radius:6px; font-family:inherit; font-size:12px; cursor:pointer; white-space:nowrap;';
+      ? 'padding:6px 12px; background:#1F5C4D; color:#F6F2E9; border:none; border-radius:6px; font-family:inherit; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;'
+      : 'padding:6px 12px; background:transparent; color:#8F8676; border:none; border-radius:6px; font-family:inherit; font-size:12px; cursor:pointer; white-space:nowrap;';
     const seg = (on) => on
       ? 'display:flex; align-items:center; gap:8px; padding:8px 12px; background:#1F5C4D; color:#F6F2E9; border:none; border-radius:6px; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer; white-space:nowrap;'
-      : 'display:flex; align-items:center; gap:8px; padding:8px 12px; background:transparent; color:#8f8676; border:none; border-radius:6px; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap;';
+      : 'display:flex; align-items:center; gap:8px; padding:8px 12px; background:transparent; color:#8F8676; border:none; border-radius:6px; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap;';
     const tab = (on) => on
       ? 'padding-bottom:12px; font-size:14px; font-weight:600; color:#F6F2E9; border-bottom:2px solid #4FB79A; cursor:pointer;'
       : 'padding-bottom:12px; font-size:14px; color:#A29C8D; cursor:pointer;';
-    const radio = (on) => 'width:18px; height:18px; border-radius:50%; border:1.5px solid ' + (on ? '#4FB79A' : '#5a5446') + '; display:inline-flex; align-items:center; justify-content:center; margin-top:2px;';
+    const radio = (on) => 'width:18px; height:18px; border-radius:50%; border:1.5px solid ' + (on ? '#4FB79A' : '#5A5446') + '; display:inline-flex; align-items:center; justify-content:center; margin-top:2px;';
     const dot = (on) => on ? 'width:8px; height:8px; border-radius:50%; background:#4FB79A; display:block;' : 'display:none;';
-    const track = (on) => 'width:40px; height:22px; border-radius:999px; background:' + (on ? '#1F5C4D' : '#2A2620') + '; border:1px solid ' + (on ? '#2a6d5c' : '#3d382e') + '; position:relative; display:inline-block; flex:0 0 40px; cursor:pointer;';
-    const knob = (on) => 'position:absolute; ' + (on ? 'right:3px' : 'left:3px') + '; top:2px; width:16px; height:16px; border-radius:50%; background:' + (on ? '#EFEAE0' : '#8f8676') + ';';
-    const card = (on) => 'padding:16px; border-radius:11px; cursor:pointer; background:' + (on ? 'rgba(31,92,77,.18)' : '#1A1813') + '; border:1px solid ' + (on ? '#2a6d5c' : '#322E26') + ';';
+    const track = (on) => 'width:40px; height:22px; border-radius:999px; background:' + (on ? '#1F5C4D' : '#2A2620') + '; border:1px solid ' + (on ? '#2A6D5C' : '#3D382E') + '; position:relative; display:inline-block; flex:0 0 40px; cursor:pointer;';
+    const knob = (on) => 'position:absolute; ' + (on ? 'right:3px' : 'left:3px') + '; top:2px; width:16px; height:16px; border-radius:50%; background:' + (on ? '#EFEAE0' : '#8F8676') + ';';
+    const card = (on) => 'padding:16px; border-radius:12px; cursor:pointer; background:' + (on ? 'rgba(31,92,77,.18)' : '#1A1813') + '; border:1px solid ' + (on ? '#2A6D5C' : '#322E26') + ';';
 
     // cumulative progress vs weekly hours, same 24 slots
     const weekly = [2.5,4,3,5.5,6,4.5,7,3.5,5,6.5,4,8,5.5,3,6,7.5,4.5,5,6,3.5,7,5.5,4,6.5];
@@ -589,7 +506,7 @@ class Component extends DCLogic {
       const isProgress = s.chart === 'progress';
       const pct = isProgress ? (acc / 130) * 100 : (h / 9) * 100;
       const last = i === weekly.length - 1;
-      return { style: 'height:' + pct.toFixed(1) + '%; border-radius:2px 2px 0 0; background:' + (last ? '#4FB79A' : isProgress ? '#2a6d5c' : '#1F5C4D') + ';' };
+      return { style: 'height:' + pct.toFixed(1) + '%; border-radius:2px 2px 0 0; background:' + (last ? '#4FB79A' : isProgress ? '#2A6D5C' : '#1F5C4D') + ';' };
     });
 
     const tasks = [
@@ -598,15 +515,24 @@ class Component extends DCLogic {
       { name: 'Programming', hours: '6.08', caret: '›', hoursColor: '#4FB79A' },
       { name: 'Project management', hours: '5.33', caret: '›', hoursColor: '#4FB79A' },
       { name: 'QA', hours: '4.89', caret: '›', hoursColor: '#4FB79A' },
-      { name: 'Graphic design', hours: '0.00', caret: '', hoursColor: '#5a5446' },
+      { name: 'Graphic design', hours: '0.00', caret: '', hoursColor: '#5A5446' },
     ];
 
+    const devGroups = [(() => { const o = [['Project detail', 'showDetail', s.page === 'detail'], ['Edit project', 'showEdit', s.page === 'edit']]; return { label: 'Page state', options: o.map(x => x[0]), value: (o.find(x => x[2]) || [''])[0], onChange: (v) => { const h = o.find(x => x[0] === v); if (h) this.renderVals()[h[1]](); } }; })()];
     return {
-      expanded: !s.collapsed,
-      collapsed: s.collapsed,
-      toggleRail: () => this.setState(x => ({ collapsed: !x.collapsed, menuOpen: false })),
-      menuOpen: s.menuOpen === true,
-      toggleMenu: () => this.setState(x => ({ menuOpen: !x.menuOpen })),
+      periodValue: s.period ?? '2026-07-06', setPeriod: (d) => this.setState({ period: d.toISOString() }),
+      projectActions: ['Pin', 'Duplicate', { sep: true }, { value: 'archive', label: 'Archive' }, { value: 'delete', label: 'Delete', danger: true }],
+      onProjectAction: (v) => { if (v === 'archive') this.setState({ confirmArchive: true }); },
+      budgetOn: s.budget === true,
+      devGroups,
+      hideSavedToast: () => this.setState({ savedToast: false }),
+      confirmArchive: this.state.confirmArchive === true,
+      askArchive: () => this.setState({ confirmArchive: true, menuOpen: false }),
+      cancelArchive: () => this.setState({ confirmArchive: false }),
+      doArchive: () => this.setState({ confirmArchive: false, archivedToast: true }),
+      archivedToast: this.state.archivedToast === true,
+      undoArchive: () => this.setState({ archivedToast: false }),
+      hideArchivedToast: () => this.setState({ archivedToast: false }),
 
       isDetail: s.page === 'detail',
       isEdit: s.page === 'edit',
@@ -665,8 +591,6 @@ class Component extends DCLogic {
 
       budgetOn: s.budget === true,
       toggleBudget: () => this.setState(x => ({ budget: !x.budget, dirty: true })),
-      budgetTrack: track(s.budget),
-      budgetKnob: knob(s.budget),
       bTotalHours: () => this.setState({ budgetKind: 'hours', dirty: true }),
       bTotalFees: () => this.setState({ budgetKind: 'fees', dirty: true }),
       bPerTask: () => this.setState({ budgetKind: 'task', dirty: true }),
@@ -682,7 +606,7 @@ class Component extends DCLogic {
         : 'Applied to every teammate on the project.',
       toggleWarn: () => this.setState(x => ({ warn: !x.warn, dirty: true })),
       warnBox: 'width:18px; height:18px; flex:0 0 18px; border-radius:4px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; '
-        + (s.warn ? 'background:#4FB79A; color:#0d211b; border:none;' : 'border:1.5px solid #5a5446; color:transparent;'),
+        + (s.warn ? 'background:#4FB79A; color:#0D211B; border:none;' : 'border:1.5px solid #5A5446; color:transparent;'),
       warnMark: s.warn ? '✓' : '',
 
       rateOpen: s.rate === true,
@@ -693,8 +617,8 @@ class Component extends DCLogic {
       cancelLabel: s.dirty ? 'Discard changes' : 'Cancel',
       saveLabel: s.dirty ? 'Update project' : 'No changes yet',
       saveStyle: s.dirty
-        ? 'padding:12px 20px; background:#4FB79A; color:#0d211b; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer;'
-        : 'padding:12px 20px; background:#232019; color:#5a5446; border:1px solid #322E26; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:not-allowed;',
+        ? 'padding:12px 20px; background:#4FB79A; color:#0D211B; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer;'
+        : 'padding:12px 20px; background:#232019; color:#5A5446; border:1px solid #322E26; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:not-allowed;',
       saveProject: () => {
         if (!this.state.dirty) return;
         this.setState({ dirty: false, savedToast: true, page: 'detail' });
@@ -707,4 +631,3 @@ class Component extends DCLogic {
 </script>
 </body>
 </html>
-

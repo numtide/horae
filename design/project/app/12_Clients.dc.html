@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#100F0C; }
+  * { box-sizing:border-box; }
+  button, .hm-row, .hm-chip, .hm-ws { transition: background .14s ease, transform .08s ease, box-shadow .16s ease, border-color .14s ease, color .14s ease; }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(79,183,154,.35) !important; }
+  button:disabled { cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+  .hb-primary:hover:not(:disabled) { background:#63C9AC !important; box-shadow:0 6px 18px -8px rgba(79,183,154,.65) !important; }
+  .hb-solid:hover:not(:disabled) { background:#27705E !important; box-shadow:0 6px 18px -8px rgba(31,92,77,.7) !important; }
+  .hb-accent:hover:not(:disabled) { background:#E5AB52 !important; box-shadow:0 6px 18px -8px rgba(217,154,60,.6) !important; }
+  .hb-secondary:hover:not(:disabled) { background:#2C2820 !important; border-color:#5A5446 !important; }
+  .hb-ghost:hover:not(:disabled) { background:rgba(79,183,154,.10) !important; color:#6ECAB0 !important; }
+  .hb-danger:hover:not(:disabled) { background:rgba(224,102,97,.12) !important; border-color:#8D4441 !important; color:#EC8683 !important; }
+  .hb-icon:hover:not(:disabled) { background:#2C2820 !important; border-color:#5A5446 !important; color:#EFEAE0 !important; }
+  .hb-caret:hover:not(:disabled) { background:#1B5347 !important; }
+  .hb-seg:not(.hb-seg-on):hover:not(:disabled) { background:#232019 !important; color:#EFEAE0 !important; }
+  .hm-row:hover { background:#2A2620 !important; }
+  .hm-row:hover .hm-ico { color:#EFEAE0 !important; }
+  .hm-danger:hover { background:rgba(224,102,97,.12) !important; color:#EC8683 !important; }
+  .hm-ws:hover { background:#2A2620 !important; }
+  .hm-chip:hover { background:#2C2820 !important; border-color:#5A5446 !important; }
+  ::selection { background:#1F5C4D; color:#F6F2E9; }
+  ::-moz-selection { background:#1F5C4D; color:#F6F2E9; }
+  * { scrollbar-width: thin; scrollbar-color: #3D382E transparent; }
+  ::-webkit-scrollbar { width:10px; height:10px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:#3D382E; border-radius:999px; border:2px solid transparent; background-clip:content-box; }
+  ::-webkit-scrollbar-thumb:hover { background:#5A5446; background-clip:content-box; }
+  ::-webkit-scrollbar-corner { background:transparent; }
+  .hb-seg:hover { background:#232019; color:#EFEAE0; }
+  .hz-bulk:hover { background:#2A2620; }
+  .hf { transition: border-color .14s ease, background .14s ease, box-shadow .16s ease; width:100%; padding:12px 12px; background:#100F0C; border:1px solid #3D382E; border-radius:8px; color:#EFEAE0; font-family:'Instrument Sans',sans-serif; font-size:14px; }
+  .hf::placeholder { color:#6A6353; }
+  .hf:hover:not(:focus) { border-color:#5A5446; background:#161510; }
+  .hf:focus { outline:none; border-color:#4FB79A; box-shadow:0 0 0 3px rgba(79,183,154,.18); }
+  a { color:#4FB79A; text-decoration:none; }
+  a:hover { color:#6ECAB0; }
+  .hz-opt { transition: box-shadow .14s ease; }
+  .hz-opt:hover { box-shadow: inset 0 0 0 999px rgba(239,234,224,.05); }
+  .hz-link { transition: color .14s ease; }
+  .hz-link:hover { color:#6ECAB0 !important; }
+  .hz-link-muted { transition: color .14s ease; }
+  .hz-link-muted:hover { color:#EFEAE0 !important; }
+  .hz-row-link { transition: color .14s ease; }
+  .hz-row-link:hover { color:#4FB79A !important; }
+  .hz-nav { transition: background .14s ease, color .14s ease; }
+  .hz-nav:hover { background:#232019 !important; color:#EFEAE0 !important; }
+  .hz-nav:hover .hm-ico { color:#EFEAE0 !important; }
+  @media (max-width: 1320px) {
+    .hz-rail { width:216px !important; flex-basis:216px !important; }
+    .hz-split { gap:32px !important; padding-left:24px !important; padding-right:24px !important; }
+    .hz-pad { padding-left:24px !important; padding-right:24px !important; }
+  }
+  @media (max-width: 1180px) {
+    .hz-split { flex-direction:column !important; gap:24px !important; }
+    .hz-subnav { width:100% !important; flex:none !important; }
+    .hz-subnav > div:first-child { max-width:420px; }
+    .hz-subnav > div:not(:first-child) { flex-direction:row !important; flex-wrap:wrap !important; gap:8px !important; }
+  }
+  @media (max-width: 900px) {
+    .hz-rail { display:none !important; }
+    .hz-shell { height:auto !important; min-height:100vh !important; }
+    .hz-pad { padding-left:20px !important; padding-right:20px !important; }
+  }
+</style>
+</helmet>
+
+<div class="hz-shell" style="display:flex; height:100vh; background:#100F0C; color:#EFEAE0; font-family:'Instrument Sans',sans-serif; overflow:hidden;">
+  <dc-import name="Rail" active="clients" hint-size="264px,100%" style="display:flex; flex:0 0 auto; align-self:stretch;"></dc-import>
+
+  <!-- ================= MAIN ================= -->
+  <div style="flex:1; display:flex; flex-direction:column; min-width:0;">
+    <dc-import name="DevBar" label="Page state" options="{{ devOptions }}" value="{{ devValue }}" on-change="{{ setDev }}" hint-size="100%,52px" style="display:block;"></dc-import>
+
+    <div class="hz-pad" style="display:flex; align-items:center; gap:16px; row-gap:12px; flex-wrap:wrap; padding:24px 40px 0;">
+      <h1 style="font-family:'Newsreader',serif; font-size:34px; font-weight:600; color:#F6F2E9; margin:0; letter-spacing:-.015em;">Clients</h1>
+      <div style="flex:1 1 0; min-width:16px;"></div>
+      <button class="hb-primary" onClick="{{ openAdd }}" style="padding:8px 16px; background:#4FB79A; color:#0D211B; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap;">New client</button>
+      <dc-import name="Dropdown" mode="actions" label="Actions" heading="{{ bulkCountLabel }}" items="{{ bulkItems }}" align="right" width="236" surface="#232019" hint-size="120px,40px"></dc-import>
+      <a href="10_Importers.dc.html" class="hb-secondary" style="padding:8px 16px; background:#232019; border:1px solid #3D382E; border-radius:8px; color:#EFEAE0; font-size:14px;">Import</a>
+      <div style="display:flex; align-items:center; gap:8px; flex:0 1 300px; min-width:220px; padding:0 12px; height:40px; background:#1A1813; border:1px solid #322E26; border-radius:8px;">
+        <span style="display:inline-flex; color:#6A6353;"><i class="ph ph-magnifying-glass" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span>
+        <input value="{{ query }}" onChange="{{ setQuery }}" placeholder="Search clients or contacts" style="flex:1; min-width:0; background:transparent; border:none; outline:none; color:#EFEAE0; font-family:inherit; font-size:14px;" />
+      </div>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:16px; padding:20px 40px 0;">
+      <dc-import name="Dropdown" items="{{ scopeItems }}" value="{{ scopeValue }}" on-select="{{ pickScope }}" width="240" hint-size="200px,40px"></dc-import>
+      <div style="flex:1;"></div>
+      <dc-import name="Dropdown" items="{{ currencyItems }}" value="{{ currencyValue }}" on-select="{{ pickCurrency }}" placeholder="Currency" align="right" width="200" hint-size="140px,40px"></dc-import>
+    </div>
+
+    <div style="padding:20px 40px 40px; flex:1; overflow:auto; min-height:0;">
+      <sc-if value="{{ hasClients }}" hint-placeholder-val="{{ true }}">
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-bottom:20px;">
+        <div style="background:#1A1813; border:1px solid #322E26; border-radius:12px; padding:16px 20px;"><div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353;">Active clients</div><div style="font-family:'IBM Plex Mono',monospace; font-size:28px; color:#F6F2E9; margin-top:8px;">6</div><div style="font-size:12px; color:#8F8676; margin-top:4px;">1 archived</div></div>
+        <div style="background:#1A1813; border:1px solid #322E26; border-radius:12px; padding:16px 20px;"><div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353;">Unbilled time</div><div style="font-family:'IBM Plex Mono',monospace; font-size:28px; color:#E0B45F; margin-top:8px;">€18,575.00</div><div style="font-size:12px; color:#8F8676; margin-top:4px;">across 5 clients · <a href="12_Client Detail.dc.html">review</a></div></div>
+        <div style="background:#1A1813; border:1px solid #322E26; border-radius:12px; padding:16px 20px;"><div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353;">Billed this year</div><div style="font-family:'IBM Plex Mono',monospace; font-size:28px; color:#F6F2E9; margin-top:8px;">€224,590.00</div><div style="font-size:12px; color:#8F8676; margin-top:4px;">+12% vs 2025</div></div>
+        <div style="background:#1A1813; border:1px solid #322E26; border-radius:12px; padding:16px 20px;"><div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353;">Hours tracked</div><div style="font-family:'IBM Plex Mono',monospace; font-size:28px; color:#F6F2E9; margin-top:8px;">1,901:00</div><div style="font-size:12px; color:#8F8676; margin-top:4px;">since Jan 2026</div></div>
+      </div>
+      <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; overflow:hidden; overflow-x:auto;">
+        <div style="display:grid; min-width:960px; grid-template-columns:34px minmax(260px,1fr) 110px 110px 150px 170px 120px; align-items:center; padding:12px 20px; border-bottom:1px solid #322E26; font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353;">
+          <span onClick="{{ toggleAll }}" class="hz-opt" style="{{ allBox }}">{{ allMark }}</span><span>Client</span><span style="text-align:right;">Currency</span><span style="text-align:right;">Projects</span><span style="text-align:right;">Hours</span><span style="text-align:right;">Unbilled</span><span></span>
+        </div>
+        <div class="hz-row-hover" style="display:grid; min-width:960px; grid-template-columns:34px minmax(260px,1fr) 110px 110px 150px 170px 120px; align-items:center; padding:16px 20px; border-bottom:1px solid #262219;">
+          <span onClick="{{ toggleRow0 }}" class="hz-opt" style="{{ box0 }}">{{ mark0 }}</span>
+          <div style="display:flex; align-items:center; gap:12px; min-width:0;"><a href="12_Client Detail.dc.html" class="hz-row-link" style="font-size:14px; font-weight:600; color:#F6F2E9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Meridian Health</a></div>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#A29C8D;">CHF</span>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">2<span style="color:#6A6353;"> / 3</span></span>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">412:30</span>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#6A6353;">CHF 5,300.00</span>
+          <div style="text-align:right; position:relative;"><dc-import name="Dropdown" mode="actions" label="Actions" compact="{{ true }}" items="{{ rowActions }}" align="right" width="170" hint-size="80px,34px"></dc-import></div>
+        </div>
+        <div class="hz-row-hover" style="display:grid; min-width:960px; grid-template-columns:34px minmax(260px,1fr) 110px 110px 150px 170px 120px; align-items:center; padding:16px 20px; border-bottom:1px solid #262219;">
+          <span onClick="{{ toggleRow1 }}" class="hz-opt" style="{{ box1 }}">{{ mark1 }}</span>
+          <div style="display:flex; align-items:center; gap:12px; min-width:0;"><a href="12_Client Detail.dc.html" class="hz-row-link" style="font-size:14px; font-weight:600; color:#F6F2E9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Rún Collective</a><span style="display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:600; background:#232019; color:#A29C8D; border:1px solid #3D382E; white-space:nowrap;">Non-billable</span></div>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#A29C8D;">EUR</span>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">1<span style="color:#6A6353;"> / 1</span></span>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">96:00</span>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#6A6353;">€0.00</span>
+          <div style="text-align:right; position:relative;"><dc-import name="Dropdown" mode="actions" label="Actions" compact="{{ true }}" items="{{ rowActions }}" align="right" width="170" hint-size="80px,34px"></dc-import></div>
+        </div>
+        <div class="hz-row-hover" style="display:grid; min-width:960px; grid-template-columns:34px minmax(260px,1fr) 110px 110px 150px 170px 120px; align-items:center; padding:16px 20px; border-bottom:1px solid #262219;">
+          <span onClick="{{ toggleRow2 }}" class="hz-opt" style="{{ box2 }}">{{ mark2 }}</span>
+          <div style="display:flex; align-items:center; gap:12px; min-width:0;"><a href="12_Client Detail.dc.html" class="hz-row-link" style="font-size:14px; font-weight:600; color:#F6F2E9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Tidewell / HarborDesk</a></div>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#A29C8D;">EUR</span>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">1<span style="color:#6A6353;"> / 2</span></span>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">233:15</span>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#6A6353;">€2,140.00</span>
+          <div style="text-align:right; position:relative;"><dc-import name="Dropdown" mode="actions" label="Actions" compact="{{ true }}" items="{{ rowActions }}" align="right" width="170" hint-size="80px,34px"></dc-import></div>
+        </div>
+        <div class="hz-row-hover" style="display:grid; min-width:960px; grid-template-columns:34px minmax(260px,1fr) 110px 110px 150px 170px 120px; align-items:center; padding:16px 20px; border-bottom:1px solid #262219;">
+          <span onClick="{{ toggleRow3 }}" class="hz-opt" style="{{ box3 }}">{{ mark3 }}</span>
+          <div style="display:flex; align-items:center; gap:12px; min-width:0;"><a href="12_Client Detail.dc.html" class="hz-row-link" style="font-size:14px; font-weight:600; color:#F6F2E9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Casa Vireo / Larkfield / Guild</a></div>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#A29C8D;">EUR</span>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">3<span style="color:#6A6353;"> / 4</span></span>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">618:45</span>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#6A6353;">€9,860.00</span>
+          <div style="text-align:right; position:relative;"><dc-import name="Dropdown" mode="actions" label="Actions" compact="{{ true }}" items="{{ rowActions }}" align="right" width="170" hint-size="80px,34px"></dc-import></div>
+        </div>
+        <div class="hz-row-hover" style="display:grid; min-width:960px; grid-template-columns:34px minmax(260px,1fr) 110px 110px 150px 170px 120px; align-items:center; padding:16px 20px; border-bottom:1px solid #262219;">
+          <span onClick="{{ toggleRow4 }}" class="hz-opt" style="{{ box4 }}">{{ mark4 }}</span>
+          <div style="display:flex; align-items:center; gap:12px; min-width:0;"><a href="12_Client Detail.dc.html" class="hz-row-link" style="font-size:14px; font-weight:600; color:#F6F2E9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Solvind AB</a></div>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#A29C8D;">EUR / USD</span>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">2<span style="color:#6A6353;"> / 3</span></span>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">305:00</span>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#E0B45F;">€1,275.00</span>
+          <div style="text-align:right; position:relative;"><dc-import name="Dropdown" mode="actions" label="Actions" compact="{{ true }}" items="{{ rowActions }}" align="right" width="170" hint-size="80px,34px"></dc-import></div>
+        </div>
+        <div class="hz-row-hover" style="display:grid; min-width:960px; grid-template-columns:34px minmax(260px,1fr) 110px 110px 150px 170px 120px; align-items:center; padding:16px 20px; border-bottom:1px solid #262219;">
+          <span onClick="{{ toggleRow5 }}" class="hz-opt" style="{{ box5 }}">{{ mark5 }}</span>
+          <div style="display:flex; align-items:center; gap:12px; min-width:0;"><a href="12_Client Detail.dc.html" class="hz-row-link" style="font-size:14px; font-weight:600; color:#F6F2E9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Northmoor</a></div>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#A29C8D;">EUR</span>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">1<span style="color:#6A6353;"> / 1</span></span>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">48:00</span>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#6A6353;">€0.00</span>
+          <div style="text-align:right; position:relative;"><dc-import name="Dropdown" mode="actions" label="Actions" compact="{{ true }}" items="{{ rowActions }}" align="right" width="170" hint-size="80px,34px"></dc-import></div>
+        </div>
+        <div class="hz-row-hover" style="display:grid; min-width:960px; grid-template-columns:34px minmax(260px,1fr) 110px 110px 150px 170px 120px; align-items:center; padding:16px 20px; ">
+          <span onClick="{{ toggleRow6 }}" class="hz-opt" style="{{ box6 }}">{{ mark6 }}</span>
+          <div style="display:flex; align-items:center; gap:12px; min-width:0;"><a href="12_Client Detail.dc.html" class="hz-row-link" style="font-size:14px; font-weight:600; color:#F6F2E9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Pelham & Roe</a><span style="display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:600; background:#232019; color:#A29C8D; border:1px solid #3D382E; white-space:nowrap;">Archived</span></div>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#A29C8D;">GBP</span>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">0<span style="color:#6A6353;"> / 2</span></span>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">187:30</span>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#6A6353;">£0.00</span>
+          <div style="text-align:right; position:relative;"><dc-import name="Dropdown" mode="actions" label="Actions" compact="{{ true }}" items="{{ rowActions }}" align="right" width="170" hint-size="80px,34px"></dc-import></div>
+        </div>
+      </div>
+      </sc-if>
+      <sc-if value="{{ noClients }}" hint-placeholder-val="{{ false }}">
+      <dc-import name="EmptyState" icon="buildings" title="No clients yet" body="Clients group projects, set the billing currency and receive invoices. Add your first one or import from Harvest." action-label="New client" on-action="{{ openAdd }}" link-label="Import from Harvest →" link-href="10_Importers.dc.html" hint-size="100%,320px" style="display:block;"></dc-import>
+      </sc-if>
+    </div>
+
+    <!-- NEW CLIENT SHEET -->
+    <sc-if value="{{ addOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeAdd }}" style="position:fixed; inset:0; background:rgba(8,7,5,.68); display:flex; align-items:flex-start; justify-content:center; padding-top:64px; z-index:60;">
+      <div onClick="{{ stopProp }}" style="width:560px; max-width:92vw; background:#1A1813; border:1px solid #322E26; border-radius:16px; box-shadow:0 24px 60px -18px rgba(0,0,0,.8);">
+        <div style="padding:16px 24px; border-bottom:1px solid #322E26; display:flex; align-items:center; gap:12px;"><span style="font-family:'Newsreader',serif; font-size:18px; font-weight:600; color:#F6F2E9;">New client</span></div>
+        <div style="padding:24px; display:flex; flex-direction:column; gap:16px;">
+          <div><div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#7C7565; margin-bottom:8px;">Client name</div><input class="hf" placeholder="Acme Studio" /></div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <div><div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#7C7565; margin-bottom:8px;">Currency</div><dc-import name="Dropdown" items="{{ newCurrencyItems }}" value="{{ newCurrency }}" on-select="{{ setNewCurrency }}" surface="#100F0C" fill="{{ true }}" hint-size="100%,44px" style="display:block;"></dc-import></div>
+            <div><div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#7C7565; margin-bottom:8px;">Default rate</div><input class="hf" placeholder="85.00" style="font-family:'IBM Plex Mono',monospace;" /></div>
+          </div>
+          <div><div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#7C7565; margin-bottom:8px;">Billing address</div><textarea class="hf" rows="{{ 3 }}" placeholder="Street, city, country — appears on invoices" style="resize:vertical; line-height:1.5;"></textarea></div>
+          <div style="display:flex; align-items:center; gap:12px; margin-top:4px;">
+            <button class="hb-primary" onClick="{{ saveAdd }}" style="padding:12px 20px; background:#4FB79A; color:#0D211B; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap;">Create client</button>
+            <button class="hb-secondary" onClick="{{ closeAdd }}" style="padding:12px 20px; background:#232019; color:#EFEAE0; border:1px solid #3D382E; border-radius:8px; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap;">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+    <dc-import name="Toast" open="{{ savedToast }}" message="Client created" on-close="{{ hideSaved }}" hint-size="0,0"></dc-import>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:1000}}">
+class Component extends DCLogic {
+  state = { empty: false, addOpen: false, scope: 'Active clients (6)', currency: 'Currency', query: '' };
+  renderVals() {
+    const s = this.state;
+    const box = (on) => 'width:16px; height:16px; border-radius:4px; border:1px solid ' + (on ? '#4FB79A' : '#5A5446') + '; background:' + (on ? '#4FB79A' : 'transparent') + '; color:#0D211B; font-size:12px; line-height:14px; text-align:center; cursor:pointer; display:inline-block;';
+    const selected = ["row0","row1","row2","row3","row4","row5","row6"].filter(k => s[k]).length;
+    return {
+      devOptions: ['Client list', 'No clients yet'], devValue: s.empty ? 'No clients yet' : 'Client list', setDev: (v) => this.setState({ empty: v === 'No clients yet' }),
+      hasClients: !s.empty, noClients: s.empty,
+      query: s.query, setQuery: (e) => this.setState({ query: e.target.value }),
+      scopeItems: ['Active clients (6)', 'Archived clients (1)', 'All clients (7)'], scopeValue: s.scope, pickScope: (v) => this.setState({ scope: v }),
+      currencyItems: [{ value: 'Currency', label: 'All currencies' }, 'EUR', 'CHF', 'USD', 'GBP'], currencyValue: s.currency, pickCurrency: (v) => this.setState({ currency: v }),
+      bulkCountLabel: selected ? selected + ' selected' : 'Select clients first',
+      bulkItems: (() => { const en = selected > 0; const it = (l) => ({ value: l, label: l, disabled: !en }); return [it('Set currency'), it('Set default rate'), { sep: true }, it('Archive clients'), it('Reactivate clients'), { sep: true }, { value: 'export', label: 'Export client list' }]; })(),
+      rowActions: [{ value: 'edit', label: 'Edit' }, { value: 'invoice', label: 'New invoice', disabled: true }, { sep: true }, { value: 'archive', label: 'Archive' }, { value: 'delete', label: 'Delete', danger: true }],
+      toggleAll: () => { const all = selected === 7; const n = {}; ["row0","row1","row2","row3","row4","row5","row6"].forEach(k => n[k] = !all); this.setState(n); }, allBox: box(selected === 7), allMark: selected === 7 ? '✓' : (selected ? '–' : ''),
+      toggleRow0: () => this.setState(x => ({ ['row0']: !x['row0'] })), box0: box(!!s['row0']), mark0: s['row0'] ? '✓' : '',
+      toggleRow1: () => this.setState(x => ({ ['row1']: !x['row1'] })), box1: box(!!s['row1']), mark1: s['row1'] ? '✓' : '',
+      toggleRow2: () => this.setState(x => ({ ['row2']: !x['row2'] })), box2: box(!!s['row2']), mark2: s['row2'] ? '✓' : '',
+      toggleRow3: () => this.setState(x => ({ ['row3']: !x['row3'] })), box3: box(!!s['row3']), mark3: s['row3'] ? '✓' : '',
+      toggleRow4: () => this.setState(x => ({ ['row4']: !x['row4'] })), box4: box(!!s['row4']), mark4: s['row4'] ? '✓' : '',
+      toggleRow5: () => this.setState(x => ({ ['row5']: !x['row5'] })), box5: box(!!s['row5']), mark5: s['row5'] ? '✓' : '',
+      toggleRow6: () => this.setState(x => ({ ['row6']: !x['row6'] })), box6: box(!!s['row6']), mark6: s['row6'] ? '✓' : '',
+      addOpen: s.addOpen, openAdd: () => this.setState({ addOpen: true }), closeAdd: () => this.setState({ addOpen: false }), stopProp: (e) => e.stopPropagation(),
+      saveAdd: () => this.setState({ addOpen: false, savedToast: true, empty: false }),
+      newCurrencyItems: ['EUR', 'CHF', 'USD', 'GBP'], newCurrency: s.newCurrency ?? 'EUR', setNewCurrency: (v) => this.setState({ newCurrency: v }),
+      savedToast: s.savedToast === true, hideSaved: () => this.setState({ savedToast: false }),
+    };
+  }
+}
+</script>
+</body>
+</html>

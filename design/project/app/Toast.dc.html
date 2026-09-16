@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#100F0C; }
+  .hz-link:hover { color:#6ECAB0 !important; } .hz-link-muted:hover { color:#EFEAE0 !important; }
+</style>
+</helmet>
+<sc-if value="{{ open }}" hint-placeholder-val="{{ true }}">
+<div style="position:fixed; left:50%; bottom:28px; transform:translateX(-50%); display:flex; align-items:center; gap:12px; background:#000000; border:1px solid #322E26; border-radius:12px; padding:12px 16px; box-shadow:0 24px 60px -18px rgba(0,0,0,.8); z-index:60; font-family:'Instrument Sans',sans-serif; max-width:92vw;">
+  <span style="{{ iconStyle }}"><i class="{{ iconCls }}" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span>
+  <span style="font-size:14px; color:#EFEAE0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ message }}</span>
+  <sc-if value="{{ hasAction }}" hint-placeholder-val="{{ false }}">
+  <span onClick="{{ onAction }}" class="hz-link" style="font-size:14px; font-weight:600; color:#4FB79A; cursor:pointer; white-space:nowrap;">{{ actionLabel }}</span>
+  </sc-if>
+  <span onClick="{{ onClose }}" class="hz-link-muted" style="display:inline-flex; color:#8F8676; cursor:pointer; margin-left:4px;"><i class="ph ph-x" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span>
+</div>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:480,&quot;height&quot;:120},&quot;open&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;message&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Credentials saved&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;kind&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;success&quot;,&quot;info&quot;,&quot;warning&quot;,&quot;error&quot;],&quot;default&quot;:&quot;success&quot;,&quot;tsType&quot;:&quot;'success'|'info'|'warning'|'error'&quot;},&quot;actionLabel&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;onAction&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;},&quot;onClose&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props;
+    const kind = p.kind ?? 'success';
+    const icon = { success: 'check', info: 'info', warning: 'warning', error: 'x-circle' }[kind] || 'check';
+    const color = { success: '#4FB79A', info: '#A29C8D', warning: '#E0B45F', error: '#EC8683' }[kind] || '#4FB79A';
+    return {
+      open: p.open ?? true, message: p.message ?? 'Saved',
+      iconCls: 'ph ph-' + icon, iconStyle: 'display:inline-flex; color:' + color + ';',
+      hasAction: !!p.actionLabel, actionLabel: p.actionLabel ?? '',
+      onAction: p.onAction ?? (() => {}), onClose: p.onClose ?? (() => {}),
+    };
+  }
+}
+</script>
+</body>
+</html>

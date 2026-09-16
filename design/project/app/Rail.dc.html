@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#100F0C; }
+  * { box-sizing:border-box; }
+  button, .hm-row, .hm-chip, .hm-ws, .hz-nav, .hz-opt { transition: background .14s ease, transform .08s ease, box-shadow .16s ease, border-color .14s ease, color .14s ease; }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(79,183,154,.35) !important; }
+  .hb-primary:hover:not(:disabled) { background:#63C9AC !important; box-shadow:0 6px 18px -8px rgba(79,183,154,.65) !important; }
+  .hb-secondary:hover:not(:disabled) { background:#2C2820 !important; border-color:#5A5446 !important; }
+  .hb-icon:hover:not(:disabled) { background:#2C2820 !important; border-color:#5A5446 !important; color:#EFEAE0 !important; }
+  .hm-row:hover { background:#2A2620 !important; }
+  .hm-row:hover .hm-ico { color:#EFEAE0 !important; }
+  .hm-danger:hover { background:rgba(224,102,97,.12) !important; color:#EC8683 !important; }
+  .hm-ws:hover { background:#2A2620 !important; }
+  .hm-chip:hover { background:#2C2820 !important; border-color:#5A5446 !important; }
+  .hz-nav:hover { background:#232019 !important; color:#EFEAE0 !important; }
+  .hz-nav:hover .hm-ico { color:#EFEAE0 !important; }
+  .hz-opt:hover { box-shadow: inset 0 0 0 999px rgba(239,234,224,.05); }
+  .hz-link-muted { transition: color .14s ease; } .hz-link-muted:hover { color:#EFEAE0 !important; }
+  a { color:#4FB79A; text-decoration:none; }
+  a:hover { color:#6ECAB0; }
+  input.hf, textarea.hf { width:100%; padding:12px 12px; background:#100F0C; border:1px solid #3D382E; border-radius:8px; font-family:'Instrument Sans',sans-serif; font-size:14px; color:#EFEAE0; outline:none; transition: border-color .14s ease, box-shadow .16s ease; }
+  input.hf::placeholder, textarea.hf::placeholder { color:#5A5446; }
+  input.hf:focus, textarea.hf:focus { border-color:#4FB79A; box-shadow:0 0 0 3px rgba(79,183,154,.18); }
+  @media (max-width: 1320px) { .hz-rail { width:216px !important; flex-basis:216px !important; } }
+  @media (max-width: 900px) { .hz-rail { display:none !important; } }
+</style>
+</helmet>
+
+<div style="display:flex; height:100%; font-family:'Instrument Sans',sans-serif; color:#EFEAE0;">
+
+<!-- ================= COMPACT RAIL ================= -->
+<sc-if value="{{ collapsed }}" hint-placeholder-val="{{ false }}">
+<div style="width:76px; flex:0 0 76px; height:100%; background:#1A1813; border-right:1px solid #322E26; display:flex; flex-direction:column; align-items:center; padding:20px 12px;">
+  <div style="position:relative; width:34px; height:34px; flex:0 0 34px; border-radius:8px; background:#1F5C4D; overflow:hidden; margin-bottom:8px;">
+    <div style="position:absolute; left:50%; top:5px; width:1.5px; height:6px; background:#E7C079; transform:translateX(-50%);"></div>
+    <div style="position:absolute; left:50%; bottom:8px; width:16px; height:16px; border-radius:50%; background:#D99A3C; transform:translateX(-50%);"></div>
+    <div style="position:absolute; left:0; right:0; bottom:0; height:10px; background:#164034;"></div>
+    <div style="position:absolute; left:0; right:0; bottom:10px; height:1px; background:#0F3D33;"></div>
+  </div>
+  <button class="hb-icon" onClick="{{ toggleRail }}" title="Expand" style="width:30px; height:30px; background:#232019; border:1px solid #3D382E; border-radius:8px; color:#A29C8D; cursor:pointer; margin-bottom:20px; font-size:14px; white-space:nowrap;">»</button>
+  <sc-if value="{{ running }}" hint-placeholder-val="{{ false }}">
+  <button onClick="{{ stopTimer }}" title="Stop timer · 1:24:07 · Atlas Platform" style="width:44px; height:44px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; background:rgba(79,183,154,.12); border:1px solid #2A6D5C; border-radius:12px; cursor:pointer; margin-bottom:20px; white-space:nowrap;">
+    <span style="width:10px; height:10px; border-radius:2px; background:#E06661; display:block;"></span>
+    <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#4FB79A;">1:24</span>
+  </button>
+  </sc-if>
+  <sc-if value="{{ notRunning }}" hint-placeholder-val="{{ true }}">
+  <button onClick="{{ openTimer }}" class="hb-primary" title="Start timer" style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; background:#4FB79A; color:#0D211B; border:none; border-radius:12px; cursor:pointer; margin-bottom:20px; white-space:nowrap;"><i class="ph-bold ph-timer" aria-hidden="true" style="font-size:18px; line-height:1; display:block;"></i></button>
+  </sc-if>
+  <div style="display:flex; flex-direction:column; gap:8px; align-items:center;">
+    <a href="04_Timesheet.dc.html" class="{{ tsCompactCls }}" title="Timesheet" style="{{ tsCompact }}"><i class="ph ph-clock" aria-hidden="true" style="font-size:18px; line-height:1; display:block;"></i></a>
+    <a href="05_Projects.dc.html" class="{{ prCompactCls }}" title="Projects" style="{{ prCompact }}"><i class="ph ph-briefcase" aria-hidden="true" style="font-size:18px; line-height:1; display:block;"></i></a>
+    <a href="12_Clients.dc.html" class="{{ clCompactCls }}" title="Clients" style="{{ clCompact }}"><i class="ph ph-buildings" aria-hidden="true" style="font-size:18px; line-height:1; display:block;"></i></a>
+    <a href="06_Approvals.dc.html" class="{{ apCompactCls }}" title="Approvals" style="{{ apCompact }}"><i class="ph ph-check-circle" aria-hidden="true" style="font-size:18px; line-height:1; display:block;"></i></a>
+    <a href="07_Reports.dc.html" class="{{ rpCompactCls }}" title="Reports" style="{{ rpCompact }}"><i class="ph ph-chart-bar" aria-hidden="true" style="font-size:18px; line-height:1; display:block;"></i></a>
+  </div>
+  <div style="flex:1;"></div>
+  <div title="Mira Kovač" style="width:38px; height:38px; border-radius:50%; background:#1F5C4D; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:16px; line-height:1; padding-top:2px; color:#EFEAE0;">M</div>
+</div>
+</sc-if>
+
+<!-- ================= EXPANDED RAIL ================= -->
+<sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}">
+<div class="hz-rail" style="width:264px; flex:0 0 264px; height:100%; background:#1A1813; border-right:1px solid #322E26; display:flex; flex-direction:column; padding:20px 16px;">
+  <div style="display:flex; align-items:center; gap:12px; padding:4px 8px 20px;">
+    <div style="position:relative; width:34px; height:34px; flex:0 0 34px; border-radius:8px; background:#1F5C4D; overflow:hidden;">
+      <div style="position:absolute; left:50%; top:5px; width:1.5px; height:6px; background:#E7C079; transform:translateX(-50%);"></div>
+      <div style="position:absolute; left:50%; bottom:8px; width:16px; height:16px; border-radius:50%; background:#D99A3C; transform:translateX(-50%);"></div>
+      <div style="position:absolute; left:0; right:0; bottom:0; height:10px; background:#164034;"></div>
+      <div style="position:absolute; left:0; right:0; bottom:10px; height:1px; background:#0F3D33;"></div>
+    </div>
+    <div style="display:flex; align-items:baseline;">
+      <span style="font-family:'Newsreader',serif; font-size:24px; font-weight:600; letter-spacing:-.01em; color:#F6F2E9;">Horae</span>
+      <span style="width:5px; height:5px; border-radius:50%; background:#D99A3C; margin-left:4px; align-self:flex-end; margin-bottom:4px;"></span>
+    </div>
+    <div style="flex:1;"></div>
+    <button class="hb-secondary" onClick="{{ toggleRail }}" title="Collapse" style="width:30px; height:30px; background:transparent; border:1px solid #322E26; border-radius:8px; color:#8F8676; cursor:pointer; font-size:14px; white-space:nowrap;">«</button>
+  </div>
+
+  <sc-if value="{{ running }}" hint-placeholder-val="{{ false }}">
+  <div style="display:flex; align-items:center; gap:12px; padding:12px; background:rgba(79,183,154,.12); border:1px solid #2A6D5C; border-radius:8px; margin-bottom:24px; width:100%;">
+    <span style="width:8px; height:8px; flex:0 0 8px; border-radius:999px; background:#4FB79A;"></span>
+    <div style="min-width:0; flex:1;">
+      <div style="font-family:'IBM Plex Mono',monospace; font-size:18px; font-weight:600; color:#F6F2E9;">1:24:07</div>
+      <div style="font-size:12px; color:#8F8676; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Atlas Platform · DevOps</div>
+    </div>
+    <button onClick="{{ stopTimer }}" class="hb-icon" title="Stop" style="width:30px; height:30px; flex:0 0 30px; background:#232019; border:1px solid #3D382E; border-radius:6px; cursor:pointer; display:flex; align-items:center; justify-content:center; white-space:nowrap;"><span style="width:10px; height:10px; border-radius:2px; background:#E06661; display:block;"></span></button>
+  </div>
+  </sc-if>
+  <sc-if value="{{ notRunning }}" hint-placeholder-val="{{ true }}">
+  <div style="margin-bottom:24px;">
+    <button onClick="{{ openTimer }}" class="hb-primary" style="width:100%; display:flex; align-items:center; justify-content:center; gap:8px; padding:8px 12px; background:#4FB79A; color:#0D211B; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap;">
+      <i class="ph-bold ph-timer" aria-hidden="true" style="font-size:14px; line-height:1; display:block;"></i>
+      Start timer
+    </button>
+  </div>
+  </sc-if>
+
+  <div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353; padding:0 8px 8px;">Track</div>
+  <div style="display:flex; flex-direction:column; gap:4px; margin-bottom:20px;">
+    <a href="04_Timesheet.dc.html" class="{{ tsCls }}" style="{{ tsStyle }}"><span class="hm-ico" style="{{ tsIco }}"><i class="ph ph-clock" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span><span style="{{ tsLabel }}">Timesheet</span></a>
+  </div>
+  <div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353; padding:0 8px 8px;">Organize</div>
+  <div style="display:flex; flex-direction:column; gap:4px; margin-bottom:20px;">
+    <a href="05_Projects.dc.html" class="{{ prCls }}" style="{{ prStyle }}"><span class="hm-ico" style="{{ prIco }}"><i class="ph ph-briefcase" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span><span style="{{ prLabel }}">Projects</span></a>
+    <a href="12_Clients.dc.html" class="{{ clCls }}" style="{{ clStyle }}"><span class="hm-ico" style="{{ clIco }}"><i class="ph ph-buildings" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span><span style="{{ clLabel }}">Clients</span></a>
+  </div>
+  <div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353; padding:0 8px 8px;">Review</div>
+  <div style="display:flex; flex-direction:column; gap:4px;">
+    <a href="06_Approvals.dc.html" class="{{ apCls }}" style="{{ apStyle }}"><span class="hm-ico" style="{{ apIco }}"><i class="ph ph-check-circle" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span><span style="{{ apLabel }}">Approvals</span></a>
+    <a href="07_Reports.dc.html" class="{{ rpCls }}" style="{{ rpStyle }}"><span class="hm-ico" style="{{ rpIco }}"><i class="ph ph-chart-bar" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span><span style="{{ rpLabel }}">Reports</span></a>
+  </div>
+
+  <div style="flex:1;"></div>
+
+  <dc-import name="UserMenu" hint-size="232px,60px"></dc-import>
+</div>
+</sc-if>
+
+<!-- ================= START TIMER SHEET ================= -->
+<sc-if value="{{ timerOpen }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ closeTimer }}" style="position:fixed; inset:0; background:rgba(8,7,5,.68); display:flex; align-items:flex-start; justify-content:center; padding-top:64px; z-index:60;">
+  <div onClick="{{ stopProp }}" style="width:560px; max-width:92vw; background:#1A1813; border:1px solid #322E26; border-radius:16px; box-shadow:0 24px 60px -18px rgba(0,0,0,.8);">
+    <div style="padding:16px 24px; border-bottom:1px solid #322E26; display:flex; align-items:center; gap:12px; border-radius:16px 16px 0 0;">
+      <span style="font-family:'Newsreader',serif; font-size:18px; font-weight:600; color:#F6F2E9;">Start a timer</span>
+      <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#7C7565;">Today · Fri 10 Jul</span>
+    </div>
+    <div style="padding:24px;">
+      <div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#7C7565; margin-bottom:8px;">Project</div>
+      <div ref="{{ comboRef }}" style="position:relative; margin-bottom:16px;">
+        <div onClick="{{ toggleProjectPicker }}" class="hb-secondary" style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 12px; background:#100F0C; border:1px solid #3D382E; border-radius:8px; cursor:pointer;">
+          <div style="min-width:0;"><div style="font-size:12px; color:#8F8676;">{{ selectedClient }}</div><div style="font-size:14px; font-weight:600; color:#F6F2E9; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ selectedProject }}</div></div>
+          <span style="display:inline-flex; color:#8F8676;"><i class="{{ projectCaret }}" aria-hidden="true" style="font-size:12px; line-height:1; display:block;"></i></span>
+        </div>
+        <sc-if value="{{ projectPickerOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute; left:0; right:0; top:calc(100% + 4px); background:#201D17; border:1px solid #3D382E; border-radius:12px; box-shadow:0 24px 60px -18px rgba(0,0,0,.8); z-index:80; overflow:hidden;">
+          <div style="position:relative; padding:12px 12px 8px;">
+            <span style="position:absolute; left:24px; top:25px; color:#6A6353; display:inline-flex;"><i class="ph ph-magnifying-glass" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span>
+            <input class="hf" value="{{ projectQuery }}" onChange="{{ onProjectQuery }}" placeholder="Search projects, clients or codes…" autoFocus="{{ true }}" style="padding-left:36px;" />
+          </div>
+          <div style="padding:0 16px 8px; font-size:12px; color:#7C7565;">{{ resultsLabel }}</div>
+          <div style="max-height:264px; overflow:auto; border-top:1px solid #322E26;">
+            <sc-for list="{{ timerRows }}" as="row" hint-placeholder-count="6">
+              <sc-if value="{{ row.isGroup }}" hint-placeholder-val="{{ false }}">
+              <div style="position:sticky; top:0; padding:8px 12px 4px; background:#201D17; font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353; border-bottom:1px solid #2A2620;">{{ row.label }}</div>
+              </sc-if>
+              <sc-if value="{{ row.isItem }}" hint-placeholder-val="{{ true }}">
+              <div onClick="{{ row.pick }}" class="hz-opt" style="{{ row.style }}">
+                <div style="min-width:0; flex:1;"><div style="font-size:14px; color:#F6F2E9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ row.name }}</div><div style="font-size:12px; color:#8F8676; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ row.client }}</div></div>
+                <sc-if value="{{ row.recent }}" hint-placeholder-val="{{ false }}"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6A6353; white-space:nowrap;">{{ row.last }}</span></sc-if>
+                <sc-if value="{{ row.on }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex; color:#4FB79A;"><i class="ph ph-check" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span></sc-if>
+              </div>
+              </sc-if>
+              <sc-if value="{{ row.isMore }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:12px; text-align:center; font-size:12px; color:#7C7565; border-top:1px solid #2A2620;">{{ row.label }}</div>
+              </sc-if>
+              <sc-if value="{{ row.isEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:24px 12px; text-align:center; font-size:14px; color:#7C7565;">No projects match “{{ row.label }}”</div>
+              </sc-if>
+            </sc-for>
+          </div>
+        </div>
+        </sc-if>
+      </div>
+      <div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#7C7565; margin-bottom:8px;">Task</div>
+      <div style="margin-bottom:12px;"><dc-import name="Dropdown" items="{{ taskItems }}" value="{{ timerTask }}" on-select="{{ pickTask }}" surface="#100F0C" fill="{{ true }}" width="320" hint-size="100%,44px" style="display:block;"></dc-import></div>
+      <textarea class="hf" value="{{ notes }}" onChange="{{ onNotes }}" placeholder="Notes (optional)" rows="{{ 3 }}" style="resize:vertical; min-height:56px; margin-bottom:12px; line-height:1.5; display:block;"></textarea>
+      <div onClick="{{ toggleTime }}" class="hz-link-muted" style="display:inline-flex; align-items:center; gap:4px; font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#7C7565; cursor:pointer; margin-bottom:8px;">Time <i class="{{ timeCaret }}" aria-hidden="true" style="font-size:12px; line-height:1; display:block;"></i></div>
+      <sc-if value="{{ timeOpen }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
+        <input class="hf" value="{{ startAt }}" onChange="{{ onStartAt }}" placeholder="0:00" style="width:120px; font-family:'IBM Plex Mono',monospace;" />
+        <span style="font-size:12px; color:#7C7565;">Timer starts from this amount — for work already done off the clock.</span>
+      </div>
+      </sc-if>
+      <div style="height:12px;"></div>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <button class="hb-primary" onClick="{{ confirmStart }}" style="display:flex; align-items:center; gap:8px; padding:12px 20px; background:#4FB79A; color:#0D211B; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap;"><i class="ph-bold ph-timer" aria-hidden="true" style="font-size:14px; line-height:1; display:block;"></i>Start timer</button>
+        <button class="hb-secondary" onClick="{{ closeTimer }}" style="padding:12px 20px; background:#232019; color:#EFEAE0; border:1px solid #3D382E; border-radius:8px; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap;">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+</sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:264,&quot;height&quot;:900},&quot;active&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;timesheet&quot;,&quot;projects&quot;,&quot;approvals&quot;,&quot;reports&quot;,&quot;none&quot;],&quot;default&quot;:&quot;timesheet&quot;,&quot;tsType&quot;:&quot;'timesheet'|'projects'|'approvals'|'reports'|'none'&quot;},&quot;running&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;onTimerChange&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;(running: boolean) =&gt; void&quot;}}">
+class Component extends DCLogic {
+  componentDidMount() {
+    this._onDoc = (e) => { const el = this._combo; if (el && this.state.projectPickerOpen && !el.contains(e.target)) this.setState({ projectPickerOpen: false }); };
+    this._onKey = (e) => { if (e.key !== 'Escape') return; if (this.state.projectPickerOpen) this.setState({ projectPickerOpen: false }); else if (this.state.timerOpen) this.setState({ timerOpen: false }); };
+    document.addEventListener('mousedown', this._onDoc, true);
+    document.addEventListener('keydown', this._onKey);
+  }
+  componentWillUnmount() { document.removeEventListener('mousedown', this._onDoc, true); document.removeEventListener('keydown', this._onKey); }
+  state = { collapsed: false, timerOpen: false, running: false, timerProject: '7307', projectQuery: '' };
+  renderVals() {
+    const p = this.props, s = this.state;
+    const controlled = typeof p.running === 'boolean';
+    const running = controlled ? p.running : s.running;
+    const setRunning = (v) => { if (p.onTimerChange) p.onTimerChange(v); if (!controlled) this.setState({ running: v }); };
+    const active = p.active ?? 'none';
+    const item = (key) => {
+      const on = active === key;
+      return {
+        cls: on ? '' : 'hz-nav',
+        style: on ? 'display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; background:#232019; border:1px solid #322E26; color:#F6F2E9;'
+                  : 'display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; color:#A29C8D;',
+        ico: 'display:inline-flex; color:' + (on ? '#4FB79A' : '#8F8676') + ';',
+        label: on ? 'font-size:14px; font-weight:600; color:#F6F2E9;' : 'font-size:14px;',
+        compactCls: on ? '' : 'hz-nav',
+        compact: 'width:44px; height:44px; display:flex; align-items:center; justify-content:center; border-radius:12px;' + (on ? ' background:#232019; border:1px solid #322E26; color:#4FB79A;' : ' color:#8F8676;'),
+      };
+    };
+    const ts = item('timesheet'), pr = item('projects'), cl = item('clients'), ap = item('approvals'), rp = item('reports');
+    // Prototype catalogue — in production this is a server search (recent first, then paged by client)
+    const catalogue = [
+      { code: '7307', name: 'T&M · Project Nix Blaze', client: 'Larkfield · EUR', task: 'Infrastructure Development', tasks: ['Infrastructure Development','Programming','Code review','Meetings'], last: '2h ago' },
+      { code: '4192', name: 'T&M · Atlas Platform', client: 'Meridian Health · CHF', task: 'Frontend engineering', tasks: ['Frontend engineering','Design','QA','Meetings'], last: 'yesterday' },
+      { code: 'OSS', name: 'Self-hosting fund', client: 'Rún Collective', task: 'Design review', tasks: ['Design review','Maintenance','Community'], last: 'Mon' },
+      { code: '5120', name: 'Fixed fee · HarborDesk redesign', client: 'Tidewell / HarborDesk', task: 'Design' },
+      { code: '5121', name: 'Retainer · Support Q3', client: 'Tidewell / HarborDesk', task: 'Support' },
+      { code: '6003', name: 'T&M · Vireo storefront', client: 'Casa Vireo / Larkfield / Guild', task: 'Frontend engineering' },
+      { code: '6004', name: 'Fixed fee · Guild brand system', client: 'Casa Vireo / Larkfield / Guild', task: 'Design' },
+      { code: '3300', name: 'T&M · Data platform migration', client: 'Solvind AB — USD', task: 'Infrastructure Development' },
+      { code: '3301', name: 'Retainer · SRE on call', client: 'Solvind AB — EUR', task: 'Operations' },
+      { code: '2208', name: 'T&M · Field app v2', client: 'Northmoor — EUR', task: 'Mobile' },
+      { code: '2209', name: 'Fixed fee · Onboarding flows', client: 'Northmoor — EUR', task: 'Design' },
+      { code: '1101', name: 'Internal · Horae', client: 'Fieldstone Studio', task: 'Product' },
+    ];
+    const q = (s.projectQuery ?? '').trim().toLowerCase();
+    const matches = q ? catalogue.filter(c => (c.code + ' ' + c.name + ' ' + c.client).toLowerCase().includes(q)) : catalogue;
+    const selKey = s.timerProject ?? catalogue[0].code;
+    const selected = catalogue.find(c => c.code === selKey) || catalogue[0];
+    const LIMIT = 8;
+    const rowStyle = (on) => 'display:flex; align-items:center; gap:12px; padding:10px 12px; cursor:pointer; border-bottom:1px solid #2A2620;' + (on ? ' background:rgba(31,92,77,.28);' : '');
+    const projRow = (c, recent) => ({ isItem: true, name: '[' + c.code + '] ' + c.name, client: c.client, recent, last: c.last ?? '', on: c.code === selKey, style: rowStyle(c.code === selKey), pick: () => this.setState({ timerProject: c.code, timerTask: undefined, projectPickerOpen: false, projectQuery: '' }) });
+    let timerRows = [];
+    if (!q) {
+      const recent = catalogue.filter(c => c.last);
+      timerRows.push({ isGroup: true, label: 'Recent' }, ...recent.map(c => projRow(c, true)));
+      const byClient = {};
+      catalogue.filter(c => !c.last).forEach(c => { (byClient[c.client] = byClient[c.client] || []).push(c); });
+      let shown = recent.length;
+      for (const [client, list] of Object.entries(byClient)) { if (shown >= LIMIT) break; timerRows.push({ isGroup: true, label: client }); for (const c of list) { if (shown >= LIMIT) break; timerRows.push(projRow(c, false)); shown++; } }
+      if (shown < catalogue.length) timerRows.push({ isMore: true, label: 'Showing ' + shown + ' of ' + catalogue.length.toLocaleString() + ' — type to search the rest' });
+    } else if (!matches.length) {
+      timerRows.push({ isEmpty: true, label: s.projectQuery });
+    } else {
+      timerRows = matches.slice(0, LIMIT).map(c => projRow(c, false));
+      if (matches.length > LIMIT) timerRows.push({ isMore: true, label: 'Showing ' + LIMIT + ' of ' + matches.length + ' matches — keep typing to narrow' });
+    }
+    const resultsLabel = q ? (matches.length + ' match' + (matches.length === 1 ? '' : 'es')) : ('Recent first · ' + catalogue.length.toLocaleString() + ' projects');
+    return {
+      collapsed: s.collapsed, expanded: !s.collapsed,
+      toggleRail: () => this.setState(x => ({ collapsed: !x.collapsed })),
+      running, notRunning: !running,
+      openTimer: () => this.setState({ timerOpen: true }),
+      closeTimer: () => this.setState({ timerOpen: false, projectQuery: '', projectPickerOpen: false }),
+      stopProp: (e) => e.stopPropagation(),
+      confirmStart: () => { this.setState({ timerOpen: false, projectQuery: '', projectPickerOpen: false, timeOpen: false, startAt: '', notes: '' }); setRunning(true); },
+      stopTimer: () => setRunning(false),
+      timerOpen: s.timerOpen,
+      timeOpen: s.timeOpen === true, toggleTime: () => this.setState(x => ({ timeOpen: !x.timeOpen })),
+      timeCaret: 'ph ph-caret-' + (s.timeOpen ? 'up' : 'down'),
+      notes: s.notes ?? '', onNotes: (e) => this.setState({ notes: e.target.value }),
+      startAt: s.startAt ?? '', onStartAt: (e) => this.setState({ startAt: e.target.value }),
+      timerTask: s.timerTask && (selected.tasks || [selected.task]).includes(s.timerTask) ? s.timerTask : selected.task,
+      taskItems: selected.tasks || [selected.task],
+      pickTask: (v) => this.setState({ timerTask: v }),
+      timerRows, resultsLabel,
+      comboRef: (el) => { this._combo = el; },
+      selectedClient: selected.client, selectedProject: '[' + selected.code + '] ' + selected.name,
+      projectPickerOpen: s.projectPickerOpen === true,
+      toggleProjectPicker: () => this.setState(x => ({ projectPickerOpen: !x.projectPickerOpen, projectQuery: '' })),
+      projectCaret: 'ph ph-caret-' + (s.projectPickerOpen ? 'up' : 'down'),
+      projectQuery: s.projectQuery ?? '', onProjectQuery: (e) => this.setState({ projectQuery: e.target.value }),
+      tsCls: ts.cls, tsStyle: ts.style, tsIco: ts.ico, tsLabel: ts.label, tsCompactCls: ts.compactCls, tsCompact: ts.compact,
+      clCls: cl.cls, clStyle: cl.style, clIco: cl.ico, clLabel: cl.label, clCompactCls: cl.compactCls, clCompact: cl.compact,
+      prCls: pr.cls, prStyle: pr.style, prIco: pr.ico, prLabel: pr.label, prCompactCls: pr.compactCls, prCompact: pr.compact,
+      apCls: ap.cls, apStyle: ap.style, apIco: ap.ico, apLabel: ap.label, apCompactCls: ap.compactCls, apCompact: ap.compact,
+      rpCls: rp.cls, rpStyle: rp.style, rpIco: rp.ico, rpLabel: rp.label, rpCompactCls: rp.compactCls, rpCompact: rp.compact,
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style> body { margin:0; background:#100F0C; } </style>
+</helmet>
+<div class="hz-pad" style="display:flex; align-items:center; gap:16px; row-gap:8px; flex-wrap:wrap; padding:12px 40px; background:#161510; border-bottom:1px solid #262219; font-family:'Instrument Sans',sans-serif;">
+  <span style="display:inline-flex; align-items:center; gap:8px; padding:4px 8px; background:#2B2413; color:#E0B45F; border:1px solid #453818; border-radius:999px; font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.12em; text-transform:uppercase; font-weight:600; white-space:nowrap;"><span style="width:6px; height:6px; border-radius:999px; background:#D6A24A;"></span>Dev mode</span>
+  <sc-for list="{{ groups }}" as="g" hint-placeholder-count="1">
+  <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; min-width:0; flex:1 1 auto;">
+    <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353; white-space:nowrap;">{{ g.label }}</span>
+    <dc-import name="SegmentedControl" options="{{ g.options }}" value="{{ g.value }}" on-change="{{ g.onChange }}" size="sm" hint-size="240px,36px" style="display:block; min-width:0; max-width:100%;"></dc-import>
+  </div>
+  </sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:900,&quot;height&quot;:64},&quot;label&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Page state&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;options&quot;:{&quot;editor&quot;:null,&quot;default&quot;:[&quot;Filled&quot;,&quot;Empty&quot;],&quot;tsType&quot;:&quot;Array&lt;string | {value: string, label: string}&gt;&quot;},&quot;value&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Filled&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;onChange&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;(value: string) =&gt; void&quot;},&quot;groups&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;Array&lt;{label: string, options: any[], value: string, onChange: (v: string) =&gt; void}&gt;&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props;
+    // Either one group (label/options/value/onChange) or several via `groups`
+    const groups = p.groups ?? [{ label: p.label ?? 'Page state', options: p.options ?? [], value: p.value, onChange: p.onChange }];
+    return { groups: groups.map(g => ({ label: g.label, options: g.options ?? [], value: g.value, onChange: g.onChange ?? (() => {}) })) };
+  }
+}
+</script>
+</body>
+</html>

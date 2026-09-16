@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#100F0C; }
+  button { transition: background .14s ease, color .14s ease; }
+  .hb-secondary:hover:not(:disabled) { background:#2C2820 !important; color:#EFEAE0 !important; }
+  .hz-opt { transition: box-shadow .14s ease; } .hz-opt:hover { box-shadow: inset 0 0 0 999px rgba(239,234,224,.05); }
+</style>
+</helmet>
+<div ref="{{ rootRef }}" style="position:relative; display:inline-flex; font-family:'Instrument Sans',sans-serif;">
+  <div style="{{ frame }}">
+    <button onClick="{{ prev }}" class="hb-secondary" title="Previous" style="display:inline-flex; align-items:center; justify-content:center; width:44px; height:44px; background:transparent; border:none; border-right:1px solid #322E26; color:#A29C8D; cursor:pointer; white-space:nowrap;"><i class="ph ph-caret-left" aria-hidden="true" style="font-size:18px; line-height:1; display:block;"></i></button>
+    <div onClick="{{ toggle }}" class="hz-opt" style="display:flex; align-items:center; align-self:stretch; gap:8px; padding:0 16px; min-height:44px; font-size:14px; color:#EFEAE0; cursor:pointer;">
+      <span style="display:inline-flex; color:#8F8676;"><i class="ph ph-calendar-blank" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span>
+      <sc-if value="{{ hasTitle }}" hint-placeholder-val="{{ true }}"><span style="font-weight:600; white-space:nowrap;">{{ title }}</span></sc-if>
+      <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D; white-space:nowrap;">{{ range }}</span>
+    </div>
+    <button onClick="{{ next }}" class="hb-secondary" title="Next" disabled="{{ nextDisabled }}" style="{{ nextStyle }}"><i class="ph ph-caret-right" aria-hidden="true" style="font-size:18px; line-height:1; display:block;"></i></button>
+  </div>
+  <sc-if value="{{ open }}" hint-placeholder-val="{{ false }}">
+  <div style="position:absolute; left:0; top:52px; z-index:80;"><dc-import name="DatePicker" mode="{{ pickerMode }}" value="{{ anchorIso }}" on-pick="{{ pick }}" hint-size="308px,380px"></dc-import></div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:420,&quot;height&quot;:80},&quot;unit&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;day&quot;,&quot;week&quot;,&quot;month&quot;],&quot;default&quot;:&quot;week&quot;,&quot;tsType&quot;:&quot;'day'|'week'|'month'&quot;},&quot;value&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;2026-07-06&quot;,&quot;tsType&quot;:&quot;string | Date&quot;},&quot;today&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;2026-07-10&quot;,&quot;tsType&quot;:&quot;string | Date&quot;},&quot;title&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;This week&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;noFuture&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;surface&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#1A1813&quot;,&quot;options&quot;:[&quot;#1A1813&quot;,&quot;#100F0C&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;onChange&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;(start: Date) =&gt; void&quot;}}">
+class Component extends DCLogic {
+  state = { open: false };
+  componentDidMount() {
+    this._root = React.createRef ? null : null;
+    this._onDoc = (e) => { const el = this._el; if (el && !el.contains(e.target) && this.state.open) this.setState({ open: false }); };
+    this._onKey = (e) => { if (e.key === 'Escape' && this.state.open) this.setState({ open: false }); };
+    document.addEventListener('mousedown', this._onDoc, true);
+    document.addEventListener('keydown', this._onKey);
+  }
+  componentWillUnmount() {
+    document.removeEventListener('mousedown', this._onDoc, true);
+    document.removeEventListener('keydown', this._onKey);
+  }
+
+  renderVals() {
+    const p = this.props, s = this.state;
+    const unit = p.unit ?? 'week';                 // 'day' | 'week' | 'month'
+    const today = p.today ? new Date(p.today) : new Date(2026, 6, 10);
+    const controlled = p.value !== undefined;
+    const raw = controlled ? new Date(p.value) : (s.value ? new Date(s.value) : today);
+    const startOf = (d) => { const x = new Date(d); x.setHours(0,0,0,0); if (unit === 'week') x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); if (unit === 'month') x.setDate(1); return x; };
+    const start = startOf(raw);
+    const end = new Date(start); if (unit === 'week') end.setDate(start.getDate() + 6); if (unit === 'month') { end.setMonth(start.getMonth() + 1); end.setDate(0); }
+    const shift = (n) => { const x = new Date(start); if (unit === 'day') x.setDate(x.getDate() + n); if (unit === 'week') x.setDate(x.getDate() + 7 * n); if (unit === 'month') x.setMonth(x.getMonth() + n); return x; };
+    const set = (d) => { if (!controlled) this.setState({ value: d.toISOString() }); if (p.onChange) p.onChange(startOf(d)); };
+    const same = (a, b) => startOf(a).getTime() === startOf(b).getTime();
+    const dd = (d) => String(d.getDate()).padStart(2, '0');
+    const mon = (d) => d.toLocaleDateString('en-GB', { month: 'short' });
+    const range = unit === 'day' ? `${start.toLocaleDateString('en-GB', { weekday: 'short' })} ${dd(start)} ${mon(start)} ${start.getFullYear()}`
+      : start.getMonth() === end.getMonth() ? `${dd(start)} – ${dd(end)} ${mon(end)} ${end.getFullYear()}` : `${dd(start)} ${mon(start)} – ${dd(end)} ${mon(end)} ${end.getFullYear()}`;
+    const isCurrent = same(start, today);
+    const isLast = same(start, shift(-1)) ? false : same(shift(1), today);
+    const title = p.title !== undefined ? p.title : (isCurrent ? { day: 'Today', week: 'This week', month: 'This month' }[unit] : isLast ? { day: 'Yesterday', week: 'Last week', month: 'Last month' }[unit] : '');
+    const noFuture = p.noFuture === true && !(shift(1) <= today);
+    return {
+      rootRef: (el) => { this._el = el; },
+      frame: 'display:flex; align-items:center; background:' + (p.surface ?? '#1A1813') + '; border:1px solid #322E26; border-radius:12px; overflow:hidden;',
+      prev: () => set(shift(-1)), next: () => { if (!noFuture) set(shift(1)); },
+      nextDisabled: noFuture,
+      nextStyle: 'display:inline-flex; align-items:center; justify-content:center; width:44px; height:44px; background:transparent; border:none; border-left:1px solid #322E26; color:' + (noFuture ? '#5A5446' : '#A29C8D') + '; cursor:' + (noFuture ? 'not-allowed' : 'pointer') + '; white-space:nowrap;',
+      hasTitle: !!title, title, range,
+      open: s.open, toggle: () => this.setState(x => ({ open: !x.open })),
+      pickerMode: unit === 'day' ? 'day' : 'week', anchorIso: start.toISOString(),
+      pick: (d) => { this.setState({ open: false }); set(d); },
+    };
+  }
+}
+</script>
+</body>
+</html>

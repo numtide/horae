@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#100F0C; }
+  button { transition: background .14s ease, transform .08s ease, box-shadow .16s ease, border-color .14s ease, color .14s ease; }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(79,183,154,.35) !important; }
+  button:disabled { cursor:not-allowed; }
+  .hb-primary:hover:not(:disabled) { background:#63C9AC !important; box-shadow:0 6px 18px -8px rgba(79,183,154,.65) !important; }
+  .hb-secondary:hover:not(:disabled) { background:#2C2820 !important; border-color:#5A5446 !important; }
+  .hb-danger-solid:hover:not(:disabled) { background:#E8827E !important; box-shadow:0 6px 18px -8px rgba(224,102,97,.6) !important; }
+  input.hf { width:100%; padding:12px 12px; background:#100F0C; border:1px solid #3D382E; border-radius:8px; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0; outline:none; transition: border-color .14s ease, box-shadow .16s ease; }
+  input.hf::placeholder { color:#5A5446; }
+  input.hf:focus { border-color:#4FB79A; box-shadow:0 0 0 3px rgba(79,183,154,.18); }
+</style>
+</helmet>
+<sc-if value="{{ open }}" hint-placeholder-val="{{ true }}">
+<div onClick="{{ onCancel }}" style="position:fixed; inset:0; background:rgba(8,7,5,.68); display:flex; align-items:center; justify-content:center; padding:24px; z-index:70; font-family:'Instrument Sans',sans-serif; color:#EFEAE0;">
+  <div onClick="{{ stopProp }}" role="dialog" aria-modal="true" style="width:480px; max-width:100%; background:#1A1813; border:1px solid #322E26; border-radius:16px; overflow:hidden; box-shadow:0 24px 60px -18px rgba(0,0,0,.8);">
+    <div style="display:flex; gap:16px; padding:24px 24px 0;">
+      <span style="{{ iconWrap }}"><i class="{{ iconCls }}" aria-hidden="true" style="font-size:20px; line-height:1; display:block;"></i></span>
+      <div style="min-width:0; flex:1;">
+        <div style="font-family:'Newsreader',serif; font-size:20px; font-weight:600; color:#F6F2E9; letter-spacing:-.01em;">{{ title }}</div>
+        <div style="font-size:14px; line-height:1.55; color:#A29C8D; margin-top:8px;">{{ body }}</div>
+        <sc-if value="{{ needsTyping }}" hint-placeholder-val="{{ false }}">
+        <div style="margin-top:16px;">
+          <div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#7C7565; margin-bottom:8px;">Type <span style="font-family:'IBM Plex Mono',monospace; color:#EFEAE0; text-transform:none; letter-spacing:0;">{{ typeToConfirm }}</span> to confirm</div>
+          <input class="hf" value="{{ typed }}" onChange="{{ onTyped }}" placeholder="{{ typeToConfirm }}" />
+        </div>
+        </sc-if>
+      </div>
+    </div>
+    <div style="display:flex; align-items:center; gap:12px; padding:24px; margin-top:4px;">
+      <button onClick="{{ confirm }}" disabled="{{ confirmDisabled }}" class="{{ confirmCls }}" style="{{ confirmStyle }}">{{ confirmLabel }}</button>
+      <button onClick="{{ onCancel }}" class="hb-secondary" style="padding:12px 20px; background:#232019; color:#EFEAE0; border:1px solid #3D382E; border-radius:8px; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap;">{{ cancelLabel }}</button>
+      <div style="flex:1;"></div>
+      <span style="font-size:12px; color:#7C7565;">Esc to close</span>
+    </div>
+  </div>
+</div>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:720,&quot;height&quot;:480},&quot;open&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;title&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Delete this workspace?&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;body&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Fieldstone Studio, its 9 members, 17 projects and all tracked time will be removed. This cannot be undone.&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;confirmLabel&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Delete workspace&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;cancelLabel&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Cancel&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;danger&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;icon&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;warning&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;typeToConfirm&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;fieldstone&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;onConfirm&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;},&quot;onCancel&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;}}">
+class Component extends DCLogic {
+  state = { typed: '' };
+  renderVals() {
+    const p = this.props;
+    const danger = p.danger ?? true;
+    const need = p.typeToConfirm ?? '';
+    const ok = !need || this.state.typed.trim() === need;
+    const base = 'padding:12px 20px; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap;';
+    return {
+      open: p.open ?? true, title: p.title ?? 'Are you sure?', body: p.body ?? '',
+      confirmLabel: p.confirmLabel ?? 'Confirm', cancelLabel: p.cancelLabel ?? 'Cancel',
+      iconCls: 'ph ph-' + (p.icon ?? (danger ? 'warning' : 'question')),
+      iconWrap: 'width:40px; height:40px; flex:0 0 40px; border-radius:12px; display:inline-flex; align-items:center; justify-content:center; ' + (danger ? 'background:#2E1817; color:#EC8683; border:1px solid #4D2523;' : 'background:#15291F; color:#5FCAA8; border:1px solid #24402F;'),
+      needsTyping: !!need, typeToConfirm: need, typed: this.state.typed,
+      onTyped: (e) => this.setState({ typed: e.target.value }),
+      confirmDisabled: !ok,
+      confirmCls: danger ? 'hb-danger-solid' : 'hb-primary',
+      confirmStyle: base + (danger ? ' background:#E06661; color:#1A0B0A;' : ' background:#4FB79A; color:#0D211B;') + (ok ? '' : ' opacity:.45;'),
+      confirm: () => { if (ok) { this.setState({ typed: '' }); (p.onConfirm ?? (() => {}))(); } },
+      onCancel: () => { this.setState({ typed: '' }); (p.onCancel ?? (() => {}))(); },
+      stopProp: (e) => e.stopPropagation(),
+    };
+  }
+}
+</script>
+</body>
+</html>
