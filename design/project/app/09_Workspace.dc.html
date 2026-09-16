@@ -8,6 +8,7 @@
 <body>
 <x-dc>
 <helmet>
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -17,29 +18,45 @@
   button, .hm-row, .hz-nav, .hm-chip, .hm-ws { transition: background .14s ease, transform .08s ease, box-shadow .16s ease, border-color .14s ease, color .14s ease; }
   button:active:not(:disabled) { transform: translateY(1px); }
   button:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(79,183,154,.35) !important; }
-  .hb-primary:hover:not(:disabled) { background:#63c9ac !important; box-shadow:0 6px 18px -8px rgba(79,183,154,.65) !important; }
-  .hb-secondary:hover:not(:disabled) { background:#2c2820 !important; border-color:#5a5446 !important; }
-  .hb-ghost:hover:not(:disabled) { background:rgba(79,183,154,.10) !important; color:#6ecab0 !important; }
-  .hb-danger:hover:not(:disabled) { background:rgba(224,102,97,.12) !important; border-color:#8d4441 !important; color:#ec8683 !important; }
-  .hb-icon:hover:not(:disabled) { background:#2c2820 !important; border-color:#5a5446 !important; color:#EFEAE0 !important; }
+  .hb-primary:hover:not(:disabled) { background:#63C9AC !important; box-shadow:0 6px 18px -8px rgba(79,183,154,.65) !important; }
+  .hb-secondary:hover:not(:disabled) { background:#2C2820 !important; border-color:#5A5446 !important; }
+  .hb-ghost:hover:not(:disabled) { background:rgba(79,183,154,.10) !important; color:#6ECAB0 !important; }
+  .hb-danger:hover:not(:disabled) { background:rgba(224,102,97,.12) !important; border-color:#8D4441 !important; color:#EC8683 !important; }
+  .hb-icon:hover:not(:disabled) { background:#2C2820 !important; border-color:#5A5446 !important; color:#EFEAE0 !important; }
   .hm-row:hover { background:#2A2620 !important; }
   .hm-row:hover .hm-ico { color:#EFEAE0 !important; }
-  .hm-danger:hover { background:rgba(224,102,97,.12) !important; color:#ec8683 !important; }
+  .hm-danger:hover { background:rgba(224,102,97,.12) !important; color:#EC8683 !important; }
   .hm-ws:hover { background:#2A2620 !important; }
-  .hz-nav:hover { background:#161510 !important; color:#EFEAE0 !important; }
   .hz-row:hover { background:#161510 !important; }
-  .hf { transition: border-color .14s ease, background .14s ease, box-shadow .16s ease; width:100%; padding:12px 12px; background:#100F0C; border:1px solid #3d382e; border-radius:8px; color:#EFEAE0; font-family:'Instrument Sans',sans-serif; font-size:14px; }
-  .hf:hover:not(:focus) { border-color:#5a5446; background:#161510; }
+  .hf { transition: border-color .14s ease, background .14s ease, box-shadow .16s ease; width:100%; padding:12px 12px; background:#100F0C; border:1px solid #3D382E; border-radius:8px; color:#EFEAE0; font-family:'Instrument Sans',sans-serif; font-size:14px; }
+  .hf:hover:not(:focus) { border-color:#5A5446; background:#161510; }
   .hf:focus { outline:none; border-color:#4FB79A; box-shadow:0 0 0 3px rgba(79,183,154,.18); }
   ::selection { background:#1F5C4D; color:#F6F2E9; }
   ::-moz-selection { background:#1F5C4D; color:#F6F2E9; }
-  * { scrollbar-width: thin; scrollbar-color: #3d382e transparent; }
+  * { scrollbar-width: thin; scrollbar-color: #3D382E transparent; }
   ::-webkit-scrollbar { width:10px; height:10px; }
   ::-webkit-scrollbar-track { background:transparent; }
-  ::-webkit-scrollbar-thumb { background:#3d382e; border-radius:999px; border:2px solid transparent; background-clip:content-box; }
-  ::-webkit-scrollbar-thumb:hover { background:#5a5446; background-clip:content-box; }
+  ::-webkit-scrollbar-thumb { background:#3D382E; border-radius:999px; border:2px solid transparent; background-clip:content-box; }
+  ::-webkit-scrollbar-thumb:hover { background:#5A5446; background-clip:content-box; }
   a { color:#4FB79A; text-decoration:none; }
-  a:hover { color:#6ecab0; }
+  a:hover { color:#6ECAB0; }
+  @media (max-width: 1180px) { .hz-split { flex-direction:column; gap:24px !important; } }
+  .hz-opt { transition: box-shadow .14s ease; }
+  .hz-opt:hover { box-shadow: inset 0 0 0 999px rgba(239,234,224,.05); }
+  .hz-link { transition: color .14s ease; }
+  .hz-link:hover { color:#6ECAB0 !important; }
+  .hz-link-muted { transition: color .14s ease; }
+  .hz-link-muted:hover { color:#EFEAE0 !important; }
+  .hz-row-link { transition: color .14s ease; }
+  .hz-row-link:hover { color:#4FB79A !important; }
+  .hz-nav { transition: background .14s ease, color .14s ease; }
+  .hz-nav:hover { background:#232019 !important; color:#EFEAE0 !important; }
+  .hz-nav:hover .hm-ico { color:#EFEAE0 !important; }
+  .hm-chip { transition: background .14s ease, border-color .14s ease; }
+  .hm-chip:hover { background:#2C2820 !important; border-color:#5A5446 !important; }
+  .hz-back { transition: background .14s ease, color .14s ease; }
+  .hz-back:hover { background:#1A1813; color:#EFEAE0; }
+  .hz-back:hover .hz-back-arrow { transform:translateX(-3px); }
   @media (max-width: 1320px) {
     .hz-rail { width:216px !important; flex-basis:216px !important; }
     .hz-split { gap:32px !important; padding-left:24px !important; padding-right:24px !important; }
@@ -61,158 +78,19 @@
 
 <div class="hz-shell" style="display:flex; height:100vh; min-height:820px; font-family:'Instrument Sans',sans-serif; color:#EFEAE0; background:#100F0C;">
 
-  <!-- ================= COMPACT RAIL ================= -->
-  <sc-if value="{{ collapsed }}" hint-placeholder-val="{{ false }}">
-  <div style="width:76px; flex:0 0 76px; background:#1A1813; border-right:1px solid #322E26; display:flex; flex-direction:column; align-items:center; padding:20px 12px;">
-    <div style="position:relative; width:34px; height:34px; flex:0 0 34px; border-radius:8px; background:#1F5C4D; overflow:hidden; margin-bottom:8px;">
-      <div style="position:absolute; left:50%; top:5px; width:1.5px; height:6px; background:#E7C079; transform:translateX(-50%);"></div>
-      <div style="position:absolute; left:50%; bottom:8px; width:16px; height:16px; border-radius:50%; background:#D99A3C; transform:translateX(-50%);"></div>
-      <div style="position:absolute; left:0; right:0; bottom:0; height:10px; background:#164034;"></div>
-      <div style="position:absolute; left:0; right:0; bottom:10px; height:1px; background:#0F3D33;"></div>
-    </div>
-    <button class="hb-icon" onClick="{{ toggleRail }}" title="Expand" style="width:34px; height:30px; background:#232019; border:1px solid #3d382e; border-radius:8px; color:#A29C8D; cursor:pointer; margin-bottom:20px; font-size:14px;">»</button>
-    <button class="hb-primary" title="Start timer" style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; background:#4FB79A; color:#0d211b; border:none; border-radius:11px; cursor:pointer; margin-bottom:20px;"><span style="width:16px; height:16px; border-radius:50%; border:2px solid #0d211b; position:relative; display:inline-block;"><span style="position:absolute; left:50%; top:3px; width:1.5px; height:5px; background:#0d211b; transform:translateX(-50%);"></span></span></button>
-    <div style="display:flex; flex-direction:column; gap:8px; align-items:center;">
-      <a href="04_Timesheet.dc.html" title="Timesheet" style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; border-radius:11px; color:#8f8676; font-size:16px;">◷</a>
-      <a href="05_Projects.dc.html" title="Projects" style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; border-radius:11px; color:#8f8676; font-size:16px;">▤</a>
-      <a href="06_Approvals.dc.html" title="Approvals" style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; border-radius:11px; color:#8f8676; font-size:16px;">✓</a>
-      <a href="07_Reports.dc.html" title="Reports" style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; border-radius:11px; color:#8f8676; font-size:16px;">▦</a>
-    </div>
-    <div style="flex:1;"></div>
-    <div title="Mira Kovač" style="width:38px; height:38px; border-radius:50%; background:#1F5C4D; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:16px; line-height:1; padding-top:2px; color:#EFEAE0;">M</div>
-  </div>
-  </sc-if>
-
-  <!-- ================= LEFT RAIL ================= -->
-  <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}">
-  <div class="hz-rail" style="width:264px; flex:0 0 264px; background:#1A1813; border-right:1px solid #322E26; display:flex; flex-direction:column; padding:20px 16px;">
-    <div style="display:flex; align-items:center; gap:12px; padding:4px 8px 20px;">
-      <div style="position:relative; width:34px; height:34px; flex:0 0 34px; border-radius:8px; background:#1F5C4D; overflow:hidden;">
-        <div style="position:absolute; left:50%; top:5px; width:1.5px; height:6px; background:#E7C079; transform:translateX(-50%);"></div>
-        <div style="position:absolute; left:50%; bottom:8px; width:16px; height:16px; border-radius:50%; background:#D99A3C; transform:translateX(-50%);"></div>
-        <div style="position:absolute; left:0; right:0; bottom:0; height:10px; background:#164034;"></div>
-        <div style="position:absolute; left:0; right:0; bottom:10px; height:1px; background:#0F3D33;"></div>
-      </div>
-      <div style="display:flex; align-items:baseline;">
-        <span style="font-family:'Newsreader',serif; font-size:24px; font-weight:600; letter-spacing:-.01em; color:#F6F2E9;">Horae</span>
-        <span style="width:5px; height:5px; border-radius:50%; background:#D99A3C; margin-left:4px; align-self:flex-end; margin-bottom:4px;"></span>
-      </div>
-      <div style="flex:1;"></div>
-      <button class="hb-secondary" onClick="{{ toggleRail }}" title="Collapse" style="width:30px; height:30px; background:transparent; border:1px solid #322E26; border-radius:8px; color:#8f8676; cursor:pointer; font-size:14px;">«</button>
-    </div>
-
-    <div style="display:flex; align-items:center; gap:8px; margin-bottom:24px;">
-      <button class="hb-primary" style="flex:1; display:flex; align-items:center; justify-content:center; gap:8px; padding:8px 12px; background:#4FB79A; color:#0d211b; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer;">
-        <span style="width:14px; height:14px; border-radius:50%; border:2px solid #0d211b; position:relative; display:inline-block;"><span style="position:absolute; left:50%; top:2px; width:1.5px; height:4px; background:#0d211b; transform:translateX(-50%);"></span></span>
-        Start timer
-      </button>
-    </div>
-
-    <div style="font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353; padding:0 8px 8px;">Track</div>
-    <div style="display:flex; flex-direction:column; gap:4px; margin-bottom:20px;">
-      <a href="04_Timesheet.dc.html" style="display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; color:#A29C8D;">
-        <span style="width:8px; height:8px; border-radius:50%; border:1.5px solid #5a5446;"></span>
-        <span style="font-size:14px;">Timesheet</span>
-      </a>
-    </div>
-    <div style="font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353; padding:0 8px 8px;">Organize</div>
-    <div style="display:flex; flex-direction:column; gap:4px; margin-bottom:20px;">
-      <a href="05_Projects.dc.html" style="display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; color:#A29C8D;">
-        <span style="width:9px; height:8px; border-radius:4px; border:1.5px solid #5a5446;"></span>
-        <span style="font-size:14px;">Projects</span>
-      </a>
-    </div>
-    <div style="font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353; padding:0 8px 8px;">Review</div>
-    <div style="display:flex; flex-direction:column; gap:4px;">
-      <a href="06_Approvals.dc.html" style="display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; color:#A29C8D;">
-        <span style="width:8px; height:8px; border-radius:50%; border:1.5px solid #5a5446;"></span>
-        <span style="font-size:14px;">Approvals</span>
-      </a>
-      <a href="07_Reports.dc.html" style="display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:8px; color:#A29C8D;">
-        <span style="display:inline-flex; align-items:flex-end; gap:2px; height:11px;"><span style="width:2.5px; height:6px; background:#5a5446;"></span><span style="width:2.5px; height:11px; background:#5a5446;"></span><span style="width:2.5px; height:8px; background:#5a5446;"></span></span>
-        <span style="font-size:14px;">Reports</span>
-      </a>
-    </div>
-
-    <div style="flex:1;"></div>
-
-    <div style="position:relative;">
-      <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
-      <div style="position:absolute; bottom:56px; left:0; width:252px; background:#201D17; border:1px solid #3d382e; border-radius:11px; overflow:hidden; box-shadow:0 26px 60px -16px rgba(0,0,0,.8); z-index:40;">
-        <div style="display:flex; align-items:center; gap:12px; padding:16px 16px 12px; border-bottom:1px solid #322E26;">
-          <div style="width:38px; height:38px; flex:0 0 38px; border-radius:50%; background:#1F5C4D; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:18px; color:#EFEAE0;">M</div>
-          <div style="min-width:0;"><div style="font-size:14px; font-weight:600; color:#F6F2E9;">Mira Kovač</div><div style="font-size:12px; color:#8f8676; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">mira@fieldstone.studio</div></div>
-          <span style="display:inline-flex; padding:4px 8px; background:#15291f; color:#5fcaa8; border:1px solid #24402f; border-radius:999px; font-size:12px; font-weight:600; white-space:nowrap;">Admin</span>
-        </div>
-        <div class="hm-ws" style="display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid #322E26; cursor:pointer;">
-          <span style="width:22px; height:22px; border-radius:6px; background:#1F5C4D; display:inline-flex; align-items:center; justify-content:center; font-size:12px; color:#EFEAE0; font-weight:700;">F</span>
-          <div style="flex:1; min-width:0;"><div style="font-size:14px; color:#EFEAE0;">Fieldstone Studio</div><div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6a6353;">horae.app/fieldstone</div></div>
-          <span style="color:#6a6353; font-size:12px;">⇄</span>
-        </div>
-        <div style="padding:8px;">
-          <a href="08_Settings.dc.html" class="hm-row" style="display:flex; align-items:center; gap:12px; padding:8px 8px; border-radius:8px; font-size:14px; color:#EFEAE0; text-decoration:none;"><span class="hm-ico" style="color:#8f8676; width:15px;">◔</span> My profile</a>
-          <a href="07_Reports.dc.html" class="hm-row" style="display:flex; align-items:center; gap:12px; padding:8px 8px; border-radius:8px; font-size:14px; color:#EFEAE0; text-decoration:none;"><span class="hm-ico" style="color:#8f8676; width:15px;">▦</span> My time report</a>
-        </div>
-        <div style="padding:8px; border-top:1px solid #322E26;">
-          <div style="padding:4px 8px 8px; font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353;">Admin</div>
-          <div style="display:flex; align-items:center; gap:12px; padding:8px 8px; border-radius:8px; font-size:14px; font-weight:600; color:#F6F2E9; background:#232019; border:1px solid #3d382e;"><span style="color:#4FB79A; width:15px;">◍</span> Workspace settings</div>
-        </div>
-        <div style="display:flex; align-items:center; gap:12px; padding:12px 16px; border-top:1px solid #322E26;">
-          <span style="color:#8f8676; width:15px; font-size:12px;">◑</span>
-          <span style="flex:1; font-size:14px; color:#EFEAE0;">Dark theme</span>
-          <span style="width:40px; height:22px; border-radius:999px; background:#1F5C4D; position:relative; display:inline-block; flex:0 0 40px;"><span style="position:absolute; right:3px; top:3px; width:16px; height:16px; border-radius:50%; background:#EFEAE0;"></span></span>
-        </div>
-        <div style="padding:8px; border-top:1px solid #322E26;">
-          <div class="hm-row" style="display:flex; align-items:center; gap:12px; padding:8px 8px; border-radius:8px; font-size:14px; color:#A29C8D; cursor:pointer;"><span style="width:15px;">?</span> Need help?</div>
-          <a href="01_Sign In.dc.html" class="hm-row hm-danger" style="display:flex; align-items:center; gap:12px; padding:8px 8px; border-radius:8px; font-size:14px; color:#E06661; text-decoration:none;"><span style="width:15px;">→</span> Sign out</a>
-        </div>
-      </div>
-      </sc-if>
-      <div onClick="{{ toggleMenu }}" style="display:flex; align-items:center; gap:12px; padding:8px; border-top:1px solid #322E26; padding-top:12px; cursor:pointer;">
-        <div style="width:30px; height:30px; border-radius:50%; background:#1F5C4D; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; color:#EFEAE0; flex:0 0 30px;">M</div>
-        <div style="min-width:0;">
-          <div style="font-size:14px; font-weight:600; color:#F6F2E9;">Mira Kovač</div>
-          <div style="font-size:12px; color:#8f8676;">Fieldstone Studio</div>
-        </div>
-        <div style="flex:1;"></div>
-        <span style="color:#6a6353; font-size:14px;">◔</span>
-      </div>
-    </div>
-  </div>
-  </sc-if>
+  <dc-import name="Rail" active="none" hint-size="264px,100%" style="display:flex; flex:0 0 auto; align-self:stretch;"></dc-import>
 
   <!-- ================= MAIN ================= -->
   <div style="flex:1; display:flex; flex-direction:column; min-width:0; overflow:hidden;">
 
-    <div style="padding:24px 40px 0;">
-      <a href="04_Timesheet.dc.html" style="display:inline-flex; align-items:center; gap:8px; font-size:14px; color:#A29C8D;"><span style="font-size:16px;">←</span> Back to Timesheet</a>
-    </div>
+    
 
-    <div class="hz-split" style="display:flex; gap:48px; padding:20px 40px 64px; flex:1; align-items:flex-start; overflow-y:auto; min-height:0;">
+    <dc-import name="DevBar" label="Section" options="{{ devSections }}" value="{{ devSection }}" on-change="{{ goDevSection }}" hint-size="100%,52px" style="display:block;"></dc-import>
+      <div class="hz-pad" style="display:flex; align-items:center; gap:16px; padding:24px 40px 0;"><h1 style="font-family:'Newsreader',serif; font-size:34px; font-weight:600; color:#F6F2E9; margin:0; letter-spacing:-.015em;">Workspace</h1></div>
 
-      <!-- ADMIN SUB-NAV -->
-      <div class="hz-subnav" style="width:250px; flex:0 0 250px;">
-        <div style="display:flex; align-items:center; gap:12px; padding:4px 4px 20px; border-bottom:1px solid #322E26; margin-bottom:16px;">
-          <div style="width:52px; height:52px; flex:0 0 52px; border-radius:50%; background:#1F5C4D; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:24px; line-height:1; padding-top:3px; font-weight:600; color:#EFEAE0;">F</div>
-          <div style="min-width:0;">
-            <div style="font-size:14px; font-weight:600; color:#F6F2E9;">Fieldstone Studio</div>
-            <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6a6353; margin-top:2px;">horae.app/fieldstone</div>
-            <span style="display:inline-flex; margin-top:8px; padding:4px 8px; background:#15291f; color:#5fcaa8; border:1px solid #24402f; border-radius:999px; font-size:12px; font-weight:600;">Admin</span>
-          </div>
-        </div>
-        <div style="font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353; padding:0 12px 8px;">Workspace</div>
-        <div style="display:flex; flex-direction:column; gap:2px; margin-bottom:16px;">
-          <div onClick="{{ goPeople }}" class="{{ clsPeople }}" style="{{ navPeople }}">People</div>
-          <div onClick="{{ goRoles }}" class="{{ clsRoles }}" style="{{ navRoles }}">Roles &amp; permissions</div>
-          <div onClick="{{ goGeneral }}" class="{{ clsGeneral }}" style="{{ navGeneral }}">General</div>
-        </div>
-        <div style="font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#6a6353; padding:0 12px 8px;">Data</div>
-        <div style="display:flex; flex-direction:column; gap:2px;">
-          <a href="10_Importers.dc.html" class="hz-nav" style="padding:8px 12px; border-radius:8px; font-size:14px; color:#A29C8D;">Importers</a>
-          <div onClick="{{ goExport }}" class="{{ clsExport }}" style="{{ navExport }}">Export &amp; backups</div>
-          <div onClick="{{ goAudit }}" class="{{ clsAudit }}" style="{{ navAudit }}">Audit log</div>
-        </div>
-      </div>
+    <div class="hz-split hz-pad" style="display:flex; gap:48px; padding:20px 40px 64px; flex:1; align-items:flex-start; overflow-y:auto; min-height:0;">
+
+      <dc-import name="AdminSubnav" scope="workspace" active="{{ section }}" on-select="{{ goSection }}" hint-size="250px,480px"></dc-import>
 
       <!-- ================= SECTION CONTENT ================= -->
       <div style="flex:1; min-width:0; max-width:760px;">
@@ -221,61 +99,61 @@
       <sc-if value="{{ isPeople }}" hint-placeholder-val="{{ true }}">
         <div style="display:flex; align-items:flex-end; gap:16px; margin-bottom:32px;">
           <div style="flex:1;">
-            <h1 style="font-family:'Newsreader',serif; font-size:34px; font-weight:600; color:#F6F2E9; margin:0; letter-spacing:-.01em;">People</h1>
-            <p style="font-size:14px; color:#8f8676; margin:8px 0 0;">9 members · 2 pending invitations · 6 of 10 seats used.</p>
+            <h2 style="font-family:'Newsreader',serif; font-size:24px; font-weight:600; color:#F6F2E9; margin:0; letter-spacing:-.01em;">People</h2>
+            <p style="font-size:14px; color:#8F8676; margin:8px 0 0;">9 members · 2 pending invitations · 6 of 10 seats used.</p>
           </div>
-          <a href="03_Invite Team.dc.html" class="hb-primary" style="padding:12px 16px; background:#4FB79A; color:#0d211b; border-radius:8px; font-size:14px; font-weight:700; white-space:nowrap;">Invite people</a>
+          <a href="03_Invite Team.dc.html" class="hb-primary" style="padding:12px 16px; background:#4FB79A; color:#0D211B; border-radius:8px; font-size:14px; font-weight:700; white-space:nowrap;">Invite people</a>
         </div>
 
-        <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; overflow-x:auto;">
+        <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; overflow-x:auto;">
           <div style="width:max-content; min-width:100%;">
-            <div style="display:grid; grid-template-columns:minmax(240px,1fr) 130px 130px 110px; padding:12px 20px; background:#161510; border-bottom:1px solid #262219; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:#6a6353;">
+            <div style="display:grid; grid-template-columns:minmax(240px,1fr) 130px 130px 110px; padding:12px 20px; background:#161510; border-bottom:1px solid #262219; font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353;">
               <span>Member</span><span>Role</span><span>Last active</span><span style="text-align:right;">Status</span>
             </div>
-            <div class="hz-row" style="display:grid; grid-template-columns:minmax(240px,1fr) 130px 130px 110px; align-items:center; padding:12px 20px; border-bottom:1px solid #201d17;">
+            <div class="hz-row" style="display:grid; grid-template-columns:minmax(240px,1fr) 130px 130px 110px; align-items:center; padding:12px 20px; border-bottom:1px solid #201D17;">
               <div style="display:flex; align-items:center; gap:12px; min-width:0;">
                 <span style="width:30px; height:30px; flex:0 0 30px; border-radius:50%; background:#1F5C4D; display:inline-flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; color:#EFEAE0;">M</span>
-                <div style="min-width:0;"><div style="font-size:14px; color:#F6F2E9;">Mira Kovač</div><div style="font-size:12px; color:#6a6353;">mira@fieldstone.studio</div></div>
+                <div style="min-width:0;"><div style="font-size:14px; color:#F6F2E9;">Mira Kovač</div><div style="font-size:12px; color:#6A6353;">mira@fieldstone.studio</div></div>
               </div>
               <span style="font-size:14px; color:#EFEAE0;">Admin</span>
-              <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">just now</span>
-              <div style="text-align:right;"><span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#15291f; color:#5fcaa8; border:1px solid #24402f; border-radius:999px; font-size:12px; font-weight:600;"><span style="width:6px; height:6px; border-radius:50%; background:#3FB489;"></span>Active</span></div>
+              <span style="font-size:12px; color:#A29C8D;">just now</span>
+              <div style="text-align:right;"><span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#15291F; color:#5FCAA8; border:1px solid #24402F; border-radius:999px; font-size:12px; font-weight:600;"><span style="width:6px; height:6px; border-radius:50%; background:#3FB489;"></span>Active</span></div>
             </div>
-            <div class="hz-row" style="display:grid; grid-template-columns:minmax(240px,1fr) 130px 130px 110px; align-items:center; padding:12px 20px; border-bottom:1px solid #201d17;">
+            <div class="hz-row" style="display:grid; grid-template-columns:minmax(240px,1fr) 130px 130px 110px; align-items:center; padding:12px 20px; border-bottom:1px solid #201D17;">
               <div style="display:flex; align-items:center; gap:12px; min-width:0;">
                 <span style="width:30px; height:30px; flex:0 0 30px; border-radius:50%; background:#1F5C4D; display:inline-flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; color:#EFEAE0;">T</span>
-                <div style="min-width:0;"><div style="font-size:14px; color:#F6F2E9;">Tomas Lindqvist</div><div style="font-size:12px; color:#6a6353;">tomas@fieldstone.studio</div></div>
+                <div style="min-width:0;"><div style="font-size:14px; color:#F6F2E9;">Tomas Lindqvist</div><div style="font-size:12px; color:#6A6353;">tomas@fieldstone.studio</div></div>
               </div>
               <span style="font-size:14px; color:#EFEAE0;">Manager</span>
-              <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">2h ago</span>
-              <div style="text-align:right;"><span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#15291f; color:#5fcaa8; border:1px solid #24402f; border-radius:999px; font-size:12px; font-weight:600;"><span style="width:6px; height:6px; border-radius:50%; background:#3FB489;"></span>Active</span></div>
+              <span style="font-size:12px; color:#A29C8D;">2h ago</span>
+              <div style="text-align:right;"><span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#15291F; color:#5FCAA8; border:1px solid #24402F; border-radius:999px; font-size:12px; font-weight:600;"><span style="width:6px; height:6px; border-radius:50%; background:#3FB489;"></span>Active</span></div>
             </div>
-            <div class="hz-row" style="display:grid; grid-template-columns:minmax(240px,1fr) 130px 130px 110px; align-items:center; padding:12px 20px; border-bottom:1px solid #201d17;">
+            <div class="hz-row" style="display:grid; grid-template-columns:minmax(240px,1fr) 130px 130px 110px; align-items:center; padding:12px 20px; border-bottom:1px solid #201D17;">
               <div style="display:flex; align-items:center; gap:12px; min-width:0;">
-                <span style="width:30px; height:30px; flex:0 0 30px; border-radius:50%; background:#6b4a1a; display:inline-flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; color:#EFEAE0;">A</span>
-                <div style="min-width:0;"><div style="font-size:14px; color:#F6F2E9;">Aisha Rahmani</div><div style="font-size:12px; color:#6a6353;">aisha@fieldstone.studio</div></div>
+                <span style="width:30px; height:30px; flex:0 0 30px; border-radius:50%; background:#6B4A1A; display:inline-flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; color:#EFEAE0;">A</span>
+                <div style="min-width:0;"><div style="font-size:14px; color:#F6F2E9;">Aisha Rahmani</div><div style="font-size:12px; color:#6A6353;">aisha@fieldstone.studio</div></div>
               </div>
               <span style="font-size:14px; color:#EFEAE0;">Member</span>
               <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">yesterday</span>
-              <div style="text-align:right;"><span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#15291f; color:#5fcaa8; border:1px solid #24402f; border-radius:999px; font-size:12px; font-weight:600;"><span style="width:6px; height:6px; border-radius:50%; background:#3FB489;"></span>Active</span></div>
+              <div style="text-align:right;"><span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#15291F; color:#5FCAA8; border:1px solid #24402F; border-radius:999px; font-size:12px; font-weight:600;"><span style="width:6px; height:6px; border-radius:50%; background:#3FB489;"></span>Active</span></div>
             </div>
-            <div class="hz-row" style="display:grid; grid-template-columns:minmax(240px,1fr) 130px 130px 110px; align-items:center; padding:12px 20px; border-bottom:1px solid #201d17;">
+            <div class="hz-row" style="display:grid; grid-template-columns:minmax(240px,1fr) 130px 130px 110px; align-items:center; padding:12px 20px; border-bottom:1px solid #201D17;">
               <div style="display:flex; align-items:center; gap:12px; min-width:0;">
-                <span style="width:30px; height:30px; flex:0 0 30px; border-radius:50%; background:#232019; border:1px solid #3d382e; display:inline-flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; color:#8f8676;">J</span>
-                <div style="min-width:0;"><div style="font-size:14px; color:#F6F2E9;">Jonas Weber</div><div style="font-size:12px; color:#6a6353;">jonas@fieldstone.studio</div></div>
+                <span style="width:30px; height:30px; flex:0 0 30px; border-radius:50%; background:#232019; border:1px solid #3D382E; display:inline-flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; color:#8F8676;">J</span>
+                <div style="min-width:0;"><div style="font-size:14px; color:#F6F2E9;">Jonas Weber</div><div style="font-size:12px; color:#6A6353;">jonas@fieldstone.studio</div></div>
               </div>
               <span style="font-size:14px; color:#EFEAE0;">Member</span>
-              <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6a6353;">—</span>
-              <div style="text-align:right;"><span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#2b2413; color:#e0b45f; border:1px solid #453818; border-radius:999px; font-size:12px; font-weight:600;"><span style="width:6px; height:6px; border-radius:50%; background:#D6A24A;"></span>Invited</span></div>
+              <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6A6353;">—</span>
+              <div style="text-align:right;"><span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#2B2413; color:#E0B45F; border:1px solid #453818; border-radius:999px; font-size:12px; font-weight:600;"><span style="width:6px; height:6px; border-radius:50%; background:#D6A24A;"></span>Invited</span></div>
             </div>
             <div class="hz-row" style="display:grid; grid-template-columns:minmax(240px,1fr) 130px 130px 110px; align-items:center; padding:12px 20px;">
               <div style="display:flex; align-items:center; gap:12px; min-width:0;">
-                <span style="width:30px; height:30px; flex:0 0 30px; border-radius:50%; background:#232019; border:1px solid #3d382e; display:inline-flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; color:#8f8676;">P</span>
-                <div style="min-width:0;"><div style="font-size:14px; color:#F6F2E9;">Priya Nandakumar</div><div style="font-size:12px; color:#6a6353;">priya@fieldstone.studio</div></div>
+                <span style="width:30px; height:30px; flex:0 0 30px; border-radius:50%; background:#232019; border:1px solid #3D382E; display:inline-flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; color:#8F8676;">P</span>
+                <div style="min-width:0;"><div style="font-size:14px; color:#F6F2E9;">Priya Nandakumar</div><div style="font-size:12px; color:#6A6353;">priya@fieldstone.studio</div></div>
               </div>
-              <span style="font-size:14px; color:#8f8676;">Member</span>
-              <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6a6353;">4 months ago</span>
-              <div style="text-align:right;"><span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#201d17; color:#8f8676; border:1px solid #322E26; border-radius:999px; font-size:12px; font-weight:600;"><span style="width:6px; height:6px; border-radius:50%; background:#5a5446;"></span>Archived</span></div>
+              <span style="font-size:14px; color:#8F8676;">Member</span>
+              <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6A6353;">4 months ago</span>
+              <div style="text-align:right;"><span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#201D17; color:#8F8676; border:1px solid #322E26; border-radius:999px; font-size:12px; font-weight:600;"><span style="width:6px; height:6px; border-radius:50%; background:#5A5446;"></span>Archived</span></div>
             </div>
           </div>
         </div>
@@ -283,27 +161,27 @@
 
       <!-- ROLES -->
       <sc-if value="{{ isRoles }}" hint-placeholder-val="{{ false }}">
-        <h1 style="font-family:'Newsreader',serif; font-size:34px; font-weight:600; color:#F6F2E9; margin:0; letter-spacing:-.01em;">Roles &amp; permissions</h1>
-        <p style="font-size:14px; color:#8f8676; margin:8px 0 32px;">Three fixed roles. Permissions are per role, not per person.</p>
-        <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; overflow-x:auto;">
+        <h2 style="font-family:'Newsreader',serif; font-size:24px; font-weight:600; color:#F6F2E9; margin:0; letter-spacing:-.01em;">Roles &amp; permissions</h2>
+        <p style="font-size:14px; color:#8F8676; margin:8px 0 32px;">Three fixed roles. Permissions are per role, not per person.</p>
+        <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; overflow-x:auto;">
           <div style="width:max-content; min-width:100%;">
-            <div style="display:grid; grid-template-columns:minmax(280px,1fr) 100px 100px 100px; padding:12px 20px; background:#161510; border-bottom:1px solid #262219; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:#6a6353;">
+            <div style="display:grid; grid-template-columns:minmax(280px,1fr) 100px 100px 100px; padding:12px 20px; background:#161510; border-bottom:1px solid #262219; font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353;">
               <span>Capability</span><span style="text-align:center;">Admin</span><span style="text-align:center;">Manager</span><span style="text-align:center;">Member</span>
             </div>
-            <div class="hz-row" style="display:grid; grid-template-columns:minmax(280px,1fr) 100px 100px 100px; align-items:center; padding:12px 20px; border-bottom:1px solid #201d17;"><span style="font-size:14px; color:#EFEAE0;">Track own time</span><span style="text-align:center; color:#4FB79A;">✓</span><span style="text-align:center; color:#4FB79A;">✓</span><span style="text-align:center; color:#4FB79A;">✓</span></div>
-            <div class="hz-row" style="display:grid; grid-template-columns:minmax(280px,1fr) 100px 100px 100px; align-items:center; padding:12px 20px; border-bottom:1px solid #201d17;"><span style="font-size:14px; color:#EFEAE0;">See own reports</span><span style="text-align:center; color:#4FB79A;">✓</span><span style="text-align:center; color:#4FB79A;">✓</span><span style="text-align:center; color:#4FB79A;">✓</span></div>
-            <div class="hz-row" style="display:grid; grid-template-columns:minmax(280px,1fr) 100px 100px 100px; align-items:center; padding:12px 20px; border-bottom:1px solid #201d17;"><span style="font-size:14px; color:#EFEAE0;">Approve timesheets</span><span style="text-align:center; color:#4FB79A;">✓</span><span style="text-align:center; color:#4FB79A;">✓</span><span style="text-align:center; color:#3d382e;">—</span></div>
-            <div class="hz-row" style="display:grid; grid-template-columns:minmax(280px,1fr) 100px 100px 100px; align-items:center; padding:12px 20px; border-bottom:1px solid #201d17;"><span style="font-size:14px; color:#EFEAE0;">Manage projects &amp; budgets</span><span style="text-align:center; color:#4FB79A;">✓</span><span style="text-align:center; color:#4FB79A;">✓</span><span style="text-align:center; color:#3d382e;">—</span></div>
-            <div class="hz-row" style="display:grid; grid-template-columns:minmax(280px,1fr) 100px 100px 100px; align-items:center; padding:12px 20px; border-bottom:1px solid #201d17;"><span style="font-size:14px; color:#EFEAE0;">See everyone's rates</span><span style="text-align:center; color:#4FB79A;">✓</span><span style="text-align:center; color:#3d382e;">—</span><span style="text-align:center; color:#3d382e;">—</span></div>
-            <div class="hz-row" style="display:grid; grid-template-columns:minmax(280px,1fr) 100px 100px 100px; align-items:center; padding:12px 20px; border-bottom:1px solid #201d17;"><span style="font-size:14px; color:#EFEAE0;">Invite &amp; remove people</span><span style="text-align:center; color:#4FB79A;">✓</span><span style="text-align:center; color:#3d382e;">—</span><span style="text-align:center; color:#3d382e;">—</span></div>
-            <div class="hz-row" style="display:grid; grid-template-columns:minmax(280px,1fr) 100px 100px 100px; align-items:center; padding:12px 20px;"><span style="font-size:14px; color:#EFEAE0;">Run importers &amp; exports</span><span style="text-align:center; color:#4FB79A;">✓</span><span style="text-align:center; color:#3d382e;">—</span><span style="text-align:center; color:#3d382e;">—</span></div>
+            <div class="hz-row" style="display:grid; grid-template-columns:minmax(280px,1fr) 100px 100px 100px; align-items:center; padding:12px 20px; border-bottom:1px solid #201D17;"><span style="font-size:14px; color:#EFEAE0;">Track own time</span><span style="display:inline-flex; align-items:center; justify-content:center; text-align:center; color:#4FB79A;"><i class="ph ph-check" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span><span style="display:inline-flex; align-items:center; justify-content:center; text-align:center; color:#4FB79A;"><i class="ph ph-check" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span><span style="display:inline-flex; align-items:center; justify-content:center; text-align:center; color:#4FB79A;"><i class="ph ph-check" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span></div>
+            <div class="hz-row" style="display:grid; grid-template-columns:minmax(280px,1fr) 100px 100px 100px; align-items:center; padding:12px 20px; border-bottom:1px solid #201D17;"><span style="font-size:14px; color:#EFEAE0;">See own reports</span><span style="display:inline-flex; align-items:center; justify-content:center; text-align:center; color:#4FB79A;"><i class="ph ph-check" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span><span style="display:inline-flex; align-items:center; justify-content:center; text-align:center; color:#4FB79A;"><i class="ph ph-check" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span><span style="display:inline-flex; align-items:center; justify-content:center; text-align:center; color:#4FB79A;"><i class="ph ph-check" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span></div>
+            <div class="hz-row" style="display:grid; grid-template-columns:minmax(280px,1fr) 100px 100px 100px; align-items:center; padding:12px 20px; border-bottom:1px solid #201D17;"><span style="font-size:14px; color:#EFEAE0;">Approve timesheets</span><span style="display:inline-flex; align-items:center; justify-content:center; text-align:center; color:#4FB79A;"><i class="ph ph-check" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span><span style="display:inline-flex; align-items:center; justify-content:center; text-align:center; color:#4FB79A;"><i class="ph ph-check" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span><span style="text-align:center; color:#3D382E;">—</span></div>
+            <div class="hz-row" style="display:grid; grid-template-columns:minmax(280px,1fr) 100px 100px 100px; align-items:center; padding:12px 20px; border-bottom:1px solid #201D17;"><span style="font-size:14px; color:#EFEAE0;">Manage projects &amp; budgets</span><span style="display:inline-flex; align-items:center; justify-content:center; text-align:center; color:#4FB79A;"><i class="ph ph-check" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span><span style="display:inline-flex; align-items:center; justify-content:center; text-align:center; color:#4FB79A;"><i class="ph ph-check" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span><span style="text-align:center; color:#3D382E;">—</span></div>
+            <div class="hz-row" style="display:grid; grid-template-columns:minmax(280px,1fr) 100px 100px 100px; align-items:center; padding:12px 20px; border-bottom:1px solid #201D17;"><span style="font-size:14px; color:#EFEAE0;">See everyone's rates</span><span style="display:inline-flex; align-items:center; justify-content:center; text-align:center; color:#4FB79A;"><i class="ph ph-check" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span><span style="text-align:center; color:#3D382E;">—</span><span style="text-align:center; color:#3D382E;">—</span></div>
+            <div class="hz-row" style="display:grid; grid-template-columns:minmax(280px,1fr) 100px 100px 100px; align-items:center; padding:12px 20px; border-bottom:1px solid #201D17;"><span style="font-size:14px; color:#EFEAE0;">Invite &amp; remove people</span><span style="display:inline-flex; align-items:center; justify-content:center; text-align:center; color:#4FB79A;"><i class="ph ph-check" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span><span style="text-align:center; color:#3D382E;">—</span><span style="text-align:center; color:#3D382E;">—</span></div>
+            <div class="hz-row" style="display:grid; grid-template-columns:minmax(280px,1fr) 100px 100px 100px; align-items:center; padding:12px 20px;"><span style="font-size:14px; color:#EFEAE0;">Run importers &amp; exports</span><span style="display:inline-flex; align-items:center; justify-content:center; text-align:center; color:#4FB79A;"><i class="ph ph-check" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span><span style="text-align:center; color:#3D382E;">—</span><span style="text-align:center; color:#3D382E;">—</span></div>
           </div>
         </div>
       </sc-if>
 
       <!-- GENERAL -->
       <sc-if value="{{ isGeneral }}" hint-placeholder-val="{{ false }}">
-        <h1 style="font-family:'Newsreader',serif; font-size:34px; font-weight:600; color:#F6F2E9; margin:0 0 32px; letter-spacing:-.01em;">General</h1>
+        <h2 style="font-family:'Newsreader',serif; font-size:24px; font-weight:600; color:#F6F2E9; margin:0 0 32px; letter-spacing:-.01em;">General</h2>
         <div style="display:flex; flex-direction:column; gap:20px;">
           <div style="display:grid; grid-template-columns:170px 1fr; align-items:center; gap:20px;">
             <label style="font-size:14px; color:#EFEAE0;">Workspace name</label>
@@ -313,27 +191,27 @@
             <label style="font-size:14px; color:#EFEAE0; padding-top:12px;">Workspace URL</label>
             <div>
               <input class="hf" value="horae.app/fieldstone" style="font-family:'IBM Plex Mono',monospace; font-size:14px;" />
-              <div style="font-size:12px; color:#8f8676; margin-top:8px;">Changing this breaks existing links.</div>
+              <div style="font-size:12px; color:#8F8676; margin-top:8px;">Changing this breaks existing links.</div>
             </div>
           </div>
           <div style="display:grid; grid-template-columns:170px 1fr; align-items:center; gap:20px;">
             <label style="font-size:14px; color:#EFEAE0;">Time zone</label>
             <div style="position:relative;">
-              <button onClick="{{ toggleTz }}" class="hb-secondary" style="width:100%; display:flex; align-items:center; gap:8px; padding:12px 12px; background:#100F0C; border:1px solid #3d382e; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer; text-align:left;"><span style="flex:1;">{{ tz }}</span><span style="color:#6a6353; font-size:12px;">▾</span></button>
+              <button onClick="{{ toggleTz }}" class="hb-secondary" style="width:100%; display:flex; align-items:center; gap:8px; padding:12px 12px; background:#100F0C; border:1px solid #3D382E; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer; text-align:left; white-space:nowrap;"><span style="flex:1;">{{ tz }}</span><span style="display:inline-flex; align-items:center; justify-content:center; color:#6A6353; font-size:12px;"><i class="ph ph-caret-down" aria-hidden="true" style="font-size:12px; line-height:1; display:block;"></i></span></button>
               <sc-if value="{{ tzOpen }}" hint-placeholder-val="{{ false }}">
-              <div style="position:absolute; left:0; right:0; top:52px; background:#201D17; border:1px solid #3d382e; border-radius:11px; box-shadow:0 24px 60px -18px rgba(0,0,0,.75); z-index:30; padding:4px;">
-                <div onClick="{{ tzZurich }}" style="{{ rowZurich }}">Europe/Zurich · CEST</div>
-                <div onClick="{{ tzLisbon }}" style="{{ rowLisbon }}">Europe/Lisbon · WEST</div>
-                <div onClick="{{ tzNewYork }}" style="{{ rowNewYork }}">America/New_York · EDT</div>
+              <div style="position:absolute; left:0; right:0; top:52px; background:#201D17; border:1px solid #3D382E; border-radius:12px; box-shadow:0 24px 60px -18px rgba(0,0,0,.8); z-index:30; padding:4px;">
+                <div onClick="{{ tzZurich }}" class="hz-opt" style="{{ rowZurich }}">Europe/Zurich · CEST</div>
+                <div onClick="{{ tzLisbon }}" class="hz-opt" style="{{ rowLisbon }}">Europe/Lisbon · WEST</div>
+                <div onClick="{{ tzNewYork }}" class="hz-opt" style="{{ rowNewYork }}">America/New_York · EDT</div>
               </div>
               </sc-if>
             </div>
           </div>
           <div style="display:grid; grid-template-columns:170px 1fr; align-items:center; gap:20px;">
             <label style="font-size:14px; color:#EFEAE0;">Week starts on</label>
-            <div style="display:inline-flex; background:#100F0C; border:1px solid #3d382e; border-radius:8px; padding:4px; width:max-content;">
-              <button onClick="{{ setMon }}" class="{{ clsMon }}" style="{{ segMon }}">Monday</button>
-              <button onClick="{{ setSun }}" class="{{ clsSun }}" style="{{ segSun }}">Sunday</button>
+            <div style="display:inline-flex; background:#100F0C; border:1px solid #3D382E; border-radius:8px; padding:4px; width:max-content;">
+              <button onClick="{{ setMon }}" class="{{ clsMon }}" style="{{ segMon }}; white-space:nowrap;">Monday</button>
+              <button onClick="{{ setSun }}" class="{{ clsSun }}" style="{{ segSun }}; white-space:nowrap;">Sunday</button>
             </div>
           </div>
           <div style="display:grid; grid-template-columns:170px 1fr; align-items:center; gap:20px;">
@@ -343,54 +221,54 @@
           <div style="display:grid; grid-template-columns:170px 1fr; align-items:start; gap:20px;">
             <label style="font-size:14px; color:#EFEAE0; padding-top:2px;">Require approval</label>
             <div style="display:flex; align-items:flex-start; gap:12px;">
-              <span onClick="{{ toggleApproval }}" style="{{ approvalTrack }}"><span style="{{ approvalKnob }}"></span></span>
-              <div style="font-size:14px; color:#8f8676; line-height:1.5; padding-top:1px;">Timesheets must be approved before they can be invoiced.</div>
+              <dc-import name="Toggle" on="{{ approvalOn }}" on-change="{{ toggleApproval }}" hint-size="40px,22px"></dc-import>
+              <div style="font-size:14px; color:#8F8676; line-height:1.5; padding-top:1px;">Timesheets must be approved before they can be invoiced.</div>
             </div>
           </div>
 
           <div style="height:1px; background:#262219; margin:12px 0 4px;"></div>
-          <div style="display:flex; align-items:center; gap:16px; padding:16px 20px; background:rgba(224,102,97,.06); border:1px solid #4d2523; border-radius:11px; flex-wrap:wrap;">
+          <div style="display:flex; align-items:center; gap:16px; padding:16px 20px; background:rgba(224,102,97,.06); border:1px solid #4D2523; border-radius:12px; flex-wrap:wrap;">
             <div style="flex:1; min-width:220px;">
-              <div style="font-size:14px; font-weight:600; color:#ec8683;">Delete this workspace</div>
-              <div style="font-size:12px; color:#8f8676; margin-top:4px;">Removes 6 940 time entries and 64 projects. Not reversible.</div>
+              <div style="font-size:14px; font-weight:600; color:#EC8683;">Delete this workspace</div>
+              <div style="font-size:12px; color:#8F8676; margin-top:4px;">Removes 6 940 time entries and 64 projects. Not reversible.</div>
             </div>
-            <button class="hb-danger" style="padding:8px 16px; background:transparent; color:#E06661; border:1px solid #6e3634; border-radius:8px; font-family:inherit; font-size:14px; cursor:pointer;">Delete workspace</button>
+            <button onClick="{{ askDelete }}" class="hb-danger" style="padding:8px 16px; background:transparent; color:#E06661; border:1px solid #6E3634; border-radius:8px; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap;">Delete workspace</button>
           </div>
         </div>
       </sc-if>
 
       <!-- EXPORT -->
       <sc-if value="{{ isExport }}" hint-placeholder-val="{{ false }}">
-        <h1 style="font-family:'Newsreader',serif; font-size:34px; font-weight:600; color:#F6F2E9; margin:0; letter-spacing:-.01em;">Export &amp; backups</h1>
-        <p style="font-size:14px; color:#8f8676; margin:8px 0 32px;">Your data leaves in open formats. Nothing here is destructive.</p>
+        <h2 style="font-family:'Newsreader',serif; font-size:24px; font-weight:600; color:#F6F2E9; margin:0; letter-spacing:-.01em;">Export &amp; backups</h2>
+        <p style="font-size:14px; color:#8F8676; margin:8px 0 32px;">Your data leaves in open formats. Nothing here is destructive.</p>
         <div style="display:flex; flex-direction:column; gap:12px;">
-          <div style="display:flex; align-items:center; gap:16px; padding:20px; background:#1A1813; border:1px solid #322E26; border-radius:11px; flex-wrap:wrap;">
+          <div style="display:flex; align-items:center; gap:16px; padding:20px; background:#1A1813; border:1px solid #322E26; border-radius:12px; flex-wrap:wrap;">
             <div style="flex:1; min-width:220px;">
               <div style="font-size:14px; font-weight:600; color:#F6F2E9;">Full workspace export</div>
-              <div style="font-size:12px; color:#8f8676; margin-top:4px;">Everything as CSV, one file per entity, in a single zip.</div>
+              <div style="font-size:12px; color:#8F8676; margin-top:4px;">Everything as CSV, one file per entity, in a single zip.</div>
             </div>
-            <button class="hb-secondary" style="padding:8px 16px; background:#232019; color:#EFEAE0; border:1px solid #3d382e; border-radius:8px; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap;">Export zip</button>
+            <button class="hb-secondary" style="padding:8px 16px; background:#232019; color:#EFEAE0; border:1px solid #3D382E; border-radius:8px; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap;">Export zip</button>
           </div>
-          <div style="display:flex; align-items:center; gap:16px; padding:20px; background:#1A1813; border:1px solid #322E26; border-radius:11px; flex-wrap:wrap;">
+          <div style="display:flex; align-items:center; gap:16px; padding:20px; background:#1A1813; border:1px solid #322E26; border-radius:12px; flex-wrap:wrap;">
             <div style="flex:1; min-width:220px;">
               <div style="font-size:14px; font-weight:600; color:#F6F2E9;">Time entries only</div>
-              <div style="font-size:12px; color:#8f8676; margin-top:4px;">The Detailed time report shape — same columns importers read.</div>
+              <div style="font-size:12px; color:#8F8676; margin-top:4px;">The Detailed time report shape — same columns importers read.</div>
             </div>
-            <button class="hb-secondary" style="padding:8px 16px; background:#232019; color:#EFEAE0; border:1px solid #3d382e; border-radius:8px; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap;">Export CSV</button>
+            <button class="hb-secondary" style="padding:8px 16px; background:#232019; color:#EFEAE0; border:1px solid #3D382E; border-radius:8px; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap;">Export CSV</button>
           </div>
-          <div style="padding:20px; background:#1A1813; border:1px solid #322E26; border-radius:11px;">
+          <div style="padding:20px; background:#1A1813; border:1px solid #322E26; border-radius:12px;">
             <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
               <div style="flex:1; min-width:220px;">
                 <div style="font-size:14px; font-weight:600; color:#F6F2E9;">Weekly automatic backup</div>
-                <div style="font-size:12px; color:#8f8676; margin-top:4px;">Every Monday 03:00 · kept for 90 days.</div>
+                <div style="font-size:12px; color:#8F8676; margin-top:4px;">Every Monday 03:00 · kept for 90 days.</div>
               </div>
-              <span onClick="{{ toggleBackup }}" style="{{ backupTrack }}"><span style="{{ backupKnob }}"></span></span>
+              <dc-import name="Toggle" on="{{ backupOn }}" on-change="{{ toggleBackup }}" hint-size="40px,22px"></dc-import>
             </div>
             <div style="margin-top:16px; padding-top:16px; border-top:1px solid #262219; display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-              <span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#15291f; color:#5fcaa8; border:1px solid #24402f; border-radius:999px; font-size:12px; font-weight:600;"><span style="width:6px; height:6px; border-radius:50%; background:#3FB489;"></span>Last backup ok</span>
-              <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">2026-08-31 03:00 · 41.2 MB</span>
+              <span style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px; background:#15291F; color:#5FCAA8; border:1px solid #24402F; border-radius:999px; font-size:12px; font-weight:600;"><span style="width:6px; height:6px; border-radius:50%; background:#3FB489;"></span>Last backup ok</span>
+              <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">31 Aug 2026, 03:00 · 41.2 MB</span>
               <div style="flex:1;"></div>
-              <a href="#" style="font-size:14px; font-weight:600;">Download latest</a>
+              <a href="#" onClick="{{ downloadLatest }}" style="font-size:14px; font-weight:600;">Download latest</a>
             </div>
           </div>
         </div>
@@ -398,20 +276,20 @@
 
       <!-- AUDIT -->
       <sc-if value="{{ isAudit }}" hint-placeholder-val="{{ false }}">
-        <h1 style="font-family:'Newsreader',serif; font-size:34px; font-weight:600; color:#F6F2E9; margin:0; letter-spacing:-.01em;">Audit log</h1>
-        <p style="font-size:14px; color:#8f8676; margin:8px 0 32px;">Every administrative action, newest first. Retained for 12 months.</p>
-        <div style="background:#1A1813; border:1px solid #322E26; border-radius:20px; overflow-x:auto;">
+        <h2 style="font-family:'Newsreader',serif; font-size:24px; font-weight:600; color:#F6F2E9; margin:0; letter-spacing:-.01em;">Audit log</h2>
+        <p style="font-size:14px; color:#8F8676; margin:8px 0 32px;">Every administrative action, newest first. Retained for 12 months.</p>
+        <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; overflow-x:auto;">
           <div style="width:max-content; min-width:100%;">
-            <div style="display:grid; grid-template-columns:150px minmax(300px,1fr) 150px; padding:12px 20px; background:#161510; border-bottom:1px solid #262219; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:#6a6353;">
+            <div style="display:grid; grid-template-columns:150px minmax(300px,1fr) 150px; padding:12px 20px; background:#161510; border-bottom:1px solid #262219; font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353;">
               <span>When</span><span>Event</span><span>Actor</span>
             </div>
-            <div class="hz-row" style="display:grid; grid-template-columns:150px minmax(300px,1fr) 150px; align-items:center; padding:12px 20px; border-bottom:1px solid #201d17;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">14:02 today</span><span style="font-size:14px; color:#EFEAE0;">Harvest import committed · 6 940 records</span><span style="font-size:12px; color:#8f8676;">Mira Kovač</span></div>
-            <div class="hz-row" style="display:grid; grid-template-columns:150px minmax(300px,1fr) 150px; align-items:center; padding:12px 20px; border-bottom:1px solid #201d17;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">13:47 today</span><span style="font-size:14px; color:#EFEAE0;">Harvest connection authorised (read-only)</span><span style="font-size:12px; color:#8f8676;">Mira Kovač</span></div>
-            <div class="hz-row" style="display:grid; grid-template-columns:150px minmax(300px,1fr) 150px; align-items:center; padding:12px 20px; border-bottom:1px solid #201d17;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">09:15 today</span><span style="font-size:14px; color:#EFEAE0;">Invitation sent to jonas@fieldstone.studio</span><span style="font-size:12px; color:#8f8676;">Mira Kovač</span></div>
-            <div class="hz-row" style="display:grid; grid-template-columns:150px minmax(300px,1fr) 150px; align-items:center; padding:12px 20px; border-bottom:1px solid #201d17;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">Aug 31</span><span style="font-size:14px; color:#EFEAE0;">Role changed: Tomas Lindqvist → Manager</span><span style="font-size:12px; color:#8f8676;">Mira Kovač</span></div>
-            <div class="hz-row" style="display:grid; grid-template-columns:150px minmax(300px,1fr) 150px; align-items:center; padding:12px 20px; border-bottom:1px solid #201d17;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">Aug 28</span><span style="font-size:14px; color:#EFEAE0;">Approval requirement turned on</span><span style="font-size:12px; color:#8f8676;">Mira Kovač</span></div>
-            <div class="hz-row" style="display:grid; grid-template-columns:150px minmax(300px,1fr) 150px; align-items:center; padding:12px 20px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">Aug 24</span><span style="font-size:14px; color:#EFEAE0;">Priya Nandakumar archived</span><span style="font-size:12px; color:#8f8676;">Tomas Lindqvist</span></div>
-            <div style="padding:12px 20px; border-top:1px solid #262219; background:#161510; font-size:12px; color:#8f8676;">Showing 6 of 214 · <a href="#">load more</a></div>
+            <div class="hz-row" style="display:grid; grid-template-columns:150px minmax(300px,1fr) 150px; align-items:center; padding:12px 20px; border-bottom:1px solid #201D17;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">Today, 14:02</span><span style="font-size:14px; color:#EFEAE0;">Harvest import committed · 6 940 records</span><span style="font-size:12px; color:#8F8676;">Mira Kovač</span></div>
+            <div class="hz-row" style="display:grid; grid-template-columns:150px minmax(300px,1fr) 150px; align-items:center; padding:12px 20px; border-bottom:1px solid #201D17;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">Today, 13:47</span><span style="font-size:14px; color:#EFEAE0;">Harvest connection authorised (read-only)</span><span style="font-size:12px; color:#8F8676;">Mira Kovač</span></div>
+            <div class="hz-row" style="display:grid; grid-template-columns:150px minmax(300px,1fr) 150px; align-items:center; padding:12px 20px; border-bottom:1px solid #201D17;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">Today, 09:15</span><span style="font-size:14px; color:#EFEAE0;">Invitation sent to jonas@fieldstone.studio</span><span style="font-size:12px; color:#8F8676;">Mira Kovač</span></div>
+            <div class="hz-row" style="display:grid; grid-template-columns:150px minmax(300px,1fr) 150px; align-items:center; padding:12px 20px; border-bottom:1px solid #201D17;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">31 Aug</span><span style="font-size:14px; color:#EFEAE0;">Role changed: Tomas Lindqvist → Manager</span><span style="font-size:12px; color:#8F8676;">Mira Kovač</span></div>
+            <div class="hz-row" style="display:grid; grid-template-columns:150px minmax(300px,1fr) 150px; align-items:center; padding:12px 20px; border-bottom:1px solid #201D17;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">28 Aug</span><span style="font-size:14px; color:#EFEAE0;">Approval requirement turned on</span><span style="font-size:12px; color:#8F8676;">Mira Kovač</span></div>
+            <div class="hz-row" style="display:grid; grid-template-columns:150px minmax(300px,1fr) 150px; align-items:center; padding:12px 20px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D;">24 Aug</span><span style="font-size:14px; color:#EFEAE0;">Priya Nandakumar archived</span><span style="font-size:12px; color:#8F8676;">Tomas Lindqvist</span></div>
+            <div style="padding:12px 20px; border-top:1px solid #262219; background:#161510; font-size:12px; color:#8F8676;">Showing 6 of 214 · <a href="#" onClick="{{ loadMore }}">load more</a></div>
           </div>
         </div>
       </sc-if>
@@ -419,11 +297,16 @@
       </div>
     </div>
   </div>
+
+  
+  <dc-import name="ConfirmDialog" open="{{ confirmDelete }}" title="Delete this workspace?" body="Fieldstone Studio, its 9 members, 17 projects and all tracked time will be removed permanently. Exports made before today stay downloadable for 30 days." confirm-label="Delete workspace" type-to-confirm="fieldstone" on-confirm="{{ doDelete }}" on-cancel="{{ cancelDelete }}" hint-size="0,0"></dc-import>
+  <dc-import name="Toast" open="{{ dlToast }}" message="Preparing backup horae-fieldstone-2026-08-31.zip · 41.2 MB" kind="info" on-close="{{ hideDlToast }}" hint-size="0,0"></dc-import>
+  <dc-import name="Toast" open="{{ auditToast }}" message="No older events — audit log covers the last 90 days" kind="info" on-close="{{ hideAuditToast }}" hint-size="0,0"></dc-import>
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:1000}}">
 class Component extends DCLogic {
-  state = { section: 'people', collapsed: false, menuOpen: false, tzOpen: false, tz: 'Europe/Zurich · CEST', weekStart: 'mon', approval: true, backup: true };
+  state = { running: false, section: 'people', collapsed: false, menuOpen: false, tzOpen: false, tz: 'Europe/Zurich · CEST', weekStart: 'mon', approval: true, backup: true };
 
   renderVals() {
     const s = this.state;
@@ -432,23 +315,37 @@ class Component extends DCLogic {
       : 'padding:8px 12px; border-radius:8px; font-size:14px; color:#A29C8D; cursor:pointer;';
     const seg = (on) => on
       ? 'padding:8px 16px; background:#1F5C4D; color:#F6F2E9; border:none; border-radius:6px; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer;'
-      : 'padding:8px 16px; background:transparent; color:#8f8676; border:none; border-radius:6px; font-family:inherit; font-size:14px; cursor:pointer;';
+      : 'padding:8px 16px; background:transparent; color:#8F8676; border:none; border-radius:6px; font-family:inherit; font-size:14px; cursor:pointer;';
     const tzRow = (on) => on
       ? 'padding:8px 12px; border-radius:8px; background:#1F5C4D; font-size:14px; font-weight:600; color:#F6F2E9; cursor:pointer;'
       : 'padding:8px 12px; border-radius:8px; font-size:14px; color:#EFEAE0; cursor:pointer;';
-    const track = (on) => `width:40px; height:22px; border-radius:999px; background:${on ? '#1F5C4D' : '#2c2820'}; border:1px solid ${on ? '#2a6d5c' : '#3d382e'}; position:relative; display:inline-block; flex:0 0 40px; cursor:pointer;`;
-    const knob = (on) => `position:absolute; ${on ? 'right:3px' : 'left:3px'}; top:2px; width:16px; height:16px; border-radius:50%; background:${on ? '#EFEAE0' : '#8f8676'};`;
+    const track = (on) => `width:40px; height:22px; border-radius:999px; background:${on ? '#1F5C4D' : '#2C2820'}; border:1px solid ${on ? '#2A6D5C' : '#3D382E'}; position:relative; display:inline-block; flex:0 0 40px; cursor:pointer;`;
+    const knob = (on) => `position:absolute; ${on ? 'right:3px' : 'left:3px'}; top:2px; width:16px; height:16px; border-radius:50%; background:${on ? '#EFEAE0' : '#8F8676'};`;
     const go = (v) => () => this.setState({ section: v, menuOpen: false, tzOpen: false });
+    const pseg = (on) => on
+      ? 'padding:6px 12px; background:#1F5C4D; color:#F6F2E9; border:none; border-radius:6px; font-family:inherit; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;'
+      : 'padding:6px 12px; background:transparent; color:#8F8676; border:none; border-radius:6px; font-family:inherit; font-size:12px; cursor:pointer; white-space:nowrap;';
 
     return {
-      expanded: !s.collapsed,
-      collapsed: s.collapsed,
-      toggleRail: () => this.setState(x => ({ collapsed: !x.collapsed, menuOpen: false })),
-      menuOpen: s.menuOpen === true,
-      toggleMenu: () => this.setState(x => ({ menuOpen: !x.menuOpen })),
+      downloadLatest: (e) => { e.preventDefault(); this.setState({ dlToast: true }); },
+      dlToast: this.state.dlToast === true, hideDlToast: () => this.setState({ dlToast: false }),
+      loadMore: (e) => { e.preventDefault(); this.setState({ auditToast: true }); },
+      auditToast: this.state.auditToast === true, hideAuditToast: () => this.setState({ auditToast: false }),
+      devSections: ['General','People','Roles & permissions','Export & backups','Audit log'],
+      devSection: ({general:'General',people:'People',roles:'Roles & permissions',export:'Export & backups',audit:'Audit log'})[s.section ?? 'people'],
+      goDevSection: (v) => this.setState({ section: ({General:'general',People:'people','Roles & permissions':'roles','Export & backups':'export','Audit log':'audit'})[v] }),
+      backupOn: s.backup === true,
+      approvalOn: s.approval === true,
+      section: s.section ?? 'people',
+      goSection: (k) => this.setState({ section: k }),
+      confirmDelete: this.state.confirmDelete === true,
+      askDelete: () => this.setState({ confirmDelete: true }),
+      cancelDelete: () => this.setState({ confirmDelete: false }),
+      doDelete: () => { this.setState({ confirmDelete: false }); location.href = '01_Sign In.dc.html'; },
 
       isPeople: s.section === 'people', isRoles: s.section === 'roles', isGeneral: s.section === 'general',
       isExport: s.section === 'export', isAudit: s.section === 'audit',
+      segPeople: pseg(s.section==='people'), segRoles: pseg(s.section==='roles'), segGeneral: pseg(s.section==='general'), segExport: pseg(s.section==='export'), segAudit: pseg(s.section==='audit'),
       goPeople: go('people'), goRoles: go('roles'), goGeneral: go('general'), goExport: go('export'), goAudit: go('audit'),
       navPeople: nav(s.section === 'people'), clsPeople: s.section === 'people' ? '' : 'hz-nav',
       navRoles: nav(s.section === 'roles'), clsRoles: s.section === 'roles' ? '' : 'hz-nav',
@@ -472,9 +369,7 @@ class Component extends DCLogic {
       segSun: seg(s.weekStart === 'sun'), clsSun: s.weekStart === 'sun' ? '' : 'hb-secondary',
 
       toggleApproval: () => this.setState(x => ({ approval: !x.approval })),
-      approvalTrack: track(s.approval), approvalKnob: knob(s.approval),
       toggleBackup: () => this.setState(x => ({ backup: !x.backup })),
-      backupTrack: track(s.backup), backupKnob: knob(s.backup),
     };
   }
 }

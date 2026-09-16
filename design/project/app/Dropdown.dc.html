@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#100F0C; }
+  button { transition: background .14s ease, border-color .14s ease, transform .08s ease; }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:focus-visible { outline:none; box-shadow:0 0 0 3px rgba(79,183,154,.35) !important; }
+  .hb-secondary:hover:not(:disabled) { background:#2C2820 !important; border-color:#5A5446 !important; }
+  .hz-opt { transition: box-shadow .14s ease; } .hz-opt:hover { box-shadow: inset 0 0 0 999px rgba(239,234,224,.05); }
+  .hm-danger:hover { background:rgba(224,102,97,.12) !important; color:#EC8683 !important; }
+  input.hf { width:100%; padding:8px 12px 8px 36px; background:#100F0C; border:1px solid #3D382E; border-radius:8px; font-family:'Instrument Sans',sans-serif; font-size:14px; color:#EFEAE0; outline:none; }
+  input.hf::placeholder { color:#5A5446; } input.hf:focus { border-color:#4FB79A; box-shadow:0 0 0 3px rgba(79,183,154,.18); }
+</style>
+</helmet>
+<div ref="{{ rootRef }}" style="{{ rootStyle }}">
+  <button onClick="{{ toggle }}" class="hb-secondary" style="{{ triggerStyle }}">{{ label }} <span style="display:inline-flex; color:#8F8676;"><i class="{{ caretCls }}" aria-hidden="true" style="font-size:12px; line-height:1; display:block;"></i></span></button>
+  <sc-if value="{{ open }}" hint-placeholder-val="{{ false }}">
+  <div style="{{ panel }}">
+    <sc-if value="{{ searchable }}" hint-placeholder-val="{{ false }}">
+    <div style="padding:12px 12px 4px; position:relative;">
+      <span style="position:absolute; left:24px; top:21px; color:#6A6353; display:inline-flex;"><i class="ph ph-magnifying-glass" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span>
+      <input class="hf" value="{{ query }}" onChange="{{ onQuery }}" placeholder="Search…" />
+    </div>
+    </sc-if>
+    <div style="max-height:340px; overflow:auto; padding:8px;">
+      <sc-if value="{{ hasHeading }}" hint-placeholder-val="{{ false }}"><div style="padding:4px 12px 8px; font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353;">{{ heading }}</div></sc-if>
+      <sc-for list="{{ rows }}" as="r" hint-placeholder-count="4">
+        <sc-if value="{{ r.isGroup }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:8px 12px 4px; font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353;">{{ r.label }}</div>
+        </sc-if>
+        <sc-if value="{{ r.isSep }}" hint-placeholder-val="{{ false }}">
+        <div style="height:1px; background:#322E26; margin:4px 0;"></div>
+        </sc-if>
+        <sc-if value="{{ r.isItem }}" hint-placeholder-val="{{ true }}">
+        <div onClick="{{ r.pick }}" class="{{ r.cls }}" style="{{ r.style }}">{{ r.label }}<sc-if value="{{ r.hasMeta }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px; color:#8F8676; margin-left:auto; padding-left:12px;">{{ r.meta }}</span></sc-if></div>
+        </sc-if>
+      </sc-for>
+    </div>
+  </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:360,&quot;height&quot;:320},&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;select&quot;,&quot;actions&quot;],&quot;default&quot;:&quot;select&quot;,&quot;tsType&quot;:&quot;'select'|'actions'&quot;},&quot;items&quot;:{&quot;editor&quot;:null,&quot;default&quot;:[&quot;Active projects (2)&quot;,&quot;Budgeted projects (2)&quot;,&quot;Archived projects (13)&quot;],&quot;tsType&quot;:&quot;Array&lt;string | {value?: string, label?: string, meta?: string, danger?: boolean, disabled?: boolean, group?: string, sep?: boolean, onSelect?: () =&gt; void}&gt;&quot;},&quot;value&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Active projects (2)&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;label&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Actions&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;placeholder&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Choose…&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;onSelect&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;(value: string) =&gt; void&quot;},&quot;searchable&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;align&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;left&quot;,&quot;right&quot;],&quot;default&quot;:&quot;left&quot;,&quot;tsType&quot;:&quot;'left'|'right'&quot;},&quot;width&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:260,&quot;min&quot;:180,&quot;max&quot;:420,&quot;unit&quot;:&quot;px&quot;,&quot;tsType&quot;:&quot;number&quot;},&quot;fill&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  state = { open: false, query: '' };
+  componentDidMount() {
+    this._root = React.createRef ? null : null;
+    this._onDoc = (e) => { const el = this._el; if (el && !el.contains(e.target) && this.state.open) this.setState({ open: false, query: '' }); };
+    this._onKey = (e) => { if (e.key === 'Escape' && this.state.open) this.setState({ open: false, query: '' }); };
+    document.addEventListener('mousedown', this._onDoc, true);
+    document.addEventListener('keydown', this._onKey);
+  }
+  componentWillUnmount() {
+    document.removeEventListener('mousedown', this._onDoc, true);
+    document.removeEventListener('keydown', this._onKey);
+  }
+
+  renderVals() {
+    const p = this.props, s = this.state;
+    const items = (p.items ?? []).map(it => typeof it === 'string' ? { value: it, label: it } : it);
+    const controlled = p.value !== undefined;
+    const value = controlled ? p.value : s.value;
+    const selected = items.find(i => i.value === value);
+    const mode = p.mode ?? 'select';          // 'select' shows the picked item in the trigger · 'actions' keeps a fixed label
+    const label = mode === 'select' ? (selected ? selected.label : (p.placeholder ?? 'Choose…')) : (p.label ?? 'Actions');
+    const q = s.query.trim().toLowerCase();
+    const visible = q ? items.filter(i => i.group || i.sep || (i.label || '').toLowerCase().includes(q)) : items;
+    return {
+      rootRef: (el) => { this._el = el; },
+      rootStyle: 'position:relative; display:' + (p.fill ? 'block' : 'inline-block') + '; font-family:\'Instrument Sans\',sans-serif; color:#EFEAE0;',
+      open: s.open, toggle: () => this.setState(x => ({ open: !x.open, query: '' })),
+      label, caretCls: 'ph ph-caret-down',
+      triggerStyle: 'display:inline-flex; align-items:center; gap:8px; border-radius:8px; color:#EFEAE0; font-family:inherit; cursor:pointer; white-space:nowrap; ' + (p.compact ? 'padding:8px 12px; font-size:12px; background:#232019; border:1px solid #3D382E;' : 'padding:' + (p.fill ? '12px 12px' : '8px 16px') + '; font-size:14px; background:' + (p.surface ?? '#1A1813') + '; border:1px solid ' + (p.surface ? '#3D382E' : '#322E26') + ';') + (p.fill ? ' width:100%; justify-content:space-between;' : ''),
+      panel: 'position:absolute; ' + ((p.align ?? 'left') === 'right' ? 'right:0;' : 'left:0;') + ' top:' + (p.compact ? 40 : p.fill ? 52 : 48) + 'px; width:' + (p.fill ? '100%' : (p.width ?? 260) + 'px') + '; background:#201D17; border:1px solid #3D382E; border-radius:12px; box-shadow:0 24px 60px -18px rgba(0,0,0,.8); z-index:80; overflow:hidden;',
+      hasHeading: !!p.heading, heading: p.heading ?? '',
+      searchable: p.searchable === true, query: s.query, onQuery: (e) => this.setState({ query: e.target.value }),
+      rows: visible.map(it => {
+        if (it.group) return { isGroup: true, label: it.group };
+        if (it.sep) return { isSep: true };
+        const on = mode === 'select' && it.value === value;
+        const disabled = it.disabled === true;
+        const base = 'display:flex; align-items:center; padding:' + (mode === 'select' ? '12px 12px' : '8px 12px') + '; border-radius:8px; font-size:14px; margin-bottom:2px;';
+        return { isItem: true, label: it.label, hasMeta: !!it.meta, meta: it.meta ?? '',
+          cls: disabled ? '' : (it.danger ? 'hz-opt hm-danger' : 'hz-opt'),
+          style: base + (disabled ? ' color:#5A5446; cursor:not-allowed;' : on ? ' background:#1F5C4D; color:#F6F2E9; font-weight:600; cursor:pointer;' : it.danger ? ' color:#E06661; cursor:pointer;' : ' color:#EFEAE0; cursor:pointer;'),
+          pick: () => { if (disabled) return; if (!controlled) this.setState({ value: it.value }); this.setState({ open: false }); if (p.onSelect) p.onSelect(it.value); if (it.onSelect) it.onSelect(); },
+        };
+      }),
+    };
+  }
+}
+</script>
+</body>
+</html>

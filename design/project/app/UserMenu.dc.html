@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#1A1813; }
+  .hm-row, .hm-chip, .hm-ws { transition: background .14s ease, border-color .14s ease, color .14s ease; }
+  .hm-row:hover { background:#2A2620 !important; }
+  .hm-row:hover .hm-ico { color:#EFEAE0 !important; }
+  .hm-danger:hover { background:rgba(224,102,97,.12) !important; color:#EC8683 !important; }
+  .hm-ws:hover { background:#2A2620 !important; }
+  .hm-chip:hover { background:#2C2820 !important; border-color:#5A5446 !important; }
+  a { color:#4FB79A; text-decoration:none; }
+  a:hover { color:#6ECAB0; }
+</style>
+</helmet>
+<div ref="{{ rootRef }}" style="position:relative; font-family:'Instrument Sans',sans-serif; color:#EFEAE0;">
+  <sc-if value="{{ open }}" hint-placeholder-val="{{ false }}">
+  <div style="position:absolute; bottom:56px; left:0; width:252px; background:#201D17; border:1px solid #3D382E; border-radius:12px; overflow:hidden; box-shadow:0 24px 60px -18px rgba(0,0,0,.8); z-index:40;">
+    <div style="display:flex; align-items:center; gap:12px; padding:16px 16px 12px; border-bottom:1px solid #322E26;">
+      <div style="width:38px; height:38px; flex:0 0 38px; border-radius:50%; background:#1F5C4D; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:18px; color:#EFEAE0;">{{ initial }}</div>
+      <div style="min-width:0;"><div style="font-size:14px; font-weight:600; color:#F6F2E9;">{{ name }}</div><div style="font-size:12px; color:#8F8676; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ email }}</div></div>
+      <span style="display:inline-flex; padding:4px 8px; background:#15291F; color:#5FCAA8; border:1px solid #24402F; border-radius:999px; font-size:12px; font-weight:600; white-space:nowrap;">{{ role }}</span>
+    </div>
+    <div class="hm-ws" style="display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid #322E26; cursor:pointer;">
+      <span style="width:22px; height:22px; border-radius:6px; background:#1F5C4D; display:inline-flex; align-items:center; justify-content:center; font-size:12px; color:#EFEAE0; font-weight:700;">{{ wsInitial }}</span>
+      <div style="flex:1; min-width:0;"><div style="font-size:14px; color:#EFEAE0;">{{ workspace }}</div><div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6A6353;">{{ wsUrl }}</div></div>
+      <span style="display:inline-flex; color:#6A6353;"><i class="ph ph-arrows-left-right" aria-hidden="true" style="font-size:12px; line-height:1; display:block;"></i></span>
+    </div>
+    <div style="padding:8px;">
+      <a href="08_Settings.dc.html" class="hm-row" style="display:flex; align-items:center; gap:12px; padding:8px 8px; border-radius:8px; font-size:14px; color:#EFEAE0; text-decoration:none;"><span class="hm-ico" style="display:inline-flex; color:#8F8676; width:16px;"><i class="ph ph-user" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span> My profile</a>
+      <a href="07_Reports.dc.html" class="hm-row" style="display:flex; align-items:center; gap:12px; padding:8px 8px; border-radius:8px; font-size:14px; color:#EFEAE0; text-decoration:none;"><span class="hm-ico" style="display:inline-flex; color:#8F8676; width:16px;"><i class="ph ph-chart-bar" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span> My time report</a>
+    </div>
+    <div style="padding:8px; border-top:1px solid #322E26;">
+      <div style="padding:4px 8px 8px; font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353;">Admin</div>
+      <a href="09_Workspace.dc.html" class="hm-row" style="display:flex; align-items:center; gap:12px; padding:8px 8px; border-radius:8px; font-size:14px; color:#EFEAE0; text-decoration:none;"><span class="hm-ico" style="display:inline-flex; color:#8F8676; width:16px;"><i class="ph ph-gear-six" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span> Workspace settings</a>
+    </div>
+    <div style="display:flex; align-items:center; gap:12px; padding:12px 16px; border-top:1px solid #322E26;">
+      <span style="display:inline-flex; color:#8F8676; width:16px;"><i class="ph ph-circle-half" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span>
+      <span style="flex:1; font-size:14px; color:#EFEAE0;">Dark theme</span>
+      <span style="width:40px; height:22px; border-radius:999px; background:#1F5C4D; position:relative; display:inline-block; flex:0 0 40px;"><span style="position:absolute; right:3px; top:3px; width:16px; height:16px; border-radius:50%; background:#EFEAE0;"></span></span>
+    </div>
+    <div style="padding:8px; border-top:1px solid #322E26;">
+      <div class="hm-row" style="display:flex; align-items:center; gap:12px; padding:8px 8px; border-radius:8px; font-size:14px; color:#A29C8D; cursor:pointer;"><span class="hm-ico" style="display:inline-flex; color:#8F8676; width:16px;"><i class="ph ph-question" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span> Need help?</div>
+      <a href="01_Sign In.dc.html" class="hm-row hm-danger" style="display:flex; align-items:center; gap:12px; padding:8px 8px; border-radius:8px; font-size:14px; color:#E06661; text-decoration:none;"><span style="display:inline-flex; width:16px;"><i class="ph ph-sign-out" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span> Sign out</a>
+    </div>
+  </div>
+  </sc-if>
+  <div onClick="{{ toggle }}" class="hm-chip" style="display:flex; align-items:center; gap:12px; padding:12px 8px 8px; border-top:1px solid #322E26; border-radius:8px; cursor:pointer;">
+    <div style="width:30px; height:30px; border-radius:50%; background:#1F5C4D; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; color:#EFEAE0; flex:0 0 30px;">{{ initial }}</div>
+    <div style="min-width:0;"><div style="font-size:14px; font-weight:600; color:#F6F2E9;">{{ name }}</div><div style="font-size:12px; color:#8F8676;">{{ workspace }}</div></div>
+    <div style="flex:1;"></div>
+    <span style="display:inline-flex; color:#6A6353;"><i class="ph ph-dots-three" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:232,&quot;height&quot;:420},&quot;name&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Mira Kovač&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;email&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;mira@fieldstone.studio&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;role&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Admin&quot;,&quot;Manager&quot;,&quot;Member&quot;],&quot;default&quot;:&quot;Admin&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;workspace&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Fieldstone Studio&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;wsUrl&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;horae.app/fieldstone&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = { open: false };
+  componentDidMount() {
+    this._root = React.createRef ? null : null;
+    this._onDoc = (e) => { const el = this._el; if (el && !el.contains(e.target) && this.state.open) this.setState({ open: false }); };
+    this._onKey = (e) => { if (e.key === 'Escape' && this.state.open) this.setState({ open: false }); };
+    document.addEventListener('mousedown', this._onDoc, true);
+    document.addEventListener('keydown', this._onKey);
+  }
+  componentWillUnmount() {
+    document.removeEventListener('mousedown', this._onDoc, true);
+    document.removeEventListener('keydown', this._onKey);
+  }
+
+  renderVals() {
+    const p = this.props;
+    const name = p.name ?? 'Mira Kovač', workspace = p.workspace ?? 'Fieldstone Studio';
+    return {
+      rootRef: (el) => { this._el = el; },
+      open: this.state.open, toggle: () => this.setState(s => ({ open: !s.open })),
+      name, initial: name[0], email: p.email ?? 'mira@fieldstone.studio', role: p.role ?? 'Admin',
+      workspace, wsInitial: workspace[0], wsUrl: p.wsUrl ?? 'horae.app/fieldstone',
+    };
+  }
+}
+</script>
+</body>
+</html>

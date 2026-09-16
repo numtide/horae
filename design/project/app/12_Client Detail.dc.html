@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#100F0C; }
+  * { box-sizing:border-box; }
+  button, .hm-row, .hm-chip, .hm-ws { transition: background .14s ease, transform .08s ease, box-shadow .16s ease, border-color .14s ease, color .14s ease; }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(79,183,154,.35) !important; }
+  button:disabled { cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+  .hb-primary:hover:not(:disabled) { background:#63C9AC !important; box-shadow:0 6px 18px -8px rgba(79,183,154,.65) !important; }
+  .hb-solid:hover:not(:disabled) { background:#27705E !important; box-shadow:0 6px 18px -8px rgba(31,92,77,.7) !important; }
+  .hb-accent:hover:not(:disabled) { background:#E5AB52 !important; box-shadow:0 6px 18px -8px rgba(217,154,60,.6) !important; }
+  .hb-secondary:hover:not(:disabled) { background:#2C2820 !important; border-color:#5A5446 !important; }
+  .hb-ghost:hover:not(:disabled) { background:rgba(79,183,154,.10) !important; color:#6ECAB0 !important; }
+  .hb-danger:hover:not(:disabled) { background:rgba(224,102,97,.12) !important; border-color:#8D4441 !important; color:#EC8683 !important; }
+  .hb-icon:hover:not(:disabled) { background:#2C2820 !important; border-color:#5A5446 !important; color:#EFEAE0 !important; }
+  .hb-caret:hover:not(:disabled) { background:#1B5347 !important; }
+  .hb-seg:not(.hb-seg-on):hover:not(:disabled) { background:#232019 !important; color:#EFEAE0 !important; }
+  .hm-row:hover { background:#2A2620 !important; }
+  .hm-row:hover .hm-ico { color:#EFEAE0 !important; }
+  .hm-danger:hover { background:rgba(224,102,97,.12) !important; color:#EC8683 !important; }
+  .hm-ws:hover { background:#2A2620 !important; }
+  .hm-chip:hover { background:#2C2820 !important; border-color:#5A5446 !important; }
+  ::selection { background:#1F5C4D; color:#F6F2E9; }
+  ::-moz-selection { background:#1F5C4D; color:#F6F2E9; }
+  * { scrollbar-width: thin; scrollbar-color: #3D382E transparent; }
+  ::-webkit-scrollbar { width:10px; height:10px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:#3D382E; border-radius:999px; border:2px solid transparent; background-clip:content-box; }
+  ::-webkit-scrollbar-thumb:hover { background:#5A5446; background-clip:content-box; }
+  ::-webkit-scrollbar-corner { background:transparent; }
+  .hb-seg:hover { background:#232019; color:#EFEAE0; }
+  .hz-bulk:hover { background:#2A2620; }
+  .hf { transition: border-color .14s ease, background .14s ease, box-shadow .16s ease; width:100%; padding:12px 12px; background:#100F0C; border:1px solid #3D382E; border-radius:8px; color:#EFEAE0; font-family:'Instrument Sans',sans-serif; font-size:14px; }
+  .hf::placeholder { color:#6A6353; }
+  .hf:hover:not(:focus) { border-color:#5A5446; background:#161510; }
+  .hf:focus { outline:none; border-color:#4FB79A; box-shadow:0 0 0 3px rgba(79,183,154,.18); }
+  a { color:#4FB79A; text-decoration:none; }
+  a:hover { color:#6ECAB0; }
+  .hz-back:hover { background:#232019; color:#EFEAE0; } .hz-back:hover .hz-back-arrow { transform:translateX(-2px); }
+  @media (max-width: 1180px) { .hz-split { grid-template-columns:1fr !important; } }
+  .hz-opt { transition: box-shadow .14s ease; }
+  .hz-opt:hover { box-shadow: inset 0 0 0 999px rgba(239,234,224,.05); }
+  .hz-link { transition: color .14s ease; }
+  .hz-link:hover { color:#6ECAB0 !important; }
+  .hz-link-muted { transition: color .14s ease; }
+  .hz-link-muted:hover { color:#EFEAE0 !important; }
+  .hz-row-link { transition: color .14s ease; }
+  .hz-row-link:hover { color:#4FB79A !important; }
+  .hz-nav { transition: background .14s ease, color .14s ease; }
+  .hz-nav:hover { background:#232019 !important; color:#EFEAE0 !important; }
+  .hz-nav:hover .hm-ico { color:#EFEAE0 !important; }
+  @media (max-width: 1320px) {
+    .hz-rail { width:216px !important; flex-basis:216px !important; }
+    .hz-split { gap:32px !important; padding-left:24px !important; padding-right:24px !important; }
+    .hz-pad { padding-left:24px !important; padding-right:24px !important; }
+  }
+  @media (max-width: 1180px) {
+    .hz-split { flex-direction:column !important; gap:24px !important; }
+    .hz-subnav { width:100% !important; flex:none !important; }
+    .hz-subnav > div:first-child { max-width:420px; }
+    .hz-subnav > div:not(:first-child) { flex-direction:row !important; flex-wrap:wrap !important; gap:8px !important; }
+  }
+  @media (max-width: 900px) {
+    .hz-rail { display:none !important; }
+    .hz-shell { height:auto !important; min-height:100vh !important; }
+    .hz-pad { padding-left:20px !important; padding-right:20px !important; }
+  }
+</style>
+</helmet>
+
+<div class="hz-shell" style="display:flex; height:100vh; background:#100F0C; color:#EFEAE0; font-family:'Instrument Sans',sans-serif; overflow:hidden;">
+  <dc-import name="Rail" active="clients" hint-size="264px,100%" style="display:flex; flex:0 0 auto; align-self:stretch;"></dc-import>
+
+  <!-- ================= MAIN ================= -->
+  <div style="flex:1; min-width:0; display:flex; flex-direction:column; overflow:hidden;">
+    <dc-import name="DevBar" label="Page state" options="{{ devOptions }}" value="{{ devValue }}" on-change="{{ setDev }}" hint-size="100%,52px" style="display:block;"></dc-import>
+    <div style="flex:1; overflow-y:auto; min-height:0;">
+    <div class="hz-pad" style="padding:24px 40px 64px;">
+      <a href="12_Clients.dc.html" class="hz-back" style="display:inline-flex; align-items:center; gap:8px; font-size:14px; color:#A29C8D; padding:6px 10px; margin-left:-10px; border-radius:8px;"><span class="hz-back-arrow" style="display:inline-flex; transition:transform .14s ease;"><i class="ph ph-arrow-left" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span> Back to Clients</a>
+
+      <div style="display:flex; align-items:flex-end; gap:16px; flex-wrap:wrap; margin-top:20px; padding-bottom:24px; border-bottom:1px solid #262219;">
+        <div style="min-width:280px;">
+          <div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353;">Client · since Mar 2024</div>
+          <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:8px;">
+            <h1 style="font-family:'Newsreader',serif; font-size:34px; font-weight:600; color:#F6F2E9; margin:0; letter-spacing:-.015em;">Meridian Health</h1>
+            <span style="display:inline-flex; padding:4px 8px; background:#232019; border:1px solid #3D382E; border-radius:999px; font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D; white-space:nowrap;">CHF</span>
+          </div>
+        </div>
+        <div style="flex:1;"></div>
+        <button class="hb-primary" style="display:flex; align-items:center; gap:8px; padding:8px 16px; background:#4FB79A; color:#0D211B; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap;">New invoice</button>
+        <button onClick="{{ openEdit }}" class="hb-secondary" style="display:flex; align-items:center; gap:8px; padding:8px 16px; background:#232019; border:1px solid #3D382E; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap;"><i class="ph ph-pencil-simple" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i> Edit client</button>
+        <dc-import name="Dropdown" mode="actions" label="Actions" items="{{ clientActions }}" on-select="{{ onClientAction }}" align="right" width="200" surface="#232019" hint-size="100px,40px"></dc-import>
+      </div>
+
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; margin-top:24px;">
+        <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; padding:20px; "><div style="font-size:14px; color:#A29C8D;">Unbilled time</div><div style="font-family:'IBM Plex Mono',monospace; font-size:30px; font-weight:600; color:#E0B45F; margin:8px 0 4px;">CHF 5,300.00</div><div style="font-size:12px; color:#8F8676;">41:30 across 2 projects</div></div>
+        <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; padding:20px; "><div style="font-size:14px; color:#A29C8D;">Billed this year</div><div style="font-family:'IBM Plex Mono',monospace; font-size:30px; font-weight:600; color:#F6F2E9; margin:8px 0 4px;">CHF 61,875.00</div><div style="font-size:12px; color:#8F8676;">4 invoices · last 30 Jun</div></div>
+        <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; padding:20px; "><div style="font-size:14px; color:#A29C8D;">Hours tracked</div><div style="font-family:'IBM Plex Mono',monospace; font-size:30px; font-weight:600; color:#F6F2E9; margin:8px 0 4px;">412:30</div><div style="font-size:12px; color:#8F8676;">since Mar 2024</div></div>
+        <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; padding:20px; "><div style="font-size:14px; color:#A29C8D;">Open invoices</div><div style="font-family:'IBM Plex Mono',monospace; font-size:30px; font-weight:600; color:#F6F2E9; margin:8px 0 4px;">1</div><div style="font-size:12px; color:#8F8676;">CHF 14,200.00 · due 20 Sep</div></div>
+      </div>
+
+      <div class="hz-split" style="display:grid; grid-template-columns:minmax(0,1fr) 320px; gap:16px; margin-top:16px; align-items:start;">
+        <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; overflow:hidden; overflow-x:auto;">
+          <div style="display:flex; align-items:center; gap:12px; padding:16px 20px; border-bottom:1px solid #322E26;">
+            <span style="font-family:'Newsreader',serif; font-size:18px; font-weight:600; color:#F6F2E9;">Projects</span>
+            <span style="font-size:12px; color:#8F8676;">2 active · 1 archived</span>
+            <div style="flex:1;"></div>
+            <a href="05_Projects.dc.html" style="font-size:14px; font-weight:600;">View in Projects</a>
+          </div>
+          <div style="display:grid; min-width:760px; grid-template-columns:minmax(260px,1fr) 130px 120px 150px 120px; align-items:center; padding:12px 20px; border-bottom:1px solid #322E26; font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353;"><span>Project</span><span style="text-align:right;">Hours</span><span style="text-align:right;">Spent</span><span style="text-align:right;">Status</span><span></span></div>
+        <div style="display:grid; min-width:760px; grid-template-columns:minmax(260px,1fr) 130px 120px 150px 120px; align-items:center; padding:14px 20px; border-bottom:1px solid #262219;">
+          <div style="display:flex; align-items:center; gap:12px; min-width:0;"><a href="11_Project Detail.dc.html" class="hz-row-link" style="font-size:14px; font-weight:600; color:#F6F2E9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">[4192] T&amp;M · Atlas Platform</a><span style="padding:4px 8px; background:#232019; border:1px solid #3D382E; border-radius:999px; font-size:12px; color:#A29C8D; white-space:nowrap;">Time &amp; Materials</span></div>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">318:00</span>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#A29C8D;">CHF 47,700.00</span>
+          <div style="display:flex; justify-content:flex-end;"><span style="display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:600; background:#15291F; color:#5FCAA8; border:1px solid #24402F; white-space:nowrap;"><span style="width:6px; height:6px; border-radius:999px; background:#3FB489;"></span>Active</span></div>
+          <div style="text-align:right;"><dc-import name="Dropdown" mode="actions" label="Actions" compact="{{ true }}" items="{{ rowActions }}" align="right" width="170" hint-size="80px,34px"></dc-import></div>
+        </div>
+        <div style="display:grid; min-width:760px; grid-template-columns:minmax(260px,1fr) 130px 120px 150px 120px; align-items:center; padding:14px 20px; border-bottom:1px solid #262219;">
+          <div style="display:flex; align-items:center; gap:12px; min-width:0;"><a href="11_Project Detail.dc.html" class="hz-row-link" style="font-size:14px; font-weight:600; color:#F6F2E9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">[4207] Fixed · Patient portal audit</a><span style="padding:4px 8px; background:#232019; border:1px solid #3D382E; border-radius:999px; font-size:12px; color:#A29C8D; white-space:nowrap;">Fixed Fee</span></div>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">64:30</span>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#A29C8D;">CHF 9,675.00</span>
+          <div style="display:flex; justify-content:flex-end;"><span style="display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:600; background:#2B2413; color:#E0B45F; border:1px solid #453818; white-space:nowrap;"><span style="width:6px; height:6px; border-radius:999px; background:#D6A24A;"></span>Over budget</span></div>
+          <div style="text-align:right;"><dc-import name="Dropdown" mode="actions" label="Actions" compact="{{ true }}" items="{{ rowActions }}" align="right" width="170" hint-size="80px,34px"></dc-import></div>
+        </div>
+        <div style="display:grid; min-width:760px; grid-template-columns:minmax(260px,1fr) 130px 120px 150px 120px; align-items:center; padding:14px 20px; ">
+          <div style="display:flex; align-items:center; gap:12px; min-width:0;"><a href="11_Project Detail.dc.html" class="hz-row-link" style="font-size:14px; font-weight:600; color:#F6F2E9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">[3980] T&amp;M · Data migration</a><span style="padding:4px 8px; background:#232019; border:1px solid #3D382E; border-radius:999px; font-size:12px; color:#A29C8D; white-space:nowrap;">Time &amp; Materials</span></div>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">30:00</span>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#A29C8D;">CHF 4,500.00</span>
+          <div style="display:flex; justify-content:flex-end;"><span style="display:inline-flex; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:600; background:#232019; color:#A29C8D; border:1px solid #3D382E; white-space:nowrap;">Archived</span></div>
+          <div style="text-align:right;"><dc-import name="Dropdown" mode="actions" label="Actions" compact="{{ true }}" items="{{ rowActions }}" align="right" width="170" hint-size="80px,34px"></dc-import></div>
+        </div>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:16px;">
+          <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; padding:20px; "><div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353; margin-bottom:8px;">Contact</div><div style="font-size:14px; font-weight:600; color:#F6F2E9;">Anna Roth</div><div style="font-size:12px; color:#8F8676; margin-top:2px;">Head of Digital</div><a href="#" onClick="{{ noop }}" style="display:block; font-family:'IBM Plex Mono',monospace; font-size:12px; margin-top:8px;">a.roth@meridian.ch</a><div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D; margin-top:4px;">+41 44 555 01 20</div></div>
+          <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; padding:20px; "><div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353; margin-bottom:8px;">Billing</div><div style="font-size:14px; color:#EFEAE0; line-height:1.55;">Meridian Health AG<br>Bahnhofstrasse 42<br>8001 Zürich, Switzerland</div><div style="display:flex; justify-content:space-between; font-size:14px; padding:12px 0 0; margin-top:12px; border-top:1px solid #262219;"><span style="color:#A29C8D;">Default rate</span><span style="font-family:'IBM Plex Mono',monospace; color:#EFEAE0;">CHF 150.00 / h</span></div><div style="display:flex; justify-content:space-between; font-size:14px; padding:4px 0;"><span style="color:#A29C8D;">Payment terms</span><span style="font-family:'IBM Plex Mono',monospace; color:#EFEAE0;">30 days</span></div><div style="display:flex; justify-content:space-between; font-size:14px; padding:4px 0;"><span style="color:#A29C8D;">VAT</span><span style="font-family:'IBM Plex Mono',monospace; color:#EFEAE0;">CHE-123.456.789</span></div></div>
+          <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; padding:20px; "><div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353; margin-bottom:8px;">Recent invoices</div><div style="display:flex; justify-content:space-between; font-size:14px; padding:6px 0;"><span style="color:#EFEAE0;">#2026-031</span><span style="font-family:'IBM Plex Mono',monospace; color:#A29C8D;">CHF 14,200.00</span><span style="display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:600; background:#2B2413; color:#E0B45F; border:1px solid #453818; white-space:nowrap;"><span style="width:6px; height:6px; border-radius:999px; background:#D6A24A;"></span>Open</span></div><div style="display:flex; justify-content:space-between; font-size:14px; padding:6px 0;"><span style="color:#EFEAE0;">#2026-024</span><span style="font-family:'IBM Plex Mono',monospace; color:#A29C8D;">CHF 18,450.00</span><span style="display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:600; background:#15291F; color:#5FCAA8; border:1px solid #24402F; white-space:nowrap;"><span style="width:6px; height:6px; border-radius:999px; background:#3FB489;"></span>Paid</span></div><div style="display:flex; justify-content:space-between; font-size:14px; padding:6px 0;"><span style="color:#EFEAE0;">#2026-017</span><span style="font-family:'IBM Plex Mono',monospace; color:#A29C8D;">CHF 12,900.00</span><span style="display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:600; background:#15291F; color:#5FCAA8; border:1px solid #24402F; white-space:nowrap;"><span style="width:6px; height:6px; border-radius:999px; background:#3FB489;"></span>Paid</span></div></div>
+        </div>
+      </div>
+    </div>
+    </div>
+
+    <!-- EDIT CLIENT SHEET -->
+    <sc-if value="{{ editOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeEdit }}" style="position:fixed; inset:0; background:rgba(8,7,5,.68); display:flex; align-items:flex-start; justify-content:center; padding-top:64px; z-index:60;">
+      <div onClick="{{ stopProp }}" style="width:560px; max-width:92vw; background:#1A1813; border:1px solid #322E26; border-radius:16px; box-shadow:0 24px 60px -18px rgba(0,0,0,.8);">
+        <div style="padding:16px 24px; border-bottom:1px solid #322E26;"><span style="font-family:'Newsreader',serif; font-size:18px; font-weight:600; color:#F6F2E9;">Edit client</span></div>
+        <div style="padding:24px; display:flex; flex-direction:column; gap:16px;">
+          <div><div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353; margin-bottom:8px;">Client name</div><input class="hf" defaultValue="Meridian Health" /></div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <div><div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353; margin-bottom:8px;">Currency</div><dc-import name="Dropdown" items="{{ currencyItems }}" value="{{ currency }}" on-select="{{ setCurrency }}" surface="#100F0C" fill="{{ true }}" hint-size="100%,44px" style="display:block;"></dc-import></div>
+            <div><div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353; margin-bottom:8px;">Default rate</div><input class="hf" defaultValue="150.00" style="font-family:'IBM Plex Mono',monospace;" /></div>
+          </div>
+          <div><div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353; margin-bottom:8px;">Billing address</div><textarea class="hf" rows="{{ 3 }}" defaultValue="Meridian Health AG&#10;Bahnhofstrasse 42&#10;8001 Zürich, Switzerland" style="resize:vertical; line-height:1.5;"></textarea></div>
+          <div style="display:flex; align-items:center; gap:12px; margin-top:4px;">
+            <button class="hb-primary" onClick="{{ saveEdit }}" style="padding:12px 20px; background:#4FB79A; color:#0D211B; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap;">Save changes</button>
+            <button class="hb-secondary" onClick="{{ closeEdit }}" style="padding:12px 20px; background:#232019; color:#EFEAE0; border:1px solid #3D382E; border-radius:8px; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap;">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+    <dc-import name="ConfirmDialog" open="{{ confirmArchive }}" title="Archive Meridian Health?" body="Its 3 projects are archived with it. Tracked time, invoices and reports stay intact; nobody can log new time until it is reactivated." confirm-label="Archive client" danger="{{ false }}" icon="archive" on-confirm="{{ doArchive }}" on-cancel="{{ cancelArchive }}" hint-size="0,0"></dc-import>
+    <dc-import name="Toast" open="{{ toast }}" message="{{ toastMsg }}" on-close="{{ hideToast }}" hint-size="0,0"></dc-import>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:1000}}">
+class Component extends DCLogic {
+  state = {};
+  renderVals() {
+    const s = this.state;
+    return {
+      devOptions: ['Client detail'], devValue: 'Client detail', setDev: () => {},
+      clientActions: ['Duplicate', { sep: true }, { value: 'archive', label: 'Archive' }, { value: 'delete', label: 'Delete', danger: true }],
+      onClientAction: (v) => { if (v === 'archive') this.setState({ confirmArchive: true }); },
+      rowActions: [{ value: 'edit', label: 'Edit' }, { value: 'pin', label: 'Pin' }, { sep: true }, { value: 'archive', label: 'Archive' }],
+      noop: (e) => e.preventDefault(),
+      editOpen: s.editOpen === true, openEdit: () => this.setState({ editOpen: true }), closeEdit: () => this.setState({ editOpen: false }), stopProp: (e) => e.stopPropagation(),
+      saveEdit: () => this.setState({ editOpen: false, toast: true, toastMsg: 'Client saved' }),
+      currencyItems: ['EUR', 'CHF', 'USD', 'GBP'], currency: s.currency ?? 'CHF', setCurrency: (v) => this.setState({ currency: v }),
+      confirmArchive: s.confirmArchive === true, cancelArchive: () => this.setState({ confirmArchive: false }),
+      doArchive: () => this.setState({ confirmArchive: false, toast: true, toastMsg: 'Meridian Health archived' }),
+      toast: s.toast === true, toastMsg: s.toastMsg ?? '', hideToast: () => this.setState({ toast: false }),
+    };
+  }
+}
+</script>
+</body>
+</html>
