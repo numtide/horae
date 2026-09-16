@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#100F0C; }
+  button { transition: background .14s ease, border-color .14s ease, color .14s ease; }
+  .hb-icon:hover:not(:disabled) { background:#2C2820 !important; border-color:#5A5446 !important; color:#EFEAE0 !important; }
+  .hs-day { transition: background .14s ease; } .hs-day:hover { background:#2A2620; }
+  .hz-link:hover { color:#6ECAB0 !important; }
+</style>
+</helmet>
+<div style="width:308px; background:#201D17; border:1px solid #3D382E; border-radius:12px; box-shadow:0 24px 60px -18px rgba(0,0,0,.8); padding:16px; font-family:'Instrument Sans',sans-serif; color:#EFEAE0;">
+  <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
+    <button onClick="{{ prevMonth }}" class="hb-icon" style="display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; background:transparent; border:1px solid #322E26; border-radius:6px; color:#A29C8D; cursor:pointer; white-space:nowrap;"><i class="ph ph-caret-left" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></button>
+    <div style="flex:1; text-align:center; font-family:'Newsreader',serif; font-size:18px; font-weight:600; color:#F6F2E9;">{{ monthLabel }}</div>
+    <button onClick="{{ nextMonth }}" class="hb-icon" style="display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; background:transparent; border:1px solid #322E26; border-radius:6px; color:#A29C8D; cursor:pointer; white-space:nowrap;"><i class="ph ph-caret-right" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></button>
+  </div>
+  <div style="display:grid; grid-template-columns:repeat(7,1fr); padding-bottom:8px; border-bottom:1px solid #322E26; margin-bottom:8px;">
+    <div style="text-align:center; font-size:12px; color:#6A6353;">Mo</div>
+    <div style="text-align:center; font-size:12px; color:#6A6353;">Tu</div>
+    <div style="text-align:center; font-size:12px; color:#6A6353;">We</div>
+    <div style="text-align:center; font-size:12px; color:#6A6353;">Th</div>
+    <div style="text-align:center; font-size:12px; color:#6A6353;">Fr</div>
+    <div style="text-align:center; font-size:12px; color:#6A6353;">Sa</div>
+    <div style="text-align:center; font-size:12px; color:#6A6353;">Su</div>
+  </div>
+  <div style="display:grid; grid-template-columns:repeat(7,1fr); border-radius:6px; overflow:hidden;">
+    <sc-for list="{{ days }}" as="day" hint-placeholder-count="42">
+      <div onClick="{{ day.pick }}" class="{{ day.cls }}" style="{{ day.style }}">{{ day.n }}</div>
+    </sc-for>
+  </div>
+  <div style="display:flex; align-items:center; gap:12px; margin-top:16px; padding-top:12px; border-top:1px solid #322E26;">
+    <span onClick="{{ pickToday }}" class="hz-link" style="font-size:14px; font-weight:600; color:#4FB79A; cursor:pointer;">{{ todayLabel }}</span>
+    <div style="flex:1;"></div>
+    <span style="font-size:12px; color:#7C7565;">{{ hint }}</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:340,&quot;height&quot;:420},&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;week&quot;,&quot;day&quot;],&quot;default&quot;:&quot;week&quot;,&quot;tsType&quot;:&quot;'week'|'day'&quot;},&quot;value&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;2026-07-06&quot;,&quot;tsType&quot;:&quot;string | Date&quot;},&quot;today&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;2026-07-08&quot;,&quot;tsType&quot;:&quot;string | Date&quot;},&quot;onPick&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;(date: Date) =&gt; void&quot;}}">
+class Component extends DCLogic {
+  state = {};
+  renderVals() {
+    const p = this.props;
+    const mode = p.mode ?? 'week';                                    // 'day' | 'week'
+    const today = p.today ? new Date(p.today) : new Date(2026, 6, 8);  // 8 Jul 2026 (prototype clock)
+    const selected = p.value ? new Date(p.value) : today;
+    const view = this.state.view ?? new Date(selected.getFullYear(), selected.getMonth(), 1);
+    const y = view.getFullYear(), m = view.getMonth();
+    const first = new Date(y, m, 1);
+    const offset = (first.getDay() + 6) % 7;                          // Monday-first
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
+    const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+    const monday = (d) => { const x = new Date(d); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); x.setHours(0,0,0,0); return x; };
+    const selMon = monday(selected);
+    const inSelWeek = (d) => { const t = d.getTime(), a = selMon.getTime(); return mode === 'week' && t >= a && t < a + 7 * 864e5; };
+    const cell = 'height:36px; display:flex; align-items:center; justify-content:center; font-family:\'IBM Plex Mono\',monospace; font-size:14px; cursor:pointer;';
+    const days = [];
+    const cells = Math.ceil((offset + daysInMonth) / 7) * 7;
+    for (let i = 0; i < cells; i++) {
+      const d = new Date(y, m, i - offset + 1);
+      const inMonth = d.getMonth() === m;
+      const isSel = mode === 'day' ? sameDay(d, selected) : inSelWeek(d);
+      const isEnd = mode === 'week' && isSel && (sameDay(d, selMon) || d.getDay() === 0);
+      const isToday = sameDay(d, today);
+      let style = cell + (inMonth ? ' color:#EFEAE0;' : ' color:#3D382E;');
+      if (isSel) style = cell + ((mode === 'day' || isEnd) ? ' background:#1F5C4D; color:#F6F2E9; font-weight:600;' : ' background:rgba(31,92,77,.28); color:#EFEAE0;');
+      if (isToday && !(mode === 'day' && isSel) && !isEnd) style += ' box-shadow:inset 0 0 0 1px #4FB79A;';
+      days.push({ n: d.getDate(), style, cls: isSel ? '' : 'hs-day', pick: () => p.onPick && p.onPick(mode === 'week' ? monday(d) : d) });
+    }
+    return {
+      days,
+      monthLabel: view.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }),
+      prevMonth: () => this.setState({ view: new Date(y, m - 1, 1) }),
+      nextMonth: () => this.setState({ view: new Date(y, m + 1, 1) }),
+      pickToday: () => { this.setState({ view: new Date(today.getFullYear(), today.getMonth(), 1) }); p.onPick && p.onPick(mode === 'week' ? monday(today) : today); },
+      todayLabel: mode === 'week' ? 'This week' : 'Today',
+      hint: mode === 'week' ? 'Picks the whole week' : 'Picks a single day',
+    };
+  }
+}
+</script>
+</body>
+</html>

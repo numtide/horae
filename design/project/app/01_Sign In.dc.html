@@ -8,6 +8,7 @@
 <body>
 <x-dc>
 <helmet>
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,500&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -18,29 +19,37 @@
   button:active:not(:disabled) { transform: translateY(1px); }
   button:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(79,183,154,.35) !important; }
   button:disabled { cursor: not-allowed; transform: none !important; box-shadow: none !important; }
-  .hb-primary:hover:not(:disabled) { background:#63c9ac !important; box-shadow:0 6px 18px -8px rgba(79,183,154,.65) !important; }
-  .hb-solid:hover:not(:disabled) { background:#27705e !important; box-shadow:0 6px 18px -8px rgba(31,92,77,.7) !important; }
-  .hb-accent:hover:not(:disabled) { background:#e5ab52 !important; box-shadow:0 6px 18px -8px rgba(217,154,60,.6) !important; }
-  .hb-secondary:hover:not(:disabled) { background:#2c2820 !important; border-color:#5a5446 !important; }
-  .hb-ghost:hover:not(:disabled) { background:rgba(79,183,154,.10) !important; color:#6ecab0 !important; }
-  .hb-danger:hover:not(:disabled) { background:rgba(224,102,97,.12) !important; border-color:#8d4441 !important; color:#ec8683 !important; }
-  .hb-icon:hover:not(:disabled) { background:#2c2820 !important; border-color:#5a5446 !important; color:#EFEAE0 !important; }
-  .hb-caret:hover:not(:disabled) { background:#1b5347 !important; }
+  .hb-primary:hover:not(:disabled) { background:#63C9AC !important; box-shadow:0 6px 18px -8px rgba(79,183,154,.65) !important; }
+  .hb-solid:hover:not(:disabled) { background:#27705E !important; box-shadow:0 6px 18px -8px rgba(31,92,77,.7) !important; }
+  .hb-accent:hover:not(:disabled) { background:#E5AB52 !important; box-shadow:0 6px 18px -8px rgba(217,154,60,.6) !important; }
+  .hb-secondary:hover:not(:disabled) { background:#2C2820 !important; border-color:#5A5446 !important; }
+  .hb-ghost:hover:not(:disabled) { background:rgba(79,183,154,.10) !important; color:#6ECAB0 !important; }
+  .hb-danger:hover:not(:disabled) { background:rgba(224,102,97,.12) !important; border-color:#8D4441 !important; color:#EC8683 !important; }
+  .hb-icon:hover:not(:disabled) { background:#2C2820 !important; border-color:#5A5446 !important; color:#EFEAE0 !important; }
+  .hb-caret:hover:not(:disabled) { background:#1B5347 !important; }
   .hm-row:hover { background:#2A2620 !important; }
   .hm-row:hover .hm-ico { color:#EFEAE0 !important; }
-  .hm-danger:hover { background:rgba(224,102,97,.12) !important; color:#ec8683 !important; }
+  .hm-danger:hover { background:rgba(224,102,97,.12) !important; color:#EC8683 !important; }
   .hm-ws:hover { background:#2A2620 !important; }
-  .hm-chip:hover { background:#2c2820 !important; }
+  .hm-chip:hover { background:#2C2820 !important; }
   ::selection { background:#1F5C4D; color:#F6F2E9; }
   ::-moz-selection { background:#1F5C4D; color:#F6F2E9; }
-  * { scrollbar-width: thin; scrollbar-color: #3d382e transparent; }
+  * { scrollbar-width: thin; scrollbar-color: #3D382E transparent; }
   ::-webkit-scrollbar { width:10px; height:10px; }
   ::-webkit-scrollbar-track { background:transparent; }
-  ::-webkit-scrollbar-thumb { background:#3d382e; border-radius:999px; border:2px solid transparent; background-clip:content-box; }
-  ::-webkit-scrollbar-thumb:hover { background:#5a5446; background-clip:content-box; }
+  ::-webkit-scrollbar-thumb { background:#3D382E; border-radius:999px; border:2px solid transparent; background-clip:content-box; }
+  ::-webkit-scrollbar-thumb:hover { background:#5A5446; background-clip:content-box; }
   ::-webkit-scrollbar-corner { background:transparent; }
   a { color:#4FB79A; text-decoration:none; }
-  a:hover { color:#6ecab0; }
+  a:hover { color:#6ECAB0; }
+  .hz-opt { transition: box-shadow .14s ease; }
+  .hz-opt:hover { box-shadow: inset 0 0 0 999px rgba(239,234,224,.05); }
+  .hz-link { transition: color .14s ease; }
+  .hz-link:hover { color:#6ECAB0 !important; }
+  .hz-link-muted { transition: color .14s ease; }
+  .hz-link-muted:hover { color:#EFEAE0 !important; }
+  .hz-row-link { transition: color .14s ease; }
+  .hz-row-link:hover { color:#4FB79A !important; }
   @media (max-width: 1320px) {
     .hz-rail { width:216px !important; flex-basis:216px !important; }
     .hz-split { gap:32px !important; padding-left:24px !important; padding-right:24px !important; }
@@ -58,9 +67,9 @@
     .hz-pad { padding-left:20px !important; padding-right:20px !important; }
   }
   button:hover { filter: brightness(1.1); }
-  input.hf { transition: border-color .14s ease, background .14s ease, box-shadow .16s ease; width:100%; padding:12px 12px; background:#100F0C; border:1px solid #3d382e; border-radius:8px; font-family:'Instrument Sans',sans-serif; font-size:14px; color:#EFEAE0; outline:none; }
-  input.hf::placeholder { color:#5a5446; }
-  input.hf:hover:not(:focus) { border-color:#5a5446; background:#161510; }
+  input.hf { transition: border-color .14s ease, background .14s ease, box-shadow .16s ease; width:100%; padding:12px 12px; background:#100F0C; border:1px solid #3D382E; border-radius:8px; font-family:'Instrument Sans',sans-serif; font-size:14px; color:#EFEAE0; outline:none; }
+  input.hf::placeholder { color:#5A5446; }
+  input.hf:hover:not(:focus) { border-color:#5A5446; background:#161510; }
   input.hf:focus { border-color:#4FB79A; box-shadow:0 0 0 3px rgba(79,183,154,.16); }
 </style>
 </helmet>
@@ -87,25 +96,25 @@
 
       <!-- SSO -->
       <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:24px;">
-        <button class="hb-secondary" style="display:flex; align-items:center; justify-content:center; gap:12px; width:100%; padding:12px 16px; background:#232019; border:1px solid #3d382e; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; font-weight:500; cursor:pointer;"><span style="font-family:'IBM Plex Mono',monospace; font-weight:600; color:#D99A3C;">G</span> Continue with Google</button>
-        <button class="hb-secondary" style="display:flex; align-items:center; justify-content:center; gap:12px; width:100%; padding:12px 16px; background:#232019; border:1px solid #3d382e; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; font-weight:500; cursor:pointer;"><span style="font-family:'IBM Plex Mono',monospace; font-weight:600; color:#EFEAE0;">⌥</span> Continue with GitHub</button>
-        <button class="hb-secondary" style="display:flex; align-items:center; justify-content:center; gap:12px; width:100%; padding:12px 16px; background:#232019; border:1px solid #3d382e; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; font-weight:500; cursor:pointer;"><span style="font-family:'IBM Plex Mono',monospace; font-weight:600; color:#4FB79A;">◇</span> Continue with SSO / SAML</button>
+        <button class="hb-secondary" style="display:flex; align-items:center; justify-content:center; gap:12px; width:100%; padding:12px 16px; background:#232019; border:1px solid #3D382E; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; font-weight:500; cursor:pointer; white-space:nowrap;"><span style="font-family:'IBM Plex Mono',monospace; font-weight:600; color:#D99A3C;">G</span> Continue with Google</button>
+        <button class="hb-secondary" style="display:flex; align-items:center; justify-content:center; gap:12px; width:100%; padding:12px 16px; background:#232019; border:1px solid #3D382E; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; font-weight:500; cursor:pointer; white-space:nowrap;"><span style="font-family:'IBM Plex Mono',monospace; font-weight:600; color:#EFEAE0;">⌥</span> Continue with GitHub</button>
+        <button class="hb-secondary" style="display:flex; align-items:center; justify-content:center; gap:12px; width:100%; padding:12px 16px; background:#232019; border:1px solid #3D382E; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; font-weight:500; cursor:pointer; white-space:nowrap;"><span style="display:inline-flex; font-family:'IBM Plex Mono',monospace; font-weight:600; color:#4FB79A;"><i class="ph ph-diamond" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span> Continue with SSO / SAML</button>
       </div>
 
       <!-- divider -->
-      <div style="display:flex; align-items:center; gap:12px; margin-bottom:24px;"><span style="flex:1; height:1px; background:#262219;"></span><span style="font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:#6a6353;">or with email</span><span style="flex:1; height:1px; background:#262219;"></span></div>
+      <div style="display:flex; align-items:center; gap:12px; margin-bottom:24px;"><span style="flex:1; height:1px; background:#262219;"></span><span style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353;">or with email</span><span style="flex:1; height:1px; background:#262219;"></span></div>
 
       <!-- email/password -->
       <div style="display:flex; flex-direction:column; gap:16px;">
         <div>
-          <div style="font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:#8f8676; margin-bottom:8px;">Work email</div>
+          <div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#8F8676; margin-bottom:8px;">Work email</div>
           <input class="hf" type="email" placeholder="you@company.com" />
         </div>
         <div>
-          <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:8px;"><span style="font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:#8f8676;">Password</span><a href="#" style="font-size:12px;">Forgot?</a></div>
+          <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:8px;"><span style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#8F8676;">Password</span><a href="#" onClick="{{ forgot }}" style="font-size:12px;">Forgot?</a></div>
           <input class="hf" type="password" placeholder="••••••••" />
         </div>
-        <a href="04_Timesheet.dc.html" style="display:block; text-align:center; padding:12px 16px; background:#1F5C4D; color:#F6F2E9; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer; box-shadow:0 8px 24px -10px rgba(31,92,77,.6);">Sign in</a>
+        <a href="04_Timesheet.dc.html" class="hb-solid" style="display:block; text-align:center; padding:12px 16px; background:#1F5C4D; color:#F6F2E9; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer; box-shadow:0 8px 24px -10px rgba(31,92,77,.6);">Sign in</a>
       </div>
 
       <div style="text-align:center; font-size:14px; color:#A29C8D; margin-top:24px;">New to Horae? <a href="02_Create Workspace.dc.html">Create a workspace</a></div>
@@ -113,15 +122,27 @@
   </div>
 
   <!-- RIGHT: brand panel -->
-  <div style="flex:0 0 46%; background:#0d1a16; border-left:1px solid #322E26; display:flex; flex-direction:column; justify-content:center; padding:64px; position:relative; overflow:hidden;">
+  <div style="flex:0 0 46%; background:#0D1A16; border-left:1px solid #322E26; display:flex; flex-direction:column; justify-content:center; padding:64px; position:relative; overflow:hidden;">
     <div style="position:absolute; top:-80px; right:-80px; width:320px; height:320px; border-radius:50%; background:radial-gradient(circle, rgba(217,154,60,.18), transparent 70%);"></div>
     <div style="position:relative;">
-      <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.2em; text-transform:uppercase; color:#4FB79A; margin-bottom:20px;">Open-source time tracking</div>
+      <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#4FB79A; margin-bottom:20px;">Open-source time tracking</div>
       <div style="font-family:'Newsreader',serif; font-size:38px; line-height:1.25; color:#F6F2E9; max-width:420px;">Time, turned into paper.</div>
-      <div style="font-family:'Newsreader',serif; font-style:italic; font-size:18px; color:#8faa9f; margin-top:16px; max-width:400px; line-height:1.5;">Track hours, review, and invoice — one calm, editorial workspace for the whole team.</div>
+      <div style="font-family:'Newsreader',serif; font-style:italic; font-size:18px; color:#8FAA9F; margin-top:16px; max-width:400px; line-height:1.5;">Track hours, review, and invoice — one calm, editorial workspace for the whole team.</div>
     </div>
   </div>
+  <dc-import name="Toast" open="{{ forgotToast }}" message="Reset link sent to mira@fieldstone.studio" on-close="{{ hideForgot }}" hint-size="0,0"></dc-import>
 </div>
 </x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:1000}}">
+class Component extends DCLogic {
+  state = {};
+  renderVals() {
+    return {
+      forgot: (e) => { e.preventDefault(); this.setState({ forgotToast: true }); },
+      forgotToast: this.state.forgotToast === true, hideForgot: () => this.setState({ forgotToast: false }),
+    };
+  }
+}
+</script>
 </body>
 </html>

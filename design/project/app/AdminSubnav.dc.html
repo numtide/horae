@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#100F0C; }
+  .hz-nav { transition: background .14s ease, color .14s ease; }
+  .hz-nav:hover { background:#232019 !important; color:#EFEAE0 !important; }
+  a { color:#4FB79A; text-decoration:none; }
+  a:hover { color:#6ECAB0; }
+  @media (max-width: 1180px) { .hz-subnav { width:100% !important; flex-basis:auto !important; } .hz-subnav-col { display:none; } .hz-subnav-tabs { display:flex !important; } }
+</style>
+</helmet>
+<div class="hz-subnav" style="width:250px; flex:0 0 250px; font-family:'Instrument Sans',sans-serif; color:#EFEAE0;">
+  <div class="hz-subnav-tabs" style="display:none; gap:4px; flex-wrap:wrap; margin-bottom:8px;">
+    <sc-for list="{{ flat }}" as="it" hint-placeholder-count="4">
+    <a href="{{ it.href }}" onClick="{{ it.click }}" class="{{ it.cls }}" style="{{ it.tabStyle }}">{{ it.label }}</a>
+    </sc-for>
+  </div>
+  <div class="hz-subnav-col">
+  <div style="display:flex; align-items:center; gap:12px; padding:4px 4px 20px; border-bottom:1px solid #322E26; margin-bottom:16px;">
+    <div style="width:52px; height:52px; flex:0 0 52px; border-radius:50%; background:#1F5C4D; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:24px; line-height:1; padding-top:3px; font-weight:600; color:#EFEAE0;">{{ initial }}</div>
+    <div style="min-width:0;">
+      <div style="font-size:14px; font-weight:600; color:#F6F2E9;">{{ title }}</div>
+      <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6A6353; margin-top:2px;">{{ subtitle }}</div>
+      <span style="display:inline-flex; margin-top:8px; padding:4px 8px; background:#15291F; color:#5FCAA8; border:1px solid #24402F; border-radius:999px; font-size:12px; font-weight:600;">{{ badge }}</span>
+    </div>
+  </div>
+  <sc-for list="{{ groups }}" as="g" hint-placeholder-count="2">
+  <div style="margin-bottom:16px;">
+    <sc-if value="{{ g.hasLabel }}" hint-placeholder-val="{{ true }}">
+    <div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353; padding:0 12px 8px;">{{ g.label }}</div>
+    </sc-if>
+    <div style="display:flex; flex-direction:column; gap:2px;">
+      <sc-for list="{{ g.items }}" as="it" hint-placeholder-count="3">
+      <a href="{{ it.href }}" onClick="{{ it.click }}" class="{{ it.cls }}" style="{{ it.style }}">{{ it.label }}</a>
+      </sc-for>
+    </div>
+  </div>
+  </sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:250,&quot;height&quot;:520},&quot;scope&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;workspace&quot;,&quot;profile&quot;],&quot;default&quot;:&quot;workspace&quot;,&quot;tsType&quot;:&quot;'workspace'|'profile'&quot;},&quot;active&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;people&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;onSelect&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;(key: string) =&gt; void&quot;},&quot;homeHref&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string&quot;},&quot;importersHref&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string&quot;},&quot;title&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Fieldstone Studio&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;subtitle&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;horae.app/fieldstone&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;badge&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Admin&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props;
+    const scope = p.scope ?? 'workspace';
+    const active = p.active ?? (scope === 'workspace' ? 'people' : 'basic');
+    const select = p.onSelect;
+    const base = 'display:block; padding:8px 12px; border-radius:8px; font-size:14px; cursor:pointer;';
+    const on = base + ' background:#232019; border:1px solid #322E26; font-weight:600; color:#F6F2E9;';
+    const off = base + ' color:#A29C8D;';
+    const mk = (key, label, href) => {
+      const isOn = key === active;
+      const local = !href;   // in-page section handled by onSelect
+      return {
+        key, label,
+        href: local ? ('#' + key) : href,
+        click: local ? (e) => { e.preventDefault(); if (select) select(key); } : undefined,
+        cls: isOn ? '' : 'hz-nav',
+        style: isOn ? on : off,
+      };
+    };
+    const workspaceGroups = [
+      { label: 'Workspace', items: [mk('general','General'), mk('people','People'), mk('roles','Roles & permissions')] },
+      { label: 'Data', items: [mk('importers','Importers', p.importersHref ?? '10_Importers.dc.html'), mk('export','Export & backups'), mk('audit','Audit log')] },
+    ];
+    const profileGroups = [
+      { label: '', items: [mk('basic','Basic info'), mk('rates','Rates'), mk('projects','Assigned projects'), mk('people','Assigned people'), mk('permissions','Permissions'), mk('integrations','Integrations'), mk('notifications','Notifications'), mk('security','Security')] },
+    ];
+    // when the page hosting the subnav is not the workspace page, in-page keys must navigate back to it
+    const groups = (scope === 'workspace' ? workspaceGroups : profileGroups).map(g => ({
+      label: g.label, hasLabel: !!g.label,
+      items: g.items.map(it => (p.homeHref && it.href.startsWith('#') && it.key !== active) ? { ...it, href: p.homeHref, click: undefined } : it),
+    }));
+    const isWs = scope === 'workspace';
+    const title = p.title ?? (isWs ? 'Fieldstone Studio' : 'Mira Kovač');
+    const flat = groups.flatMap(g => g.items).map(it => ({ ...it, tabStyle: 'display:inline-block; padding:8px 12px; border-radius:8px; font-size:14px; white-space:nowrap; ' + (it.key === active ? 'background:#232019; border:1px solid #322E26; font-weight:600; color:#F6F2E9;' : 'color:#A29C8D;') }));
+    return {
+      flat, groups, title, initial: title[0],
+      subtitle: p.subtitle ?? (isWs ? 'horae.app/fieldstone' : 'mira@fieldstone.studio'),
+      badge: p.badge ?? (isWs ? 'Admin' : 'Manager'),
+    };
+  }
+}
+</script>
+</body>
+</html>

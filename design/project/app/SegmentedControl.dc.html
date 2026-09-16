@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#100F0C; }
+  button { transition: background .14s ease, color .14s ease, transform .08s ease; }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:focus-visible { outline:none; box-shadow:0 0 0 3px rgba(79,183,154,.35) !important; }
+  .hb-seg:not(.hb-seg-on):hover:not(:disabled) { background:#232019 !important; color:#EFEAE0 !important; }
+</style>
+</helmet>
+<div style="{{ wrap }}">
+  <sc-for list="{{ items }}" as="it" hint-placeholder-count="3">
+  <button onClick="{{ it.pick }}" class="{{ it.cls }}" style="{{ it.style }}">{{ it.label }}</button>
+  </sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:360,&quot;height&quot;:80},&quot;options&quot;:{&quot;editor&quot;:null,&quot;default&quot;:[&quot;Day&quot;,&quot;Week&quot;,&quot;Calendar&quot;],&quot;tsType&quot;:&quot;Array&lt;string | {value: string, label: string}&gt;&quot;},&quot;value&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Week&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;onChange&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;(value: string) =&gt; void&quot;},&quot;size&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;sm&quot;,&quot;md&quot;],&quot;default&quot;:&quot;sm&quot;,&quot;tsType&quot;:&quot;'sm'|'md'&quot;},&quot;surface&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#100F0C&quot;,&quot;options&quot;:[&quot;#100F0C&quot;,&quot;#1A1813&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;fill&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  state = {};
+  renderVals() {
+    const p = this.props;
+    const options = (p.options ?? []).map(o => typeof o === 'string' ? { value: o, label: o } : o);
+    const controlled = p.value !== undefined;
+    const value = controlled ? p.value : (this.state.value ?? (options[0] && options[0].value));
+    const size = p.size ?? 'sm';                              // 'sm' 12px (dev bar, filters) · 'md' 14px (view switchers)
+    const pad = size === 'md' ? '8px 16px' : '6px 12px';
+    const fs = size === 'md' ? '14px' : '12px';
+    const base = 'padding:' + pad + '; border:none; border-radius:6px; font-family:inherit; font-size:' + fs + '; cursor:pointer; white-space:nowrap;';
+    const on = base + ' background:#1F5C4D; color:#F6F2E9; font-weight:600;';
+    const off = base + ' background:transparent; color:#8F8676;' + (size === 'md' ? ' font-weight:500; color:#A29C8D;' : '');
+    return {
+      wrap: 'display:inline-flex; flex-wrap:wrap; gap:2px; max-width:100%; background:' + (p.surface ?? '#100F0C') + '; border:1px solid #322E26; border-radius:8px; padding:4px; font-family:\'Instrument Sans\',sans-serif;' + (p.fill ? ' width:100%;' : ''),
+      items: options.map(o => {
+        const isOn = o.value === value;
+        return { label: o.label, cls: isOn ? 'hb-seg hb-seg-on' : 'hb-seg', style: on && (isOn ? on : off) + (p.fill ? ' flex:1;' : ''),
+          pick: () => { if (!controlled) this.setState({ value: o.value }); if (p.onChange) p.onChange(o.value); } };
+      }),
+    };
+  }
+}
+</script>
+</body>
+</html>

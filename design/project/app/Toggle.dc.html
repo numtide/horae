@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+  body { margin:0; background:#100F0C; }
+  .hz-toggle { transition: background .14s ease, box-shadow .16s ease; }
+  .hz-toggle:hover { box-shadow: 0 0 0 3px rgba(79,183,154,.14); }
+  .hz-toggle > span { transition: transform .16s ease; }
+</style>
+</helmet>
+<span onClick="{{ flip }}" class="hz-toggle" role="switch" aria-checked="{{ on }}" style="{{ track }}"><span style="{{ knob }}"></span></span>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:80,&quot;height&quot;:40},&quot;on&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;disabled&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;onChange&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;(on: boolean) =&gt; void&quot;}}">
+class Component extends DCLogic {
+  state = {};
+  renderVals() {
+    const p = this.props;
+    const controlled = typeof p.on === 'boolean';
+    const on = controlled ? p.on : (this.state.on ?? false);
+    const disabled = p.disabled === true;
+    return {
+      on,
+      track: 'width:40px; height:22px; border-radius:999px; position:relative; display:inline-block; flex:0 0 40px; cursor:' + (disabled ? 'not-allowed' : 'pointer') + '; background:' + (on ? '#1F5C4D' : '#3D382E') + ';' + (disabled ? ' opacity:.5;' : ''),
+      knob: 'position:absolute; left:3px; top:3px; width:16px; height:16px; border-radius:50%; background:#EFEAE0; transform:translateX(' + (on ? '18px' : '0') + ');',
+      flip: () => { if (disabled) return; const v = !on; if (!controlled) this.setState({ on: v }); if (p.onChange) p.onChange(v); },
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600&family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#100F0C; }
+  button { transition: background .14s ease, box-shadow .16s ease, transform .08s ease; }
+  button:active { transform: translateY(1px); }
+  .hb-primary:hover { background:#63C9AC !important; box-shadow:0 6px 18px -8px rgba(79,183,154,.65) !important; }
+  .hb-secondary:hover { background:#2C2820 !important; border-color:#5A5446 !important; }
+</style>
+</helmet>
+<div style="display:flex; flex-direction:column; align-items:center; text-align:center; gap:12px; padding:64px 24px; background:#1A1813; border:1px solid #322E26; border-radius:16px; font-family:'Instrument Sans',sans-serif; color:#EFEAE0;">
+  <div style="{{ circle }}"><i class="{{ iconCls }}" aria-hidden="true" style="font-size:22px; line-height:1; display:block;"></i></div>
+  <div style="font-family:'Newsreader',serif; font-size:20px; font-weight:600; color:#F6F2E9; margin-top:4px;">{{ title }}</div>
+  <div style="font-size:14px; color:#8F8676; max-width:400px; line-height:1.55;">{{ body }}</div>
+  <div style="display:flex; align-items:center; gap:16px; margin-top:4px; flex-wrap:wrap; justify-content:center;">
+    <sc-if value="{{ hasAction }}" hint-placeholder-val="{{ false }}">
+    <button onClick="{{ onAction }}" class="{{ btnCls }}" style="{{ btnStyle }}">{{ actionLabel }}</button>
+    </sc-if>
+    <sc-if value="{{ hasLink }}" hint-placeholder-val="{{ false }}">
+    <a href="{{ linkHref }}" style="font-size:14px; font-weight:600;">{{ linkLabel }}</a>
+    </sc-if>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:560,&quot;height&quot;:320},&quot;icon&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;clock&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;tone&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;muted&quot;,&quot;success&quot;],&quot;default&quot;:&quot;muted&quot;,&quot;tsType&quot;:&quot;'muted'|'success'&quot;},&quot;title&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;No time tracked this week&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;body&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Start a timer or add a row to begin. Entries save as you type.&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;actionLabel&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Add row&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;primary&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;onAction&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props;
+    const tone = p.tone ?? 'muted';   // 'muted' | 'success'
+    const primary = p.primary ?? true;
+    return {
+      iconCls: 'ph ph-' + (p.icon ?? 'clock'),
+      circle: 'width:52px; height:52px; border-radius:50%; display:flex; align-items:center; justify-content:center; ' + (tone === 'success' ? 'background:#15291F; border:1px solid #24402F; color:#5FCAA8;' : 'background:#232019; border:1px solid #3D382E; color:#5A5446;'),
+      title: p.title ?? 'Nothing here yet', body: p.body ?? '',
+      hasAction: !!p.actionLabel, actionLabel: p.actionLabel ?? '', onAction: p.onAction ?? (() => {}),
+      hasLink: !!p.linkLabel, linkLabel: p.linkLabel ?? '', linkHref: p.linkHref ?? '#',
+      btnCls: primary ? 'hb-primary' : 'hb-secondary',
+      btnStyle: 'padding:12px 20px; border-radius:8px; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap; ' + (primary ? 'background:#4FB79A; color:#0D211B; border:none; font-weight:700;' : 'background:#232019; color:#EFEAE0; border:1px solid #3D382E;'),
+    };
+  }
+}
+</script>
+</body>
+</html>
