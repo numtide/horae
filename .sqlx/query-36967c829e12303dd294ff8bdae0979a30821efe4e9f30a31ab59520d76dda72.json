@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE harvest_connection_generations SET account_generation = account_generation + 1 WHERE org_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "36967c829e12303dd294ff8bdae0979a30821efe4e9f30a31ab59520d76dda72"
+}
