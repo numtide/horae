@@ -5,6 +5,7 @@ use uuid::Uuid;
 use super::{is_admin, is_manager, loaded, run_action};
 use crate::components::combobox::{ComboOption, Combobox};
 use crate::components::form::{FormCard, FormGroup, Input, Select};
+use crate::components::icons::NavIcon;
 use crate::components::menu::{Menu, MenuDivider, MenuItem};
 use crate::components::modal::Modal;
 use crate::components::table::DataTable;
@@ -120,7 +121,9 @@ pub fn ProjectList() -> Element {
     let mut export_scope = use_signal(|| "active".to_string());
     let mut export_fmt = use_signal(|| "csv".to_string());
 
+    let can_import = is_admin(&me);
     let is_manager = is_manager(&me);
+    let spend_ready = matches!(&*spend_res.read(), Some(Ok(_)));
 
     let client_names: HashMap<Uuid, String> = match &*clients_res.read() {
         Some(Ok(cs)) => cs.iter().map(|c| (c.id, c.name.clone())).collect(),
@@ -236,39 +239,41 @@ pub fn ProjectList() -> Element {
         div {
             div { class: "page-header",
                 h1 { class: "page-title", "Projects" }
-                button {
-                    class: "btn btn-secondary btn-sm ml-auto",
-                    onclick: move |_| export_open.set(true),
-                    "Export"
-                }
-                div { class: "proj-search",
-                    span { class: "proj-search-icon", aria_hidden: "true", "⌕" }
-                    input {
-                        class: "proj-search-input",
-                        r#type: "text",
-                        placeholder: "Search by project or client",
-                        aria_label: "Search by project or client",
-                        value: "{query}",
-                        oninput: move |e| query.set(e.value()),
-                    }
-                }
-                if is_manager {
-                    button {
-                        class: "btn btn-primary",
-                        onclick: move |_| {
-                            if show_form() {
+                div { class: "page-actions items-center",
+                    if is_manager {
+                        button {
+                            class: "btn btn-primary btn-sm",
+                            onclick: move |_| {
+                                let open = !show_form();
                                 reset_form();
-                            } else {
-                                editing_id.set(None);
-                                show_form.set(true);
-                            }
-                        },
-                        if show_form() { "Cancel" } else { "Add Project" }
+                                show_form.set(open);
+                            },
+                            if show_form() { "Cancel" } else { "New project" }
+                        }
+                    }
+                    if can_import {
+                        Link { to: Route::HarvestImport {}, class: "btn btn-secondary btn-sm", "Import" }
+                    }
+                    button {
+                        class: "btn btn-secondary btn-sm",
+                        onclick: move |_| export_open.set(true),
+                        "Export"
+                    }
+                    div { class: "proj-search",
+                        span { class: "proj-search-icon", aria_hidden: "true", "⌕" }
+                        input {
+                            class: "proj-search-input",
+                            r#type: "text",
+                            placeholder: "Search by project or client",
+                            aria_label: "Search by project or client",
+                            value: "{query}",
+                            oninput: move |e| query.set(e.value()),
+                        }
                     }
                 }
             }
 
-            div { class: "flex items-center gap-4 mb-6",
+            div { class: "flex flex-wrap items-center gap-4 mb-6",
                 Menu { id: "project-scope-menu", label: "{scope_label}",
                     MenuItem {
                         selected: scope() == "active",
@@ -399,6 +404,16 @@ pub fn ProjectList() -> Element {
             if let Some(message) = action_error() {
                 div { class: "alert alert-danger", role: "alert", "Could not change project status: {message}" }
             }
+            match &*spend_res.read() {
+                None => rsx! { p { class: "text-sm text-secondary mb-4", role: "status", "Loading project spend…" } },
+                Some(Err(_)) => rsx! {
+                    div { class: "alert alert-danger", role: "alert",
+                        "Could not load project spend. Spent and remaining amounts are unavailable. "
+                        button { class: "btn btn-secondary btn-sm", onclick: move |_| spend_res.restart(), "Retry" }
+                    }
+                },
+                Some(Ok(_)) => rsx! {},
+            }
 
             {loaded(&*projects.read(), |list| {
                     let q = query().to_lowercase();
@@ -444,19 +459,51 @@ pub fn ProjectList() -> Element {
                     }
                     if groups.is_empty() {
                         rsx! {
-                            div { class: "proj-card",
-                                div { class: "proj-empty", "No projects match your filters." }
+                            div { class: "empty-state bg-secondary rounded-panel",
+                                span { class: "empty-state-icon", aria_hidden: "true", NavIcon { name: "projects" } }
+                                if list.is_empty() {
+                                    h2 { class: "empty-state-title text-xl", "No projects yet" }
+                                    p { class: "empty-state-text",
+                                        if is_manager {
+                                            "Projects hold the tasks your team tracks against. Create one to get started."
+                                        } else {
+                                            "Projects hold the tasks your team tracks against. Ask a manager to create your first project."
+                                        }
+                                    }
+                                    div { class: "flex flex-wrap items-center justify-center gap-4 mt-1",
+                                        if is_manager && !show_form() {
+                                            button {
+                                                class: "btn btn-primary",
+                                                onclick: move |_| { reset_form(); show_form.set(true); },
+                                                "New project"
+                                            }
+                                        }
+                                        if can_import {
+                                            Link { to: Route::HarvestImport {}, class: "font-semibold", "Import from Harvest →" }
+                                        }
+                                    }
+                                } else {
+                                    h2 { class: "empty-state-title text-xl", "No projects match your filters" }
+                                    p { class: "empty-state-text", "Try another search, client or project status." }
+                                    button {
+                                        class: "btn btn-secondary",
+                                        onclick: move |_| {
+                                            query.set(String::new());
+                                            client_filter.set(String::new());
+                                            scope.set("active".to_string());
+                                        },
+                                        "Reset filters"
+                                    }
+                                }
                             }
                         }
                     } else {
                         rsx! {
                             div { class: "proj-card",
-                                div { class: "proj-scroll",
+                                div { class: "proj-scroll", role: "region", aria_label: "Projects by client", tabindex: "0",
                                 div { class: "proj-head",
                                     span { "Client" }
                                     span { class: "text-right", "Budget" }
-                                    span { class: "text-right", "⚑ Scheduled" }
-                                    span { class: "text-right", "Delta" }
                                     span { class: "text-right", "Spent" }
                                     span { class: "text-right", "Budget remaining" }
                                     span {}
@@ -490,20 +537,28 @@ pub fn ProjectList() -> Element {
                                                     span { class: "text-faint", "⟳" }
                                                 }
                                             }
-                                            span { class: "font-mono text-right text-faint", "–" }
-                                            span { class: "font-mono text-right text-faint", "–" }
                                             div { class: "flex items-center justify-end gap-3 font-mono",
-                                                span { class: "whitespace-nowrap", "{rs.spent}" }
-                                                if let Some(pct) = rs.pct {
-                                                    div { class: "proj-bar",
-                                                        div { class: "proj-bar-fill", style: "width: {pct}%" }
+                                                if spend_ready {
+                                                    span { class: "whitespace-nowrap", "{rs.spent}" }
+                                                    if let Some(pct) = rs.pct {
+                                                        progress {
+                                                            class: "proj-bar",
+                                                            aria_label: "Budget used for {p.name}",
+                                                            max: "100", value: "{pct}", "{pct}%"
+                                                        }
                                                     }
+                                                } else {
+                                                    span { class: "text-muted", aria_label: "Spent unavailable", "—" }
                                                 }
                                             }
                                             div { class: "flex items-baseline justify-end gap-2 font-mono",
-                                                span { class: "whitespace-nowrap", "{rs.remaining}" }
-                                                if let Some(lbl) = rs.pct_label.clone() {
-                                                    span { class: "text-faint", "{lbl}" }
+                                                if spend_ready {
+                                                    span { class: "whitespace-nowrap", "{rs.remaining}" }
+                                                    if let Some(lbl) = rs.pct_label.clone() {
+                                                        span { class: "text-faint", "{lbl}" }
+                                                    }
+                                                } else {
+                                                    span { class: "text-muted", aria_label: "Remaining unavailable", "—" }
                                                 }
                                             }
                                             div { class: "flex justify-end",

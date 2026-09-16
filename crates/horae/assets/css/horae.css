@@ -109,6 +109,7 @@
   --space-10: 2.5rem;
   --space-12: 3rem;
   --space-16: 4rem;
+  --size-progress: 0.4375rem;
 
   /* Border radius */
   --radius-sm: 4px;
@@ -1611,19 +1612,23 @@ tbody tr:hover { background: var(--color-row-hover); }
 /* Reserve space for the project name as well as numeric tracks and gaps. Keep
    headers, rows and group bands the same width inside the horizontal scroller. */
 .proj-scroll { overflow-x: auto; }
-.proj-head, .proj-row, .proj-group { min-width: 1280px; }
+.proj-head, .proj-row, .proj-group { min-width: 1080px; }
 .proj-head,
 .proj-row {
   display: grid;
-  grid-template-columns: minmax(280px, 1fr) 130px 130px 96px 210px 220px 120px;
+  grid-template-columns: minmax(280px, 1fr) 130px 210px 220px 120px;
   align-items: center; gap: var(--space-2);
   padding: var(--space-4) var(--space-5);
 }
 .proj-bar {
-  width: 96px; height: 7px; border-radius: var(--radius-full);
+  appearance: none; border: none; flex-shrink: 0;
+  width: calc(2 * var(--space-12)); height: var(--size-progress); border-radius: var(--radius-full);
   background: var(--color-bg-tertiary); overflow: hidden;
 }
-.proj-bar-fill { height: 100%; background: var(--color-primary); }
+.proj-bar::-webkit-progress-bar { background: var(--color-bg-tertiary); border-radius: var(--radius-full); }
+.proj-bar::-webkit-progress-value { background: var(--color-primary); border-radius: var(--radius-full); }
+.proj-bar::-moz-progress-bar { background: var(--color-primary); border-radius: var(--radius-full); }
+.proj-scroll:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
 .proj-row > :first-child { flex-wrap: wrap; }
 .proj-namelink { min-width: 0; overflow-wrap: anywhere; color: var(--color-text); text-decoration: none; }
 .proj-namelink:hover { color: var(--color-primary); text-decoration: none; }
@@ -1639,11 +1644,8 @@ tbody tr:hover { background: var(--color-row-hover); }
   font-size: var(--font-size-sm); font-weight: 600; color: var(--color-text-secondary);
 }
 .proj-row { border-bottom: 1px solid var(--color-border-light); }
+.proj-row:hover { background: var(--color-row-hover); }
 .proj-row:last-child { border-bottom: none; }
-.proj-empty {
-  padding: var(--space-6) var(--space-5);
-  color: var(--color-text-secondary); font-size: var(--font-size-sm);
-}
 
 
 /* Modal + segmented choice buttons (used by the projects Export dialog). */
