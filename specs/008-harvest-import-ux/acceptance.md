@@ -2,7 +2,7 @@
 
 ## Current delivery
 
-Implementation on `feat/harvest-import-ui`, based on planning commit `5c9955b`, initially validated on 2026-09-15. On 2026-09-16, the operator separately authorized a real Preview and a coordinated local upgrade. The published branch now includes master through merge commit `fcadde6`; application code, SQLx metadata and build configuration are unchanged from `3eac906`. Persistent Git signing configuration remains unchanged. Publication remains a draft until all acceptance gates are complete.
+Implementation on `feat/harvest-import-ui`, based on planning commit `5c9955b`, initially validated on 2026-09-15. On 2026-09-16, the operator separately authorized a real Preview and a coordinated local upgrade. The branch includes master through merge commit `fcadde6`; application code, SQLx metadata and build configuration are unchanged from `3eac906`. Full Nix revalidation passed on integrated commit `91fb512`. All feature acceptance tasks are complete; PR #202 can leave draft, with required remote checks still governing merge. Persistent Git signing configuration remains unchanged. No automatic PR merge or committing import is included.
 
 ## Implementation baseline
 
@@ -47,11 +47,11 @@ Environment: Nix development shell; isolated PostgreSQL `horae_account_switch_de
 | Core/server tests | Core 88 passed; final server suite 618 passed across all targets, 11 pre-existing ignored tests |
 | Clippy / WASM / formatting | Final all-target Clippy with `-D warnings -W clippy::perf`, explicit WASM build and `nix fmt` passed |
 | SQLx | Passed: forced online/non-incremental regeneration reproduced the reviewed 574-entry cache exactly |
-| Full Nix | Passed on implementation commit `3eac906` on 2026-09-16 with bounded resources; integrated-master tree revalidation pending |
-| Browser layout, keyboard and zoom | All six scenarios passed again after the final UI guard |
+| Full Nix | Passed on both `3eac906` and integrated-master commit `91fb512` on 2026-09-16 with bounded resources, x86_64-linux |
+| Browser layout, keyboard and zoom | All six scenarios passed again on 2026-09-16 against the deployed bundle on isolated port 8092, including actual 200% zoom |
 | Design comparison/deviation evidence | Recorded above |
 | Real Harvest dry-run and data comparison | Passed on 2026-09-16 with separate operator authorization; one Preview, 12 unchanged business tables, readable retained report and complete error download. Source-user mapping errors are recorded below. |
-| Commit / implementation PR | Unsigned implementation commit authorized; draft publication only until remaining acceptance gates pass (T026) |
+| Commit / implementation PR | Conflicts resolved, acceptance complete and PR #202 updated for review; no automatic merge (T026) |
 
 Commands executed in the Nix shell (shared compiled artifacts only; isolated database URL as above):
 
@@ -67,7 +67,7 @@ HORAE_TEST_URL=http://127.0.0.1:8092 node crates/horae/tests/browser/importers.c
 
 The browser command used existing Playwright and Chromium 152 through the documented environment overrides. A repeated SQLx invocation on the warm target found zero queries; its working-tree cache removal was restored from the staged index, then forced regeneration reproduced all 574 entries without a diff. No metadata loss is included in this change.
 
-The initial full Nix attempt evaluated the checks and started builds, but did not pass. During that attempt, the ten-second synchronization wait in `durable_api_reclaimed_worker_cannot_commit_its_next_page` timed out under contention. The complete suite subsequently passed with two test threads and no heavy parallel Nix builds; no timeout or assertion was weakened. On 2026-09-16, `nix flake check --no-update-lock-file --max-jobs 1 --cores 4` passed on `3eac906`: core 88, server/integration 618, 11 pre-existing ignored tests, Clippy, SQLx cache, formatting, package and NixOS deployment/OIDC checks. This run covered x86_64-linux; other architectures were not executed. The integrated-master tree is being checked separately before completion.
+The initial full Nix attempt evaluated the checks and started builds, but did not pass. During that attempt, the ten-second synchronization wait in `durable_api_reclaimed_worker_cannot_commit_its_next_page` timed out under contention. The complete suite subsequently passed with two test threads and no heavy parallel Nix builds; no timeout or assertion was weakened. On 2026-09-16, `nix flake check --no-update-lock-file --max-jobs 1 --cores 4` passed on `3eac906`: core 88, server/integration 618, 11 pre-existing ignored tests, Clippy, SQLx cache, formatting, package and NixOS deployment/OIDC checks. The same full command subsequently passed on integrated-master commit `91fb512`. Both runs covered x86_64-linux; other architectures were not executed.
 
 Record the tested commit, scenario/command, actual result and limitations for every executed gate. Never substitute another check's success for an unavailable check. Do not commit credentials, sessions or real data.
 
@@ -81,6 +81,11 @@ Record the tested commit, scenario/command, actual result and limitations for ev
   `CARGO_BUILD_JOBS=2 SQLX_OFFLINE=true dx build --platform web --fullstack true --force-sequential true --locked`
   inside the Nix shell. Copied the bundle into a private local acceptance directory
   so later builds cannot replace assets underneath the running instance.
+- Repeated `tests/browser/importers.cjs` against that same bundle on port 8092
+  with the isolated fixture database and an empty Harvest configuration. All six
+  scenarios passed, including the current-preview primary action and actual 200%
+  zoom (1440 to 720 CSS pixels, DPR 1 to 2). Stopped the temporary fixture server
+  afterward; the authorized local instance remains on port 8080.
 - Confirmed zero queued/running imports and zero running timers. Created a
   mode-0600 PostgreSQL custom-format backup in a mode-0700 directory and checked
   its archive listing. This verifies archive readability, not a restore drill.
@@ -118,3 +123,18 @@ Record the tested commit, scenario/command, actual result and limitations for ev
 This satisfies T025/SC-006 (readable preview with truthful record-level errors and
 unchanged business data). A real committing import needs a separate decision and
 resolution of the source-user mapping; neither is part of this acceptance.
+
+## Final review and integrated checks
+
+- Reviewed the connection/result/history/retry contract against the existing
+  fixture evidence and authorized live result. The master integration adds design
+  references and resolves planning-document conflicts, not application changes.
+- Integrated production package:
+  `/nix/store/5lli9bx8ri2hf62ga294mcbskrw5q8pi-horae-0.1.0.drv`.
+- Integrated test suite:
+  `/nix/store/sxsp7b881hzxlnd1w61gnm8vmgc5x6xj-horae-tests-0.1.0.drv`.
+- Both integrated NixOS deployment/crash-recovery and OIDC checks passed. The
+  final acceptance closure changes only Markdown evidence/task state; application
+  sources, queries and deployment configuration remain unchanged.
+- No Spec Kit extension hooks are configured. T024, T025 and T026 are complete;
+  required GitHub checks must still pass on the published head before merge.
