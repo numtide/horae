@@ -2,7 +2,7 @@
 
 ## Current delivery
 
-Implementation on `feat/harvest-import-ui`, based on planning commit `5c9955b`, validated on 2026-09-15. No schema, credential, real-account or live-data change. The operator authorized this implementation commit without a signature because the SSH/FIDO key is unavailable; persistent Git signing configuration remains unchanged. Publication is a draft while the remaining acceptance gates are incomplete. The real Harvest acceptance remains a separate operator gate.
+Implementation on `feat/harvest-import-ui`, based on planning commit `5c9955b`, initially validated on 2026-09-15. On 2026-09-16, the operator separately authorized a real Preview and a coordinated local upgrade. The published branch now includes master through merge commit `fcadde6`; application code, SQLx metadata and build configuration are unchanged from `3eac906`. Persistent Git signing configuration remains unchanged. Publication remains a draft until all acceptance gates are complete.
 
 ## Implementation baseline
 
@@ -47,10 +47,10 @@ Environment: Nix development shell; isolated PostgreSQL `horae_account_switch_de
 | Core/server tests | Core 88 passed; final server suite 618 passed across all targets, 11 pre-existing ignored tests |
 | Clippy / WASM / formatting | Final all-target Clippy with `-D warnings -W clippy::perf`, explicit WASM build and `nix fmt` passed |
 | SQLx | Passed: forced online/non-incremental regeneration reproduced the reviewed 574-entry cache exactly |
-| Full Nix | Incomplete: parallel builds were cancelled after host load exceeded 130; rerun with bounded build resources |
+| Full Nix | Passed on implementation commit `3eac906` on 2026-09-16 with bounded resources; integrated-master tree revalidation pending |
 | Browser layout, keyboard and zoom | All six scenarios passed again after the final UI guard |
 | Design comparison/deviation evidence | Recorded above |
-| Real Harvest dry-run and data comparison | **Blocked: separate operator go-ahead required (T025)** |
+| Real Harvest dry-run and data comparison | Passed on 2026-09-16 with separate operator authorization; one Preview, 12 unchanged business tables, readable retained report and complete error download. Source-user mapping errors are recorded below. |
 | Commit / implementation PR | Unsigned implementation commit authorized; draft publication only until remaining acceptance gates pass (T026) |
 
 Commands executed in the Nix shell (shared compiled artifacts only; isolated database URL as above):
@@ -67,6 +67,54 @@ HORAE_TEST_URL=http://127.0.0.1:8092 node crates/horae/tests/browser/importers.c
 
 The browser command used existing Playwright and Chromium 152 through the documented environment overrides. A repeated SQLx invocation on the warm target found zero queries; its working-tree cache removal was restored from the staged index, then forced regeneration reproduced all 574 entries without a diff. No metadata loss is included in this change.
 
-The full Nix attempt evaluated the checks and started builds, but is not a passing gate. During that attempt, the ten-second synchronization wait in `durable_api_reclaimed_worker_cannot_commit_its_next_page` timed out under contention. The complete suite subsequently passed with two test threads and no heavy parallel Nix builds; no timeout or assertion was weakened. Resume the remaining gate with `nix flake check --no-update-lock-file --max-jobs 1 --cores 4` after publication prerequisites are resolved.
+The initial full Nix attempt evaluated the checks and started builds, but did not pass. During that attempt, the ten-second synchronization wait in `durable_api_reclaimed_worker_cannot_commit_its_next_page` timed out under contention. The complete suite subsequently passed with two test threads and no heavy parallel Nix builds; no timeout or assertion was weakened. On 2026-09-16, `nix flake check --no-update-lock-file --max-jobs 1 --cores 4` passed on `3eac906`: core 88, server/integration 618, 11 pre-existing ignored tests, Clippy, SQLx cache, formatting, package and NixOS deployment/OIDC checks. This run covered x86_64-linux; other architectures were not executed. The integrated-master tree is being checked separately before completion.
 
 Record the tested commit, scenario/command, actual result and limitations for every executed gate. Never substitute another check's success for an unavailable check. Do not commit credentials, sessions or real data.
+
+## Authorized local upgrade and real Preview — 2026-09-16
+
+- Resolved the two planning/implementation documentation conflicts with master in
+  `acceptance.md` and `tasks.md`, preserving completed implementation evidence and
+  incomplete acceptance gates. Commit `fcadde6` contains the integrated design
+  references; no application-code changes were needed.
+- Built matching server/WASM from that worktree using
+  `CARGO_BUILD_JOBS=2 SQLX_OFFLINE=true dx build --platform web --fullstack true --force-sequential true --locked`
+  inside the Nix shell. Copied the bundle into a private local acceptance directory
+  so later builds cannot replace assets underneath the running instance.
+- Confirmed zero queued/running imports and zero running timers. Created a
+  mode-0600 PostgreSQL custom-format backup in a mode-0700 directory and checked
+  its archive listing. This verifies archive readability, not a restore drill.
+- Stopped the old feature-006 server/worker before starting the new bundle on
+  loopback port 8080 with the existing private configuration. Startup applied
+  migration 0029 from feature 007; no other migration was pending. Health passed.
+  The existing PostgreSQL process and database were preserved.
+- Read-only repeatable-read snapshots compare row counts and ordered full-row
+  digests for organizations, users, clients, projects, tasks, project_tasks,
+  assignments, time_entries, approvals, audit_log, invoices and invoice_line_items.
+  All 12 tables were identical before/after both deployment and Preview.
+- Used the real browser and existing connected Harvest account. Feature-008
+  connection-management controls were present; credentials were not expired.
+  Submitted exactly one `DryRun` / `Full` operation through Preview. A browser
+  request guard allowed that one preview and status/history/connection reads,
+  while blocking import confirmation, retry and account mutations.
+- The job reached `succeeded`, producing a readable Preview report. Its predicted
+  changes were 8 clients, 4 projects and 12 tasks, with 1 skipped task. All 750
+  time entries were reported as errors because one source email has no matching
+  Horae user. These are preview predictions, not created business records; no
+  successful real import is claimed. No user or email mapping was changed.
+- Verified the retained result from history, absence of historical confirmation,
+  and the complete 750-record NDJSON error download. Every downloaded error has
+  the same missing-user cause; browser checks reported no application exceptions.
+  The bound account and synchronization watermark match the pre-upgrade backup.
+- The initial one-off browser harness used an obsolete success-banner label after
+  the job completed. Corrected that assertion and verified the same retained
+  result read-only; did not enqueue another Preview. The live run does not claim
+  a fresh current-preview primary-action assertion; fixture coverage above
+  supplies that evidence.
+- Private backup, snapshots, report, error download and operational logs remain
+  outside the repository. No tokens, session data, account identifiers, source
+  emails or business records are included in committed acceptance evidence.
+
+This satisfies T025/SC-006 (readable preview with truthful record-level errors and
+unchanged business data). A real committing import needs a separate decision and
+resolution of the source-user mapping; neither is part of this acceptance.

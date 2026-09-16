@@ -58,7 +58,7 @@
 - [x] T022 [P] Document the additive snapshot contract and compatibility in `specs/005-durable-harvest-jobs/contracts/import-jobs.md` and `specs/006-harvest-jobs-cli/contracts/cli.md` (FR-014).
 - [x] T023 Regenerate and review `.sqlx/` against the isolated migrated database with `cargo sqlx prepare --workspace -- --features server --all-targets` after all projection queries are final (FR-003, FR-014, FR-015).
 - [ ] T024 Run the core/server/UI/CLI tests, all-target Clippy, WASM build, formatting and full Nix gates from `specs/008-harvest-import-ux/quickstart.md`; record actual results and unchanged polling/pagination behavior in `specs/008-harvest-import-ux/acceptance.md` (FR-003, FR-014, FR-015).
-- [ ] T025 After explicit operator go-ahead, follow the real Preview-only acceptance in `specs/008-harvest-import-ux/quickstart.md` and record provider outcome plus unchanged business-data evidence in `specs/008-harvest-import-ux/acceptance.md`; otherwise leave this task blocked, not complete (FR-015, SC-006).
+- [x] T025 After explicit operator go-ahead, follow the real Preview-only acceptance in `specs/008-harvest-import-ux/quickstart.md` and record provider outcome plus unchanged business-data evidence in `specs/008-harvest-import-ux/acceptance.md`; otherwise leave this task blocked, not complete (FR-015, SC-006).
 - [ ] T026 Review final UX/state/security evidence against `specs/008-harvest-import-ux/contracts/importer-ui.md`, record results in `specs/008-harvest-import-ux/acceptance.md`, and open/update the scoped implementation PR without self-merging (FR-003, FR-012, FR-014, FR-015).
 
 ## Dependencies and execution order
