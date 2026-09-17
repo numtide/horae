@@ -14,6 +14,6 @@
 
 ## UI
 
-Named keyboard-operable checkboxes; header unchecked/mixed/checked. Manager/admin-only Actions shows selected count or guidance, and Archive or Reactivate according to scope. Filters clear selection. Over 100 disables action with explicit narrowing guidance.
+Named keyboard-operable checkboxes; header unchecked/mixed/checked. Manager/admin-only Actions has a disabled native trigger when selection is empty or a batch is pending; otherwise it shows the selected count and Archive or Reactivate according to scope. Filters clear selection. Over 100 disables the operation with explicit narrowing guidance.
 
 Confirmation lists names/count, explains history preservation, and offers cancel/confirm. Pending blocks duplicates/dismissal. Failure remains visible and retryable; success clears selection and refreshes resources. Shared defaults, both themes and responsive scroller remain intact. No deferred prototype features.

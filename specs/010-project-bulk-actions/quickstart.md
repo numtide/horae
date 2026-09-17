@@ -43,3 +43,9 @@ Compare shared-style-audit.cjs snapshots from the exact base commit (`b389fb9`) 
 All mutations used temporary PostgreSQL clusters. The imported workspace on port 8080 was not used for tests.
 
 Delivered for review in [PR #205](https://github.com/numtide/horae/pull/205). CI remains a required pre-merge gate; this delivery does not merge the PR.
+
+### Review follow-up
+
+The initial alignment checks missed checkbox overflow inside the first subgrid track. A failing geometry test reproduced the reported overlap: 18px checkboxes occupied a zero-width cell and overlapped labels by 4px. Including the row's start padding in that track restores an 18px cell and 16px label gap, without changing the read-only grid.
+
+Actions now uses a disabled native trigger with no selection or while submitting. Tests cover disabled clicks and arrow-key handling, enabling after selection, and disabling again after clearing it; other menus retain their defaults. The 13 controls/navigation tests, Clippy, WASM/fullstack build, all five browser suites and the eight-page style comparison pass after these changes. Geometry is checked in both themes at 320/768/1440px.

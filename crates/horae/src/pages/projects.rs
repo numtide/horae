@@ -336,6 +336,7 @@ pub fn ProjectList() -> Element {
                         Menu {
                             id: "project-bulk-menu", label: "⚡ Actions", align_right: true,
                             trigger_class: "text-sm py-2 px-4",
+                            disabled: selected_count == 0 || bulk_busy(),
                             div { class: "px-3 pt-1 pb-2 text-xs uppercase text-label", "{selection_label}" }
                             if selected_count > 100 {
                                 p { class: "px-3 text-sm text-secondary", "Select at most 100 projects" }

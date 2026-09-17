@@ -51,7 +51,7 @@
 
   document.addEventListener('keydown', event => {
     const trigger = event.target.closest('button[popovertarget][aria-haspopup="menu"]');
-    if (trigger && ['ArrowDown', 'ArrowUp'].includes(event.key)) {
+    if (trigger && !trigger.disabled && ['ArrowDown', 'ArrowUp'].includes(event.key)) {
       event.preventDefault();
       const menu = document.getElementById(trigger.getAttribute('popovertarget'));
       menu.dataset.last = String(event.key === 'ArrowUp');

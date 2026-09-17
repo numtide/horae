@@ -60,13 +60,14 @@ if (!selectionOnly) {
     const trigger = page.locator('#project-bulk-menu-trigger');
     await visit();
     await expect(all).toHaveAttribute('aria-checked', 'false');
-    await trigger.click();
-    await expect(bulkMenu).toContainText('Select projects first');
-    await expect(bulkMenu.getByRole('menuitem', { name: 'Archive projects', exact: true })).toBeDisabled();
-    await page.keyboard.press('Escape');
+    await expect(trigger).toBeDisabled();
+    await trigger.click({ force: true });
+    await trigger.dispatchEvent('keydown', { key: 'ArrowDown' });
+    await expect(bulkMenu).not.toBeVisible();
     const first = page.getByRole('checkbox', { name: 'Select Bulk project 1', exact: true });
     await first.focus();
     await page.keyboard.press('Space');
+    await expect(trigger).toBeEnabled();
     await expect(all).toHaveAttribute('aria-checked', 'mixed');
     await trigger.click();
     await expect(bulkMenu).toContainText('1 project selected');
@@ -75,6 +76,7 @@ if (!selectionOnly) {
     await expect(all).toHaveAttribute('aria-checked', 'true');
     await all.click();
     await expect(first).toHaveAttribute('aria-checked', 'false');
+    await expect(trigger).toBeDisabled();
     console.log('PASS: keyboard selection, mixed/select-all states and Actions count');
 
     await all.click();
@@ -107,13 +109,21 @@ if (!selectionOnly) {
         await expect(all).toHaveAttribute('aria-checked', 'false');
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
         await expect(first.locator('.choice-box')).toHaveCSS('width', '18px');
+        const selectionFits = await page.locator('.proj-head, .proj-row').evaluateAll(rows => rows.every(row => {
+          const checkbox = row.querySelector('.choice-box').getBoundingClientRect();
+          const cell = row.firstElementChild.getBoundingClientRect();
+          const identity = row.children[1].getBoundingClientRect();
+          const gap = parseFloat(getComputedStyle(row.parentElement).columnGap);
+          return checkbox.left >= cell.left - 1 && checkbox.right <= cell.right + 1
+            && identity.left - checkbox.right >= gap - 1;
+        }));
+        assert.equal(selectionFits, true, `Checkboxes fit their tracks without overlapping labels at ${width}px (${theme})`);
+        await all.click();
         await trigger.focus();
         await page.keyboard.press('Enter');
         await expect(bulkMenu).toBeVisible();
         await page.keyboard.press('Escape');
         await expect(trigger).toBeFocused();
-        await all.focus();
-        await page.keyboard.press('Space');
         await trigger.focus();
         await page.keyboard.press('Enter');
         await bulkMenu.getByRole('menuitem', { name: 'Archive projects', exact: true }).focus();
@@ -182,8 +192,7 @@ if (!selectionOnly) {
     role = 'manager'; amount = 0; fixtures = undefined;
     await visit();
     await expect(page.getByRole('checkbox')).toHaveCount(0);
-    await trigger.click();
-    await expect(bulkMenu.getByRole('menuitem', { name: 'Archive projects', exact: true })).toBeDisabled();
+    await expect(trigger).toBeDisabled();
     role = 'member'; amount = 2; fixtures = undefined;
     await visit();
     await expect(page.getByRole('checkbox')).toHaveCount(0);

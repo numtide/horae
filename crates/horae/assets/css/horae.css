@@ -1625,7 +1625,8 @@ tbody tr:hover { background: var(--color-row-hover); }
 }
 .proj-head, .proj-row, .proj-group { grid-column: 1 / -1; }
 .proj-grid-selectable {
-  grid-template-columns: var(--size-checkbox) minmax(26rem, 1fr) repeat(4, max-content);
+  /* Subgrid's first track also contains the row's px-5 start padding. */
+  grid-template-columns: calc(var(--size-checkbox) + var(--space-5)) minmax(26rem, 1fr) repeat(4, max-content);
   column-gap: var(--space-4);
 }
 .proj-head,

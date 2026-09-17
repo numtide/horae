@@ -15,6 +15,9 @@ pub fn Menu(
     /// Extra utility classes on the trigger; compact styling remains the default.
     #[props(default)]
     trigger_class: String,
+    /// Disable the native trigger without changing other menus' defaults.
+    #[props(default)]
+    disabled: bool,
     children: Element,
 ) -> Element {
     let popover = if align_right {
@@ -29,6 +32,7 @@ pub fn Menu(
                 id: "{id}-trigger",
                 r#type: "button",
                 class: "btn btn-secondary btn-sm {trigger_class}",
+                disabled,
                 "aria-haspopup": "menu",
                 "aria-expanded": "false",
                 "aria-controls": "{id}",

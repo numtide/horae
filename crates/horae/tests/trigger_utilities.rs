@@ -66,6 +66,20 @@ fn menu_keeps_compact_defaults() {
     });
     assert!(html.contains("btn btn-secondary btn-sm"), "{html}");
     assert!(!html.contains("text-sm"), "{html}");
+    assert!(!html.contains("disabled"), "{html}");
+}
+
+#[test]
+fn menu_can_disable_its_native_trigger() {
+    let html = render(|| rsx! { Menu { id: "disabled-menu", label: "Actions", disabled: true } });
+    let trigger = html
+        .split("<button")
+        .nth(1)
+        .unwrap()
+        .split('>')
+        .next()
+        .unwrap();
+    assert!(trigger.contains("disabled"), "{html}");
 }
 
 #[test]

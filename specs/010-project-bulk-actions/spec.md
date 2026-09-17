@@ -63,7 +63,7 @@ As a manager or administrator, I can confirm a single operation to archive activ
 - **FR-001**: Only signed-in managers and administrators may perform bulk status changes, restricted to their organization; enforce this beyond the visible controls.
 - **FR-002**: Provide per-row and select-all checkboxes with checked, unchecked and mixed header states and an accurate selected count in Actions.
 - **FR-003**: Selection is page-local, clears on filter changes and successful mutation, and never includes currently hidden or unavailable rows in a submitted batch.
-- **FR-004**: Actions offers Archive in active/budgeted views and Reactivate in archived view; no selection, unavailable data or an oversized selection disables the operation and explains why.
+- **FR-004**: The Actions trigger is disabled with no selected rows or while submitting. Actions offers Archive in active/budgeted views and Reactivate in archived view; no selection, unavailable data or an oversized selection disables the operation. Oversized selections show narrowing guidance inside the menu.
 - **FR-005**: Confirmation identifies the action, count and project names; cancellation makes no change. Pending submissions prevent duplicates and dismissal.
 - **FR-006**: A valid batch of 1–100 projects commits all requested status changes together. Any invalid, missing or foreign project rejects the whole batch. Duplicate identifiers are harmless; unchanged statuses produce no transition notification.
 - **FR-007**: Only active/archived status changes. Project details, assignments, time entries, invoices and historical totals remain unchanged. Existing single-project actions keep working.

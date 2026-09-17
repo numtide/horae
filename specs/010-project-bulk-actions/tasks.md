@@ -40,6 +40,11 @@
 - [x] T015 Run Rust/server/WASM checks and all browser suites; audit shared-style snapshots for eight pages at three widths and both-theme selection keyboard flows. Record evidence in specs/010-project-bulk-actions/quickstart.md (FR-009–FR-010, SC-003–SC-004).
 - [x] T016 Review CSS/framework/security diff, update DESIGN.md as needed, format, commit and open one scoped PR with deviations and verification results in its body.
 
+## Review follow-up
+
+- [x] T017 Correct the selectable subgrid's first track for row padding and verify checkbox containment/gaps in both themes at all three widths.
+- [x] T018 Disable the Actions trigger for an empty selection or pending batch, preserving other Menu defaults; cover state changes and disabled clicks.
+
 ## Dependencies and execution order
 
 T001–T003 → US1 → US2 integration → T014–T016. T004/T005 are independent tests; T009/T010 are independent server/browser tests. T011 depends on T009 and can be implemented independently of UI; T012 depends on T007/T010/T011. Shared-file edits remain sequential.
