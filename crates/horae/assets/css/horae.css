@@ -30,6 +30,7 @@
   --color-text-strong: #F6F2E9;  /* headings, wordmark, solid-button ink */
   --color-text: #EFEAE0;
   --color-text-secondary: #A29C8D;
+  --color-text-subtle: #8F8676;  /* supporting copy in the refreshed handoff */
   --color-text-muted: #7C7565;
   --color-label: #6A6353;        /* uppercase micro-labels, table headers */
 
@@ -111,12 +112,17 @@
   --space-12: 3rem;
   --space-16: 4rem;
   --size-progress: 0.4375rem;
+  --size-empty-icon-tile: 3.25rem;
+  --size-icon-lg: 1.375rem;
+  --width-empty-copy: 23.75rem;
+  --line-height-copy: 1.55;
 
   /* Border radius */
   --radius-sm: 4px;
   --radius: 6px;           /* controls, inputs */
   --radius-lg: 11px;       /* cards, tables */
   --radius-xl: 16px;      /* grouped list cards */
+  --radius-icon: 12px;    /* empty-state icon tiles */
   --radius-panel: 20px;    /* auth card, large panels */
   --radius-full: 9999px;   /* pills */
   --radius-btn: 8px;       /* buttons */
@@ -172,6 +178,7 @@
   --color-text-strong: #12100C;  /* headings go darker than body on paper */
   --color-text: #22201B;
   --color-text-secondary: #6B6459;
+  --color-text-subtle: var(--color-text-secondary);
   --color-text-muted: #9A9182;
   --color-label: #8A8270;
 
@@ -951,6 +958,13 @@ tbody tr:hover { background: var(--color-row-hover); }
 }
 .empty-state-title { font-family: var(--font-family-display); font-size: var(--font-size-lg); font-weight: 600; color: var(--color-text-strong); }
 .empty-state-text { font-size: var(--font-size-sm); color: var(--color-text-secondary); max-width: 420px; line-height: 1.5; }
+/* Opt-in tile/copy variants leave existing empty states unchanged. */
+.empty-state-icon-tile {
+  width: var(--size-empty-icon-tile); height: var(--size-empty-icon-tile);
+  border-radius: var(--radius-icon); color: var(--color-border-strong);
+}
+.empty-state-icon-tile svg { width: var(--size-icon-lg); height: var(--size-icon-lg); }
+.empty-state-copy { max-width: var(--width-empty-copy); line-height: var(--line-height-copy); }
 
 /* Alert / flash messages */
 .alert {
@@ -1611,7 +1625,7 @@ tbody tr:hover { background: var(--color-row-hover); }
 .proj-head, .proj-row, .proj-group { grid-column: 1 / -1; }
 .proj-head,
 .proj-row {
-  display: grid; grid-template-columns: subgrid;
+  grid-template-columns: subgrid;
 }
 .proj-bar {
   appearance: none; border: none; flex-shrink: 0;
@@ -1622,10 +1636,9 @@ tbody tr:hover { background: var(--color-row-hover); }
 .proj-bar::-webkit-progress-value { background: var(--color-primary); border-radius: var(--radius-full); }
 .proj-bar::-moz-progress-bar { background: var(--color-primary); border-radius: var(--radius-full); }
 .proj-scroll:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
-.proj-namelink { min-width: 0; max-width: 26rem; overflow-wrap: anywhere; color: var(--color-text-strong); text-decoration: none; }
+.proj-namelink { max-width: 26rem; overflow-wrap: anywhere; text-decoration: none; }
 .proj-namelink:hover { color: var(--color-primary); text-decoration: none; }
 .proj-head {
-  border-bottom: 1px solid var(--color-border);
   letter-spacing: 0.12em;
 }
 .proj-group {

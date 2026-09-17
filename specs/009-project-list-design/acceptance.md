@@ -104,3 +104,67 @@ Browser checks use Chromium and the isolated `horae_projects_design_dev_20260916
 database on port 8092. The live imported workspace on 8080 remains unchanged and
 healthy. Other browser engines were not exercised. Full Nix CI and human visual
 review remain merge gates; this follow-up does not authorize merging the PR.
+
+## Review corrections and reproducible browser checks
+
+The follow-up review found a wrong table-header color, an oversized empty-state
+radius, a circular undersized glyph, inherited link typography, and remaining
+page CSS that duplicated utilities. Projects now opts into the handoff's 16px
+card, 52px icon tile with a 22px briefcase glyph, 64px/24px padding, 380px copy
+measure, 14px import link and label-colored table header. Heading/paragraph
+margins are reset locally so the 12px stack gap controls spacing. Existing
+empty states, navigation glyphs and compact menu/combobox defaults are unchanged.
+
+`projects-design.cjs` asserts those dimensions and tokens, role-dependent
+actions, the light-theme copy color, and the shared semantic defaults. The
+header-color assertion failed against the previous preview before the fix.
+
+### Reproducing shared-style comparisons
+
+The previously temporary comparison is now `shared-style-audit.cjs`. Set
+`HORAE_TEST_URL` to an isolated demo instance (not port 8080), `HORAE_TEST_WEEK`
+to its seeded Monday, and `PLAYWRIGHT_MODULE`/`CHROMIUM_PATH` if needed. Before
+rebuilding that preview, run:
+
+```sh
+node crates/horae/tests/browser/shared-style-audit.cjs record /tmp/horae-shared-before.json
+```
+
+After updating its bundle, without changing its data or browser configuration:
+
+```sh
+node crates/horae/tests/browser/shared-style-audit.cjs compare /tmp/horae-shared-before.json
+```
+
+The capture refuses to overwrite a baseline. Both runs block remote fonts so
+availability of Google Fonts does not affect measurements. This compares sampled
+computed styles on eight other routes at three widths, not pixel screenshots
+or every element/state of the application.
+
+### Continuous browser checks
+
+On Linux, `nix build .#checks.x86_64-linux.browser -L` builds the application and
+runs Projects, responsive layout, menus and mobile-navigation checks with pinned
+Playwright/Chromium. The existing `nix flake check` CI job discovers this check.
+`run-design-checks.sh` creates its own PostgreSQL cluster on a temporary Unix
+socket, migrates/seeds it, derives the seeded week and starts the server on 8093.
+It refuses an occupied HTTP test port and stops its server/database on exit.
+The baseline comparison remains an explicit before/after review tool; CI uses
+the persistent design/default assertions and cross-page interaction checks.
+
+Validation of the final corrections on 2026-09-17:
+
+- Nine Rust tests, server Clippy with all targets, WASM check and matching
+  fullstack build passed again.
+- All 77 browser checks passed inside the Nix build sandbox using the locally
+  built debug bundle substituted for the release package. This validates the
+  new runner, isolation, pinned browser and font setup; the release package and
+  full CI remain a separate gate.
+- The first sandbox attempt exposed Chromium crashing without Fontconfig/fonts;
+  the check now explicitly supplies a pinned font configuration and DejaVu.
+- The final preview passed the expanded Projects suite, including dark/light
+  copy colors, exact empty-state dimensions and unchanged shared defaults.
+- All 24 shared-style comparisons matched after the final rebuild. Inspected
+  the application empty-state screenshot; prototype files were not rendered.
+- Formatting and diff checks passed. Preview 8092 is updated; imported workspace
+  8080 remains healthy and untouched. Bulk selection/actions remain a separate PR.

@@ -460,32 +460,32 @@ pub fn ProjectList() -> Element {
                     }
                     if groups.is_empty() {
                         rsx! {
-                            div { class: "empty-state bg-secondary rounded-panel",
-                                span { class: "empty-state-icon", aria_hidden: "true", NavIcon { name: "projects" } }
+                            div { class: "empty-state bg-secondary border rounded-xl px-6 justify-center",
+                                span { class: "empty-state-icon empty-state-icon-tile", aria_hidden: "true", NavIcon { name: "briefcase" } }
                                 if list.is_empty() {
-                                    h2 { class: "empty-state-title text-xl", "No projects yet" }
-                                    p { class: "empty-state-text",
+                                    h2 { class: "empty-state-title text-xl m-0", "No projects yet" }
+                                    p { class: "empty-state-text empty-state-copy text-subtle m-0",
                                         if is_manager {
                                             "Projects hold the tasks your team tracks against. Create one to get started."
                                         } else {
                                             "Projects hold the tasks your team tracks against. Ask a manager to create your first project."
                                         }
                                     }
-                                    div { class: "flex flex-wrap items-center justify-center gap-4 mt-1",
+                                    div { class: "flex flex-wrap items-center justify-center gap-3 mt-1",
                                         if is_manager && !show_form() {
                                             button {
-                                                class: "btn btn-primary",
+                                                class: "btn btn-primary py-3 px-5",
                                                 onclick: move |_| { reset_form(); show_form.set(true); },
                                                 "New project"
                                             }
                                         }
                                         if can_import {
-                                            Link { to: Route::HarvestImport {}, class: "font-semibold", "Import from Harvest →" }
+                                            Link { to: Route::HarvestImport {}, class: "text-sm font-semibold", "Import from Harvest →" }
                                         }
                                     }
                                 } else {
-                                    h2 { class: "empty-state-title text-xl", "No projects match your filters" }
-                                    p { class: "empty-state-text", "Try another search, client or project status." }
+                                    h2 { class: "empty-state-title text-xl m-0", "No projects match your filters" }
+                                    p { class: "empty-state-text empty-state-copy text-subtle m-0", "Try another search, client or project status." }
                                     button {
                                         class: "btn btn-secondary",
                                         onclick: move |_| {
@@ -503,7 +503,7 @@ pub fn ProjectList() -> Element {
                             div { class: "bg-secondary border rounded-xl overflow-hidden",
                                 div { class: "proj-scroll overflow-x-auto", role: "region", aria_label: "Projects by client", tabindex: "0",
                                 div { class: "proj-grid grid",
-                                div { class: "proj-head items-center py-3 px-5 text-xs uppercase text-faint",
+                                div { class: "proj-head grid items-center py-3 px-5 text-xs uppercase text-label border-b",
                                     span { "Client" }
                                     span { class: "text-right", "Budget" }
                                     span { class: "text-right", "Spent" }
@@ -521,11 +521,11 @@ pub fn ProjectList() -> Element {
                                                 None => p.name.clone(),
                                             };
                                             rsx! {
-                                            div { class: "proj-row items-center py-4 px-5 text-sm", key: "{p.id}",
+                                            div { class: "proj-row grid items-center py-4 px-5 text-sm", key: "{p.id}",
                                             div { class: "flex items-center gap-3 min-w-0",
                                                 Link {
                                                     to: Route::ProjectDetail { id: p.id },
-                                                    class: "font-semibold proj-namelink",
+                                                    class: "font-semibold text-strong min-w-0 proj-namelink",
                                                     "{pname}"
                                                 }
                                                 span { class: "chip px-2 flex-none whitespace-nowrap", "{p.project_type.label()}" }

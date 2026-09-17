@@ -225,6 +225,7 @@
 .text-strong { color: var(--color-text-strong); }
 .text-default { color: var(--color-text); }
 .text-secondary { color: var(--color-text-secondary); }
+.text-subtle { color: var(--color-text-subtle); }
 .text-muted { color: var(--color-text-secondary); }
 .text-faint { color: var(--color-text-muted); }
 .text-label { color: var(--color-label); }

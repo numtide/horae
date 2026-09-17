@@ -85,6 +85,8 @@ Sizes are `--font-size-*` tokens with matching `text-*` utilities: `xs` 12 · `s
 | `--radius` | `6px` | Menu items, segmented inner, small controls |
 | `--radius-btn` | `8px` | Buttons, inputs |
 | `--radius-lg` | `11px` | Small cards, menus / popovers, toasts |
+| `--radius-icon` | `12px` | Opt-in empty-state icon tiles |
+| `--radius-xl` | `16px` | Refreshed grouped lists and empty-state cards |
 | `--radius-panel` | `20px` | Tables, modals, large panels, auth card |
 | `--radius-full` | `9999px` | Badge pills, toggles |
 
@@ -138,11 +140,16 @@ Control-lg is 44px tall (`12px 20px`). Brand fills **brighten** on hover with a 
 
 ## Tokens & utilities
 
+Empty-state variants are opt-in: `.empty-state-icon-tile` uses the 52px tile,
+12px radius and 22px glyph tokens; `.empty-state-copy` limits copy to 380px with
+1.55 line height. Compose card spacing/radius and `text-subtle` in markup. The
+existing `.empty-state`, circular icon and typography defaults are unchanged.
+
 Everything is driven by CSS custom properties in `:root` (`assets/css/horae.css`) —
 never hardcode a colour, spacing, or radius in a rule; reference the token so the
 palette stays themeable and consistent. Notable token groups:
 
-- Colour: `--color-{bg,bg-secondary,bg-tertiary,bg-overlay,menu,row-hover}`, `--color-{text-strong,text,text-secondary,text-muted,label}`, `--color-primary*`, `--color-accent*`, and semantic `--color-{success,warning,danger,info}` with `-bg` / `-fg` / `-line` tints.
+- Colour: `--color-{bg,bg-secondary,bg-tertiary,bg-overlay,menu,row-hover}`, `--color-{text-strong,text,text-secondary,text-subtle,text-muted,label}`, `--color-primary*`, `--color-accent*`, and semantic `--color-{success,warning,danger,info}` with `-bg` / `-fg` / `-line` tints.
 - Foreground-on-fill: `--color-on-{primary,accent,pine}` (text over a solid control).
 - Chrome: `--color-border`, `--color-border-input`, `--color-border-strong`, `--color-border-danger`, `--color-border-danger-hover`, `--ring` / `--ring-soft` (focus glows).
 - Hover fills: `--color-{primary,accent}-hover`, `--color-pine-hover`, and the brand glows `--glow-{primary,accent,pine}`.

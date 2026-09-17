@@ -60,14 +60,15 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
     });
     async function visit() {
       const ready = page.waitForResponse(r => r.url().includes('/api/list_projects') && r.status() === 200);
-      await page.goto(`${base}/projects`);
-      await (await ready).finished();
+      const [response] = await Promise.all([ready, page.goto(`${base}/projects`)]);
+      await response.finished();
     }
     await visit();
     await expect(page.getByRole('button', { name: 'New project', exact: true })).toBeVisible();
     await expect(page.locator('.page-header').getByRole('link', { name: 'Import', exact: true })).toHaveAttribute('href', '/admin/importers');
     await expect(page.locator('.proj-head')).not.toContainText('Scheduled');
     await expect(page.locator('.proj-head')).not.toContainText('Delta');
+    await expect(page.locator('.proj-head')).toHaveCSS('color', 'rgb(106, 99, 83)');
     const progress = page.getByRole('progressbar', { name: 'Budget used for Design budget project' });
     await expect(progress).toHaveAttribute('value', '50');
     await expect(progress).toHaveAttribute('max', '100');
@@ -188,15 +189,36 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
       await visit();
       const state = page.locator('.empty-state');
       await expect(state.getByRole('heading', { name: 'No projects yet', exact: true })).toBeVisible();
+      await expect(state).toHaveCSS('border-radius', '16px');
+      await expect(state).toHaveCSS('padding', '64px 24px');
+      await expect(state).toHaveCSS('border-color', 'rgb(50, 46, 38)');
+      await expect(state.locator('.empty-state-icon')).toHaveCSS('width', '52px');
+      await expect(state.locator('.empty-state-icon')).toHaveCSS('height', '52px');
+      await expect(state.locator('.empty-state-icon')).toHaveCSS('border-radius', '12px');
+      await expect(state.locator('.empty-state-icon svg')).toHaveCSS('width', '22px');
+      await expect(state.locator('.empty-state-icon svg')).toHaveCSS('height', '22px');
+      await expect(state.locator('.empty-state-text')).toHaveCSS('max-width', '380px');
+      await expect(state.locator('.empty-state-text')).toHaveCSS('color', 'rgb(143, 134, 118)');
+      await expect(state.locator('.empty-state-text')).toHaveCSS('line-height', '21.7px');
+      await expect(state.locator('.empty-state-text')).toHaveCSS('margin', '0px');
+      await expect(state.locator('.empty-state-title')).toHaveCSS('margin', '0px');
       await expect(state.getByRole('button', { name: 'New project', exact: true })).toHaveCount(canCreate ? 1 : 0);
       await expect(state.getByRole('link', { name: /Import from Harvest/ })).toHaveCount(canImport ? 1 : 0);
+      if (canImport) await expect(state.getByRole('link', { name: /Import from Harvest/ })).toHaveCSS('font-size', '14px');
+      if (canImport && process.env.HORAE_TEST_SCREENSHOT_DIR)
+        await page.screenshot({ path: `${process.env.HORAE_TEST_SCREENSHOT_DIR}/projects-empty.png` });
       if (canCreate) {
+        await expect(state.getByRole('button', { name: 'New project', exact: true })).toHaveCSS('padding', '12px 20px');
         await state.getByRole('button', { name: 'New project', exact: true }).click();
         await expect(page.getByRole('heading', { name: 'New Project', exact: true })).toBeVisible();
         await page.locator('.page-header').getByRole('button', { name: 'Cancel', exact: true }).click();
       }
       console.log(`PASS: empty-state guidance and action visibility for ${orgRole}`);
     }
+    await page.locator('html').evaluate(root => { root.dataset.theme = 'light'; });
+    await expect(page.locator('.empty-state-text')).toHaveCSS('color', 'rgb(107, 100, 89)');
+    await expect(page.locator('.empty-state')).toHaveCSS('background-color', 'rgb(248, 245, 238)');
+    await page.locator('html').evaluate(root => { root.dataset.theme = 'dark'; });
     role = 'admin';
     await page.goto(`${base}/components`);
     for (const name of [/^Actions/, /^Filter by client/]) {
@@ -204,7 +226,22 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
       await expect(trigger).toHaveCSS('font-size', '12px');
       await expect(trigger).toHaveCSS('padding-left', '12px');
     }
-    console.log('PASS: shared Menu and Combobox retain their compact gallery defaults');
+    // Exercise the unmodified semantic defaults without depending on gallery copy.
+    await page.locator('main').evaluate(main => {
+      const state = document.createElement('div');
+      state.id = 'default-empty-state';
+      state.className = 'empty-state';
+      const icon = document.createElement('span');
+      icon.className = 'empty-state-icon';
+      state.append(icon);
+      main.append(state);
+    });
+    await expect(page.locator('#default-empty-state')).toHaveCSS('border-radius', '11px');
+    await expect(page.locator('#default-empty-state')).toHaveCSS('padding', '64px 32px');
+    await expect(page.locator('#default-empty-state .empty-state-icon')).toHaveCSS('width', '46px');
+    await expect(page.locator('#default-empty-state .empty-state-icon')).toHaveCSS('border-radius', '50%');
+    await expect(page.locator('.nav-item svg').first()).toHaveCSS('width', '15px');
+    console.log('PASS: shared Menu, Combobox, empty-state and navigation-icon defaults are unchanged');
     assert.deepEqual(mutations, []);
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }

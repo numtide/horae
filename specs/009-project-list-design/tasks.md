@@ -8,3 +8,5 @@
 - [x] T006 Correct the navigation fixture dependencies and validate all targets.
 - [x] T007 Refine Projects typography and content-sized columns using utilities.
 - [x] T008 Verify shared defaults and cross-page visual/interaction regressions.
+- [x] T009 Correct empty-state geometry and table-header tokens without changing shared defaults.
+- [x] T010 Add reproducible shared-style comparisons and wire isolated browser checks into Nix CI.
