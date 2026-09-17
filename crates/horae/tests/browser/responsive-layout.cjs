@@ -1,9 +1,16 @@
 // Run against an isolated, seeded dev-login instance. No business data is changed.
 // HORAE_TEST_URL=http://127.0.0.1:8092 node crates/horae/tests/browser/responsive-layout.cjs
+// HORAE_TEST_WEEK selects the Monday of a seeded week for the entry checks.
 const { chromium, expect } = require(process.env.PLAYWRIGHT_MODULE || 'playwright/test');
 const assert = require('node:assert/strict');
 const base = process.env.HORAE_TEST_URL;
 assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
+const week = process.env.HORAE_TEST_WEEK || '2027-10-04';
+const monday = new Date(`${week}T00:00:00Z`);
+assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(week) && monday.getUTCDay() === 1,
+  'HORAE_TEST_WEEK must be a Monday in YYYY-MM-DD format');
+const nextWeek = new Date(monday.getTime() + 7 * 86400000).toISOString().slice(0, 10);
+const sunday = new Date(monday.getTime() + 6 * 86400000).toISOString().slice(0, 10);
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, headless: true });
@@ -59,16 +66,16 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
       ['/invoices', 'list_invoices'], ['/reports', 'report_time'],
       ['/admin/users', 'list_users'], ['/approvals', 'list_approvals'],
       ['/settings', 'get_me'], ['/admin/importers', 'get_me'],
-      ['/timesheet/week/2027-10-04', 'list_time_entries'],
-      ['/timesheet/day/2027-10-04', 'list_time_entries'],
-      ['/timesheet/calendar/2027-10-04', 'list_time_entries'],
+      [`/timesheet/week/${week}`, 'list_time_entries'],
+      [`/timesheet/day/${week}`, 'list_time_entries'],
+      [`/timesheet/calendar/${week}`, 'list_time_entries'],
     ]) {
       await visit(path, resource);
       if (path === '/reports') await expect(page.getByRole('link', { name: 'Export XLSX', exact: true })).toBeVisible();
       for (const width of [320, 390, 768, 1280, 1440]) {
         await page.setViewportSize({ width, height: 1000 });
         await check(`${path} header at ${width}px`, headersFit);
-        if (process.env.HORAE_TEST_SCREENSHOT_DIR && width === 320 && path === '/timesheet/week/2027-10-04')
+        if (process.env.HORAE_TEST_SCREENSHOT_DIR && width === 320 && path === `/timesheet/week/${week}`)
           await page.screenshot({ path: `${process.env.HORAE_TEST_SCREENSHOT_DIR}/responsive-timesheet.png` });
       }
     }
@@ -112,11 +119,11 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     });
     await check('small-screen timesheet pager, date picker and view controls remain usable', async () => {
       await page.setViewportSize({ width: 320, height: 1000 });
-      await visit('/timesheet/week/2027-10-04', 'list_time_entries');
+      await visit(`/timesheet/week/${week}`, 'list_time_entries');
       await page.getByRole('button', { name: 'Next week', exact: true }).click();
-      await expect(page).toHaveURL(/2027-10-11/);
+      await expect(page).toHaveURL(url => url.pathname === `/timesheet/week/${nextWeek}`);
       await page.getByRole('button', { name: 'Previous week', exact: true }).click();
-      await expect(page).toHaveURL(/2027-10-04/);
+      await expect(page).toHaveURL(url => url.pathname === `/timesheet/week/${week}`);
       await page.locator('.ts-pager-label').click();
       const picker = page.locator('.dp-pop');
       await expect(picker).toBeVisible();
@@ -142,7 +149,7 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     });
     await check('day strip scrolls to Sunday and long entry labels do not cover actions', async () => {
       await page.setViewportSize({ width: 320, height: 1000 });
-      await visit('/timesheet/day/2027-10-04', 'list_time_entries');
+      await visit(`/timesheet/day/${week}`, 'list_time_entries');
       const first = page.locator('.ts-day-entry').first();
       await expect(first).toBeVisible();
       await first.locator('.ts-day-entry-project').evaluate(el => { el.textContent = 'unbroken_project_reference_'.repeat(10); });
@@ -153,7 +160,7 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
       await expect(page.getByRole('dialog', { name: /Edit time entry/ })).toBeVisible();
       await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click();
       await page.locator('.ts-daystrip').getByRole('button', { name: /^Sun/ }).click();
-      await expect(page).toHaveURL(/2027-10-10/);
+      await expect(page).toHaveURL(url => url.pathname === `/timesheet/day/${sunday}`);
       await expect(page.locator('.ts-dayitem.active .ts-dayitem-name')).toHaveText('Sun');
       await headersFit();
     });

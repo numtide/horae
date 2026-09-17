@@ -75,7 +75,7 @@ Three typefaces loaded from Google Fonts:
 
 ### Type scale
 
-Sizes are `--font-size-*` tokens with matching `text-*` utilities: `xs` 12 · `sm` 14 (body, numerals) · `base` 16 · `lg` 18 (H2) · `xl` 20 · `2xl` 24 · `3xl` 30 (H1) · `display` 44 (hero totals, e.g. invoice "Total due"). Headings resolve to `--color-text-strong`.
+Sizes are `--font-size-*` tokens with matching `text-*` utilities: `xs` 12 · `sm` 14 (body, numerals) · `base` 16 · `lg` 18 (H2) · `xl` 20 · `2xl` 24 · `3xl` 30 (H1) · `4xl` 34 (refreshed handoff page heading) · `display` 44 (hero totals, e.g. invoice "Total due"). Headings resolve to `--color-text-strong`. The refreshed heading uses `tracking-tight` (−0.015em); opt into it per surface without changing existing heading defaults.
 
 ## Border Radius
 
@@ -85,6 +85,8 @@ Sizes are `--font-size-*` tokens with matching `text-*` utilities: `xs` 12 · `s
 | `--radius` | `6px` | Menu items, segmented inner, small controls |
 | `--radius-btn` | `8px` | Buttons, inputs |
 | `--radius-lg` | `11px` | Small cards, menus / popovers, toasts |
+| `--radius-icon` | `12px` | Opt-in empty-state icon tiles |
+| `--radius-xl` | `16px` | Refreshed grouped lists and empty-state cards |
 | `--radius-panel` | `20px` | Tables, modals, large panels, auth card |
 | `--radius-full` | `9999px` | Badge pills, toggles |
 
@@ -138,16 +140,21 @@ Control-lg is 44px tall (`12px 20px`). Brand fills **brighten** on hover with a 
 
 ## Tokens & utilities
 
+Empty-state variants are opt-in: `.empty-state-icon-tile` uses the 52px tile,
+12px radius and 22px glyph tokens; `.empty-state-copy` limits copy to 380px with
+1.55 line height. Compose card spacing/radius and `text-subtle` in markup. The
+existing `.empty-state`, circular icon and typography defaults are unchanged.
+
 Everything is driven by CSS custom properties in `:root` (`assets/css/horae.css`) —
 never hardcode a colour, spacing, or radius in a rule; reference the token so the
 palette stays themeable and consistent. Notable token groups:
 
-- Colour: `--color-{bg,bg-secondary,bg-tertiary,bg-overlay,menu,row-hover}`, `--color-{text-strong,text,text-secondary,text-muted,label}`, `--color-primary*`, `--color-accent*`, and semantic `--color-{success,warning,danger,info}` with `-bg` / `-fg` / `-line` tints.
+- Colour: `--color-{bg,bg-secondary,bg-tertiary,bg-overlay,menu,row-hover}`, `--color-{text-strong,text,text-secondary,text-subtle,text-muted,label}`, `--color-primary*`, `--color-accent*`, and semantic `--color-{success,warning,danger,info}` with `-bg` / `-fg` / `-line` tints.
 - Foreground-on-fill: `--color-on-{primary,accent,pine}` (text over a solid control).
 - Chrome: `--color-border`, `--color-border-input`, `--color-border-strong`, `--color-border-danger`, `--color-border-danger-hover`, `--ring` / `--ring-soft` (focus glows).
 - Hover fills: `--color-{primary,accent}-hover`, `--color-pine-hover`, and the brand glows `--glow-{primary,accent,pine}`.
 - Elevation: `--shadow-{sm,md,menu,modal}`.
-- Scale: `--space-1..16`, `--font-size-*` (`xs`–`3xl`, `display`), `--radius-*` (`sm`, base, `btn`, `lg`, `panel`, `full`).
+- Scale: `--space-1..16`, `--font-size-*` (`xs`–`4xl`, `display`), `--radius-*` (`sm`, base, `btn`, `lg`, `xl`, `panel`, `full`). `rounded-btn` uses the existing 8px control radius; `rounded-xl` adds the refreshed handoff's 16px grouped-list radius without changing existing cards.
 
 On top of the tokens is a **Tailwind-style utility layer** — `flex`,
 `items-center`, `justify-between`, `gap-4`, `p-4`, directional `pt-/pb-/pl-/pr-`,
@@ -168,6 +175,10 @@ keeps `horae-utils.css` in sync, and a stale committed copy can't slip through
 
 Tokens and semantic component classes stay hand-written in `horae.css`; the
 generator owns only the mechanical utility + responsive matrix.
+
+`Menu` and `Combobox` accept optional `trigger_class` utilities. Their default
+remains `btn btn-secondary btn-sm`; a surface may opt into `text-sm px-4` without
+changing other callers or adding page-specific descendant overrides.
 
 ## Pages
 

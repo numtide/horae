@@ -19,6 +19,8 @@ use uuid::Uuid;
 pub mod combobox;
 #[path = "../src/components/form.rs"]
 pub mod form;
+#[path = "../src/components/icons.rs"]
+pub mod icons;
 #[path = "../src/components/menu.rs"]
 pub mod menu;
 #[path = "../src/components/modal.rs"]
@@ -26,7 +28,7 @@ pub mod modal;
 #[path = "../src/components/table.rs"]
 pub mod table;
 mod components {
-    pub use super::{combobox, form, menu, modal, table};
+    pub use super::{combobox, form, icons, menu, modal, table};
 }
 #[path = "../src/models/assignment.rs"]
 mod assignment;
@@ -93,6 +95,13 @@ mod route {
         ProjectList {},
         #[route("/projects/:id")]
         ProjectDetail { id: Uuid },
+        #[route("/admin/importers")]
+        HarvestImport {},
+    }
+
+    #[component]
+    fn HarvestImport() -> Element {
+        rsx! { h1 { "Importers" } }
     }
 
     #[component]
@@ -112,6 +121,31 @@ fn settle(dom: &mut VirtualDom) {
         dom.render_immediate_to_vec();
     }
     panic!("detail navigation did not settle");
+}
+
+#[tokio::test]
+async fn empty_project_list_links_to_the_importer_route() {
+    let probe = Probe {
+        initial_path: Some("/projects".into()),
+        ..Probe::default()
+    };
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains("No projects yet"), "rendered: {html}");
+    assert_eq!(html.matches("href=\"/admin/importers\"").count(), 2);
+
+    let navigator = probe.navigator.borrow().unwrap();
+    dom.in_scope(probe.scope.borrow().unwrap(), || {
+        navigator.push(route::Route::HarvestImport {})
+    });
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains("Importers"));
+
+    dom.in_scope(probe.scope.borrow().unwrap(), || navigator.go_back());
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains("No projects yet"));
 }
 
 #[tokio::test]

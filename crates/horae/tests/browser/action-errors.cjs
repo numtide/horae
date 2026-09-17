@@ -25,7 +25,7 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated, seeded test instance');
     },
     {
       name: 'project archive', path: '/projects', resource: 'list_projects',
-      endpoint: 'set_project_active', form: 'Add Project',
+      endpoint: 'set_project_active', form: 'New project',
       formEndpoint: 'create_project', submit: 'Create Project',
       action: async () => {
         await page.getByRole('button', { name: /^Actions/ }).first().click();

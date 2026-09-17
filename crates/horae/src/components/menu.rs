@@ -12,6 +12,9 @@ pub fn Menu(
     /// Anchor the popover to the right edge — for right-aligned cells.
     #[props(default)]
     align_right: bool,
+    /// Extra utility classes on the trigger; compact styling remains the default.
+    #[props(default)]
+    trigger_class: String,
     children: Element,
 ) -> Element {
     let popover = if align_right {
@@ -25,7 +28,7 @@ pub fn Menu(
             button {
                 id: "{id}-trigger",
                 r#type: "button",
-                class: "btn btn-secondary btn-sm",
+                class: "btn btn-secondary btn-sm {trigger_class}",
                 "aria-haspopup": "menu",
                 "aria-expanded": "false",
                 "aria-controls": "{id}",

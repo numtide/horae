@@ -21,7 +21,7 @@ pub fn NavIcon(name: String) -> Element {
             line { x1: "5.2", y1: "1.6", x2: "5.2", y2: "4" }
             line { x1: "10.8", y1: "1.6", x2: "10.8", y2: "4" }
         },
-        "clients" => rsx! {
+        "clients" | "briefcase" => rsx! {
             rect { x: "2", y: "5", width: "12", height: "8.5", rx: "1.5" }
             path { d: "M6 5 V3.6 A1 1 0 0 1 7 2.6 H9 A1 1 0 0 1 10 3.6 V5" }
         },

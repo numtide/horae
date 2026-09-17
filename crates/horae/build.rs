@@ -161,6 +161,7 @@ fn families() -> Vec<Family> {
                 ("text-strong", "color: var(--color-text-strong)"),
                 ("text-default", "color: var(--color-text)"),
                 ("text-secondary", "color: var(--color-text-secondary)"),
+                ("text-subtle", "color: var(--color-text-subtle)"),
                 ("text-muted", "color: var(--color-text-secondary)"),
                 ("text-faint", "color: var(--color-text-muted)"),
                 ("text-label", "color: var(--color-label)"),
@@ -195,6 +196,8 @@ fn families() -> Vec<Family> {
                 ("rounded-sm", "border-radius: var(--radius-sm)"),
                 ("rounded", "border-radius: var(--radius)"),
                 ("rounded-lg", "border-radius: var(--radius-lg)"),
+                ("rounded-xl", "border-radius: var(--radius-xl)"),
+                ("rounded-btn", "border-radius: var(--radius-btn)"),
                 ("rounded-panel", "border-radius: var(--radius-panel)"),
                 ("rounded-full", "border-radius: var(--radius-full)"),
             ],
@@ -254,7 +257,9 @@ fn spacing_family() -> Family {
 
 fn type_family() -> Family {
     let mut rules = Vec::new();
-    for size in ["xs", "sm", "base", "lg", "xl", "2xl", "3xl", "display"] {
+    for size in [
+        "xs", "sm", "base", "lg", "xl", "2xl", "3xl", "4xl", "display",
+    ] {
         rules.push((
             format!("text-{size}"),
             format!("font-size: var(--font-size-{size})"),
@@ -270,6 +275,7 @@ fn type_family() -> Family {
         ("text-right", "text-align: right"),
         ("uppercase", "text-transform: uppercase"),
         ("tracking-wide", "letter-spacing: 0.06em"),
+        ("tracking-tight", "letter-spacing: -0.015em"),
         ("tracking-wider", "letter-spacing: 0.14em"),
         ("leading-tight", "line-height: 1.2"),
         ("font-sans", "font-family: var(--font-family)"),
