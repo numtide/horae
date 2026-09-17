@@ -38,7 +38,7 @@
 
 - [x] T014 Wire the new browser suite into crates/horae/tests/browser/run-design-checks.sh (FR-010).
 - [x] T015 Run Rust/server/WASM checks and all browser suites; audit shared-style snapshots for eight pages at three widths and both-theme selection keyboard flows. Record evidence in specs/010-project-bulk-actions/quickstart.md (FR-009–FR-010, SC-003–SC-004).
-- [ ] T016 Review CSS/framework/security diff, update DESIGN.md as needed, format, commit and open one scoped PR with deviations and verification results in its body.
+- [x] T016 Review CSS/framework/security diff, update DESIGN.md as needed, format, commit and open one scoped PR with deviations and verification results in its body.
 
 ## Dependencies and execution order
 

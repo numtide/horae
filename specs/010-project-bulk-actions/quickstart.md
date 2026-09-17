@@ -41,3 +41,5 @@ Compare shared-style-audit.cjs snapshots from the exact base commit (`b389fb9`) 
 - Shared-style snapshots are identical on Clients, Invoices, Reports, Users, Settings, Importers, Components and Timesheet at 320/768/1440px, comparing a fresh build of base commit `b389fb9` against this implementation with the same demo data. The older running preview was not a valid Importers baseline; its different copy/layout predated already-merged changes.
 
 All mutations used temporary PostgreSQL clusters. The imported workspace on port 8080 was not used for tests.
+
+Delivered for review in [PR #205](https://github.com/numtide/horae/pull/205). CI remains a required pre-merge gate; this delivery does not merge the PR.
