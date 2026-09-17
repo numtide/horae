@@ -55,6 +55,6 @@ if [[ -n ${HORAE_STYLE_BASELINE:-} ]]; then
   node "$browser_tests/shared-style-audit.cjs" compare "$HORAE_STYLE_BASELINE"
 fi
 
-for suite in projects-design responsive-layout menu-popovers mobile-navigation project-bulk-actions; do
+for suite in projects-design responsive-layout menu-popovers mobile-navigation project-bulk-actions project-bulk-recovery; do
   node "$browser_tests/$suite.cjs"
 done

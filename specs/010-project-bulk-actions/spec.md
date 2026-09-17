@@ -49,6 +49,8 @@ As a manager or administrator, I can confirm a single operation to archive activ
 ### Edge Cases
 
 - Empty/loading/failed list: no actionable selection.
+- Post-commit refresh: stale rows cannot be selected while loading; a failed read offers a list-only retry without repeating the mutation.
+- Successful confirmation disables its opener: focus moves to the project-status filter; cancellation still returns focus to Actions.
 - Refresh removes a selected row: exclude it from the active selection before confirmation.
 - Missing or foreign-organization project in a batch: reject the entire batch without changing any project.
 - Repeated identifiers and already-requested statuses: do not duplicate changes or transition notifications.

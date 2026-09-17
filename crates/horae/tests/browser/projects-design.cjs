@@ -161,6 +161,8 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
     await dialog.getByRole('button', { name: 'Excel', exact: true }).click();
     await expect(dialog.getByRole('link', { name: 'Export projects' })).toHaveAttribute('href', '/api/projects/export/xlsx?scope=active');
     await page.keyboard.press('Escape');
+    await expect(dialog).not.toBeVisible();
+    await expect(page.getByRole('button', { name: 'Export', exact: true })).toBeFocused();
     console.log('PASS: narrow/short layouts, keyboard row actions and export formats');
 
     holdSpend = true;

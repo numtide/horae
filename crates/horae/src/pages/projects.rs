@@ -163,11 +163,14 @@ pub fn ProjectList() -> Element {
         _ => HashMap::new(),
     };
     let query_lower = query().to_lowercase();
+    // Resources retain their previous value while a restart is pending.
+    let projects_loading = projects.state()() != UseResourceState::Ready;
     let visible: Vec<Project> = projects
         .read()
         .as_ref()
         .and_then(|result| result.as_ref().ok())
         .into_iter()
+        .filter(|_| !projects_loading)
         .flatten()
         .filter(|p| {
             matches_project_filters(p, &query_lower, &scope(), &client_filter(), &client_names)
@@ -524,6 +527,21 @@ pub fn ProjectList() -> Element {
                 Some(Ok(_)) => rsx! {},
             }
 
+            if projects_loading {
+                p { class: "text-sm text-secondary", aria_busy: "true", "Loading projects…" }
+            } else if matches!(&*projects.read(), Some(Err(_))) {
+                div { class: "alert alert-danger", role: "alert",
+                    "Could not load projects. Retry to refresh the list. "
+                    button { r#type: "button", class: "btn btn-secondary btn-sm",
+                        onclick: move |_| {
+                            selected.write().clear();
+                            projects.restart();
+                            document::eval("document.getElementById('project-scope-menu-trigger')?.focus();");
+                        },
+                        "Retry"
+                    }
+                }
+            } else {
             {loaded(&*projects.read(), |list| {
                     let visible_ids: BTreeSet<Uuid> = visible.iter().map(|p| p.id).collect();
                     let all_selected = !visible_ids.is_empty() && selected_count == visible_ids.len();
@@ -743,9 +761,11 @@ pub fn ProjectList() -> Element {
                         }
                     }
             })}
+            }
 
             Modal {
                 id: "bulk-projects-dialog", labelledby: "bulk-projects-title",
+                focus_fallback: "project-scope-menu-trigger",
                 open: confirmation.is_some(), busy: bulk_busy(),
                 on_dismiss: move |_| bulk_action.set(None),
                 h2 { id: "bulk-projects-title", class: "modal-title m-0", "{confirm_verb} {confirm_count} {confirm_noun}?" }

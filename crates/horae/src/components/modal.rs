@@ -9,17 +9,26 @@ pub fn Modal(
     open: bool,
     #[props(default = false)] busy: bool,
     #[props(default = false)] large: bool,
+    /// Focus this element only when the opener can no longer receive focus.
+    #[props(default)]
+    focus_fallback: Option<&'static str>,
     on_dismiss: EventHandler<()>,
     children: Element,
 ) -> Element {
     let mut backdrop_press = use_signal(|| false);
-    use_effect(use_reactive!(|(open, id)| {
+    use_effect(use_reactive!(|(open, id, focus_fallback)| {
         let id = serde_json::json!(id);
+        let fallback = serde_json::json!(focus_fallback);
         document::eval(&format!(
             "const dialog = document.getElementById({id});
              if (dialog) {{
                  if ({open} && !dialog.open) dialog.showModal();
-                 else if (!{open} && dialog.open) dialog.close();
+                 else if (!{open} && dialog.open) {{
+                     dialog.close();
+                     if ({fallback} && document.activeElement === document.body) {{
+                         document.getElementById({fallback})?.focus();
+                     }}
+                 }}
              }}"
         ));
     }));

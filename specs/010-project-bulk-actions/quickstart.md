@@ -49,3 +49,9 @@ Delivered for review in [PR #205](https://github.com/numtide/horae/pull/205). CI
 The initial alignment checks missed checkbox overflow inside the first subgrid track. A failing geometry test reproduced the reported overlap: 18px checkboxes occupied a zero-width cell and overlapped labels by 4px. Including the row's start padding in that track restores an 18px cell and 16px label gap, without changing the read-only grid.
 
 Actions now uses a disabled native trigger with no selection or while submitting. Tests cover disabled clicks and arrow-key handling, enabling after selection, and disabling again after clearing it; other menus retain their defaults. The 13 controls/navigation tests, Clippy, WASM/fullstack build, all five browser suites and the eight-page style comparison pass after these changes. Geometry is checked in both themes at 320/768/1440px.
+
+### Bulk recovery follow-up
+
+Successful confirmation now falls back to the project-status filter when the disabled Actions trigger cannot receive focus. Cancellation retains native focus restoration. Pending project reads hide stale rows and disable bulk selection; failed reads offer Retry without resubmitting the mutation.
+
+The new `project-bulk-recovery` browser suite first failed against the previous bundle on focus restoration, then passed for successful, delayed and failed refreshes against the updated bundle. All six isolated browser suites, 13 controls/navigation tests, server/all-target Clippy and WASM/fullstack compilation pass. No database queries, migrations or CSS rules changed.
