@@ -6,3 +6,5 @@
 - [x] T004 Verify server/WASM builds, formatting and isolated browser checks.
 - [x] T005 Record evidence and deviations for a scoped review PR.
 - [x] T006 Correct the navigation fixture dependencies and validate all targets.
+- [x] T007 Refine Projects typography and content-sized columns using utilities.
+- [x] T008 Verify shared defaults and cross-page visual/interaction regressions.

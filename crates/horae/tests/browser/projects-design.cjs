@@ -74,6 +74,15 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
     await expect(page.locator('.proj-row [style]')).toHaveCount(0);
     console.log('PASS: header actions, supported metrics and labelled native budget progress');
 
+    await expect(page.getByRole('heading', { name: 'Projects', exact: true })).toHaveCSS('font-size', '34px');
+    await expect(page.locator('.proj-namelink')).toHaveCSS('font-size', '14px');
+    assert.equal(await page.locator('.proj-row').evaluate(row => {
+      const [name, type] = row.firstElementChild.children;
+      const a = name.getBoundingClientRect(), b = type.getBoundingClientRect();
+      return Math.abs((a.top + a.bottom) / 2 - (b.top + b.bottom) / 2) < 1;
+    }), true, 'Project name and type share a line');
+    console.log('PASS: design heading, compact row typography and inline project type');
+
     await page.getByRole('textbox', { name: 'Search by project or client' }).fill('no matching project');
     await expect(page.getByRole('heading', { name: 'No projects match your filters' })).toBeVisible();
     await page.getByRole('button', { name: 'Reset filters', exact: true }).click();
@@ -83,10 +92,10 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
     await page.getByRole('menuitem', { name: /^Archived projects/ }).click();
     await page.getByRole('button', { name: 'Reset filters', exact: true }).click();
     await expect(page.getByRole('button', { name: /^Active projects/ })).toBeVisible();
-    await page.getByRole('button', { name: /^Filter by client/ }).click();
+    await page.getByRole('button', { name: /^All clients/ }).click();
     await page.getByRole('listbox').getByRole('button', { name: 'No projects client', exact: true }).click();
     await page.getByRole('button', { name: 'Reset filters', exact: true }).click();
-    await expect(page.getByRole('button', { name: /^Filter by client/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^All clients/ })).toBeVisible();
     await expect(page.locator('.proj-row')).toHaveCount(1);
     console.log('PASS: filtered empty state resets search, scope and client');
 
@@ -109,6 +118,22 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
         });
       });
       assert.equal(geometry, true);
+      // Full currency codes and large/negative amounts must fit, not paint over
+      // neighbouring columns. Only the browser DOM changes; no data is written.
+      await page.locator('.proj-row').evaluate(row => {
+        row.children[1].firstElementChild.textContent = 'USD 123,456,789.00';
+        row.children[2].firstElementChild.textContent = 'USD 234,567,890.00';
+        row.children[3].firstElementChild.textContent = '-USD 111,111,101.00';
+      });
+      assert.equal(await page.locator('.proj-row').evaluate(row => {
+        return [...row.children].slice(1, 4).every(cell => {
+          const bounds = cell.getBoundingClientRect();
+          return [...cell.children].every(child => {
+            const box = child.getBoundingClientRect();
+            return box.left >= bounds.left - 1 && box.right <= bounds.right + 1;
+          });
+        });
+      }), true, `Currency amounts stay inside their columns at ${width}px`);
     }
     await page.locator('.proj-namelink').evaluate(el => { el.textContent = 'unbroken_project_name_'.repeat(20); });
     assert.equal(await page.locator('.proj-row').evaluate(row => {
@@ -172,6 +197,14 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
       }
       console.log(`PASS: empty-state guidance and action visibility for ${orgRole}`);
     }
+    role = 'admin';
+    await page.goto(`${base}/components`);
+    for (const name of [/^Actions/, /^Filter by client/]) {
+      const trigger = page.getByRole('button', { name });
+      await expect(trigger).toHaveCSS('font-size', '12px');
+      await expect(trigger).toHaveCSS('padding-left', '12px');
+    }
+    console.log('PASS: shared Menu and Combobox retain their compact gallery defaults');
     assert.deepEqual(mutations, []);
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }

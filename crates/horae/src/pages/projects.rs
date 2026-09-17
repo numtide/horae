@@ -237,12 +237,12 @@ pub fn ProjectList() -> Element {
 
     rsx! {
         div {
-            div { class: "page-header",
-                h1 { class: "page-title", "Projects" }
-                div { class: "page-actions items-center",
+            div { class: "page-header mb-5",
+                h1 { class: "page-title text-4xl font-semibold text-strong tracking-tight", "Projects" }
+                div { class: "page-actions items-center gap-4",
                     if is_manager {
                         button {
-                            class: "btn btn-primary btn-sm",
+                            class: "btn btn-primary py-2 px-4",
                             onclick: move |_| {
                                 let open = !show_form();
                                 reset_form();
@@ -252,15 +252,15 @@ pub fn ProjectList() -> Element {
                         }
                     }
                     if can_import {
-                        Link { to: Route::HarvestImport {}, class: "btn btn-secondary btn-sm", "Import" }
+                        Link { to: Route::HarvestImport {}, class: "btn btn-secondary py-2 px-4", "Import" }
                     }
                     button {
-                        class: "btn btn-secondary btn-sm",
+                        class: "btn btn-secondary py-2 px-4",
                         onclick: move |_| export_open.set(true),
                         "Export"
                     }
-                    div { class: "proj-search",
-                        span { class: "proj-search-icon", aria_hidden: "true", "⌕" }
+                    div { class: "proj-search flex items-center gap-2 py-2 px-3 bg-secondary border rounded-btn",
+                        span { class: "text-faint flex-none", aria_hidden: "true", "⌕" }
                         input {
                             class: "proj-search-input",
                             r#type: "text",
@@ -273,8 +273,8 @@ pub fn ProjectList() -> Element {
                 }
             }
 
-            div { class: "flex flex-wrap items-center gap-4 mb-6",
-                Menu { id: "project-scope-menu", label: "{scope_label}",
+            div { class: "flex flex-wrap items-center gap-4 mb-5",
+                Menu { id: "project-scope-menu", label: "{scope_label}", trigger_class: "text-sm px-4",
                     MenuItem {
                         selected: scope() == "active",
                         onclick: move |_| scope.set("active".to_string()),
@@ -293,9 +293,10 @@ pub fn ProjectList() -> Element {
                 }
                 div { class: "flex-1" }
                 Combobox {
+                    trigger_class: "text-sm px-4",
                     options: client_options,
                     value: client_filter(),
-                    placeholder: "Filter by client",
+                    placeholder: "All clients",
                     all_label: "All clients",
                     onselect: move |v| client_filter.set(v),
                 }
@@ -499,9 +500,10 @@ pub fn ProjectList() -> Element {
                         }
                     } else {
                         rsx! {
-                            div { class: "proj-card",
-                                div { class: "proj-scroll", role: "region", aria_label: "Projects by client", tabindex: "0",
-                                div { class: "proj-head",
+                            div { class: "bg-secondary border rounded-xl overflow-hidden",
+                                div { class: "proj-scroll overflow-x-auto", role: "region", aria_label: "Projects by client", tabindex: "0",
+                                div { class: "proj-grid grid",
+                                div { class: "proj-head items-center py-3 px-5 text-xs uppercase text-faint",
                                     span { "Client" }
                                     span { class: "text-right", "Budget" }
                                     span { class: "text-right", "Spent" }
@@ -509,7 +511,7 @@ pub fn ProjectList() -> Element {
                                     span {}
                                 }
                                 for (group_name, group) in groups {
-                                    div { key: "grp-{group_name}", class: "proj-group", "{group_name}" }
+                                    div { key: "grp-{group_name}", class: "proj-group py-3 px-5 text-sm font-semibold text-primary", "{group_name}" }
                                     for p in group {
                                         {
                                             let (sm, sc) = spend_map.get(&p.id).copied().unwrap_or((0, 0));
@@ -519,14 +521,14 @@ pub fn ProjectList() -> Element {
                                                 None => p.name.clone(),
                                             };
                                             rsx! {
-                                            div { class: "proj-row", key: "{p.id}",
+                                            div { class: "proj-row items-center py-4 px-5 text-sm", key: "{p.id}",
                                             div { class: "flex items-center gap-3 min-w-0",
                                                 Link {
                                                     to: Route::ProjectDetail { id: p.id },
                                                     class: "font-semibold proj-namelink",
                                                     "{pname}"
                                                 }
-                                                span { class: "badge badge-neutral", "{p.project_type.label()}" }
+                                                span { class: "chip px-2 flex-none whitespace-nowrap", "{p.project_type.label()}" }
                                                 if !p.active {
                                                     span { class: "badge badge-neutral", "Inactive" }
                                                 }
@@ -555,7 +557,7 @@ pub fn ProjectList() -> Element {
                                                 if spend_ready {
                                                     span { class: "whitespace-nowrap", "{rs.remaining}" }
                                                     if let Some(lbl) = rs.pct_label.clone() {
-                                                        span { class: "text-faint", "{lbl}" }
+                                                        span { class: "text-faint text-xs whitespace-nowrap", "{lbl}" }
                                                     }
                                                 } else {
                                                     span { class: "text-muted", aria_label: "Remaining unavailable", "—" }
@@ -621,6 +623,7 @@ pub fn ProjectList() -> Element {
                                             }
                                         }
                                     }
+                                }
                                 }
                                 }
                             }

@@ -96,6 +96,7 @@
   --font-size-xl: 1.25rem;
   --font-size-2xl: 1.5rem;
   --font-size-3xl: 1.875rem;
+  --font-size-4xl: 2.125rem; /* 34px — page heading in the refreshed handoff */
   --font-size-display: 2.75rem;   /* 44px — hero display: invoice totals, big numerals */
 
   /* Spacing */
@@ -115,6 +116,7 @@
   --radius-sm: 4px;
   --radius: 6px;           /* controls, inputs */
   --radius-lg: 11px;       /* cards, tables */
+  --radius-xl: 16px;      /* grouped list cards */
   --radius-panel: 20px;    /* auth card, large panels */
   --radius-full: 9999px;   /* pills */
   --radius-btn: 8px;       /* buttons */
@@ -1591,13 +1593,7 @@ tbody tr:hover { background: var(--color-row-hover); }
 
 /* Projects — client-grouped budget table. Structural only (grid template,
    grouped banding); colours/spacing come from tokens, layout from utilities. */
-.proj-search {
-  display: flex; align-items: center; gap: var(--space-2);
-  width: 300px; max-width: 100%; padding: var(--space-2) var(--space-3);
-  background: var(--color-bg-secondary); border: 1px solid var(--color-border);
-  border-radius: var(--radius-btn);
-}
-.proj-search-icon { color: var(--color-text-muted); flex-shrink: 0; }
+.proj-search { width: 300px; max-width: 100%; }
 .proj-search-input {
   flex: 1; min-width: 0; background: transparent; border: none; outline: none;
   color: var(--color-text); font: inherit; font-size: var(--font-size-sm);
@@ -1605,20 +1601,17 @@ tbody tr:hover { background: var(--color-row-hover); }
 .proj-search-input::placeholder { color: var(--color-text-muted); }
 .proj-search:focus-within { border-color: var(--color-primary); box-shadow: var(--ring-soft); }
 
-.proj-card {
-  background: var(--color-bg-secondary); border: 1px solid var(--color-border);
-  border-radius: var(--radius-panel); overflow: hidden;
+/* Share content-sized numeric tracks across every row: currency codes and
+   large amounts widen the table inside its scroller, never overlap a neighbour. */
+.proj-grid {
+  width: max-content; min-width: 100%;
+  grid-template-columns: minmax(26rem, 1fr) repeat(4, max-content);
+  column-gap: var(--space-6);
 }
-/* Reserve space for the project name as well as numeric tracks and gaps. Keep
-   headers, rows and group bands the same width inside the horizontal scroller. */
-.proj-scroll { overflow-x: auto; }
-.proj-head, .proj-row, .proj-group { min-width: 1080px; }
+.proj-head, .proj-row, .proj-group { grid-column: 1 / -1; }
 .proj-head,
 .proj-row {
-  display: grid;
-  grid-template-columns: minmax(280px, 1fr) 130px 210px 220px 120px;
-  align-items: center; gap: var(--space-2);
-  padding: var(--space-4) var(--space-5);
+  display: grid; grid-template-columns: subgrid;
 }
 .proj-bar {
   appearance: none; border: none; flex-shrink: 0;
@@ -1629,19 +1622,15 @@ tbody tr:hover { background: var(--color-row-hover); }
 .proj-bar::-webkit-progress-value { background: var(--color-primary); border-radius: var(--radius-full); }
 .proj-bar::-moz-progress-bar { background: var(--color-primary); border-radius: var(--radius-full); }
 .proj-scroll:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
-.proj-row > :first-child { flex-wrap: wrap; }
-.proj-namelink { min-width: 0; overflow-wrap: anywhere; color: var(--color-text); text-decoration: none; }
+.proj-namelink { min-width: 0; max-width: 26rem; overflow-wrap: anywhere; color: var(--color-text-strong); text-decoration: none; }
 .proj-namelink:hover { color: var(--color-primary); text-decoration: none; }
 .proj-head {
   border-bottom: 1px solid var(--color-border);
-  font-size: var(--font-size-xs); letter-spacing: 0.1em; text-transform: uppercase;
-  color: var(--color-text-muted);
+  letter-spacing: 0.12em;
 }
 .proj-group {
-  padding: var(--space-3) var(--space-5);
-  background: var(--color-bg);
+  background: var(--color-cell-empty-bg);
   border-bottom: 1px solid var(--color-border-light);
-  font-size: var(--font-size-sm); font-weight: 600; color: var(--color-text-secondary);
 }
 .proj-row { border-bottom: 1px solid var(--color-border-light); }
 .proj-row:hover { background: var(--color-row-hover); }

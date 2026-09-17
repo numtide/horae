@@ -65,3 +65,42 @@ The production UI and backend are unchanged by this correction.
 - `cargo sqlx prepare --check --workspace -- --features server --all-targets`:
   passed against the isolated design-test database with `SQLX_OFFLINE=false`;
   the committed query cache is unchanged.
+
+## Visual fidelity and shared-system regression check — 2026-09-17
+
+The initial layout did not meet the supplied side-by-side reference: heading
+size, row density, billing-type placement and monetary-column spacing differed.
+The follow-up uses additive framework utilities and existing chips, removes
+duplicated page CSS, and shares content-sized numeric tracks across all rows.
+Existing utility definitions and shared component defaults are unchanged.
+
+- Reproduced the heading mismatch with a failing browser assertion (24px instead
+  of the handoff's 34px). Added coverage for 14px rows, inline billing types and
+  large/negative currency amounts staying inside their columns at three widths.
+- `trigger_utilities`: four passing tests cover Menu/Combobox compact defaults
+  and opt-in trigger classes. `detail_navigation`: all five tests passed.
+- Server Clippy with `--all-targets --locked -- -D warnings`, WASM check and
+  matching fullstack build passed in the Nix shell.
+- `projects-design.cjs`: ten checks passed, including compact default controls
+  in the component gallery and no business mutations.
+- `menu-popovers.cjs`: five checks passed, including gallery keyboard controls,
+  filters, calendar menus, short screens and first/last project-row actions.
+- `mobile-navigation.cjs`: three checks passed for focus, mobile navigation,
+  account navigation and preservation of desktop collapse/resize preferences.
+- `responsive-layout.cjs`: 55 header checks plus four interaction checks passed
+  with `HORAE_TEST_WEEK=2026-09-14`. The original fixed 2027 date had no entries
+  in this demo. The harness now accepts the seeded Monday explicitly, without
+  rewriting the database; navigation assertions preserve query parameters.
+- Compared computed typography, colors, padding, spacing, radii and dimensions
+  before/after on Clients, Invoices, Reports, Users, Settings, Importers, the
+  component gallery and Timesheet week at 320/768/1440px. All 24 comparisons
+  matched for the sampled shared controls, headings, main panels and sidebar.
+  This is a measured shared-style check, not a whole-application pixel snapshot.
+- Inspected the running Projects screenshot: the two demo projects retain
+  inline billing types and separated USD amounts, with the larger heading and
+  accented client groups. No prototype rendering was required.
+
+Browser checks use Chromium and the isolated `horae_projects_design_dev_20260916`
+database on port 8092. The live imported workspace on 8080 remains unchanged and
+healthy. Other browser engines were not exercised. Full Nix CI and human visual
+review remain merge gates; this follow-up does not authorize merging the PR.

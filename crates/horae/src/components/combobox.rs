@@ -42,6 +42,9 @@ pub fn Combobox(
     /// Label of the reset row at the top of the list.
     #[props(default = "All".to_string())]
     all_label: String,
+    /// Extra utility classes on the trigger; compact styling remains the default.
+    #[props(default)]
+    trigger_class: String,
     #[props(default)] onselect: EventHandler<String>,
 ) -> Element {
     let mut open = use_signal(|| false);
@@ -73,7 +76,7 @@ pub fn Combobox(
         div { class: "menu-anchor",
             button {
                 r#type: "button",
-                class: "btn btn-secondary btn-sm",
+                class: "btn btn-secondary btn-sm {trigger_class}",
                 "aria-haspopup": "listbox",
                 "aria-expanded": "{open}",
                 onclick: move |_| {

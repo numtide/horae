@@ -200,6 +200,7 @@
 .text-xl { font-size: var(--font-size-xl); }
 .text-2xl { font-size: var(--font-size-2xl); }
 .text-3xl { font-size: var(--font-size-3xl); }
+.text-4xl { font-size: var(--font-size-4xl); }
 .text-display { font-size: var(--font-size-display); }
 .font-normal { font-weight: 400; }
 .font-medium { font-weight: 500; }
@@ -210,6 +211,7 @@
 .text-right { text-align: right; }
 .uppercase { text-transform: uppercase; }
 .tracking-wide { letter-spacing: 0.06em; }
+.tracking-tight { letter-spacing: -0.015em; }
 .tracking-wider { letter-spacing: 0.14em; }
 .leading-tight { line-height: 1.2; }
 .font-sans { font-family: var(--font-family); }
@@ -251,6 +253,8 @@
 .rounded-sm { border-radius: var(--radius-sm); }
 .rounded { border-radius: var(--radius); }
 .rounded-lg { border-radius: var(--radius-lg); }
+.rounded-xl { border-radius: var(--radius-xl); }
+.rounded-btn { border-radius: var(--radius-btn); }
 .rounded-panel { border-radius: var(--radius-panel); }
 .rounded-full { border-radius: var(--radius-full); }
 

@@ -75,7 +75,7 @@ Three typefaces loaded from Google Fonts:
 
 ### Type scale
 
-Sizes are `--font-size-*` tokens with matching `text-*` utilities: `xs` 12 · `sm` 14 (body, numerals) · `base` 16 · `lg` 18 (H2) · `xl` 20 · `2xl` 24 · `3xl` 30 (H1) · `display` 44 (hero totals, e.g. invoice "Total due"). Headings resolve to `--color-text-strong`.
+Sizes are `--font-size-*` tokens with matching `text-*` utilities: `xs` 12 · `sm` 14 (body, numerals) · `base` 16 · `lg` 18 (H2) · `xl` 20 · `2xl` 24 · `3xl` 30 (H1) · `4xl` 34 (refreshed handoff page heading) · `display` 44 (hero totals, e.g. invoice "Total due"). Headings resolve to `--color-text-strong`. The refreshed heading uses `tracking-tight` (−0.015em); opt into it per surface without changing existing heading defaults.
 
 ## Border Radius
 
@@ -147,7 +147,7 @@ palette stays themeable and consistent. Notable token groups:
 - Chrome: `--color-border`, `--color-border-input`, `--color-border-strong`, `--color-border-danger`, `--color-border-danger-hover`, `--ring` / `--ring-soft` (focus glows).
 - Hover fills: `--color-{primary,accent}-hover`, `--color-pine-hover`, and the brand glows `--glow-{primary,accent,pine}`.
 - Elevation: `--shadow-{sm,md,menu,modal}`.
-- Scale: `--space-1..16`, `--font-size-*` (`xs`–`3xl`, `display`), `--radius-*` (`sm`, base, `btn`, `lg`, `panel`, `full`).
+- Scale: `--space-1..16`, `--font-size-*` (`xs`–`4xl`, `display`), `--radius-*` (`sm`, base, `btn`, `lg`, `xl`, `panel`, `full`). `rounded-btn` uses the existing 8px control radius; `rounded-xl` adds the refreshed handoff's 16px grouped-list radius without changing existing cards.
 
 On top of the tokens is a **Tailwind-style utility layer** — `flex`,
 `items-center`, `justify-between`, `gap-4`, `p-4`, directional `pt-/pb-/pl-/pr-`,
@@ -168,6 +168,10 @@ keeps `horae-utils.css` in sync, and a stale committed copy can't slip through
 
 Tokens and semantic component classes stay hand-written in `horae.css`; the
 generator owns only the mechanical utility + responsive matrix.
+
+`Menu` and `Combobox` accept optional `trigger_class` utilities. Their default
+remains `btn btn-secondary btn-sm`; a surface may opt into `text-sm px-4` without
+changing other callers or adding page-specific descendant overrides.
 
 ## Pages
 

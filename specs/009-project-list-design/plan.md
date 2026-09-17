@@ -10,6 +10,11 @@
    existing action-error regression harness.
 1. Run server Clippy, WASM check, formatting and isolated browser checks; publish
    one review PR. CI's full Nix gate remains required before merge.
+1. Refine visual fidelity with additive utilities, existing chips and shared
+   content-sized table tracks. Allow Menu/Combobox trigger utilities without
+   changing compact defaults; cover both defaults and opt-in classes in tests.
+1. Compare computed shared styles and dimensions on other routes before/after;
+   exercise responsive layouts, menus and navigation in the isolated preview.
 
 ## Constitution check
 

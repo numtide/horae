@@ -24,11 +24,19 @@ Preserve existing server functions, permissions, billing calculations and export
 - At 320, 768 and 1440 CSS pixels, controls remain reachable and rows scroll
   inside their container, not the document. Keyboard users can reach the scroller
   and open row menus; long project names stay in the name column.
+- Match the handoff's 34px heading, 14px row text, inline billing-type chips,
+  accented client bands and 16px list-card radius through tokens and utilities.
+  Full currency codes, large amounts and negative remaining budgets must not
+  overlap adjacent columns; header and row tracks remain aligned.
+- Preserve shared component defaults and all existing utility definitions.
+  Verify other screens and the component gallery at mobile, tablet and desktop
+  widths before accepting page-level design refinements.
 
 ## Deliberate handoff deviations
 
 No scheduling, manager filter, bulk selection/actions, pinning, deletion, new
 project metadata or client-detail links to the current placeholder. Keep the
 working inline create/edit form; a modal conversion is a separate interaction
-change. Retain app-shell navigation, token radii/type sizes and actual roles.
+change. Retain app-shell navigation and actual roles. Add missing design tokens
+and utilities without changing existing radii, typography or component defaults.
 No fabricated demo data or changes to the live imported workspace.
