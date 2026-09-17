@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "ALTER TABLE projects ADD CONSTRAINT reject_archiving CHECK (active OR name <> 'Reject')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "1d3fc1123d9461cda464da915f1053adfdb53619123c354a3b686fc1b9fba066"
+}

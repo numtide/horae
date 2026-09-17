@@ -17,6 +17,8 @@ use uuid::Uuid;
 
 #[path = "../src/components/combobox.rs"]
 pub mod combobox;
+#[path = "../src/components/controls.rs"]
+pub mod controls;
 #[path = "../src/components/form.rs"]
 pub mod form;
 #[path = "../src/components/icons.rs"]
@@ -28,7 +30,7 @@ pub mod modal;
 #[path = "../src/components/table.rs"]
 pub mod table;
 mod components {
-    pub use super::{combobox, form, icons, menu, modal, table};
+    pub use super::{combobox, controls, form, icons, menu, modal, table};
 }
 #[path = "../src/models/assignment.rs"]
 mod assignment;
@@ -452,6 +454,12 @@ mod server_fns {
         panic!("unexpected mutation");
     }
     pub async fn set_project_active(_id: String, _active: bool) -> Result<(), ServerFnError> {
+        panic!("unexpected mutation");
+    }
+    pub async fn set_projects_active(
+        _ids: Vec<String>,
+        _active: bool,
+    ) -> Result<Vec<Project>, ServerFnError> {
         panic!("unexpected mutation");
     }
     pub async fn create_assignment(

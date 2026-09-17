@@ -51,6 +51,10 @@ done
 kill -0 "$app_pid"
 curl -fsS "$HORAE_TEST_URL/health" >/dev/null
 
-for suite in projects-design responsive-layout menu-popovers mobile-navigation; do
+if [[ -n ${HORAE_STYLE_BASELINE:-} ]]; then
+  node "$browser_tests/shared-style-audit.cjs" compare "$HORAE_STYLE_BASELINE"
+fi
+
+for suite in projects-design responsive-layout menu-popovers mobile-navigation project-bulk-actions; do
   node "$browser_tests/$suite.cjs"
 done

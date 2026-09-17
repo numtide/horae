@@ -1,9 +1,10 @@
 use dioxus::prelude::*;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use uuid::Uuid;
 
 use super::{is_admin, is_manager, loaded, run_action};
 use crate::components::combobox::{ComboOption, Combobox};
+use crate::components::controls::Checkbox;
 use crate::components::form::{FormCard, FormGroup, Input, Select};
 use crate::components::icons::NavIcon;
 use crate::components::menu::{Menu, MenuDivider, MenuItem};
@@ -85,11 +86,38 @@ fn row_spend(p: &Project, spent_minutes: i64, spent_cents: i64) -> RowSpend {
     }
 }
 
+fn matches_project_filters(
+    project: &Project,
+    query: &str,
+    scope: &str,
+    client: &str,
+    client_names: &HashMap<Uuid, String>,
+) -> bool {
+    let scope_matches = match scope {
+        "budgeted" => project.active && project.budget_kind != BudgetKind::None,
+        "archived" => !project.active,
+        _ => project.active,
+    };
+    scope_matches
+        && (client.is_empty() || project.client_id.to_string() == client)
+        && (query.is_empty()
+            || project.name.to_lowercase().contains(query)
+            || client_names
+                .get(&project.client_id)
+                .is_some_and(|name| name.to_lowercase().contains(query)))
+}
+
+#[derive(Clone)]
+struct BulkProjectAction {
+    activate: bool,
+    projects: Vec<(Uuid, String)>,
+}
+
 #[component]
 pub fn ProjectList() -> Element {
     // Management view: `include_inactive = true` also lists deactivated projects
     // so managers can reactivate them; new-entry pickers pass `false`.
-    let projects = use_resource(|| async move { server_fns::list_projects(None, true).await });
+    let mut projects = use_resource(|| async move { server_fns::list_projects(None, true).await });
     // All clients (including inactive) so a project under a deactivated client
     // still resolves to its real name; the create form filters to active ones.
     let clients_res = use_resource(|| async move { server_fns::list_clients(true).await });
@@ -116,6 +144,11 @@ pub fn ProjectList() -> Element {
     // Status scope: "active" | "budgeted" (has a budget) | "archived" (inactive).
     let mut scope = use_signal(|| "active".to_string());
     let mut client_filter = use_signal(String::new);
+    let mut selected = use_signal(BTreeSet::<Uuid>::new);
+    let mut bulk_action = use_signal(|| None::<BulkProjectAction>);
+    let mut bulk_busy = use_signal(|| false);
+    let mut bulk_error = use_signal(|| None::<String>);
+    let mut bulk_success = use_signal(|| None::<String>);
     // Export modal: open state + chosen scope and format.
     let mut export_open = use_signal(|| false);
     let mut export_scope = use_signal(|| "active".to_string());
@@ -128,6 +161,56 @@ pub fn ProjectList() -> Element {
     let client_names: HashMap<Uuid, String> = match &*clients_res.read() {
         Some(Ok(cs)) => cs.iter().map(|c| (c.id, c.name.clone())).collect(),
         _ => HashMap::new(),
+    };
+    let query_lower = query().to_lowercase();
+    let visible: Vec<Project> = projects
+        .read()
+        .as_ref()
+        .and_then(|result| result.as_ref().ok())
+        .into_iter()
+        .flatten()
+        .filter(|p| {
+            matches_project_filters(p, &query_lower, &scope(), &client_filter(), &client_names)
+        })
+        .cloned()
+        .collect();
+    let selection: Vec<(Uuid, String)> = visible
+        .iter()
+        .filter(|p| selected.read().contains(&p.id))
+        .map(|p| {
+            (
+                p.id,
+                match &p.code {
+                    Some(code) => format!("[{code}] {}", p.name),
+                    None => p.name.clone(),
+                },
+            )
+        })
+        .collect();
+    let selected_count = selection.len();
+    let bulk_label = if scope() == "archived" {
+        "Reactivate projects"
+    } else {
+        "Archive projects"
+    };
+    let selection_label = match selected_count {
+        0 => "Select projects first".to_string(),
+        1 => "1 project selected".to_string(),
+        count => format!("{count} projects selected"),
+    };
+    let confirmation = bulk_action();
+    let confirm_count = confirmation
+        .as_ref()
+        .map_or(0, |action| action.projects.len());
+    let confirm_noun = if confirm_count == 1 {
+        "project"
+    } else {
+        "projects"
+    };
+    let confirm_verb = if confirmation.as_ref().is_some_and(|action| action.activate) {
+        "Reactivate"
+    } else {
+        "Archive"
     };
     // project_id -> (spent_minutes, spent_cents); missing = no tracked time yet.
     let spend_map: HashMap<Uuid, (i64, i64)> = match &*spend_res.read() {
@@ -250,6 +333,27 @@ pub fn ProjectList() -> Element {
                             },
                             if show_form() { "Cancel" } else { "New project" }
                         }
+                        Menu {
+                            id: "project-bulk-menu", label: "⚡ Actions", align_right: true,
+                            trigger_class: "text-sm py-2 px-4",
+                            div { class: "px-3 pt-1 pb-2 text-xs uppercase text-label", "{selection_label}" }
+                            if selected_count > 100 {
+                                p { class: "px-3 text-sm text-secondary", "Select at most 100 projects" }
+                            }
+                            MenuItem {
+                                disabled: selected_count == 0 || selected_count > 100 || bulk_busy(),
+                                onclick: move |_| {
+                                    if selection.is_empty() || selection.len() > 100 || bulk_busy() { return; }
+                                    bulk_error.set(None);
+                                    bulk_success.set(None);
+                                    bulk_action.set(Some(BulkProjectAction {
+                                        activate: scope() == "archived",
+                                        projects: selection.clone(),
+                                    }));
+                                },
+                                "{bulk_label}"
+                            }
+                        }
                     }
                     if can_import {
                         Link { to: Route::HarvestImport {}, class: "btn btn-secondary py-2 px-4", "Import" }
@@ -267,7 +371,7 @@ pub fn ProjectList() -> Element {
                             placeholder: "Search by project or client",
                             aria_label: "Search by project or client",
                             value: "{query}",
-                            oninput: move |e| query.set(e.value()),
+                            oninput: move |e| { selected.write().clear(); query.set(e.value()); },
                         }
                     }
                 }
@@ -277,17 +381,17 @@ pub fn ProjectList() -> Element {
                 Menu { id: "project-scope-menu", label: "{scope_label}", trigger_class: "text-sm px-4",
                     MenuItem {
                         selected: scope() == "active",
-                        onclick: move |_| scope.set("active".to_string()),
+                        onclick: move |_| { selected.write().clear(); scope.set("active".to_string()); },
                         "Active projects ({active_count})"
                     }
                     MenuItem {
                         selected: scope() == "budgeted",
-                        onclick: move |_| scope.set("budgeted".to_string()),
+                        onclick: move |_| { selected.write().clear(); scope.set("budgeted".to_string()); },
                         "Budgeted projects ({budgeted_count})"
                     }
                     MenuItem {
                         selected: scope() == "archived",
-                        onclick: move |_| scope.set("archived".to_string()),
+                        onclick: move |_| { selected.write().clear(); scope.set("archived".to_string()); },
                         "Archived projects ({archived_count})"
                     }
                 }
@@ -298,7 +402,7 @@ pub fn ProjectList() -> Element {
                     value: client_filter(),
                     placeholder: "All clients",
                     all_label: "All clients",
-                    onselect: move |v| client_filter.set(v),
+                    onselect: move |v| { selected.write().clear(); client_filter.set(v); },
                 }
             }
 
@@ -405,6 +509,9 @@ pub fn ProjectList() -> Element {
             if let Some(message) = action_error() {
                 div { class: "alert alert-danger", role: "alert", "Could not change project status: {message}" }
             }
+            if let Some(message) = bulk_success() {
+                div { class: "alert alert-success", role: "status", "{message}" }
+            }
             match &*spend_res.read() {
                 None => rsx! { p { class: "text-sm text-secondary mb-4", role: "status", "Loading project spend…" } },
                 Some(Err(_)) => rsx! {
@@ -417,28 +524,9 @@ pub fn ProjectList() -> Element {
             }
 
             {loaded(&*projects.read(), |list| {
-                    let q = query().to_lowercase();
-                    let cf = client_filter();
-                    let sc = scope();
-                    let mut items: Vec<Project> = list
-                        .iter()
-                        .filter(|p| {
-                            let scope_ok = match sc.as_str() {
-                                "budgeted" => p.active && p.budget_kind != BudgetKind::None,
-                                "archived" => !p.active,
-                                _ => p.active,
-                            };
-                            scope_ok && (cf.is_empty() || p.client_id.to_string() == cf)
-                        })
-                        .filter(|p| {
-                            if q.is_empty() {
-                                return true;
-                            }
-                            let cn = client_names.get(&p.client_id).cloned().unwrap_or_default();
-                            p.name.to_lowercase().contains(&q) || cn.to_lowercase().contains(&q)
-                        })
-                        .cloned()
-                        .collect();
+                    let visible_ids: BTreeSet<Uuid> = visible.iter().map(|p| p.id).collect();
+                    let all_selected = !visible_ids.is_empty() && selected_count == visible_ids.len();
+                    let mut items = visible.clone();
                     // Group by client, ordered by client name then project name.
                     items.sort_by(|a, b| {
                         let an = client_names.get(&a.client_id).cloned().unwrap_or_default();
@@ -489,6 +577,7 @@ pub fn ProjectList() -> Element {
                                     button {
                                         class: "btn btn-secondary",
                                         onclick: move |_| {
+                                            selected.write().clear();
                                             query.set(String::new());
                                             client_filter.set(String::new());
                                             scope.set("active".to_string());
@@ -502,8 +591,19 @@ pub fn ProjectList() -> Element {
                         rsx! {
                             div { class: "bg-secondary border rounded-xl overflow-hidden",
                                 div { class: "proj-scroll overflow-x-auto", role: "region", aria_label: "Projects by client", tabindex: "0",
-                                div { class: "proj-grid grid",
+                                div { class: if is_manager { "proj-grid proj-grid-selectable grid" } else { "proj-grid grid" },
                                 div { class: "proj-head grid items-center py-3 px-5 text-xs uppercase text-label border-b",
+                                    if is_manager {
+                                        div { class: "flex items-center",
+                                            Checkbox {
+                                                checked: all_selected, mixed: selected_count > 0 && !all_selected,
+                                                compact: true, label: "Select all visible projects", disabled: bulk_busy(),
+                                                onclick: move |_| {
+                                                    if all_selected { selected.write().clear(); } else { selected.set(visible_ids.clone()); }
+                                                },
+                                            }
+                                        }
+                                    }
                                     span { "Client" }
                                     span { class: "text-right", "Budget" }
                                     span { class: "text-right", "Spent" }
@@ -522,6 +622,18 @@ pub fn ProjectList() -> Element {
                                             };
                                             rsx! {
                                             div { class: "proj-row grid items-center py-4 px-5 text-sm", key: "{p.id}",
+                                            if is_manager {
+                                                div { class: "flex items-center",
+                                                    Checkbox {
+                                                        checked: selected.read().contains(&p.id), compact: true,
+                                                        label: "Select {pname}", disabled: bulk_busy(),
+                                                        onclick: move |_| {
+                                                            let mut ids = selected.write();
+                                                            if !ids.remove(&p.id) { ids.insert(p.id); }
+                                                        },
+                                                    }
+                                                }
+                                            }
                                             div { class: "flex items-center gap-3 min-w-0",
                                                 Link {
                                                     to: Route::ProjectDetail { id: p.id },
@@ -630,6 +742,56 @@ pub fn ProjectList() -> Element {
                         }
                     }
             })}
+
+            Modal {
+                id: "bulk-projects-dialog", labelledby: "bulk-projects-title",
+                open: confirmation.is_some(), busy: bulk_busy(),
+                on_dismiss: move |_| bulk_action.set(None),
+                h2 { id: "bulk-projects-title", class: "modal-title m-0", "{confirm_verb} {confirm_count} {confirm_noun}?" }
+                div { class: "modal-body",
+                    p { class: "text-sm text-secondary", "Only project status changes. Existing time entries, invoices and budgets are kept." }
+                    ul { class: "text-sm",
+                        if let Some(action) = &confirmation {
+                            for (id, name) in &action.projects {
+                                li { key: "{id}", class: "proj-confirm-name", "{name}" }
+                            }
+                        }
+                    }
+                    if let Some(message) = bulk_error() {
+                        div { class: "alert alert-danger", role: "alert", "Could not confirm project status: {message}. You can retry safely or cancel and refresh the list." }
+                    }
+                    div { class: "modal-actions",
+                        button {
+                            r#type: "button", class: "btn btn-primary", disabled: bulk_busy(),
+                            onclick: move |_| {
+                                if bulk_busy() { return; }
+                                let Some(action) = bulk_action() else { return; };
+                                bulk_busy.set(true);
+                                bulk_error.set(None);
+                                spawn(async move {
+                                    let ids = action.projects.iter().map(|(id, _)| id.to_string()).collect();
+                                    match server_fns::set_projects_active(ids, action.activate).await {
+                                        Ok(_) => {
+                                            let verb = if action.activate { "Reactivated" } else { "Archived" };
+                                            let noun = if action.projects.len() == 1 { "project" } else { "projects" };
+                                            bulk_success.set(Some(format!("{verb} {} {noun}", action.projects.len())));
+                                            selected.write().clear();
+                                            bulk_action.set(None);
+                                            projects.restart();
+                                        }
+                                        Err(error) => bulk_error.set(Some(error.to_string())),
+                                    }
+                                    bulk_busy.set(false);
+                                });
+                            },
+                            if bulk_busy() { "Updating projects…" } else { "{confirm_verb} projects" }
+                        }
+                        button { r#type: "button", class: "btn btn-secondary", disabled: bulk_busy(),
+                            onclick: move |_| bulk_action.set(None), "Cancel"
+                        }
+                    }
+                }
+            }
 
             Modal {
                 id: "export-projects-dialog",

@@ -78,7 +78,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
     await expect(page.getByRole('heading', { name: 'Projects', exact: true })).toHaveCSS('font-size', '34px');
     await expect(page.locator('.proj-namelink')).toHaveCSS('font-size', '14px');
     assert.equal(await page.locator('.proj-row').evaluate(row => {
-      const [name, type] = row.firstElementChild.children;
+      const [name, type] = row.querySelector('.proj-namelink').parentElement.children;
       const a = name.getBoundingClientRect(), b = type.getBoundingClientRect();
       return Math.abs((a.top + a.bottom) / 2 - (b.top + b.bottom) / 2) < 1;
     }), true, 'Project name and type share a line');
@@ -106,6 +106,8 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
       const headerFits = await page.locator('.page-header').evaluate(header => {
         const bounds = header.getBoundingClientRect();
         return [...header.querySelectorAll('button, a, input')].every(el => {
+          // Closed popovers have no layout box and are not header controls.
+          if (!el.checkVisibility()) return true;
           const box = el.getBoundingClientRect();
           return box.left >= bounds.left - 1 && box.right <= bounds.right + 1;
         });
@@ -122,12 +124,12 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
       // Full currency codes and large/negative amounts must fit, not paint over
       // neighbouring columns. Only the browser DOM changes; no data is written.
       await page.locator('.proj-row').evaluate(row => {
-        row.children[1].firstElementChild.textContent = 'USD 123,456,789.00';
-        row.children[2].firstElementChild.textContent = 'USD 234,567,890.00';
-        row.children[3].firstElementChild.textContent = '-USD 111,111,101.00';
+        row.children[2].firstElementChild.textContent = 'USD 123,456,789.00';
+        row.children[3].firstElementChild.textContent = 'USD 234,567,890.00';
+        row.children[4].firstElementChild.textContent = '-USD 111,111,101.00';
       });
       assert.equal(await page.locator('.proj-row').evaluate(row => {
-        return [...row.children].slice(1, 4).every(cell => {
+        return [...row.children].slice(2, 5).every(cell => {
           const bounds = cell.getBoundingClientRect();
           return [...cell.children].every(child => {
             const box = child.getBoundingClientRect();
@@ -138,8 +140,8 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
     }
     await page.locator('.proj-namelink').evaluate(el => { el.textContent = 'unbroken_project_name_'.repeat(20); });
     assert.equal(await page.locator('.proj-row').evaluate(row => {
-      const name = row.firstElementChild.getBoundingClientRect();
-      return [...row.firstElementChild.children].every(el => {
+      const name = row.querySelector('.proj-namelink').parentElement.getBoundingClientRect();
+      return [...row.querySelector('.proj-namelink').parentElement.children].every(el => {
         const box = el.getBoundingClientRect();
         return box.right <= name.right + 1 && el.scrollWidth <= el.clientWidth + 1;
       });

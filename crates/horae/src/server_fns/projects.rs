@@ -8,6 +8,9 @@ mod tests;
 #[cfg(all(test, feature = "server"))]
 mod mutation_tests;
 
+#[cfg(all(test, feature = "server"))]
+mod bulk_tests;
+
 // ── Projects ─────────────────────────────────────────────────────────────────
 
 #[cfg(feature = "server")]
@@ -305,27 +308,89 @@ pub async fn set_project_active(
     let project_id = parse_uuid(&project_id, "project_id")?;
     let (project, transition) =
         set_project_active_record(&state.db, manager.org_id, project_id, active).await?;
+    dispatch_project_status(state, manager.org_id, &project, transition);
+    Ok(project)
+}
+
+/// Set up to 100 projects to the requested status in one organization-scoped transaction.
+#[server]
+pub async fn set_projects_active(
+    project_ids: Vec<String>,
+    active: bool,
+) -> Result<Vec<Project>, ServerFnError> {
+    let manager = require_manager().await?;
+    let ids = parse_bulk_project_ids(&project_ids)?;
+    let state = crate::state::global_state().await;
+    let results = set_projects_active_records(&state.db, manager.org_id, &ids, active).await?;
+    Ok(results
+        .into_iter()
+        .map(|(project, transition)| {
+            dispatch_project_status(state, manager.org_id, &project, transition);
+            project
+        })
+        .collect())
+}
+
+#[cfg(feature = "server")]
+fn parse_bulk_project_ids(values: &[String]) -> Result<Vec<uuid::Uuid>, ServerFnError> {
+    if values.is_empty() || values.len() > 100 {
+        return Err(err(BAD_REQUEST, "Select between 1 and 100 projects"));
+    }
+    let mut ids = values
+        .iter()
+        .map(|value| {
+            uuid::Uuid::parse_str(value).map_err(|_| err(BAD_REQUEST, "Invalid project ID"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    // Overlapping batches acquire their row locks in one global order.
+    ids.sort_unstable();
+    ids.dedup();
+    Ok(ids)
+}
+
+#[cfg(feature = "server")]
+fn dispatch_project_status(
+    state: &crate::state::AppState,
+    org_id: uuid::Uuid,
+    project: &Project,
+    transition: Option<crate::plugin::event::ActiveTransition>,
+) {
     if let Some(t) = transition {
         let occurred_at = chrono::Utc::now();
-        let project = project_payload(&project);
+        let project = project_payload(project);
         state.plugins.dispatch(match t {
             crate::plugin::event::ActiveTransition::Reactivated => {
                 crate::plugin::AppEvent::ProjectReactivated {
                     occurred_at,
-                    org_id: manager.org_id,
+                    org_id,
                     project,
                 }
             }
             crate::plugin::event::ActiveTransition::Deactivated => {
                 crate::plugin::AppEvent::ProjectDeactivated {
                     occurred_at,
-                    org_id: manager.org_id,
+                    org_id,
                     project,
                 }
             }
         });
     }
-    Ok(project)
+}
+
+#[cfg(feature = "server")]
+async fn set_projects_active_records(
+    db: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    sorted_ids: &[uuid::Uuid],
+    active: bool,
+) -> Result<Vec<(Project, Option<crate::plugin::event::ActiveTransition>)>, ServerFnError> {
+    let mut tx = db.begin().await.map_err(server_err)?;
+    let mut results = Vec::with_capacity(sorted_ids.len());
+    for &id in sorted_ids {
+        results.push(set_project_active_in_transaction(&mut tx, org_id, id, active).await?);
+    }
+    tx.commit().await.map_err(server_err)?;
+    Ok(results)
 }
 
 #[cfg(feature = "server")]
@@ -336,7 +401,19 @@ async fn set_project_active_record(
     active: bool,
 ) -> Result<(Project, Option<crate::plugin::event::ActiveTransition>), ServerFnError> {
     let mut tx = db.begin().await.map_err(server_err)?;
-    let before = lock_project(&mut tx, org_id, project_id).await?;
+    let result = set_project_active_in_transaction(&mut tx, org_id, project_id, active).await?;
+    tx.commit().await.map_err(server_err)?;
+    Ok(result)
+}
+
+#[cfg(feature = "server")]
+async fn set_project_active_in_transaction(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    org_id: uuid::Uuid,
+    project_id: uuid::Uuid,
+    active: bool,
+) -> Result<(Project, Option<crate::plugin::event::ActiveTransition>), ServerFnError> {
+    let before = lock_project(tx, org_id, project_id).await?;
 
     let project = sqlx::query_as!(
         Project,
@@ -354,14 +431,13 @@ async fn set_project_active_record(
         org_id,
         active,
     )
-    .fetch_optional(&mut *tx)
+    .fetch_optional(&mut **tx)
     .await
     .map_err(server_err)?;
 
     let transition = project.as_ref().and_then(|updated| {
         crate::plugin::event::active_transition(Some(before.active), updated.active)
     });
-    tx.commit().await.map_err(server_err)?;
     Ok((project.unwrap_or(before), transition))
 }
 

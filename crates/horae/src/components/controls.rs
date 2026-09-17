@@ -53,17 +53,24 @@ pub fn Toggle(
 pub fn Checkbox(
     checked: bool,
     label: String,
+    #[props(default)] mixed: bool,
+    #[props(default)] compact: bool,
+    #[props(default)] disabled: bool,
     #[props(default)] onclick: EventHandler<MouseEvent>,
 ) -> Element {
     rsx! {
         button {
             r#type: "button",
-            class: if checked { "choice checked" } else { "choice" },
+            class: if checked || mixed { "choice checked" } else { "choice" },
             role: "checkbox",
-            "aria-checked": "{checked}",
+            aria_label: label.clone(),
+            "aria-checked": if mixed { "mixed" } else if checked { "true" } else { "false" },
+            disabled,
             onclick: move |e| onclick.call(e),
-            span { class: "choice-box checkbox", if checked { "✓" } }
-            span { "{label}" }
+            span { class: "choice-box checkbox", aria_hidden: "true",
+                if mixed { "−" } else if checked { "✓" }
+            }
+            if !compact { span { "{label}" } }
         }
     }
 }

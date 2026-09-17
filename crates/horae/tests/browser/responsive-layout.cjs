@@ -100,9 +100,11 @@ const sunday = new Date(monday.getTime() + 6 * 86400000).toISOString().slice(0, 
               if (Math.abs(cell.x - head[i].x) > 1 || Math.abs(cell.width - head[i].width) > 1)
                 problems.push(`column ${i} differs from header`);
             });
-            for (const el of row.firstElementChild.children) {
+            const identity = row.querySelector('.proj-namelink').parentElement;
+            const nameCell = identity.getBoundingClientRect();
+            for (const el of identity.children) {
               const box = el.getBoundingClientRect();
-              if (box.left < cells[0].left - 1 || box.right > cells[0].right + 1 || el.scrollWidth > el.clientWidth + 1)
+              if (box.left < nameCell.left - 1 || box.right > nameCell.right + 1 || el.scrollWidth > el.clientWidth + 1)
                 problems.push(`${el.textContent}: outside name column`);
             }
             return problems;
