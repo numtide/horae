@@ -4,9 +4,10 @@ const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
 const base = process.env.HORAE_TEST_URL;
 const selectionOnly = process.argv.includes('--selection-only');
+const fixturesOnly = process.argv.includes('--fixtures-only');
 const target = new URL(base);
 assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !== '8080');
-if (!selectionOnly) {
+if (!selectionOnly && !fixturesOnly) {
   assert.equal(target.port, '8093', 'Full suite requires the disposable runner');
   assert.ok(process.env.DATABASE_URL?.includes('?host=/'), 'Require the runner socket database');
 }
@@ -15,7 +16,10 @@ if (!selectionOnly) {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const errors = [];
-  page.on('pageerror', error => errors.push(error.message));
+  page.on('pageerror', error => {
+    errors.push(error.message);
+    console.error(`Browser error at ${page.url()}: ${error.stack}`);
+  });
   try {
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin' }).click();
@@ -53,6 +57,11 @@ if (!selectionOnly) {
     });
     async function visit() {
       await page.goto(`${base}/projects`);
+      // Zero rows also matches the loading state; wait for the resolved empty view
+      // before the next navigation can cancel response bodies still being read.
+      if (amount === 0) {
+        await expect(page.getByRole('heading', { name: 'No projects yet', exact: true })).toBeVisible();
+      }
       await expect(page.locator('.proj-row')).toHaveCount(amount);
     }
     const all = page.getByRole('checkbox', { name: 'Select all visible projects', exact: true });
@@ -140,7 +149,10 @@ if (!selectionOnly) {
     }
     console.log('PASS: keyboard selection/confirmation and no document overflow in both themes at three widths');
     await page.setViewportSize({ width: 1440, height: 900 });
-    if (selectionOnly) return;
+    if (selectionOnly) {
+      assert.deepEqual(errors, []);
+      return;
+    }
 
     async function confirmDialog(action = 'Archive') {
       await trigger.click();
@@ -198,6 +210,11 @@ if (!selectionOnly) {
     await expect(page.getByRole('checkbox')).toHaveCount(0);
     await expect(trigger).toHaveCount(0);
     console.log('PASS: oversized selection cannot submit and members have no bulk controls');
+
+    if (fixturesOnly) {
+      assert.deepEqual(errors, []);
+      return;
+    }
 
     // Real requests, real sessions, and only the disposable runner database.
     await page.unroute('**/api/**');

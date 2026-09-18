@@ -55,3 +55,19 @@ Actions now uses a disabled native trigger with no selection or while submitting
 Successful confirmation now falls back to the project-status filter when the disabled Actions trigger cannot receive focus. Cancellation retains native focus restoration. Pending project reads hide stale rows and disable bulk selection; failed reads offer Retry without resubmitting the mutation.
 
 The new `project-bulk-recovery` browser suite first failed against the previous bundle on focus restoration, then passed for successful, delayed and failed refreshes against the updated bundle. All six isolated browser suites, 13 controls/navigation tests, server/all-target Clippy and WASM/fullstack compilation pass. No database queries, migrations or CSS rules changed.
+
+### Merge-queue regression — 2026-09-18
+
+The merge-queue browser run failed with `RuntimeError: unreachable`. Repeated release-client runs with the pinned Playwright 1.60.0 browser and 4× CPU throttling reproduced it when moving from an empty manager list to the member fixture. Temporary panic diagnostics identified `dioxus-fullstack` 0.7.9's response-body `unwrap()` in `magic.rs`: navigation cancelled an unfinished fetch. The diagnostics were removed; application code and dependencies are unchanged.
+
+The empty fixture now waits for the rendered **No projects yet** heading. A zero-row assertion alone also passed while the resource was loading, allowing premature navigation. Browser errors still fail the suite, now with a stack trace; the selection-only path checks them too. No retries or fixed sleeps were added.
+
+Validation: 100 oversized/empty/member cycles and ten complete fixture-suite repetitions pass under 4× CPU throttling with the diagnostic release client. All six isolated suites pass with the original release client and release server, including real archive/reactivate and authorization checks against disposable PostgreSQL.
+
+To run all simulated cases against a non-production local preview without reaching the real-mutation section, set `HORAE_TEST_URL` and `PLAYWRIGHT_MODULE`, then run:
+
+```sh
+node crates/horae/tests/browser/project-bulk-actions.cjs --fixtures-only
+```
+
+The default full suite still requires the disposable runner on port 8093 and its Unix-socket database. Port 8080 remains forbidden in every mode.
