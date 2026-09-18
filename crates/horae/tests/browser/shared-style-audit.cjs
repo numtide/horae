@@ -26,19 +26,22 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
     for (const [path, resource] of [
       ['/clients', 'list_clients'], ['/invoices', 'list_invoices'],
       ['/reports', 'report_time'], ['/admin/users', 'list_users'],
-      ['/settings', 'get_me'], ['/admin/importers', 'get_me'],
+      ['/settings', 'get_me'], ['/admin/importers', 'import/harvest/connection'],
       ['/components', 'get_me'], [`/timesheet/week/${week}`, 'list_time_entries'],
     ]) {
       const ready = page.waitForResponse(r => r.url().includes(`/api/${resource}`) && r.status() === 200);
       await page.goto(`${base}${path}`);
       await (await ready).finished();
       await expect(page.locator('.page-header, .ts-header').first()).toBeVisible();
+      if (path === '/admin/importers') {
+        await expect(page.getByText('Checking connection…', { exact: true })).toHaveCount(0);
+      }
       if (path === '/reports') await expect(page.getByRole('link', { name: 'Export XLSX', exact: true })).toBeVisible();
       await page.evaluate(() => document.fonts.ready);
       for (const width of [320, 768, 1440]) {
         await page.setViewportSize({ width, height: 900 });
         result[`${path}:${width}`] = await page.locator(
-          '.page-header, .page-title, .page-actions, .page-header .btn, .menu-anchor > .btn, .chip, .ts-header, .ts-toolbar, .ts-toolbar .btn, .app-sidebar, .nav-item, main'
+          '.page-header, .page-title, .page-actions, .page-header .btn, .menu-anchor > .btn, .chip, .choice, .choice-box, .toggle, .toggle-track, .segmented, .form-input, .ts-header, .ts-toolbar, .ts-toolbar .btn, .app-sidebar, .nav-item, main'
         ).evaluateAll(nodes => nodes.map(node => {
           const style = getComputedStyle(node);
           return Object.fromEntries(['display', 'width', 'height', 'padding', 'gap', 'fontFamily',

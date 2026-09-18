@@ -112,6 +112,7 @@
   --space-12: 3rem;
   --space-16: 4rem;
   --size-progress: 0.4375rem;
+  --size-checkbox: 18px;
   --size-empty-icon-tile: 3.25rem;
   --size-icon-lg: 1.375rem;
   --width-empty-copy: 23.75rem;
@@ -1079,7 +1080,7 @@ tbody tr:hover { background: var(--color-row-hover); }
   outline: none; box-shadow: var(--ring);
 }
 .choice-box {
-  width: 18px; height: 18px; flex-shrink: 0;
+  width: var(--size-checkbox); height: var(--size-checkbox); flex-shrink: 0;
   border: 1.5px solid var(--color-border-strong); background: var(--color-bg);
   display: inline-flex; align-items: center; justify-content: center;
   color: var(--color-on-primary); font-size: 12px; font-weight: 700;
@@ -1623,6 +1624,11 @@ tbody tr:hover { background: var(--color-row-hover); }
   column-gap: var(--space-6);
 }
 .proj-head, .proj-row, .proj-group { grid-column: 1 / -1; }
+.proj-grid-selectable {
+  /* Subgrid's first track also contains the row's px-5 start padding. */
+  grid-template-columns: calc(var(--size-checkbox) + var(--space-5)) minmax(26rem, 1fr) repeat(4, max-content);
+  column-gap: var(--space-4);
+}
 .proj-head,
 .proj-row {
   grid-template-columns: subgrid;
@@ -1638,6 +1644,7 @@ tbody tr:hover { background: var(--color-row-hover); }
 .proj-scroll:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
 .proj-namelink { max-width: 26rem; overflow-wrap: anywhere; text-decoration: none; }
 .proj-namelink:hover { color: var(--color-primary); text-decoration: none; }
+.proj-confirm-name { overflow-wrap: anywhere; }
 .proj-head {
   letter-spacing: 0.12em;
 }

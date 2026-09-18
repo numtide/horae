@@ -180,6 +180,15 @@ generator owns only the mechanical utility + responsive matrix.
 remains `btn btn-secondary btn-sm`; a surface may opt into `text-sm px-4` without
 changing other callers or adding page-specific descendant overrides.
 
+`Menu` can opt into a native `disabled` trigger. Projects uses this when its
+selection is empty or a bulk operation is pending; other menus remain enabled.
+
+`Checkbox` keeps its labelled, two-state defaults. Opt into `compact` for an
+accessible-name-only table control, `mixed` for select-all's indeterminate state,
+and `disabled` while submitting. `--size-checkbox` preserves the existing 18px
+square. Projects adds its selection track only through `.proj-grid-selectable`;
+read-only rows and other shared controls retain their existing layout.
+
 ## Pages
 
 | Route | Component | Description |
