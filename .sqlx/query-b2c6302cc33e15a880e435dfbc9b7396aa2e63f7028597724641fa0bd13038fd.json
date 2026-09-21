@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO users (id,org_id,email,name,org_role,billable_rate_cents,cost_rate_cents)\n                 VALUES ($1,$2,$3,'Local member','member',5000,2500)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b2c6302cc33e15a880e435dfbc9b7396aa2e63f7028597724641fa0bd13038fd"
+}
