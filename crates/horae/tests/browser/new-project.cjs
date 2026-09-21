@@ -56,6 +56,64 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await expect(screen.getByRole('status')).toHaveText('No draft saved yet');
     await expect(screen.getByRole('button', { name: 'Save project', exact: true })).toBeDisabled();
 
+    const clientPicker = page.getByRole('dialog', { name: 'Choose Client', exact: true });
+    await screen.getByLabel('Client', { exact: true }).click();
+    const clientSearch = clientPicker.getByRole('searchbox', { name: 'Search Client', exact: true });
+    await expect(clientSearch).toBeFocused();
+    await clientSearch.fill('TechStart');
+    await clientPicker.getByRole('option', { name: 'TechStart Inc', exact: true }).click();
+    await expect(clientPicker).not.toBeVisible();
+    await expect(screen.getByLabel('Client', { exact: true })).toBeFocused();
+    const currency = screen.getByRole('button', { name: 'Currency', exact: true });
+    await currency.click();
+    const currencyPicker = page.getByRole('listbox', { name: 'Choose Currency', exact: true });
+    await expect(currencyPicker.getByRole('option', { selected: true })).toBeFocused();
+    await page.keyboard.press('End');
+    await expect(currencyPicker.getByRole('option', { name: 'GBP', exact: true })).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(currency).toContainText('GBP');
+    await screen.getByLabel('Client', { exact: true }).click();
+    await clientSearch.fill('Acme');
+    await clientPicker.getByRole('option', { name: 'Acme Corp', exact: true }).click();
+    await expect(currency).toContainText('GBP');
+    await currency.click();
+    await currencyPicker.getByRole('option', { name: /^Client default/ }).click();
+    await screen.getByLabel('Client', { exact: true }).click();
+    await clientSearch.fill('No such client here');
+    await expect(clientPicker.getByText('No matching clients.', { exact: true })).toBeVisible();
+    await clientSearch.press('Escape');
+    await expect(screen.getByLabel('Client', { exact: true })).toBeFocused();
+    await expect(screen.getByLabel('Client', { exact: true })).toContainText('Acme Corp');
+
+    let releaseClients;
+    await page.route('**/api/project_creation_options*', async route => {
+      const response = await route.fetch();
+      await new Promise(resolve => { releaseClients = resolve; });
+      return route.fulfill({ response });
+    });
+    try {
+      await screen.getByLabel('Client', { exact: true }).click();
+      await expect(clientPicker.getByRole('status')).toHaveText('Loading choices…');
+      await expect.poll(() => !!releaseClients).toBe(true);
+      assert.equal(await clientPicker.getByRole('option').evaluateAll(options => options.length > 0 && options.every(option => option.disabled)), true);
+      releaseClients();
+      await clientPicker.getByRole('option', { name: 'Acme Corp', exact: true }).click();
+      await readsFinished(page);
+    } finally {
+      releaseClients?.();
+      await page.unroute('**/api/project_creation_options*');
+    }
+    await page.route('**/api/project_creation_options*', route => route.abort());
+    await screen.getByLabel('Client', { exact: true }).click();
+    await clientSearch.fill('unavailable search');
+    await expect(clientPicker.getByRole('alert')).toContainText('Could not search clients');
+    await expect(screen.getByLabel('Client', { exact: true })).toContainText('Acme Corp');
+    await readsFinished(page);
+    await page.unroute('**/api/project_creation_options*');
+    await clientSearch.fill('Acme');
+    await clientPicker.getByRole('option', { name: 'Acme Corp', exact: true }).click();
+    console.log('PASS: searchable client selection, pending/error recovery and explicit/inherited currency');
+
     await screen.getByRole('button', { name: '+ New client', exact: true }).click();
     const client = page.getByRole('dialog', { name: 'New client', exact: true });
     await client.getByLabel('Client name', { exact: true }).fill('New project browser client');
@@ -66,6 +124,8 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await expect(screen.getByLabel('Client', { exact: true })).toContainText('New project browser client');
     await screen.getByLabel('Project name', { exact: true }).fill('Recoverable browser project');
     await screen.getByLabel('Project code', { exact: true }).fill('BROWSER-NEW');
+    const codeBox = await screen.getByLabel('Project code', { exact: true }).boundingBox();
+    assert.equal(codeBox.width, 160, 'Project code uses the compact handoff width');
     await chooseDate('Start date', '1 September 2026');
     await chooseDate('End date', '15 October 2026');
     await screen.getByRole('button', { name: 'Clear End date', exact: true }).click();
@@ -73,6 +133,39 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await expect(screen.getByLabel('End date', { exact: true })).toBeFocused();
     await screen.getByLabel('Tags', { exact: true }).fill('browser');
     await screen.getByLabel('Tags', { exact: true }).press('Enter');
+    const tagField = screen.locator('.np-tags');
+    await expect(tagField.getByRole('button', { name: 'Remove tag browser', exact: true })).toBeVisible();
+    await expect(tagField.getByRole('textbox', { name: 'Tags', exact: true })).toBeVisible();
+    const tagInput = screen.getByLabel('Tags', { exact: true });
+    await tagInput.fill(' BROWSER , design , design ');
+    await tagInput.press('Enter');
+    await expect(tagField.locator('.chip')).toHaveCount(2);
+    await tagInput.press('Backspace');
+    await expect(tagField.locator('.chip')).toHaveCount(1);
+    await tagInput.fill('keyboard');
+    await tagInput.press(',');
+    await tagField.getByRole('button', { name: 'Remove tag keyboard', exact: true }).focus();
+    await page.keyboard.press('Enter');
+    await expect(tagInput).toBeFocused();
+    await expect(tagField.locator('.chip')).toHaveCount(1);
+    const longTag = 'é'.repeat(51);
+    await tagInput.fill(longTag);
+    await tagInput.press('Enter');
+    await expect(screen.getByRole('alert')).toContainText('50 characters');
+    await expect(tagInput).toHaveValue(longTag);
+    await expect(tagField.locator('.chip')).toHaveCount(1);
+    await tagInput.fill(Array.from({ length: 50 }, (_, index) => `extra-${index}`).join(','));
+    await tagInput.press('Enter');
+    await expect(screen.getByRole('alert')).toContainText('50 tags');
+    await expect(tagInput).not.toHaveValue('');
+    await expect(tagField.locator('.chip')).toHaveCount(1);
+    await tagInput.fill('');
+    await expect(screen.getByRole('alert')).toHaveCount(0);
+    await tagInput.fill('入力');
+    await tagInput.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', isComposing: true });
+    await expect(tagInput).toHaveValue('入力');
+    await expect(tagField.locator('.chip')).toHaveCount(1);
+    await tagInput.fill('');
     await screen.getByRole('radio', { name: /^Project hourly rate/ }).check();
     await screen.locator('#np-project-rate').fill('75.25');
     await screen.getByLabel('Budget', { exact: true }).selectOption({ label: 'Total project hours' });
@@ -153,6 +246,9 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await page.unroute('**/api/project_creation_options*');
     console.log('PASS: real client, team, task restrictions, billing and invoice defaults survive reload');
 
+    const wideTag = 'W'.repeat(50);
+    await tagInput.fill(wideTag);
+    await tagInput.press('Enter');
     for (const width of [390, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true,
@@ -168,12 +264,43 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
       }
       await page.keyboard.press('Escape');
       await expect(calendar).not.toBeVisible();
+      for (const name of ['Client', 'Currency']) {
+        const trigger = screen.getByRole('button', { name, exact: true });
+        await trigger.click();
+        const panel = page.getByRole('dialog', { name: `Choose ${name}`, exact: true });
+        await expect(panel).toBeVisible();
+        const box = await panel.boundingBox();
+        assert.ok(box.x >= 0 && box.x + box.width <= width, `${name} fits at ${width}px`);
+        assert.ok(box.y >= 0 && box.y + box.height <= 901, `${name} fits vertically`);
+        if (process.env.HORAE_TEST_SCREENSHOT_DIR) {
+          await page.screenshot({ path: `${process.env.HORAE_TEST_SCREENSHOT_DIR}/new-project-${name.toLowerCase()}-${width}.png` });
+        }
+        await page.keyboard.press('Escape');
+        await expect(panel).not.toBeVisible();
+        await expect(trigger).toBeFocused();
+      }
       // Screenshots restore caret styling by leaving empty style attributes.
       await expect(screen.locator('[style]:not([style=""])')).toHaveCount(0);
       if (process.env.HORAE_TEST_SCREENSHOT_DIR) {
         await page.screenshot({ path: `${process.env.HORAE_TEST_SCREENSHOT_DIR}/new-project-${width}.png`, fullPage: true });
       }
     }
+    await page.setViewportSize({ width: 390, height: 320 });
+    const clientTrigger = screen.getByRole('button', { name: 'Client', exact: true });
+    await clientTrigger.evaluate(element => window.scrollTo(0, scrollY + element.getBoundingClientRect().top - 200));
+    await clientTrigger.focus();
+    await clientTrigger.press('Enter');
+    await expect(clientPicker.getByRole('option', { name: 'New project browser client', exact: true })).toBeEnabled();
+    assert.ok((await clientPicker.boundingBox()).y < (await clientTrigger.boundingBox()).y, 'Short viewport opens the client choices above the field');
+    await clientSearch.fill('TechStart');
+    await expect(clientPicker.getByRole('option', { name: 'TechStart Inc', exact: true })).toBeEnabled();
+    await expect.poll(async () => {
+      const anchor = await clientTrigger.boundingBox(), panel = await clientPicker.boundingBox();
+      return Math.abs(anchor.y - (panel.y + panel.height) - 4);
+    }).toBeLessThanOrEqual(1);
+    await clientSearch.press('Escape');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await tagField.getByRole('button', { name: `Remove tag ${wideTag}`, exact: true }).click();
     await screen.getByRole('radio', { name: /^Fixed Fee/ }).check();
     await screen.getByRole('radio', { name: 'Milestones', exact: true }).check();
     await screen.getByRole('button', { name: 'Add milestone', exact: true }).click();

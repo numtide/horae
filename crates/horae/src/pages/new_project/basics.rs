@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 use crate::components::form::{FormGroup, Input, Select, Textarea};
 use crate::components::modal::Modal;
+use crate::components::select_field::SelectField;
 use crate::models::project_creation::{
     CreationClient, CreationOptions, CreationSearch, ProjectForm,
 };
@@ -17,9 +18,10 @@ pub(super) fn Basics(
     mut form: Signal<ProjectForm>,
     mut options: Signal<CreationOptions>,
 ) -> Element {
-    let mut client_query = use_signal(String::new);
+    let client_query = use_signal(String::new);
     let mut client_open = use_signal(|| false);
     let mut tag_input = use_signal(String::new);
+    let mut tag_error = use_signal(|| None::<&'static str>);
     let clients = use_resource(move || {
         let query = client_query();
         async move {
@@ -28,6 +30,7 @@ pub(super) fn Basics(
             server_fns::project_creation_options(search).await
         }
     });
+    let clients_pending = clients.state()() != UseResourceState::Ready;
     let selected = form.read().client_id;
     let catalog = options.read();
     let client_results = clients.read();
@@ -61,18 +64,41 @@ pub(super) fn Basics(
     let previous_code = catalog.previous_code.clone();
     let suggested_code = catalog.suggested_code.clone();
     let can_edit_private = catalog.can_edit_private_settings;
+    let organization_currency = catalog.organization_currency.clone();
     drop(catalog);
+    let mut client_choices = vec![(String::new(), "Select a client…".into())];
+    let mut disabled_clients = Vec::new();
+    if missing_client {
+        let id = selected.map(|id| id.to_string()).unwrap_or_default();
+        client_choices.push((
+            id.clone(),
+            "Previously selected client — search to verify".into(),
+        ));
+        disabled_clients.push(id);
+    }
+    for client in choices {
+        let label = if client.active {
+            client.name
+        } else {
+            format!("{} (archived)", client.name)
+        };
+        if !client.active {
+            disabled_clients.push(client.id.to_string());
+        }
+        client_choices.push((client.id.to_string(), label));
+    }
 
     rsx! {
         FormRow { label: "Client", id: "np-client", hint: "Who this project is for",
             div { class: "flex flex-col gap-3",
-                label { class: "text-xs text-subtle", r#for: "np-client-search", "Search clients" }
-                Input { id: "np-client-search", value: client_query(), placeholder: "Search by client name", oninput: move |event: FormEvent| client_query.set(event.value()) }
                 div { class: "flex flex-wrap items-center gap-3",
-                    div { class: "flex-1 min-w-0",
-                        select { class: "form-select", id: "np-client",
-                            onchange: move |event| {
-                                let id = Uuid::parse_str(&event.value()).ok();
+                    div { class: "np-client-select min-w-0",
+                        SelectField { id: "np-client", label: "Client", options: client_choices,
+                            selected: selected.map(|id| id.to_string()).unwrap_or_default(),
+                            disabled_values: disabled_clients, query: Some(client_query),
+                            pending: clients_pending,
+                            onselect: move |value: String| {
+                                let id = Uuid::parse_str(&value).ok();
                                 form.write().client_id = id;
                                 if let Some(Ok(results)) = &*clients.read()
                                     && let Some(client) = results.clients.iter().find(|client| Some(client.id) == id)
@@ -81,24 +107,18 @@ pub(super) fn Basics(
                                     options.write().clients.push(client.clone());
                                 }
                             },
-                            option { value: "", selected: selected.is_none(), "Select a client…" }
-                            if missing_client {
-                                option { value: selected.map(|id| id.to_string()).unwrap_or_default(), selected: true, disabled: true, "Previously selected client — search to verify" }
-                            }
-                            for client in choices {
-                                option { key: "{client.id}", value: "{client.id}", selected: Some(client.id) == selected, disabled: !client.active,
-                                    "{client.name}"
-                                    if !client.active { " (archived)" }
+                            if !clients_pending {
+                                match &*client_results {
+                                    Some(Err(error)) => rsx! { p { class: "text-sm text-danger p-2", role: "alert", "Could not search clients: {error}" } },
+                                    Some(Ok(results)) if results.clients.is_empty() => rsx! { p { class: "text-sm text-subtle p-2 m-0", role: "status", "No matching clients." } },
+                                    Some(Ok(results)) if results.more_clients => rsx! { p { class: "form-hint p-2", "Showing the first 50 matches. Refine your search to find another client." } },
+                                    _ => rsx! {},
                                 }
                             }
                         }
                     }
+                    span { class: "text-sm text-label", "or" }
                     button { r#type: "button", class: "btn btn-secondary", onclick: move |_| client_open.set(true), "+ New client" }
-                }
-                match &*client_results {
-                    Some(Err(error)) => rsx! { p { class: "text-sm text-danger", role: "alert", "Could not search clients: {error}" } },
-                    Some(Ok(results)) if results.more_clients => rsx! { p { class: "form-hint", "Showing the first 50 matches. Refine your search to find another client." } },
-                    _ => rsx! {},
                 }
                 if unavailable_client {
                     p { class: "text-sm text-warning", "This client is archived or unavailable. Choose an active client before saving the project." }
@@ -109,15 +129,16 @@ pub(super) fn Basics(
             Input { id: "np-name", value: form.read().name.clone(), placeholder: "Project name", oninput: move |event: FormEvent| form.write().name = event.value() }
         }
         FormRow { label: "Project code", id: "np-code", hint: "Optional",
-            div { class: "max-w-sm",
-                Input { id: "np-code", value: form.read().code.clone(), placeholder: "Project code", oninput: move |event: FormEvent| form.write().code = event.value() }
+            div { class: "flex flex-wrap items-center gap-3",
+                input { id: "np-code", class: "np-code form-input font-mono", value: form.read().code.clone(), placeholder: "Project code", oninput: move |event| form.write().code = event.value() }
+                if let Some(code) = previous_code {
+                    span { class: "text-sm text-subtle", "Last code: " span { class: "font-mono", "{code}" } }
+                }
+                if let Some(code) = suggested_code {
+                    button { r#type: "button", class: "btn btn-ghost btn-sm font-semibold", onclick: move |_| form.write().code = code.clone(), "Use {code}" }
+                }
             }
-            if let Some(code) = previous_code {
-                p { class: "form-hint", "Previous project code: " span { class: "font-mono", "{code}" } }
-            }
-            if let Some(code) = suggested_code {
-                button { r#type: "button", class: "btn btn-ghost btn-sm", onclick: move |_| form.write().code = code.clone(), "Use {code}" }
-            }
+            p { class: "form-hint", "An optional reference for this project. Numbers or letters, up to 100 characters." }
         }
         FormRow { label: "Dates", hint: "Optional · planning only",
             div { class: "flex flex-wrap items-center gap-3",
@@ -131,41 +152,51 @@ pub(super) fn Basics(
             p { class: "form-hint", "Dates are advisory and do not prevent time tracking." }
         }
         FormRow { label: "Tags", id: "np-tags", hint: "Optional · for filtering",
-            div { class: "flex flex-wrap gap-2 mb-2",
+            div { class: "chip-input chip-input-neutral np-tags py-1 cursor-text",
+                onclick: move |_| { document::eval("document.getElementById('np-tags')?.focus();"); },
                 for tag in form.read().tags.clone() {
-                    span { key: "{tag}", class: "badge badge-neutral inline-flex items-center gap-2",
-                        "{tag}"
-                        button { r#type: "button", class: "btn btn-ghost btn-sm", aria_label: "Remove tag {tag}", onclick: move |_| form.write().tags.retain(|existing| existing != &tag), "×" }
+                    span { key: "{tag}", class: "chip min-w-0",
+                        span { class: "truncate", title: "{tag}", "{tag}" }
+                        button { r#type: "button", class: "chip-input-x", aria_label: "Remove tag {tag}", onclick: move |_| {
+                            form.write().tags.retain(|existing| existing != &tag);
+                            tag_error.set(None);
+                        }, "×" }
                     }
                 }
-            }
-            input { id: "np-tags", class: "form-input", value: tag_input(), placeholder: "Type a tag and press Enter",
-                oninput: move |event| tag_input.set(event.value()),
-                onkeydown: move |event| {
-                    if event.key() == Key::Enter || event.key() == Key::Character(",".into()) {
-                        event.prevent_default();
-                        let raw = tag_input();
-                        let mut state = form.write();
-                        for tag in raw.split(',').map(str::trim).filter(|tag| !tag.is_empty()) {
-                            if state.tags.len() < 50 && !state.tags.iter().any(|existing| existing.to_lowercase() == tag.to_lowercase()) {
-                                state.tags.push(tag.to_string());
+                input { id: "np-tags", class: "chip-input-field", value: tag_input(), placeholder: if form.read().tags.is_empty() { "Add tags…" } else { "" },
+                    aria_describedby: if tag_error().is_some() { "np-tags-hint np-tags-error" } else { "np-tags-hint" },
+                    aria_invalid: tag_error().is_some(),
+                    oninput: move |event| { tag_input.set(event.value()); tag_error.set(None); },
+                    onkeydown: move |event| {
+                        if event.is_composing() { return; }
+                        if event.key() == Key::Enter || event.key() == Key::Character(",".into()) {
+                            event.prevent_default();
+                            let result = add_tags(&form.read().tags, &tag_input());
+                            match result {
+                                Ok(tags) => {
+                                    form.write().tags = tags;
+                                    tag_input.set(String::new());
+                                    tag_error.set(None);
+                                }
+                                Err(message) => tag_error.set(Some(message)),
                             }
+                        } else if event.key() == Key::Backspace && tag_input.peek().is_empty() {
+                            form.write().tags.pop();
+                            tag_error.set(None);
                         }
-                        tag_input.set(String::new());
-                    } else if event.key() == Key::Backspace && tag_input.peek().is_empty() {
-                        form.write().tags.pop();
-                    }
-                },
+                    },
+                }
             }
-            p { class: "form-hint", "Enter or comma adds a tag. Backspace on an empty field removes the last tag." }
+            p { id: "np-tags-hint", class: "form-hint", "Enter or comma adds a tag. Backspace on an empty field removes the last tag. Removing a tag here does not delete it from other projects." }
+            if let Some(message) = tag_error() { p { id: "np-tags-error", class: "text-sm text-danger", role: "alert", "{message}" } }
         }
         FormRow { label: "Currency", id: "np-currency", hint: "For billing and project rates",
-            div { class: "max-w-sm",
-                Select { id: "np-currency", options: currency_options, selected: form.read().currency.clone().unwrap_or_default(), onchange: move |event: FormEvent| {
-                    let value = event.value();
+            div { class: "np-currency-select",
+                SelectField { id: "np-currency", label: "Currency", options: currency_options, selected: form.read().currency.clone().unwrap_or_default(), onselect: move |value: String| {
                     form.write().currency = (!value.is_empty()).then_some(value);
                 } }
             }
+            p { class: "form-hint", "Sets the currency for rates, fees and budgets. Costs use the workspace currency ({organization_currency})." }
         }
         if can_edit_private {
             FormRow { label: "Notes", id: "np-notes", hint: "Optional · admins only",
@@ -179,6 +210,73 @@ pub(super) fn Basics(
                 client_open.set(false);
             }
         }
+    }
+}
+
+fn add_tags(current: &[String], input: &str) -> Result<Vec<String>, &'static str> {
+    let mut tags = current.to_vec();
+    for tag in input
+        .split(',')
+        .map(str::trim)
+        .filter(|tag| !tag.is_empty())
+    {
+        if tag.chars().count() > 50 || tag.contains('\0') {
+            return Err("Each tag must contain at most 50 characters and no null character.");
+        }
+        let key = tag.to_lowercase();
+        if tags
+            .iter()
+            .any(|existing| existing.trim().to_lowercase() == key)
+        {
+            continue;
+        }
+        if tags.len() >= 50 {
+            return Err("A project can have at most 50 tags. Remove a tag before adding another.");
+        }
+        tags.push(tag.to_owned());
+    }
+    Ok(tags)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::add_tags;
+
+    #[test]
+    fn tags_trim_and_deduplicate_without_changing_existing_spelling() {
+        assert_eq!(
+            add_tags(&["Équipe".into()], " équipe , Q3, q3, , platform ").unwrap(),
+            ["Équipe", "Q3", "platform"]
+        );
+    }
+
+    #[test]
+    fn a_full_tag_list_still_accepts_a_duplicate() {
+        let current: Vec<_> = (0..50).map(|index| format!("tag-{index}")).collect();
+        assert_eq!(add_tags(&current, " TAG-0 ").unwrap(), current);
+    }
+
+    #[test]
+    fn a_batch_that_would_exceed_the_tag_limit_is_rejected() {
+        let current: Vec<_> = (0..49).map(|index| format!("tag-{index}")).collect();
+        assert_eq!(
+            add_tags(&current, "last, overflow"),
+            Err("A project can have at most 50 tags. Remove a tag before adding another.")
+        );
+    }
+
+    #[test]
+    fn tag_length_counts_characters_instead_of_bytes() {
+        let tag = "é".repeat(50);
+        assert_eq!(add_tags(&[], &tag).unwrap(), [tag]);
+    }
+
+    #[test]
+    fn overlong_tags_are_rejected_without_truncation() {
+        assert_eq!(
+            add_tags(&[], &"é".repeat(51)),
+            Err("Each tag must contain at most 50 characters and no null character.")
+        );
     }
 }
 

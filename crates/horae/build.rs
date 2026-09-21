@@ -215,6 +215,7 @@ fn families() -> Vec<Family> {
                 ("overflow-hidden", "overflow: hidden"),
                 ("overflow-x-auto", "overflow-x: auto"),
                 ("cursor-pointer", "cursor: pointer"),
+                ("cursor-text", "cursor: text"),
                 ("opacity-60", "opacity: 0.6"),
             ],
         ),

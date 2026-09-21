@@ -119,6 +119,10 @@
   --width-project-form: 73.75rem;
   --width-form-label: 13.75rem;
   --width-planning-date: 11.25rem;
+  --width-project-code: 10rem;
+  --width-tag-entry: 8.75rem;
+  --width-form-select: 20rem;
+  --height-form-control: 2.75rem;
   --line-height-copy: 1.55;
 
   /* Border radius */
@@ -782,6 +786,12 @@ h1, h2, h3, h4, h5, h6 {
 /* Forms */
 /* New Project: structural layout only; control chrome remains shared. */
 .np-page { max-width: var(--width-project-form); }
+.np-client-select { flex: 1 1 var(--width-form-select); }
+.np-currency-select { width: var(--width-form-select); max-width: 100%; }
+.np-code.form-input { width: var(--width-project-code); }
+.np-tags { min-height: var(--height-form-control); }
+.np-tags .chip { max-width: 100%; }
+.np-tags .chip-input-field { min-width: min(100%, var(--width-tag-entry)); }
 .np-date-field.form-input { width: var(--width-planning-date); }
 /* Only the planning-date wrapper opts into top-layer calendar positioning. */
 .np-date-popover { background: transparent; }
@@ -1285,6 +1295,7 @@ tbody tr:hover { background: var(--color-row-hover); }
 }
 .chip-input:focus-within { border-color: var(--color-primary); box-shadow: var(--ring-soft); }
 .chip-input .chip { background: var(--color-pine); border-color: transparent; color: var(--color-on-pine); }
+.chip-input-neutral .chip { background: var(--color-bg-tertiary); border-color: var(--color-border-input); color: var(--color-text); }
 .chip-input-x { background: none; border: none; color: inherit; opacity: 0.7; cursor: pointer; padding: 0; line-height: 1; }
 .chip-input-x:hover { opacity: 1; }
 .chip-input-field {

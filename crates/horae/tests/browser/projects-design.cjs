@@ -297,6 +297,8 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
       await expect(trigger).toHaveCSS('padding-left', '12px');
     }
     // Exercise the unmodified semantic defaults without depending on gallery copy.
+    await expect(page.locator('.chip-input .chip').first()).toHaveCSS('background-color', 'rgb(31, 92, 77)');
+    await expect(page.locator('.chip-input-field').first()).toHaveCSS('min-width', '80px');
     await page.locator('main').evaluate(main => {
       const state = document.createElement('div');
       state.id = 'default-empty-state';

@@ -21,8 +21,10 @@ pub mod form;
 pub mod icons;
 #[path = "../src/components/modal.rs"]
 pub mod modal;
+#[path = "../src/components/select_field.rs"]
+pub mod select_field;
 mod components {
-    pub use super::{controls, date_picker, form, icons, modal};
+    pub use super::{controls, date_picker, form, icons, modal, select_field};
 }
 #[path = "../src/models/project_creation.rs"]
 pub mod project_creation;
@@ -171,6 +173,11 @@ async fn recovered_client_outside_the_catalog_page_keeps_its_currency_and_name()
     let html = render(probe.clone());
     assert!(html.contains("Outside the first page"), "{html}");
     assert!(html.contains("(archived)"));
+    let archived_label = html.rfind("Outside the first page (archived)").unwrap();
+    let archived_option = html[..archived_label].rsplit("<button").next().unwrap();
+    assert!(
+        archived_option.contains("role=\"option\"") && archived_option.contains("disabled=true")
+    );
     assert!(html.contains("Client default (CHF)"));
     assert!(html.contains("value=\"Recovered project\""));
     assert!(html.contains("value=\"12-\""));
@@ -206,6 +213,50 @@ fn with_form(form: ProjectForm) -> Probe {
         }),
         ..Default::default()
     }
+}
+
+#[tokio::test]
+async fn a_real_code_suggestion_does_not_replace_recovered_input() {
+    let mut probe = with_form(ProjectForm {
+        code: "12-".into(),
+        ..Default::default()
+    });
+    probe.options.previous_code = Some("0009".into());
+    probe.options.suggested_code = Some("0010".into());
+    let html = render(probe.clone());
+    assert!(html.contains("value=\"12-\""));
+    assert!(html.contains("Last code: ") && html.contains("0009"));
+    assert!(html.contains("Use 0010"));
+    assert_eq!(probe.writes.get(), 0);
+}
+
+#[tokio::test]
+async fn client_and_currency_use_labelled_form_dropdowns() {
+    let html = render(Probe::default());
+    assert!(
+        html.contains("popovertarget=\"np-client-options\""),
+        "{html}"
+    );
+    assert!(html.contains("aria-label=\"Choose Client\""));
+    assert!(html.contains("popovertarget=\"np-currency-options\""));
+    assert!(html.contains("aria-label=\"Choose Currency\""));
+}
+
+#[tokio::test]
+async fn recovered_tags_use_the_shared_inline_chip_field_without_saving() {
+    let probe = with_form(ProjectForm {
+        tags: vec!["Q3".into(), "platform".into()],
+        ..Default::default()
+    });
+    let html = render(probe.clone());
+    assert!(
+        html.contains("chip-input chip-input-neutral np-tags"),
+        "{html}"
+    );
+    assert!(html.contains("class=\"chip-input-field\""));
+    assert!(html.contains("aria-label=\"Remove tag platform\""));
+    assert!(html.contains("aria-describedby=\"np-tags-hint\""));
+    assert_eq!(probe.writes.get(), 0);
 }
 
 #[tokio::test]
