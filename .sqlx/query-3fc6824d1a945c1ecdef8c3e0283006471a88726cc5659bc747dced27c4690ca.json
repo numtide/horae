@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT rate_mode, budget_scope FROM project_settings WHERE project_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "rate_mode",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "budget_scope",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "3fc6824d1a945c1ecdef8c3e0283006471a88726cc5659bc747dced27c4690ca"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE projects SET budget_kind = 'hours', budget_minutes = 120,\n             rate_cents = CASE WHEN $2 = 'project' THEN 10000 ELSE NULL END WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "98ce3e932be0c17b26565982135deab3d748ec1116c213dbe91a831e7c9b405c"
+}

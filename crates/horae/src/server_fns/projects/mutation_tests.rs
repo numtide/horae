@@ -18,6 +18,304 @@ fn project_edit(name: &str) -> ProjectEdit<'_> {
 mod project {
     use super::*;
 
+    async fn configured_project(pool: &PgPool, mode: &str, scope: &str) -> SeedIds {
+        let ids = seed(pool, OrgRole::Admin).await;
+        sqlx::query!(
+            "UPDATE projects SET budget_kind = 'hours', budget_minutes = 120,
+             rate_cents = CASE WHEN $2 = 'project' THEN 10000 ELSE NULL END WHERE id = $1",
+            ids.project_id,
+            mode,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            "INSERT INTO project_settings (id, org_id, project_id, creator_id, rate_mode, budget_scope)
+             VALUES ($1, $2, $3, $4, $5, $6)",
+            uuid::Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id, mode, scope,
+        ).execute(pool).await.unwrap();
+        sqlx::query!(
+            "INSERT INTO project_tasks (project_id, task_id, billable, rate_cents) VALUES ($1, $2, true, 8000)",
+            ids.project_id, ids.task_id,
+        ).execute(pool).await.unwrap();
+        sqlx::query!(
+            "INSERT INTO assignments (id, project_id, user_id, role, rate_cents) VALUES ($1, $2, $3, 'lead', 9000)",
+            uuid::Uuid::now_v7(), ids.project_id, ids.user_id,
+        ).execute(pool).await.unwrap();
+        if scope == "task" {
+            sqlx::query!(
+                "INSERT INTO project_task_settings (id, org_id, project_id, task_id, budget_minutes) VALUES ($1, $2, $3, $4, 120)",
+                uuid::Uuid::now_v7(), ids.org_id, ids.project_id, ids.task_id,
+            ).execute(pool).await.unwrap();
+        } else if scope == "person" {
+            sqlx::query!(
+                "INSERT INTO project_member_budgets (id, org_id, project_id, user_id, budget_minutes) VALUES ($1, $2, $3, $4, 120)",
+                uuid::Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id,
+            ).execute(pool).await.unwrap();
+        }
+        ids
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn configured_edits_reject_incompatible_financial_changes_atomically(pool: PgPool) {
+        let original = ProjectEdit {
+            budget_kind: "hours",
+            budget_value: "2",
+            ..project_edit("Must not be saved")
+        };
+        for (mode, scope, fields, message) in [
+            (
+                "task",
+                "project",
+                ProjectEdit {
+                    currency: "USD",
+                    ..original
+                },
+                "currency",
+            ),
+            (
+                "person",
+                "project",
+                ProjectEdit {
+                    project_type: "fixed_fee",
+                    ..original
+                },
+                "type",
+            ),
+            (
+                "project",
+                "project",
+                ProjectEdit { ..original },
+                "rate is required",
+            ),
+            (
+                "task",
+                "project",
+                ProjectEdit {
+                    rate_value: "1",
+                    ..original
+                },
+                "rate mode",
+            ),
+            (
+                "person",
+                "project",
+                ProjectEdit {
+                    rate_value: "1",
+                    ..original
+                },
+                "rate mode",
+            ),
+            (
+                "task",
+                "task",
+                ProjectEdit {
+                    budget_value: "3",
+                    ..original
+                },
+                "scoped budget",
+            ),
+            (
+                "person",
+                "person",
+                ProjectEdit {
+                    budget_kind: "amount",
+                    budget_value: "2",
+                    ..original
+                },
+                "scoped budget",
+            ),
+        ] {
+            let ids = configured_project(&pool, mode, scope).await;
+            let before = version(&pool, ids.project_id).await;
+            let error = update_project_record(&pool, ids.org_id, ids.project_id, &fields)
+                .await
+                .expect_err(message);
+            assert!(error.to_string().contains(message), "{error}");
+            assert_eq!(version(&pool, ids.project_id).await, before, "{message}");
+        }
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn configured_edits_preserve_compatible_changes_and_idempotence(pool: PgPool) {
+        for (mode, scope, kind, value, rate, expected_spend) in [
+            ("task", "task", "hours", "2", "", 8000),
+            ("person", "person", "hours", "2", "", 9000),
+            ("task", "project", "hours", "3", "", 8000),
+            ("person", "project", "hours", "0", "", 9000),
+            ("project", "project", "hours", "2", "0", 0),
+            ("project", "project", "hours", "2", "80.25", 8025),
+            ("task", "project", "amount", "1.25", "", 8000),
+            ("person", "project", "none", "", "", 9000),
+        ] {
+            let ids = configured_project(&pool, mode, scope).await;
+            crate::server_fns::test_seed::time_entry(
+                &pool,
+                &ids,
+                horae_core::types::EntryState::Open,
+            )
+            .await;
+            let fields = ProjectEdit {
+                currency: " eur ",
+                budget_kind: kind,
+                budget_value: value,
+                rate_value: rate,
+                ..project_edit("Renamed")
+            };
+            let (updated, changed) =
+                update_project_record(&pool, ids.org_id, ids.project_id, &fields)
+                    .await
+                    .unwrap();
+            assert!(changed);
+            assert_eq!(updated.name, "Renamed");
+            assert_eq!(updated.currency, "EUR");
+            assert_eq!(
+                (updated.budget_amount_cents, updated.budget_minutes),
+                parse_budget(kind.parse().unwrap(), value).unwrap()
+            );
+            assert_eq!(updated.rate_cents, parse_project_rate(rate).unwrap());
+            let before = version(&pool, ids.project_id).await;
+            let (repeated, changed) =
+                update_project_record(&pool, ids.org_id, ids.project_id, &fields)
+                    .await
+                    .unwrap();
+            assert_eq!(
+                (repeated, changed, version(&pool, ids.project_id).await),
+                (updated, false, before)
+            );
+            let settings = sqlx::query!(
+                "SELECT rate_mode, budget_scope FROM project_settings WHERE project_id = $1",
+                ids.project_id,
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+            assert_eq!(
+                (settings.rate_mode.as_str(), settings.budget_scope.as_str()),
+                (mode, scope)
+            );
+            let spend = fetch_project_spend(&pool, ids.org_id, ids.user_id)
+                .await
+                .unwrap();
+            assert_eq!(spend.len(), 1);
+            assert_eq!(
+                (spend[0].spent_minutes, spend[0].spent_cents),
+                (60, expected_spend)
+            );
+        }
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn configured_edits_recheck_settings_after_waiting_for_the_project(pool: PgPool) {
+        let ids = seed(&pool, OrgRole::Admin).await;
+        let mut first = pool.begin().await.unwrap();
+        let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
+            .fetch_one(&mut *first)
+            .await
+            .unwrap()
+            .unwrap();
+        lock_project(&mut first, ids.org_id, ids.project_id)
+            .await
+            .unwrap();
+        sqlx::query!(
+            "INSERT INTO project_settings (id, org_id, project_id, creator_id, rate_mode, budget_scope)
+             VALUES ($1, $2, $3, $4, $5, $6)",
+            uuid::Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id, "person", "project",
+        ).execute(&mut *first).await.unwrap();
+        let before = version(&pool, ids.project_id).await;
+        let run_pool = pool.clone();
+        let mut run = tokio::task::JoinSet::new();
+        run.spawn(async move {
+            update_project_record(
+                &run_pool,
+                ids.org_id,
+                ids.project_id,
+                &ProjectEdit {
+                    currency: "USD",
+                    ..project_edit("Must not be saved")
+                },
+            )
+            .await
+        });
+        wait_for_blocked(&pool, blocker).await;
+        first.commit().await.unwrap();
+        let error = tokio::time::timeout(Duration::from_secs(5), run.join_next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap()
+            .unwrap_err();
+        assert!(error.to_string().contains("currency"), "{error}");
+        assert_eq!(version(&pool, ids.project_id).await, before);
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn configured_edits_preserve_non_hourly_billing(pool: PgPool) {
+        for project_type in [ProjectType::FixedFee, ProjectType::NonBillable] {
+            let ids = configured_project(&pool, "person", "project").await;
+            sqlx::query!(
+                "UPDATE projects SET project_type = $2 WHERE id = $1",
+                ids.project_id,
+                project_type as ProjectType,
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            if project_type == ProjectType::FixedFee {
+                sqlx::query!(
+                    "UPDATE project_settings SET fee_mode = 'single', fee_amount_cents = 10000 WHERE project_id = $1",
+                    ids.project_id,
+                ).execute(&pool).await.unwrap();
+            }
+            let kind = project_type.to_string();
+            let original = ProjectEdit {
+                project_type: &kind,
+                budget_kind: "hours",
+                budget_value: "2",
+                ..project_edit("Renamed")
+            };
+            let (updated, changed) =
+                update_project_record(&pool, ids.org_id, ids.project_id, &original)
+                    .await
+                    .unwrap();
+            assert!(changed);
+            assert_eq!(
+                (
+                    updated.name.as_str(),
+                    updated.project_type,
+                    updated.rate_cents
+                ),
+                ("Renamed", project_type, None)
+            );
+            let before = version(&pool, ids.project_id).await;
+            for fields in [
+                ProjectEdit {
+                    project_type: "time_and_materials",
+                    ..original
+                },
+                ProjectEdit {
+                    currency: "USD",
+                    ..original
+                },
+                ProjectEdit {
+                    rate_value: "1",
+                    ..original
+                },
+                ProjectEdit {
+                    budget_kind: "amount",
+                    ..original
+                },
+            ] {
+                assert!(
+                    update_project_record(&pool, ids.org_id, ids.project_id, &fields)
+                        .await
+                        .is_err()
+                );
+                assert_eq!(version(&pool, ids.project_id).await, before);
+            }
+        }
+    }
+
     #[sqlx::test(migrations = "./migrations")]
     async fn each_detail_field_changes_once_on_an_inactive_project(pool: PgPool) {
         for fields in [

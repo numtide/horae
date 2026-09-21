@@ -414,6 +414,66 @@ async fn update_project_record(
     let mut tx = db.begin().await.map_err(server_err)?;
     let before = lock_project(&mut tx, org_id, project_id).await?;
 
+    let settings = sqlx::query!(
+        "SELECT rate_mode, budget_scope FROM project_settings
+         WHERE project_id = $1 AND org_id = $2 FOR SHARE",
+        project_id,
+        org_id,
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(server_err)?;
+    let currency = if let Some(settings) = settings {
+        // This editor cannot replace the configured rates, fee schedule or
+        // scoped allocations atomically. Never reinterpret their denomination.
+        if pt != before.project_type {
+            return Err(conflict(
+                "Changing this project's type requires updating its billing configuration",
+            ));
+        }
+        if !edit
+            .currency
+            .trim()
+            .eq_ignore_ascii_case(before.currency.trim())
+        {
+            return Err(conflict(
+                "Changing this project's currency requires explicit replacement of its configured amounts",
+            ));
+        }
+        let project_rate = pt == ProjectType::TimeAndMaterials && settings.rate_mode == "project";
+        if project_rate && rate_cents.is_none() {
+            return Err(conflict(
+                "Project rate is required; enter 0 for a zero rate",
+            ));
+        }
+        if !project_rate && rate_cents != before.rate_cents {
+            return Err(conflict(
+                "This project's rate mode does not use the hourly rate in this editor",
+            ));
+        }
+        if settings.budget_scope != "project"
+            && (bk, budget_amount_cents, budget_minutes)
+                != (
+                    before.budget_kind,
+                    before.budget_amount_cents,
+                    before.budget_minutes,
+                )
+        {
+            return Err(conflict(
+                "A scoped budget must be changed through its task or person allocations",
+            ));
+        }
+        let budget_mode = match bk {
+            BudgetKind::None => horae_core::project::BudgetMode::None,
+            BudgetKind::Hours => horae_core::project::BudgetMode::TotalHours,
+            BudgetKind::Amount => horae_core::project::BudgetMode::TotalFees,
+        };
+        budget_mode.validate_for(pt).map_err(conflict)?;
+        before.currency.as_str()
+    } else {
+        edit.currency
+    };
+
     let project = sqlx::query_as!(
         Project,
         r#"UPDATE projects
@@ -433,7 +493,7 @@ async fn update_project_record(
         org_id,
         edit.name,
         pt as ProjectType,
-        edit.currency,
+        currency,
         bk as BudgetKind,
         budget_amount_cents,
         budget_minutes,
