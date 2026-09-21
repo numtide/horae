@@ -782,8 +782,12 @@ h1, h2, h3, h4, h5, h6 {
 /* New Project: structural layout only; control chrome remains shared. */
 .np-page { max-width: var(--width-project-form); }
 .np-row { grid-template-columns: var(--width-form-label) minmax(0, 1fr); }
+.np-type:has(input:checked) { border-color: var(--color-primary); }
+.np-type:focus-within { box-shadow: var(--ring); }
+.np-page input[type="radio"] { accent-color: var(--color-primary); }
 .np-footer { position: sticky; bottom: 0; z-index: 5; }
 @media (max-width: 1180px) {
+  .np-page .np-types { grid-template-columns: minmax(0, 1fr); }
   .np-page .np-row { grid-template-columns: minmax(0, 1fr); gap: var(--space-2); }
   .np-row > .np-label { padding-top: 0; }
 }

@@ -17,6 +17,7 @@ pub(super) struct ValidatedProject {
     pub alert_threshold: i16,
     pub fee: Option<FeeSchedule>,
     pub terms_days: i16,
+    pub po_number: String,
     pub discount_bps: i16,
     pub tax1_bps: i16,
     pub tax2: Option<(String, i16)>,
@@ -251,7 +252,12 @@ pub(super) fn validate_project_form(
         None
     };
 
-    let defaults = &form.invoice_defaults;
+    let neutral_defaults = crate::models::project_creation::InvoiceDefaultsInput::default();
+    let defaults = if form.project_type == ProjectType::NonBillable {
+        &neutral_defaults
+    } else {
+        &form.invoice_defaults
+    };
     let terms_days = defaults
         .terms_days
         .trim()
@@ -336,9 +342,48 @@ pub(super) fn validate_project_form(
         alert_threshold,
         fee,
         terms_days,
+        po_number: defaults.po_number.trim().to_owned(),
         discount_bps,
         tax1_bps,
         tax2,
         tags,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::project_creation::{InvoiceDefaultsInput, SecondTaxInput};
+
+    #[test]
+    fn non_billable_projects_ignore_hidden_invoice_inputs() {
+        let form = ProjectForm {
+            name: "Internal work".into(),
+            project_type: ProjectType::NonBillable,
+            invoice_defaults: InvoiceDefaultsInput {
+                terms_days: "unfinished".into(),
+                po_number: "x".repeat(201),
+                tax: "-21".into(),
+                discount: "101".into(),
+                second_tax: Some(SecondTaxInput {
+                    name: String::new(),
+                    percentage: "pending".into(),
+                }),
+            },
+            ..Default::default()
+        };
+        let validated = validate_project_form(&form, "EUR", false).unwrap();
+        assert_eq!(validated.terms_days, 30);
+        assert!(validated.po_number.is_empty());
+        assert_eq!(validated.tax1_bps, 0);
+        assert_eq!(validated.discount_bps, 0);
+        assert!(validated.tax2.is_none());
+        assert_eq!(form.invoice_defaults.terms_days, "unfinished");
+
+        let billable = ProjectForm {
+            project_type: ProjectType::TimeAndMaterials,
+            ..form
+        };
+        assert!(validate_project_form(&billable, "EUR", false).is_err());
+    }
 }

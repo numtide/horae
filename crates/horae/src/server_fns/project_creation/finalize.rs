@@ -91,7 +91,7 @@ pub(super) async fn finalize_draft_record(
         Uuid::now_v7(), org_id, project_id, actor_id, settings.rate_mode, settings.budget_scope,
         has_budget && form.budget_monthly, has_budget && form.budget_nonbillable,
         has_budget && form.budget_alert, settings.alert_threshold, visibility,
-        fee_mode, fee_amount, monthly_day, settings.terms_days, form.invoice_defaults.po_number.trim(),
+        fee_mode, fee_amount, monthly_day, settings.terms_days, settings.po_number,
         settings.discount_bps, settings.tax1_bps, settings.tax2.as_ref().map(|(name, _)| name.as_str()),
         settings.tax2.as_ref().map(|(_, bps)| *bps),
     ).execute(&mut *tx).await.map_err(storage_error)?;

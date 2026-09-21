@@ -308,7 +308,7 @@ pub fn ProjectList() -> Element {
                             button {
                                 class: "btn btn-secondary py-2 px-4",
                                 onclick: move |_| reset_form(),
-                                "Cancel editing"
+                                "Cancel"
                             }
                         } else {
                             Link { to: Route::NewProject {}, class: "btn btn-primary py-2 px-4", "New project" }

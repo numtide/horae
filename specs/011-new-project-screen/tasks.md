@@ -40,7 +40,7 @@
 - [x] T017 [US2] Implement idempotent initial draft save, load, compare-and-swap save, discard and completed lookup in `crates/horae/src/server_fns/project_creation.rs`.
 - [ ] T018 [US2] Add one transactional project-created event record and retry-safe dispatch using `crates/horae/src/server_fns/project_creation.rs` and scoped `crates/horae/src/jobs.rs` outbox handling.
 - [ ] T019 [US2] Implement debounced serialized autosave, truthful status, pending-navigation warning, retry/conflict/discard and finalization sequencing in `crates/horae/src/pages/new_project.rs`.
-- [ ] T020 [US2] Add browser recovery/concurrency cases in `crates/horae/tests/browser/new-project.spec.ts`, including edits during autosave and no false saved state.
+- [x] T020 [US2] Add browser recovery/concurrency cases in `crates/horae/tests/browser/new-project.cjs`, including edits during autosave and no false saved state.
 
 ## Phase 5: US3 — Configure billing and budgets (P1)
 
@@ -54,7 +54,7 @@
 - [ ] T026 [US3] Implement single/milestone/monthly fee preparation and duplicate-claim/void handling in `crates/horae/src/server_fns/invoices.rs` and `crates/horae/src/models/invoice.rs`, excluding configured fee work from hourly charges.
 - [ ] T027 [US3] Add failing mail availability, injection, timeout, retry/lease and acknowledged-delivery tests in `crates/horae/src/notifications.rs`.
 - [ ] T028 [US3] Implement optional bounded direct sendmail delivery, event-kind outbox claiming and sanitized terminal errors in `crates/horae/src/notifications.rs`, `crates/horae/src/config.rs`, `crates/horae/src/jobs.rs` and startup/shutdown wiring.
-- [ ] T029 [US3] Build all rate/type/fee/budget panels and per-task/person budget fields in `crates/horae/src/pages/new_project.rs` (or sibling section modules), with truthful unavailable-email state.
+- [x] T029 [US3] Build all rate/type/fee/budget panels and per-task/person budget fields in `crates/horae/src/pages/new_project.rs` (or sibling section modules), with truthful unavailable-email state.
 - [ ] T030 [US3] Re-run invoice, import, report, Harvest and budget fixtures and record unchanged legacy totals in `specs/011-new-project-screen/quickstart.md`.
 
 ## Phase 6: US4 — Tasks, team and privacy (P1)
@@ -69,7 +69,7 @@
 - [ ] T036 [US4] Apply consistent authorization to project export count/stream and Harvest project/task/time-entry projections in `crates/horae/src/reports.rs`, `crates/horae/src/reports/limits.rs`, `crates/horae/src/reports/streaming.rs`, `crates/horae/src/harvest/mod.rs`.
 - [ ] T037 [US4] Verify private tables/functions stay outside plugin grants and payloads with tests in `crates/horae/src/plugin/database.rs` and `crates/horae/src/plugin/event.rs`.
 - [ ] T038 [US4] Build task/team selectors, billable all/none, restrictions dialog, Add everyone, project leads, admin-only cost/notes and report visibility in `crates/horae/src/pages/new_project.rs` (or sibling section modules).
-- [ ] T039 [US4] Exercise role matrix via browser/direct server responses and existing approval/import regressions in `crates/horae/tests/browser/new-project.spec.ts` and `specs/011-new-project-screen/quickstart.md`.
+- [ ] T039 [US4] Exercise role matrix via browser/direct server responses and existing approval/import regressions in `crates/horae/tests/browser/new-project.cjs` and `specs/011-new-project-screen/quickstart.md`.
 
 ## Phase 7: US5 — Invoice defaults (P2)
 
@@ -86,7 +86,7 @@
 **Independent test**: Every conditional panel at 390/768/1440 widths and keyboard-only, plus existing shared-screen regressions.
 
 - [ ] T045 [P] [US6] Map remaining target/imported component reference states to tokens in `specs/011-new-project-screen/contracts/new-project.md`; do not render prototypes (FR-018–020).
-- [ ] T046 [US6] Add failing accessibility/layout/recovery cases in `crates/horae/tests/browser/new-project.spec.ts` before shared-control changes.
+- [ ] T046 [US6] Add failing accessibility/layout/recovery cases in `crates/horae/tests/browser/new-project.cjs` before shared-control changes.
 - [ ] T047 [US6] Add only necessary opt-in labels/disabled options/focus/keyboard capabilities to `crates/horae/src/components/combobox.rs`, `crates/horae/src/components/form.rs` and other reused controls; preserve default callers.
 - [ ] T048 [US6] Align label grid/cards/footer/spacing and responsive states in `crates/horae/src/pages/new_project.rs`, `crates/horae/assets/css/horae.css`, `crates/horae/build.rs`; no inline styles, copied literals or utility duplication.
 - [ ] T049 [US6] Integrate New Project tests into `crates/horae/tests/browser/run-design-checks.sh` and run all existing navigation/menu/project selection/recovery checks plus Clients/Timesheet/Invoices smoke checks.

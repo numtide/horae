@@ -9,10 +9,22 @@ use crate::server_fns;
 
 #[path = "new_project/basics.rs"]
 mod basics;
+#[path = "new_project/billing.rs"]
+mod billing;
 #[path = "new_project/draft.rs"]
 mod draft;
+#[path = "new_project/invoice_defaults.rs"]
+mod invoice_defaults;
+#[path = "new_project/tasks.rs"]
+mod tasks;
+#[path = "new_project/team.rs"]
+mod team;
 use basics::Basics;
+use billing::Billing;
 use draft::DraftState;
+use invoice_defaults::InvoiceDefaults;
+use tasks::Tasks;
+use team::{Team, Visibility};
 
 #[component]
 pub fn NewProject() -> Element {
@@ -64,6 +76,7 @@ fn ProjectEditor(
     let mut error = use_signal(|| None::<String>);
     let mut intent = use_signal(|| None::<Intent>);
     let mut discard_open = use_signal(|| false);
+    let catalog_busy = use_signal(|| false);
     let navigator = use_navigator();
 
     use_effect(move || {
@@ -156,7 +169,7 @@ fn ProjectEditor(
     });
 
     let dirty = state.read().is_dirty(&form.read());
-    let locked = intent().is_some();
+    let locked = intent().is_some() || catalog_busy();
     let status = if error().is_some() {
         "Changes need attention".to_string()
     } else if busy() || dirty {
@@ -195,6 +208,11 @@ fn ProjectEditor(
             }
             fieldset { class: "border-0 p-0 m-0 min-w-0", disabled: locked, aria_label: "Project settings",
                 Basics { form, options }
+                Visibility { form }
+                Billing { form, options }
+                Tasks { form, options }
+                Team { form, options, busy: catalog_busy }
+                InvoiceDefaults { form }
             }
             footer { class: "np-footer flex flex-wrap items-center gap-3 py-4 bg-base border-t",
                 button { class: "btn btn-primary", r#type: "button", disabled: !can_create || locked || error().is_some(), onclick: move |_| intent.set(Some(Intent::Create)),

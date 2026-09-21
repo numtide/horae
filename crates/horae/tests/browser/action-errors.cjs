@@ -25,10 +25,14 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated, seeded test instance');
     },
     {
       name: 'project archive', path: '/projects', resource: 'list_projects',
-      endpoint: 'set_project_active', form: 'New project',
-      formEndpoint: 'create_project', submit: 'Create Project',
+      endpoint: 'set_project_active', form: /^Actions/,
+      formEndpoint: 'update_project', submit: 'Save Changes',
+      openForm: async () => {
+        await page.locator('.proj-row').getByRole('button', { name: /^Actions/ }).first().click();
+        await page.getByRole('menuitem', { name: 'Edit', exact: true }).click();
+      },
       action: async () => {
-        await page.getByRole('button', { name: /^Actions/ }).first().click();
+        await page.locator('.proj-row').getByRole('button', { name: /^Actions/ }).first().click();
         await page.getByRole('menuitem', { name: 'Archive', exact: true }).click();
       },
     },
@@ -53,14 +57,15 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated, seeded test instance');
         const ready = page.waitForResponse(r => r.url().includes(`/api/${scenario.resource}`) && r.status() === 200);
         await page.goto(`${base}${scenario.path}`);
         await (await ready).finished();
-        await expect(page.getByRole('button', { name: scenario.form, exact: true })).toBeVisible();
+        await expect(page.getByRole('button', { name: scenario.form, exact: true }).first()).toBeVisible();
         const rejected = page.waitForEvent('requestfailed', r => r.url().includes(`/api/${scenario.endpoint}`));
         await scenario.action();
         await rejected;
         await expect(page.locator('.alert-danger')).toBeVisible();
         await expect(page.getByRole('alert')).toBeVisible();
         // Opening and cancelling an unrelated form must not clear an action error.
-        await page.getByRole('button', { name: scenario.form, exact: true }).click();
+        if (scenario.openForm) await scenario.openForm();
+        else await page.getByRole('button', { name: scenario.form, exact: true }).click();
         await expect(page.getByRole('alert')).toBeVisible();
         const formRejected = page.waitForEvent('requestfailed', r => r.url().includes(`/api/${scenario.formEndpoint}`));
         await page.getByRole('button', { name: scenario.submit, exact: true }).click();

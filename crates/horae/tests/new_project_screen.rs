@@ -11,12 +11,14 @@ use dioxus::router::components::HistoryProvider;
 use futures_util::FutureExt;
 use uuid::Uuid;
 
+#[path = "../src/components/controls.rs"]
+pub mod controls;
 #[path = "../src/components/form.rs"]
 pub mod form;
 #[path = "../src/components/modal.rs"]
 pub mod modal;
 mod components {
-    pub use super::{form, modal};
+    pub use super::{controls, form, modal};
 }
 #[path = "../src/models/project_creation.rs"]
 pub mod project_creation;
@@ -184,6 +186,197 @@ async fn administrative_notes_only_render_for_an_authorized_editor() {
     let mut probe = Probe::default();
     probe.options.can_edit_private_settings = true;
     assert!(render(probe).contains("id=\"np-notes\""));
+}
+
+fn with_form(form: ProjectForm) -> Probe {
+    Probe {
+        draft: Some(ProjectDraft {
+            id: Uuid::now_v7(),
+            revision: 1,
+            saved_at: chrono::Utc::now(),
+            form,
+        }),
+        ..Default::default()
+    }
+}
+
+#[tokio::test]
+async fn time_and_materials_restores_project_rate_and_budget_without_enabling_unconfigured_email() {
+    use horae_core::project::{BudgetMode, RateMode};
+    let probe = with_form(ProjectForm {
+        rate_mode: RateMode::Project,
+        project_rate: "0".into(),
+        budget_mode: BudgetMode::TotalHours,
+        budget_value: "125:30".into(),
+        ..Default::default()
+    });
+    let html = render(probe);
+    let text = html.replace("&#38;", "&").replace("&amp;", "&");
+    for label in ["Time & Materials", "Fixed Fee", "Non-Billable"] {
+        assert!(text.contains(label), "missing {label}: {html}");
+    }
+    for id in ["np-project-rate", "np-budget-mode", "np-budget-value"] {
+        assert!(
+            html.contains(&format!("id=\"{id}\"")),
+            "missing {id}: {html}"
+        );
+    }
+    assert!(html.contains("value=\"125:30\""));
+    assert!(html.contains("Email delivery is not configured"));
+    assert!(html.contains("Invoice defaults"));
+}
+
+#[tokio::test]
+async fn fixed_fee_restores_each_schedule_and_never_shows_hourly_rate_controls() {
+    use horae_core::types::ProjectType;
+    use project_creation::{FeeMode, MilestoneInput};
+    for mode in [FeeMode::Single, FeeMode::Milestones, FeeMode::Monthly] {
+        let probe = with_form(ProjectForm {
+            project_type: ProjectType::FixedFee,
+            fee_mode: mode,
+            fee_amount: "800.25".into(),
+            milestones: vec![MilestoneInput {
+                id: Uuid::now_v7(),
+                name: "Research delivery".into(),
+                due_on: "2026-11-30".into(),
+                amount: "400.25".into(),
+            }],
+            ..Default::default()
+        });
+        let html = render(probe);
+        assert!(html.contains("Project fee"), "{html}");
+        assert!(!html.contains("Billable rates"));
+        match mode {
+            FeeMode::Single => assert!(html.contains("value=\"800.25\"")),
+            FeeMode::Milestones => {
+                assert!(html.contains("Research delivery"));
+                assert!(html.contains("value=\"2026-11-30\""));
+                assert!(html.contains("Add milestone"));
+            }
+            FeeMode::Monthly => assert!(html.contains("id=\"np-monthly-day\"")),
+        }
+        assert!(html.contains("Invoice defaults"));
+    }
+}
+
+#[tokio::test]
+async fn nonbillable_hides_fee_rate_and_invoice_controls_without_erasing_the_draft() {
+    let probe = with_form(ProjectForm {
+        project_type: horae_core::types::ProjectType::NonBillable,
+        fee_amount: "800.25".into(),
+        project_rate: "95".into(),
+        ..Default::default()
+    });
+    let html = render(probe.clone());
+    assert!(html.contains("id=\"np-budget-mode\""), "{html}");
+    for hidden in [
+        "id=\"np-project-rate\"",
+        "id=\"np-fee-amount\"",
+        "Invoice defaults",
+    ] {
+        assert!(!html.contains(hidden));
+    }
+    assert_eq!(probe.writes.get(), 0);
+}
+
+#[tokio::test]
+async fn tasks_and_team_restore_scoped_settings_without_exposing_costs_to_managers() {
+    use horae_core::project::{BudgetMode, RateMode};
+    use project_creation::{
+        CreationPerson, CreationTask, ProjectMemberInput, ProjectTaskInput, TaskAccess, TaskSource,
+    };
+    let user_id = Uuid::now_v7();
+    let task_id = Uuid::now_v7();
+    let mut probe = with_form(ProjectForm {
+        rate_mode: RateMode::Task,
+        budget_mode: BudgetMode::HoursPerTask,
+        tasks: vec![ProjectTaskInput {
+            id: Uuid::now_v7(),
+            source: TaskSource::Existing { task_id },
+            billable: true,
+            rate: "0".into(),
+            budget: "12:30".into(),
+            access: TaskAccess::Restricted {
+                user_ids: vec![user_id],
+            },
+        }],
+        team: vec![ProjectMemberInput {
+            user_id,
+            manager: true,
+            billable_rate: String::new(),
+            cost_rate: String::new(),
+            budget: String::new(),
+        }],
+        ..Default::default()
+    });
+    probe.options.tasks.push(CreationTask {
+        id: task_id,
+        name: "Release preparation".into(),
+        billable: true,
+        default_rate_cents: Some(8000),
+    });
+    probe.options.people.push(CreationPerson {
+        id: user_id,
+        name: "Project teammate".into(),
+        billable_rate_cents: None,
+        cost_rate_cents: None,
+    });
+    let html = render(probe.clone());
+    for text in [
+        "Tasks",
+        "Team",
+        "Release preparation",
+        "Project teammate",
+        "Restricted (1)",
+        "Add everyone",
+        "Report visibility",
+    ] {
+        assert!(html.contains(text), "missing {text}: {html}");
+    }
+    assert!(html.contains("value=\"12:30\""));
+    assert!(!html.contains("np-cost-rate"));
+    assert_eq!(probe.writes.get(), 0);
+    probe.options.can_edit_private_settings = true;
+    probe.options.people[0].cost_rate_cents = Some(6234);
+    let html = render(probe);
+    assert!(html.contains("np-cost-rate"));
+    assert!(html.contains("62.34"));
+}
+
+#[tokio::test]
+async fn invoice_defaults_restore_custom_terms_and_named_second_tax() {
+    use project_creation::{InvoiceDefaultsInput, SecondTaxInput};
+    let probe = with_form(ProjectForm {
+        invoice_defaults: InvoiceDefaultsInput {
+            terms_days: "37".into(),
+            po_number: "PO-actual".into(),
+            tax: "7.25".into(),
+            second_tax: Some(SecondTaxInput {
+                name: "Local tax".into(),
+                percentage: "1.50".into(),
+            }),
+            discount: "2.75".into(),
+        },
+        ..Default::default()
+    });
+    let html = render(probe);
+    for (id, value) in [
+        ("np-terms-days", "37"),
+        ("np-po-number", "PO-actual"),
+        ("np-tax", "7.25"),
+        ("np-second-tax-name", "Local tax"),
+        ("np-second-tax", "1.50"),
+        ("np-discount", "2.75"),
+    ] {
+        assert!(
+            html.contains(&format!("id=\"{id}\"")),
+            "missing {id}: {html}"
+        );
+        assert!(
+            html.contains(&format!("value=\"{value}\"")),
+            "missing {value}: {html}"
+        );
+    }
 }
 
 mod server_fns {

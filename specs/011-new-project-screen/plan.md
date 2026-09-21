@@ -83,7 +83,7 @@ crates/horae/src/route.rs / src/pages.rs        registration
 crates/horae/src/components/                   opt-in shared capabilities
 crates/horae/assets/css/horae.css               structural np-* rules/tokens
 crates/horae/build.rs                          missing utilities only
-crates/horae/tests/browser/new-project.spec.ts
+crates/horae/tests/browser/new-project.cjs
 ```
 
 **Structure Decision**: Existing layers and sibling-file module roots; no repository abstraction, form engine, new queue framework or alternate mutation API.

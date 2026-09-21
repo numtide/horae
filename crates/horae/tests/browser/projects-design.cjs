@@ -27,7 +27,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
     await page.waitForURL(`${base}/`);
     await page.route('**/api/**', async route => {
       const path = new URL(route.request().url()).pathname;
-      if (/\/(create|update|set|delete|start|stop|import|submit|approve|reopen|cancel|retry)/.test(path)) {
+      if (/\/(create|update|set|delete|start|stop|import|submit|approve|reopen|cancel|retry|save|finalize|discard)/.test(path)) {
         mutations.push(path);
         return route.abort();
       }
@@ -64,7 +64,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
       await response.finished();
     }
     await visit();
-    await expect(page.getByRole('button', { name: 'New project', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'New project', exact: true })).toHaveAttribute('href', '/projects/new');
     await expect(page.locator('.page-header').getByRole('link', { name: 'Import', exact: true })).toHaveAttribute('href', '/admin/importers');
     await expect(page.locator('.proj-head')).not.toContainText('Scheduled');
     await expect(page.locator('.proj-head')).not.toContainText('Delta');
@@ -206,16 +206,18 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
       await expect(state.locator('.empty-state-text')).toHaveCSS('line-height', '21.7px');
       await expect(state.locator('.empty-state-text')).toHaveCSS('margin', '0px');
       await expect(state.locator('.empty-state-title')).toHaveCSS('margin', '0px');
-      await expect(state.getByRole('button', { name: 'New project', exact: true })).toHaveCount(canCreate ? 1 : 0);
+      await expect(state.getByRole('link', { name: 'New project', exact: true })).toHaveCount(canCreate ? 1 : 0);
       await expect(state.getByRole('link', { name: /Import from Harvest/ })).toHaveCount(canImport ? 1 : 0);
       if (canImport) await expect(state.getByRole('link', { name: /Import from Harvest/ })).toHaveCSS('font-size', '14px');
       if (canImport && process.env.HORAE_TEST_SCREENSHOT_DIR)
         await page.screenshot({ path: `${process.env.HORAE_TEST_SCREENSHOT_DIR}/projects-empty.png` });
       if (canCreate) {
-        await expect(state.getByRole('button', { name: 'New project', exact: true })).toHaveCSS('padding', '12px 20px');
-        await state.getByRole('button', { name: 'New project', exact: true }).click();
-        await expect(page.getByRole('heading', { name: 'New Project', exact: true })).toBeVisible();
-        await page.locator('.page-header').getByRole('button', { name: 'Cancel', exact: true }).click();
+        await expect(state.getByRole('link', { name: 'New project', exact: true })).toHaveCSS('padding', '12px 20px');
+        await state.getByRole('link', { name: 'New project', exact: true }).click();
+        await expect(page).toHaveURL(`${base}/projects/new`);
+        await expect(page.getByRole('heading', { name: 'New project', exact: true })).toBeVisible();
+        await page.getByRole('button', { name: /Back to Projects/ }).click();
+        await expect(page).toHaveURL(`${base}/projects`);
       }
       console.log(`PASS: empty-state guidance and action visibility for ${orgRole}`);
     }

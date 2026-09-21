@@ -55,6 +55,15 @@ if [[ -n ${HORAE_STYLE_BASELINE:-} ]]; then
   node "$browser_tests/shared-style-audit.cjs" compare "$HORAE_STYLE_BASELINE"
 fi
 
-for suite in projects-design responsive-layout menu-popovers mobile-navigation project-bulk-actions project-bulk-recovery; do
+# Explicit filenames allow focused iteration without bypassing database isolation.
+suites=("$@")
+if [[ ${#suites[@]} == 0 ]]; then
+  suites=(projects-design responsive-layout menu-popovers mobile-navigation project-bulk-actions project-bulk-recovery action-errors new-project)
+fi
+for suite in "${suites[@]}"; do
+  if [[ ! $suite =~ ^[a-z][a-z-]*$ || ! -f "$browser_tests/$suite.cjs" ]]; then
+    echo "Unknown browser suite: $suite" >&2
+    exit 1
+  fi
   node "$browser_tests/$suite.cjs"
 done
