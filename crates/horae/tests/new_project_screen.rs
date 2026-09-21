@@ -191,6 +191,40 @@ fn an_input_can_link_its_validation_error_without_changing_its_value_or_class() 
 }
 
 #[test]
+fn checkbox_error_identity_is_opt_in_without_changing_its_behavior() {
+    for error in [false, true] {
+        let mut dom = VirtualDom::new_with_props(
+            |error: bool| {
+                rsx! {
+                    controls::Checkbox {
+                        checked: true, label: "Budget email", disabled: true,
+                        id: if error { "budget-email" } else { "" },
+                        error_id: error.then(|| "budget-email-error".to_owned()),
+                    }
+                }
+            },
+            error,
+        );
+        dom.rebuild_in_place();
+        let html = dioxus::ssr::render(&dom);
+        for attribute in [
+            "class=\"choice checked\"",
+            "aria-checked=\"true\"",
+            "aria-label=\"Budget email\"",
+            "disabled",
+        ] {
+            assert!(html.contains(attribute), "Missing {attribute}");
+        }
+        assert_eq!(html.contains("id=\"budget-email\""), error);
+        assert_eq!(html.contains("aria-invalid=\"true\""), error);
+        assert_eq!(
+            html.contains("aria-describedby=\"budget-email-error\""),
+            error
+        );
+    }
+}
+
+#[test]
 fn textarea_and_selector_error_links_are_opt_in_and_preserve_controls() {
     for error in [false, true] {
         let mut dom = VirtualDom::new_with_props(

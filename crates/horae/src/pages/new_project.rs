@@ -301,7 +301,7 @@ fn ProjectEditor(
                         aria_label: "Project settings",
                         Basics { form, options, invalid_field: invalid_field(), error_message: error() }
                         Visibility { form }
-                        Billing { form, options }
+                        Billing { form, options, invalid_field: invalid_field(), error_message: error() }
                         Tasks { form, options }
                         Team { form, options, busy: catalog_busy }
                         InvoiceDefaults { form, invalid_field: invalid_field(), error_message: error() }
@@ -390,7 +390,7 @@ fn validation_field(error: &ServerFnError) -> Option<ProjectFormField> {
     serde_json::from_value(details.get("field")?.clone()).ok()
 }
 
-fn field_id(field: ProjectFormField) -> &'static str {
+fn field_id(field: ProjectFormField) -> String {
     match field {
         ProjectFormField::Name => "np-name",
         ProjectFormField::Code => "np-code",
@@ -398,6 +398,18 @@ fn field_id(field: ProjectFormField) -> &'static str {
         ProjectFormField::EndsOn => "np-end",
         ProjectFormField::Currency => "np-currency",
         ProjectFormField::AdminNotes => "np-notes",
+        ProjectFormField::ProjectType => "np-project-type",
+        ProjectFormField::RateMode => "np-rate-mode",
+        ProjectFormField::ProjectRate => "np-project-rate",
+        ProjectFormField::BudgetMode => "np-budget-mode",
+        ProjectFormField::BudgetValue => "np-budget-value",
+        ProjectFormField::BudgetAlert => "np-budget-alert",
+        ProjectFormField::BudgetAlertAt => "np-alert-threshold",
+        ProjectFormField::FeeAmount => "np-fee-amount",
+        ProjectFormField::Milestones => "np-add-milestone",
+        ProjectFormField::MilestoneName(id) => return format!("np-milestone-name-{id}"),
+        ProjectFormField::MilestoneDate(id) => return format!("np-milestone-date-{id}"),
+        ProjectFormField::MilestoneAmount(id) => return format!("np-milestone-amount-{id}"),
         ProjectFormField::PaymentTerms => "np-terms-days",
         ProjectFormField::PurchaseOrder => "np-po-number",
         ProjectFormField::Tax => "np-tax",
@@ -405,6 +417,7 @@ fn field_id(field: ProjectFormField) -> &'static str {
         ProjectFormField::SecondTax => "np-second-tax",
         ProjectFormField::Discount => "np-discount",
     }
+    .to_owned()
 }
 
 fn is_definite_rejection(error: &ServerFnError) -> bool {
@@ -419,7 +432,18 @@ mod tests {
     fn only_known_validation_fields_can_target_a_control() {
         const BAD_REQUEST: u16 = 400;
         const CONFLICT: u16 = 409;
+        let row = uuid::Uuid::now_v7();
         for (code, details, expected) in [
+            (
+                BAD_REQUEST,
+                Some(serde_json::json!({"field": {"milestone_amount": row}})),
+                Some(ProjectFormField::MilestoneAmount(row)),
+            ),
+            (
+                BAD_REQUEST,
+                Some(serde_json::json!({"field": {"milestone_amount": "not-a-uuid"}})),
+                None,
+            ),
             (
                 BAD_REQUEST,
                 Some(serde_json::json!({"field": "tax"})),
@@ -442,6 +466,10 @@ mod tests {
             assert_eq!(validation_field(&error), expected);
         }
         assert_eq!(field_id(ProjectFormField::Tax), "np-tax");
+        assert_eq!(
+            field_id(ProjectFormField::MilestoneAmount(row)),
+            format!("np-milestone-amount-{row}")
+        );
     }
 
     #[test]

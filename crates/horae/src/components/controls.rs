@@ -49,10 +49,13 @@ pub fn Toggle(
 }
 
 /// A checkbox with a label. Controlled via `checked`.
+/// Optional `id` and `error_id` associate a field-specific validation message.
 #[component]
 pub fn Checkbox(
     checked: bool,
     label: String,
+    #[props(default)] id: String,
+    #[props(default)] error_id: Option<String>,
     #[props(default)] mixed: bool,
     #[props(default)] compact: bool,
     #[props(default)] disabled: bool,
@@ -63,6 +66,9 @@ pub fn Checkbox(
             r#type: "button",
             class: if checked || mixed { "choice checked" } else { "choice" },
             role: "checkbox",
+            id: if !id.is_empty() { "{id}" },
+            aria_invalid: error_id.as_ref().map(|_| "true"),
+            aria_describedby: error_id,
             aria_label: label.clone(),
             "aria-checked": if mixed { "mixed" } else if checked { "true" } else { "false" },
             disabled,

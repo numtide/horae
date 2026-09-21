@@ -160,7 +160,14 @@ pub(super) fn validate_project_form(
     })?;
     form.budget_mode
         .validate_for(form.project_type)
-        .map_err(|error| err(BAD_REQUEST, error))?;
+        .map_err(|error| {
+            let field = if error == ProjectValidationError::ProjectType {
+                ProjectFormField::ProjectType
+            } else {
+                ProjectFormField::BudgetMode
+            };
+            with_field(err(BAD_REQUEST, error), field)
+        })?;
     bounded_text(&form.admin_notes, 10000, false, "Private notes")
         .map_err(|error| with_field(error, ProjectFormField::AdminNotes))?;
 
@@ -173,14 +180,18 @@ pub(super) fn validate_project_form(
             RateMode::Task => "task",
             RateMode::Project => "project",
             RateMode::Legacy => {
-                return Err(err(BAD_REQUEST, "Select person, task or project rates"));
+                return Err(with_field(
+                    err(BAD_REQUEST, "Select person, task or project rates"),
+                    ProjectFormField::RateMode,
+                ));
             }
         }
     };
     let rate_cents = if is_hourly && form.rate_mode == RateMode::Project {
         Some(
-            optional_amount(&form.project_rate, "Project rate")?
-                .ok_or_else(|| err(BAD_REQUEST, "Project rate is required"))?,
+            optional_amount(&form.project_rate, "Project rate")
+                .and_then(|value| value.ok_or_else(|| err(BAD_REQUEST, "Project rate is required")))
+                .map_err(|error| with_field(error, ProjectFormField::ProjectRate))?,
         )
     } else {
         None
@@ -192,12 +203,14 @@ pub(super) fn validate_project_form(
             BudgetKind::Hours,
             "project",
             None,
-            optional_hours(&form.budget_value)?,
+            optional_hours(&form.budget_value)
+                .map_err(|error| with_field(error, ProjectFormField::BudgetValue))?,
         ),
         BudgetMode::TotalFees => (
             BudgetKind::Amount,
             "project",
-            optional_amount(&form.budget_value, "Budget")?,
+            optional_amount(&form.budget_value, "Budget")
+                .map_err(|error| with_field(error, ProjectFormField::BudgetValue))?,
             None,
         ),
         BudgetMode::HoursPerTask => (
@@ -221,18 +234,27 @@ pub(super) fn validate_project_form(
     };
     let alert_threshold = if form.budget_alert && form.budget_mode != BudgetMode::None {
         if !email_available {
-            return Err(err(BAD_REQUEST, "Budget email delivery is not configured"));
+            return Err(with_field(
+                err(BAD_REQUEST, "Budget email delivery is not configured"),
+                ProjectFormField::BudgetAlert,
+            ));
         }
         let threshold = form.budget_alert_at.trim().parse::<i16>().map_err(|_| {
-            err(
-                BAD_REQUEST,
-                "Budget alert: enter a whole percentage from 0 to 100",
+            with_field(
+                err(
+                    BAD_REQUEST,
+                    "Budget alert: enter a whole percentage from 0 to 100",
+                ),
+                ProjectFormField::BudgetAlertAt,
             )
         })?;
         if !(0..=100).contains(&threshold) {
-            return Err(err(
-                BAD_REQUEST,
-                "Budget alert: enter a whole percentage from 0 to 100",
+            return Err(with_field(
+                err(
+                    BAD_REQUEST,
+                    "Budget alert: enter a whole percentage from 0 to 100",
+                ),
+                ProjectFormField::BudgetAlertAt,
             ));
         }
         threshold
@@ -243,8 +265,11 @@ pub(super) fn validate_project_form(
     let fee = if form.project_type == ProjectType::FixedFee {
         let fee = match form.fee_mode {
             FeeMode::Single | FeeMode::Monthly => {
-                let amount_cents = optional_amount(&form.fee_amount, "Fixed fee")?
-                    .ok_or_else(|| err(BAD_REQUEST, "Fixed fee amount is required"))?;
+                let amount_cents = optional_amount(&form.fee_amount, "Fixed fee")
+                    .and_then(|value| {
+                        value.ok_or_else(|| err(BAD_REQUEST, "Fixed fee amount is required"))
+                    })
+                    .map_err(|error| with_field(error, ProjectFormField::FeeAmount))?;
                 if form.fee_mode == FeeMode::Single {
                     FeeSchedule::Single { amount_cents }
                 } else {
@@ -255,18 +280,46 @@ pub(super) fn validate_project_form(
                 }
             }
             FeeMode::Milestones => {
+                if form.milestones.is_empty() {
+                    return Err(with_field(
+                        err(BAD_REQUEST, ProjectValidationError::Milestones),
+                        ProjectFormField::Milestones,
+                    ));
+                }
                 let mut ids = HashSet::new();
                 let mut milestones = Vec::with_capacity(form.milestones.len());
+                let mut total = 0_i64;
                 for item in &form.milestones {
                     if !ids.insert(item.id) {
                         return Err(err(BAD_REQUEST, "Duplicate milestone"));
                     }
+                    bounded_text(&item.name, 200, true, "Milestone name").map_err(|error| {
+                        with_field(error, ProjectFormField::MilestoneName(item.id))
+                    })?;
+                    let due_on = date(&item.due_on, "Milestone date")
+                        .and_then(|value| {
+                            value.ok_or_else(|| err(BAD_REQUEST, "Milestone date is required"))
+                        })
+                        .map_err(|error| {
+                            with_field(error, ProjectFormField::MilestoneDate(item.id))
+                        })?;
+                    let amount_cents = optional_amount(&item.amount, "Milestone fee")
+                        .and_then(|value| {
+                            value.ok_or_else(|| err(BAD_REQUEST, "Milestone amount is required"))
+                        })
+                        .map_err(|error| {
+                            with_field(error, ProjectFormField::MilestoneAmount(item.id))
+                        })?;
+                    total = total.checked_add(amount_cents).ok_or_else(|| {
+                        with_field(
+                            err(BAD_REQUEST, "Milestone total is too large"),
+                            ProjectFormField::MilestoneAmount(item.id),
+                        )
+                    })?;
                     milestones.push(FeeMilestone {
                         name: item.name.trim().into(),
-                        due_on: date(&item.due_on, "Milestone date")?
-                            .ok_or_else(|| err(BAD_REQUEST, "Milestone date is required"))?,
-                        amount_cents: optional_amount(&item.amount, "Milestone fee")?
-                            .ok_or_else(|| err(BAD_REQUEST, "Milestone amount is required"))?,
+                        due_on,
+                        amount_cents,
                     });
                 }
                 FeeSchedule::Milestones { milestones }
@@ -389,6 +442,144 @@ pub(super) fn validate_project_form(
 mod tests {
     use super::*;
     use crate::models::project_creation::{InvoiceDefaultsInput, SecondTaxInput};
+    use uuid::Uuid;
+
+    #[test]
+    fn billing_rejections_identify_the_active_control() {
+        for (case, field, value, email) in [
+            ("rate", "project_rate", "", false),
+            ("rate", "project_rate", "-1", false),
+            ("rate", "project_rate", "1.001", false),
+            ("hours", "budget_value", "unfinished", false),
+            ("fees", "budget_value", "-1", false),
+            ("single", "fee_amount", "", false),
+            ("monthly", "fee_amount", "1.001", false),
+            ("alert", "budget_alert_at", "101", true),
+            ("alert", "budget_alert_at", "0.5", true),
+            ("alert", "budget_alert", "80", false),
+            ("budget", "budget_mode", "", false),
+            ("legacy", "rate_mode", "", false),
+        ] {
+            let mut form = ProjectForm {
+                name: "Valid project".into(),
+                ..Default::default()
+            };
+            match case {
+                "rate" => {
+                    form.rate_mode = RateMode::Project;
+                    form.project_rate = value.into();
+                }
+                "hours" | "fees" => {
+                    form.budget_mode = if case == "hours" {
+                        BudgetMode::TotalHours
+                    } else {
+                        BudgetMode::TotalFees
+                    };
+                    form.budget_value = value.into();
+                }
+                "single" | "monthly" => {
+                    form.project_type = ProjectType::FixedFee;
+                    form.fee_mode = if case == "single" {
+                        FeeMode::Single
+                    } else {
+                        FeeMode::Monthly
+                    };
+                    form.fee_amount = value.into();
+                }
+                "alert" => {
+                    form.budget_mode = BudgetMode::TotalHours;
+                    form.budget_alert = true;
+                    form.budget_alert_at = value.into();
+                }
+                "budget" => {
+                    form.project_type = ProjectType::NonBillable;
+                    form.budget_mode = BudgetMode::TotalFees;
+                }
+                "legacy" => form.rate_mode = RateMode::Legacy,
+                _ => unreachable!(),
+            }
+            assert_rejection_field(&form, email, serde_json::json!(field));
+        }
+    }
+
+    #[test]
+    fn milestone_rejections_target_the_invalid_row_by_identity() {
+        use crate::models::project_creation::MilestoneInput;
+        let first_id = Uuid::now_v7();
+        let second_id = Uuid::now_v7();
+        for (field, value) in [
+            ("milestone_name", ""),
+            ("milestone_date", ""),
+            ("milestone_date", "2026-9-1"),
+            ("milestone_amount", ""),
+            ("milestone_amount", "-1"),
+            ("milestone_amount", "1.001"),
+            ("milestone_amount", "92233720368547758.07"),
+        ] {
+            let mut form = ProjectForm {
+                name: "Valid project".into(),
+                project_type: ProjectType::FixedFee,
+                fee_mode: FeeMode::Milestones,
+                milestones: [first_id, second_id]
+                    .map(|id| MilestoneInput {
+                        id,
+                        name: "Delivery".into(),
+                        due_on: "2026-09-01".into(),
+                        amount: "1.00".into(),
+                    })
+                    .to_vec(),
+                ..Default::default()
+            };
+            let row = &mut form.milestones[1];
+            match field {
+                "milestone_name" => row.name = value.into(),
+                "milestone_date" => row.due_on = value.into(),
+                "milestone_amount" => row.amount = value.into(),
+                _ => unreachable!(),
+            }
+            assert_rejection_field(&form, false, serde_json::json!({ field: second_id }));
+        }
+        let empty = ProjectForm {
+            name: "Valid project".into(),
+            project_type: ProjectType::FixedFee,
+            fee_mode: FeeMode::Milestones,
+            ..Default::default()
+        };
+        assert_rejection_field(&empty, false, serde_json::json!("milestones"));
+    }
+
+    fn assert_rejection_field(form: &ProjectForm, email: bool, expected: serde_json::Value) {
+        let Err(ServerFnError::ServerError { code, details, .. }) =
+            validate_project_form(form, "EUR", email)
+        else {
+            panic!("Expected a field rejection for {expected}");
+        };
+        assert_eq!(code, BAD_REQUEST);
+        assert_eq!(details, Some(serde_json::json!({ "field": expected })));
+    }
+
+    #[test]
+    fn inactive_billing_inputs_remain_in_the_draft_without_blocking_creation() {
+        for project_type in [ProjectType::NonBillable, ProjectType::TimeAndMaterials] {
+            let form = ProjectForm {
+                name: "Valid project".into(),
+                project_type,
+                project_rate: "unfinished".into(),
+                fee_amount: "unfinished".into(),
+                budget_value: "unfinished".into(),
+                budget_alert: true,
+                budget_alert_at: "unfinished".into(),
+                ..Default::default()
+            };
+            let validated = validate_project_form(&form, "EUR", false).unwrap();
+            assert!(validated.rate_cents.is_none());
+            assert!(validated.budget_cents.is_none());
+            assert!(validated.budget_minutes.is_none());
+            assert!(validated.fee.is_none());
+            assert_eq!(form.project_rate, "unfinished");
+            assert_eq!(form.fee_amount, "unfinished");
+        }
+    }
 
     #[test]
     fn basic_rejections_identify_the_field_without_echoing_input() {

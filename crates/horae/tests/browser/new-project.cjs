@@ -41,6 +41,29 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
   const screen = page.locator('.np-page');
   const draftStatus = screen.locator('header').getByRole('status');
   const saved = () => expect(draftStatus).toContainText('Draft saved at');
+  const rejectField = async (field, errorId) => {
+    await saved();
+    await screen.getByRole('button', { name: 'Save project', exact: true }).focus();
+    await page.keyboard.press('Enter');
+    await expect(draftStatus).toHaveText('Changes need attention');
+    await expect(field).toHaveAttribute('aria-invalid', 'true');
+    await expect(field).toHaveAttribute('aria-describedby', errorId);
+    await expect(field).toBeFocused();
+    const message = screen.locator(`#${errorId}`);
+    await expect(message).toHaveText(await screen.locator('#np-form-error-message').innerText());
+    const footer = await screen.locator('.np-footer').boundingBox();
+    for (const item of [field, message]) {
+      const box = await item.boundingBox();
+      assert.ok(box.y >= 0 && box.y + box.height <= footer.y, 'Rejected control and its message remain above actions');
+    }
+  };
+  const retryValidation = async () => {
+    await screen.getByRole('button', { name: 'Retry request', exact: true }).focus();
+    await page.keyboard.press('Enter');
+    await saved();
+    await expect(screen.locator('[aria-invalid="true"]')).toHaveCount(0);
+    await expect(page).toHaveURL(`${base}/projects/new`);
+  };
   const chooseField = async (id, label, option) => {
     const trigger = screen.locator(`#${id}`);
     assert.equal(await trigger.evaluate(node => node.tagName), 'BUTTON', `${label} uses the shared selector`);
@@ -664,6 +687,52 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     assert.equal(draftWrites, writesBeforeFailedResume, 'Resuming after failure must not rewrite the acknowledged draft');
     console.log('PASS: failed resume and retry preserve the existing draft without a replacement write');
 
+    for (const width of [390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const [id, invalid] of [['np-project-rate', ''], ['np-project-rate', '1.001'], ['np-budget-value', 'unfinished']]) {
+        const field = screen.locator(`#${id}`), original = await field.inputValue();
+        await field.fill(invalid);
+        await rejectField(field, 'np-billing-field-error');
+        await expect(field).toHaveValue(invalid);
+        await field.fill(original);
+        await retryValidation();
+      }
+      await chooseField('np-budget-mode', 'Budget', 'Total project fees');
+      const budget = screen.locator('#np-budget-value'), original = await budget.inputValue();
+      await budget.fill('-1');
+      await rejectField(budget, 'np-billing-field-error');
+      await budget.fill(original);
+      await retryValidation();
+      await chooseField('np-budget-mode', 'Budget', 'Total project hours');
+    }
+    console.log('PASS: invalid hourly rates and hour/fee budgets retain input and focus their error at three widths');
+
+    await saved();
+    await readsFinished(page);
+    await screen.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(page).toHaveURL(`${base}/projects`);
+    // The editor saw mail configured; the real isolated server has it disabled.
+    // This models configuration disappearing before finalization, without sending mail.
+    await page.route('**/api/project_creation_options*', async route => {
+      const response = await route.fetch();
+      await route.fulfill({ response, json: { ...await response.json(), email_available: true } });
+    });
+    await page.getByRole('link', { name: 'New project', exact: true }).click();
+    const emailAlert = screen.locator('#np-budget-alert');
+    await expect(emailAlert).toBeEnabled();
+    await readsFinished(page);
+    await page.unroute('**/api/project_creation_options*');
+    await emailAlert.click();
+    await rejectField(emailAlert, 'np-billing-field-error');
+    await expect(emailAlert).toBeEnabled();
+    await emailAlert.click();
+    await retryValidation();
+    await screen.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(page).toHaveURL(`${base}/projects`);
+    await page.getByRole('link', { name: 'New project', exact: true }).click();
+    await expect(emailAlert).toBeDisabled();
+    console.log('PASS: a stale email configuration rejection can be corrected without sending mail');
+
     const wideTag = 'W'.repeat(50);
     await tagInput.fill(wideTag);
     await tagInput.press('Enter');
@@ -798,7 +867,21 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await screen.getByRole('radio', { name: 'Monthly', exact: true }).check();
     await fieldWidth('np-monthly-day', 200);
     await chooseField('np-monthly-day', 'Monthly invoice day', 'Last day of the month');
+    for (const width of [390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const mode of ['Single fee', 'Monthly']) {
+        await screen.getByRole('radio', { name: mode, exact: true }).check();
+        const fee = screen.locator('#np-fee-amount');
+        await fee.fill(mode === 'Single fee' ? '' : '-1');
+        await rejectField(fee, 'np-billing-field-error');
+        await fee.fill('100');
+        await retryValidation();
+      }
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
     await screen.getByRole('radio', { name: 'Milestones', exact: true }).check();
+    await rejectField(screen.locator('#np-add-milestone'), 'np-billing-field-error');
+    await retryValidation();
     await screen.getByRole('button', { name: 'Add milestone', exact: true }).click();
     await screen.getByLabel('Milestone name', { exact: true }).fill('Delivery');
     await screen.getByLabel('Due date', { exact: true }).fill('2026-10-01');
@@ -843,6 +926,27 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
         await milestoneRow.screenshot({ path: `${process.env.HORAE_TEST_SCREENSHOT_DIR}/new-project-milestone-${width}.png` });
       }
     }
+    const secondRow = screen.locator('.np-milestone-row').nth(1);
+    const secondName = secondRow.getByLabel('Milestone name', { exact: true });
+    const secondDate = secondRow.getByLabel('Due date', { exact: true });
+    const secondAmount = secondRow.getByLabel('Amount (EUR)', { exact: true });
+    const secondId = (await secondName.getAttribute('id')).replace('np-milestone-name-', '');
+    await secondDate.fill('2026-10-02');
+    for (const width of [390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const [field, invalid, corrected] of [[secondName, '', 'Supplement'], [secondDate, '', '2026-10-02'], [secondAmount, '1.001', '0.75']]) {
+        await field.fill(invalid);
+        await rejectField(field, `np-milestone-error-${secondId}`);
+        await expect(field).toHaveValue(invalid);
+        await expect(milestoneAmount).toHaveValue('1000.25');
+        await field.fill(corrected);
+        await retryValidation();
+      }
+    }
+    await secondName.fill('');
+    await secondDate.fill('');
+    await saved();
+    console.log('PASS: single/monthly fees, empty schedules and individual milestone errors recover without changing another row');
     await extraMilestone.getByRole('button', { name: 'Remove milestone', exact: true }).focus();
     await page.keyboard.press('Enter');
     await expect(screen.getByRole('button', { name: 'Add milestone', exact: true })).toBeFocused();
