@@ -111,6 +111,7 @@ pub(super) async fn entries(
 pub(super) async fn projects(
     pool: &PgPool,
     org_id: Uuid,
+    viewer_id: Uuid,
     scope: &str,
 ) -> Result<Vec<ProjectExportRow>, StatusCode> {
     let mut tx = begin(pool).await?;
@@ -122,19 +123,21 @@ pub(super) async fn projects(
                     octet_length(name), octet_length(currency))), 0) as "field_bytes!"
            FROM (SELECT c.name client_name, p.code, p.name, p.currency
                  FROM projects p JOIN clients c ON c.id = p.client_id
-                 WHERE p.org_id = $1 AND CASE $2
+                 JOIN project_read_access access ON access.project_id = p.id AND access.org_id = p.org_id
+                 WHERE p.org_id = $1 AND access.user_id = $4 AND access.can_view_progress AND CASE $2
                    WHEN 'budgeted' THEN p.active AND p.budget_kind <> 'none'
                    WHEN 'archived' THEN NOT p.active ELSE p.active END
                  LIMIT $3) bounded"#,
         org_id,
         scope,
         XLSX.rows + 1,
+        viewer_id,
     )
     .fetch_one(&mut *tx)
     .await
     .map_err(database_error)?;
     check(size.rows, size.bytes, size.field_bytes, XLSX)?;
-    let rows = super::fetch_projects_export(&mut *tx, org_id, scope)
+    let rows = super::fetch_projects_export(&mut *tx, org_id, viewer_id, scope)
         .await
         .map_err(database_error)?;
     tx.commit().await.map_err(database_error)?;
@@ -399,18 +402,20 @@ mod tests {
         let keys: Vec<_> = (0..=XLSX.rows).map(|_| Uuid::now_v7()).collect();
         sqlx::query!("INSERT INTO projects (id, org_id, client_id, name, currency, active) SELECT id, $2, $3, 'Archived', 'EUR', false FROM unnest($1::uuid[]) id", &keys, ids.org_id, ids.client_id).execute(&pool).await.unwrap();
         for scope in ["active", "unknown"] {
-            let rows = projects(&pool, ids.org_id, scope).await.unwrap();
+            let rows = projects(&pool, ids.org_id, ids.user_id, scope)
+                .await
+                .unwrap();
             assert_eq!(rows.len(), 1);
             assert_eq!(rows[0].name, "Widget");
         }
         assert!(
-            projects(&pool, ids.org_id, "budgeted")
+            projects(&pool, ids.org_id, ids.user_id, "budgeted")
                 .await
                 .unwrap()
                 .is_empty()
         );
         assert!(matches!(
-            projects(&pool, ids.org_id, "archived").await,
+            projects(&pool, ids.org_id, ids.user_id, "archived").await,
             Err(StatusCode::PAYLOAD_TOO_LARGE)
         ));
         sqlx::query!(
@@ -421,7 +426,10 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(
-            projects(&pool, ids.org_id, "budgeted").await.unwrap().len(),
+            projects(&pool, ids.org_id, ids.user_id, "budgeted")
+                .await
+                .unwrap()
+                .len(),
             1
         );
         sqlx::query!(
@@ -432,7 +440,7 @@ mod tests {
         .await
         .unwrap();
         assert!(matches!(
-            projects(&pool, ids.org_id, "active").await,
+            projects(&pool, ids.org_id, ids.user_id, "active").await,
             Err(StatusCode::PAYLOAD_TOO_LARGE)
         ));
     }
@@ -587,7 +595,9 @@ mod tests {
         assert_cell(&xml, "E2", "1");
         assert_cell(&xml, "F2", "0");
         assert!(xlsx_part(&sheet, "xl/sharedStrings.xml").contains("Café &lt;&amp;&gt;"));
-        let rows = projects(&pool, ids.org_id, "active").await.unwrap();
+        let rows = projects(&pool, ids.org_id, ids.user_id, "active")
+            .await
+            .unwrap();
         let sheet = super::super::projects_xlsx(&rows).unwrap();
         assert!(xlsx_part(&sheet, "xl/sharedStrings.xml").contains("Widget"));
         let (invoice, lines) = invoice(&pool, ids.org_id, id).await.unwrap();

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT p.id, p.name, p.code, p.project_type::text AS \"project_type!: String\", p.active,\n         p.budget_kind::text AS \"budget_kind!: String\", p.budget_amount_cents, p.budget_minutes,\n         p.starts_on as \"starts_on: chrono::NaiveDate\",\n         p.ends_on as \"ends_on: chrono::NaiveDate\",\n         p.created_at as \"created_at: chrono::DateTime<chrono::Utc>\",\n         p.client_id, c.name AS client_name\n         FROM projects p\n         JOIN clients c ON c.id = p.client_id\n         WHERE p.id = $1 AND p.org_id = $2",
+  "query": "SELECT p.id, p.name, p.code, p.project_type::text AS \"project_type!: String\", p.active,\n         p.budget_kind::text AS \"budget_kind!: String\", p.budget_amount_cents, p.budget_minutes,\n         p.starts_on as \"starts_on: chrono::NaiveDate\",\n         p.ends_on as \"ends_on: chrono::NaiveDate\",\n         p.created_at as \"created_at: chrono::DateTime<chrono::Utc>\",\n         p.client_id, c.name AS client_name\n         FROM projects p\n         JOIN clients c ON c.id = p.client_id\n         JOIN project_read_access access ON access.project_id = p.id AND access.org_id = p.org_id\n         WHERE p.org_id = $1 AND access.user_id = $7 AND access.can_view_progress\n           AND ($2::bool IS NULL OR p.active = $2)\n           AND ($3::uuid IS NULL OR p.client_id = $3)\n           AND ($4::timestamptz IS NULL OR p.created_at >= $4::timestamptz)\n         ORDER BY p.name, p.id\n         LIMIT $5 OFFSET $6",
   "describe": {
     "columns": [
       {
@@ -72,6 +72,11 @@
     "parameters": {
       "Left": [
         "Uuid",
+        "Bool",
+        "Uuid",
+        "Timestamptz",
+        "Int8",
+        "Int8",
         "Uuid"
       ]
     },
@@ -91,5 +96,5 @@
       false
     ]
   },
-  "hash": "17f30685cbbab47d7c80c982432679c7c22d894366c1d911689025dec17c0e3a"
+  "hash": "4c92eb5086da295966079d26e562d2aa5258f834b5655c7aed292e32b179be1c"
 }

@@ -124,6 +124,15 @@ async fn streamed_timesheet_exceeds_xlsx_row_limit_without_one_large_body_chunk(
 #[serial_test::serial]
 async fn streamed_projects_preserve_scope_budget_and_tenant_isolation(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
+    sqlx::query!(
+        "INSERT INTO assignments (id,project_id,user_id) VALUES ($1,$2,$3)",
+        Uuid::now_v7(),
+        ids.project_id,
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     let _other = seed(&pool, OrgRole::Member).await;
     sqlx::query!("UPDATE projects SET code = 'A,B', budget_kind = 'hours', budget_minutes = 90 WHERE id = $1",
         ids.project_id).execute(&pool).await.unwrap();
@@ -131,6 +140,7 @@ async fn streamed_projects_preserve_scope_budget_and_tenant_isolation(pool: PgPo
         let result = projects(
             pool.clone(),
             ids.org_id,
+            ids.user_id,
             ProjectsExportParams {
                 scope: scope.map(str::to_owned),
             },
@@ -152,15 +162,17 @@ async fn streamed_projects_preserve_scope_budget_and_tenant_isolation(pool: PgPo
         assert_eq!(&rows[0][2], "Widget");
         assert_eq!(&rows[0][4], "EUR");
         assert_eq!(&rows[0][6], "Active");
-        let expected = super::super::fetch_projects_export(&pool, ids.org_id, "active")
-            .await
-            .unwrap();
+        let expected =
+            super::super::fetch_projects_export(&pool, ids.org_id, ids.user_id, "active")
+                .await
+                .unwrap();
         assert_eq!(&rows[0][5], &super::super::budget_cell(&expected[0]));
     }
     let bytes = body(
         projects(
             pool,
             ids.org_id,
+            ids.user_id,
             ProjectsExportParams {
                 scope: Some("archived".to_owned()),
             },

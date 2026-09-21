@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE project_settings SET report_visibility = 'project_members' WHERE project_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f94b5411b60c5cb934d9d7be833f199687fc51aeb4b1b95af9a72dc9243c547d"
+}

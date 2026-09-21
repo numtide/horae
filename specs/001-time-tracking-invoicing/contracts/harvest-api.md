@@ -38,6 +38,7 @@ pages with `422`. Horae intentionally retains its numbered-page contract.
 | Catalog filters | `is_active`; projects also accept `client_id` | See timestamp exceptions below |
 | Unknown query parameters | Ignored by queries but retained in pagination links | Retaining a parameter does not mean its filter is supported; `cursor` is also ignored |
 | Time-entry access | Members read only their own entries; managers/admins read the organization | Manager access follows Horae's policy, not Harvest's assigned-team/project scope |
+| Project access | List, count and detail require project-progress access; managers/admins retain organization scope | Ordinary assigned members require member-visible progress; project leads/admins can read their assigned progress. Hidden projects return `404` on detail and do not enter pagination counts |
 | User access | `/users` requires manager/admin; `/users/me` returns the signed-in user | No member listing of teammates' rates |
 | Update timestamps | Time entries use real `updated_at`; projects/clients use `created_at` | Catalog incremental synchronization cannot detect all edits |
 | Task/user `updated_since` | Accepted but ignored | Tasks have empty timestamps; users emit creation time as update time |
@@ -170,6 +171,11 @@ caller's organization or outside the member's own entries.
 
 Returns a paginated collection under the `projects` key. Ordered by `name`, then `id`.
 
+Only projects whose progress the current active user can read are included, in both
+the collection and its count. Missing settings preserve assigned legacy-member
+access. A historical own time entry alone does not grant project-wide progress;
+its minimal project identity remains available in the time-entry response.
+
 Query parameters (all optional):
 
 1. `is_active` — boolean; filter by active state.
@@ -181,7 +187,9 @@ Query parameters (all optional):
 
 ### `GET /harvest/v2/projects/{id}`
 
-Returns a single `HarvestProject` by UUID, or `404` if not found.
+Returns a single `HarvestProject` by UUID, or `404` if missing, foreign or outside
+the caller's project-progress access. It does not grant hourly-rate or private-note
+access to members or project leads.
 
 ### `GET /harvest/v2/clients`
 

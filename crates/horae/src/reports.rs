@@ -16,6 +16,9 @@ mod bounded;
 mod limits;
 mod streaming;
 
+#[cfg(test)]
+mod privacy_tests;
+
 /// `login_redirect_guard` lets `/api/` through, because everything else there is
 /// a server function that checks its own session. These handlers must too. The
 /// `active` check is what revokes a deactivated user's still-live session
@@ -292,9 +295,10 @@ fn budget_cell(r: &ProjectExportRow) -> String {
 async fn fetch_projects_export<'e>(
     executor: impl sqlx::PgExecutor<'e> + 'e,
     org_id: uuid::Uuid,
+    viewer_id: uuid::Uuid,
     scope: &'e str,
 ) -> Result<Vec<ProjectExportRow>, sqlx::Error> {
-    stream_projects_export(executor, org_id, scope)
+    stream_projects_export(executor, org_id, viewer_id, scope)
         .try_collect()
         .await
 }
@@ -302,6 +306,7 @@ async fn fetch_projects_export<'e>(
 fn stream_projects_export<'e>(
     executor: impl sqlx::PgExecutor<'e> + 'e,
     org_id: uuid::Uuid,
+    viewer_id: uuid::Uuid,
     scope: &'e str,
 ) -> impl Stream<Item = Result<ProjectExportRow, sqlx::Error>> + 'e {
     sqlx::query_as!(
@@ -313,12 +318,14 @@ fn stream_projects_export<'e>(
                   p.budget_amount_cents, p.budget_minutes, p.active
            FROM projects p
            JOIN clients c ON c.id = p.client_id
-           WHERE p.org_id = $1 AND CASE $2
+           JOIN project_read_access access ON access.project_id = p.id AND access.org_id = p.org_id
+           WHERE p.org_id = $1 AND access.user_id = $3 AND access.can_view_progress AND CASE $2
              WHEN 'budgeted' THEN p.active AND p.budget_kind <> 'none'
              WHEN 'archived' THEN NOT p.active ELSE p.active END
            ORDER BY c.name, p.name, p.id"#,
         org_id,
         scope,
+        viewer_id,
     )
     .fetch(executor)
 }
@@ -331,22 +338,22 @@ pub async fn export_projects_csv(
     session: Session,
     Query(params): Query<ProjectsExportParams>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let (_, org_id) = require_session(&session).await?;
+    let (viewer_id, org_id) = require_session(&session).await?;
 
     let state = crate::state::global_state().await;
-    streaming::projects(state.db.clone(), org_id, params).await
+    streaming::projects(state.db.clone(), org_id, viewer_id, params).await
 }
 
 pub async fn export_projects_xlsx(
     session: Session,
     Query(params): Query<ProjectsExportParams>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let (_, org_id) = require_session(&session).await?;
+    let (viewer_id, org_id) = require_session(&session).await?;
     let permit = bounded::ExportPermit::acquire()?;
 
     let scope = params.scope.as_deref().unwrap_or("active");
     let state = crate::state::global_state().await;
-    let rows = limits::projects(&state.db, org_id, scope).await?;
+    let rows = limits::projects(&state.db, org_id, viewer_id, scope).await?;
 
     let data = permit.render(move || projects_xlsx(&rows)).await?;
 

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT c.name as client_name, p.code, p.name,\n                  p.project_type as \"project_type: horae_core::types::ProjectType\",\n                  p.currency,\n                  p.budget_kind as \"budget_kind: horae_core::types::BudgetKind\",\n                  p.budget_amount_cents, p.budget_minutes, p.active\n           FROM projects p\n           JOIN clients c ON c.id = p.client_id\n           WHERE p.org_id = $1 AND CASE $2\n             WHEN 'budgeted' THEN p.active AND p.budget_kind <> 'none'\n             WHEN 'archived' THEN NOT p.active ELSE p.active END\n           ORDER BY c.name, p.name, p.id",
+  "query": "SELECT c.name as client_name, p.code, p.name,\n                  p.project_type as \"project_type: horae_core::types::ProjectType\",\n                  p.currency,\n                  p.budget_kind as \"budget_kind: horae_core::types::BudgetKind\",\n                  p.budget_amount_cents, p.budget_minutes, p.active\n           FROM projects p\n           JOIN clients c ON c.id = p.client_id\n           JOIN project_read_access access ON access.project_id = p.id AND access.org_id = p.org_id\n           WHERE p.org_id = $1 AND access.user_id = $3 AND access.can_view_progress AND CASE $2\n             WHEN 'budgeted' THEN p.active AND p.budget_kind <> 'none'\n             WHEN 'archived' THEN NOT p.active ELSE p.active END\n           ORDER BY c.name, p.name, p.id",
   "describe": {
     "columns": [
       {
@@ -75,7 +75,8 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Text"
+        "Text",
+        "Uuid"
       ]
     },
     "nullable": [
@@ -90,5 +91,5 @@
       false
     ]
   },
-  "hash": "dc03796df08627ae6d719d61767ff15b49d2a153b01d604f5cb1526c031e6e96"
+  "hash": "57eb29df6705504900787fc8be1822e540c26e0293a5fe2b03b3d5dc403e25de"
 }

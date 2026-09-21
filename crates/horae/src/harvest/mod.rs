@@ -524,7 +524,8 @@ async fn list_projects(
 
     let total = sqlx::query_scalar!(
         "SELECT COUNT(*) FROM projects p
-         WHERE p.org_id = $1
+         JOIN project_read_access access ON access.project_id = p.id AND access.org_id = p.org_id
+         WHERE p.org_id = $1 AND access.user_id = $5 AND access.can_view_progress
            AND ($2::bool IS NULL OR p.active = $2)
            AND ($3::uuid IS NULL OR p.client_id = $3)
            AND ($4::timestamptz IS NULL OR p.created_at >= $4::timestamptz)",
@@ -532,6 +533,7 @@ async fn list_projects(
         filters.is_active,
         filters.client_id,
         filters.updated_since as Option<DateTime<Utc>>,
+        user.user_id,
     )
     .fetch_one(&db)
     .await
@@ -548,7 +550,8 @@ async fn list_projects(
          p.client_id, c.name AS client_name
          FROM projects p
          JOIN clients c ON c.id = p.client_id
-         WHERE p.org_id = $1
+         JOIN project_read_access access ON access.project_id = p.id AND access.org_id = p.org_id
+         WHERE p.org_id = $1 AND access.user_id = $7 AND access.can_view_progress
            AND ($2::bool IS NULL OR p.active = $2)
            AND ($3::uuid IS NULL OR p.client_id = $3)
            AND ($4::timestamptz IS NULL OR p.created_at >= $4::timestamptz)
@@ -560,6 +563,7 @@ async fn list_projects(
         filters.updated_since as Option<DateTime<Utc>>,
         per_page,
         offset,
+        user.user_id,
     )
     .fetch_all(&db)
     .await
@@ -595,9 +599,11 @@ async fn get_project(
          p.client_id, c.name AS client_name
          FROM projects p
          JOIN clients c ON c.id = p.client_id
-         WHERE p.id = $1 AND p.org_id = $2"#,
+         JOIN project_read_access access ON access.project_id = p.id AND access.org_id = p.org_id
+         WHERE p.id = $1 AND p.org_id = $2 AND access.user_id = $3 AND access.can_view_progress"#,
         id,
         user.org_id,
+        user.user_id,
     )
     .fetch_optional(&db)
     .await

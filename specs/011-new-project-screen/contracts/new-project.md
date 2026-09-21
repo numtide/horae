@@ -53,6 +53,8 @@ Timesheet and Timer use separate rate-free `list_tracking_projects`/`list_tracki
 
 Count, pagination, export and detail queries use the same authorization projection. Do not add private fields to plugin payloads/granted tables. Existing organization-report manager gate remains.
 
+Project CSV and XLSX exports require `can_view_progress` just like Projects. XLSX size/count checks apply that filter before limits and share their existing read-only repeatable-read transaction with the payload query. Harvest project counts, pages and detail use the same view; unavailable detail is 404. Own time-entry project identities remain readable without granting project-wide budget access.
+
 ## Billing and downstream invariants
 
 Missing settings preserves all legacy rates/amounts. New selected modes have parity across Rust/SQL, project spend, reports, invoice preparation and compatibility exports. Zero is not absent; currency mismatch is not conversion.

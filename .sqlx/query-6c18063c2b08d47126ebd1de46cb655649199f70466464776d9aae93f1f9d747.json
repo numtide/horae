@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO project_settings (id, org_id, project_id, creator_id, rate_mode) VALUES ($1,$2,$3,$4,'project')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6c18063c2b08d47126ebd1de46cb655649199f70466464776d9aae93f1f9d747"
+}

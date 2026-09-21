@@ -153,6 +153,7 @@ pub(super) async fn entries(
 pub(super) async fn projects(
     pool: PgPool,
     org_id: Uuid,
+    viewer_id: Uuid,
     params: ProjectsExportParams,
 ) -> Result<Response, StatusCode> {
     response(
@@ -169,6 +170,7 @@ pub(super) async fn projects(
                 super::stream_projects_export(
                     &mut *tx,
                     org_id,
+                    viewer_id,
                     params.scope.as_deref().unwrap_or("active"),
                 ),
                 &super::PROJECT_EXPORT_HEADERS,
