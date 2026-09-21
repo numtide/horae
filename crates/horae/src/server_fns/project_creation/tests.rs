@@ -871,7 +871,16 @@ async fn draft_ownership_discard_and_role_changes_are_enforced(pool: PgPool) {
     let other = seed(&pool, OrgRole::Admin).await;
     let id = Uuid::now_v7();
     let form = ProjectForm {
+        client_id: Some(owner.client_id),
+        name: "Private configuration".into(),
         admin_notes: "Confidential".into(),
+        team: vec![ProjectMemberInput {
+            user_id: owner.user_id,
+            manager: true,
+            billable_rate: String::new(),
+            cost_rate: "62.25".into(),
+            budget: String::new(),
+        }],
         ..Default::default()
     };
     assert!(
@@ -910,6 +919,36 @@ async fn draft_ownership_discard_and_role_changes_are_enforced(pool: PgPool) {
         .unwrap()
         .unwrap();
     assert!(draft.form.admin_notes.is_empty());
+    assert!(draft.form.team[0].cost_rate.is_empty());
+    let payload = serde_json::to_string(&draft).unwrap();
+    assert!(!payload.contains("Confidential"));
+    assert!(!payload.contains("62.25"));
+    for result in [
+        super::save_draft_record(&pool, owner.user_id, owner.org_id, id, 1, &form)
+            .await
+            .map(|_| ()),
+        super::finalize_draft_record(&pool, owner.user_id, owner.org_id, id, 1, &form, false)
+            .await
+            .map(|_| ()),
+    ] {
+        assert!(matches!(
+            result,
+            Err(super::ServerFnError::ServerError {
+                code: super::FORBIDDEN,
+                ..
+            })
+        ));
+    }
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM projects WHERE org_id = $1",
+            owner.org_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(1),
+    );
     assert!(
         super::discard_draft_record(&pool, owner.user_id, owner.org_id, id, 2)
             .await

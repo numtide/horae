@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users SET org_role = 'admin', active = false WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "68f2374445fab308bd7ccd186ef6fbe9597dfcae9a6547eb73aabdcdcabb32ea"
+}

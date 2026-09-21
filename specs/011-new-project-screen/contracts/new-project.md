@@ -57,6 +57,8 @@ Project CSV and XLSX exports require `can_view_progress` just like Projects. XLS
 
 UI task reads and Harvest task counts/pages/detail share `task_read_access`: active organization managers/admins see the catalog; members see assigned-project tasks and their own historical task identities. Task identity does not grant tracking access. Member task rates are omitted. Harvest time-entry queries revalidate the current active actor, even if the supplied role is stale. Entries omit `budgeted` without progress access, omit member financial rates, and expose project cost overrides only to administrators. Managers retain legacy profile costs only when no project override exists; an inaccessible override is not replaced with a fabricated fallback.
 
+Grouped reports resolve organization and manager/admin authority from the current active viewer ID. A manager's group containing any project cost override omits `cost_cents` altogether; it does not expose the override, substitute a profile rate or return a partial cost. Other groups retain their legacy costs, while administrators see exact effective totals. The UI labels missing group/grand-total costs `Restricted`; billing amounts and worked hours remain available. Detailed time CSV/XLSX exports contain no cost fields.
+
 ## Billing and downstream invariants
 
 Missing settings preserves all legacy rates/amounts. New selected modes have parity across Rust/SQL, project spend, reports, invoice preparation and compatibility exports. Zero is not absent; currency mismatch is not conversion.

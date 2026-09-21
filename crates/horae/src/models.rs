@@ -45,7 +45,9 @@ pub struct ReportRow {
     pub billable_minutes: i64,
     /// Billing is partitioned by currency; cost has its own organization currency.
     pub billable_cents: i64,
-    pub cost_cents: i64,
+    /// Absent if any entry in the group has an administrator-only cost override.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cost_cents: Option<i64>,
     pub currency: String,
     pub cost_currency: String,
 }

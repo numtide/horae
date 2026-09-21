@@ -4,7 +4,7 @@ use sqlx::PgPool;
 
 #[sqlx::test(migrations = "./migrations")]
 async fn configured_project_currency_and_cost_override_keep_their_denominations(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, OrgRole::Admin).await;
     time_entry(&pool, &ids, EntryState::Open).await;
     sqlx::query!(
         "INSERT INTO assignments (id,project_id,user_id,role) VALUES ($1,$2,$3,'lead')",
@@ -39,7 +39,7 @@ async fn configured_project_currency_and_cost_override_keep_their_denominations(
         .unwrap();
     let report = crate::server_fns::reports::fetch_report(
         &pool,
-        ids.org_id,
+        ids.user_id,
         (day, day),
         "project",
         None,
@@ -62,7 +62,7 @@ async fn configured_project_currency_and_cost_override_keep_their_denominations(
             report[0].cost_currency.as_str(),
             report[0].cost_cents
         ),
-        ("USD", 6000, "EUR", 1500)
+        ("USD", 6000, "EUR", Some(1500))
     );
 }
 
@@ -90,7 +90,7 @@ async fn configured_fixed_fee_hours_are_not_invoiced_but_legacy_fees_are_unchang
                 .unwrap();
         let report = crate::server_fns::reports::fetch_report(
             &pool,
-            ids.org_id,
+            ids.user_id,
             (day, day),
             "project",
             None,
@@ -268,7 +268,7 @@ async fn selected_project_rate_modes_agree_across_billing_consumers(pool: PgPool
         let day = "2026-09-07".parse().unwrap();
         let report = crate::server_fns::reports::fetch_report(
             &pool,
-            ids.org_id,
+            ids.user_id,
             (day, day),
             "project",
             None,
@@ -334,7 +334,7 @@ async fn billing_cascade_agrees_across_all_four_levels_including_zero(pool: PgPo
         let day = "2026-09-07".parse().unwrap();
         let report = crate::server_fns::reports::fetch_report(
             &pool,
-            ids.org_id,
+            ids.user_id,
             (day, day),
             "project",
             None,
@@ -389,7 +389,7 @@ async fn project_rate_is_used_by_invoices_reports_and_spend(pool: PgPool) {
     assert_eq!(invoice.invoice.total_cents, 6000);
     let report = crate::server_fns::reports::fetch_report(
         &pool,
-        ids.org_id,
+        ids.user_id,
         (day, day),
         "project",
         None,
@@ -429,7 +429,7 @@ async fn invoiced_amounts_survive_rate_changes_and_void_uses_current_rates(pool:
     .unwrap();
     let report = crate::server_fns::reports::fetch_report(
         &pool,
-        ids.org_id,
+        ids.user_id,
         (day, day),
         "project",
         None,
@@ -484,7 +484,7 @@ async fn non_billable_context_produces_no_unbilled_amount_on_any_report(pool: Pg
         let day = "2026-09-07".parse().unwrap();
         let report = crate::server_fns::reports::fetch_report(
             &pool,
-            ids.org_id,
+            ids.user_id,
             (day, day),
             "project",
             None,
@@ -543,7 +543,7 @@ async fn invoiced_billability_survives_later_project_changes(pool: PgPool) {
     .unwrap();
     let report = crate::server_fns::reports::fetch_report(
         &pool,
-        ids.org_id,
+        ids.user_id,
         (day, day),
         "project",
         None,
@@ -639,7 +639,7 @@ async fn large_invoice_and_reports_agree_without_intermediate_overflow(pool: PgP
         .unwrap();
     let report = crate::server_fns::reports::fetch_report(
         &pool,
-        ids.org_id,
+        ids.user_id,
         (day, day),
         "project",
         None,
@@ -664,7 +664,7 @@ async fn large_invoice_and_reports_agree_without_intermediate_overflow(pool: PgP
     time_entry(&pool, &ids, EntryState::Open).await;
     let report_error = crate::server_fns::reports::fetch_report(
         &pool,
-        ids.org_id,
+        ids.user_id,
         (day, day),
         "project",
         None,
@@ -773,7 +773,7 @@ async fn assert_reporting_minutes(
     let day = "2026-09-07".parse().unwrap();
     let report = crate::server_fns::reports::fetch_report(
         pool,
-        ids.org_id,
+        ids.user_id,
         (day, day),
         "project",
         None,
@@ -795,7 +795,11 @@ async fn assert_reporting_minutes(
         report[0].total_minutes, 16,
         "worked minutes are not overwritten"
     );
-    assert_eq!(report[0].cost_cents, 1600, "labor cost uses worked minutes");
+    assert_eq!(
+        report[0].cost_cents,
+        Some(1600),
+        "labor cost uses worked minutes"
+    );
     let detail = crate::reports::fetch_entries(pool, ids.org_id, day, day, None, None, None)
         .await
         .unwrap();

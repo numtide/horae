@@ -63,7 +63,8 @@
 
 **Independent test**: Direct endpoint role matrix, task restrictions including races, archived-history edits and safe timer stop after revocation.
 
-- [ ] T031 [US4] Add failing task/team/admin-note/cost privacy tests in `crates/horae/src/server_fns/project_creation/tests.rs` and `crates/horae/src/server_fns/projects/tests.rs` (FR-006, FR-014–015).
+- [x] T031 [US4] Add failing task/team/admin-note/cost privacy tests in `crates/horae/src/server_fns/project_creation/tests.rs` and `crates/horae/src/server_fns/projects/tests.rs` (FR-006, FR-014–015).
+  - Creation/catalog and project/team read tests cover private notes/costs, role/tenant checks and rate-free member progress. The grouped report regression reproduced a manager reading the private override; report queries now revalidate current authority and omit restricted group costs without fabricating totals. Tests also cover a demoted creator's serialized draft and rejected save/finalize attempts containing private fields. Browser role verification remains T039.
 - [ ] T032 [US4] Implement atomic catalog task creation/association, task restriction and deduplicated project memberships in `crates/horae/src/server_fns/project_creation.rs`, without promoting org roles or editing profiles.
 - [x] T033 [US4] Add failing direct mutation restriction/race tests in `crates/horae/src/server_fns/time_entries/update_tests.rs`, preserving submission barriers and running-timer exit.
 - [x] T034 [US4] Enforce task restriction in new-entry context SQL and update/reschedule/reorder/delete guards in `crates/horae/src/server_fns/time_entries.rs` and the feature migration; preserve privileged import/approval authority.

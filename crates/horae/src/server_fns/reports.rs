@@ -31,7 +31,7 @@ pub async fn report_time(
 
     fetch_report(
         &state.db,
-        manager.org_id,
+        manager.id,
         (from_date, to_date),
         &group_by,
         client_filter,
@@ -45,7 +45,7 @@ pub async fn report_time(
 #[cfg(feature = "server")]
 pub(super) async fn fetch_report(
     pool: &sqlx::PgPool,
-    org_id: uuid::Uuid,
+    viewer_id: uuid::Uuid,
     period: (chrono::NaiveDate, chrono::NaiveDate),
     group_by: &str,
     client_filter: Option<uuid::Uuid>,
@@ -97,8 +97,11 @@ pub(super) async fn fetch_report(
                ) END, 0)
                  AS billable_rate_cents,
                line.amount_cents AS frozen_amount_cents,
-               COALESCE(mc.cost_rate_cents, u.cost_rate_cents, 0) AS cost_rate_cents
+               CASE WHEN viewer.org_role = 'admin' OR mc.id IS NULL
+                 THEN COALESCE(mc.cost_rate_cents, u.cost_rate_cents, 0) END AS cost_rate_cents
              FROM time_entries te
+             JOIN users viewer ON viewer.id = $6 AND viewer.org_id = te.org_id
+               AND viewer.active AND viewer.org_role IN ('admin', 'manager')
              JOIN projects p ON te.project_id = p.id
              LEFT JOIN project_settings ps ON ps.project_id = p.id
              JOIN clients c ON p.client_id = c.id
@@ -110,8 +113,7 @@ pub(super) async fn fetch_report(
              LEFT JOIN invoice_line_items line ON line.invoice_id = te.invoice_id AND line.time_entry_id = te.id
              LEFT JOIN invoices invoice ON invoice.id = te.invoice_id
              LEFT JOIN project_member_costs mc ON mc.project_id = te.project_id AND mc.user_id = te.user_id
-             WHERE te.org_id = $6
-               AND te.spent_date BETWEEN $1 AND $2
+             WHERE te.spent_date BETWEEN $1 AND $2
                AND ($3::uuid IS NULL OR p.client_id = $3)
                AND ($4::uuid IS NULL OR te.project_id = $4)
                AND ($5::uuid IS NULL OR te.user_id = $5)
@@ -127,7 +129,9 @@ pub(super) async fn fetch_report(
                SUM(COALESCE(frozen_amount_cents, line_amount_cents(billable_rate_cents, rounded_minutes)))
                  FILTER (WHERE billable),
                0)::bigint as "billable_cents!",
-             SUM(line_amount_cents(cost_rate_cents, minutes))::bigint as "cost_cents!",
+             -- A partial sum would invent a cost for a group containing private work.
+             CASE WHEN bool_and(cost_rate_cents IS NOT NULL)
+               THEN SUM(line_amount_cents(cost_rate_cents, minutes))::bigint END as "cost_cents?",
              currency as "currency!",
              cost_currency as "cost_currency!"
            FROM entry
@@ -140,7 +144,7 @@ pub(super) async fn fetch_report(
         client_filter,
         project_filter,
         user_filter,
-        org_id,
+        viewer_id,
         group_by,
     )
     .fetch_all(pool)

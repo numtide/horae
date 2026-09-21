@@ -213,10 +213,10 @@ ______________________________________________________________________
 
 | Function | Inputs | Output | Errors | Required role |
 |---|---|---|---|---|
-| `report_time` | `from: Date`, `to: Date`, `group_by: "project" \| "task" \| "client" \| "person"`, optional `client_id`, `project_id`, `user_id` | `Vec<ReportRow>` (`group_id`, `label`, `currency`, `total_minutes`, `rounded_minutes`, `billable_minutes`, `billable_cents`, `cost_cents`) | `ServerFnError` (`401`, `403`, `500`, invalid date/filter) | manager |
+| `report_time` | `from: Date`, `to: Date`, `group_by: "project" \| "task" \| "client" \| "person"`, optional `client_id`, `project_id`, `user_id` | `Vec<ReportRow>` (`group_id`, `label`, `currency`, `cost_currency`, `total_minutes`, `rounded_minutes`, `billable_minutes`, `billable_cents`, optional `cost_cents`) | `ServerFnError` (`401`, `403`, `500`, invalid date/filter) | manager |
 | `report_detailed` | `from: Date`, `to: Date`, optional `client_id`, `project_id`, `user_id` | `Vec<DetailedReportRow>` | `ServerFnError` (`401`, `403`, `500`, invalid date/filter) | manager |
 
-`report_time` groups by the selected entity's UUID and the client's currency,
+`report_time` groups by the selected entity's UUID and the billing currency,
 not by its display name. Each row has a non-null currency; one person or task
 working across currencies appears in separate rows. Names remain labels, so
 distinct entities with the same name are not merged. Unknown dimensions retain
@@ -224,6 +224,14 @@ the project fallback. Ordering is bytewise label, UUID, then bytewise currency.
 The UI keys rows by UUID and currency and does not sum monetary totals across
 currencies. A same-currency total exceeding the supported integer range is
 reported explicitly. This does not change currency authority or convert money.
+
+Billing currency comes from the attached invoice, configured project, or legacy
+client as appropriate. Costs retain the organization's separate `cost_currency`.
+The query resolves the active viewer's current organization and manager/admin role.
+If a manager's group contains a private project cost override, `cost_cents` is
+omitted rather than returning the override, a fallback or a partial sum. The UI
+shows `Restricted` for that row and its cost grand total. Administrators see the
+exact effective costs; managers retain legacy costs in groups without overrides.
 
 Export links (not `#[server]` functions):
 

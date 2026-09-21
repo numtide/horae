@@ -64,11 +64,178 @@ async fn entries(pool: &PgPool, ids: &SeedIds, rows: &[(i32, Option<i32>, bool)]
     }
 }
 
-async fn report(pool: &PgPool, org_id: Uuid, dimension: &str) -> Vec<ReportRow> {
+async fn report(pool: &PgPool, viewer_id: Uuid, dimension: &str) -> Vec<ReportRow> {
     let day = "2026-09-07".parse().unwrap();
-    fetch_report(pool, org_id, (day, day), dimension, None, None, None)
+    fetch_report(pool, viewer_id, (day, day), dimension, None, None, None)
         .await
         .unwrap()
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial]
+async fn manager_report_omits_groups_containing_private_project_costs(pool: PgPool) {
+    let (first, second) = fixtures(&pool, "EUR").await;
+    entries(&pool, &first, &[(60, None, true)]).await;
+    entries(&pool, &second, &[(60, None, true)]).await;
+    sqlx::query!(
+        "INSERT INTO assignments (id,project_id,user_id,role) VALUES ($1,$2,$3,'lead')",
+        Uuid::now_v7(),
+        first.project_id,
+        first.user_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO project_member_costs (id,org_id,project_id,user_id,cost_rate_cents) VALUES ($1,$2,$3,$4,7777)",
+        Uuid::now_v7(), first.org_id, first.project_id, first.user_id,
+    ).execute(&pool).await.unwrap();
+    let rows = report(&pool, first.user_id, "project").await;
+    let private = rows
+        .iter()
+        .find(|row| row.group_id == first.project_id)
+        .unwrap();
+    let public = rows
+        .iter()
+        .find(|row| row.group_id == second.project_id)
+        .unwrap();
+    let payload = serde_json::to_value(private).unwrap();
+    assert!(
+        payload.get("cost_cents").is_none(),
+        "private aggregate leaked: {payload}"
+    );
+    assert_eq!(payload["billable_cents"], 9000);
+    assert_eq!(payload["total_minutes"], 60);
+    assert_eq!(serde_json::to_value(public).unwrap()["cost_cents"], 6030);
+
+    // Combine a private and a legacy cost in one person group.
+    sqlx::query!(
+        "UPDATE time_entries SET user_id = $1 WHERE project_id = $2",
+        first.user_id,
+        second.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    for (dimension, private_id) in [
+        ("project", first.project_id),
+        ("client", first.client_id),
+        ("task", first.task_id),
+        ("person", first.user_id),
+    ] {
+        let rows = report(&pool, first.user_id, dimension).await;
+        let private = rows.iter().find(|row| row.group_id == private_id).unwrap();
+        assert_eq!(
+            private.cost_cents, None,
+            "{dimension} leaked a private or partial cost"
+        );
+    }
+    let rows = report(&pool, first.user_id, "person").await;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(
+        (rows[0].total_minutes, rows[0].billable_cents),
+        (120, 21000)
+    );
+
+    sqlx::query!(
+        "UPDATE users SET org_role = 'admin' WHERE id = $1",
+        first.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let rows = report(&pool, first.user_id, "person").await;
+    assert_eq!(rows[0].cost_cents, Some(13807));
+    sqlx::query!(
+        "UPDATE project_member_costs SET cost_rate_cents = 0 WHERE project_id = $1",
+        first.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let rows = report(&pool, first.user_id, "project").await;
+    assert_eq!(
+        rows.iter()
+            .find(|row| row.group_id == first.project_id)
+            .unwrap()
+            .cost_cents,
+        Some(0)
+    );
+
+    sqlx::query!(
+        "UPDATE users SET org_role = 'manager' WHERE id = $1",
+        first.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        report(&pool, first.user_id, "person").await[0].cost_cents,
+        None
+    );
+    sqlx::query!(
+        "DELETE FROM project_member_costs WHERE project_id = $1",
+        first.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        report(&pool, first.user_id, "person").await[0].cost_cents,
+        Some(12060)
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial]
+async fn report_uses_current_active_actor_and_tenant_for_every_filter(pool: PgPool) {
+    let first = seed(&pool, OrgRole::Manager).await;
+    let foreign = seed(&pool, OrgRole::Admin).await;
+    entries(&pool, &first, &[(60, None, true)]).await;
+    entries(&pool, &foreign, &[(120, None, true)]).await;
+    let day = "2026-09-07".parse().unwrap();
+    assert_eq!(report(&pool, first.user_id, "project").await.len(), 1);
+    assert_eq!(
+        report(&pool, foreign.user_id, "project").await[0].total_minutes,
+        120
+    );
+    for (client, project, user) in [
+        (Some(foreign.client_id), None, None),
+        (None, Some(foreign.project_id), None),
+        (None, None, Some(foreign.user_id)),
+    ] {
+        assert!(
+            fetch_report(
+                &pool,
+                first.user_id,
+                (day, day),
+                "project",
+                client,
+                project,
+                user
+            )
+            .await
+            .unwrap()
+            .is_empty()
+        );
+    }
+    assert!(report(&pool, Uuid::now_v7(), "project").await.is_empty());
+    sqlx::query!(
+        "UPDATE users SET org_role = 'member' WHERE id = $1",
+        first.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(report(&pool, first.user_id, "project").await.is_empty());
+    sqlx::query!(
+        "UPDATE users SET org_role = 'admin', active = false WHERE id = $1",
+        first.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(report(&pool, first.user_id, "project").await.is_empty());
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -88,7 +255,7 @@ async fn same_names_keep_separate_groups_for_every_dimension(pool: PgPool) {
     )
     .await;
     for dimension in ["project", "task", "client", "person", "unknown"] {
-        let rows = report(&pool, first.org_id, dimension).await;
+        let rows = report(&pool, first.user_id, dimension).await;
         assert_eq!(rows.len(), 2, "{dimension}: {rows:?}");
         assert_eq!(rows[0].label, rows[1].label);
         let mut expected_ids = match dimension {
@@ -115,7 +282,10 @@ async fn same_names_keep_separate_groups_for_every_dimension(pool: PgPool) {
         totals.sort();
         assert_eq!(
             totals,
-            [(26, 31, 31, 6200, 2614), (132, 130, 105, 15750, 13267)]
+            [
+                (26, 31, 31, 6200, Some(2614)),
+                (132, 130, 105, 15750, Some(13267))
+            ]
         );
     }
 }
@@ -132,7 +302,7 @@ async fn shared_person_and_task_are_partitioned_by_currency(pool: PgPool) {
     };
     entries(&pool, &cross, &[(60, None, true)]).await;
     for dimension in ["person", "task"] {
-        let rows = report(&pool, first.org_id, dimension).await;
+        let rows = report(&pool, first.user_id, dimension).await;
         assert_eq!(rows.len(), 2, "{dimension}: {rows:?}");
         assert_eq!(rows[0].group_id, rows[1].group_id);
         assert_eq!((&*rows[0].currency, &*rows[1].currency), ("EUR", "USD"));
@@ -166,7 +336,7 @@ async fn filters_and_renames_keep_report_identity_and_totals(pool: PgPool) {
     ] {
         let rows = fetch_report(
             &pool,
-            first.org_id,
+            first.user_id,
             (day, day),
             "project",
             client,
@@ -201,7 +371,7 @@ async fn filters_and_renames_keep_report_identity_and_totals(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    let rows = report(&pool, first.org_id, "project").await;
+    let rows = report(&pool, first.user_id, "project").await;
     assert_eq!(rows.len(), 2);
     assert_eq!(
         (&*rows[0].label, rows[0].group_id, rows[0].total_minutes),
@@ -215,7 +385,7 @@ async fn filters_and_renames_keep_report_identity_and_totals(pool: PgPool) {
     assert!(
         fetch_report(
             &pool,
-            first.org_id,
+            first.user_id,
             (outside, outside),
             "project",
             None,
