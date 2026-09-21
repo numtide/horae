@@ -58,6 +58,9 @@ pub struct ProjectDetails {
     pub code: Option<String>,
     pub client_name: String,
     pub currency: String,
+    /// Present only when this manager can supply rates for new task links.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task_rate_currency: Option<String>,
     pub starts_on: Option<NaiveDate>,
     pub ends_on: Option<NaiveDate>,
     pub tags: Vec<String>,

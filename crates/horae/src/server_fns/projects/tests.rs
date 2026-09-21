@@ -378,10 +378,11 @@ async fn enabling_tasks_rejects_invalid_or_wrong_currency_explicit_rates_without
 #[sqlx::test(migrations = "./migrations")]
 async fn enabling_tasks_rejects_explicit_rates_unused_by_the_project(pool: PgPool) {
     for (project_type, mode) in [
-        (ProjectType::TimeAndMaterials, "person"),
-        (ProjectType::TimeAndMaterials, "project"),
-        (ProjectType::FixedFee, "task"),
-        (ProjectType::NonBillable, "task"),
+        (ProjectType::TimeAndMaterials, Some("person")),
+        (ProjectType::TimeAndMaterials, Some("project")),
+        (ProjectType::FixedFee, Some("task")),
+        (ProjectType::NonBillable, Some("task")),
+        (ProjectType::NonBillable, None),
     ] {
         let ids = seed(&pool, OrgRole::Admin).await;
         sqlx::query!(
@@ -392,10 +393,12 @@ async fn enabling_tasks_rejects_explicit_rates_unused_by_the_project(pool: PgPoo
         .execute(&pool)
         .await
         .unwrap();
-        sqlx::query!(
+        if let Some(mode) = mode {
+            sqlx::query!(
             "INSERT INTO project_settings (id, org_id, project_id, creator_id, rate_mode) VALUES ($1, $2, $3, $4, $5)",
             Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id, mode,
         ).execute(&pool).await.unwrap();
+        }
         let rate = ProjectTaskRate {
             amount: "0".into(),
             currency: "EUR".into(),

@@ -10,7 +10,9 @@ use crate::components::icons::NavIcon;
 use crate::components::menu::{Menu, MenuDivider, MenuItem};
 use crate::components::modal::Modal;
 use crate::components::table::DataTable;
-use crate::models::{Client, Project, ProjectBudgetProgress, ProjectDetails, ProjectTagLink};
+use crate::models::{
+    Client, Project, ProjectBudgetProgress, ProjectDetails, ProjectTagLink, ProjectTaskRate,
+};
 use crate::route::Route;
 use crate::server_fns;
 use horae_core::money::{format_cents, format_cents_plain};
@@ -1133,7 +1135,13 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                 }
             }
 
-            ProjectTasks { project_id: id, can_manage: is_manager(&me) }
+            ProjectTasks {
+                project_id: id,
+                can_manage: is_manager(&me) && details.state()() == UseResourceState::Ready
+                    && matches!(&*details.read(), Some(Ok(_))),
+                task_rate_currency: details.read().as_ref().and_then(|result| result.as_ref().ok())
+                    .and_then(|project| project.task_rate_currency.clone()),
+            }
 
             // ── Assignments section ─────────────────────────────────────
             div { class: "mt-6",
@@ -1293,16 +1301,25 @@ fn SavedProjectDetails(project: ProjectDetails) -> Element {
 }
 
 #[component]
-fn ProjectTasks(project_id: Uuid, can_manage: bool) -> Element {
+fn ProjectTasks(project_id: Uuid, can_manage: bool, task_rate_currency: Option<String>) -> Element {
     let mut enabled = use_resource(move || async move {
         server_fns::list_project_tasks(project_id.to_string()).await
     });
     let mut catalog = use_resource(|| async move { server_fns::list_tasks().await });
     let mut selected = use_signal(String::new);
+    let mut rate = use_signal(String::new);
     let mut name = use_signal(String::new);
     let mut billable = use_signal(|| true);
     let mut error = use_signal(|| None::<String>);
     let mut saving = use_signal(|| false);
+    let enabled_ids: BTreeSet<_> = enabled
+        .read()
+        .as_ref()
+        .and_then(|result| result.as_ref().ok())
+        .into_iter()
+        .flatten()
+        .map(|task| task.id)
+        .collect();
 
     rsx! {
         div { class: "card mt-6 p-5",
@@ -1319,20 +1336,32 @@ fn ProjectTasks(project_id: Uuid, can_manage: bool) -> Element {
                     {loaded(&*catalog.read(), |tasks| rsx! {
                         select {
                             id: "project-task", class: "form-select", value: "{selected}",
-                            disabled: saving(), onchange: move |e| selected.set(e.value()),
+                            disabled: saving(), onchange: move |e| {
+                                selected.set(e.value()); rate.set(String::new()); error.set(None);
+                            },
                             option { value: "", "Select task…" }
-                            for task in tasks { option { value: "{task.id}", "{task.name}" } }
+                            for task in tasks { option { value: "{task.id}", disabled: enabled_ids.contains(&task.id), "{task.name}" } }
                         }
                     })}
+                }
+                if let Some(currency) = task_rate_currency.as_deref() {
+                    FormGroup { label: "Task hourly rate ({currency})", id: "project-task-rate",
+                        hint: "For newly enabled tasks. Leave blank to inherit a compatible catalog rate; enter 0 for a zero rate.",
+                        Input { id: "project-task-rate", class: "w-30 max-w-full font-mono text-right",
+                            value: "{rate}", disabled: saving(), oninput: move |event: FormEvent| rate.set(event.value()) }
+                    }
                 }
                 button {
                     class: "btn btn-secondary", disabled: saving() || selected().is_empty(),
                     onclick: move |_| {
                         let task_id = selected();
+                        let explicit_rate = task_rate_currency.as_ref().filter(|_| !rate().trim().is_empty())
+                            .map(|currency| ProjectTaskRate { amount: rate(), currency: currency.clone() });
+                        error.set(None);
                         saving.set(true);
                         spawn(async move {
-                            match server_fns::link_project_task(project_id.to_string(), task_id, None).await {
-                                Ok(()) => { error.set(None); selected.set(String::new()); enabled.restart(); }
+                            match server_fns::link_project_task(project_id.to_string(), task_id, explicit_rate).await {
+                                Ok(()) => { error.set(None); selected.set(String::new()); rate.set(String::new()); enabled.restart(); }
                                 Err(e) => error.set(Some(e.to_string())),
                             }
                             saving.set(false);

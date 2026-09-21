@@ -53,7 +53,9 @@ mod user;
 mod models {
     pub use super::{
         client::Client,
-        project::{Project, ProjectBudgetProgress, ProjectDetails, ProjectTagLink},
+        project::{
+            Project, ProjectBudgetProgress, ProjectDetails, ProjectTagLink, ProjectTaskRate,
+        },
     };
     pub use super::{invoice, project_creation};
 }
@@ -381,6 +383,7 @@ async fn pending_or_failed_project_details_never_show_previous_metadata() {
     dom.rebuild_in_place();
     settle(&mut dom);
     assert!(dioxus::ssr::render(&dom).contains("CODE-1"));
+    assert!(dioxus::ssr::render(&dom).contains("Task hourly rate (EUR)"));
     let (send, receive) = oneshot::channel();
     *probe.detail_response.borrow_mut() = Some(receive);
     let navigator = probe.navigator.borrow().unwrap();
@@ -390,6 +393,8 @@ async fn pending_or_failed_project_details_never_show_previous_metadata() {
     settle(&mut dom);
     let html = dioxus::ssr::render(&dom);
     assert!(html.contains("Loading project details"), "{html}");
+    assert!(!html.contains("project-task-rate"), "{html}");
+    assert!(!html.contains("Enable task"), "{html}");
     assert!(
         !html.contains("CODE-1") && !html.contains("Tag-1"),
         "{html}"
@@ -402,6 +407,8 @@ async fn pending_or_failed_project_details_never_show_previous_metadata() {
         html.contains("Metadata unavailable") && html.contains("Retry details"),
         "{html}"
     );
+    assert!(!html.contains("project-task-rate"), "{html}");
+    assert!(!html.contains("Enable task"), "{html}");
     assert!(
         !html.contains("CODE-1") && !html.contains("Tag-1"),
         "{html}"
@@ -577,6 +584,7 @@ mod server_fns {
             code: Some(format!("CODE-{}", id.as_u128())),
             client_name: "Client".into(),
             currency: "EUR".into(),
+            task_rate_currency: Some("EUR".into()),
             starts_on: None,
             ends_on: None,
             tags: vec![format!("Tag-{}", id.as_u128())],

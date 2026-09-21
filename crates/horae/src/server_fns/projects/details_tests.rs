@@ -6,6 +6,74 @@ use uuid::Uuid;
 
 #[sqlx::test(migrations = "./migrations")]
 #[serial]
+async fn project_details_only_offer_task_rate_currency_to_current_managers(pool: PgPool) {
+    for project_type in [
+        ProjectType::TimeAndMaterials,
+        ProjectType::FixedFee,
+        ProjectType::NonBillable,
+    ] {
+        for mode in [None, Some("task"), Some("person"), Some("project")] {
+            let ids = seed(&pool, OrgRole::Admin).await;
+            sqlx::query!(
+                "UPDATE projects SET project_type = $2 WHERE id = $1",
+                ids.project_id,
+                project_type as ProjectType
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            sqlx::query!(
+                "INSERT INTO assignments (id,project_id,user_id,role) VALUES ($1,$2,$3,'lead')",
+                Uuid::now_v7(),
+                ids.project_id,
+                ids.user_id
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            if let Some(mode) = mode {
+                sqlx::query!("INSERT INTO project_settings (id, org_id, project_id, creator_id, rate_mode) VALUES ($1, $2, $3, $4, $5)", Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id, mode)
+                    .execute(&pool).await.unwrap();
+            }
+            for role in [OrgRole::Admin, OrgRole::Manager, OrgRole::Member] {
+                sqlx::query!(
+                    "UPDATE users SET org_role = $2 WHERE id = $1",
+                    ids.user_id,
+                    role as OrgRole
+                )
+                .execute(&pool)
+                .await
+                .unwrap();
+                let details = fetch_project_details(&pool, ids.org_id, ids.user_id, ids.project_id)
+                    .await
+                    .unwrap()
+                    .unwrap();
+                let json = serde_json::to_value(details).unwrap();
+                let expected = if role != OrgRole::Member
+                    && project_type != ProjectType::NonBillable
+                    && (mode.is_none()
+                        || (project_type == ProjectType::TimeAndMaterials && mode == Some("task")))
+                {
+                    Some("EUR")
+                } else {
+                    None
+                };
+                assert_eq!(
+                    json.get("task_rate_currency")
+                        .and_then(serde_json::Value::as_str),
+                    expected,
+                    "{role:?}, {project_type:?}, {mode:?}"
+                );
+                if expected.is_none() {
+                    assert!(json.get("task_rate_currency").is_none());
+                }
+            }
+        }
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial]
 async fn project_details_and_tags_follow_current_progress_and_private_permissions(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     let other = seed(&pool, OrgRole::Admin).await;

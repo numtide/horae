@@ -41,6 +41,11 @@ async fn fetch_project_details(
     sqlx::query_as!(
         ProjectDetails,
         r#"SELECT p.id, p.name, p.code, c.name AS client_name, p.currency,
+            CASE WHEN u.org_role IN ('admin', 'manager')
+              AND p.project_type <> 'non_billable'
+              AND (settings.project_id IS NULL
+                OR (p.project_type = 'time_and_materials' AND settings.rate_mode = 'task'))
+              THEN p.currency END AS task_rate_currency,
             p.starts_on as "starts_on: chrono::NaiveDate",
             p.ends_on as "ends_on: chrono::NaiveDate",
             ARRAY(SELECT t.name FROM project_tag_links l
@@ -53,6 +58,7 @@ async fn fetch_project_details(
         JOIN project_read_access a ON a.project_id = p.id AND a.org_id = p.org_id
         JOIN users u ON u.id = a.user_id AND u.org_id = a.org_id
         LEFT JOIN project_private_settings private ON private.project_id = p.id AND private.org_id = p.org_id
+        LEFT JOIN project_settings settings ON settings.project_id = p.id AND settings.org_id = p.org_id
         WHERE p.org_id = $1 AND a.user_id = $2 AND p.id = $3 AND a.can_view_progress"#,
         org_id,
         viewer_id,
@@ -918,11 +924,13 @@ async fn enable_project_task(
 ) -> Result<(), ServerFnError> {
     // Validate before the idempotent insert, including already-linked pairs.
     // Hold these rows until commit so archiving cannot race task enablement.
+    // Preserve legacy catalog inheritance, including non-billable projects,
+    // while accepting explicit overrides only where billing uses them.
     let task = sqlx::query!(
         r#"SELECT t.billable_default, p.currency, o.default_currency AS organization_currency,
                 (ps.project_id IS NOT NULL) AS "configured!",
-                (ps.project_id IS NULL
-                  OR (p.project_type = 'time_and_materials' AND ps.rate_mode = 'task')) AS "uses_task_rates!",
+                (p.project_type <> 'non_billable' AND (ps.project_id IS NULL
+                  OR (p.project_type = 'time_and_materials' AND ps.rate_mode = 'task'))) AS "uses_task_rates!",
                 EXISTS(SELECT 1 FROM project_tasks pt
                        WHERE pt.project_id = p.id AND pt.task_id = t.id) AS "linked!",
                 CASE WHEN ps.project_id IS NULL
