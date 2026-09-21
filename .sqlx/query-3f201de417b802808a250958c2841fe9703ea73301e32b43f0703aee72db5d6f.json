@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO assignments (id,project_id,user_id,role,rate_cents) VALUES ($1,$2,$3,$4,$5)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        {
+          "Custom": {
+            "name": "project_role",
+            "kind": {
+              "Enum": [
+                "lead",
+                "freelancer",
+                "admin"
+              ]
+            }
+          }
+        },
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3f201de417b802808a250958c2841fe9703ea73301e32b43f0703aee72db5d6f"
+}

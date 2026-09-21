@@ -1,0 +1,107 @@
+# Implementation Plan: New Project
+
+**Branch**: `feat/new-project-screen` | **Date**: 2026-09-21 | **Spec**: [spec.md](spec.md)
+
+**Input**: `specs/011-new-project-screen/spec.md`
+
+## Summary
+
+Implement `/projects/new` in the existing application shell using shared controls and utility CSS. Add private versioned drafts, atomic final creation, real billing/budget settings, task/team permissions and invoice defaults. Preserve existing/imported projects with explicit legacy semantics.
+
+Implementation is incremental; the basic form is the first testable slice, not completion of the full goal.
+
+## Technical Context
+
+**Language/Version**: Rust edition 2024, toolchain pinned by the Nix flake.
+
+**Primary Dependencies**: Existing Dioxus 0.7 fullstack, Axum, Tokio, sqlx, serde, chrono, UUID and thiserror. No new crate/framework planned. Optional email delegates to an administrator-configured sendmail-compatible executable, without a shell or a custom SMTP implementation.
+
+**Storage**: PostgreSQL; migrations start at `0030`. New tables use UUID v7 and organization foreign keys. Versioned JSON is appropriate for incomplete drafts; operational data uses typed columns and relations.
+
+**Testing**: Core unit tests, serial sqlx integration tests, existing isolated Playwright runner, server Clippy, WASM check, SQLx cache, formatting and flake CI.
+
+**Target Platform**: Linux server/browser WASM, desktop and mobile.
+
+**Project Type**: Existing fullstack workspace, `crates/core` and `crates/horae`; no new crate.
+
+**Performance Goals**: Autosave after 600 ms idle debounce, one outstanding save per draft with coalesced changes. Catalog lookup pages at most 1,000 rows; server search/pagination beyond that. Draft limits: 256 KiB, 500 selected tasks/people each, 50 tags, 100 milestones.
+
+**Constraints**: Never use imported production data for tests. Integer minutes/cents. New currency choices EUR/CHF/USD/GBP follow the handoff and current two-decimal monetary support. Shared CSS/control defaults stay unchanged; opt-in extensions only. No automatic invoice issuing or external mail during tests.
+
+**Scale/Scope**: One creation surface plus necessary downstream consumers. General Project Detail redesign, existing-project migration and organization/auth redesign are excluded.
+
+## Constitution Check
+
+| Principle | Pre-research | Post-design approach |
+|---|---|---|
+| Exactness | Pass | Checked core money/time helpers, basis-point adjustments, Rust/SQL parity tests. |
+| Domain purity | Pass | Pure validation, rate choice, fee dates and invoice arithmetic in core; no new I/O dependency there. |
+| Single datastore | Pass | PostgreSQL drafts/settings/outbox; UUID v7 and org foreign keys on every new table. |
+| Server mutations | Pass | Session-authorized Dioxus functions and server-internal workers/importer paths; no ad-hoc browser writes. |
+| Reproducibility | Pass | Nix shell, regenerated SQLx cache/utilities, unit/integration/browser/flake gates. |
+
+No constitutional exception is requested.
+
+## Project Structure
+
+### Documentation
+
+```text
+specs/011-new-project-screen/
+  spec.md
+  plan.md
+  research.md
+  data-model.md
+  contracts/new-project.md
+  quickstart.md
+  checklists/requirements.md
+  tasks.md
+```
+
+### Source Code
+
+```text
+crates/core/src/project.rs                     creation validation/types
+crates/core/src/invoice.rs                     rate and adjustment arithmetic
+crates/core/src/budget.rs                      period/scope helpers
+crates/horae/migrations/0030_*.sql              drafts/configuration
+crates/horae/migrations/0031_*.sql              billing/invoice sources
+crates/horae/src/models/project_creation.rs    typed request/result projections
+crates/horae/src/server_fns/project_creation.rs
+crates/horae/src/server_fns/project_creation/tests.rs
+crates/horae/src/server_fns/projects.rs         catalog, tags, authorized projections
+crates/horae/src/server_fns/time_entries.rs    shared task restriction guards
+crates/horae/src/server_fns/reports.rs          rates, currencies, progress privacy
+crates/horae/src/server_fns/invoices.rs         fee/default preparation and snapshots
+crates/horae/src/notifications.rs               bounded optional mail delivery
+crates/horae/src/jobs.rs                        scoped outbox claiming
+crates/horae/src/pages/new_project.rs           composition and draft lifecycle
+crates/horae/src/pages/new_project/             form sections if needed
+crates/horae/src/pages/projects.rs              entry links; preserve existing editing
+crates/horae/src/pages/invoices.rs              defaults and fee preparation
+crates/horae/src/route.rs / src/pages.rs        registration
+crates/horae/src/components/                   opt-in shared capabilities
+crates/horae/assets/css/horae.css               structural np-* rules/tokens
+crates/horae/build.rs                          missing utilities only
+crates/horae/tests/browser/new-project.spec.ts
+```
+
+**Structure Decision**: Existing layers and sibling-file module roots; no repository abstraction, form engine, new queue framework or alternate mutation API.
+
+## Execution Design
+
+1. Establish exact domain tests/contracts, then legacy-safe draft/configuration schema with protected private tables.
+1. Implement draft read/save/discard/finalization with revision checks and transactional revalidation. Draft ID provides retry identity; name is not an idempotency key.
+1. Add static `/projects/new` before dynamic project detail, keep Projects active in navigation, and compose labeled form rows and existing modal/shell. Do not add a separate sidebar item absent from the handoff.
+1. Enforce task access in the existing new-entry eligibility view and historical mutation guards. Preserve archived-history edits and safe stopping of an own running timer after revocation.
+1. Integrate rate modes, scoped budgets, fixed-fee occurrences and invoice-owned defaults across all consumers. Missing configuration means legacy behavior, including legacy fixed-fee hourly invoicing.
+1. Record budget alerts in the existing outbox with unique logical identity; filter claims by event kind. Optional direct sendmail invocation has bounded timeout, sanitized headers and stable Message-ID. Document ambiguous acknowledgement/at-least-once delivery.
+1. Finish responsive/accessibility states and adversarial/regression review. Open one scoped reviewed PR, without automatically merging.
+
+## Agent Context and Hooks
+
+Checked-in Spec Kit provides setup/prerequisite scripts but no `update-agent-context.sh`; record context here rather than claim an absent script ran. No `.specify/extensions.yml` exists, so no hooks apply.
+
+## Complexity Tracking
+
+No constitution violations. Backend changes are driven by displayed controls; compatibility risks and alternatives are in [research.md](research.md).

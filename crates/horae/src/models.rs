@@ -5,6 +5,7 @@ pub mod invoice;
 mod jobs;
 pub mod organization;
 pub mod project;
+pub mod project_creation;
 pub mod task;
 pub mod time_entry;
 pub mod user;

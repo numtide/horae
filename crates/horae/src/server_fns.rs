@@ -478,6 +478,7 @@ mod importers;
 mod invoices;
 mod organization;
 mod plugins;
+mod project_creation;
 mod projects;
 mod reports;
 mod time_entries;

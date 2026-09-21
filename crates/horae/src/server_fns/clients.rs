@@ -4,6 +4,39 @@ use super::*;
 
 // ── Clients ──────────────────────────────────────────────────────────────────
 
+/// Explicit client creation from the project form, including its default rate.
+#[server]
+pub async fn create_project_client(
+    name: String,
+    currency: String,
+    default_rate: String,
+) -> Result<crate::models::project_creation::CreationClient, ServerFnError> {
+    let actor = require_manager().await?;
+    let state = crate::state::global_state().await;
+    let client = super::project_creation::create_client_record(
+        &state.db,
+        actor.id,
+        actor.org_id,
+        &name,
+        &currency,
+        &default_rate,
+    )
+    .await?;
+    state
+        .plugins
+        .dispatch(crate::plugin::AppEvent::ClientCreated {
+            occurred_at: chrono::Utc::now(),
+            org_id: actor.org_id,
+            client: crate::plugin::event::ClientPayload {
+                id: client.id,
+                name: client.name.clone(),
+                currency: client.currency.clone(),
+                active: client.active,
+            },
+        });
+    Ok(client)
+}
+
 /// Lists clients. With `include_inactive = false` only active clients are
 /// returned (the set shown in new-entry pickers); pass `true` for the management
 /// view that also needs to reactivate deactivated clients.
