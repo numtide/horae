@@ -19,6 +19,59 @@ async fn single_fee(pool: &PgPool) -> SeedIds {
 
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]
+async fn invoice_preview_does_not_materialize_fees_and_preserves_released_snapshots(pool: PgPool) {
+    let ids = single_fee(&pool).await;
+    let period = ("2026-09-01".parse().unwrap(), "2026-09-30".parse().unwrap());
+    let first = preview::prepare(&pool, ids.org_id, ids.client_id, period, None, None)
+        .await
+        .unwrap();
+    assert_eq!(first.lines.len(), 1);
+    assert_eq!(
+        (
+            first.lines[0].amount_cents,
+            first.lines[0].minutes,
+            first.lines[0].rate_cents
+        ),
+        (12500, None, None)
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM project_fee_occurrences WHERE org_id = $1",
+            ids.org_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(0)
+    );
+    let generated =
+        generate_invoice_for_period(&pool, ids.org_id, ids.client_id, period.0, period.1)
+            .await
+            .unwrap();
+    assert!(
+        preview::prepare(&pool, ids.org_id, ids.client_id, period, None, None)
+            .await
+            .is_err()
+    );
+    transition_invoice(&pool, ids.org_id, generated.invoice.id, InvoiceStatus::Void)
+        .await
+        .unwrap();
+    sqlx::query!(
+        "UPDATE project_settings SET fee_amount_cents = 99999 WHERE project_id = $1",
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let released = preview::prepare(&pool, ids.org_id, ids.client_id, period, None, None)
+        .await
+        .unwrap();
+    assert_eq!(released.lines, first.lines);
+    assert_eq!(released.amounts.unwrap().total_cents, 12500);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
 async fn invoice_defaults_apply_to_selected_fees_without_claiming_other_projects(pool: PgPool) {
     let ids = single_fee(&pool).await;
     let other = Uuid::now_v7();
@@ -33,6 +86,23 @@ async fn invoice_defaults_apply_to_selected_fees_without_claiming_other_projects
         tax1_bps: 2100,
         ..Default::default()
     };
+    assert!(
+        preview::prepare(&pool, ids.org_id, ids.client_id, period, None, None)
+            .await
+            .is_err()
+    );
+    let estimate = preview::prepare(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        Some(&[ids.project_id]),
+        Some(&overrides),
+    )
+    .await
+    .unwrap();
+    assert_eq!(estimate.lines.len(), 1);
+    assert_eq!(estimate.amounts.unwrap().total_cents, 13613);
     let result = generate_invoice_with_options(
         &pool,
         ids.org_id,
@@ -189,6 +259,18 @@ async fn milestones_include_unbilled_overdue_fees_but_not_future_fees(pool: PgPo
         sqlx::query!("INSERT INTO project_fee_milestones (id,org_id,project_id,name,due_on,amount_cents,position) VALUES ($1,$2,$3,$4,$5,$6,$7)", Uuid::now_v7(), ids.org_id, ids.project_id, format!("Milestone {position}"), date.parse::<chrono::NaiveDate>().unwrap() as chrono::NaiveDate, amount, position)
             .execute(&pool).await.unwrap();
     }
+    let estimate = preview::prepare(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        ("2026-09-01".parse().unwrap(), "2026-09-30".parse().unwrap()),
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(estimate.lines.len(), 2);
+    assert_eq!(estimate.amounts.unwrap().total_cents, 3000);
     let invoice = generate_invoice_for_period(
         &pool,
         ids.org_id,
@@ -214,6 +296,18 @@ async fn milestones_include_unbilled_overdue_fees_but_not_future_fees(pool: PgPo
 async fn monthly_fees_use_calendar_dates_and_skip_already_claimed_months(pool: PgPool) {
     let ids = single_fee(&pool).await;
     sqlx::query!("UPDATE project_settings SET fee_mode = 'monthly', monthly_day = 'last' WHERE project_id = $1", ids.project_id).execute(&pool).await.unwrap();
+    let estimate = preview::prepare(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        ("2028-02-16".parse().unwrap(), "2028-03-31".parse().unwrap()),
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(estimate.lines.len(), 2);
+    assert_eq!(estimate.amounts.unwrap().total_cents, 25000);
     let first = generate_invoice_for_period(
         &pool,
         ids.org_id,
@@ -229,6 +323,19 @@ async fn monthly_fees_use_calendar_dates_and_skip_already_claimed_months(pool: P
         dates.iter().map(ToString::to_string).collect::<Vec<_>>(),
         ["2028-02-29", "2028-03-31"]
     );
+    let estimate = preview::prepare(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        ("2028-02-01".parse().unwrap(), "2028-04-30".parse().unwrap()),
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(estimate.lines.len(), 1);
+    assert_eq!(estimate.amounts.unwrap().total_cents, 12500);
+    assert!(estimate.lines[0].description.contains("2028-04"));
     let next = generate_invoice_for_period(
         &pool,
         ids.org_id,

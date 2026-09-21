@@ -1,13 +1,63 @@
 //! Invoice server functions.
 
 use super::*;
-use crate::models::invoice::InvoiceDefaults;
+use crate::models::invoice::{InvoiceDefaults, InvoicePreparation};
 
 #[cfg(feature = "server")]
 mod defaults;
 
 #[cfg(feature = "server")]
 mod fees;
+
+#[cfg(feature = "server")]
+mod entries;
+
+#[cfg(feature = "server")]
+mod preview;
+
+#[cfg(feature = "server")]
+#[derive(Clone, Copy)]
+enum SourceRead {
+    Preview,
+    Generate,
+}
+
+#[server]
+pub async fn prepare_invoice(
+    client_id: String,
+    period_from: String,
+    period_to: String,
+    project_ids: Option<Vec<String>>,
+    overrides: Option<InvoiceDefaults>,
+) -> Result<InvoicePreparation, ServerFnError> {
+    let manager = require_manager().await?;
+    let state = crate::state::global_state().await;
+    if project_ids
+        .as_ref()
+        .is_some_and(|ids| ids.is_empty() || ids.len() > 1000)
+    {
+        return Err(err(BAD_REQUEST, "Select between 1 and 1000 projects"));
+    }
+    let selected = project_ids
+        .map(|ids| {
+            ids.iter()
+                .map(|id| parse_uuid(id, "project_id"))
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .transpose()?;
+    preview::prepare(
+        &state.db,
+        manager.org_id,
+        parse_uuid(&client_id, "client_id")?,
+        (
+            parse_date(&period_from, "period_from")?,
+            parse_date(&period_to, "period_to")?,
+        ),
+        selected.as_deref(),
+        overrides.as_ref(),
+    )
+    .await
+}
 
 #[cfg(all(test, feature = "server"))]
 mod tests;
@@ -189,65 +239,15 @@ async fn generate_invoice_with_options(
     // FOR UPDATE locks the entry rows: a competing transaction blocks here
     // until this one commits, then re-evaluates its WHERE and skips rows that
     // were just invoiced.
-    struct EntryWithRates {
-        entry_id: uuid::Uuid,
-        project_id: uuid::Uuid,
-        minutes: i32,
-        project_name: String,
-        task_name: String,
-        notes: Option<String>,
-        spent_date: chrono::NaiveDate,
-        rate_cents: Option<i64>,
-        currency: String,
-    }
-
-    let entries = sqlx::query_as!(
-        EntryWithRates,
-        r#"SELECT
-             te.id as entry_id,
-             te.project_id,
-             effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir) as "minutes!",
-             p.name as project_name,
-             t.name as task_name,
-             te.notes,
-             te.spent_date as "spent_date: chrono::NaiveDate",
-             resolve_project_rate(ps.rate_mode, pt.rate_cents, a.rate_cents, p.rate_cents,
-               CASE WHEN ps.project_id IS NULL OR p.currency = o.default_currency THEN u.billable_rate_cents END,
-               CASE WHEN p.currency = c.currency THEN c.default_rate_cents END
-             ) as "rate_cents?",
-             CASE WHEN ps.project_id IS NULL THEN c.currency ELSE p.currency END as "currency!"
-           FROM time_entries te
-           JOIN projects p ON p.id = te.project_id
-           JOIN clients c ON c.id = p.client_id
-           LEFT JOIN project_settings ps ON ps.project_id = p.id
-           JOIN tasks t ON t.id = te.task_id
-           LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
-           LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id
-           JOIN users u ON u.id = te.user_id
-           JOIN organizations o ON o.id = te.org_id
-           WHERE te.org_id = $1
-             AND p.client_id = $2
-             AND te.billable = true
-             AND p.project_type <> 'non_billable'
-             AND (ps.project_id IS NULL OR p.project_type = 'time_and_materials')
-             AND COALESCE(pt.billable, t.billable_default)
-             AND NOT te.is_running
-             AND te.invoice_id IS NULL
-             AND te.state IN ('open', 'approved')
-             AND te.spent_date >= $3
-             AND te.spent_date <= $4
-             AND ($5::uuid[] IS NULL OR p.id = ANY($5))
-           ORDER BY te.spent_date, te.id
-           FOR UPDATE OF te"#,
+    let entries = entries::read(
+        &mut tx,
         org_id,
         client_id,
-        from as chrono::NaiveDate,
-        to as chrono::NaiveDate,
+        (from, to),
         selected.as_deref(),
+        SourceRead::Generate,
     )
-    .fetch_all(&mut *tx)
-    .await
-    .map_err(server_err)?;
+    .await?;
 
     let fees =
         fees::prepare_fees(&mut tx, org_id, client_id, from, to, selected.as_deref()).await?;
@@ -309,20 +309,12 @@ async fn generate_invoice_with_options(
     for e in &entries {
         let rate = e.rate_cents.unwrap_or(0);
 
-        let amount = horae_core::invoice::line_amount_cents(rate, e.minutes)
-            .map_err(|_| conflict("Invoice line amount exceeds the supported range."))?;
+        let amount = e.amount()?;
         total_cents = total_cents.checked_add(amount).ok_or_else(|| {
             conflict("Invoice total exceeds the supported range; select a shorter period.")
         })?;
 
-        let description = if let Some(notes) = &e.notes {
-            format!(
-                "{} — {} ({}): {}",
-                e.spent_date, e.project_name, e.task_name, notes
-            )
-        } else {
-            format!("{} — {} ({})", e.spent_date, e.project_name, e.task_name)
-        };
+        let description = e.description();
 
         lines.push(InvoiceLine {
             id: uuid::Uuid::now_v7(),

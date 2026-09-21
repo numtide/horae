@@ -1,0 +1,62 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT f.id,f.project_id,f.description,f.amount_cents,f.currency,f.period_key,f.due_on as \"due_on: NaiveDate\"\n         FROM project_fee_occurrences f JOIN projects p ON p.id = f.project_id\n         WHERE f.org_id = $1 AND p.client_id = $2 AND p.project_type = 'fixed_fee'\n           AND f.invoice_id IS NULL AND f.due_on <= $4\n           AND (f.period_key NOT LIKE 'month:%' OR f.due_on >= $3)\n           AND ($5::uuid[] IS NULL OR f.project_id = ANY($5))\n         ORDER BY f.due_on,f.project_id,f.period_key LIMIT 10001 ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "project_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "amount_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "currency",
+        "type_info": "Bpchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "period_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "due_on: NaiveDate",
+        "type_info": "Date"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Date",
+        "Date",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "48b9897ef919e84afc63496f2372fc44c7565b0340762a02fc0207bfb222a69d"
+}

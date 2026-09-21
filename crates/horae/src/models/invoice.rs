@@ -106,3 +106,35 @@ impl Default for InvoiceDefaults {
         }
     }
 }
+
+/// Read-only estimate. Generation rechecks all sources and settings before claiming them.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InvoicePreparation {
+    pub issued_on: NaiveDate,
+    pub due_on: Option<NaiveDate>,
+    pub currency: String,
+    pub projects: Vec<InvoiceProjectDefaults>,
+    /// Absent when selected projects require explicit conflict resolution.
+    pub defaults: Option<InvoiceDefaults>,
+    pub lines: Vec<InvoicePreviewLine>,
+    pub subtotal_cents: i64,
+    pub amounts: Option<horae_core::invoice::InvoiceAmounts>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InvoiceProjectDefaults {
+    pub project_id: Uuid,
+    pub name: String,
+    pub defaults: InvoiceDefaults,
+}
+
+/// Fee previews have neither a time quantity nor an hourly rate.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InvoicePreviewLine {
+    pub project_id: Uuid,
+    pub currency: String,
+    pub description: String,
+    pub minutes: Option<i32>,
+    pub rate_cents: Option<i64>,
+    pub amount_cents: i64,
+}

@@ -25,7 +25,7 @@ pub fn resolve_project_rate(
 }
 
 /// Invoice-owned components after discount and non-compounding taxes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct InvoiceAmounts {
     pub subtotal_cents: i64,
     pub discount_cents: i64,

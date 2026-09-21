@@ -37,7 +37,7 @@ mod assignment;
 #[path = "../src/models/client.rs"]
 mod client;
 #[path = "../src/models/invoice.rs"]
-mod invoice;
+pub mod invoice;
 #[path = "../src/pages/invoices.rs"]
 mod invoices;
 #[path = "../src/models/project.rs"]

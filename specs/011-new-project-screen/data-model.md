@@ -44,7 +44,7 @@ Migration 0034 replaces the existing new-time context view with the task restric
 
 `project_fee_milestones`: project_id, label, due_on, amount_cents, position. At most 100; required nonempty label, date and nonnegative amount. Single/monthly modes use project settings; monthly day is first/fifteenth/last, computed as a calendar date with leap-year tests.
 
-`project_fee_occurrences`: project_id, milestone_id nullable, period_key, due_on, amount_cents, currency, invoice_id nullable. Unique (project_id,period_key) identifies single, milestone or calendar-month occurrence. Materialize on explicit invoice preparation; do not issue invoices on schedule automatically.
+`project_fee_occurrences`: project_id, milestone_id nullable, period_key, due_on, amount_cents, currency, invoice_id nullable. Unique (project_id,period_key) identifies single, milestone or calendar-month occurrence. Materialize when explicitly generating the draft invoice; its read-only preparation preview does not create or reserve occurrences. Do not issue invoices on schedule automatically.
 
 Occurrences also snapshot the line description. Keys are `single`, `milestone:<uuid>` or `month:<YYYY-MM>`. Composite foreign keys keep project/milestone/invoice references in the same organization. Claimed occurrences remain available as historical invoice sources after a void releases their current claim; later generation reuses the occurrence identity and frozen amount.
 
