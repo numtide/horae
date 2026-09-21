@@ -216,8 +216,14 @@ pub(super) async fn invoice(
                 |writer, line| {
                     writer.write_record([
                         line.description.as_str(),
-                        &super::format_hours2(line.minutes.into()),
-                        &super::format_cents_plain(line.rate_cents),
+                        &line
+                            .minutes
+                            .map(|minutes| super::format_hours2(minutes.into()))
+                            .unwrap_or_default(),
+                        &line
+                            .rate_cents
+                            .map(super::format_cents_plain)
+                            .unwrap_or_default(),
                         &super::format_cents_plain(line.amount_cents),
                     ])
                 },

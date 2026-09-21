@@ -449,7 +449,7 @@ fn stream_invoice_lines<'e>(
 ) -> impl Stream<Item = Result<crate::models::InvoiceLine, sqlx::Error>> + 'e {
     sqlx::query_as!(
         crate::models::InvoiceLine,
-        r#"SELECT id, invoice_id, time_entry_id, description,
+        r#"SELECT id, invoice_id, time_entry_id, fee_occurrence_id, description,
                   minutes, rate_cents, amount_cents
            FROM invoice_line_items
            WHERE invoice_id = $1
@@ -544,12 +544,16 @@ fn invoice_xlsx(
         worksheet
             .write_string(r, 0, &line.description)
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-        worksheet
-            .write_number(r, 1, line.minutes as f64 / 60.0)
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-        worksheet
-            .write_number(r, 2, line.rate_cents as f64 / 100.0)
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        if let Some(minutes) = line.minutes {
+            worksheet
+                .write_number(r, 1, minutes as f64 / 60.0)
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        }
+        if let Some(rate) = line.rate_cents {
+            worksheet
+                .write_number(r, 2, rate as f64 / 100.0)
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        }
         worksheet
             .write_number(r, 3, line.amount_cents as f64 / 100.0)
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;

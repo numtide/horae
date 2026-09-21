@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO invoice_line_items (id,invoice_id,time_entry_id,fee_occurrence_id,description,minutes,rate_cents,amount_cents) VALUES ($1,$2,$3,$4,'Invalid source',$5,$6,0)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Int4",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "960b88c760a2be5a59c58fd1e682eb395f534d526f47b2d86b48bdde9008a7a3"
+}

@@ -40,6 +40,8 @@ Reuse assignment roles for project lead designation; never change org_role. Per-
 
 `project_fee_occurrences`: project_id, milestone_id nullable, period_key, due_on, amount_cents, currency, invoice_id nullable. Unique (project_id,period_key) identifies single, milestone or calendar-month occurrence. Materialize on explicit invoice preparation; do not issue invoices on schedule automatically.
 
+Occurrences also snapshot the line description. Keys are `single`, `milestone:<uuid>` or `month:<YYYY-MM>`. Composite foreign keys keep project/milestone/invoice references in the same organization. Claimed occurrences remain available as historical invoice sources after a void releases their current claim; later generation reuses the occurrence identity and frozen amount.
+
 Invoice lines allow exactly one of time_entry_id or fee_occurrence_id, enforced by CHECK. Existing time-backed rows retain their source. Fee rows do not fabricate minutes/hourly rates. Invoice transaction claims available occurrences; void releases claims but leaves original invoice snapshots immutable.
 
 ## Invoice-owned defaults and calculations

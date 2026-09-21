@@ -101,8 +101,8 @@
   ..for line in inputs.lines {
     (
       text(size: 9pt, line.description),
-      text(size: 9pt, fmt-hours(line.minutes)),
-      text(size: 9pt, fmt-money(line.rate_cents, currency) + "/hr"),
+      text(size: 9pt, if line.minutes == none { "—" } else { fmt-hours(line.minutes) }),
+      text(size: 9pt, if line.rate_cents == none { "—" } else { fmt-money(line.rate_cents, currency) + "/hr" }),
       align(right, text(size: 9pt, fmt-money(line.amount_cents, currency))),
     )
   },

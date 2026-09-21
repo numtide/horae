@@ -531,6 +531,46 @@ mod tests {
 
     #[sqlx::test(migrations = "./migrations")]
     #[serial_test::serial]
+    async fn fee_exports_preserve_absent_quantities_and_render_a_real_pdf(pool: PgPool) {
+        let ids = seed(&pool, OrgRole::Manager).await;
+        let (id, _) = add_invoice(&pool, &ids, 0).await;
+        let fee_id = uuid::Uuid::now_v7();
+        sqlx::query!("UPDATE invoices SET total_cents = 12500 WHERE id = $1", id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query!("INSERT INTO project_fee_occurrences (id,org_id,project_id,period_key,due_on,description,amount_cents,currency,invoice_id) VALUES ($1,$2,$3,'single','2026-09-01','Fixed fee',12500,'EUR',$4)", fee_id, ids.org_id, ids.project_id, id).execute(&pool).await.unwrap();
+        sqlx::query!("INSERT INTO invoice_line_items (id,invoice_id,fee_occurrence_id,description,amount_cents) VALUES ($1,$2,$3,'Fixed fee',12500)", uuid::Uuid::now_v7(), id, fee_id).execute(&pool).await.unwrap();
+        let (invoice, lines) = invoice(&pool, ids.org_id, id).await.unwrap();
+        let workbook = super::super::invoice_xlsx(&invoice, &lines).unwrap();
+        let xml = xlsx_part(&workbook, "xl/worksheets/sheet1.xml");
+        assert!(!xml.contains("r=\"B2\""));
+        assert!(!xml.contains("r=\"C2\""));
+        assert_cell(&xml, "D2", "125");
+        assert_cell(&xml, "D3", "125");
+        let document = pdf(&pool, ids.org_id, id).await.unwrap();
+        tokio::task::spawn_blocking(move || {
+            let render = || {
+                crate::render::render_invoice_pdf(
+                    &document.invoice,
+                    &document.lines,
+                    &document.client_name,
+                    document.client_address.as_deref(),
+                    document.client_tax_id.as_deref(),
+                    &document.branding,
+                )
+                .unwrap()
+            };
+            let first = render();
+            assert!(first.starts_with(b"%PDF-"));
+            assert_eq!(first, render());
+        })
+        .await
+        .unwrap();
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    #[serial_test::serial]
     async fn bounded_exports_preserve_real_workbooks_and_deterministic_pdf(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Manager).await;
         let (id, _) = add_invoice(&pool, &ids, 1).await;

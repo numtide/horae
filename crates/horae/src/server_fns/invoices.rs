@@ -2,8 +2,14 @@
 
 use super::*;
 
+#[cfg(feature = "server")]
+mod fees;
+
 #[cfg(all(test, feature = "server"))]
 mod tests;
+
+#[cfg(all(test, feature = "server"))]
+mod fee_tests;
 
 // ── Invoices ──────────────────────────────────────────────────────────────────
 
@@ -176,15 +182,18 @@ async fn generate_invoice_for_period(
     .await
     .map_err(server_err)?;
 
-    let Some(first_entry) = entries.first() else {
-        return Err(not_found(
-            "No billable, un-invoiced time found for this client and period.",
-        ));
-    };
-    let currency = first_entry.currency.trim();
+    let fees = fees::prepare_fees(&mut tx, org_id, client_id, from, to).await?;
+    let currency = entries
+        .first()
+        .map(|entry| entry.currency.trim())
+        .or_else(|| fees.first().map(|fee| fee.currency.trim()))
+        .ok_or_else(|| {
+            not_found("No billable, un-invoiced time or fees found for this client and period.")
+        })?;
     if entries
         .iter()
         .any(|entry| entry.currency.trim() != currency)
+        || fees.iter().any(|fee| fee.currency.trim() != currency)
     {
         return Err(conflict(
             "Projects with different billing currencies cannot share an invoice.",
@@ -211,7 +220,7 @@ async fn generate_invoice_for_period(
     let due_on = issued_on + chrono::Duration::days(30);
 
     // Build line items and compute total.
-    let mut lines = Vec::with_capacity(entries.len());
+    let mut lines = Vec::with_capacity(entries.len() + fees.len());
     let mut total_cents: i64 = 0;
 
     for e in &entries {
@@ -235,11 +244,28 @@ async fn generate_invoice_for_period(
         lines.push(InvoiceLine {
             id: uuid::Uuid::now_v7(),
             invoice_id,
-            time_entry_id: e.entry_id,
+            time_entry_id: Some(e.entry_id),
+            fee_occurrence_id: None,
             description,
-            minutes: e.minutes,
-            rate_cents: rate,
+            minutes: Some(e.minutes),
+            rate_cents: Some(rate),
             amount_cents: amount,
+        });
+    }
+
+    for fee in &fees {
+        total_cents = total_cents.checked_add(fee.amount_cents).ok_or_else(|| {
+            conflict("Invoice total exceeds the supported range; select a shorter period.")
+        })?;
+        lines.push(InvoiceLine {
+            id: uuid::Uuid::now_v7(),
+            invoice_id,
+            time_entry_id: None,
+            fee_occurrence_id: Some(fee.id),
+            description: fee.description.clone(),
+            minutes: None,
+            rate_cents: None,
+            amount_cents: fee.amount_cents,
         });
     }
 
@@ -278,22 +304,24 @@ async fn generate_invoice_for_period(
     // other invoice for the org for as long as that takes.
     let line_ids: Vec<uuid::Uuid> = lines.iter().map(|l| l.id).collect();
     let line_invoice_ids: Vec<uuid::Uuid> = lines.iter().map(|l| l.invoice_id).collect();
-    let line_entry_ids: Vec<uuid::Uuid> = lines.iter().map(|l| l.time_entry_id).collect();
+    let line_entry_ids: Vec<Option<uuid::Uuid>> = lines.iter().map(|l| l.time_entry_id).collect();
+    let line_fee_ids: Vec<Option<uuid::Uuid>> = lines.iter().map(|l| l.fee_occurrence_id).collect();
     let line_descriptions: Vec<String> = lines.iter().map(|l| l.description.clone()).collect();
-    let line_minutes: Vec<i32> = lines.iter().map(|l| l.minutes).collect();
-    let line_rates: Vec<i64> = lines.iter().map(|l| l.rate_cents).collect();
+    let line_minutes: Vec<Option<i32>> = lines.iter().map(|l| l.minutes).collect();
+    let line_rates: Vec<Option<i64>> = lines.iter().map(|l| l.rate_cents).collect();
     let line_amounts: Vec<i64> = lines.iter().map(|l| l.amount_cents).collect();
 
     sqlx::query!(
-        r#"INSERT INTO invoice_line_items (id, invoice_id, time_entry_id, description, minutes, rate_cents, amount_cents)
-           SELECT * FROM unnest($1::uuid[], $2::uuid[], $3::uuid[], $4::text[], $5::int4[], $6::int8[], $7::int8[])"#,
+        r#"INSERT INTO invoice_line_items (id, invoice_id, time_entry_id, description, minutes, rate_cents, amount_cents, fee_occurrence_id)
+           SELECT * FROM unnest($1::uuid[], $2::uuid[], $3::uuid[], $4::text[], $5::int4[], $6::int8[], $7::int8[], $8::uuid[])"#,
         &line_ids,
         &line_invoice_ids,
-        &line_entry_ids,
+        &line_entry_ids as &[Option<uuid::Uuid>],
         &line_descriptions,
-        &line_minutes,
-        &line_rates,
+        &line_minutes as &[Option<i32>],
+        &line_rates as &[Option<i64>],
         &line_amounts,
+        &line_fee_ids as &[Option<uuid::Uuid>],
     )
     .execute(&mut *tx)
     .await
@@ -303,6 +331,7 @@ async fn generate_invoice_for_period(
     // concurrent writers; re-checking state and invoice_id here is the final
     // guarantee that exactly the entries behind the line items get flipped.
     let entry_ids: Vec<uuid::Uuid> = entries.iter().map(|e| e.entry_id).collect();
+    let billed_minutes: Vec<i32> = entries.iter().map(|e| e.minutes).collect();
     let flipped = sqlx::query!(
         r#"UPDATE time_entries
            SET invoice_id = $1,
@@ -315,7 +344,7 @@ async fn generate_invoice_for_period(
              AND state IN ('open', 'approved')"#,
         invoice_id,
         &entry_ids,
-        &line_minutes,
+        &billed_minutes,
     )
     .execute(&mut *tx)
     .await
@@ -325,6 +354,17 @@ async fn generate_invoice_for_period(
     if flipped != entry_ids.len() as u64 {
         return Err(conflict(
             "Some of the selected time was modified concurrently; no invoice was created. Please retry.",
+        ));
+    }
+
+    let fee_ids: Vec<uuid::Uuid> = fees.iter().map(|fee| fee.id).collect();
+    let claimed = sqlx::query!(
+        "UPDATE project_fee_occurrences SET invoice_id = $1 WHERE org_id = $2 AND id = ANY($3) AND invoice_id IS NULL",
+        invoice_id, org_id, &fee_ids,
+    ).execute(&mut *tx).await.map_err(server_err)?.rows_affected();
+    if claimed != fee_ids.len() as u64 {
+        return Err(conflict(
+            "Some fees were already invoiced; no invoice was created. Please retry.",
         ));
     }
 
@@ -431,6 +471,8 @@ async fn transition_invoice(
     // Reopened time is editable again, so its previously frozen rounding no
     // longer represents a locked duration. Invoice lines remain unchanged.
     if target == InvoiceStatus::Void {
+        sqlx::query!("UPDATE project_fee_occurrences SET invoice_id = NULL WHERE invoice_id = $1 AND org_id = $2", id, org_id)
+            .execute(&mut *tx).await.map_err(server_err)?;
         sqlx::query!(
             r#"UPDATE time_entries
                SET invoice_id = NULL, state = 'open', rounded_minutes = NULL

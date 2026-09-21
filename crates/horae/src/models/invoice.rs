@@ -24,10 +24,11 @@ pub struct Invoice {
 pub struct InvoiceLine {
     pub id: Uuid,
     pub invoice_id: Uuid,
-    pub time_entry_id: Uuid,
+    pub time_entry_id: Option<Uuid>,
+    pub fee_occurrence_id: Option<Uuid>,
     pub description: String,
-    pub minutes: i32,
-    pub rate_cents: i64,
+    pub minutes: Option<i32>,
+    pub rate_cents: Option<i64>,
     pub amount_cents: i64,
 }
 

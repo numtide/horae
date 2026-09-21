@@ -84,8 +84,18 @@ fn build_inputs(
         .map(|l| {
             let mut ld = Dict::new();
             ld.insert("description".into(), l.description.clone().into_value());
-            ld.insert("minutes".into(), (l.minutes as i64).into_value());
-            ld.insert("rate_cents".into(), l.rate_cents.into_value());
+            ld.insert(
+                "minutes".into(),
+                l.minutes
+                    .map(|minutes| i64::from(minutes).into_value())
+                    .unwrap_or(Value::None),
+            );
+            ld.insert(
+                "rate_cents".into(),
+                l.rate_cents
+                    .map(IntoValue::into_value)
+                    .unwrap_or(Value::None),
+            );
             ld.insert("amount_cents".into(), l.amount_cents.into_value());
             Value::Dict(ld)
         })

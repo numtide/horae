@@ -230,6 +230,22 @@ async fn export_connection(pool: &PgPool) -> (PgPool, i32) {
 
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]
+async fn streamed_fee_invoice_has_no_fabricated_hours_or_hourly_rate(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    let invoice_id = Uuid::now_v7();
+    let fee_id = Uuid::now_v7();
+    sqlx::query!("INSERT INTO invoices (id,org_id,client_id,number,issued_on,due_on,currency,total_cents) VALUES ($1,$2,$3,'FEE-1','2026-09-01','2026-10-01','EUR',12500)", invoice_id, ids.org_id, ids.client_id).execute(&pool).await.unwrap();
+    sqlx::query!("INSERT INTO project_fee_occurrences (id,org_id,project_id,period_key,due_on,description,amount_cents,currency,invoice_id) VALUES ($1,$2,$3,'single','2026-09-01','Fixed fee',12500,'EUR',$4)", fee_id, ids.org_id, ids.project_id, invoice_id).execute(&pool).await.unwrap();
+    sqlx::query!("INSERT INTO invoice_line_items (id,invoice_id,fee_occurrence_id,description,amount_cents) VALUES ($1,$2,$3,'Fixed fee',12500)", Uuid::now_v7(), invoice_id, fee_id).execute(&pool).await.unwrap();
+    let bytes = body(invoice(pool, ids.org_id, invoice_id).await.unwrap()).await;
+    assert_eq!(
+        String::from_utf8(bytes).unwrap(),
+        "Description,Hours,Rate,Amount\nFixed fee,,,125.00\nTotal,,,125.00\n"
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
 async fn dropping_streamed_timesheet_closes_its_database_connection(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
     add_entries(&pool, &ids, 10_001).await;

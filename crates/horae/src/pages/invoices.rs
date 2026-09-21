@@ -75,6 +75,9 @@ pub fn InvoiceList() -> Element {
 
             if show_form() {
                 FormCard { title: "Generate Invoice", error,
+                    p { class: "text-muted text-sm",
+                        "Creates a draft from unbilled time and monthly fees in this period, plus overdue single fees and milestones. Nothing is sent automatically."
+                    }
                     FormGroup { label: "Client", id: "inv-client",
                         Select {
                             id: "inv-client",
@@ -121,7 +124,7 @@ pub fn InvoiceList() -> Element {
                 {loaded(&*invoices.read(), |list| rsx! {
                     if list.is_empty() {
                         div { class: "text-muted text-sm p-5",
-                            "No invoices yet. Generate one from billable time."
+                            "No invoices yet. Generate one from billable time or project fees."
                         }
                     } else {
                         DataTable {
@@ -301,10 +304,10 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
                                         tr { key: "{line.id}",
                                             td { "{line.description}" }
                                             td { class: "text-mono text-right",
-                                                { horae_core::duration::format_hhmm(line.minutes.into()) }
+                                                { line.minutes.map(|minutes| horae_core::duration::format_hhmm(minutes.into())).unwrap_or_else(|| "—".into()) }
                                             }
                                             td { class: "text-mono text-right",
-                                                { format!("{}/hr", format_cents_plain(line.rate_cents)) }
+                                                { line.rate_cents.map(|rate| format!("{}/hr", format_cents_plain(rate))).unwrap_or_else(|| "—".into()) }
                                             }
                                             td { class: "text-mono text-right",
                                                 { format_cents_plain(line.amount_cents) }

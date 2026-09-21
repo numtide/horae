@@ -72,7 +72,7 @@ async fn configured_fixed_fee_hours_are_not_invoiced_but_legacy_fees_are_unchang
         let ids = seed(&pool, OrgRole::Manager).await;
         let entry = time_entry(&pool, &ids, EntryState::Open).await;
         sqlx::query!(
-            "UPDATE projects SET project_type = 'fixed_fee', rate_cents = 6000 WHERE id = $1",
+            "UPDATE projects SET project_type = 'fixed_fee', rate_cents = 6000, starts_on = '2026-10-01' WHERE id = $1",
             ids.project_id
         )
         .execute(&pool)
@@ -289,7 +289,7 @@ async fn selected_project_rate_modes_agree_across_billing_consumers(pool: PgPool
                 invoice.invoice.total_cents,
                 invoice.lines[0].rate_cents
             ),
-            (expected, expected, expected, expected),
+            (expected, expected, expected, Some(expected)),
             "selected mode: {mode}; task={task:?}, assignment={assignment:?}, project={project:?}",
         );
     }
@@ -354,7 +354,7 @@ async fn billing_cascade_agrees_across_all_four_levels_including_zero(pool: PgPo
                 invoice.invoice.total_cents,
                 invoice.lines[0].rate_cents
             ),
-            (expected, expected, expected, expected),
+            (expected, expected, expected, Some(expected)),
             "rates: {task:?}, {assignment:?}, {project:?}, {user:?}",
         );
     }
@@ -382,7 +382,7 @@ async fn project_rate_is_used_by_invoices_reports_and_spend(pool: PgPool) {
     let invoice = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, day, day)
         .await
         .unwrap();
-    assert_eq!(invoice.lines[0].rate_cents, 6000);
+    assert_eq!(invoice.lines[0].rate_cents, Some(6000));
     assert_eq!(invoice.invoice.total_cents, 6000);
     let report = crate::server_fns::reports::fetch_report(
         &pool,
@@ -726,7 +726,13 @@ async fn invoicing_uses_and_freezes_effective_minutes(pool: PgPool) {
         .iter()
         .map(|line| (line.time_entry_id, line.minutes, line.amount_cents))
         .collect();
-    assert_eq!(amounts, vec![(open, 15, 1500), (approved, 10, 1000)]);
+    assert_eq!(
+        amounts,
+        vec![
+            (Some(open), Some(15), 1500),
+            (Some(approved), Some(10), 1000)
+        ]
+    );
     assert_eq!(result.invoice.total_cents, 2500);
     let frozen = sqlx::query!(
         "SELECT id, minutes, rounded_minutes FROM time_entries WHERE org_id = $1 ORDER BY id",
@@ -922,7 +928,7 @@ async fn effective_minutes_migration_preserves_historical_invoice_quantities(poo
     assert!(
         lines
             .iter()
-            .all(|line| line.minutes == 8 && line.amount_cents == 800)
+            .all(|line| line.minutes == Some(8) && line.amount_cents == 800)
     );
 }
 
@@ -946,7 +952,7 @@ async fn invoicing_leaves_running_time_open(pool: PgPool) {
         .unwrap();
 
     let billed: Vec<_> = result.lines.iter().map(|line| line.time_entry_id).collect();
-    assert_eq!(billed, vec![stopped, approved]);
+    assert_eq!(billed, vec![Some(stopped), Some(approved)]);
     let timer = sqlx::query!(
         r#"SELECT state as "state: EntryState", invoice_id, is_running FROM time_entries WHERE id = $1"#,
         running,
