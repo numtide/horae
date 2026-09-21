@@ -152,6 +152,68 @@ async fn enabling_is_tenant_scoped_even_for_existing_links_and_preserves_overrid
     .unwrap();
     assert_eq!((link.billable, link.rate_cents), (false, Some(123)));
 }
+
+#[sqlx::test(migrations = "./migrations")]
+async fn enabling_tasks_only_inherits_rates_used_by_configured_projects(pool: PgPool) {
+    for project_type in [
+        ProjectType::TimeAndMaterials,
+        ProjectType::FixedFee,
+        ProjectType::NonBillable,
+    ] {
+        for mode in [None, Some("person"), Some("project"), Some("task")] {
+            for default_rate in [None, Some(0_i64), Some(8000)] {
+                let ids = seed(&pool, OrgRole::Admin).await;
+                sqlx::query!(
+                    "UPDATE projects SET project_type = $2 WHERE id = $1",
+                    ids.project_id,
+                    project_type as ProjectType
+                )
+                .execute(&pool)
+                .await
+                .unwrap();
+                sqlx::query!(
+                    "UPDATE tasks SET default_rate_cents = $2 WHERE id = $1",
+                    ids.task_id,
+                    default_rate
+                )
+                .execute(&pool)
+                .await
+                .unwrap();
+                if let Some(mode) = mode {
+                    sqlx::query!(
+                        "INSERT INTO project_settings (id, org_id, project_id, creator_id, rate_mode) VALUES ($1, $2, $3, $4, $5)",
+                        Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id, mode,
+                    ).execute(&pool).await.unwrap();
+                }
+                let mut tx = pool.begin().await.unwrap();
+                enable_project_task(&mut tx, ids.org_id, ids.project_id, ids.task_id)
+                    .await
+                    .unwrap();
+                tx.commit().await.unwrap();
+                let expected = if mode.is_none()
+                    || (project_type == ProjectType::TimeAndMaterials && mode == Some("task"))
+                {
+                    default_rate
+                } else {
+                    None
+                };
+                let stored = sqlx::query_scalar!(
+                    "SELECT rate_cents FROM project_tasks WHERE project_id = $1 AND task_id = $2",
+                    ids.project_id,
+                    ids.task_id
+                )
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+                assert_eq!(
+                    stored, expected,
+                    "type={project_type:?}, mode={mode:?}, default={default_rate:?}"
+                );
+            }
+        }
+    }
+}
+
 async fn project_with_assignment(pool: &PgPool) -> (User, Uuid) {
     let ids = seed(pool, OrgRole::Member).await;
     let colleague = Uuid::now_v7();

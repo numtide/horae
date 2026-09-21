@@ -914,9 +914,13 @@ async fn enable_project_task(
     // Validate before the idempotent insert, including already-linked pairs.
     // Hold these rows until commit so archiving cannot race task enablement.
     let task = sqlx::query!(
-        "SELECT t.billable_default, t.default_rate_cents
+        "SELECT t.billable_default,
+                CASE WHEN ps.project_id IS NULL
+                       OR (p.project_type = 'time_and_materials' AND ps.rate_mode = 'task')
+                     THEN t.default_rate_cents ELSE NULL END AS default_rate_cents
          FROM projects p JOIN clients c ON c.id = p.client_id AND c.org_id = p.org_id
          JOIN tasks t ON t.org_id = p.org_id
+         LEFT JOIN project_settings ps ON ps.project_id = p.id AND ps.org_id = p.org_id
          WHERE p.id = $1 AND t.id = $2 AND p.org_id = $3
            AND p.active AND c.active AND t.active
          FOR SHARE OF p, c, t",
