@@ -112,6 +112,11 @@
   --space-10: 2.5rem;
   --space-12: 3rem;
   --space-16: 4rem;
+  --space-24: 6rem;
+  --space-30: 7.5rem;
+  --space-40: 10rem;
+  --space-50: 12.5rem;
+  --space-60: 15rem;
   --size-progress: 0.4375rem;
   --size-checkbox: 18px;
   --size-empty-icon-tile: 3.25rem;

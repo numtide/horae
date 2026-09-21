@@ -60,15 +60,22 @@ pub(super) fn Billing(mut form: Signal<ProjectForm>, options: Signal<CreationOpt
                                 (RateMode::Task, "Task hourly rate", "Use the rate set for each task on this project."),
                                 (RateMode::Project, "Project hourly rate", "Apply one rate to all billable work on this project."),
                             ] {
-                                label { class: "np-option flex items-center gap-3 p-3 bg-base border border-input rounded-btn cursor-pointer",
-                                    input { class: "choice-box radio size-4 m-0", r#type: "radio", name: "np-rate-mode", checked: form.read().rate_mode == mode, onchange: move |_| form.write().rate_mode = mode }
-                                    span { span { class: "block text-sm", "{title}" } span { class: "block text-xs text-subtle mt-1", "{hint}" } }
+                                div { class: "np-option flex flex-wrap items-center gap-3 p-3 bg-base border border-input rounded-btn",
+                                    label { class: "flex flex-1 basis-form-select min-w-0 items-center gap-3 cursor-pointer",
+                                        input { class: "choice-box radio size-4 m-0", r#type: "radio", name: "np-rate-mode", checked: form.read().rate_mode == mode, onchange: move |_| form.write().rate_mode = mode }
+                                        span { span { class: "block text-sm", "{title}" } span { class: "block text-xs text-subtle mt-1", "{hint}" } }
+                                    }
+                                    if mode == RateMode::Project && form.read().rate_mode == mode {
+                                        div { class: "flex items-center gap-2 max-w-full",
+                                            span { class: "font-mono text-sm text-subtle", "{currency_label}" }
+                                            Input { id: "np-project-rate", label: "Hourly rate ({currency_label})", class: "w-30 max-w-full font-mono text-right", value: form.read().project_rate.clone(), oninput: move |event: FormEvent| form.write().project_rate = event.value() }
+                                            span { class: "text-xs text-subtle whitespace-nowrap", "/ h" }
+                                        }
+                                    }
                                 }
                             }
                             if form.read().rate_mode == RateMode::Project {
-                                FormGroup { label: "Hourly rate ({currency_label})", id: "np-project-rate", hint: "Required. Zero is an explicit rate, not a missing rate.",
-                                    Input { id: "np-project-rate", value: form.read().project_rate.clone(), oninput: move |event: FormEvent| form.write().project_rate = event.value() }
-                                }
+                                p { class: "form-hint m-0", "Required. Zero is an explicit rate, not a missing rate." }
                             }
                         }
                     }
@@ -119,31 +126,39 @@ fn Budget(mut form: Signal<ProjectForm>, currency: String, email_available: bool
     };
     rsx! {
         div {
-            FormGroup { label: "Budget", id: "np-budget-mode",
-                Select { id: "np-budget-mode", options: select_options, selected,
-                    onchange: move |event: FormEvent| {
-                        if let Some((mode, _, _)) = choices.iter().find(|(_, key, _)| *key == event.value()) { form.write().budget_mode = *mode; }
+            label { class: "block text-xs uppercase tracking-wide text-faint mb-2", r#for: "np-budget-mode", "Budget" }
+            div { class: "flex flex-wrap items-center gap-3",
+                div { class: "w-form-select max-w-full",
+                    Select { id: "np-budget-mode", options: select_options, selected,
+                        onchange: move |event: FormEvent| {
+                            if let Some((mode, _, _)) = choices.iter().find(|(_, key, _)| *key == event.value()) { form.write().budget_mode = *mode; }
+                        }
                     }
                 }
-            }
-            if matches!(mode, BudgetMode::TotalHours | BudgetMode::TotalFees) {
-                FormGroup { label: amount_label, id: "np-budget-value",
-                    Input { id: "np-budget-value", value: form.read().budget_value.clone(), oninput: move |event: FormEvent| form.write().budget_value = event.value() }
+                if matches!(mode, BudgetMode::TotalHours | BudgetMode::TotalFees) {
+                    div { class: "flex items-center gap-2 max-w-full",
+                        if mode == BudgetMode::TotalFees { span { class: "font-mono text-sm text-subtle", "{currency}" } }
+                        Input { id: "np-budget-value", label: amount_label, class: "w-40 max-w-full font-mono text-right", value: form.read().budget_value.clone(), oninput: move |event: FormEvent| form.write().budget_value = event.value() }
+                        span { class: "text-xs text-subtle", if mode == BudgetMode::TotalFees { "total" } else { "hours" } }
+                    }
                 }
             }
             if matches!(mode, BudgetMode::HoursPerTask | BudgetMode::FeesPerTask) { p { class: "form-hint", "Enter each task's budget in the Tasks section below." } }
             if mode == BudgetMode::HoursPerPerson { p { class: "form-hint", "Enter each person's budget in the Team section below." } }
             if mode != BudgetMode::None {
                 div { class: "flex flex-col gap-3 mt-4",
-                    Checkbox { checked: form.read().budget_alert, label: "Email me and project managers when the budget passes the threshold", disabled: !email_available && !form.read().budget_alert,
-                        onclick: move |_| { let value = !form.read().budget_alert; form.write().budget_alert = value; }
-                    }
-                    if !email_available { p { class: "form-hint m-0", "Email delivery is not configured. Ask an administrator to configure it before enabling budget emails." } }
-                    if form.read().budget_alert {
-                        FormGroup { label: "Budget email threshold (%)", id: "np-alert-threshold",
-                            Input { id: "np-alert-threshold", disabled: !email_available, value: form.read().budget_alert_at.clone(), oninput: move |event: FormEvent| form.write().budget_alert_at = event.value() }
+                    div { class: "flex flex-wrap items-center gap-3",
+                        Checkbox { checked: form.read().budget_alert, label: "Email me and project managers when the budget passes the threshold", disabled: !email_available && !form.read().budget_alert,
+                            onclick: move |_| { let value = !form.read().budget_alert; form.write().budget_alert = value; }
+                        }
+                        if form.read().budget_alert {
+                            div { class: "flex items-center gap-2",
+                                Input { id: "np-alert-threshold", label: "Budget email threshold (%)", class: "w-16 font-mono text-right", disabled: !email_available, value: form.read().budget_alert_at.clone(), oninput: move |event: FormEvent| form.write().budget_alert_at = event.value() }
+                                span { class: "text-sm text-subtle", "%" }
+                            }
                         }
                     }
+                    if !email_available { p { class: "form-hint m-0", "Email delivery is not configured. Ask an administrator to configure it before enabling budget emails." } }
                     Checkbox { checked: form.read().budget_monthly, label: "Budget resets every month", onclick: move |_| { let value = !form.read().budget_monthly; form.write().budget_monthly = value; } }
                     if form.read().project_type != ProjectType::NonBillable {
                         Checkbox { checked: form.read().budget_nonbillable, label: "Include non-billable time in the budget", onclick: move |_| { let value = !form.read().budget_nonbillable; form.write().budget_nonbillable = value; } }
@@ -193,12 +208,14 @@ fn FeeSchedule(mut form: Signal<ProjectForm>, currency: String) -> Element {
                     }
                 }
             } else {
-                div { class: "mt-4",
-                    FormGroup { label: "Fee ({currency})", id: "np-fee-amount",
-                        Input { id: "np-fee-amount", value: form.read().fee_amount.clone(), oninput: move |event: FormEvent| form.write().fee_amount = event.value() }
+                div { class: "flex flex-wrap items-center gap-2 mt-4",
+                    div { class: "flex items-center gap-2 max-w-full",
+                        span { class: "font-mono text-sm text-subtle", "{currency}" }
+                        Input { id: "np-fee-amount", label: "Fee ({currency})", class: "w-50 max-w-full font-mono text-right", value: form.read().fee_amount.clone(), oninput: move |event: FormEvent| form.write().fee_amount = event.value() }
                     }
                     if mode == FeeMode::Monthly {
-                        FormGroup { label: "Available to invoice on", id: "np-monthly-day",
+                        label { class: "text-xs text-subtle", r#for: "np-monthly-day", "per month, available to invoice on" }
+                        div { class: "w-50 max-w-full",
                             Select { id: "np-monthly-day", options: vec![("first".into(), "1st of the month".into()), ("fifteenth".into(), "15th of the month".into()), ("last".into(), "Last day of the month".into())],
                                 selected: match form.read().monthly_day { MonthlyFeeDay::First => "first", MonthlyFeeDay::Fifteenth => "fifteenth", MonthlyFeeDay::Last => "last" },
                                 onchange: move |event: FormEvent| form.write().monthly_day = match event.value().as_str() { "fifteenth" => MonthlyFeeDay::Fifteenth, "last" => MonthlyFeeDay::Last, _ => MonthlyFeeDay::First }

@@ -41,7 +41,9 @@ pub fn FormGroup(
 #[component]
 pub fn Input(
     #[props(default = "text".to_string())] kind: String,
+    #[props(default)] class: String,
     #[props(default)] id: String,
+    #[props(default)] label: String,
     #[props(default)] value: String,
     #[props(default)] placeholder: String,
     #[props(default)] disabled: bool,
@@ -50,8 +52,9 @@ pub fn Input(
 ) -> Element {
     rsx! {
         input {
-            class: "form-input",
+            class: if class.is_empty() { "form-input".into() } else { format!("form-input {class}") },
             id: if !id.is_empty() { "{id}" },
+            aria_label: if !label.is_empty() { "{label}" },
             r#type: "{kind}",
             value: "{value}",
             placeholder: "{placeholder}",

@@ -138,6 +138,37 @@ async fn billing_and_visibility_keep_native_radios_inside_designed_option_cards(
     }
 }
 
+#[test]
+fn shared_input_without_options_keeps_its_original_class_and_external_label() {
+    let mut dom = VirtualDom::new(|| rsx! { form::Input { id: "existing-field" } });
+    dom.rebuild_in_place();
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains("class=\"form-input\""));
+    assert!(!html.contains("aria-label="));
+}
+
+#[test]
+fn compact_input_adds_utilities_and_accessible_name_without_losing_native_state() {
+    let mut dom = VirtualDom::new(|| {
+        rsx! {
+            form::Input { id: "compact-field", class: "w-24 font-mono text-right", label: "Tax (%)", value: "1.50", disabled: true }
+        }
+    });
+    dom.rebuild_in_place();
+    let html = dioxus::ssr::render(&dom);
+    for attribute in [
+        "class=\"form-input w-24 font-mono text-right\"",
+        "aria-label=\"Tax (%)\"",
+        "value=\"1.50\"",
+        "disabled",
+    ] {
+        assert!(
+            html.contains(attribute),
+            "Missing compact input attribute: {attribute}"
+        );
+    }
+}
+
 #[tokio::test]
 async fn empty_form_has_labelled_fields_no_demo_data_and_no_spurious_save() {
     let probe = Probe::default();

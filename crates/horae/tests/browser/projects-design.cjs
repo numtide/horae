@@ -316,5 +316,8 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
     console.log('PASS: shared Menu, Combobox, empty-state and navigation-icon defaults are unchanged');
     assert.deepEqual(mutations, []);
     assert.deepEqual(errors, []);
+  } catch (error) {
+    console.error({ url: page.url(), errors, mutations, page: await page.locator('body').ariaSnapshot() });
+    throw error;
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

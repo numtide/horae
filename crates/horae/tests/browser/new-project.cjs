@@ -95,6 +95,19 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await saved();
     console.log('PASS: project types retain native keyboard selection and the designed icon/option-card states');
 
+    const fieldWidth = async (id, width, numeric = false) => {
+      const field = screen.locator(`#${id}`);
+      assert.equal((await field.boundingBox()).width, width, `${id} matches its handoff width`);
+      if (numeric) {
+        assert.equal(await field.evaluate(node => getComputedStyle(node).textAlign), 'right');
+        assert.match(await field.evaluate(node => getComputedStyle(node).fontFamily), /IBM Plex Mono/);
+      }
+    };
+    await fieldWidth('np-terms', 240);
+    await fieldWidth('np-po-number', 240);
+    await fieldWidth('np-tax', 96, true);
+    await fieldWidth('np-discount', 96, true);
+
     const clientPicker = page.getByRole('dialog', { name: 'Choose Client', exact: true });
     await screen.getByLabel('Client', { exact: true }).click();
     const clientSearch = clientPicker.getByRole('searchbox', { name: 'Search Client', exact: true });
@@ -210,6 +223,14 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await screen.locator('#np-project-rate').fill('75.25');
     await screen.getByLabel('Budget', { exact: true }).selectOption({ label: 'Total project hours' });
     await screen.locator('#np-budget-value').fill('120');
+    await fieldWidth('np-project-rate', 120, true);
+    await fieldWidth('np-budget-mode', 320);
+    await fieldWidth('np-budget-value', 160, true);
+    await expect(screen.locator('.np-option:has(input[name="np-rate-mode"]:checked) #np-project-rate')).toBeVisible();
+    const budgetTypeBox = await screen.locator('#np-budget-mode').boundingBox();
+    const budgetAmountBox = await screen.locator('#np-budget-value').boundingBox();
+    assert.ok(Math.abs((budgetTypeBox.y + budgetTypeBox.height / 2) -
+      (budgetAmountBox.y + budgetAmountBox.height / 2)) <= 1, 'Budget type and amount align in a desktop row');
     await expect(screen.getByRole('checkbox', { name: /^Email me/ })).toBeDisabled();
     await screen.getByRole('button', { name: 'Add everyone', exact: true }).click();
     await expect(screen.getByLabel('Project name', { exact: true })).toBeEnabled();
@@ -227,6 +248,15 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await screen.getByLabel('Payment terms', { exact: true }).selectOption({ label: 'Custom days' });
     await screen.getByLabel('Days until payment is due', { exact: true }).fill('21');
     await screen.getByLabel('Tax (%)', { exact: true }).fill('21');
+    await screen.getByRole('button', { name: 'Add a second tax', exact: true }).click();
+    await screen.getByLabel('Second tax name', { exact: true }).fill('Local tax');
+    await screen.getByLabel('Second tax (%)', { exact: true }).fill('1.5');
+    await fieldWidth('np-second-tax-name', 160);
+    await fieldWidth('np-second-tax', 96, true);
+    await screen.getByRole('button', { name: 'Remove second tax', exact: true }).focus();
+    await page.keyboard.press('Enter');
+    await expect(screen.getByLabel('Tax (%)', { exact: true })).toBeFocused();
+    await expect(screen.getByLabel('Second tax name', { exact: true })).toHaveCount(0);
     await screen.getByRole('button', { name: 'Add a second tax', exact: true }).click();
     await screen.getByLabel('Second tax name', { exact: true }).fill('Local tax');
     await screen.getByLabel('Second tax (%)', { exact: true }).fill('1.5');
@@ -291,6 +321,20 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await tagInput.press('Enter');
     for (const width of [390, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
+      await fieldWidth('np-project-rate', 120, true);
+      await fieldWidth('np-budget-value', 160, true);
+      await fieldWidth('np-terms', 240);
+      await fieldWidth('np-po-number', 240);
+      await fieldWidth('np-tax', 96, true);
+      await fieldWidth('np-second-tax-name', 160);
+      await fieldWidth('np-second-tax', 96, true);
+      await fieldWidth('np-discount', 96, true);
+      if (width === 390) {
+        const rateLabel = await screen.locator('.np-option label:has(input[name="np-rate-mode"]:checked)').boundingBox();
+        const rateField = await screen.locator('#np-project-rate').boundingBox();
+        assert.ok(rateField.y >= rateLabel.y + rateLabel.height,
+          'At mobile width the rate moves below its label instead of crushing the description');
+      }
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true,
         `New project fits at ${width}px`);
       await screen.getByLabel('End date', { exact: true }).click();
@@ -323,6 +367,8 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
       await expect(screen.locator('[style]:not([style=""])')).toHaveCount(0);
       if (process.env.HORAE_TEST_SCREENSHOT_DIR) {
         await page.screenshot({ path: `${process.env.HORAE_TEST_SCREENSHOT_DIR}/new-project-${width}.png`, fullPage: true });
+        await screen.locator('.np-row:has(.np-types)').screenshot({ path: `${process.env.HORAE_TEST_SCREENSHOT_DIR}/new-project-billing-${width}.png` });
+        await screen.getByRole('region', { name: 'Invoice defaults', exact: true }).screenshot({ path: `${process.env.HORAE_TEST_SCREENSHOT_DIR}/new-project-invoice-defaults-${width}.png` });
       }
     }
     await page.setViewportSize({ width: 390, height: 320 });
@@ -342,6 +388,9 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await page.setViewportSize({ width: 1440, height: 900 });
     await tagField.getByRole('button', { name: `Remove tag ${wideTag}`, exact: true }).click();
     await screen.getByRole('radio', { name: /^Fixed Fee/ }).check();
+    await fieldWidth('np-fee-amount', 200, true);
+    await screen.getByRole('radio', { name: 'Monthly', exact: true }).check();
+    await fieldWidth('np-monthly-day', 200);
     await screen.getByRole('radio', { name: 'Milestones', exact: true }).check();
     await screen.getByRole('button', { name: 'Add milestone', exact: true }).click();
     await screen.getByLabel('Milestone name', { exact: true }).fill('Delivery');
