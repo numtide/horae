@@ -1,6 +1,10 @@
 //! Invoice server functions.
 
 use super::*;
+use crate::models::invoice::InvoiceDefaults;
+
+#[cfg(feature = "server")]
+mod defaults;
 
 #[cfg(feature = "server")]
 mod fees;
@@ -29,7 +33,9 @@ pub async fn list_invoices(status: Option<String>) -> Result<Vec<Invoice>, Serve
                   status as "status: InvoiceStatus",
                   issued_on as "issued_on: chrono::NaiveDate",
                   due_on as "due_on: chrono::NaiveDate",
-                  currency, total_cents, notes,
+                  currency, total_cents, notes, terms_days, po_number,
+                  discount_bps, tax1_bps, tax2_name, tax2_bps,
+                  subtotal_cents, discount_cents, tax1_cents, tax2_cents,
                   created_at as "created_at: chrono::DateTime<chrono::Utc>"
            FROM invoices
            WHERE org_id = $1
@@ -63,6 +69,8 @@ pub async fn generate_invoice(
     client_id: String,
     period_from: String,
     period_to: String,
+    project_ids: Option<Vec<String>>,
+    overrides: Option<InvoiceDefaults>,
 ) -> Result<InvoiceWithLines, ServerFnError> {
     let manager = require_manager().await?;
     let state = crate::state::global_state().await;
@@ -70,8 +78,28 @@ pub async fn generate_invoice(
     let from = parse_date(&period_from, "period_from")?;
     let to = parse_date(&period_to, "period_to")?;
 
-    let result =
-        generate_invoice_for_period(&state.db, manager.org_id, client_id, from, to).await?;
+    if project_ids
+        .as_ref()
+        .is_some_and(|ids| ids.is_empty() || ids.len() > 1000)
+    {
+        return Err(err(BAD_REQUEST, "Select between 1 and 1000 projects"));
+    }
+    let project_ids = project_ids
+        .map(|ids| {
+            ids.iter()
+                .map(|id| parse_uuid(id, "project_id"))
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .transpose()?;
+    let result = generate_invoice_with_options(
+        &state.db,
+        manager.org_id,
+        client_id,
+        (from, to),
+        project_ids.as_deref(),
+        overrides.as_ref(),
+    )
+    .await?;
     state
         .plugins
         .dispatch(crate::plugin::AppEvent::InvoiceCreated {
@@ -82,7 +110,7 @@ pub async fn generate_invoice(
     Ok(result)
 }
 
-#[cfg(feature = "server")]
+#[cfg(all(test, feature = "server"))]
 async fn generate_invoice_for_period(
     pool: &sqlx::PgPool,
     org_id: uuid::Uuid,
@@ -90,6 +118,31 @@ async fn generate_invoice_for_period(
     from: chrono::NaiveDate,
     to: chrono::NaiveDate,
 ) -> Result<InvoiceWithLines, ServerFnError> {
+    generate_invoice_with_options(pool, org_id, client_id, (from, to), None, None).await
+}
+
+#[cfg(feature = "server")]
+async fn generate_invoice_with_options(
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    client_id: uuid::Uuid,
+    (from, to): (chrono::NaiveDate, chrono::NaiveDate),
+    project_ids: Option<&[uuid::Uuid]>,
+    overrides: Option<&InvoiceDefaults>,
+) -> Result<InvoiceWithLines, ServerFnError> {
+    if from > to {
+        return Err(err(BAD_REQUEST, "Invoice period ends before it starts"));
+    }
+    if project_ids.is_some_and(|ids| ids.is_empty() || ids.len() > 1000) {
+        return Err(err(BAD_REQUEST, "Select between 1 and 1000 projects"));
+    }
+    let selected = project_ids.map(|ids| {
+        ids.iter()
+            .copied()
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>()
+    });
     // Verify client belongs to this org before selecting any billable work.
     sqlx::query_scalar!(
         "SELECT id FROM clients WHERE id = $1 AND org_id = $2",
@@ -119,6 +172,16 @@ async fn generate_invoice_for_period(
     .await
     .map_err(server_err)?;
 
+    if let Some(ids) = &selected {
+        let allowed = sqlx::query_scalar!("SELECT id FROM projects WHERE org_id = $1 AND client_id = $2 AND id = ANY($3) ORDER BY id FOR SHARE", org_id, client_id, ids)
+            .fetch_all(&mut *tx).await.map_err(server_err)?;
+        if allowed.len() != ids.len() {
+            return Err(not_found(
+                "Some selected projects are unavailable for this client",
+            ));
+        }
+    }
+
     // Fetch billable, un-invoiced entries for this client in the period,
     // with the selected hourly rate. Open and approved time is
     // invoiceable (spec 001: billable, un-invoiced time is directly
@@ -128,6 +191,7 @@ async fn generate_invoice_for_period(
     // were just invoiced.
     struct EntryWithRates {
         entry_id: uuid::Uuid,
+        project_id: uuid::Uuid,
         minutes: i32,
         project_name: String,
         task_name: String,
@@ -141,6 +205,7 @@ async fn generate_invoice_for_period(
         EntryWithRates,
         r#"SELECT
              te.id as entry_id,
+             te.project_id,
              effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir) as "minutes!",
              p.name as project_name,
              t.name as task_name,
@@ -171,18 +236,21 @@ async fn generate_invoice_for_period(
              AND te.state IN ('open', 'approved')
              AND te.spent_date >= $3
              AND te.spent_date <= $4
+             AND ($5::uuid[] IS NULL OR p.id = ANY($5))
            ORDER BY te.spent_date, te.id
            FOR UPDATE OF te"#,
         org_id,
         client_id,
         from as chrono::NaiveDate,
         to as chrono::NaiveDate,
+        selected.as_deref(),
     )
     .fetch_all(&mut *tx)
     .await
     .map_err(server_err)?;
 
-    let fees = fees::prepare_fees(&mut tx, org_id, client_id, from, to).await?;
+    let fees =
+        fees::prepare_fees(&mut tx, org_id, client_id, from, to, selected.as_deref()).await?;
     let currency = entries
         .first()
         .map(|entry| entry.currency.trim())
@@ -200,6 +268,21 @@ async fn generate_invoice_for_period(
         ));
     }
 
+    let billed_projects: Vec<_> = entries
+        .iter()
+        .map(|entry| entry.project_id)
+        .chain(fees.iter().map(|fee| fee.project_id))
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    let settings = defaults::resolve(
+        &mut tx,
+        org_id,
+        selected.as_deref().unwrap_or(&billed_projects),
+        overrides,
+    )
+    .await?;
+
     // Generate invoice number: INV-YYYYMM-NNN
     let now = chrono::Utc::now();
     let year_month = now.format("%Y%m").to_string();
@@ -216,8 +299,8 @@ async fn generate_invoice_for_period(
 
     let invoice_id = uuid::Uuid::now_v7();
     let issued_on = now.date_naive();
-    // Default due date: 30 days from issue
-    let due_on = issued_on + chrono::Duration::days(30);
+    let due_on = horae_core::project::payment_due_date(issued_on, settings.terms_days as u16)
+        .map_err(|error| err(BAD_REQUEST, error.to_string()))?;
 
     // Build line items and compute total.
     let mut lines = Vec::with_capacity(entries.len() + fees.len());
@@ -269,10 +352,14 @@ async fn generate_invoice_for_period(
         });
     }
 
-    // Insert invoice.
+    let amounts = defaults::amounts(&settings, total_cents)?;
+    let total_cents = amounts.total_cents;
+
+    // Insert invoice-owned values; later project edits cannot alter this snapshot.
     sqlx::query!(
-        r#"INSERT INTO invoices (id, org_id, client_id, number, status, issued_on, due_on, currency, total_cents)
-           VALUES ($1, $2, $3, $4, 'draft', $5, $6, $7, $8)"#,
+        r#"INSERT INTO invoices (id, org_id, client_id, number, status, issued_on, due_on, currency, total_cents,
+             po_number,discount_bps,tax1_bps,tax2_name,tax2_bps,discount_cents,tax1_cents,tax2_cents)
+           VALUES ($1, $2, $3, $4, 'draft', $5, $6, $7, $8, $9,$10,$11,$12,$13,$14,$15,$16)"#,
         invoice_id,
         org_id,
         client_id,
@@ -281,6 +368,8 @@ async fn generate_invoice_for_period(
         due_on as chrono::NaiveDate,
         currency,
         total_cents,
+        settings.po_number, settings.discount_bps, settings.tax1_bps, settings.tax2_name,
+        settings.tax2_bps, amounts.discount_cents, amounts.tax1_cents, amounts.tax2_cents,
     )
     .execute(&mut *tx)
     .await
@@ -380,11 +469,87 @@ async fn generate_invoice_for_period(
         due_on,
         currency: currency.to_string(),
         total_cents,
+        terms_days: i32::from(settings.terms_days),
+        po_number: settings.po_number,
+        discount_bps: settings.discount_bps,
+        tax1_bps: settings.tax1_bps,
+        tax2_name: settings.tax2_name,
+        tax2_bps: settings.tax2_bps,
+        subtotal_cents: amounts.subtotal_cents,
+        discount_cents: amounts.discount_cents,
+        tax1_cents: amounts.tax1_cents,
+        tax2_cents: amounts.tax2_cents,
         notes: None,
         created_at: now,
     };
 
     Ok(InvoiceWithLines { invoice, lines })
+}
+
+/// Override only an editable invoice; project defaults and source lines stay intact.
+#[server]
+pub async fn update_invoice_defaults(
+    invoice_id: String,
+    overrides: InvoiceDefaults,
+) -> Result<Invoice, ServerFnError> {
+    let manager = require_manager().await?;
+    let state = crate::state::global_state().await;
+    let id = parse_uuid(&invoice_id, "invoice_id")?;
+    update_invoice_defaults_in_db(&state.db, manager.org_id, id, &overrides).await
+}
+
+#[cfg(feature = "server")]
+async fn update_invoice_defaults_in_db(
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    id: uuid::Uuid,
+    overrides: &InvoiceDefaults,
+) -> Result<Invoice, ServerFnError> {
+    let mut tx = pool.begin().await.map_err(server_err)?;
+    let current = sqlx::query!(
+        r#"SELECT status as "status: InvoiceStatus", subtotal_cents,
+                  issued_on as "issued_on: chrono::NaiveDate"
+           FROM invoices WHERE org_id = $1 AND id = $2 FOR UPDATE"#,
+        org_id,
+        id,
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(server_err)?
+    .ok_or_else(|| not_found("Invoice not found"))?;
+    if current.status != InvoiceStatus::Draft {
+        return Err(conflict("Only draft invoices can be edited"));
+    }
+    let amounts = defaults::amounts(overrides, current.subtotal_cents)?;
+    let due_on =
+        horae_core::project::payment_due_date(current.issued_on, overrides.terms_days as u16)
+            .map_err(|error| err(BAD_REQUEST, error.to_string()))?;
+    sqlx::query!(
+        "UPDATE invoices SET due_on=$3,po_number=$4,discount_bps=$5,tax1_bps=$6,
+            tax2_name=$7,tax2_bps=$8,discount_cents=$9,tax1_cents=$10,tax2_cents=$11,total_cents=$12
+         WHERE org_id=$1 AND id=$2",
+        org_id,
+        id,
+        due_on as chrono::NaiveDate,
+        overrides.po_number,
+        overrides.discount_bps,
+        overrides.tax1_bps,
+        overrides.tax2_name,
+        overrides.tax2_bps,
+        amounts.discount_cents,
+        amounts.tax1_cents,
+        amounts.tax2_cents,
+        amounts.total_cents,
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(server_err)?;
+    let invoice = crate::reports::fetch_invoice_metadata(&mut *tx, id, org_id)
+        .await
+        .map_err(server_err)?
+        .ok_or_else(|| not_found("Invoice not found"))?;
+    tx.commit().await.map_err(server_err)?;
+    Ok(invoice)
 }
 
 #[server]
@@ -492,7 +657,9 @@ async fn transition_invoice(
                      status as "status: InvoiceStatus",
                      issued_on as "issued_on: chrono::NaiveDate",
                      due_on as "due_on: chrono::NaiveDate",
-                     currency, total_cents, notes,
+                     currency, total_cents, notes, terms_days, po_number,
+                     discount_bps, tax1_bps, tax2_name, tax2_bps,
+                     subtotal_cents, discount_cents, tax1_cents, tax2_cents,
                      created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
         id,
         org_id,

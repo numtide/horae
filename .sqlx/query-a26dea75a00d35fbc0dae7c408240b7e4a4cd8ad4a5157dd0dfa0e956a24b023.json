@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO project_settings (id,org_id,project_id,creator_id,rate_mode,fee_mode,fee_amount_cents,terms_days) VALUES ($1,$2,$3,$4,'person','single',90000,90)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a26dea75a00d35fbc0dae7c408240b7e4a4cd8ad4a5157dd0dfa0e956a24b023"
+}

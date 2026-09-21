@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE project_settings SET terms_days = 90,tax1_bps = 0 WHERE project_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "da356d131e44b749f492ed4d8f1db2f268cfd9d8a509d0ef621f63648e898c19"
+}

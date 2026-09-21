@@ -109,7 +109,7 @@ pub fn InvoiceList() -> Element {
                             let from = period_from();
                             let to = period_to();
                             run_action(
-                                server_fns::generate_invoice(client, from, to),
+                                server_fns::generate_invoice(client, from, to, None, None),
                                 invoices,
                                 error,
                                 move || show_form.set(false),

@@ -447,7 +447,7 @@ async fn fetch_invoice_from(
     Ok(Some((invoice, lines)))
 }
 
-async fn fetch_invoice_metadata(
+pub(crate) async fn fetch_invoice_metadata(
     executor: impl sqlx::PgExecutor<'_>,
     invoice_id: uuid::Uuid,
     org_id: uuid::Uuid,
@@ -459,7 +459,9 @@ async fn fetch_invoice_metadata(
                   status as "status: InvoiceStatus",
                   issued_on as "issued_on: chrono::NaiveDate",
                   due_on as "due_on: chrono::NaiveDate",
-                  currency, total_cents, notes,
+                  currency, total_cents, notes, terms_days, po_number,
+                  discount_bps, tax1_bps, tax2_name, tax2_bps,
+                  subtotal_cents, discount_cents, tax1_cents, tax2_cents,
                   created_at as "created_at: chrono::DateTime<chrono::Utc>"
            FROM invoices
            WHERE id = $1 AND org_id = $2"#,

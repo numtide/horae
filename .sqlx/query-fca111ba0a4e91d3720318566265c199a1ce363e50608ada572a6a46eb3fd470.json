@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE invoices SET status = $3\n           WHERE id = $1 AND org_id = $2\n           RETURNING id, org_id, client_id, number,\n                     status as \"status: InvoiceStatus\",\n                     issued_on as \"issued_on: chrono::NaiveDate\",\n                     due_on as \"due_on: chrono::NaiveDate\",\n                     currency, total_cents, notes,\n                     created_at as \"created_at: chrono::DateTime<chrono::Utc>\"",
+  "query": "SELECT id, org_id, client_id, number,\n                  status as \"status: InvoiceStatus\",\n                  issued_on as \"issued_on: chrono::NaiveDate\",\n                  due_on as \"due_on: chrono::NaiveDate\",\n                  currency, total_cents, notes, terms_days, po_number,\n                  discount_bps, tax1_bps, tax2_name, tax2_bps,\n                  subtotal_cents, discount_cents, tax1_cents, tax2_cents,\n                  created_at as \"created_at: chrono::DateTime<chrono::Utc>\"\n           FROM invoices\n           WHERE org_id = $1\n             AND ($2::invoice_status IS NULL OR status = $2)\n           ORDER BY created_at DESC",
   "describe": {
     "columns": [
       {
@@ -67,13 +67,62 @@
       },
       {
         "ordinal": 10,
+        "name": "terms_days",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 11,
+        "name": "po_number",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "discount_bps",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 13,
+        "name": "tax1_bps",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 14,
+        "name": "tax2_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "tax2_bps",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 16,
+        "name": "subtotal_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 17,
+        "name": "discount_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 18,
+        "name": "tax1_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 19,
+        "name": "tax2_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 20,
         "name": "created_at: chrono::DateTime<chrono::Utc>",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
         "Uuid",
         {
           "Custom": {
@@ -101,8 +150,18 @@
       false,
       false,
       true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
       false
     ]
   },
-  "hash": "364ddb660191bf63488c1309e11fb62e249516bd8496aad8a9f72416bd2a646d"
+  "hash": "fca111ba0a4e91d3720318566265c199a1ce363e50608ada572a6a46eb3fd470"
 }

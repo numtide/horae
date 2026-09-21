@@ -76,6 +76,8 @@ Projects uses the same configured consumption evaluator as budget alerts. The ov
 
 Invoice defaults are snapshots, editable on drafts; conflicting defaults require explicit resolution. CSV/XLSX/PDF and displayed totals include every adjustment component and identify currency. A new project does not issue invoices or send client email.
 
+Generation accepts an optional bounded selection of project IDs and explicit invoice overrides. Empty selections, unavailable/cross-client/foreign projects and invalid percentages/text/terms are rejected; duplicate selected IDs collapse without duplicate charges. Time and fee queries use the same selection, including already-materialized unclaimed fees. Without a selection, contributing projects determine defaults; an explicit selection also includes selected projects without currently eligible work when resolving defaults. Missing project configuration means Net 30 and zero adjustments. Differing defaults return a conflict unless explicit invoice values are supplied. Generation and draft-only default edits reuse core arithmetic and preserve source line amounts. The edit locks the invoice before checking its state so a concurrent send cannot accept a late edit. Voiding retains invoice-owned values and historical lines. Interactive preparation, editing controls and complete export presentation remain tracked separately until their acceptance checks pass.
+
 ## Optional email deployment
 
 Administrator configuration supplies absolute sendmail-compatible executable and sender; no shell command text. Availability is returned truthfully to the UI. Reject header/recipient injection, bound subprocess time/output, use direct stdin message and fixed arguments. Tests use an isolated stub, never the user's mail configuration.

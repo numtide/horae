@@ -3,6 +3,456 @@ use crate::server_fns::test_seed::{seed, time_entry};
 use sqlx::PgPool;
 
 #[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn invoice_defaults_apply_exact_adjustments_and_payment_terms(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    time_entry(&pool, &ids, EntryState::Open).await;
+    sqlx::query!(
+        "UPDATE projects SET rate_cents = 10001 WHERE id = $1",
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!("INSERT INTO project_settings (id,org_id,project_id,creator_id,rate_mode,terms_days,po_number,discount_bps,tax1_bps,tax2_name,tax2_bps)
+        VALUES ($1,$2,$3,$4,'project',21,'PO-123',1250,2100,'Local tax',150)", uuid::Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id)
+        .execute(&pool).await.unwrap();
+    let day = "2026-09-07".parse().unwrap();
+    let result = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, day, day)
+        .await
+        .unwrap();
+    assert_eq!(
+        (result.invoice.due_on - result.invoice.issued_on).num_days(),
+        21
+    );
+    assert_eq!(result.invoice.total_cents, 10720);
+    assert_eq!(
+        result
+            .lines
+            .iter()
+            .map(|line| line.amount_cents)
+            .sum::<i64>(),
+        10001
+    );
+    assert_eq!(
+        (
+            result.invoice.subtotal_cents,
+            result.invoice.discount_cents,
+            result.invoice.tax1_cents,
+            result.invoice.tax2_cents
+        ),
+        (10001, 1250, 1838, 131)
+    );
+    assert_eq!(result.invoice.po_number, "PO-123");
+    assert_eq!(result.invoice.tax2_name.as_deref(), Some("Local tax"));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn invoice_defaults_conflict_rolls_back_all_claims(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    let first_entry = time_entry(&pool, &ids, EntryState::Open).await;
+    let other = crate::server_fns::test_seed::SeedIds {
+        project_id: uuid::Uuid::now_v7(),
+        ..ids
+    };
+    sqlx::query!("INSERT INTO projects (id,org_id,client_id,name,currency,rate_cents) VALUES ($1,$2,$3,'Other','EUR',10000)", other.project_id, ids.org_id, ids.client_id)
+        .execute(&pool).await.unwrap();
+    time_entry(&pool, &other, EntryState::Open).await;
+    sqlx::query!(
+        "INSERT INTO project_settings (id,org_id,project_id,creator_id,rate_mode,terms_days)
+        VALUES ($1,$2,$3,$4,'project',14)",
+        uuid::Uuid::now_v7(),
+        ids.org_id,
+        other.project_id,
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let day = "2026-09-07".parse().unwrap();
+    let error = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, day, day)
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        ServerFnError::ServerError { code: CONFLICT, .. }
+    ));
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM invoices WHERE org_id = $1",
+            ids.org_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(0)
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT invoice_id FROM time_entries WHERE id = $1",
+            first_entry
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        None
+    );
+    let explicit = InvoiceDefaults {
+        terms_days: 0,
+        po_number: "Resolved".into(),
+        ..Default::default()
+    };
+    let result = generate_invoice_with_options(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        (day, day),
+        None,
+        Some(&explicit),
+    )
+    .await
+    .unwrap();
+    assert_eq!(result.lines.len(), 2);
+    assert_eq!(result.invoice.due_on, result.invoice.issued_on);
+    assert_eq!(result.invoice.po_number, "Resolved");
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn invoice_defaults_are_invoice_owned_and_only_drafts_are_editable(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    time_entry(&pool, &ids, EntryState::Open).await;
+    sqlx::query!(
+        "UPDATE projects SET rate_cents = 10000 WHERE id = $1",
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!("INSERT INTO project_settings (id,org_id,project_id,creator_id,rate_mode,terms_days,tax1_bps)
+        VALUES ($1,$2,$3,$4,'project',14,2100)", uuid::Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id).execute(&pool).await.unwrap();
+    let day = "2026-09-07".parse().unwrap();
+    let created = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, day, day)
+        .await
+        .unwrap();
+    sqlx::query!(
+        "UPDATE project_settings SET terms_days = 90,tax1_bps = 0 WHERE project_id = $1",
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let stored = crate::reports::fetch_invoice_metadata(&pool, created.invoice.id, ids.org_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        (stored.terms_days, stored.tax1_bps, stored.total_cents),
+        (14, 2100, 12100)
+    );
+    let overrides = InvoiceDefaults {
+        terms_days: 21,
+        po_number: "Invoice only".into(),
+        discount_bps: 1000,
+        tax1_bps: 1000,
+        ..Default::default()
+    };
+    let edited = update_invoice_defaults_in_db(&pool, ids.org_id, stored.id, &overrides)
+        .await
+        .unwrap();
+    assert_eq!(
+        (
+            edited.terms_days,
+            edited.subtotal_cents,
+            edited.discount_cents,
+            edited.tax1_cents,
+            edited.total_cents
+        ),
+        (21, 10000, 1000, 900, 9900)
+    );
+    let settings = sqlx::query!(
+        "SELECT terms_days,tax1_bps,po_number FROM project_settings WHERE project_id = $1",
+        ids.project_id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        (
+            settings.terms_days,
+            settings.tax1_bps,
+            settings.po_number.as_str()
+        ),
+        (90, 0, "")
+    );
+    let foreign = seed(&pool, OrgRole::Manager).await;
+    assert!(matches!(
+        update_invoice_defaults_in_db(&pool, foreign.org_id, stored.id, &overrides).await,
+        Err(ServerFnError::ServerError {
+            code: NOT_FOUND,
+            ..
+        })
+    ));
+    transition_invoice(&pool, ids.org_id, stored.id, InvoiceStatus::Sent)
+        .await
+        .unwrap();
+    assert!(matches!(
+        update_invoice_defaults_in_db(&pool, ids.org_id, stored.id, &InvoiceDefaults::default())
+            .await,
+        Err(ServerFnError::ServerError { code: CONFLICT, .. })
+    ));
+    transition_invoice(&pool, ids.org_id, stored.id, InvoiceStatus::Void)
+        .await
+        .unwrap();
+    let voided = crate::reports::fetch_invoice_metadata(&pool, stored.id, ids.org_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        (voided.total_cents, voided.po_number.as_str()),
+        (9900, "Invoice only")
+    );
+    assert!(
+        update_invoice_defaults_in_db(&pool, ids.org_id, stored.id, &overrides)
+            .await
+            .is_err()
+    );
+    let regenerated = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, day, day)
+        .await
+        .unwrap();
+    assert_eq!(
+        (
+            regenerated.invoice.terms_days,
+            regenerated.invoice.total_cents
+        ),
+        (90, 10000)
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn invoice_defaults_selection_rejects_unavailable_projects_before_claiming(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    let entry = time_entry(&pool, &ids, EntryState::Open).await;
+    let unselected = crate::server_fns::test_seed::SeedIds {
+        project_id: uuid::Uuid::now_v7(),
+        ..ids
+    };
+    sqlx::query!("INSERT INTO projects (id,org_id,client_id,name,currency,rate_cents) VALUES ($1,$2,$3,'Unselected','EUR',10000)", unselected.project_id, ids.org_id, ids.client_id)
+        .execute(&pool).await.unwrap();
+    let unselected_entry = time_entry(&pool, &unselected, EntryState::Open).await;
+    let foreign = seed(&pool, OrgRole::Manager).await;
+    let day = "2026-09-07".parse().unwrap();
+    for selected in [
+        vec![],
+        vec![foreign.project_id],
+        vec![ids.project_id, foreign.project_id],
+    ] {
+        assert!(
+            generate_invoice_with_options(
+                &pool,
+                ids.org_id,
+                ids.client_id,
+                (day, day),
+                Some(&selected),
+                None
+            )
+            .await
+            .is_err()
+        );
+    }
+    let result = generate_invoice_with_options(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        (day, day),
+        Some(&[ids.project_id, ids.project_id]),
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(result.lines.len(), 1);
+    assert_eq!(result.lines[0].time_entry_id, Some(entry));
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT invoice_id FROM time_entries WHERE id = $1",
+            unselected_entry
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        None
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn invoice_defaults_edit_rechecks_status_after_waiting_for_a_concurrent_send(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    time_entry(&pool, &ids, EntryState::Open).await;
+    let day = "2026-09-07".parse().unwrap();
+    let invoice = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, day, day)
+        .await
+        .unwrap()
+        .invoice;
+    let mut sending = pool.begin().await.unwrap();
+    let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
+        .fetch_one(&mut *sending)
+        .await
+        .unwrap()
+        .unwrap();
+    sqlx::query!(
+        "SELECT id FROM invoices WHERE id = $1 FOR UPDATE",
+        invoice.id
+    )
+    .fetch_one(&mut *sending)
+    .await
+    .unwrap();
+    let edit_pool = pool.clone();
+    let edit = tokio::spawn(async move {
+        update_invoice_defaults_in_db(
+            &edit_pool,
+            ids.org_id,
+            invoice.id,
+            &InvoiceDefaults {
+                po_number: "Must not save".into(),
+                ..Default::default()
+            },
+        )
+        .await
+    });
+    crate::server_fns::test_seed::wait_for_blocked(&pool, blocker).await;
+    sqlx::query!(
+        "UPDATE invoices SET status = 'sent' WHERE id = $1",
+        invoice.id
+    )
+    .execute(&mut *sending)
+    .await
+    .unwrap();
+    sending.commit().await.unwrap();
+    assert!(matches!(
+        edit.await.unwrap(),
+        Err(ServerFnError::ServerError { code: CONFLICT, .. })
+    ));
+    let stored = crate::reports::fetch_invoice_metadata(&pool, invoice.id, ids.org_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(stored.po_number, "");
+}
+
+#[sqlx::test(migrations = false)]
+#[serial_test::serial]
+async fn invoice_defaults_legacy_insert_preserves_dates_and_exact_total(pool: PgPool) {
+    let mut previous = sqlx::migrate!("./migrations");
+    previous.migrations = std::borrow::Cow::Owned(
+        previous
+            .iter()
+            .filter(|migration| migration.version < 37)
+            .cloned()
+            .collect(),
+    );
+    previous.run(&pool).await.unwrap();
+    let ids = seed(&pool, OrgRole::Manager).await;
+    let id = uuid::Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO invoices (id,org_id,client_id,number,issued_on,due_on,currency,total_cents)
+        VALUES ($1,$2,$3,'Legacy','2026-09-01','2026-09-08','EUR',9223372036854775807)",
+        id,
+        ids.org_id,
+        ids.client_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::migrate!("./migrations").run(&pool).await.unwrap();
+    let legacy = crate::reports::fetch_invoice_metadata(&pool, id, ids.org_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        (legacy.terms_days, legacy.total_cents, legacy.subtotal_cents),
+        (7, i64::MAX, i64::MAX)
+    );
+    let overflow = InvoiceDefaults {
+        tax1_bps: 10000,
+        ..Default::default()
+    };
+    assert!(
+        update_invoice_defaults_in_db(&pool, ids.org_id, id, &overflow)
+            .await
+            .is_err()
+    );
+    let unchanged = crate::reports::fetch_invoice_metadata(&pool, id, ids.org_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(legacy, unchanged);
+}
+
+#[test]
+fn invoice_defaults_validate_all_override_fields() {
+    for invalid in [
+        InvoiceDefaults {
+            terms_days: -1,
+            ..Default::default()
+        },
+        InvoiceDefaults {
+            terms_days: 366,
+            ..Default::default()
+        },
+        InvoiceDefaults {
+            discount_bps: -1,
+            ..Default::default()
+        },
+        InvoiceDefaults {
+            tax1_bps: 10001,
+            ..Default::default()
+        },
+        InvoiceDefaults {
+            tax2_name: Some("Local".into()),
+            tax2_bps: Some(-1),
+            ..Default::default()
+        },
+        InvoiceDefaults {
+            tax2_bps: Some(0),
+            ..Default::default()
+        },
+        InvoiceDefaults {
+            tax2_name: Some(" ".into()),
+            tax2_bps: Some(0),
+            ..Default::default()
+        },
+        InvoiceDefaults {
+            po_number: "x".repeat(201),
+            ..Default::default()
+        },
+        InvoiceDefaults {
+            po_number: "bad\0value".into(),
+            ..Default::default()
+        },
+    ] {
+        assert!(
+            matches!(
+                defaults::amounts(&invalid, 10000),
+                Err(ServerFnError::ServerError {
+                    code: BAD_REQUEST,
+                    ..
+                })
+            ),
+            "{invalid:?}"
+        );
+    }
+    let free = InvoiceDefaults {
+        discount_bps: 10000,
+        tax1_bps: 10000,
+        ..Default::default()
+    };
+    assert_eq!(defaults::amounts(&free, 1).unwrap().total_cents, 0);
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn configured_project_currency_and_cost_override_keep_their_denominations(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     time_entry(&pool, &ids, EntryState::Open).await;

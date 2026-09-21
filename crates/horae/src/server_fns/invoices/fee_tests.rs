@@ -18,6 +18,65 @@ async fn single_fee(pool: &PgPool) -> SeedIds {
 }
 
 #[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn invoice_defaults_apply_to_selected_fees_without_claiming_other_projects(pool: PgPool) {
+    let ids = single_fee(&pool).await;
+    let other = Uuid::now_v7();
+    sqlx::query!("INSERT INTO projects (id,org_id,client_id,name,currency,project_type,starts_on) VALUES ($1,$2,$3,'Other fee','USD','fixed_fee','2026-09-01')", other, ids.org_id, ids.client_id).execute(&pool).await.unwrap();
+    sqlx::query!("INSERT INTO project_settings (id,org_id,project_id,creator_id,rate_mode,fee_mode,fee_amount_cents,terms_days) VALUES ($1,$2,$3,$4,'person','single',90000,90)", Uuid::now_v7(), ids.org_id, other, ids.user_id).execute(&pool).await.unwrap();
+    let other_fee = Uuid::now_v7();
+    sqlx::query!("INSERT INTO project_fee_occurrences (id,org_id,project_id,period_key,due_on,description,amount_cents,currency) VALUES ($1,$2,$3,'single','2026-09-01','Other fee',90000,'USD')", other_fee, ids.org_id, other).execute(&pool).await.unwrap();
+    let period = ("2026-09-01".parse().unwrap(), "2026-09-30".parse().unwrap());
+    let overrides = InvoiceDefaults {
+        terms_days: 14,
+        discount_bps: 1000,
+        tax1_bps: 2100,
+        ..Default::default()
+    };
+    let result = generate_invoice_with_options(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        Some(&[ids.project_id]),
+        Some(&overrides),
+    )
+    .await
+    .unwrap();
+    assert_eq!(result.lines.len(), 1);
+    assert!(result.lines[0].fee_occurrence_id.is_some());
+    assert_eq!(result.lines[0].time_entry_id, None);
+    assert_eq!(
+        (
+            result.invoice.subtotal_cents,
+            result.invoice.discount_cents,
+            result.invoice.tax1_cents,
+            result.invoice.total_cents
+        ),
+        (12500, 1250, 2363, 13613)
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT invoice_id FROM project_fee_occurrences WHERE id = $1",
+            other_fee
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        None
+    );
+    transition_invoice(&pool, ids.org_id, result.invoice.id, InvoiceStatus::Void)
+        .await
+        .unwrap();
+    let stored = crate::reports::fetch_invoice_metadata(&pool, result.invoice.id, ids.org_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(stored.total_cents, 13613);
+    assert_eq!(stored.tax1_cents, 2363);
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn single_fee_can_be_invoiced_without_time(pool: PgPool) {
     let ids = single_fee(&pool).await;
     let from = "2026-09-01".parse().unwrap();

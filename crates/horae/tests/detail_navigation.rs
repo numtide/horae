@@ -601,6 +601,16 @@ mod server_fns {
                 due_on: chrono::NaiveDate::from_ymd_opt(2026, 9, 30).unwrap(),
                 currency: "EUR".into(),
                 total_cents: 0,
+                terms_days: 29,
+                po_number: String::new(),
+                discount_bps: 0,
+                tax1_bps: 0,
+                tax2_name: None,
+                tax2_bps: None,
+                subtotal_cents: 0,
+                discount_cents: 0,
+                tax1_cents: 0,
+                tax2_cents: 0,
                 notes: None,
                 created_at: chrono::DateTime::UNIX_EPOCH,
             },
@@ -620,6 +630,8 @@ mod server_fns {
         _client: String,
         _from: String,
         _to: String,
+        _projects: Option<Vec<String>>,
+        _overrides: Option<crate::invoice::InvoiceDefaults>,
     ) -> Result<Invoice, ServerFnError> {
         panic!("navigation must not generate invoices");
     }

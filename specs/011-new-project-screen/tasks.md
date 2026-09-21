@@ -83,9 +83,11 @@
 
 **Independent test**: Defaults prefill, conflicting projects, explicit override, immutable prior invoice, exact displayed/exported components.
 
-- [ ] T040 [US5] Add failing invoice default/conflict/tax/discount/due-date/void tests in `crates/horae/src/server_fns/invoices/tests.rs` (FR-016–017).
-- [ ] T041 [US5] Add legacy-safe invoice snapshot fields and map optional time/fee sources in `crates/horae/migrations/0031_project_billing.sql` and `crates/horae/src/models/invoice.rs`.
+- [x] T040 [US5] Add failing invoice default/conflict/tax/discount/due-date/void tests in `crates/horae/src/server_fns/invoices/tests.rs` (FR-016–017).
+- [x] T041 [US5] Add legacy-safe invoice snapshot fields and map optional time/fee sources in `crates/horae/migrations/0037_invoice_defaults.sql` and `crates/horae/src/models/invoice.rs`.
+  - Exact adjustment and conflict tests reproduced ignored project terms and silently accepted mixed defaults. Eight new regression checks cover terms/PO/two taxes/discount, explicit conflict resolution, tenant/project selection, frozen values and draft-only edits, send/edit locking, fee selection, overflow rollback and an actual upgrade of legacy invoice data. Additive 0037 preserves existing dates/totals; source exclusivity remains unchanged. All 692 server-bin tests pass (11 pre-existing ignored).
 - [ ] T042 [US5] Implement project invoice preparation, mixed-default resolution, checked adjustments and draft-only override mutation in `crates/horae/src/server_fns/invoices.rs`.
+  - Generation now inherits or explicitly resolves defaults, limits selected projects, snapshots checked components and allows row-locked draft edits. The typed APIs are implemented; read-only preparation/previews and their interactive integration remain required before completing this task. T043/T044 still own editable controls and visible/exported component breakdowns.
 - [ ] T043 [US5] Implement payment terms/custom days/PO/tax/second-tax/discount form controls in `crates/horae/src/pages/new_project.rs` and editable prepared defaults/fee rows in `crates/horae/src/pages/invoices.rs`.
 - [ ] T044 [US5] Render/export invoice-owned components and fee rows in `crates/horae/src/reports.rs`, `crates/horae/src/reports/streaming.rs`, `crates/horae/src/reports/limits.rs`, `crates/horae/templates/invoice.typ`, with CSV/XLSX/PDF regressions.
 
@@ -111,7 +113,7 @@
 
 Setup → Foundation → US1 → US2 → US3 → US4 → US5 → US6 → Final. Each story has independent fixtures but end-to-end UI completion depends on prior persistence. US1 may call the provisional draft finalization path established in Foundation; US2 adds recovery/concurrency behavior. No intermediate slice is the final feature.
 
-T041 expands T022's feature migration before it is published; do not rewrite a migration after it has shipped. T023 depends on T022; T026 depends on T022 and precedes T042. T034 uses additive feature migration 0034 instead of rewriting historical 0019 or the already-applied 0030. T045 is independent documentation and can run beside implementation. Tasks touching the same file run sequentially.
+T041 uses additive migration 0037 rather than rewriting already-applied 0031; optional time/fee sources remain in T022's migration. Do not rewrite a migration after it has shipped. T023 depends on T022; T026 depends on T022 and precedes T042. T034 uses additive feature migration 0034 instead of rewriting historical 0019 or the already-applied 0030. T045 is independent documentation and can run beside implementation. Tasks touching the same file run sequentially.
 
 Parallel examples: US1 browser scenario design can accompany server tests; US2 browser recovery scenarios accompany revision tests; US3 core budget tests can run alongside mail stub tests; US4 plugin grant checks accompany frontend role scenarios; US5 PDF fixture design accompanies core adjustment checks; US6 viewport runs can be parallelized by the existing runner. These are task opportunities, not authorization to launch additional implementation agents.
 

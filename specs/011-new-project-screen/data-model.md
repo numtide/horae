@@ -54,6 +54,8 @@ Invoice lines allow exactly one of time_entry_id or fee_occurrence_id, enforced 
 
 Add invoice snapshot fields: terms_days, po_number, discount_bps, tax1_bps, tax2_name/tax2_bps, subtotal_cents, discount_cents, tax1_cents, tax2_cents. Existing rows backfill zero adjustments and subtotal=total.
 
+Additive migration 0037 introduces these without rewriting already-applied 0031. Stored generated columns derive `terms_days` from the invoice's own dates and `subtotal_cents` from its own total/adjustment components, never from project settings. This preserves existing dates and totals, including legacy writers that omit new fields. Numeric intermediates avoid overflow before the final bigint subtotal. Checks require the stored discount and each non-compounding tax to match exact half-up basis-point arithmetic; optional second-tax name/rate are paired.
+
 Default terms 30 days; custom 0–365, dates checked for overflow. Tax/discount up to two decimal percentage places. Subtotal → rounded discount → discounted subtotal → separately rounded non-compounding taxes → checked total. Editing is draft-only. Mixed-project defaults require explicit input; unlike currencies cannot share an invoice.
 
 ## Budget notification

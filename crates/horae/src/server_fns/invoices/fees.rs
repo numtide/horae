@@ -7,6 +7,7 @@ const MAX_FEE_OCCURRENCES: usize = 10_000;
 
 pub(super) struct FeeLine {
     pub id: Uuid,
+    pub project_id: Uuid,
     pub description: String,
     pub amount_cents: i64,
     pub currency: String,
@@ -31,6 +32,7 @@ pub(super) async fn prepare_fees(
     client_id: Uuid,
     from: NaiveDate,
     to: NaiveDate,
+    selected: Option<&[Uuid]>,
 ) -> Result<Vec<FeeLine>, ServerFnError> {
     if from > to {
         return Err(err(BAD_REQUEST, "Invoice period ends before it starts"));
@@ -43,8 +45,9 @@ pub(super) async fn prepare_fees(
            FROM projects p JOIN project_settings s ON s.project_id = p.id
            WHERE p.org_id = $1 AND p.client_id = $2 AND p.project_type = 'fixed_fee'
              AND s.fee_mode IS NOT NULL
+             AND ($3::uuid[] IS NULL OR p.id = ANY($3))
            ORDER BY p.id LIMIT 1001 FOR SHARE OF p, s"#,
-        org_id, client_id,
+        org_id, client_id, selected,
     ).fetch_all(&mut **tx).await.map_err(server_err)?;
     if projects.len() > 1000 {
         return Err(conflict(
@@ -173,16 +176,18 @@ pub(super) async fn prepare_fees(
 
     let fees = sqlx::query_as!(
         FeeLine,
-        "SELECT f.id,f.description,f.amount_cents,f.currency
+        "SELECT f.id,f.project_id,f.description,f.amount_cents,f.currency
          FROM project_fee_occurrences f JOIN projects p ON p.id = f.project_id
          WHERE f.org_id = $1 AND p.client_id = $2 AND p.project_type = 'fixed_fee'
            AND f.invoice_id IS NULL AND f.due_on <= $4
            AND (f.period_key NOT LIKE 'month:%' OR f.due_on >= $3)
+           AND ($5::uuid[] IS NULL OR f.project_id = ANY($5))
          ORDER BY f.due_on,f.project_id,f.period_key LIMIT 10001 FOR UPDATE OF f",
         org_id,
         client_id,
         from as NaiveDate,
         to as NaiveDate,
+        selected,
     )
     .fetch_all(&mut **tx)
     .await

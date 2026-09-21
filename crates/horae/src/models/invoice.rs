@@ -15,6 +15,16 @@ pub struct Invoice {
     pub due_on: NaiveDate,
     pub currency: String,
     pub total_cents: i64,
+    pub terms_days: i32,
+    pub po_number: String,
+    pub discount_bps: i16,
+    pub tax1_bps: i16,
+    pub tax2_name: Option<String>,
+    pub tax2_bps: Option<i16>,
+    pub subtotal_cents: i64,
+    pub discount_cents: i64,
+    pub tax1_cents: i64,
+    pub tax2_cents: i64,
     pub notes: Option<String>,
     pub created_at: DateTime<Utc>,
 }
@@ -37,4 +47,30 @@ pub struct InvoiceLine {
 pub struct InvoiceWithLines {
     pub invoice: Invoice,
     pub lines: Vec<InvoiceLine>,
+}
+
+/// Editable invoice values, copied from projects rather than linked to them.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "server", derive(sqlx::FromRow))]
+pub struct InvoiceDefaults {
+    pub terms_days: i16,
+    pub po_number: String,
+    pub discount_bps: i16,
+    pub tax1_bps: i16,
+    pub tax2_name: Option<String>,
+    pub tax2_bps: Option<i16>,
+}
+
+impl Default for InvoiceDefaults {
+    fn default() -> Self {
+        Self {
+            terms_days: 30,
+            po_number: String::new(),
+            discount_bps: 0,
+            tax1_bps: 0,
+            tax2_name: None,
+            tax2_bps: None,
+        }
+    }
 }
