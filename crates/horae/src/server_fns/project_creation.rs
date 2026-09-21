@@ -21,6 +21,9 @@ mod options;
 #[cfg(feature = "server")]
 use options::{load_creation_options, load_selected_catalog, load_selected_client};
 
+#[cfg(all(test, feature = "server"))]
+mod assignment_tests;
+
 /// Resolve only the selected active task/person identities, independently of pagination.
 #[server]
 pub async fn project_creation_selection(

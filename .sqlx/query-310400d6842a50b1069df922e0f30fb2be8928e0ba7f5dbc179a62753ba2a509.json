@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT ARRAY[\n            (SELECT count(*) FROM projects WHERE org_id = $1),\n            (SELECT count(*) FROM tasks WHERE org_id = $1),\n            (SELECT count(*) FROM project_tags WHERE org_id = $1),\n            (SELECT count(*) FROM horae_outbox WHERE org_id = $1 AND event_kind = 'project_created')\n        ] AS \"counts!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "counts!",
+        "type_info": "Int8Array"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "310400d6842a50b1069df922e0f30fb2be8928e0ba7f5dbc179a62753ba2a509"
+}

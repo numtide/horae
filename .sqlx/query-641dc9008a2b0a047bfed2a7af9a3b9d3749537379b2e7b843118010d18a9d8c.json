@@ -1,0 +1,57 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.user_id, a.role AS \"role: ProjectRole\", a.rate_cents,\n                  c.cost_rate_cents, b.budget_minutes\n           FROM assignments a\n           JOIN project_member_costs c USING (project_id, user_id)\n           JOIN project_member_budgets b USING (project_id, user_id)\n           WHERE a.project_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "role: ProjectRole",
+        "type_info": {
+          "Custom": {
+            "name": "project_role",
+            "kind": {
+              "Enum": [
+                "lead",
+                "freelancer",
+                "admin"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "rate_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "cost_rate_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "budget_minutes",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "641dc9008a2b0a047bfed2a7af9a3b9d3749537379b2e7b843118010d18a9d8c"
+}
