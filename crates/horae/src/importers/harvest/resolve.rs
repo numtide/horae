@@ -518,6 +518,33 @@ pub async fn ensure_project_task(
     if cache.project_tasks.contains(&(project_id, task_id)) {
         return Ok(());
     }
+    // Configured overrides are denominated in the project currency. Existing
+    // links ignore incoming rates, and legacy projects keep their import rules.
+    if rate.is_some()
+        && let Some(project) = sqlx::query!(
+            "SELECT p.currency, o.default_currency FROM projects p
+             JOIN project_settings ps ON ps.project_id = p.id AND ps.org_id = p.org_id
+             JOIN organizations o ON o.id = p.org_id
+             WHERE p.id = $1 AND NOT EXISTS (
+               SELECT 1 FROM project_tasks pt WHERE pt.project_id = p.id AND pt.task_id = $2
+             ) FOR SHARE OF p",
+            project_id,
+            task_id,
+        )
+        .fetch_optional(&mut *conn)
+        .await?
+        && !row
+            .currency
+            .as_deref()
+            .map(str::trim)
+            .filter(|currency| !currency.is_empty())
+            .unwrap_or(&project.default_currency)
+            .eq_ignore_ascii_case(&project.currency)
+    {
+        return Err(RowFailure::new(
+            "imported task rate currency differs from the configured project currency",
+        ));
+    }
     sqlx::query!(
         "INSERT INTO project_tasks (project_id, task_id, billable, rate_cents)
          VALUES ($1, $2, $3, $4)

@@ -1036,6 +1036,63 @@ mod tests {
     }
 
     #[sqlx::test(migrations = "./migrations")]
+    #[serial_test::serial]
+    async fn imported_legacy_rates_survive_retry_in_harvest_list_and_detail(pool: PgPool) {
+        let ids = seed(&pool, OrgRole::Admin).await;
+        sqlx::query!(
+            "UPDATE users SET billable_rate_cents = 3000, cost_rate_cents = 1200 WHERE id = $1",
+            ids.user_id,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let csv = format!(
+            "Date,Client,Project,Task,Email,Hours,Billable?,Billable Rate,Currency\n\
+             2026-09-07,Acme,Imported,Design,{}@test.com,1.25,Yes,80,EUR\n\
+             2026-09-07,Acme,Imported,Review,{}@test.com,0.5,Yes,0,EUR\n\
+             2026-09-07,Acme,Imported,Dev,{}@test.com,1,Yes,,EUR\n",
+            ids.user_id, ids.user_id, ids.user_id,
+        );
+        for _ in 0..2 {
+            let report = crate::importers::harvest::csv_source::import_body(
+                &pool,
+                ids.org_id,
+                "EUR",
+                axum::body::Body::from(csv.clone()),
+                horae_core::importers::harvest::types::ImportMode::Commit,
+            )
+            .await
+            .unwrap();
+            assert_eq!(report.error_count(), 0, "{report:?}");
+        }
+        let caller = caller(&ids, OrgRole::Admin);
+        let Json(page) = time_entries_page(&pool, &caller, no_time_entry_filters())
+            .await
+            .unwrap();
+        let entries = &page.data["time_entries"];
+        assert_eq!(entries.len(), 3);
+        for entry in entries {
+            let expected = match entry.task.name.as_str() {
+                "Design" => (80.0, 1.25),
+                "Review" => (0.0, 0.5),
+                "Dev" => (30.0, 1.0),
+                name => panic!("unexpected imported task: {name}"),
+            };
+            let Json(detail) = time_entry_by_id(&pool, &caller, entry.id.parse().unwrap())
+                .await
+                .unwrap();
+            assert_eq!(
+                (entry.billable_rate, entry.hours, entry.cost_rate),
+                (Some(expected.0), expected.1, Some(12.0))
+            );
+            assert_eq!(
+                (detail.billable_rate, detail.hours, detail.cost_rate),
+                (entry.billable_rate, entry.hours, entry.cost_rate)
+            );
+        }
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
     async fn harvest_entry_rates_respect_selected_project_mode(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Admin).await;
         let id = insert_entry(&pool, &ids, ids.user_id, "Selected rates").await;

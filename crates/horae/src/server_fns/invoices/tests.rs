@@ -2,6 +2,8 @@ use super::*;
 use crate::server_fns::test_seed::{seed, time_entry};
 use sqlx::PgPool;
 
+mod imported_rates;
+
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]
 async fn invoice_preview_keeps_time_rates_and_defaults_in_one_snapshot(pool: PgPool) {
