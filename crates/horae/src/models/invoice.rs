@@ -32,32 +32,18 @@ pub struct Invoice {
 impl Invoice {
     /// Stored invoice components, in display order; no project settings are read.
     pub fn breakdown(&self) -> Vec<(String, i64)> {
-        use horae_core::money::format_cents_plain;
-
-        let mut rows = vec![("Subtotal".into(), self.subtotal_cents)];
-        if self.discount_bps != 0 {
-            rows.push((
-                format!(
-                    "Discount ({}%)",
-                    format_cents_plain(self.discount_bps.into())
-                ),
-                -self.discount_cents,
-            ));
-        }
-        if self.tax1_bps != 0 {
-            rows.push((
-                format!("Tax ({}%)", format_cents_plain(self.tax1_bps.into())),
-                self.tax1_cents,
-            ));
-        }
-        if let (Some(name), Some(bps)) = (&self.tax2_name, self.tax2_bps) {
-            rows.push((
-                format!("{name} ({}%)", format_cents_plain(bps.into())),
-                self.tax2_cents,
-            ));
-        }
-        rows.push(("Total".into(), self.total_cents));
-        rows
+        adjustment_breakdown(
+            &horae_core::invoice::InvoiceAmounts {
+                subtotal_cents: self.subtotal_cents,
+                discount_cents: self.discount_cents,
+                tax1_cents: self.tax1_cents,
+                tax2_cents: self.tax2_cents,
+                total_cents: self.total_cents,
+            },
+            self.discount_bps,
+            self.tax1_bps,
+            self.tax2_name.as_deref().zip(self.tax2_bps),
+        )
     }
 }
 
@@ -119,6 +105,51 @@ pub struct InvoicePreparation {
     pub lines: Vec<InvoicePreviewLine>,
     pub subtotal_cents: i64,
     pub amounts: Option<horae_core::invoice::InvoiceAmounts>,
+}
+
+impl InvoicePreparation {
+    /// Estimated components in the same order as frozen invoices; unresolved
+    /// defaults have no calculated breakdown.
+    pub fn breakdown(&self) -> Option<Vec<(String, i64)>> {
+        let defaults = self.defaults.as_ref()?;
+        Some(adjustment_breakdown(
+            self.amounts.as_ref()?,
+            defaults.discount_bps,
+            defaults.tax1_bps,
+            defaults.tax2_name.as_deref().zip(defaults.tax2_bps),
+        ))
+    }
+}
+
+fn adjustment_breakdown(
+    amounts: &horae_core::invoice::InvoiceAmounts,
+    discount_bps: i16,
+    tax1_bps: i16,
+    second_tax: Option<(&str, i16)>,
+) -> Vec<(String, i64)> {
+    use horae_core::money::format_cents_plain;
+
+    let mut rows = vec![("Subtotal".into(), amounts.subtotal_cents)];
+    if discount_bps != 0 {
+        rows.push((
+            format!("Discount ({}%)", format_cents_plain(discount_bps.into())),
+            -amounts.discount_cents,
+        ));
+    }
+    if tax1_bps != 0 {
+        rows.push((
+            format!("Tax ({}%)", format_cents_plain(tax1_bps.into())),
+            amounts.tax1_cents,
+        ));
+    }
+    if let Some((name, bps)) = second_tax {
+        rows.push((
+            format!("{name} ({}%)", format_cents_plain(bps.into())),
+            amounts.tax2_cents,
+        ));
+    }
+    rows.push(("Total".into(), amounts.total_cents));
+    rows
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

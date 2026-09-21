@@ -5,11 +5,15 @@ use horae_core::money::format_cents_plain;
 use horae_core::types::InvoiceStatus;
 use uuid::Uuid;
 
-use super::{loaded, run_action};
-use crate::components::form::{FormCard, FormGroup, Input, Select};
+use super::loaded;
 use crate::components::table::DataTable;
 use crate::route::Route;
 use crate::server_fns;
+
+#[path = "invoices/defaults_form.rs"]
+mod defaults_form;
+#[path = "invoices/preparation.rs"]
+mod preparation;
 
 /// The badge class for an invoice status — one convention for list and detail.
 fn invoice_badge_class(status: InvoiceStatus) -> &'static str {
@@ -48,10 +52,8 @@ pub fn InvoiceList() -> Element {
             .collect();
 
     let mut show_form = use_signal(|| false);
-    let mut selected_client = use_signal(String::new);
-    let mut period_from = use_signal(String::new);
-    let mut period_to = use_signal(String::new);
-    let mut error = use_signal(|| None::<String>);
+    let busy = use_signal(|| false);
+    let navigator = use_navigator();
 
     rsx! {
         div {
@@ -60,13 +62,9 @@ pub fn InvoiceList() -> Element {
                 div { class: "page-actions",
                     button {
                         class: "btn btn-primary",
+                        disabled: busy(),
                         onclick: move |_| {
-                            if show_form() {
-                                show_form.set(false);
-                                error.set(None);
-                            } else {
-                                show_form.set(true);
-                            }
+                            if !busy() { show_form.toggle(); }
                         },
                         if show_form() { "Cancel" } else { "New Invoice" }
                     }
@@ -74,50 +72,14 @@ pub fn InvoiceList() -> Element {
             }
 
             if show_form() {
-                FormCard { title: "Generate Invoice", error,
-                    p { class: "text-muted text-sm",
-                        "Creates a draft from unbilled time and monthly fees in this period, plus overdue single fees and milestones. Nothing is sent automatically."
-                    }
-                    FormGroup { label: "Client", id: "inv-client",
-                        Select {
-                            id: "inv-client",
-                            options: client_opts,
-                            selected: selected_client(),
-                            onchange: move |e: FormEvent| selected_client.set(e.value()),
+                {loaded(&*clients.read(), |_| rsx! {
+                    preparation::PrepareInvoice { client_opts: client_opts.clone(), busy,
+                        oncreated: move |id| {
+                            show_form.set(false);
+                            navigator.push(Route::InvoiceDetail { id });
                         }
                     }
-                    FormGroup { label: "Period from", id: "inv-from",
-                        Input {
-                            id: "inv-from",
-                            kind: "date",
-                            value: "{period_from}",
-                            oninput: move |e: FormEvent| period_from.set(e.value()),
-                        }
-                    }
-                    FormGroup { label: "Period to", id: "inv-to",
-                        Input {
-                            id: "inv-to",
-                            kind: "date",
-                            value: "{period_to}",
-                            oninput: move |e: FormEvent| period_to.set(e.value()),
-                        }
-                    }
-                    button {
-                        class: "btn btn-primary",
-                        onclick: move |_| {
-                            let client = selected_client();
-                            let from = period_from();
-                            let to = period_to();
-                            run_action(
-                                server_fns::generate_invoice(client, from, to, None, None),
-                                invoices,
-                                error,
-                                move || show_form.set(false),
-                            );
-                        },
-                        "Generate Invoice"
-                    }
-                }
+                })}
             }
 
             div { class: "card",
@@ -190,10 +152,12 @@ pub fn InvoiceDetail(id: Uuid) -> Element {
 
 #[component]
 fn InvoiceDetailContent(id: Uuid) -> Element {
-    let invoice_data =
+    let mut invoice_data =
         use_resource(move || async move { server_fns::get_invoice(id.to_string()).await });
     let clients = use_resource(|| async move { server_fns::list_clients(false).await });
-    let error = use_signal(|| None::<String>);
+    let mut error = use_signal(|| None::<String>);
+    let editing = use_signal(|| false);
+    let mut busy = use_signal(|| false);
 
     let client_name = |cid: Uuid| -> String {
         clients
@@ -212,12 +176,19 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
             button {
                 class: if primary { "btn btn-primary" } else { "btn btn-secondary" },
                 style: if !primary { "margin-left: 0.5rem;" },
-                onclick: move |_| run_action(
-                    server_fns::update_invoice_status(id.to_string(), to.to_string()),
-                    invoice_data,
-                    error,
-                    || (),
-                ),
+                disabled: busy() || editing(),
+                onclick: move |_| {
+                    if busy() || editing() { return; }
+                    error.set(None);
+                    busy.set(true);
+                    spawn(async move {
+                        match server_fns::update_invoice_status(id.to_string(), to.to_string()).await {
+                            Ok(_) => invoice_data.restart(),
+                            Err(err) => error.set(Some(err.to_string())),
+                        }
+                        busy.set(false);
+                    });
+                },
                 {label}
             }
         }
@@ -296,6 +267,10 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
                                 }
                             }
                         }
+                    }
+
+                    if inv.status == InvoiceStatus::Draft {
+                        defaults_form::DraftDefaults { invoice: inv.clone(), editing, busy, onsaved: move |_| invoice_data.restart() }
                     }
 
                     div { class: "card",

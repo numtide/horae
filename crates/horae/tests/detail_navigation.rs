@@ -42,6 +42,8 @@ pub mod invoice;
 mod invoices;
 #[path = "../src/models/project.rs"]
 mod project;
+#[path = "../src/models/project_creation.rs"]
+pub mod project_creation;
 #[path = "../src/pages/projects.rs"]
 mod projects;
 #[path = "../src/models/task.rs"]
@@ -53,6 +55,7 @@ mod models {
         client::Client,
         project::{Project, ProjectBudgetProgress, ProjectDetails, ProjectTagLink},
     };
+    pub use super::{invoice, project_creation};
 }
 
 type InvoiceResponse = Result<invoice::InvoiceWithLines, ServerFnError>;
@@ -678,8 +681,25 @@ mod server_fns {
         _to: String,
         _projects: Option<Vec<String>>,
         _overrides: Option<crate::invoice::InvoiceDefaults>,
-    ) -> Result<Invoice, ServerFnError> {
+    ) -> Result<InvoiceWithLines, ServerFnError> {
         panic!("navigation must not generate invoices");
+    }
+
+    pub async fn prepare_invoice(
+        _client: String,
+        _from: String,
+        _to: String,
+        _projects: Option<Vec<String>>,
+        _overrides: Option<crate::invoice::InvoiceDefaults>,
+    ) -> Result<crate::invoice::InvoicePreparation, ServerFnError> {
+        panic!("navigation must not prepare invoices");
+    }
+
+    pub async fn update_invoice_defaults(
+        _id: String,
+        _overrides: crate::invoice::InvoiceDefaults,
+    ) -> Result<Invoice, ServerFnError> {
+        panic!("navigation must not edit invoice values");
     }
 
     pub async fn update_invoice_status(
