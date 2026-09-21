@@ -84,12 +84,9 @@ async fn generate_invoice_for_period(
     from: chrono::NaiveDate,
     to: chrono::NaiveDate,
 ) -> Result<InvoiceWithLines, ServerFnError> {
-    // Verify client belongs to this org and get its currency.
-    let client = sqlx::query_as!(
-        Client,
-        r#"SELECT id, org_id, name, currency, address, tax_id, active,
-                  created_at as "created_at: chrono::DateTime<chrono::Utc>"
-           FROM clients WHERE id = $1 AND org_id = $2"#,
+    // Verify client belongs to this org before selecting any billable work.
+    sqlx::query_scalar!(
+        "SELECT id FROM clients WHERE id = $1 AND org_id = $2",
         client_id,
         org_id,
     )
@@ -117,7 +114,7 @@ async fn generate_invoice_for_period(
     .map_err(server_err)?;
 
     // Fetch billable, un-invoiced entries for this client in the period,
-    // with rate candidates from all cascade levels. Open and approved time is
+    // with the selected hourly rate. Open and approved time is
     // invoiceable (spec 001: billable, un-invoiced time is directly
     // invoiceable); submitted time is locked pending an approval decision.
     // FOR UPDATE locks the entry rows: a competing transaction blocks here
@@ -130,10 +127,8 @@ async fn generate_invoice_for_period(
         task_name: String,
         notes: Option<String>,
         spent_date: chrono::NaiveDate,
-        task_rate_cents: Option<i64>,
-        assignment_rate_cents: Option<i64>,
-        project_rate_cents: Option<i64>,
-        user_rate_cents: Option<i64>,
+        rate_cents: Option<i64>,
+        currency: String,
     }
 
     let entries = sqlx::query_as!(
@@ -145,12 +140,15 @@ async fn generate_invoice_for_period(
              t.name as task_name,
              te.notes,
              te.spent_date as "spent_date: chrono::NaiveDate",
-             pt.rate_cents as task_rate_cents,
-             a.rate_cents as assignment_rate_cents,
-             p.rate_cents as project_rate_cents,
-             u.billable_rate_cents as user_rate_cents
+             resolve_project_rate(ps.rate_mode, pt.rate_cents, a.rate_cents, p.rate_cents,
+               CASE WHEN ps.project_id IS NULL OR p.currency = o.default_currency THEN u.billable_rate_cents END,
+               CASE WHEN p.currency = c.currency THEN c.default_rate_cents END
+             ) as "rate_cents?",
+             CASE WHEN ps.project_id IS NULL THEN c.currency ELSE p.currency END as "currency!"
            FROM time_entries te
            JOIN projects p ON p.id = te.project_id
+           JOIN clients c ON c.id = p.client_id
+           LEFT JOIN project_settings ps ON ps.project_id = p.id
            JOIN tasks t ON t.id = te.task_id
            LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
            LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id
@@ -160,6 +158,7 @@ async fn generate_invoice_for_period(
              AND p.client_id = $2
              AND te.billable = true
              AND p.project_type <> 'non_billable'
+             AND (ps.project_id IS NULL OR p.project_type = 'time_and_materials')
              AND COALESCE(pt.billable, t.billable_default)
              AND NOT te.is_running
              AND te.invoice_id IS NULL
@@ -177,9 +176,18 @@ async fn generate_invoice_for_period(
     .await
     .map_err(server_err)?;
 
-    if entries.is_empty() {
+    let Some(first_entry) = entries.first() else {
         return Err(not_found(
             "No billable, un-invoiced time found for this client and period.",
+        ));
+    };
+    let currency = first_entry.currency.trim();
+    if entries
+        .iter()
+        .any(|entry| entry.currency.trim() != currency)
+    {
+        return Err(conflict(
+            "Projects with different billing currencies cannot share an invoice.",
         ));
     }
 
@@ -207,13 +215,7 @@ async fn generate_invoice_for_period(
     let mut total_cents: i64 = 0;
 
     for e in &entries {
-        let rate = horae_core::invoice::resolve_rate(
-            e.task_rate_cents,
-            e.assignment_rate_cents,
-            e.project_rate_cents,
-            e.user_rate_cents,
-        )
-        .unwrap_or(0);
+        let rate = e.rate_cents.unwrap_or(0);
 
         let amount = horae_core::invoice::line_amount_cents(rate, e.minutes)
             .map_err(|_| conflict("Invoice line amount exceeds the supported range."))?;
@@ -251,7 +253,7 @@ async fn generate_invoice_for_period(
         invoice_number,
         issued_on as chrono::NaiveDate,
         due_on as chrono::NaiveDate,
-        client.currency.trim(),
+        currency,
         total_cents,
     )
     .execute(&mut *tx)
@@ -336,7 +338,7 @@ async fn generate_invoice_for_period(
         status: InvoiceStatus::Draft,
         issued_on,
         due_on,
-        currency: client.currency.trim().to_string(),
+        currency: currency.to_string(),
         total_cents,
         notes: None,
         created_at: now,

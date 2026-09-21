@@ -1,0 +1,56 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT mode, task, assignment, project, person, client,\n                resolve_project_rate(mode, task, assignment, project, person, client) AS rate\n         FROM unnest(ARRAY[NULL::text, 'legacy', 'person', 'task', 'project']) AS modes(mode)\n         CROSS JOIN unnest(ARRAY[NULL::bigint, 0, 1234]) AS tasks(task)\n         CROSS JOIN unnest(ARRAY[NULL::bigint, 0, 2345]) AS assignments(assignment)\n         CROSS JOIN unnest(ARRAY[NULL::bigint, 0, 3456]) AS projects(project)\n         CROSS JOIN unnest(ARRAY[NULL::bigint, 0, 4567]) AS people(person)\n         CROSS JOIN unnest(ARRAY[NULL::bigint, 0, 5678]) AS clients(client)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "mode",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "task",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "assignment",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "project",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "person",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "client",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "rate",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "a97333e42649c2e37ef07d77dc56debf11f3e1b8e29c189233c71186ffecdf66"
+}

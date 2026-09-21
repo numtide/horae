@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE projects SET currency = 'USD', rate_cents = 6000 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0f7d42a3a6a97985c3eb4c16b996255888f86d4015197b9f28e7d77e2adbf730"
+}

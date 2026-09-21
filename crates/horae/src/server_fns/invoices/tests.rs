@@ -3,6 +3,299 @@ use crate::server_fns::test_seed::{seed, time_entry};
 use sqlx::PgPool;
 
 #[sqlx::test(migrations = "./migrations")]
+async fn configured_project_currency_and_cost_override_keep_their_denominations(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    time_entry(&pool, &ids, EntryState::Open).await;
+    sqlx::query!(
+        "INSERT INTO assignments (id,project_id,user_id,role) VALUES ($1,$2,$3,'lead')",
+        uuid::Uuid::now_v7(),
+        ids.project_id,
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE users SET billable_rate_cents = 3000, cost_rate_cents = 1000 WHERE id = $1",
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE projects SET currency = 'USD', rate_cents = 6000 WHERE id = $1",
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!("INSERT INTO project_settings (id,org_id,project_id,creator_id,rate_mode) VALUES ($1,$2,$3,$4,'project')", uuid::Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id)
+        .execute(&pool).await.unwrap();
+    sqlx::query!("INSERT INTO project_member_costs (id,org_id,project_id,user_id,cost_rate_cents) VALUES ($1,$2,$3,$4,1500)", uuid::Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id)
+        .execute(&pool).await.unwrap();
+    let day = "2026-09-07".parse().unwrap();
+    let invoice = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, day, day)
+        .await
+        .unwrap();
+    let report = crate::server_fns::reports::fetch_report(
+        &pool,
+        ids.org_id,
+        (day, day),
+        "project",
+        None,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        (
+            invoice.invoice.currency.as_str(),
+            invoice.invoice.total_cents
+        ),
+        ("USD", 6000)
+    );
+    assert_eq!(
+        (
+            report[0].currency.as_str(),
+            report[0].billable_cents,
+            report[0].cost_currency.as_str(),
+            report[0].cost_cents
+        ),
+        ("USD", 6000, "EUR", 1500)
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn configured_fixed_fee_hours_are_not_invoiced_but_legacy_fees_are_unchanged(pool: PgPool) {
+    for configured in [false, true] {
+        let ids = seed(&pool, OrgRole::Manager).await;
+        let entry = time_entry(&pool, &ids, EntryState::Open).await;
+        sqlx::query!(
+            "UPDATE projects SET project_type = 'fixed_fee', rate_cents = 6000 WHERE id = $1",
+            ids.project_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        if configured {
+            sqlx::query!("INSERT INTO project_settings (id,org_id,project_id,creator_id,rate_mode,fee_mode,fee_amount_cents) VALUES ($1,$2,$3,$4,'person','single',10000)", uuid::Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id)
+                .execute(&pool).await.unwrap();
+        }
+        let day = "2026-09-07".parse().unwrap();
+        let invoice = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, day, day).await;
+        let spend = crate::server_fns::projects::fetch_project_spend(&pool, ids.org_id)
+            .await
+            .unwrap();
+        let report = crate::server_fns::reports::fetch_report(
+            &pool,
+            ids.org_id,
+            (day, day),
+            "project",
+            None,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        if configured {
+            assert!(invoice.unwrap_err().to_string().contains("No billable"));
+            assert_eq!((spend[0].spent_cents, report[0].billable_cents), (0, 0));
+            assert!(
+                sqlx::query_scalar!("SELECT invoice_id FROM time_entries WHERE id = $1", entry)
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap()
+                    .is_none()
+            );
+        } else {
+            assert_eq!(invoice.unwrap().invoice.total_cents, 6000);
+            assert_eq!(
+                (spend[0].spent_cents, report[0].billable_cents),
+                (6000, 6000)
+            );
+        }
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn mixed_project_currencies_cannot_partially_create_an_invoice(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    time_entry(&pool, &ids, EntryState::Open).await;
+    let second_project = uuid::Uuid::now_v7();
+    sqlx::query!("INSERT INTO projects (id,org_id,client_id,name,currency,rate_cents) VALUES ($1,$2,$3,'USD project','USD',6000)", second_project, ids.org_id, ids.client_id)
+        .execute(&pool).await.unwrap();
+    sqlx::query!("INSERT INTO project_settings (id,org_id,project_id,creator_id,rate_mode) VALUES ($1,$2,$3,$4,'project')", uuid::Uuid::now_v7(), ids.org_id, second_project, ids.user_id)
+        .execute(&pool).await.unwrap();
+    sqlx::query!("INSERT INTO time_entries (id,org_id,user_id,project_id,task_id,spent_date,minutes,billable,state) VALUES ($1,$2,$3,$4,$5,'2026-09-07',60,true,'open')", uuid::Uuid::now_v7(), ids.org_id, ids.user_id, second_project, ids.task_id)
+        .execute(&pool).await.unwrap();
+    let day = "2026-09-07".parse().unwrap();
+    let error = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, day, day)
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("different billing currencies"));
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM invoices WHERE org_id = $1",
+            ids.org_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(0)
+    );
+    assert_eq!(sqlx::query_scalar!("SELECT count(*) FROM time_entries WHERE org_id = $1 AND invoice_id IS NULL AND state = 'open'", ids.org_id).fetch_one(&pool).await.unwrap(), Some(2));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn selected_project_rate_modes_agree_across_billing_consumers(pool: PgPool) {
+    for (mode, task, assignment, project, user, client, expected) in [
+        (
+            "person",
+            Some(5000),
+            Some(4000),
+            Some(3500),
+            Some(3000),
+            Some(2000),
+            4000,
+        ),
+        (
+            "person",
+            Some(5000),
+            None,
+            Some(3500),
+            Some(3000),
+            Some(2000),
+            3000,
+        ),
+        (
+            "person",
+            Some(5000),
+            None,
+            Some(3500),
+            None,
+            Some(2000),
+            2000,
+        ),
+        (
+            "person",
+            Some(5000),
+            Some(0),
+            Some(3500),
+            Some(3000),
+            Some(2000),
+            0,
+        ),
+        (
+            "task",
+            Some(5000),
+            Some(4000),
+            Some(3500),
+            Some(3000),
+            Some(2000),
+            5000,
+        ),
+        (
+            "task",
+            None,
+            Some(4000),
+            Some(3500),
+            Some(3000),
+            Some(2000),
+            2000,
+        ),
+        (
+            "task",
+            Some(0),
+            Some(4000),
+            Some(3500),
+            Some(3000),
+            Some(2000),
+            0,
+        ),
+        (
+            "project",
+            Some(5000),
+            Some(4000),
+            Some(3500),
+            Some(3000),
+            Some(2000),
+            3500,
+        ),
+        (
+            "project",
+            Some(5000),
+            Some(4000),
+            Some(0),
+            Some(3000),
+            Some(2000),
+            0,
+        ),
+    ] {
+        let ids = seed(&pool, OrgRole::Manager).await;
+        time_entry(&pool, &ids, EntryState::Open).await;
+        sqlx::query!(
+            "UPDATE users SET billable_rate_cents = $2 WHERE id = $1",
+            ids.user_id,
+            user
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            "UPDATE projects SET rate_cents = $2 WHERE id = $1",
+            ids.project_id,
+            project
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            "UPDATE clients SET default_rate_cents = $2 WHERE id = $1",
+            ids.client_id,
+            client
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!("INSERT INTO project_tasks (project_id, task_id, billable, rate_cents) VALUES ($1, $2, true, $3)", ids.project_id, ids.task_id, task)
+            .execute(&pool).await.unwrap();
+        sqlx::query!("INSERT INTO assignments (id, project_id, user_id, role, rate_cents) VALUES ($1, $2, $3, 'lead', $4)", uuid::Uuid::now_v7(), ids.project_id, ids.user_id, assignment)
+            .execute(&pool).await.unwrap();
+        sqlx::query!("INSERT INTO project_settings (id, org_id, project_id, creator_id, rate_mode) VALUES ($1,$2,$3,$4,$5)", uuid::Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id, mode)
+            .execute(&pool).await.unwrap();
+        let day = "2026-09-07".parse().unwrap();
+        let report = crate::server_fns::reports::fetch_report(
+            &pool,
+            ids.org_id,
+            (day, day),
+            "project",
+            None,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        let spend = crate::server_fns::projects::fetch_project_spend(&pool, ids.org_id)
+            .await
+            .unwrap();
+        let invoice = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, day, day)
+            .await
+            .unwrap();
+        assert_eq!(
+            (
+                report[0].billable_cents,
+                spend[0].spent_cents,
+                invoice.invoice.total_cents,
+                invoice.lines[0].rate_cents
+            ),
+            (expected, expected, expected, expected),
+            "selected mode: {mode}; task={task:?}, assignment={assignment:?}, project={project:?}",
+        );
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn billing_cascade_agrees_across_all_four_levels_including_zero(pool: PgPool) {
     for (task, assignment, project, user, expected) in [
         (Some(5000), Some(4000), Some(3500), Some(3000), 5000),

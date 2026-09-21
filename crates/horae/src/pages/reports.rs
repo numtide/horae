@@ -15,18 +15,19 @@ use crate::server_fns;
 fn money_total(
     rows: &[crate::models::ReportRow],
     amount: fn(&crate::models::ReportRow) -> i64,
+    currency: fn(&crate::models::ReportRow) -> &str,
 ) -> String {
     let Some(first) = rows.first() else {
         return "\u{2014}".into();
     };
-    if rows.iter().any(|r| r.currency != first.currency) {
+    if rows.iter().any(|row| currency(row) != currency(first)) {
         return "\u{2014}".into();
     }
     match rows
         .iter()
         .try_fold(0i64, |sum, row| sum.checked_add(amount(row)))
     {
-        Some(total) => money(total, &first.currency),
+        Some(total) => money(total, currency(first)),
         None => "Amount exceeds supported range".into(),
     }
 }
@@ -267,8 +268,8 @@ pub fn Reports() -> Element {
                         let grand_total: i64 = rows.iter().map(|r| r.total_minutes).sum();
                         let grand_rounded: i64 = rows.iter().map(|r| r.rounded_minutes).sum();
                         let grand_billable: i64 = rows.iter().map(|r| r.billable_minutes).sum();
-                        let grand_bill_amount = money_total(rows, |r| r.billable_cents);
-                        let grand_cost_amount = money_total(rows, |r| r.cost_cents);
+                        let grand_bill_amount = money_total(rows, |r| r.billable_cents, |r| &r.currency);
+                        let grand_cost_amount = money_total(rows, |r| r.cost_cents, |r| &r.cost_currency);
                         rsx! {
                             DataTable {
                                 table {
@@ -290,7 +291,7 @@ pub fn Reports() -> Element {
                                                 td { class: "text-mono text-right", "{hours(row.rounded_minutes)}" }
                                                 td { class: "text-mono text-right", "{hours(row.billable_minutes)}" }
                                                 td { class: "text-mono text-right", "{money(row.billable_cents, &row.currency)}" }
-                                                td { class: "text-mono text-right", "{money(row.cost_cents, &row.currency)}" }
+                                                td { class: "text-mono text-right", "{money(row.cost_cents, &row.cost_currency)}" }
                                             }
                                         }
                                         tr { class: "report-total-row",
@@ -378,20 +379,24 @@ mod tests {
             billable_cents: cents,
             cost_cents: 0,
             currency: currency.into(),
+            cost_currency: "EUR".into(),
         }
     }
 
     #[test]
     fn mixed_currencies_are_not_added_even_when_the_numbers_would_overflow() {
         let rows = [row("EUR", i64::MAX), row("USD", i64::MAX)];
-        assert_eq!(money_total(&rows, |r| r.billable_cents), "\u{2014}");
+        assert_eq!(
+            money_total(&rows, |r| r.billable_cents, |r| &r.currency),
+            "\u{2014}"
+        );
     }
 
     #[test]
     fn monetary_total_overflow_is_visible_instead_of_panicking() {
         let rows = [row("EUR", i64::MAX), row("EUR", 1)];
         assert_eq!(
-            money_total(&rows, |r| r.billable_cents),
+            money_total(&rows, |r| r.billable_cents, |r| &r.currency),
             "Amount exceeds supported range"
         );
     }
@@ -399,7 +404,24 @@ mod tests {
     #[test]
     fn single_currency_totals_are_formatted_and_empty_reports_have_no_amount() {
         let rows = [row("EUR", 100), row("EUR", 250)];
-        assert_eq!(money_total(&rows, |r| r.billable_cents), money(350, "EUR"));
-        assert_eq!(money_total(&[], |r| r.billable_cents), "\u{2014}");
+        assert_eq!(
+            money_total(&rows, |r| r.billable_cents, |r| &r.currency),
+            money(350, "EUR")
+        );
+        assert_eq!(
+            money_total(&[], |r| r.billable_cents, |r| &r.currency),
+            "\u{2014}"
+        );
+    }
+
+    #[test]
+    fn cost_total_uses_organization_currency_across_billing_currencies() {
+        let mut rows = [row("USD", 100), row("CHF", 250)];
+        rows[0].cost_cents = 50;
+        rows[1].cost_cents = 75;
+        assert_eq!(
+            money_total(&rows, |r| r.cost_cents, |r| &r.cost_currency),
+            money(125, "EUR")
+        );
     }
 }

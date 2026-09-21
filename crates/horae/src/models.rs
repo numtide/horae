@@ -43,12 +43,11 @@ pub struct ReportRow {
     pub total_minutes: i64,
     pub rounded_minutes: i64,
     pub billable_minutes: i64,
-    /// Billable amount in cents (rates resolved via FR-024) and cost in cents
-    /// (`users.cost_rate_cents`). Each row contains only one currency; an entity
-    /// with time for clients in different currencies appears in separate rows.
+    /// Billing is partitioned by currency; cost has its own organization currency.
     pub billable_cents: i64,
     pub cost_cents: i64,
     pub currency: String,
+    pub cost_currency: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

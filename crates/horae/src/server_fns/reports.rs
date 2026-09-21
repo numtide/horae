@@ -61,7 +61,7 @@ pub(super) async fn fetch_report(
     //
     // The CTE names each entry's derived values once so the aggregates below
     // read as the sums they are; Postgres inlines a CTE referenced once.
-    // `COALESCE(pt, a, p, u)` is `horae_core::invoice::resolve_rate` written out,
+    // `resolve_project_rate` is the SQL twin of the pure core rate selection,
     // and `line_amount_cents` is the SQL twin of the Rust function invoicing
     // uses (migration 0016). The rounding term inside it is per row, so these
     // sums cannot be taken over pre-aggregated minutes.
@@ -81,19 +81,26 @@ pub(super) async fn fetch_report(
                  WHEN 'person' THEN u.name
                  ELSE p.name
                END AS label,
-               c.currency AS currency,
+               COALESCE(invoice.currency,
+                 CASE WHEN ps.project_id IS NULL THEN c.currency ELSE p.currency END) AS currency,
+               o.default_currency AS cost_currency,
                te.minutes AS minutes,
                -- Billable hours and amount use the rounded minutes that get
                -- invoiced; cost is what the worked time costs, so it stays on
                -- the actual ones.
                effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir) AS rounded_minutes,
                (te.billable AND (te.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable, t.billable_default)))) AS billable,
-               COALESCE(pt.rate_cents, a.rate_cents, p.rate_cents, u.billable_rate_cents, 0)
+               COALESCE(CASE WHEN ps.project_id IS NULL OR p.project_type = 'time_and_materials'
+                 THEN resolve_project_rate(ps.rate_mode, pt.rate_cents, a.rate_cents, p.rate_cents,
+                 CASE WHEN ps.project_id IS NULL OR p.currency = o.default_currency THEN u.billable_rate_cents END,
+                 CASE WHEN p.currency = c.currency THEN c.default_rate_cents END
+               ) END, 0)
                  AS billable_rate_cents,
                line.amount_cents AS frozen_amount_cents,
-               COALESCE(u.cost_rate_cents, 0) AS cost_rate_cents
+               COALESCE(mc.cost_rate_cents, u.cost_rate_cents, 0) AS cost_rate_cents
              FROM time_entries te
              JOIN projects p ON te.project_id = p.id
+             LEFT JOIN project_settings ps ON ps.project_id = p.id
              JOIN clients c ON p.client_id = c.id
              JOIN tasks t ON te.task_id = t.id
              JOIN users u ON te.user_id = u.id
@@ -101,6 +108,8 @@ pub(super) async fn fetch_report(
              LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
              LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id
              LEFT JOIN invoice_line_items line ON line.invoice_id = te.invoice_id AND line.time_entry_id = te.id
+             LEFT JOIN invoices invoice ON invoice.id = te.invoice_id
+             LEFT JOIN project_member_costs mc ON mc.project_id = te.project_id AND mc.user_id = te.user_id
              WHERE te.org_id = $6
                AND te.spent_date BETWEEN $1 AND $2
                AND ($3::uuid IS NULL OR p.client_id = $3)
@@ -119,9 +128,10 @@ pub(super) async fn fetch_report(
                  FILTER (WHERE billable),
                0)::bigint as "billable_cents!",
              SUM(line_amount_cents(cost_rate_cents, minutes))::bigint as "cost_cents!",
-             currency as "currency!"
+             currency as "currency!",
+             cost_currency as "cost_currency!"
            FROM entry
-           GROUP BY group_id, label, currency
+           GROUP BY group_id, label, currency, cost_currency
            -- Stable ties for duplicate labels and multi-currency entities.
            ORDER BY label COLLATE "C", group_id, currency COLLATE "C"
         "#,

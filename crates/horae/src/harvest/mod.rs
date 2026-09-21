@@ -178,7 +178,9 @@ fn time_entry_row_to_harvest(
     row: &TimeEntryRow,
     org_round_min: u32,
     org_round_dir: horae_core::types::RoundDir,
+    caller_role: horae_core::types::OrgRole,
 ) -> HarvestTimeEntry {
+    let can_view_rates = caller_role.is_manager_or_above();
     let hours = row.minutes as f64 / 60.0;
     let rounded_hours = horae_core::rounding::effective_minutes(
         row.minutes as u32,
@@ -225,8 +227,14 @@ fn time_entry_row_to_harvest(
         timer_started_at: row.started_at.map(|t| t.to_rfc3339()),
         billable: row.billable,
         budgeted: row.budget_kind != "none",
-        billable_rate: row.billable_rate_cents.map(|c| c as f64 / 100.0),
-        cost_rate: row.user_cost_rate_cents.map(|c| c as f64 / 100.0),
+        billable_rate: row
+            .billable_rate_cents
+            .filter(|_| can_view_rates)
+            .map(|c| c as f64 / 100.0),
+        cost_rate: row
+            .user_cost_rate_cents
+            .filter(|_| can_view_rates)
+            .map(|c| c as f64 / 100.0),
         created_at: row.created_at.to_rfc3339(),
         updated_at: row.updated_at.to_rfc3339(),
         user: HarvestRef {
@@ -260,9 +268,8 @@ async fn list_time_entries(
     Ok(Json(page.with_query(uri.query())))
 }
 
-/// Entries carry both a teammate's notes and their rates, so the row set is
-/// scoped by [`scoped_user_filter`]: org-wide for a manager, own rows for a
-/// member.
+/// Members receive their own entries without rates; managers can read the
+/// organization's entries and financial fields.
 async fn time_entries_page(
     db: &PgPool,
     caller: &AuthUser,
@@ -313,8 +320,13 @@ async fn time_entries_page(
                te.project_id, p.name AS project_name, p.code AS project_code,
                te.task_id, t.name AS task_name,
                p.client_id, c.name AS client_name,
-               COALESCE(line.rate_cents, pt.rate_cents, a.rate_cents, p.rate_cents, u.billable_rate_cents) AS "billable_rate_cents?",
-               u.cost_rate_cents AS user_cost_rate_cents,
+               COALESCE(line.rate_cents,
+                 CASE WHEN ps.project_id IS NULL OR p.project_type = 'time_and_materials'
+                 THEN resolve_project_rate(ps.rate_mode, pt.rate_cents, a.rate_cents, p.rate_cents,
+                 CASE WHEN ps.project_id IS NULL OR p.currency = o.default_currency THEN u.billable_rate_cents END,
+                 CASE WHEN p.currency = c.currency THEN c.default_rate_cents END
+               ) END) AS "billable_rate_cents?",
+               COALESCE(mc.cost_rate_cents, u.cost_rate_cents) AS user_cost_rate_cents,
                p.budget_kind::text AS "budget_kind!: String"
          FROM time_entries te
          JOIN users u ON u.id = te.user_id
@@ -324,6 +336,9 @@ async fn time_entries_page(
          LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id
          LEFT JOIN invoice_line_items line ON line.invoice_id = te.invoice_id AND line.time_entry_id = te.id
          JOIN clients c ON c.id = p.client_id
+         JOIN organizations o ON o.id = te.org_id
+         LEFT JOIN project_settings ps ON ps.project_id = p.id
+         LEFT JOIN project_member_costs mc ON mc.project_id = te.project_id AND mc.user_id = te.user_id
          WHERE te.org_id = $1
            AND ($2::uuid IS NULL OR te.user_id = $2)
            AND ($3::uuid IS NULL OR te.project_id = $3)
@@ -349,7 +364,7 @@ async fn time_entries_page(
 
     let entries: Vec<HarvestTimeEntry> = rows
         .iter()
-        .map(|r| time_entry_row_to_harvest(r, round_min, round_dir))
+        .map(|r| time_entry_row_to_harvest(r, round_min, round_dir, caller.org_role))
         .collect();
 
     Ok(Json(HarvestPagination::new(
@@ -394,14 +409,22 @@ async fn time_entry_by_id(db: &PgPool, caller: &AuthUser, id: Uuid) -> ApiResult
                te.project_id, p.name AS project_name, p.code AS project_code,
                te.task_id, t.name AS task_name,
                p.client_id, c.name AS client_name,
-               COALESCE(line.rate_cents, pt.rate_cents, a.rate_cents, p.rate_cents, u.billable_rate_cents) AS "billable_rate_cents?",
-               u.cost_rate_cents AS user_cost_rate_cents,
+               COALESCE(line.rate_cents,
+                 CASE WHEN ps.project_id IS NULL OR p.project_type = 'time_and_materials'
+                 THEN resolve_project_rate(ps.rate_mode, pt.rate_cents, a.rate_cents, p.rate_cents,
+                 CASE WHEN ps.project_id IS NULL OR p.currency = o.default_currency THEN u.billable_rate_cents END,
+                 CASE WHEN p.currency = c.currency THEN c.default_rate_cents END
+               ) END) AS "billable_rate_cents?",
+               COALESCE(mc.cost_rate_cents, u.cost_rate_cents) AS user_cost_rate_cents,
                p.budget_kind::text AS "budget_kind!: String"
          FROM time_entries te
          JOIN users u ON u.id = te.user_id
          JOIN projects p ON p.id = te.project_id
          JOIN tasks t ON t.id = te.task_id
          JOIN clients c ON c.id = p.client_id
+         JOIN organizations o ON o.id = te.org_id
+         LEFT JOIN project_settings ps ON ps.project_id = p.id
+         LEFT JOIN project_member_costs mc ON mc.project_id = te.project_id AND mc.user_id = te.user_id
          LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
          LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id
          LEFT JOIN invoice_line_items line ON line.invoice_id = te.invoice_id AND line.time_entry_id = te.id
@@ -416,7 +439,12 @@ async fn time_entry_by_id(db: &PgPool, caller: &AuthUser, id: Uuid) -> ApiResult
     .map_err(internal)?
     .ok_or_else(not_found)?;
 
-    Ok(Json(time_entry_row_to_harvest(&row, round_min, round_dir)))
+    Ok(Json(time_entry_row_to_harvest(
+        &row,
+        round_min,
+        round_dir,
+        caller.org_role,
+    )))
 }
 
 // ── Projects ────────────────────────────────────────────────────────────────
@@ -944,6 +972,99 @@ mod tests {
             page: None,
             per_page: None,
             updated_since: None,
+        }
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn members_cannot_read_own_project_rates_or_cost_overrides(pool: PgPool) {
+        let ids = seed(&pool, OrgRole::Member).await;
+        let id = insert_entry(&pool, &ids, ids.user_id, "Private costs").await;
+        sqlx::query!(
+            "INSERT INTO assignments (id,project_id,user_id,role) VALUES ($1,$2,$3,'freelancer')",
+            Uuid::now_v7(),
+            ids.project_id,
+            ids.user_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            "UPDATE users SET billable_rate_cents = 3000, cost_rate_cents = 1000 WHERE id = $1",
+            ids.user_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!("INSERT INTO project_member_costs (id,org_id,project_id,user_id,cost_rate_cents) VALUES ($1,$2,$3,$4,1500)", Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id)
+            .execute(&pool).await.unwrap();
+        let member = caller(&ids, OrgRole::Member);
+        let Json(entry) = time_entry_by_id(&pool, &member, id).await.unwrap();
+        let Json(page) = time_entries_page(&pool, &member, no_time_entry_filters())
+            .await
+            .unwrap();
+        assert_eq!((entry.billable_rate, entry.cost_rate), (None, None));
+        assert_eq!(
+            (
+                page.data["time_entries"][0].billable_rate,
+                page.data["time_entries"][0].cost_rate
+            ),
+            (None, None)
+        );
+        assert_eq!(entry.hours, 1.0);
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn harvest_entry_rates_respect_selected_project_mode(pool: PgPool) {
+        let ids = seed(&pool, OrgRole::Manager).await;
+        let id = insert_entry(&pool, &ids, ids.user_id, "Selected rates").await;
+        let caller = caller(&ids, OrgRole::Manager);
+        sqlx::query!(
+            "UPDATE users SET billable_rate_cents = 3000 WHERE id = $1",
+            ids.user_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            "UPDATE projects SET rate_cents = 3500 WHERE id = $1",
+            ids.project_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!("INSERT INTO project_tasks (project_id, task_id, billable, rate_cents) VALUES ($1, $2, true, 5000)", ids.project_id, ids.task_id)
+            .execute(&pool).await.unwrap();
+        sqlx::query!("INSERT INTO assignments (id, project_id, user_id, role, rate_cents) VALUES ($1, $2, $3, 'lead', 4000)", Uuid::now_v7(), ids.project_id, ids.user_id)
+            .execute(&pool).await.unwrap();
+        sqlx::query!("INSERT INTO project_member_costs (id,org_id,project_id,user_id,cost_rate_cents) VALUES ($1,$2,$3,$4,1500)", Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id)
+            .execute(&pool).await.unwrap();
+        sqlx::query!("INSERT INTO project_settings (id, org_id, project_id, creator_id, rate_mode) VALUES ($1,$2,$3,$4,'person')", Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id)
+            .execute(&pool).await.unwrap();
+        for (mode, expected) in [("person", 40.0), ("task", 50.0), ("project", 35.0)] {
+            sqlx::query!(
+                "UPDATE project_settings SET rate_mode = $2 WHERE project_id = $1",
+                ids.project_id,
+                mode
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            let Json(entry) = time_entry_by_id(&pool, &caller, id).await.unwrap();
+            let Json(page) = time_entries_page(&pool, &caller, no_time_entry_filters())
+                .await
+                .unwrap();
+            assert_eq!(
+                (
+                    entry.billable_rate,
+                    page.data["time_entries"][0].billable_rate
+                ),
+                (Some(expected), Some(expected)),
+                "selected mode: {mode}"
+            );
+            assert_eq!(
+                (entry.cost_rate, page.data["time_entries"][0].cost_rate),
+                (Some(15.0), Some(15.0))
+            );
         }
     }
 

@@ -19,12 +19,15 @@
 - **Rationale**: Task catalog rates are not a live legacy candidate. Existing fixed-fee projects are invoiced hourly; changing this silently would alter imported data.
 - **Alternatives**: Global cascade replacement/backfill rejected; independent divergent formulas rejected in favor of a pure core helper and an SQL equivalent with parity tests.
 - **Consumers**: `crates/core/src/invoice.rs::resolve_rate`, `server_fns/projects.rs::fetch_project_spend`, `server_fns/reports.rs::fetch_report`, `server_fns/invoices.rs::generate_invoice_for_period`, both Harvest time-entry queries, `importers/harvest/resolve.rs::resolve_project`.
+- **Hourly implementation checkpoint**: migration 0031 introduces the pure SQL counterpart of `resolve_project_rate`; 1,215 combinations cover absent, zero and present sources against Rust. All five operational queries use it. Missing settings preserve the old cascade, configured fixed/non-billable projects have no hourly charge, and attached invoice lines keep precedence. The function revokes PUBLIC execution and does not expand the plugin allowlist. Fee occurrence and exclusive-source schema remain to be added before this migration ships.
 
 ## Exactness and currency
 
 - **Decision**: Reuse `money::{parse_cents,add,format_cents_plain}`, `invoice::line_amount_cents`, duration and budget helpers. Add checked basis-point calculations using widened integers.
 - **Rationale**: Helpers currently assume two decimals, and currency checks only constrain code length. Restrict new creation to reference EUR/CHF/USD/GBP; do not claim complete ISO minor-unit support. Existing reports group by client currency and have one currency for bill/cost totals; configured projects need separate billing/cost grouping and labels.
 - **Alternatives**: Float arithmetic forbidden; new monetary dependency unnecessary; implicit cross-currency rate inheritance rejected.
+- **Consumer checkpoint**: configured invoices use project currency and reject mixed-currency selections before inserting or claiming time. Grouped reports prefer attached invoice currency, otherwise project currency for configured rows and client currency for legacy rows. Costs use project overrides before profile defaults and carry a separate organization-currency field through report totals. Inherited profile/client rates enter configured billing only when their source currency matches; creation/edit validation for every inheritance path still requires the final cross-currency audit.
+- **Privacy checkpoint**: both Harvest time-entry responses redact all rates for ordinary members, including their own project-specific costs. Manager access and member time quantities remain intact. This does not finish the broader project/task/user projection authorization audit.
 
 ## Fee invoicing and defaults
 

@@ -111,10 +111,9 @@ pub(super) async fn fetch_project_spend(
 ) -> Result<Vec<ProjectSpend>, sqlx::Error> {
     // Grouped in Postgres, not folded here: the overview needs one number per
     // project, and folding in Rust meant fetching one row per time entry to get
-    // there. `COALESCE(pt, a, p, u)` is the FR-024 cascade — exactly what
-    // `horae_core::invoice::resolve_rate` does — and `line_amount_cents` is the
-    // SQL twin of the Rust function invoicing uses. Attached invoice amounts
-    // take priority over live rates. The joins cannot multiply rows: project
+    // there. SQL rate resolution preserves legacy precedence for projects
+    // without settings. Attached invoice amounts take priority over live rates.
+    // The joins cannot multiply rows: project
     // tasks, assignments, and invoice lines each have a unique pair key.
     let spend = sqlx::query_as!(
         ProjectSpend,
@@ -122,11 +121,17 @@ pub(super) async fn fetch_project_spend(
              te.project_id as "project_id!",
              SUM(te.minutes)::bigint as "spent_minutes!",
              COALESCE(SUM(COALESCE(line.amount_cents, line_amount_cents(
-                 COALESCE(pt.rate_cents, a.rate_cents, p.rate_cents, u.billable_rate_cents, 0),
+                 COALESCE(CASE WHEN ps.project_id IS NULL OR p.project_type = 'time_and_materials'
+                   THEN resolve_project_rate(ps.rate_mode, pt.rate_cents, a.rate_cents, p.rate_cents,
+                   CASE WHEN ps.project_id IS NULL OR p.currency = o.default_currency THEN u.billable_rate_cents END,
+                   CASE WHEN p.currency = c.currency THEN c.default_rate_cents END
+                 ) END, 0),
                  effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir)
                ))) FILTER (WHERE (te.billable AND (te.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable, t.billable_default))))), 0)::bigint as "spent_cents!"
            FROM time_entries te
            JOIN projects p ON p.id = te.project_id
+           JOIN clients c ON c.id = p.client_id
+           LEFT JOIN project_settings ps ON ps.project_id = p.id
            JOIN tasks t ON t.id = te.task_id
            LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
            LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id

@@ -3,6 +3,61 @@ use crate::server_fns::test_seed::seed;
 use sqlx::PgPool;
 use uuid::Uuid;
 
+#[sqlx::test(migrations = "./migrations")]
+async fn project_rate_sql_matches_rust_for_missing_zero_and_present_sources(pool: PgPool) {
+    use horae_core::project::RateMode;
+
+    let rows = sqlx::query!(
+        "SELECT mode, task, assignment, project, person, client,
+                resolve_project_rate(mode, task, assignment, project, person, client) AS rate
+         FROM unnest(ARRAY[NULL::text, 'legacy', 'person', 'task', 'project']) AS modes(mode)
+         CROSS JOIN unnest(ARRAY[NULL::bigint, 0, 1234]) AS tasks(task)
+         CROSS JOIN unnest(ARRAY[NULL::bigint, 0, 2345]) AS assignments(assignment)
+         CROSS JOIN unnest(ARRAY[NULL::bigint, 0, 3456]) AS projects(project)
+         CROSS JOIN unnest(ARRAY[NULL::bigint, 0, 4567]) AS people(person)
+         CROSS JOIN unnest(ARRAY[NULL::bigint, 0, 5678]) AS clients(client)"
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(rows.len(), 1215);
+    for row in rows {
+        let mode = match row.mode.as_deref() {
+            None | Some("legacy") => RateMode::Legacy,
+            Some("person") => RateMode::Person,
+            Some("task") => RateMode::Task,
+            Some("project") => RateMode::Project,
+            other => panic!("unexpected test mode: {other:?}"),
+        };
+        let expected = horae_core::invoice::resolve_project_rate(
+            mode,
+            row.task,
+            row.assignment,
+            row.project,
+            row.person,
+            row.client,
+        );
+        assert_eq!(
+            row.rate, expected,
+            "mode={mode:?}; task={:?}, assignment={:?}, project={:?}, person={:?}, client={:?}",
+            row.task, row.assignment, row.project, row.person, row.client
+        );
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn project_rate_helper_has_no_public_execute_grant(pool: PgPool) {
+    let public_execute = sqlx::query_scalar!(
+        r#"SELECT EXISTS (
+           SELECT 1 FROM pg_proc p,
+             LATERAL aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) acl
+           WHERE p.oid = 'public.resolve_project_rate(text,bigint,bigint,bigint,bigint,bigint)'::regprocedure
+             AND acl.grantee = 0 AND acl.privilege_type = 'EXECUTE'
+         ) AS "public_execute!""#
+    ).fetch_one(&pool).await.unwrap();
+    assert!(!public_execute);
+}
+
 #[test]
 fn project_rate_distinguishes_inheritance_zero_and_exact_amounts() {
     assert_eq!(parse_project_rate("  ").unwrap(), None);
