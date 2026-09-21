@@ -100,8 +100,9 @@
           </div>
         </div>
         <div style="flex:1;"></div>
-        <button class="hb-primary" style="display:flex; align-items:center; gap:8px; padding:8px 16px; background:#4FB79A; color:#0D211B; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap;">New invoice</button>
-        <button onClick="{{ openEdit }}" class="hb-secondary" style="display:flex; align-items:center; gap:8px; padding:8px 16px; background:#232019; border:1px solid #3D382E; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap;"><i class="ph ph-pencil-simple" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i> Edit client</button>
+        <a href="13_New Project.dc.html" class="hb-secondary" style="display:inline-flex; align-items:center; gap:8px; height:44px; padding:0 16px; background:#232019; border:1px solid #3D382E; border-radius:8px; color:#EFEAE0; font-size:14px; white-space:nowrap;"><i class="ph ph-plus" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i>New project</a>
+        <button class="hb-primary" style="display:flex; align-items:center; gap:8px; height:44px; padding:0 16px; background:#4FB79A; color:#0D211B; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap;">New invoice</button>
+        <button onClick="{{ openEdit }}" class="hb-secondary" style="display:flex; align-items:center; gap:8px; height:44px; padding:0 16px; background:#232019; border:1px solid #3D382E; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap;"><i class="ph ph-pencil-simple" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i> Edit client</button>
         <dc-import name="Dropdown" mode="actions" label="Actions" items="{{ clientActions }}" on-select="{{ onClientAction }}" align="right" width="200" surface="#232019" hint-size="100px,40px"></dc-import>
       </div>
 

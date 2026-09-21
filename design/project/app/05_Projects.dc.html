@@ -91,11 +91,11 @@
     <div class="hz-pad" style="display:flex; align-items:center; gap:16px; row-gap:12px; flex-wrap:wrap; padding:24px 40px 0;">
       <h1 style="font-family:'Newsreader',serif; font-size:34px; font-weight:600; color:#F6F2E9; margin:0; letter-spacing:-.015em;">Projects</h1>
       <div style="flex:1 1 0; min-width:16px;"></div>
-      <button class="hb-primary" onClick="{{ openAdd }}" style="padding:8px 16px; background:#4FB79A; color:#0D211B; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap;">New project</button>
-      <dc-import name="Dropdown" mode="actions" label="⚡ Actions" heading="{{ bulkCountLabel }}" items="{{ bulkItems }}" align="right" width="236" surface="#232019" hint-size="120px,40px"></dc-import>
-      <a href="10_Importers.dc.html" class="hb-secondary" style="padding:8px 16px; background:#232019; border:1px solid #3D382E; border-radius:8px; color:#EFEAE0; font-size:14px;">Import</a>
-      <button class="hb-secondary" onClick="{{ openExport }}" style="padding:8px 16px; background:#232019; border:1px solid #3D382E; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap;">Export</button>
-      <div style="display:flex; align-items:center; gap:8px; flex:0 1 300px; min-width:220px; padding:8px 12px; background:#1A1813; border:1px solid #322E26; border-radius:8px;">
+      <a href="13_New Project.dc.html" class="hb-primary" style="display:inline-flex; align-items:center; height:44px; padding:0 16px; background:#4FB79A; color:#0D211B; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap;">New project</a>
+      <dc-import name="Dropdown" mode="actions" label="Actions" heading="{{ bulkCountLabel }}" items="{{ bulkItems }}" align="right" width="236" surface="#232019" hint-size="120px,40px"></dc-import>
+      <a href="10_Importers.dc.html" class="hb-secondary" style="display:inline-flex; align-items:center; height:44px; padding:0 16px; background:#232019; border:1px solid #3D382E; border-radius:8px; color:#EFEAE0; font-size:14px;">Import</a>
+      <button class="hb-secondary" onClick="{{ openExport }}" style="display:inline-flex; align-items:center; height:44px; padding:0 16px; background:#232019; border:1px solid #3D382E; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap;">Export</button>
+      <div style="display:flex; align-items:center; gap:8px; flex:0 1 300px; min-width:220px; height:44px; padding:0 12px; background:#1A1813; border:1px solid #322E26; border-radius:8px;">
         <span style="display:inline-flex; align-items:center; justify-content:center; color:#6A6353; font-size:14px;"><i class="ph ph-magnifying-glass" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span>
         <span style="font-size:14px; color:#5A5446; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Search by project or client</span>
       </div>
@@ -104,12 +104,19 @@
     <div style="display:flex; align-items:center; gap:16px; padding:20px 40px 0;">
             <dc-import name="Dropdown" items="{{ scopeItems }}" value="{{ scopeValue }}" on-select="{{ pickScope }}" width="260" hint-size="200px,40px"></dc-import>
       <div style="flex:1;"></div>
-      <dc-import name="Dropdown" items="{{ clientItems }}" value="{{ clientValue }}" on-select="{{ pickClient }}" placeholder="Filter by client" searchable="{{ true }}" align="right" width="300" hint-size="180px,40px"></dc-import>
-      <dc-import name="Dropdown" items="{{ managerItems }}" value="{{ managerValue }}" on-select="{{ pickManager }}" placeholder="Filter by manager" searchable="{{ true }}" align="right" width="260" hint-size="180px,40px"></dc-import>
+      <dc-import name="Dropdown" items="{{ clientItems }}" value="{{ clientValue }}" on-select="{{ pickClient }}" empty-label="Filter by client" searchable="{{ true }}" align="right" width="300" hint-size="180px,40px"></dc-import>
+      <dc-import name="Dropdown" items="{{ managerItems }}" value="{{ managerValue }}" on-select="{{ pickManager }}" empty-label="Filter by manager" searchable="{{ true }}" align="right" width="260" hint-size="180px,40px"></dc-import>
     </div>
 
     <div style="padding:20px 40px 40px; flex:1; overflow:auto; min-height:0;">
       <sc-if value="{{ hasProjects }}" hint-placeholder-val="{{ true }}">
+      <sc-if value="{{ isError }}" hint-placeholder-val="{{ false }}">
+      <dc-import name="ErrorState" kind="network" code="GET /projects?scope=active · timeout after 8s" on-retry="{{ retry }}" link-label="Open status page →" link-href="#" hint-size="100%,360px" style="display:block;"></dc-import>
+      </sc-if>
+      <sc-if value="{{ isLoading }}" hint-placeholder-val="{{ false }}">
+      <dc-import name="Skeleton" kind="table" rows="{{ 7 }}" columns="34px minmax(300px,1fr) 130px 130px 96px 200px 220px 120px" widths="{{ skWidths }}" hint-size="100%,440px" style="display:block;"></dc-import>
+      </sc-if>
+      <sc-if value="{{ notLoading }}" hint-placeholder-val="{{ true }}">
       <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; position:relative; overflow-x:auto;">
         <div style="width:max-content; min-width:100%;">
         <!-- header -->
@@ -146,6 +153,7 @@
         </div>
         </div>
       </div>
+      </sc-if>
       </sc-if>
 
       <sc-if value="{{ noProjects }}" hint-placeholder-val="{{ false }}">
@@ -246,8 +254,15 @@ class Component extends DCLogic {
     const seg = (active) => active
       ? 'padding:12px 16px; background:#15291F; border:1px solid #4FB79A; border-radius:8px; color:#F6F2E9; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer;'
       : 'padding:12px 16px; background:#100F0C; border:1px solid #3D382E; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer;';
-    const devGroups = [(() => { const o = [['Project list', 'showFilled', !isEmpty], ['No projects yet', 'showEmptyState', isEmpty]]; return { label: 'Page state', options: o.map(x => x[0]), value: (o.find(x => x[2]) || [''])[0], onChange: (v) => { const h = o.find(x => x[0] === v); if (h) this.renderVals()[h[1]](); } }; })()];
+    const isLoading = this.state.loading === true;
+    const isError = this.state.error === true;
+    const devGroups = [(() => { const o = [['Project list', 'showFilled', !isEmpty && !isLoading && !isError], ['Loading', 'showLoading', isLoading], ['Error', 'showError', isError], ['No projects yet', 'showEmptyState', isEmpty && !isLoading && !isError]]; return { label: 'Page state', options: o.map(x => x[0]), value: (o.find(x => x[2]) || [''])[0], onChange: (v) => { const h = o.find(x => x[0] === v); if (h) this.renderVals()[h[1]](); } }; })()];
     return {
+      isLoading, notLoading: !isLoading && !isError, isError,
+      showError: () => this.setState({ error: true, loading: false, empty: false }),
+      retry: () => { this.setState({ error: false, loading: true }); setTimeout(() => this.setState({ loading: false }), 1400); },
+      skWidths: [0, 55, 60, 50, 40, 70, 65, 45],
+      showLoading: () => this.setState({ loading: true, empty: false, error: false }),
       scopeItems: ['Active projects (2)','Budgeted projects (2)','Archived projects (13)'],
       scopeValue: s.scopeLabel || 'Active projects (2)',
       pickScope: (v) => this.setState({ scopeLabel: v }),
@@ -289,8 +304,8 @@ class Component extends DCLogic {
       cliNorthmoorRow: mgrRow(s.clientLabel === "Northmoor — EUR"),
       pickClientPelham: () => this.setState({ clientLabel: "Pelham & Roe", clientOpen: false }),
       cliPelhamRow: mgrRow(s.clientLabel === "Pelham & Roe"),
-      showFilled: () => this.setState({ empty: false }),
-      showEmptyState: () => this.setState({ empty: true }),
+      showFilled: () => this.setState({ empty: false, loading: false, error: false }),
+      showEmptyState: () => this.setState({ empty: true, loading: false, error: false }),
       segFilled: pseg(!isEmpty),
       segEmpty: pseg(isEmpty),
       clientLabel: s.clientLabel,

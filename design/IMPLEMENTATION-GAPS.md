@@ -1,5 +1,11 @@
 # Design implementation inventory
 
+> Historical snapshot: this inventory has not been re-audited against the
+> 2026-09-21 export or current application code. The latest bundle adds New Project,
+> ErrorState and Skeleton; see [the handoff guide](README.md) for its provenance
+> and changes. PR #202 and the Projects improvements in #204/#205 have since merged.
+> Reconcile the entries and PR statuses below before planning implementation.
+
 Reviewed on 2026-09-16 against the `Horae (1).zip` handoff and application baseline
 `d32d56f` (`origin/master`, safe Harvest account switching). This is a source-based
 inventory, not visual acceptance, a new feature specification, or an assertion

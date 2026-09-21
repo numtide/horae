@@ -23,7 +23,7 @@
 </style>
 </helmet>
 <div ref="{{ rootRef }}" style="{{ rootStyle }}">
-  <button onClick="{{ toggle }}" class="hb-secondary" style="{{ triggerStyle }}">{{ label }} <span style="display:inline-flex; color:#8F8676;"><i class="{{ caretCls }}" aria-hidden="true" style="font-size:12px; line-height:1; display:block;"></i></span></button>
+  <button onClick="{{ toggle }}" class="hb-secondary" style="{{ triggerStyle }}"><span style="{{ labelStyle }}">{{ label }}</span> <span style="display:inline-flex; color:#8F8676;"><i class="{{ caretCls }}" aria-hidden="true" style="font-size:12px; line-height:1; display:block;"></i></span></button>
   <sc-if value="{{ open }}" hint-placeholder-val="{{ false }}">
   <div style="{{ panel }}">
     <sc-if value="{{ searchable }}" hint-placeholder-val="{{ false }}">
@@ -70,17 +70,17 @@ class Component extends DCLogic {
     const items = (p.items ?? []).map(it => typeof it === 'string' ? { value: it, label: it } : it);
     const controlled = p.value !== undefined;
     const value = controlled ? p.value : s.value;
-    const selected = items.find(i => i.value === value);
+    const selected = value === undefined ? undefined : items.find(i => !i.group && !i.sep && i.value === value);
     const mode = p.mode ?? 'select';          // 'select' shows the picked item in the trigger · 'actions' keeps a fixed label
-    const label = mode === 'select' ? (selected ? selected.label : (p.placeholder ?? 'Choose…')) : (p.label ?? 'Actions');
+    const label = mode === 'select' ? (selected ? selected.label : (p.emptyLabel ?? p.placeholder ?? 'Choose…')) : (p.label ?? 'Actions');
     const q = s.query.trim().toLowerCase();
     const visible = q ? items.filter(i => i.group || i.sep || (i.label || '').toLowerCase().includes(q)) : items;
     return {
       rootRef: (el) => { this._el = el; },
       rootStyle: 'position:relative; display:' + (p.fill ? 'block' : 'inline-block') + '; font-family:\'Instrument Sans\',sans-serif; color:#EFEAE0;',
       open: s.open, toggle: () => this.setState(x => ({ open: !x.open, query: '' })),
-      label, caretCls: 'ph ph-caret-down',
-      triggerStyle: 'display:inline-flex; align-items:center; gap:8px; border-radius:8px; color:#EFEAE0; font-family:inherit; cursor:pointer; white-space:nowrap; ' + (p.compact ? 'padding:8px 12px; font-size:12px; background:#232019; border:1px solid #3D382E;' : 'padding:' + (p.fill ? '12px 12px' : '8px 16px') + '; font-size:14px; background:' + (p.surface ?? '#1A1813') + '; border:1px solid ' + (p.surface ? '#3D382E' : '#322E26') + ';') + (p.fill ? ' width:100%; justify-content:space-between;' : ''),
+      label, labelStyle: 'white-space:nowrap; ' + (mode === 'select' && p.fill ? 'overflow:hidden; text-overflow:ellipsis; ' : '') + 'color:' + (mode === 'select' && !selected ? '#6A6353' : '#EFEAE0') + ';', caretCls: 'ph ph-caret-down',
+      triggerStyle: 'display:inline-flex; align-items:center; gap:8px; border-radius:8px; color:#EFEAE0; font-family:inherit; cursor:pointer; white-space:nowrap; ' + (p.compact ? 'min-height:34px; padding:0 12px; font-size:12px; background:#232019; border:1px solid #3D382E;' : 'min-height:44px; padding:' + (p.fill ? '0 12px' : '0 16px') + '; font-size:14px; background:' + (p.surface ?? '#1A1813') + '; border:1px solid ' + (p.surface ? '#3D382E' : '#322E26') + ';') + (p.fill ? ' width:100%; justify-content:space-between;' : ''),
       panel: 'position:absolute; ' + ((p.align ?? 'left') === 'right' ? 'right:0;' : 'left:0;') + ' top:' + (p.compact ? 40 : p.fill ? 52 : 48) + 'px; width:' + (p.fill ? '100%' : (p.width ?? 260) + 'px') + '; background:#201D17; border:1px solid #3D382E; border-radius:12px; box-shadow:0 24px 60px -18px rgba(0,0,0,.8); z-index:80; overflow:hidden;',
       hasHeading: !!p.heading, heading: p.heading ?? '',
       searchable: p.searchable === true, query: s.query, onQuery: (e) => this.setState({ query: e.target.value }),

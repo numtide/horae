@@ -89,10 +89,10 @@
     <div class="hz-pad" style="display:flex; align-items:center; gap:16px; row-gap:12px; flex-wrap:wrap; padding:24px 40px 0;">
       <h1 style="font-family:'Newsreader',serif; font-size:34px; font-weight:600; color:#F6F2E9; margin:0; letter-spacing:-.015em;">Clients</h1>
       <div style="flex:1 1 0; min-width:16px;"></div>
-      <button class="hb-primary" onClick="{{ openAdd }}" style="padding:8px 16px; background:#4FB79A; color:#0D211B; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap;">New client</button>
+      <button class="hb-primary" onClick="{{ openAdd }}" style="display:inline-flex; align-items:center; height:44px; padding:0 16px; background:#4FB79A; color:#0D211B; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap;">New client</button>
       <dc-import name="Dropdown" mode="actions" label="Actions" heading="{{ bulkCountLabel }}" items="{{ bulkItems }}" align="right" width="236" surface="#232019" hint-size="120px,40px"></dc-import>
-      <a href="10_Importers.dc.html" class="hb-secondary" style="padding:8px 16px; background:#232019; border:1px solid #3D382E; border-radius:8px; color:#EFEAE0; font-size:14px;">Import</a>
-      <div style="display:flex; align-items:center; gap:8px; flex:0 1 300px; min-width:220px; padding:0 12px; height:40px; background:#1A1813; border:1px solid #322E26; border-radius:8px;">
+      <a href="10_Importers.dc.html" class="hb-secondary" style="display:inline-flex; align-items:center; height:44px; padding:0 16px; background:#232019; border:1px solid #3D382E; border-radius:8px; color:#EFEAE0; font-size:14px;">Import</a>
+      <div style="display:flex; align-items:center; gap:8px; flex:0 1 300px; min-width:220px; padding:0 12px; height:44px; background:#1A1813; border:1px solid #322E26; border-radius:8px;">
         <span style="display:inline-flex; color:#6A6353;"><i class="ph ph-magnifying-glass" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span>
         <input value="{{ query }}" onChange="{{ setQuery }}" placeholder="Search clients or contacts" style="flex:1; min-width:0; background:transparent; border:none; outline:none; color:#EFEAE0; font-family:inherit; font-size:14px;" />
       </div>
@@ -101,7 +101,7 @@
     <div style="display:flex; align-items:center; gap:16px; padding:20px 40px 0;">
       <dc-import name="Dropdown" items="{{ scopeItems }}" value="{{ scopeValue }}" on-select="{{ pickScope }}" width="240" hint-size="200px,40px"></dc-import>
       <div style="flex:1;"></div>
-      <dc-import name="Dropdown" items="{{ currencyItems }}" value="{{ currencyValue }}" on-select="{{ pickCurrency }}" placeholder="Currency" align="right" width="200" hint-size="140px,40px"></dc-import>
+      <dc-import name="Dropdown" items="{{ currencyItems }}" value="{{ currencyValue }}" on-select="{{ pickCurrency }}" empty-label="Currency" align="right" width="200" hint-size="140px,40px"></dc-import>
     </div>
 
     <div style="padding:20px 40px 40px; flex:1; overflow:auto; min-height:0;">

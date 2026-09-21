@@ -104,41 +104,35 @@
           </div>
         </div>
         <div style="flex:1;"></div>
-        <button onClick="{{ showEdit }}" class="hb-secondary" style="display:flex; align-items:center; gap:8px; padding:8px 16px; background:#232019; border:1px solid #3D382E; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap;">✎ Edit project</button>
+        <button onClick="{{ showEdit }}" class="hb-secondary" style="display:flex; align-items:center; gap:8px; height:44px; padding:0 16px; background:#232019; border:1px solid #3D382E; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap;"><i class="ph ph-pencil-simple" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i> Edit project</button>
         <dc-import name="Dropdown" mode="actions" label="Actions" items="{{ projectActions }}" on-select="{{ onProjectAction }}" align="right" width="180" surface="#232019" hint-size="100px,40px"></dc-import>
       </div>
 
       <!-- chart -->
       <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; padding:20px; margin-top:24px;">
-        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:20px;">
-          <div style="display:inline-flex; background:#100F0C; border:1px solid #322E26; border-radius:8px; padding:4px;">
-            <button onClick="{{ showProgress }}" class="hb-seg" style="{{ segProgress }}; white-space:nowrap;">Project progress</button>
-            <button onClick="{{ showWeekly }}" class="hb-seg" style="{{ segWeekly }}; white-space:nowrap;">Hours per week</button>
-          </div>
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+          <dc-import name="SegmentedControl" options="{{ chartModes }}" value="{{ chartMode }}" on-change="{{ setChartMode }}" size="md" hint-size="300px,44px"></dc-import>
           <div style="flex:1;"></div>
           <dc-import name="PeriodNav" unit="week" value="{{ periodValue }}" on-change="{{ setPeriod }}" no-future="{{ true }}" surface="#100F0C" hint-size="300px,44px"></dc-import>
         </div>
-        <div style="display:flex; gap:16px;">
-          <div style="display:flex; flex-direction:column; justify-content:space-between; padding:4px 0 24px; font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6A6353;">
-            <span>150</span><span>100</span><span>50</span><span>0</span>
-          </div>
-          <div style="flex:1; min-width:0;">
-            <div style="position:relative; height:220px; border-bottom:1px solid #322E26;">
-              <div style="position:absolute; left:0; right:0; top:0; height:1px; background:#201D17;"></div>
-              <div style="position:absolute; left:0; right:0; top:33%; height:1px; background:#201D17;"></div>
-              <div style="position:absolute; left:0; right:0; top:66%; height:1px; background:#201D17;"></div>
-              <div style="position:absolute; left:0; right:0; bottom:0; top:0; display:flex; align-items:flex-end; gap:4px;">
-                <sc-for list="{{ bars }}" as="bar" hint-placeholder-count="24">
-                  <div style="flex:1; display:flex; flex-direction:column; justify-content:flex-end; height:100%;">
-                    <div style="{{ bar.style }}"></div>
-                  </div>
-                </sc-for>
-              </div>
-            </div>
-            <div style="display:flex; justify-content:space-between; margin-top:8px; font-size:12px; color:#6A6353;">
-              <span>Apr 2026</span><span>May 2026</span><span>Jun 2026</span><span>Jul 2026</span>
-            </div>
-          </div>
+        <div style="position:relative; height:280px; margin-top:28px; padding:8px 0 28px 44px;">
+          <div style="position:absolute; left:0; top:8px; bottom:28px; width:36px; display:flex; flex-direction:column; justify-content:space-between; align-items:flex-end; font-family:'IBM Plex Mono',monospace; font-size:10px; color:#6A6353;"><span>{{ yTop }}</span><span>{{ yMid }}</span><span>0</span></div>
+          <div style="position:absolute; left:44px; right:0; top:8px; bottom:28px; border-left:1px solid #322E26; border-bottom:1px solid #322E26; background:repeating-linear-gradient(to top, transparent 0, transparent calc(50% - 1px), #1E1B15 calc(50% - 1px), #1E1B15 50%);"></div>
+          <div style="position:absolute; top:8px; bottom:28px; background:rgba(79,183,154,.08); border-left:1px dashed #2A6D5C; border-right:1px dashed #2A6D5C; left:{{ bandLeft }}; width:{{ bandWidth }};"><span style="position:absolute; top:6px; left:50%; transform:translateX(-50%); padding:2px 6px; background:#1A1813; border:1px solid #2A6D5C; border-radius:999px; font-family:'IBM Plex Mono',monospace; font-size:10px; color:#4FB79A; white-space:nowrap;">This week</span></div>
+          <svg viewBox="0 0 1000 200" preserveAspectRatio="none" style="position:absolute; left:44px; right:0; top:8px; bottom:28px; width:calc(100% - 44px); height:calc(100% - 36px); overflow:visible;">
+            <sc-if value="{{ isProgress }}" hint-placeholder-val="{{ true }}">
+            <path d="{{ areaPath }}" fill="rgba(79,183,154,.10)"></path>
+            <path d="{{ linePath }}" fill="none" stroke="#4FB79A" stroke-width="2" vector-effect="non-scaling-stroke"></path>
+            <path d="{{ budgetPath }}" fill="none" stroke="#D99A3C" stroke-width="1.5" stroke-dasharray="6 5" vector-effect="non-scaling-stroke"></path>
+            </sc-if>
+            <sc-if value="{{ isHours }}" hint-placeholder-val="{{ false }}">
+            <path d="{{ barsRest }}" fill="#1F5C4D"></path>
+            <path d="{{ barsPrev }}" fill="#3A8F78"></path>
+            <path d="{{ barsLast }}" fill="#4FB79A"></path>
+            </sc-if>
+          </svg>
+          <div style="position:absolute; left:44px; right:0; bottom:0; display:flex; justify-content:space-between; font-family:'IBM Plex Mono',monospace; font-size:10px; color:#6A6353;"><span>Apr 2026</span><span>May</span><span>Jun</span><span>Jul</span><span>Aug</span><span>Sep</span></div>
+          <div style="position:absolute; right:0; top:-16px; display:flex; gap:16px; font-size:12px; color:#8F8676;"><span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:12px; height:2px; background:#4FB79A; display:inline-block;"></span>{{ legendMain }}</span><sc-if value="{{ isProgress }}" hint-placeholder-val="{{ true }}"><span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:12px; height:0; border-top:2px dashed #D99A3C; display:inline-block;"></span>Fee cap · 150h</span></sc-if></div>
         </div>
       </div>
 
@@ -174,60 +168,96 @@
       </div>
 
       <!-- tabs -->
-      <div style="display:flex; align-items:center; gap:24px; margin-top:32px; border-bottom:1px solid #262219;">
-        <span onClick="{{ tabTasks }}" class="hz-tab" style="{{ tabTasksStyle }}">Tasks</span>
-        <span onClick="{{ tabTeam }}" class="hz-tab" style="{{ tabTeamStyle }}">Team</span>
-        <span onClick="{{ tabInvoices }}" class="hz-tab" style="{{ tabInvoicesStyle }}">Invoices</span>
+      <div style="display:flex; gap:4px; border-bottom:1px solid #262219; margin-top:32px;">
+        <sc-for list="{{ detailTabs }}" as="dt" hint-placeholder-count="3"><span onClick="{{ dt.pick }}" class="{{ dt.cls }}" style="{{ dt.style }}">{{ dt.label }}<span style="margin-left:8px; padding:1px 6px; border-radius:999px; background:#232019; border:1px solid #3D382E; font-family:'IBM Plex Mono',monospace; font-size:10px; color:#A29C8D;">{{ dt.count }}</span></span></sc-for>
       </div>
 
-      <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:24px 0 16px;">
-        <span style="font-family:'Newsreader',serif; font-size:24px; font-weight:600; color:#F6F2E9;">All time</span>
+      <sc-if value="{{ hasToolbar }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex; align-items:center; gap:12px; margin-top:24px; flex-wrap:wrap;">
+        <h2 style="font-family:'Newsreader',serif; font-size:24px; font-weight:600; color:#F6F2E9; margin:0;">{{ rangeTitle }}</h2>
         <div style="flex:1;"></div>
-        <button class="hb-secondary" style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:#1A1813; border:1px solid #322E26; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap;">All time <span style="display:inline-flex; align-items:center; justify-content:center; color:#8F8676; font-size:12px;"><i class="ph ph-caret-down" aria-hidden="true" style="font-size:12px; line-height:1; display:block;"></i></span></button>
-        <button class="hb-secondary" style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:#1A1813; border:1px solid #322E26; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap;">Export <span style="display:inline-flex; align-items:center; justify-content:center; color:#8F8676; font-size:12px;"><i class="ph ph-caret-down" aria-hidden="true" style="font-size:12px; line-height:1; display:block;"></i></span></button>
+        <dc-import name="Dropdown" items="{{ rangeItems }}" value="{{ rangeValue }}" on-select="{{ setRange }}" width="200" hint-size="120px,44px"></dc-import>
+        <dc-import name="Dropdown" mode="actions" label="Export" items="{{ exportItems }}" on-select="{{ doExport }}" align="right" width="200" hint-size="100px,44px"></dc-import>
       </div>
-
-      <sc-if value="{{ isTasks }}" hint-placeholder-val="{{ true }}">
-      <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; overflow:hidden;">
-        <div style="display:grid; grid-template-columns:1fr 120px 120px; padding:12px 20px; background:#161510; border-bottom:1px solid #262219; font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353;">
-          <span>Billable tasks</span><span style="text-align:right;">Hours</span><span style="text-align:right;">Costs</span>
-        </div>
-        <sc-for list="{{ tasks }}" as="task" hint-placeholder-count="6">
-          <div class="hz-row" style="display:grid; grid-template-columns:1fr 120px 120px; align-items:center; padding:12px 20px; border-bottom:1px solid #201D17;">
-            <div style="display:flex; align-items:center; gap:12px;"><span style="color:#6A6353; font-size:12px;">{{ task.caret }}</span><span style="font-size:14px; color:#EFEAE0;">{{ task.name }}</span></div>
-            <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:{{ task.hoursColor }};">{{ task.hours }}</span>
-            <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#A29C8D;">€0.00</span>
+      </sc-if>
+      <sc-if value="{{ tabTasks }}" hint-placeholder-val="{{ true }}">
+      <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; overflow:hidden; margin-top:16px;">
+        <div style="display:grid; grid-template-columns:minmax(0,1fr) 140px 140px; align-items:center; padding:12px 20px; border-bottom:1px solid #322E26; background:#161510; font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353;"><span>Billable tasks</span><span onClick="{{ sortHours }}" class="hz-link-muted" style="text-align:right; cursor:pointer; display:inline-flex; justify-content:flex-end; align-items:center; gap:4px;">Hours <i class="{{ sortIcon }}" aria-hidden="true" style="font-size:12px; line-height:1; display:block;"></i></span><span style="text-align:right;">Costs</span></div>
+        <sc-for list="{{ taskRows }}" as="tr" hint-placeholder-count="8">
+        <div>
+          <div onClick="{{ tr.toggle }}" class="{{ tr.cls }}" style="{{ tr.style }}">
+            <div style="display:flex; align-items:center; gap:10px; min-width:0;"><span style="{{ tr.caretStyle }}"><i class="ph ph-caret-right" aria-hidden="true" style="font-size:14px; line-height:1; display:block;"></i></span><span style="font-size:14px; color:{{ tr.nameColor }}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ tr.name }}</span></div>
+            <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px;"><a href="07_Reports.dc.html" class="{{ tr.linkCls }}" style="{{ tr.hoursStyle }}">{{ tr.hours }}</a></span>
+            <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#A29C8D;">{{ tr.costs }}</span>
           </div>
+          <sc-if value="{{ tr.open }}" hint-placeholder-val="{{ false }}">
+          <div style="background:#161510; border-bottom:1px solid #262219;">
+            <sc-for list="{{ tr.people }}" as="pp" hint-placeholder-count="2">
+            <div style="display:grid; grid-template-columns:minmax(0,1fr) 140px 140px; align-items:center; padding:10px 20px 10px 54px; border-top:1px solid #1E1B15;">
+              <div style="display:flex; align-items:center; gap:10px; min-width:0;"><span style="width:22px; height:22px; flex:0 0 22px; border-radius:50%; background:{{ pp.color }}; display:inline-flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:11px; color:#EFEAE0;">{{ pp.initial }}</span><span style="font-size:14px; color:#EFEAE0;">{{ pp.name }}</span></div>
+              <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">{{ pp.hours }}</span>
+              <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#A29C8D;">{{ pp.costs }}</span>
+            </div>
+            </sc-for>
+          </div>
+          </sc-if>
+        </div>
         </sc-for>
-        <div style="display:grid; grid-template-columns:1fr 120px 120px; align-items:center; padding:12px 20px; background:#161510; font-size:14px; font-weight:600;">
-          <span style="color:#F6F2E9;">Total</span>
-          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; color:#F6F2E9;">119.85</span>
-          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; color:#A29C8D;">€0.00</span>
-        </div>
+        <div style="display:grid; grid-template-columns:minmax(0,1fr) 140px 140px; align-items:center; padding:14px 20px; background:#161510;"><span style="font-size:14px; font-weight:600; color:#F6F2E9; padding-left:24px;">Total</span><span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; font-weight:600; color:#F6F2E9;">{{ totalHours }}</span><span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#A29C8D; display:inline-flex; justify-content:flex-end; align-items:center; gap:6px;">{{ totalCosts }} <span title="Cost rates are missing for 1 teammate" style="display:inline-flex; color:#E0B45F;"><i class="ph ph-warning" aria-hidden="true" style="font-size:14px; line-height:1; display:block;"></i></span></span></div>
       </div>
       </sc-if>
 
-      <sc-if value="{{ isTeam }}" hint-placeholder-val="{{ false }}">
-      <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; overflow:hidden;">
-        <div style="display:grid; grid-template-columns:1fr 140px 120px; padding:12px 20px; background:#161510; border-bottom:1px solid #262219; font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353;">
-          <span>Member</span><span>Cost rate</span><span style="text-align:right;">Hours</span>
+      <sc-if value="{{ tabTeam }}" hint-placeholder-val="{{ false }}">
+      <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; overflow:hidden; margin-top:16px;">
+        <div style="display:grid; grid-template-columns:minmax(0,1fr) 140px 140px; align-items:center; padding:12px 20px; border-bottom:1px solid #322E26; background:#161510; font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353;"><span>Team</span><span onClick="{{ sortHours }}" class="hz-link-muted" style="text-align:right; cursor:pointer; display:inline-flex; justify-content:flex-end; align-items:center; gap:4px;">Hours <i class="{{ sortIcon }}" aria-hidden="true" style="font-size:12px; line-height:1; display:block;"></i></span><span style="text-align:right;">Costs</span></div>
+        <sc-for list="{{ teamRows }}" as="tm" hint-placeholder-count="3">
+        <div>
+          <div onClick="{{ tm.toggle }}" class="hz-opt" style="{{ tm.style }}">
+            <div style="display:flex; align-items:center; gap:10px; min-width:0;"><span style="{{ tm.caretStyle }}"><i class="ph ph-caret-right" aria-hidden="true" style="font-size:14px; line-height:1; display:block;"></i></span><span style="width:26px; height:26px; flex:0 0 26px; border-radius:50%; background:{{ tm.color }}; display:inline-flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:12px; color:#EFEAE0;">{{ tm.initial }}</span><span style="font-size:14px; color:#F6F2E9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ tm.name }}</span><sc-if value="{{ tm.isManager }}" hint-placeholder-val="{{ false }}"><span style="padding:2px 8px; background:#232019; border:1px solid #3D382E; border-radius:999px; font-size:12px; color:#A29C8D; white-space:nowrap;">Manager</span></sc-if></div>
+            <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px;"><a href="07_Reports.dc.html" class="hz-link" style="color:#4FB79A; text-decoration:none;">{{ tm.hours }}</a></span>
+            <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:{{ tm.costColor }};">{{ tm.costs }}</span>
+          </div>
+          <sc-if value="{{ tm.open }}" hint-placeholder-val="{{ false }}">
+          <div style="background:#161510; border-bottom:1px solid #262219;">
+            <sc-for list="{{ tm.tasks }}" as="tt" hint-placeholder-count="2">
+            <div style="display:grid; grid-template-columns:minmax(0,1fr) 140px 140px; align-items:center; padding:10px 20px 10px 54px; border-top:1px solid #1E1B15;">
+              <span style="font-size:14px; color:#EFEAE0;">{{ tt.name }}</span>
+              <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px;"><a href="07_Reports.dc.html" class="hz-link" style="color:#4FB79A; text-decoration:none;">{{ tt.hours }}</a></span>
+              <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#A29C8D;">{{ tt.costs }}</span>
+            </div>
+            </sc-for>
+          </div>
+          </sc-if>
         </div>
-        <div class="hz-row" style="display:grid; grid-template-columns:1fr 140px 120px; align-items:center; padding:12px 20px; border-bottom:1px solid #201D17;">
-          <div style="display:flex; align-items:center; gap:12px;"><span style="width:38px; height:38px; flex:0 0 34px; border-radius:50%; background:#1F5C4D; display:inline-flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; color:#EFEAE0;">M</span><span style="font-size:14px; color:#F6F2E9;">Mira Kovač</span></div>
-          <span style="font-size:14px; color:#8F8676;">Missing rate</span>
-          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">96.40</span>
-        </div>
-        <div class="hz-row" style="display:grid; grid-template-columns:1fr 140px 120px; align-items:center; padding:12px 20px;">
-          <div style="display:flex; align-items:center; gap:12px;"><span style="width:34px; height:34px; flex:0 0 34px; border-radius:50%; background:#6B4A1A; display:inline-flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; color:#EFEAE0;">A</span><span style="font-size:14px; color:#F6F2E9;">Aisha Rahmani</span></div>
-          <span style="font-family:'IBM Plex Mono',monospace; font-size:14px; color:#A29C8D;">€65.00 / h</span>
-          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">23.45</span>
-        </div>
+        </sc-for>
+        <div style="display:grid; grid-template-columns:minmax(0,1fr) 140px 140px; align-items:center; padding:14px 20px; background:#161510;"><span style="font-size:14px; font-weight:600; color:#F6F2E9; padding-left:24px;">Total</span><span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; font-weight:600; color:#F6F2E9;">{{ totalHours }}</span><span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#A29C8D; display:inline-flex; justify-content:flex-end; align-items:center; gap:6px;">{{ totalCosts }} <span title="Cost rates are missing for 1 teammate" style="display:inline-flex; color:#E0B45F;"><i class="ph ph-warning" aria-hidden="true" style="font-size:14px; line-height:1; display:block;"></i></span></span></div>
       </div>
       </sc-if>
 
-      <sc-if value="{{ isInvoices }}" hint-placeholder-val="{{ false }}">
-      <dc-import name="EmptyState" icon="briefcase" title="No invoices yet" body="€5,300.00 of tracked work is waiting to be billed." action-label="New invoice" hint-size="100%,320px" style="display:block;"></dc-import>
+      <sc-if value="{{ tabInvoices }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex; align-items:center; gap:12px; margin-top:24px; flex-wrap:wrap;">
+        <button class="hb-primary" style="display:inline-flex; align-items:center; gap:8px; height:44px; padding:0 16px; background:#4FB79A; color:#0D211B; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap;"><i class="ph-bold ph-plus" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i>New invoice</button>
+        <button onClick="{{ openLink }}" class="hb-secondary" style="display:inline-flex; align-items:center; gap:8px; height:44px; padding:0 16px; background:#232019; border:1px solid #3D382E; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap;">Link invoice</button>
+        <div style="flex:1;"></div>
+        <span style="font-size:12px; color:#7C7565;"><span style="font-family:'IBM Plex Mono',monospace; color:#E0B45F;">€5,300.00</span> tracked and not yet invoiced</span>
+      </div>
+      <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; overflow:hidden; overflow-x:auto; margin-top:16px;">
+        <div style="display:grid; min-width:820px; grid-template-columns:100px 130px 130px 120px minmax(0,1fr) 150px 90px; align-items:center; gap:12px; padding:12px 20px; border-bottom:1px solid #322E26; background:#161510; font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353;"><span>Status</span><span>Issue date</span><span>Paid on</span><span>ID</span><span>Subject</span><span style="text-align:right;">Pre-tax amount</span><span></span></div>
+        <sc-for list="{{ invoiceRows }}" as="iv" hint-placeholder-count="2">
+        <div style="display:grid; min-width:820px; grid-template-columns:100px 130px 130px 120px minmax(0,1fr) 150px 90px; align-items:center; gap:12px; padding:12px 20px; border-bottom:1px solid #262219;">
+          <div><span style="{{ iv.pillStyle }}">{{ iv.status }}</span></div>
+          <span style="font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">{{ iv.issued }}</span>
+          <span style="font-family:'IBM Plex Mono',monospace; font-size:14px; color:{{ iv.paidColor }};">{{ iv.paid }}</span>
+          <a href="#" onClick="{{ noop }}" style="font-family:'IBM Plex Mono',monospace; font-size:14px; font-weight:600;">{{ iv.no }}</a>
+          <span style="font-size:14px; color:#A29C8D; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ iv.subject }}</span>
+          <span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; color:#EFEAE0;">{{ iv.amount }}</span>
+          <div style="text-align:right;"><button onClick="{{ iv.unlink }}" class="hb-secondary" style="height:30px; padding:0 10px; background:#232019; border:1px solid #3D382E; border-radius:6px; color:#A29C8D; font-family:inherit; font-size:12px; cursor:pointer; white-space:nowrap;">Unlink</button></div>
+        </div>
+        </sc-for>
+        <div style="display:grid; min-width:820px; grid-template-columns:100px 130px 130px 120px minmax(0,1fr) 150px 90px; align-items:center; gap:12px; padding:14px 20px; background:#161510;"><span></span><span></span><span></span><span></span><span style="text-align:right; font-size:14px; font-weight:600; color:#F6F2E9;">Total</span><span style="text-align:right; font-family:'IBM Plex Mono',monospace; font-size:14px; font-weight:600; color:#F6F2E9;">{{ invoiceTotal }}</span><span></span></div>
+      </div>
       </sc-if>
+
     </div>
     </sc-if>
 
@@ -498,28 +528,59 @@ class Component extends DCLogic {
     const knob = (on) => 'position:absolute; ' + (on ? 'right:3px' : 'left:3px') + '; top:2px; width:16px; height:16px; border-radius:50%; background:' + (on ? '#EFEAE0' : '#8F8676') + ';';
     const card = (on) => 'padding:16px; border-radius:12px; cursor:pointer; background:' + (on ? 'rgba(31,92,77,.18)' : '#1A1813') + '; border:1px solid ' + (on ? '#2A6D5C' : '#322E26') + ';';
 
-    // cumulative progress vs weekly hours, same 24 slots
-    const weekly = [2.5,4,3,5.5,6,4.5,7,3.5,5,6.5,4,8,5.5,3,6,7.5,4.5,5,6,3.5,7,5.5,4,6.5];
-    let acc = 0;
-    const bars = weekly.map((h, i) => {
-      acc += h;
-      const isProgress = s.chart === 'progress';
-      const pct = isProgress ? (acc / 130) * 100 : (h / 9) * 100;
-      const last = i === weekly.length - 1;
-      return { style: 'height:' + pct.toFixed(1) + '%; border-radius:2px 2px 0 0; background:' + (last ? '#4FB79A' : isProgress ? '#2A6D5C' : '#1F5C4D') + ';' };
-    });
-
-    const tasks = [
-      { name: 'DevOps', hours: '94.37', caret: '›', hoursColor: '#4FB79A' },
-      { name: 'Research', hours: '9.18', caret: '›', hoursColor: '#4FB79A' },
-      { name: 'Programming', hours: '6.08', caret: '›', hoursColor: '#4FB79A' },
-      { name: 'Project management', hours: '5.33', caret: '›', hoursColor: '#4FB79A' },
-      { name: 'QA', hours: '4.89', caret: '›', hoursColor: '#4FB79A' },
-      { name: 'Graphic design', hours: '0.00', caret: '', hoursColor: '#5A5446' },
-    ];
-
     const devGroups = [(() => { const o = [['Project detail', 'showDetail', s.page === 'detail'], ['Edit project', 'showEdit', s.page === 'edit']]; return { label: 'Page state', options: o.map(x => x[0]), value: (o.find(x => x[2]) || [''])[0], onChange: (v) => { const h = o.find(x => x[0] === v); if (h) this.renderVals()[h[1]](); } }; })()];
     return {
+      detailTabs: [['tasks','Tasks','8'],['team','Team','3'],['invoices','Invoices','2']].map(([k,l,c]) => { const on = (s.tab ?? 'tasks') === k; return { label: l, count: c, pick: () => this.setState({ tab: k }), cls: on ? '' : 'hz-nav', style: 'display:inline-flex; align-items:center; padding:10px 12px; margin-bottom:-1px; font-size:14px; cursor:pointer; border-radius:8px 8px 0 0; ' + (on ? 'color:#F6F2E9; font-weight:600; border-bottom:2px solid #4FB79A;' : 'color:#A29C8D; border-bottom:2px solid transparent;') }; }),
+      hasToolbar: (s.tab ?? 'tasks') !== 'invoices',
+      tabTasks: (s.tab ?? 'tasks') === 'tasks', tabTeam: s.tab === 'team', tabInvoices: s.tab === 'invoices',
+      rangeItems: ['All time', 'This month', 'Last month', 'This quarter', 'This year', 'Custom…'], rangeValue: s.range ?? 'All time', setRange: (v) => this.setState({ range: v }), rangeTitle: s.range ?? 'All time',
+      exportItems: ['CSV', 'Excel', 'PDF summary'], doExport: () => this.setState({ savedToast: true }),
+      sortHours: () => this.setState(x => ({ sortAsc: !x.sortAsc })), sortIcon: 'ph ph-caret-' + (s.sortAsc ? 'up' : 'down'),
+      chartModes: ['Project progress', 'Hours per week'], chartMode: s.chart === 'weekly' ? 'Hours per week' : 'Project progress',
+      setChartMode: (v) => this.setState({ chart: v === 'Hours per week' ? 'weekly' : 'progress' }),
+      isProgress: s.chart !== 'weekly', isHours: s.chart === 'weekly',
+      legendMain: s.chart === 'weekly' ? 'Hours tracked per week' : 'Cumulative hours',
+      noop: (e) => e.preventDefault(),
+      openLink: () => this.setState({ savedToast: true }),
+      ...(() => {
+        const weekly = [3.5, 6, 8.25, 7, 9.5, 5.5, 10, 12.25, 8, 6.5, 9, 11.5, 7.75, 4, 6.25, 8.5, 10.75, 9.25, 6.5, 5.5, 4.75, 2.5, 1.25];
+        const n = weekly.length, W = 1000, H = 200;
+        const cum = []; weekly.reduce((a, v, i) => (cum[i] = a + v), 0);
+        const yMax = s.chart === 'weekly' ? 16 : 160;
+        const x = (i) => (i / (n - 1)) * W, y = (v) => H - (v / yMax) * H;
+        const line = cum.map((v, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1)).join(' ');
+        const bw = W / n * 0.62;
+        const people = { M: ['Mira Kovač', '#1F5C4D'], T: ['Tomas Lindqvist', '#3A3323'], A: ['Ada Okafor', '#2A3A33'] };
+        const raw = [['DevOps', 94.37, [['T', 61.2], ['A', 33.17]]], ['Research', 9.18, [['M', 9.18]]], ['Programming', 6.08, [['T', 6.08]]], ['Project Management', 5.33, [['M', 5.33]]], ['QA', 4.89, [['A', 4.89]]], ['Business Development', 0, []], ['Graphic Design', 0, []], ['Marketing', 0, []]];
+        const rows = [...raw].sort((a, b) => s.sortAsc ? a[1] - b[1] : b[1] - a[1]);
+        const hm = (h) => { const m = Math.round(h * 60); return Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0'); };
+        return {
+          yTop: yMax, yMid: yMax / 2,
+          ...(() => { const rect = (k) => { const v = weekly[k]; const x0 = x(k) - bw / 2, y0 = y(v); return 'M' + x0.toFixed(1) + ' ' + y0.toFixed(1) + 'h' + bw.toFixed(1) + 'v' + (H - y0).toFixed(1) + 'h-' + bw.toFixed(1) + 'Z'; }; return { barsRest: weekly.slice(0, n - 2).map((_, k) => rect(k)).join(' '), barsPrev: rect(n - 2), barsLast: rect(n - 1) }; })(),
+          linePath: line, areaPath: line + ' L' + W + ' ' + H + ' L0 ' + H + ' Z',
+          budgetPath: 'M0 ' + y(150).toFixed(1) + ' L' + W + ' ' + y(150).toFixed(1),
+          bandLeft: 'calc(44px + ' + (((n - 1.5) / (n - 1)) * 100).toFixed(2) + '% - ' + (((n - 1.5) / (n - 1)) * 44).toFixed(1) + 'px)',
+          bandWidth: 'calc(' + ((1 / (n - 1)) * 100).toFixed(2) + '% - ' + ((1 / (n - 1)) * 44).toFixed(1) + 'px)',
+          taskRows: rows.map(([name, h, pp]) => { const has = h > 0; const open = !!(has && s.openTasks && s.openTasks[name]); return {
+            name, hours: hm(h), costs: '€0.00', open, nameColor: has ? '#F6F2E9' : '#8F8676',
+            toggle: () => { if (has) this.setState(x => ({ openTasks: { ...(x.openTasks || {}), [name]: !(x.openTasks && x.openTasks[name]) } })); },
+            cls: has ? 'hz-opt' : '', style: 'display:grid; grid-template-columns:minmax(0,1fr) 140px 140px; align-items:center; padding:14px 20px; border-bottom:1px solid #262219; cursor:' + (has ? 'pointer' : 'default') + ';',
+            caretStyle: 'display:inline-flex; color:#6A6353; transition:transform .14s ease; transform:rotate(' + (open ? 90 : 0) + 'deg);' + (has ? '' : ' visibility:hidden;'),
+            linkCls: has ? 'hz-link' : '', hoursStyle: 'color:' + (has ? '#4FB79A' : '#6A6353') + '; text-decoration:none;' + (has ? '' : ' pointer-events:none;'),
+            people: pp.map(([k, ph]) => ({ initial: k, name: people[k][0], color: people[k][1], hours: hm(ph), costs: '€0.00' })),
+          }; }),
+          teamRows: [['M', true, [['Research', 9.18], ['Project Management', 5.33]], '€841.58'], ['T', false, [['DevOps', 61.2], ['Programming', 6.08]], null], ['A', false, [['DevOps', 33.17], ['QA', 4.89]], '€2,093.30']].sort((a, b) => { const ha = a[2].reduce((q, r) => q + r[1], 0), hb = b[2].reduce((q, r) => q + r[1], 0); return s.sortAsc ? ha - hb : hb - ha; }).map(([k, mgr, tasks, cost]) => { const h = tasks.reduce((q, r) => q + r[1], 0); const open = !!(s.openTeam && s.openTeam[k]); return { initial: k, name: people[k][0], color: people[k][1], isManager: mgr, hours: hm(h), costs: cost ?? 'No cost rate', costColor: cost ? '#A29C8D' : '#E0B45F', open,
+            toggle: () => this.setState(x => ({ openTeam: { ...(x.openTeam || {}), [k]: !(x.openTeam && x.openTeam[k]) } })),
+            style: 'display:grid; grid-template-columns:minmax(0,1fr) 140px 140px; align-items:center; padding:12px 20px; border-bottom:1px solid #262219; cursor:pointer;' + (open ? ' background:rgba(79,183,154,.06);' : ''),
+            caretStyle: 'display:inline-flex; color:#6A6353; transition:transform .14s ease; transform:rotate(' + (open ? 90 : 0) + 'deg);',
+            tasks: tasks.map(([n2, th]) => ({ name: n2, hours: hm(th), costs: '€0.00' })) }; }),
+          invoiceRows: (s.invoices ?? [['Open', '20 Aug 2026', null, '#2026-031', 'K8S infrastructure — July', 2700], ['Paid', '30 Jun 2026', '12 Jul 2026', '#2026-024', 'K8S infrastructure — Q2', 2650]]).map((r, i) => { const [status, issued, paid, no, subject, amt] = r; return { status, issued, paid: paid ?? '—', paidColor: paid ? '#EFEAE0' : '#6A6353', no, subject, amount: '€' + amt.toLocaleString('en-GB', { minimumFractionDigits: 2 }),
+            pillStyle: 'display:inline-flex; align-items:center; padding:3px 8px; border-radius:999px; font-size:12px; font-weight:600; white-space:nowrap; ' + (status === 'Paid' ? 'background:#15291F; color:#5FCAA8; border:1px solid #24402F;' : status === 'Draft' ? 'background:#232019; color:#A29C8D; border:1px solid #3D382E;' : 'background:#2B2413; color:#E0B45F; border:1px solid #453818;'),
+            unlink: () => this.setState(x => ({ invoices: (x.invoices ?? [['Open', '20 Aug 2026', null, '#2026-031', 'K8S infrastructure — July', 2700], ['Paid', '30 Jun 2026', '12 Jul 2026', '#2026-024', 'K8S infrastructure — Q2', 2650]]).filter((_, j) => j !== i), savedToast: true })) }; }),
+          invoiceTotal: '€' + (s.invoices ?? [[0,0,0,0,0,2700],[0,0,0,0,0,2650]]).reduce((q, r) => q + r[5], 0).toLocaleString('en-GB', { minimumFractionDigits: 2 }),
+          totalHours: hm(raw.reduce((a, r) => a + r[1], 0)), totalCosts: '€0.00',
+        };
+      })(),
       periodValue: s.period ?? '2026-07-06', setPeriod: (d) => this.setState({ period: d.toISOString() }),
       projectActions: ['Pin', 'Duplicate', { sep: true }, { value: 'archive', label: 'Archive' }, { value: 'delete', label: 'Delete', danger: true }],
       onProjectAction: (v) => { if (v === 'archive') this.setState({ confirmArchive: true }); },
@@ -543,21 +604,6 @@ class Component extends DCLogic {
 
       actionsOpen: s.actionsOpen === true,
       toggleActions: () => this.setState(x => ({ actionsOpen: !x.actionsOpen })),
-
-      bars,
-      showProgress: () => this.setState({ chart: 'progress' }),
-      showWeekly: () => this.setState({ chart: 'weekly' }),
-      segProgress: seg(s.chart === 'progress'),
-      segWeekly: seg(s.chart === 'weekly'),
-
-      tasks,
-      isTasks: s.tab === 'tasks', isTeam: s.tab === 'team', isInvoices: s.tab === 'invoices',
-      tabTasks: () => this.setState({ tab: 'tasks' }),
-      tabTeam: () => this.setState({ tab: 'team' }),
-      tabInvoices: () => this.setState({ tab: 'invoices' }),
-      tabTasksStyle: tab(s.tab === 'tasks'),
-      tabTeamStyle: tab(s.tab === 'team'),
-      tabInvoicesStyle: tab(s.tab === 'invoices'),
 
       notes: s.notes,
       setNotes: (e) => this.setState({ notes: e.target.value, dirty: true }),
