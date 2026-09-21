@@ -6,6 +6,7 @@ use horae_core::project::{BudgetMode, RateMode};
 use horae_core::types::ProjectType;
 use uuid::Uuid;
 
+use crate::components::avatar::{Avatar, first_initial};
 use crate::components::controls::Checkbox;
 use crate::components::form::{FormGroup, Input};
 use crate::models::project_creation::{
@@ -60,13 +61,14 @@ pub(super) fn Team(
     rsx! {
         section { class: "bg-secondary border rounded-xl mt-4", aria_labelledby: "np-team-heading",
             div { class: "flex flex-wrap items-baseline gap-3 py-4 px-5 border-b",
-                h2 { id: "np-team-heading", class: "text-xl font-semibold", "Team" }
+                h2 { id: "np-team-heading", class: "text-xl font-semibold m-0", "Team" }
                 span { class: "text-xs text-subtle", "{form.read().team.len()} people" }
                 span { class: "text-xs text-faint ml-auto", "Check = manages this project" }
             }
             for member in form.read().team.clone() { MemberRow { key: "{member.user_id}", form, options, id: member.user_id } }
             if form.read().team.is_empty() { p { class: "text-sm text-subtle px-5", "No teammates selected yet." } }
             div { class: "p-5",
+                p { class: "form-hint mt-0", "Blank billable rates inherit the person's profile, then the client's default. Blank costs inherit only the profile cost. Rates are not converted between currencies. Overrides affect only this project." }
                 if let Some(message) = error() { p { class: "text-sm text-danger", role: "alert", "{message}" } }
                 FormGroup { label: "Search teammates", id: "np-team-search",
                     Input { id: "np-team-search", value: query(), oninput: move |event: FormEvent| query.set(event.value()) }
@@ -165,35 +167,45 @@ fn MemberRow(mut form: Signal<ProjectForm>, options: Signal<CreationOptions>, id
         })
         .unwrap_or_else(|| "project currency".into());
     rsx! {
-        div { class: "px-5 py-3 border-b",
-            div { class: "flex items-center gap-3",
-                Checkbox { checked: member.manager, compact: true, label: "{name} manages this project", onclick: move |_| { if let Some(member) = form.write().team.iter_mut().find(|member| member.user_id == id) { member.manager = !member.manager; } } }
-                span { class: "flex-1 text-sm font-semibold", "{name}" }
-                button { r#type: "button", class: "btn btn-ghost btn-sm", aria_label: "Remove {name} from project", onclick: move |_| remove_member(&mut form.write(), id), "Remove" }
+        div { class: "np-assignment-row grid items-center gap-4 px-5 py-3 border-b border-light",
+            Checkbox { checked: member.manager, compact: true, label: "{name} manages this project", onclick: move |_| { if let Some(member) = form.write().team.iter_mut().find(|member| member.user_id == id) { member.manager = !member.manager; } } }
+            div { class: "flex items-center gap-4 min-w-0",
+                Avatar { initials: first_initial(&name), size: "project" }
+                div { class: "min-w-0",
+                    div { class: "text-sm text-strong truncate", title: "{name}", "{name}" }
+                    div { class: "text-xs text-subtle", if member.manager { "Project manager" } else { "Project member" } }
+                }
             }
-            div { class: "grid md:grid-cols-3 gap-3 mt-3",
+            div { class: "np-row-controls flex flex-wrap items-center gap-4 min-w-0",
                 if form.read().project_type == ProjectType::TimeAndMaterials && form.read().rate_mode == RateMode::Person {
-                    FormGroup { label: "Billable rate ({billing_currency}/h)", id: "np-person-rate-{id}",
-                        Input { id: "np-person-rate-{id}", value: member.billable_rate, oninput: move |event: FormEvent| { if let Some(member) = form.write().team.iter_mut().find(|member| member.user_id == id) { member.billable_rate = event.value(); } } }
-                        if let Some(rate) = person.as_ref().and_then(|person| person.billable_rate_cents) {
-                            p { class: "form-hint", "Profile: {org_currency} {format_cents_plain(rate)}/h. Rates are not converted between currencies." }
-                        } else { p { class: "form-hint", "No profile rate. Leave blank to use the client's default rate." } }
+                    label { class: "flex items-center gap-2 text-xs text-subtle", r#for: "np-person-rate-{id}",
+                        "bill"
+                        Input { class: "w-30 max-w-full font-mono text-right", id: "np-person-rate-{id}", label: "Billable rate for {name} ({billing_currency}/h)", value: member.billable_rate,
+                            placeholder: if org_currency == billing_currency { person.as_ref().and_then(|person| person.billable_rate_cents).map(format_cents_plain).unwrap_or_else(|| "Inherit".into()) } else { "Inherit".into() },
+                            oninput: move |event: FormEvent| { if let Some(member) = form.write().team.iter_mut().find(|member| member.user_id == id) { member.billable_rate = event.value(); } }
+                        }
+                        "{billing_currency}/h"
                     }
                 }
                 if options.read().can_edit_private_settings {
-                    FormGroup { label: "Cost rate ({org_currency}/h) · admins only", id: "np-cost-rate-{id}",
-                        Input { id: "np-cost-rate-{id}", value: member.cost_rate, oninput: move |event: FormEvent| { if let Some(member) = form.write().team.iter_mut().find(|member| member.user_id == id) { member.cost_rate = event.value(); } } }
-                        if let Some(rate) = person.as_ref().and_then(|person| person.cost_rate_cents) {
-                            p { class: "form-hint", "Profile: {org_currency} {format_cents_plain(rate)}/h. A project override does not change the profile." }
-                        } else { p { class: "form-hint", "No profile cost rate. Add an optional project-only rate." } }
+                    label { class: "flex items-center gap-2 text-xs text-subtle", r#for: "np-cost-rate-{id}",
+                        "cost"
+                        Input { class: "w-30 max-w-full font-mono text-right", id: "np-cost-rate-{id}", label: "Cost rate for {name} ({org_currency}/h) · admins only", value: member.cost_rate,
+                            placeholder: person.as_ref().and_then(|person| person.cost_rate_cents).map(format_cents_plain).unwrap_or_else(|| "No rate".into()),
+                            oninput: move |event: FormEvent| { if let Some(member) = form.write().team.iter_mut().find(|member| member.user_id == id) { member.cost_rate = event.value(); } }
+                        }
+                        "{org_currency}/h"
                     }
                 }
                 if form.read().budget_mode == BudgetMode::HoursPerPerson {
-                    FormGroup { label: "Budget hours", id: "np-person-budget-{id}",
-                        Input { id: "np-person-budget-{id}", value: member.budget, oninput: move |event: FormEvent| { if let Some(member) = form.write().team.iter_mut().find(|member| member.user_id == id) { member.budget = event.value(); } } }
+                    label { class: "flex items-center gap-2 text-xs text-subtle", r#for: "np-person-budget-{id}",
+                        "budget"
+                        Input { class: "w-30 max-w-full font-mono text-right", id: "np-person-budget-{id}", label: "Budget hours for {name}", value: member.budget, oninput: move |event: FormEvent| { if let Some(member) = form.write().team.iter_mut().find(|member| member.user_id == id) { member.budget = event.value(); } } }
+                        "h"
                     }
                 }
             }
+            button { r#type: "button", class: "np-row-remove btn btn-ghost p-0 size-8", aria_label: "Remove {name} from project", onclick: move |_| remove_member(&mut form.write(), id), "×" }
         }
     }
 }

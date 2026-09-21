@@ -239,6 +239,49 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await screen.getByRole('region', { name: 'Tasks', exact: true }).getByRole('button', { name: 'Development', exact: true }).click();
     await screen.locator('#np-task-search').fill('Browser custom task');
     await screen.getByRole('button', { name: 'Add task', exact: true }).click();
+    const teamSection = screen.getByRole('region', { name: 'Team', exact: true });
+    const costInput = teamSection.locator('input[id^="np-cost-rate-"]').first();
+    assert.equal((await costInput.boundingBox()).width, 120, 'Project cost overrides are compact');
+    await expect(teamSection.locator('.avatar').first()).toHaveCSS('width', '30px');
+    await expect(teamSection).toContainText('Project manager');
+    await expect(screen.locator('.np-assignment-row')).toHaveCount(3);
+    for (const row of await screen.locator('.np-assignment-row').all()) {
+      assert.ok((await row.boundingBox()).height <= 72, 'Default assignment rows remain compact on desktop');
+    }
+    await screen.getByRole('radio', { name: /^Person hourly rate/ }).check();
+    await screen.locator('#np-budget-mode').selectOption('hours_per_person');
+    await teamSection.getByLabel('Billable rate for Admin User (EUR/h)', { exact: true }).fill('0');
+    await teamSection.getByLabel('Budget hours for Admin User', { exact: true }).fill('12:30');
+    await costInput.fill('0');
+    for (const width of [390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const input of await teamSection.locator('.np-row-controls input').all()) {
+        assert.equal((await input.boundingBox()).width, 120);
+      }
+      const row = teamSection.locator('.np-assignment-row');
+      assert.ok(await row.evaluate(node => node.scrollWidth <= node.clientWidth), 'All member rates/budget fit the row');
+      if (process.env.HORAE_TEST_SCREENSHOT_DIR) {
+        await row.screenshot({ path: `${process.env.HORAE_TEST_SCREENSHOT_DIR}/new-project-team-row-${width}.png` });
+      }
+    }
+    await screen.getByRole('radio', { name: /^Task hourly rate/ }).check();
+    await screen.locator('#np-budget-mode').selectOption('hours_per_task');
+    const taskRate = screen.getByLabel('Hourly rate for Browser custom task (EUR)', { exact: true });
+    await taskRate.fill('0');
+    await screen.getByLabel('Budget hours for Browser custom task', { exact: true }).fill('4');
+    for (const width of [390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const input of await screen.getByRole('region', { name: 'Tasks', exact: true }).locator('.np-row-controls input').all()) {
+        assert.equal((await input.boundingBox()).width, 120);
+      }
+      const row = screen.locator('.np-assignment-row').filter({ has: page.getByLabel('Hourly rate for Browser custom task (EUR)', { exact: true }) });
+      assert.ok(await row.evaluate(node => node.scrollWidth <= node.clientWidth), 'Task rate/budget/access fit the row');
+      if (process.env.HORAE_TEST_SCREENSHOT_DIR) {
+        await row.screenshot({ path: `${process.env.HORAE_TEST_SCREENSHOT_DIR}/new-project-task-row-${width}.png` });
+      }
+    }
+    await screen.getByRole('radio', { name: /^Project hourly rate/ }).check();
+    await screen.locator('#np-budget-mode').selectOption('total_hours');
     await screen.getByRole('button', { name: /^Access for Browser custom task:/ }).click();
     const access = page.getByRole('dialog', { name: 'Who can track to this task?' });
     await access.getByRole('radio', { name: 'Only selected people', exact: true }).check();
@@ -305,6 +348,17 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await expect(screen.getByRole('button', { name: 'Remove tag browser', exact: true })).toBeFocused();
     await expect(screen.locator('#np-project-rate')).toHaveValue('75.25');
     await expect(screen.locator('#np-budget-value')).toHaveValue('120');
+    await expect(costInput).toHaveValue('0');
+    await screen.getByRole('radio', { name: /^Person hourly rate/ }).check();
+    await screen.locator('#np-budget-mode').selectOption('hours_per_person');
+    await expect(teamSection.getByLabel('Billable rate for Admin User (EUR/h)', { exact: true })).toHaveValue('0');
+    await expect(teamSection.getByLabel('Budget hours for Admin User', { exact: true })).toHaveValue('12:30');
+    await screen.getByRole('radio', { name: /^Task hourly rate/ }).check();
+    await screen.locator('#np-budget-mode').selectOption('hours_per_task');
+    await expect(taskRate).toHaveValue('0');
+    await expect(screen.getByLabel('Budget hours for Browser custom task', { exact: true })).toHaveValue('4');
+    await screen.getByRole('radio', { name: /^Project hourly rate/ }).check();
+    await screen.locator('#np-budget-mode').selectOption('total_hours');
     await expect(screen.getByLabel('Days until payment is due', { exact: true })).toHaveValue('21');
     await expect(screen.getByLabel('Second tax name', { exact: true })).toHaveValue('Local tax');
     await expect(screen.getByRole('button', { name: /^Access for Browser custom task:/ })).not.toContainText('Everyone');

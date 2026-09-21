@@ -11,6 +11,8 @@ use dioxus::router::components::HistoryProvider;
 use futures_util::FutureExt;
 use uuid::Uuid;
 
+#[path = "../src/components/avatar.rs"]
+pub mod avatar;
 #[path = "../src/components/controls.rs"]
 pub mod controls;
 #[path = "../src/components/date_picker.rs"]
@@ -24,7 +26,7 @@ pub mod modal;
 #[path = "../src/components/select_field.rs"]
 pub mod select_field;
 mod components {
-    pub use super::{controls, date_picker, form, icons, modal, select_field};
+    pub use super::{avatar, controls, date_picker, form, icons, modal, select_field};
 }
 #[path = "../src/models/project_creation.rs"]
 pub mod project_creation;
@@ -455,6 +457,10 @@ async fn tasks_and_team_restore_scoped_settings_without_exposing_costs_to_manage
         "Team",
         "Release preparation",
         "Project teammate",
+        "Project manager",
+        "avatar-project",
+        "Hourly rate for Release preparation",
+        "Budget hours for Release preparation",
         "Restricted (1)",
         "Add everyone",
         "Report visibility",
@@ -468,7 +474,8 @@ async fn tasks_and_team_restore_scoped_settings_without_exposing_costs_to_manage
     probe.options.people[0].cost_rate_cents = Some(6234);
     let html = render(probe);
     assert!(html.contains("np-cost-rate"));
-    assert!(html.contains("62.34"));
+    assert!(html.contains("placeholder=\"62.34\""));
+    assert!(html.contains("Cost rate for Project teammate"));
 }
 
 #[tokio::test]

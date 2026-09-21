@@ -5,7 +5,7 @@ use horae_core::types::ProjectType;
 use uuid::Uuid;
 
 use crate::components::controls::Checkbox;
-use crate::components::form::{FormGroup, Input};
+use crate::components::form::Input;
 use crate::components::modal::Modal;
 use crate::models::project_creation::{
     CreationOptions, CreationSearch, ProjectForm, ProjectTaskInput, TaskAccess, TaskSource,
@@ -95,7 +95,7 @@ pub(super) fn Tasks(
     rsx! {
         section { class: "bg-secondary border rounded-xl mt-2", aria_labelledby: "np-tasks-heading",
             div { class: "flex flex-wrap items-baseline gap-3 py-4 px-5 border-b",
-                h2 { id: "np-tasks-heading", class: "text-xl font-semibold", "Tasks" }
+                h2 { id: "np-tasks-heading", class: "text-xl font-semibold m-0", "Tasks" }
                 span { class: "text-xs text-subtle", "{form.read().tasks.len()} tasks" }
                 if billable_project {
                     div { class: "flex items-center gap-2 ml-auto",
@@ -111,6 +111,9 @@ pub(super) fn Tasks(
             }
             if form.read().tasks.is_empty() { p { class: "text-sm text-subtle px-5", "No tasks selected yet." } }
             div { class: "p-5",
+                if form.read().project_type == ProjectType::TimeAndMaterials && form.read().rate_mode == RateMode::Task {
+                    p { class: "form-hint mt-0", "Blank rates inherit the catalog rate, then the client's default. Rates are not converted between currencies." }
+                }
                 if let Some(message) = error() { p { class: "text-sm text-danger", role: "alert", "{message}" } }
                 label { class: "form-label", r#for: "np-task-search", "Find or create a task" }
                 div { class: "flex flex-wrap gap-3",
@@ -187,27 +190,30 @@ fn TaskRow(
         .unwrap_or_else(|| "project currency".into());
     let billable_project = form.read().project_type != ProjectType::NonBillable;
     rsx! {
-        div { class: "px-5 py-3 border-b",
-            div { class: "flex flex-wrap items-center gap-3",
-                Checkbox { checked: task.billable && billable_project, compact: true, disabled: !billable_project, label: "{name} is billable", onclick: move |_| { if let Some(task) = form.write().tasks.iter_mut().find(|task| task.id == id) { task.billable = !task.billable; } } }
-                span { class: "flex-1 text-sm font-semibold", "{name}" }
-                button { r#type: "button", class: "btn btn-ghost btn-sm", aria_label: "Access for {name}: {access_label}", onclick: move |_| on_access.call(id), "{access_label}" }
-                button { r#type: "button", class: "btn btn-ghost btn-sm", aria_label: "Remove task {name}", onclick: move |_| form.write().tasks.retain(|task| task.id != id), "Remove" }
-            }
-            div { class: "grid md:grid-cols-2 gap-3 mt-3",
+        div { class: "np-assignment-row grid items-center gap-4 px-5 py-3 border-b border-light",
+            Checkbox { checked: task.billable && billable_project, compact: true, disabled: !billable_project, label: "{name} is billable", onclick: move |_| { if let Some(task) = form.write().tasks.iter_mut().find(|task| task.id == id) { task.billable = !task.billable; } } }
+            span { class: "text-sm text-strong truncate", title: "{name}", "{name}" }
+            div { class: "np-row-controls flex flex-wrap items-center gap-4 min-w-0",
                 if form.read().project_type == ProjectType::TimeAndMaterials && form.read().rate_mode == RateMode::Task {
-                    FormGroup { label: "Hourly rate ({currency})", id: "np-task-rate-{id}",
-                        Input { id: "np-task-rate-{id}", value: task.rate, oninput: move |event: FormEvent| { if let Some(task) = form.write().tasks.iter_mut().find(|task| task.id == id) { task.rate = event.value(); } } }
-                        if let Some(rate) = catalog.as_ref().and_then(|task| task.default_rate_cents) { p { class: "form-hint", "Catalog: {options.read().organization_currency} {format_cents_plain(rate)}/h. Different currencies need an explicit project rate." } }
-                        else { p { class: "form-hint", "No catalog rate. Leave blank to use the client's default rate." } }
+                    label { class: "flex items-center gap-2 text-xs text-subtle", r#for: "np-task-rate-{id}",
+                        "rate"
+                        Input { class: "w-30 max-w-full font-mono text-right", id: "np-task-rate-{id}", label: "Hourly rate for {name} ({currency})", value: task.rate,
+                            placeholder: if options.read().organization_currency == currency { catalog.as_ref().and_then(|task| task.default_rate_cents).map(format_cents_plain).unwrap_or_else(|| "Inherit".into()) } else { "Inherit".into() },
+                            oninput: move |event: FormEvent| { if let Some(task) = form.write().tasks.iter_mut().find(|task| task.id == id) { task.rate = event.value(); } }
+                        }
+                        "{currency}/h"
                     }
                 }
                 if matches!(form.read().budget_mode, BudgetMode::HoursPerTask | BudgetMode::FeesPerTask) {
-                    FormGroup { label: if form.read().budget_mode == BudgetMode::FeesPerTask { format!("Budget ({currency})") } else { "Budget hours".into() }, id: "np-task-budget-{id}",
-                        Input { id: "np-task-budget-{id}", value: task.budget, oninput: move |event: FormEvent| { if let Some(task) = form.write().tasks.iter_mut().find(|task| task.id == id) { task.budget = event.value(); } } }
+                    label { class: "flex items-center gap-2 text-xs text-subtle", r#for: "np-task-budget-{id}",
+                        "budget"
+                        Input { class: "w-30 max-w-full font-mono text-right", id: "np-task-budget-{id}", label: if form.read().budget_mode == BudgetMode::FeesPerTask { format!("Budget for {name} ({currency})") } else { format!("Budget hours for {name}") }, value: task.budget, oninput: move |event: FormEvent| { if let Some(task) = form.write().tasks.iter_mut().find(|task| task.id == id) { task.budget = event.value(); } } }
+                        if form.read().budget_mode == BudgetMode::FeesPerTask { "{currency}" } else { "h" }
                     }
                 }
+                button { r#type: "button", class: "btn btn-ghost btn-sm", aria_label: "Access for {name}: {access_label}", onclick: move |_| on_access.call(id), "{access_label}" }
             }
+            button { r#type: "button", class: "np-row-remove btn btn-ghost p-0 size-8", aria_label: "Remove task {name}", onclick: move |_| form.write().tasks.retain(|task| task.id != id), "×" }
         }
     }
 }

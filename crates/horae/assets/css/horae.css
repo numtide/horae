@@ -119,6 +119,7 @@
   --space-60: 15rem;
   --size-progress: 0.4375rem;
   --size-checkbox: 18px;
+  --size-project-avatar: 1.875rem;
   --size-empty-icon-tile: 3.25rem;
   --size-icon-lg: 1.375rem;
   --width-empty-copy: 23.75rem;
@@ -821,6 +822,8 @@ h1, h2, h3, h4, h5, h6 {
 .np-date-popover { background: transparent; }
 .np-date-popover .dp { max-width: 100%; }
 .np-row { grid-template-columns: var(--width-form-label) minmax(0, 1fr); }
+.np-assignment-row { grid-template-columns: var(--space-5) minmax(0, 1fr) auto var(--space-8); }
+.np-assignment-row .avatar-project { width: var(--size-project-avatar); height: var(--size-project-avatar); }
 .np-type:hover, .np-option:hover { border-color: var(--color-border-strong); }
 .np-type:has(input:checked), .np-option:has(input:checked) {
   border-color: var(--color-primary);
@@ -835,6 +838,9 @@ h1, h2, h3, h4, h5, h6 {
 }
 .np-page input[type="radio"] { accent-color: var(--color-primary); }
 @media (max-width: 1180px) {
+  .np-assignment-row { grid-template-columns: var(--space-5) minmax(0, 1fr) var(--space-8); }
+  .np-row-controls { grid-column: 2 / -1; grid-row: 2; }
+  .np-row-remove { grid-column: -2; grid-row: 1; }
   .np-page .np-types { grid-template-columns: minmax(0, 1fr); }
   .np-page .np-row { grid-template-columns: minmax(0, 1fr); gap: var(--space-2); }
   .np-row > .np-label { padding-top: 0; }
