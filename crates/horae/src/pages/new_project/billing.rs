@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use crate::components::controls::Checkbox;
 use crate::components::form::{FormGroup, Input, Select};
+use crate::components::icons::NavIcon;
 use crate::models::project_creation::{CreationOptions, FeeMode, MilestoneInput, ProjectForm};
 
 use super::FormRow;
@@ -25,19 +26,23 @@ pub(super) fn Billing(mut form: Signal<ProjectForm>, options: Signal<CreationOpt
     rsx! {
         FormRow { label: "Project type", hint: "How this project bills",
             div { class: "np-types grid grid-cols-3 gap-3", role: "group", aria_label: "Project type",
-                for (kind, hint) in [
-                    (ProjectType::TimeAndMaterials, "Bill by the hour at your team's billable rates."),
-                    (ProjectType::FixedFee, "Bill a set fee, in one go or across a schedule."),
-                    (ProjectType::NonBillable, "Track internal work without billing a client."),
+                for (kind, icon, hint) in [
+                    (ProjectType::TimeAndMaterials, "time", "Bill by the hour at your team's billable rates."),
+                    (ProjectType::FixedFee, "invoices", "Bill a set fee, in one go or across a schedule."),
+                    (ProjectType::NonBillable, "nonbillable", "Track internal work without billing a client."),
                 ] {
-                    label { class: if project_type == kind { "np-type border rounded-xl p-4 bg-primary-soft cursor-pointer" } else { "np-type border rounded-xl p-4 bg-secondary cursor-pointer" },
+                    label { class: if project_type == kind { "np-type relative border rounded-xl p-4 bg-choice-selected cursor-pointer" } else { "np-type relative border rounded-xl p-4 bg-secondary cursor-pointer" },
                         span { class: "flex items-center gap-3 text-sm font-semibold text-strong",
-                            input { r#type: "radio", name: "np-project-type", value: kind.to_string(), checked: project_type == kind,
+                            input { class: "absolute inset-0 w-full h-full opacity-0 m-0 cursor-pointer", r#type: "radio", name: "np-project-type", value: kind.to_string(), checked: project_type == kind,
                                 onchange: move |_| {
                                     let mut data = form.write();
                                     data.project_type = kind;
                                     if data.budget_mode.validate_for(kind).is_err() { data.budget_mode = BudgetMode::None; }
                                 },
+                            }
+                            span { "data-project-type-icon": icon, aria_hidden: "true",
+                                class: if project_type == kind { "size-8 flex-none inline-flex items-center justify-center rounded-btn bg-pine text-on-pine" } else { "size-8 flex-none inline-flex items-center justify-center rounded-btn bg-tertiary text-subtle" },
+                                NavIcon { name: icon }
                             }
                             "{kind.label()}"
                         }
@@ -49,14 +54,14 @@ pub(super) fn Billing(mut form: Signal<ProjectForm>, options: Signal<CreationOpt
                 if project_type == ProjectType::TimeAndMaterials {
                     fieldset { class: "border-0 p-0 m-0",
                         legend { class: "text-xs uppercase tracking-wide text-faint mb-2", "Billable rates" }
-                        div { class: "flex flex-col gap-3",
+                        div { class: "flex flex-col gap-2",
                             for (mode, title, hint) in [
                                 (RateMode::Person, "Person hourly rate", "Use each person's project override or profile rate."),
                                 (RateMode::Task, "Task hourly rate", "Use the rate set for each task on this project."),
                                 (RateMode::Project, "Project hourly rate", "Apply one rate to all billable work on this project."),
                             ] {
-                                label { class: "flex items-start gap-3 cursor-pointer",
-                                    input { r#type: "radio", name: "np-rate-mode", checked: form.read().rate_mode == mode, onchange: move |_| form.write().rate_mode = mode }
+                                label { class: "np-option flex items-center gap-3 p-3 bg-base border border-input rounded-btn cursor-pointer",
+                                    input { class: "choice-box radio size-4 m-0", r#type: "radio", name: "np-rate-mode", checked: form.read().rate_mode == mode, onchange: move |_| form.write().rate_mode = mode }
                                     span { span { class: "block text-sm", "{title}" } span { class: "block text-xs text-subtle mt-1", "{hint}" } }
                                 }
                             }

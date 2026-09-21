@@ -187,6 +187,8 @@
 /* Sizing */
 .w-full { width: 100%; }
 .h-full { height: 100%; }
+.size-8 { width: var(--space-8); height: var(--space-8); }
+.size-4 { width: var(--space-4); height: var(--space-4); }
 .min-w-0 { min-width: 0; }
 .max-w-sm { max-width: 24rem; }
 .max-w-md { max-width: 28rem; }
@@ -231,6 +233,7 @@
 .text-faint { color: var(--color-text-muted); }
 .text-label { color: var(--color-label); }
 .text-primary { color: var(--color-primary); }
+.text-on-pine { color: var(--color-on-pine); }
 .text-accent { color: var(--color-accent); }
 .text-success { color: var(--color-success); }
 .text-danger { color: var(--color-danger); }
@@ -244,10 +247,13 @@
 .bg-menu { background: var(--color-menu); }
 .bg-primary { background: var(--color-primary); }
 .bg-primary-soft { background: var(--color-primary-bg); }
+.bg-pine { background: var(--color-pine); }
+.bg-choice-selected { background: var(--color-choice-selected-bg); }
 
 /* Border & radius */
 .border { border: 1px solid var(--color-border); }
 .border-0 { border: none; }
+.border-input { border-color: var(--color-border-input); }
 .border-t { border-top: 1px solid var(--color-border); }
 .border-b { border-bottom: 1px solid var(--color-border); }
 .border-l { border-left: 1px solid var(--color-border); }
@@ -268,11 +274,13 @@
 .shadow-modal { box-shadow: var(--shadow-modal); }
 .relative { position: relative; }
 .absolute { position: absolute; }
+.inset-0 { inset: 0; }
 .overflow-hidden { overflow: hidden; }
 .overflow-x-auto { overflow-x: auto; }
 .cursor-pointer { cursor: pointer; }
 .cursor-text { cursor: text; }
 .opacity-60 { opacity: 0.6; }
+.opacity-0 { opacity: 0; }
 
 /* Responsive variants — `bp:util` (e.g. `md:flex-row`). Written plainly in
    markup; the `:` is escaped only in the selector. */

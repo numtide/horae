@@ -96,7 +96,8 @@
 
 **Independent test**: Every conditional panel at 390/768/1440 widths and keyboard-only, plus existing shared-screen regressions.
 
-- [ ] T045 [P] [US6] Map remaining target/imported component reference states to tokens in `specs/011-new-project-screen/contracts/new-project.md`; do not render prototypes (FR-018–020).
+- [x] T045 [P] [US6] Map remaining target/imported component reference states to tokens in `specs/011-new-project-screen/contracts/new-project.md`; do not render prototypes (FR-018–020).
+  - Full-source mapping now records every panel, conditional state, reference dimension and shared-component relationship, with explicit outstanding layout/accessibility evidence. This completes the mapping, not the visual alignment: compact rate/budget/fee/invoice controls, task/team rows, main/footer geometry and full keyboard/failure coverage remain under T046–T050.
 - [ ] T046 [US6] Add failing accessibility/layout/recovery cases in `crates/horae/tests/browser/new-project.cjs` before shared-control changes.
 - [ ] T047 [US6] Add only necessary opt-in labels/disabled options/focus/keyboard capabilities to `crates/horae/src/components/combobox.rs`, `crates/horae/src/components/form.rs` and other reused controls; preserve default callers.
 - [ ] T048 [US6] Align label grid/cards/footer/spacing and responsive states in `crates/horae/src/pages/new_project.rs`, `crates/horae/assets/css/horae.css`, `crates/horae/build.rs`; no inline styles, copied literals or utility duplication.

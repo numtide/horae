@@ -56,6 +56,45 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await expect(screen.getByRole('status')).toHaveText('No draft saved yet');
     await expect(screen.getByRole('button', { name: 'Save project', exact: true })).toBeDisabled();
 
+    const typeCards = screen.locator('.np-types');
+    await expect(typeCards.locator('[data-project-type-icon] svg')).toHaveCount(3);
+    const firstType = typeCards.getByRole('radio').first();
+    await firstType.focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(typeCards.getByRole('radio', { name: /^Fixed Fee/ })).toBeChecked();
+    await expect(screen.getByRole('group', { name: 'Project fee', exact: true })).toBeVisible();
+    await saved();
+    await page.keyboard.press('ArrowRight');
+    await expect(typeCards.getByRole('radio', { name: /^Non-Billable/ })).toBeChecked();
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('ArrowLeft');
+    await expect(firstType).toBeChecked();
+    const selectedType = typeCards.locator('label:has(input:checked)');
+    assert.notEqual(await selectedType.evaluate(node => getComputedStyle(node).boxShadow), 'none');
+    const iconSize = await selectedType.locator('[data-project-type-icon]').boundingBox();
+    assert.equal(iconSize.width, 32);
+    assert.equal(iconSize.height, 32);
+    for (const name of ['np-rate-mode', 'np-visibility']) {
+      const options = screen.locator(`.np-option:has(input[name="${name}"])`);
+      assert.ok(await options.count() >= 2);
+      for (const option of await options.all()) {
+        assert.deepEqual(await option.evaluate(node => {
+          const style = getComputedStyle(node);
+          return [style.padding, style.borderRadius, style.borderTopWidth];
+        }), ['12px', '8px', '1px']);
+      }
+      const chosen = options.filter({ has: page.locator('input:checked') });
+      assert.notEqual(await chosen.evaluate(node => getComputedStyle(node).boxShadow), 'none');
+      await options.first().getByRole('radio').focus();
+      await page.keyboard.press('ArrowRight');
+      await expect(options.nth(1).getByRole('radio')).toBeChecked();
+      await expect(options.nth(1).getByRole('radio')).toBeFocused();
+      await page.keyboard.press('ArrowLeft');
+      await expect(options.first().getByRole('radio')).toBeChecked();
+    }
+    await saved();
+    console.log('PASS: project types retain native keyboard selection and the designed icon/option-card states');
+
     const clientPicker = page.getByRole('dialog', { name: 'Choose Client', exact: true });
     await screen.getByLabel('Client', { exact: true }).click();
     const clientSearch = clientPicker.getByRole('searchbox', { name: 'Search Client', exact: true });

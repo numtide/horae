@@ -15,6 +15,10 @@ pub fn NavIcon(name: String) -> Element {
             circle { cx: "8", cy: "8", r: "6" }
             path { d: "M8 4.5 V8 L10.5 9.5" }
         },
+        "nonbillable" => rsx! {
+            circle { cx: "8", cy: "8", r: "6" }
+            path { d: "M3.8 3.8 L12.2 12.2" }
+        },
         "timesheet" => rsx! {
             rect { x: "2.5", y: "3", width: "11", height: "10.5", rx: "1.5" }
             line { x1: "2.5", y1: "6", x2: "13.5", y2: "6" }

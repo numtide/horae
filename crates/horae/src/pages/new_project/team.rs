@@ -20,13 +20,13 @@ use super::FormRow;
 pub(super) fn Visibility(mut form: Signal<ProjectForm>) -> Element {
     rsx! {
         FormRow { label: "Report visibility",
-            fieldset { class: "border-0 p-0 m-0 flex flex-col gap-3", aria_label: "Report visibility",
+            fieldset { class: "border-0 p-0 m-0 flex flex-col gap-2", aria_label: "Report visibility",
                 for (value, label, hint) in [
                     (ReportVisibility::Managers, "Managers only", "Organization managers and this project's leads can see progress."),
                     (ReportVisibility::ProjectMembers, "Everyone on the project", "Project members can also see progress, without private rates or costs."),
                 ] {
-                    label { class: "flex items-start gap-3 cursor-pointer",
-                        input { r#type: "radio", name: "np-visibility", checked: form.read().report_visibility == value, onchange: move |_| form.write().report_visibility = value }
+                    label { class: "np-option flex items-center gap-3 p-3 bg-base border border-input rounded-btn cursor-pointer",
+                        input { class: "choice-box radio size-4 m-0", r#type: "radio", name: "np-visibility", checked: form.read().report_visibility == value, onchange: move |_| form.write().report_visibility = value }
                         span { span { class: "block text-sm", "{label}" } span { class: "block text-xs text-subtle mt-1", "{hint}" } }
                     }
                 }

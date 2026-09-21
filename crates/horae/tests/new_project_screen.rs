@@ -118,6 +118,27 @@ fn render(probe: Probe) -> String {
 }
 
 #[tokio::test]
+async fn billing_and_visibility_keep_native_radios_inside_designed_option_cards() {
+    let html = render(Probe::default());
+    assert_eq!(
+        html.matches("data-project-type-icon=").count(),
+        3,
+        "Missing project type icons"
+    );
+    assert_eq!(
+        html.matches("np-option ").count(),
+        5,
+        "Three rate options and two visibility options need card chrome"
+    );
+    for group in ["np-project-type", "np-rate-mode", "np-visibility"] {
+        assert!(
+            html.contains(&format!("name=\"{group}\"")),
+            "Keep native keyboard radio groups: {group}"
+        );
+    }
+}
+
+#[tokio::test]
 async fn empty_form_has_labelled_fields_no_demo_data_and_no_spurious_save() {
     let probe = Probe::default();
     let html = render(probe.clone());

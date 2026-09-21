@@ -54,6 +54,9 @@ done
 kill -0 "$app_pid"
 curl -fsS "$HORAE_TEST_URL/health" >/dev/null
 
+if [[ -n ${HORAE_STYLE_RECORD:-} ]]; then
+  node "$browser_tests/shared-style-audit.cjs" record "$HORAE_STYLE_RECORD"
+fi
 if [[ -n ${HORAE_STYLE_BASELINE:-} ]]; then
   node "$browser_tests/shared-style-audit.cjs" compare "$HORAE_STYLE_BASELINE"
 fi
