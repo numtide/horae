@@ -12,20 +12,28 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const errors = [];
   const requests = new Map();
+  const resources = new Map();
   context.on('page', tab => {
     const pending = new Set();
+    const pendingResources = new Set();
     requests.set(tab, pending);
+    resources.set(tab, pendingResources);
     tab.on('request', request => {
+      pendingResources.add(request);
       if (new URL(request.url()).pathname.startsWith('/api/')) pending.add(request);
     });
-    tab.on('requestfinished', request => pending.delete(request));
-    tab.on('requestfailed', request => pending.delete(request));
+    tab.on('requestfinished', request => { pending.delete(request); pendingResources.delete(request); });
+    tab.on('requestfailed', request => { pending.delete(request); pendingResources.delete(request); });
     tab.on('pageerror', error => errors.push(error.stack || error.message));
     tab.on('console', message => {
       if (message.type() === 'error' && !message.text().includes('Failed to load resource') && !message.text().startsWith('WebSocket connection')) console.error(message.text());
     });
   });
   const page = await context.newPage();
+  let draftWrites = 0;
+  page.on('request', request => {
+    if (request.url().includes('/api/save_project_draft')) draftWrites++;
+  });
   // Destroying a document midway through a response body triggers an upstream
   // Dioxus decoder panic. Await reads when tearing down test pages; deliberately
   // interrupted mutations below still exercise the application's retry paths.
@@ -63,9 +71,36 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await page.getByRole('button', { name: 'Sign in as Admin' }).click();
     await page.waitForURL(`${base}/`);
     await page.getByRole('link', { name: 'Projects', exact: true }).click();
-    await page.getByRole('link', { name: 'New project', exact: true }).click();
+    for (const endpoint of ['project_creation_options', 'load_project_draft']) {
+      const pattern = `**/api/${endpoint}*`;
+      let release;
+      const pending = new Promise(resolve => { release = resolve; });
+      await page.route(pattern, async route => { await pending; await route.abort(); });
+      try {
+        if (endpoint === 'project_creation_options') {
+          await page.getByRole('link', { name: 'New project', exact: true }).click();
+        } else {
+          await page.getByRole('button', { name: 'Retry', exact: true }).click();
+        }
+        await expect(page.getByRole('status').filter({ hasText: 'Loading project settings' })).toBeVisible();
+        await expect(screen).toHaveCount(0);
+        assert.equal(draftWrites, 0, 'Loading cannot create or replace a draft');
+        release();
+        await expect(page.getByRole('alert')).toContainText('Could not load project settings');
+        await expect(page.getByRole('button', { name: 'Retry', exact: true })).toBeEnabled();
+        await expect(page.getByRole('link', { name: 'Back to Projects', exact: true })).toBeVisible();
+        await expect(screen).toHaveCount(0);
+        assert.equal(draftWrites, 0, 'Failed initialization cannot create or replace a draft');
+      } finally {
+        release();
+        await page.unroute(pattern);
+      }
+    }
+    await page.getByRole('button', { name: 'Retry', exact: true }).click();
     await expect(page).toHaveURL(`${base}/projects/new`);
     await expect(draftStatus).toHaveText('No draft saved yet');
+    assert.equal(draftWrites, 0);
+    console.log('PASS: initial catalog/draft failures show loading and recovery without rendering or saving an empty replacement');
     await expect(screen.getByRole('button', { name: 'Save project', exact: true })).toBeDisabled();
     const taskHint = screen.getByRole('region', { name: 'Tasks', exact: true }).locator('p').filter({ hasText: /^Everyone on the project can track/ });
     await expect(taskHint).toHaveCSS('padding-top', '10px');
@@ -573,6 +608,61 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
       }
     }
     console.log('PASS: all invoice-default errors identify and focus their field, preserve input and recover at three widths');
+
+    for (const width of [390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const [id, invalid] of [
+        ['np-name', 'N'.repeat(201)], ['np-code', 'C'.repeat(101)],
+        ['np-notes', 'Private context '.repeat(667)], ['np-end', '31 Aug 2026'],
+      ]) {
+        const field = screen.locator(`#${id}`);
+        const original = id === 'np-end' ? null : await field.inputValue();
+        if (id === 'np-end') await chooseDate('End date', '31 August 2026');
+        else await field.fill(invalid);
+        await saved();
+        await screen.getByRole('button', { name: 'Save project', exact: true }).focus();
+        await page.keyboard.press('Enter');
+        await expect(draftStatus).toHaveText('Changes need attention');
+        await expect(field).toHaveAttribute('aria-invalid', 'true');
+        await expect(field).toHaveAttribute('aria-describedby', 'np-basic-field-error');
+        await expect(field).toBeFocused();
+        if (id === 'np-end') await expect(field).toHaveText(invalid);
+        else await expect(field).toHaveValue(invalid);
+        const message = screen.locator('#np-basic-field-error');
+        await expect(message).toHaveText(await screen.locator('#np-form-error-message').innerText());
+        const footer = await screen.locator('.np-footer').boundingBox();
+        for (const item of [field, message]) {
+          const bounds = await item.boundingBox();
+          assert.ok(bounds.y >= 0 && bounds.y + bounds.height <= footer.y, `${id} and its error remain visible at ${width}`);
+        }
+        if (id === 'np-end') await screen.getByRole('button', { name: 'Clear End date', exact: true }).click();
+        else await field.fill(original);
+        await screen.getByRole('button', { name: 'Retry request', exact: true }).focus();
+        await page.keyboard.press('Enter');
+        await saved();
+        await expect(screen.locator('[aria-invalid="true"]')).toHaveCount(0);
+        await expect(page).toHaveURL(`${base}/projects/new`);
+      }
+    }
+    console.log('PASS: basic-field rejections retain values, link visible errors and restore focus at three widths');
+
+    await readsFinished(page);
+    await screen.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(page).toHaveURL(`${base}/projects`);
+    const writesBeforeFailedResume = draftWrites;
+    await page.route('**/api/load_project_draft*', route => route.abort());
+    await page.getByRole('link', { name: 'New project', exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText('Could not load project settings');
+    await expect(screen).toHaveCount(0);
+    assert.equal(draftWrites, writesBeforeFailedResume);
+    await page.unroute('**/api/load_project_draft*');
+    await page.getByRole('button', { name: 'Retry', exact: true }).click();
+    await expect(screen.getByLabel('Project name', { exact: true })).toHaveValue('Recoverable browser project');
+    await expect(screen.locator('#np-code')).toHaveValue('BROWSER-NEW');
+    await expect(screen.locator('#np-start')).toHaveText('01 Sep 2026');
+    await saved();
+    assert.equal(draftWrites, writesBeforeFailedResume, 'Resuming after failure must not rewrite the acknowledged draft');
+    console.log('PASS: failed resume and retry preserve the existing draft without a replacement write');
 
     const wideTag = 'W'.repeat(50);
     await tagInput.fill(wideTag);
@@ -1085,7 +1175,11 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     console.log('PASS: stale tabs cannot overwrite saved input; explicit discard removes only the draft');
     assert.deepEqual(errors, []);
   } catch (error) {
-    console.error({ url: page.url(), errors, pending: [...requests.get(page)].map(request => new URL(request.url()).pathname), page: await page.locator('body').ariaSnapshot() });
+    console.error({ url: page.url(), errors, pending: [...requests.get(page)].map(request => new URL(request.url()).pathname),
+      resources: [...resources.get(page)].map(request => {
+        const url = new URL(request.url());
+        return { type: request.resourceType(), host: url.host, path: url.pathname };
+      }), page: await page.locator('body').ariaSnapshot() });
     throw error;
   } finally {
     await browser.close();

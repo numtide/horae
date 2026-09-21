@@ -25,6 +25,12 @@ pub enum FeeMode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ProjectFormField {
+    Name,
+    Code,
+    StartsOn,
+    EndsOn,
+    Currency,
+    AdminNotes,
     PaymentTerms,
     PurchaseOrder,
     Tax,

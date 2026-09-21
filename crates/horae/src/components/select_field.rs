@@ -2,12 +2,14 @@ use dioxus::prelude::*;
 
 /// A full-width form selector using the shared menu surface and native popover.
 /// An optional query signal connects the search field to the caller's catalog.
+/// `error_id` links a rejected selection to its existing visible error message.
 #[component]
 pub fn SelectField(
     id: String,
     label: String,
     options: Vec<(String, String)>,
     selected: String,
+    #[props(default)] error_id: Option<String>,
     #[props(default)] disabled_values: Vec<String>,
     #[props(default)] query: Option<Signal<String>>,
     #[props(default)] pending: bool,
@@ -30,6 +32,8 @@ pub fn SelectField(
             class: "form-input flex items-center justify-between gap-2 text-left",
             popovertarget: "{id}-options", aria_haspopup: "dialog",
             aria_controls: "{id}-options", aria_expanded: "false",
+            aria_invalid: error_id.as_ref().map(|_| "true"),
+            aria_describedby: error_id,
             "data-select-trigger": "true",
             onclick: move |_| {
                 if let Some(mut query) = query && !query.peek().is_empty() {

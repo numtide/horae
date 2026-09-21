@@ -299,7 +299,7 @@ fn ProjectEditor(
                         class: "border-0 p-0 m-0 min-w-0",
                         disabled: locked,
                         aria_label: "Project settings",
-                        Basics { form, options }
+                        Basics { form, options, invalid_field: invalid_field(), error_message: error() }
                         Visibility { form }
                         Billing { form, options }
                         Tasks { form, options }
@@ -392,6 +392,12 @@ fn validation_field(error: &ServerFnError) -> Option<ProjectFormField> {
 
 fn field_id(field: ProjectFormField) -> &'static str {
     match field {
+        ProjectFormField::Name => "np-name",
+        ProjectFormField::Code => "np-code",
+        ProjectFormField::StartsOn => "np-start",
+        ProjectFormField::EndsOn => "np-end",
+        ProjectFormField::Currency => "np-currency",
+        ProjectFormField::AdminNotes => "np-notes",
         ProjectFormField::PaymentTerms => "np-terms-days",
         ProjectFormField::PurchaseOrder => "np-po-number",
         ProjectFormField::Tax => "np-tax",

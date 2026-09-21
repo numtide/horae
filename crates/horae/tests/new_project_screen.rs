@@ -191,6 +191,40 @@ fn an_input_can_link_its_validation_error_without_changing_its_value_or_class() 
 }
 
 #[test]
+fn textarea_and_selector_error_links_are_opt_in_and_preserve_controls() {
+    for error in [false, true] {
+        let mut dom = VirtualDom::new_with_props(
+            |error: bool| {
+                rsx! {
+                    form::Textarea { id: "notes", value: "Keep this text", error_id: error.then(|| "notes-error".to_owned()) }
+                    select_field::SelectField {
+                        id: "currency", label: "Currency", selected: "EUR",
+                        options: vec![("EUR".into(), "EUR".into())],
+                        error_id: error.then(|| "currency-error".to_owned()),
+                        onselect: |_| {},
+                    }
+                }
+            },
+            error,
+        );
+        dom.rebuild_in_place();
+        let html = dioxus::ssr::render(&dom);
+        assert!(html.contains("class=\"form-textarea\""));
+        assert!(html.contains("Keep this text</textarea>"));
+        assert!(
+            html.contains("class=\"form-input flex items-center justify-between gap-2 text-left\"")
+        );
+        assert!(html.contains("popovertarget=\"currency-options\""));
+        assert_eq!(
+            html.matches("aria-invalid=\"true\"").count(),
+            if error { 2 } else { 0 }
+        );
+        assert_eq!(html.contains("aria-describedby=\"notes-error\""), error);
+        assert_eq!(html.contains("aria-describedby=\"currency-error\""), error);
+    }
+}
+
+#[test]
 fn compact_input_adds_utilities_and_accessible_name_without_losing_native_state() {
     let mut dom = VirtualDom::new(|| {
         rsx! {

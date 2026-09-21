@@ -1,7 +1,9 @@
 use super::*;
 use crate::models::project_creation::{FeeMode, ProjectFormField, TaskSource};
 use chrono::NaiveDate;
-use horae_core::project::{BudgetMode, FeeMilestone, FeeSchedule, Percentage, RateMode};
+use horae_core::project::{
+    BudgetMode, FeeMilestone, FeeSchedule, Percentage, ProjectValidationError, RateMode,
+};
 use std::collections::HashSet;
 
 /// Parsed values for the active controls; hidden values remain only in the draft.
@@ -135,8 +137,10 @@ pub(super) fn validate_project_form(
     currency: &str,
     email_available: bool,
 ) -> Result<ValidatedProject, ServerFnError> {
-    let starts_on = date(&form.starts_on, "Start date")?;
-    let ends_on = date(&form.ends_on, "End date")?;
+    let starts_on = date(&form.starts_on, "Start date")
+        .map_err(|error| with_field(error, ProjectFormField::StartsOn))?;
+    let ends_on = date(&form.ends_on, "End date")
+        .map_err(|error| with_field(error, ProjectFormField::EndsOn))?;
     horae_core::project::validate_basics(
         &form.name,
         Some(&form.code),
@@ -144,11 +148,21 @@ pub(super) fn validate_project_form(
         starts_on,
         ends_on,
     )
-    .map_err(|error| err(BAD_REQUEST, error))?;
+    .map_err(|error| {
+        let field = match error {
+            ProjectValidationError::Name => ProjectFormField::Name,
+            ProjectValidationError::Code => ProjectFormField::Code,
+            ProjectValidationError::Currency => ProjectFormField::Currency,
+            ProjectValidationError::DateOrder => ProjectFormField::EndsOn,
+            _ => return err(BAD_REQUEST, error),
+        };
+        with_field(err(BAD_REQUEST, error), field)
+    })?;
     form.budget_mode
         .validate_for(form.project_type)
         .map_err(|error| err(BAD_REQUEST, error))?;
-    bounded_text(&form.admin_notes, 10000, false, "Private notes")?;
+    bounded_text(&form.admin_notes, 10000, false, "Private notes")
+        .map_err(|error| with_field(error, ProjectFormField::AdminNotes))?;
 
     let is_hourly = form.project_type == ProjectType::TimeAndMaterials;
     let rate_mode = if !is_hourly {
@@ -375,6 +389,47 @@ pub(super) fn validate_project_form(
 mod tests {
     use super::*;
     use crate::models::project_creation::{InvoiceDefaultsInput, SecondTaxInput};
+
+    #[test]
+    fn basic_rejections_identify_the_field_without_echoing_input() {
+        for (field, value) in [
+            ("name", "private".repeat(29)),
+            ("name", String::new()),
+            ("code", "private".repeat(15)),
+            ("starts_on", "2026-9-1".into()),
+            ("ends_on", "not a date".into()),
+            ("ends_on", "2026-08-31".into()),
+            ("currency", "JPY".into()),
+            ("admin_notes", "private".repeat(1429)),
+        ] {
+            let mut form = ProjectForm {
+                name: "Valid project".into(),
+                starts_on: "2026-09-01".into(),
+                ..Default::default()
+            };
+            let mut currency = "EUR".to_owned();
+            match field {
+                "name" => form.name = value,
+                "code" => form.code = value,
+                "starts_on" => form.starts_on = value,
+                "ends_on" => form.ends_on = value,
+                "currency" => currency = value,
+                "admin_notes" => form.admin_notes = value,
+                _ => unreachable!(),
+            }
+            let Err(ServerFnError::ServerError {
+                code,
+                message,
+                details,
+            }) = validate_project_form(&form, &currency, false)
+            else {
+                panic!("Expected a field rejection for {field}");
+            };
+            assert_eq!(code, BAD_REQUEST);
+            assert_eq!(details, Some(serde_json::json!({ "field": field })));
+            assert!(!message.contains("private"));
+        }
+    }
 
     #[test]
     fn invoice_rejections_identify_the_field_without_echoing_input() {

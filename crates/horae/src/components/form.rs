@@ -70,9 +70,11 @@ pub fn Input(
 }
 
 /// A multi-line text input.
+/// `error_id` links invalid input to its existing visible error message.
 #[component]
 pub fn Textarea(
     #[props(default)] id: String,
+    #[props(default)] error_id: Option<String>,
     #[props(default)] value: String,
     #[props(default)] placeholder: String,
     #[props(default = 3)] rows: i64,
@@ -83,6 +85,8 @@ pub fn Textarea(
         textarea {
             class: "form-textarea",
             id: if !id.is_empty() { "{id}" },
+            aria_invalid: error_id.as_ref().map(|_| "true"),
+            aria_describedby: error_id,
             rows: "{rows}",
             placeholder: "{placeholder}",
             disabled,

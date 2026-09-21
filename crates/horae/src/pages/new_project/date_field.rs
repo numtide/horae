@@ -11,6 +11,7 @@ pub(super) fn DateField(
     label: String,
     placeholder: String,
     value: String,
+    #[props(default)] error_id: Option<String>,
     onchange: EventHandler<String>,
 ) -> Element {
     let mut opening = use_signal(|| 0_u64);
@@ -33,6 +34,8 @@ pub(super) fn DateField(
                 class: "np-date-field form-input flex items-center justify-between gap-3 font-mono text-left",
                 popovertarget: "{id}-calendar",
                 aria_haspopup: "dialog", aria_expanded: "false", aria_controls: "{id}-calendar",
+                aria_invalid: error_id.as_ref().map(|_| "true"),
+                aria_describedby: error_id,
                 onclick: move |_| opening += 1,
                 span { class: if value.is_empty() { "text-faint" } else { "" }, "{display}" }
                 span { class: "text-label inline-flex", aria_hidden: "true", NavIcon { name: "timesheet" } }

@@ -6,7 +6,7 @@ use crate::components::form::{FormGroup, Input, Select, Textarea};
 use crate::components::modal::Modal;
 use crate::components::select_field::SelectField;
 use crate::models::project_creation::{
-    CreationClient, CreationOptions, CreationSearch, ProjectForm,
+    CreationClient, CreationOptions, CreationSearch, ProjectForm, ProjectFormField,
 };
 use crate::server_fns;
 
@@ -17,7 +17,16 @@ use super::date_field::DateField;
 pub(super) fn Basics(
     mut form: Signal<ProjectForm>,
     mut options: Signal<CreationOptions>,
+    #[props(default)] invalid_field: Option<ProjectFormField>,
+    #[props(default)] error_message: Option<String>,
 ) -> Element {
+    let error_id =
+        |field| (invalid_field == Some(field)).then(|| "np-basic-field-error".to_owned());
+    let error_for = |fields: &[ProjectFormField]| {
+        invalid_field
+            .filter(|field| fields.contains(field))
+            .and(error_message.clone())
+    };
     let client_query = use_signal(String::new);
     let mut client_open = use_signal(|| false);
     let mut tag_input = use_signal(String::new);
@@ -126,11 +135,17 @@ pub(super) fn Basics(
             }
         }
         FormRow { label: "Project name", id: "np-name", hint: "Required",
-            Input { id: "np-name", value: form.read().name.clone(), placeholder: "Project name", oninput: move |event: FormEvent| form.write().name = event.value() }
+            Input { id: "np-name", error_id: error_id(ProjectFormField::Name), value: form.read().name.clone(), placeholder: "Project name", oninput: move |event: FormEvent| form.write().name = event.value() }
+            if let Some(message) = error_for(&[ProjectFormField::Name]) {
+                p { id: "np-basic-field-error", class: "text-sm text-danger", "{message}" }
+            }
         }
         FormRow { label: "Project code", id: "np-code", hint: "Optional",
             div { class: "flex flex-wrap items-center gap-3",
-                input { id: "np-code", class: "np-code form-input font-mono", value: form.read().code.clone(), placeholder: "Project code", oninput: move |event| form.write().code = event.value() }
+                input { id: "np-code", class: "np-code form-input font-mono", value: form.read().code.clone(), placeholder: "Project code",
+                    aria_invalid: error_id(ProjectFormField::Code).map(|_| "true"),
+                    aria_describedby: error_id(ProjectFormField::Code),
+                    oninput: move |event| form.write().code = event.value() }
                 if let Some(code) = previous_code {
                     span { class: "text-sm text-subtle", "Last code: " span { class: "font-mono", "{code}" } }
                 }
@@ -139,17 +154,23 @@ pub(super) fn Basics(
                 }
             }
             p { class: "form-hint", "An optional reference for this project. Numbers or letters, up to 100 characters." }
+            if let Some(message) = error_for(&[ProjectFormField::Code]) {
+                p { id: "np-basic-field-error", class: "text-sm text-danger", "{message}" }
+            }
         }
         FormRow { label: "Dates", hint: "Optional · planning only",
             div { class: "flex flex-wrap items-center gap-3",
                 FormGroup { label: "Start date", id: "np-start",
-                    DateField { id: "np-start", label: "Start date", placeholder: "Starts on", value: form.read().starts_on.clone(), onchange: move |value| form.write().starts_on = value }
+                    DateField { id: "np-start", error_id: error_id(ProjectFormField::StartsOn), label: "Start date", placeholder: "Starts on", value: form.read().starts_on.clone(), onchange: move |value| form.write().starts_on = value }
                 }
                 FormGroup { label: "End date", id: "np-end",
-                    DateField { id: "np-end", label: "End date", placeholder: "Ends on", value: form.read().ends_on.clone(), onchange: move |value| form.write().ends_on = value }
+                    DateField { id: "np-end", error_id: error_id(ProjectFormField::EndsOn), label: "End date", placeholder: "Ends on", value: form.read().ends_on.clone(), onchange: move |value| form.write().ends_on = value }
                 }
             }
             p { class: "form-hint", "Dates are advisory and do not prevent time tracking." }
+            if let Some(message) = error_for(&[ProjectFormField::StartsOn, ProjectFormField::EndsOn]) {
+                p { id: "np-basic-field-error", class: "text-sm text-danger", "{message}" }
+            }
         }
         FormRow { label: "Tags", id: "np-tags", hint: "Optional · for filtering",
             div { class: "chip-input chip-input-neutral np-tags py-1 cursor-text",
@@ -192,15 +213,21 @@ pub(super) fn Basics(
         }
         FormRow { label: "Currency", id: "np-currency", hint: "For billing and project rates",
             div { class: "np-currency-select",
-                SelectField { id: "np-currency", label: "Currency", options: currency_options, selected: form.read().currency.clone().unwrap_or_default(), onselect: move |value: String| {
+                SelectField { id: "np-currency", error_id: error_id(ProjectFormField::Currency), label: "Currency", options: currency_options, selected: form.read().currency.clone().unwrap_or_default(), onselect: move |value: String| {
                     form.write().currency = (!value.is_empty()).then_some(value);
                 } }
             }
             p { class: "form-hint", "Sets the currency for rates, fees and budgets. Costs use the workspace currency ({organization_currency})." }
+            if let Some(message) = error_for(&[ProjectFormField::Currency]) {
+                p { id: "np-basic-field-error", class: "text-sm text-danger", "{message}" }
+            }
         }
         if can_edit_private {
             FormRow { label: "Notes", id: "np-notes", hint: "Optional · admins only",
-                Textarea { id: "np-notes", rows: 3, value: form.read().admin_notes.clone(), placeholder: "Private context for administrators", oninput: move |event: FormEvent| form.write().admin_notes = event.value() }
+                Textarea { id: "np-notes", error_id: error_id(ProjectFormField::AdminNotes), rows: 3, value: form.read().admin_notes.clone(), placeholder: "Private context for administrators", oninput: move |event: FormEvent| form.write().admin_notes = event.value() }
+                if let Some(message) = error_for(&[ProjectFormField::AdminNotes]) {
+                    p { id: "np-basic-field-error", class: "text-sm text-danger", "{message}" }
+                }
             }
         }
         NewClientDialog { open: client_open(), currency: options.read().organization_currency.clone(), on_dismiss: move |_| client_open.set(false),
