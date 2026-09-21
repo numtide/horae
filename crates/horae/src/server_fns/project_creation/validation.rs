@@ -110,23 +110,22 @@ fn with_field(mut error: ServerFnError, field: ProjectFormField) -> ServerFnErro
 }
 
 fn sum_budgets<'a>(
-    values: impl Iterator<Item = &'a str>,
+    values: impl Iterator<Item = (ProjectFormField, &'a str)>,
     money: bool,
 ) -> Result<Option<i64>, ServerFnError> {
     let mut total = None;
-    for value in values {
+    for (field, value) in values {
         let amount = if money {
-            optional_amount(value, "Budget")?
+            optional_amount(value, "Budget")
         } else {
-            optional_hours(value)?
-        };
+            optional_hours(value)
+        }
+        .map_err(|error| with_field(error, field))?;
         if let Some(amount) = amount {
-            total = Some(
-                total
-                    .unwrap_or(0_i64)
-                    .checked_add(amount)
-                    .ok_or_else(|| err(BAD_REQUEST, "Budget total is too large"))?,
-            );
+            total =
+                Some(total.unwrap_or(0_i64).checked_add(amount).ok_or_else(|| {
+                    with_field(err(BAD_REQUEST, "Budget total is too large"), field)
+                })?);
         }
     }
     Ok(total)
@@ -217,19 +216,37 @@ pub(super) fn validate_project_form(
             BudgetKind::Hours,
             "task",
             None,
-            sum_budgets(form.tasks.iter().map(|task| task.budget.as_str()), false)?,
+            sum_budgets(
+                form.tasks
+                    .iter()
+                    .map(|task| (ProjectFormField::TaskBudget(task.id), task.budget.as_str())),
+                false,
+            )?,
         ),
         BudgetMode::FeesPerTask => (
             BudgetKind::Amount,
             "task",
-            sum_budgets(form.tasks.iter().map(|task| task.budget.as_str()), true)?,
+            sum_budgets(
+                form.tasks
+                    .iter()
+                    .map(|task| (ProjectFormField::TaskBudget(task.id), task.budget.as_str())),
+                true,
+            )?,
             None,
         ),
         BudgetMode::HoursPerPerson => (
             BudgetKind::Hours,
             "person",
             None,
-            sum_budgets(form.team.iter().map(|member| member.budget.as_str()), false)?,
+            sum_budgets(
+                form.team.iter().map(|member| {
+                    (
+                        ProjectFormField::PersonBudget(member.user_id),
+                        member.budget.as_str(),
+                    )
+                }),
+                false,
+            )?,
         ),
     };
     let alert_threshold = if form.budget_alert && form.budget_mode != BudgetMode::None {
@@ -382,9 +399,11 @@ pub(super) fn validate_project_form(
         if !people.insert(member.user_id) {
             return Err(err(BAD_REQUEST, "A person can only be assigned once"));
         }
-        optional_amount(&member.cost_rate, "Cost rate")?;
+        optional_amount(&member.cost_rate, "Cost rate")
+            .map_err(|error| with_field(error, ProjectFormField::CostRate(member.user_id)))?;
         if is_hourly && form.rate_mode == RateMode::Person {
-            optional_amount(&member.billable_rate, "Person rate")?;
+            optional_amount(&member.billable_rate, "Person rate")
+                .map_err(|error| with_field(error, ProjectFormField::PersonRate(member.user_id)))?;
         }
     }
     let mut task_rows = HashSet::new();
@@ -415,7 +434,8 @@ pub(super) fn validate_project_form(
             ));
         }
         if is_hourly && form.rate_mode == RateMode::Task {
-            optional_amount(&task.rate, "Task rate")?;
+            optional_amount(&task.rate, "Task rate")
+                .map_err(|error| with_field(error, ProjectFormField::TaskRate(task.id)))?;
         }
     }
     Ok(ValidatedProject {
@@ -443,6 +463,79 @@ mod tests {
     use super::*;
     use crate::models::project_creation::{InvoiceDefaultsInput, SecondTaxInput};
     use uuid::Uuid;
+
+    #[test]
+    fn assignment_rejections_identify_the_invalid_row() {
+        use crate::models::project_creation::{ProjectMemberInput, ProjectTaskInput};
+        let first = Uuid::now_v7();
+        let second = Uuid::now_v7();
+        for (field, value) in [
+            ("task_rate", "-1"),
+            ("task_rate", "1.001"),
+            ("person_rate", "-1"),
+            ("person_rate", "1.001"),
+            ("cost_rate", "-1"),
+            ("cost_rate", "1.001"),
+            ("task_budget", "unfinished"),
+            ("person_budget", "unfinished"),
+            ("task_fees", "-1"),
+            ("task_fees", "1.001"),
+            ("task_fees", "92233720368547758.07"),
+        ] {
+            let mut form = ProjectForm {
+                name: "Valid project".into(),
+                tasks: [first, second]
+                    .map(|id| ProjectTaskInput {
+                        id,
+                        source: TaskSource::Existing {
+                            task_id: Uuid::now_v7(),
+                        },
+                        billable: true,
+                        rate: "1".into(),
+                        budget: "1".into(),
+                        access: TaskAccess::Everyone,
+                    })
+                    .to_vec(),
+                team: [first, second]
+                    .map(|user_id| ProjectMemberInput {
+                        user_id,
+                        manager: false,
+                        billable_rate: "1".into(),
+                        cost_rate: "1".into(),
+                        budget: "1".into(),
+                    })
+                    .to_vec(),
+                ..Default::default()
+            };
+            match field {
+                "task_rate" => {
+                    form.rate_mode = RateMode::Task;
+                    form.tasks[1].rate = value.into();
+                }
+                "person_rate" => form.team[1].billable_rate = value.into(),
+                "cost_rate" => form.team[1].cost_rate = value.into(),
+                "task_budget" | "task_fees" => {
+                    form.budget_mode = if field == "task_fees" {
+                        BudgetMode::FeesPerTask
+                    } else {
+                        BudgetMode::HoursPerTask
+                    };
+                    form.tasks[1].budget = value.into();
+                }
+                "person_budget" => {
+                    form.budget_mode = BudgetMode::HoursPerPerson;
+                    form.team[1].budget = value.into();
+                }
+                _ => unreachable!(),
+            }
+            let expected = if field == "task_fees" {
+                "task_budget"
+            } else {
+                field
+            };
+            assert_rejection_field(&form, false, serde_json::json!({ expected: second }));
+        }
+    }
 
     #[test]
     fn billing_rejections_identify_the_active_control() {

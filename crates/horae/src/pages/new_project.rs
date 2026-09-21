@@ -302,8 +302,8 @@ fn ProjectEditor(
                         Basics { form, options, invalid_field: invalid_field(), error_message: error() }
                         Visibility { form }
                         Billing { form, options, invalid_field: invalid_field(), error_message: error() }
-                        Tasks { form, options }
-                        Team { form, options, busy: catalog_busy }
+                        Tasks { form, options, invalid_field: invalid_field(), error_message: error() }
+                        Team { form, options, busy: catalog_busy, invalid_field: invalid_field(), error_message: error() }
                         InvoiceDefaults { form, invalid_field: invalid_field(), error_message: error() }
                     }
                 }
@@ -410,6 +410,11 @@ fn field_id(field: ProjectFormField) -> String {
         ProjectFormField::MilestoneName(id) => return format!("np-milestone-name-{id}"),
         ProjectFormField::MilestoneDate(id) => return format!("np-milestone-date-{id}"),
         ProjectFormField::MilestoneAmount(id) => return format!("np-milestone-amount-{id}"),
+        ProjectFormField::TaskRate(id) => return format!("np-task-rate-{id}"),
+        ProjectFormField::TaskBudget(id) => return format!("np-task-budget-{id}"),
+        ProjectFormField::PersonRate(id) => return format!("np-person-rate-{id}"),
+        ProjectFormField::CostRate(id) => return format!("np-cost-rate-{id}"),
+        ProjectFormField::PersonBudget(id) => return format!("np-person-budget-{id}"),
         ProjectFormField::PaymentTerms => "np-terms-days",
         ProjectFormField::PurchaseOrder => "np-po-number",
         ProjectFormField::Tax => "np-tax",

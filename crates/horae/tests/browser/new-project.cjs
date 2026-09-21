@@ -56,6 +56,10 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
       const box = await item.boundingBox();
       assert.ok(box.y >= 0 && box.y + box.height <= footer.y, 'Rejected control and its message remain above actions');
     }
+    if (process.env.HORAE_TEST_SCREENSHOT_DIR && /^np-(task|person)-error-/.test(errorId)) {
+      const control = (await field.getAttribute('id')).slice(0, -37);
+      await page.screenshot({ path: `${process.env.HORAE_TEST_SCREENSHOT_DIR}/new-project-${control}-error-${page.viewportSize().width}.png` });
+    }
   };
   const retryValidation = async () => {
     await screen.getByRole('button', { name: 'Retry request', exact: true }).focus();
@@ -732,6 +736,45 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await page.getByRole('link', { name: 'New project', exact: true }).click();
     await expect(emailAlert).toBeDisabled();
     console.log('PASS: a stale email configuration rejection can be corrected without sending mail');
+
+    await screen.getByRole('radio', { name: /^Person hourly rate/ }).check();
+    await chooseField('np-budget-mode', 'Budget', 'Hours per person');
+    for (const width of [390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const [prefix, invalid] of [['np-person-rate-', '1.001'], ['np-cost-rate-', '-1'], ['np-person-budget-', 'unfinished']]) {
+        const field = teamSection.locator(`input[id^="${prefix}"]`).first();
+        const original = await field.inputValue();
+        const id = (await field.getAttribute('id')).slice(prefix.length);
+        await field.fill(invalid);
+        await rejectField(field, `np-person-error-${id}`);
+        await expect(screen.locator('[aria-invalid="true"]')).toHaveCount(1);
+        await expect(field).toHaveValue(invalid);
+        await field.fill(original);
+        await retryValidation();
+      }
+    }
+    await screen.getByRole('radio', { name: /^Task hourly rate/ }).check();
+    await chooseField('np-budget-mode', 'Budget', 'Hours per task');
+    const firstTaskRate = tasksSection.locator('input[id^="np-task-rate-"]').first();
+    const firstRateValue = await firstTaskRate.inputValue();
+    for (const width of [390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const [prefix, invalid] of [['np-task-rate-', '1.001'], ['np-task-budget-', 'unfinished']]) {
+        const field = tasksSection.locator(`input[id^="${prefix}"]`).nth(1);
+        const original = await field.inputValue();
+        const id = (await field.getAttribute('id')).slice(prefix.length);
+        await field.fill(invalid);
+        await rejectField(field, `np-task-error-${id}`);
+        await expect(screen.locator('[aria-invalid="true"]')).toHaveCount(1);
+        await expect(firstTaskRate).toHaveValue(firstRateValue);
+        await expect(field).toHaveValue(invalid);
+        await field.fill(original);
+        await retryValidation();
+      }
+    }
+    await screen.getByRole('radio', { name: /^Project hourly rate/ }).check();
+    await chooseField('np-budget-mode', 'Budget', 'Total project hours');
+    console.log('PASS: task/person rate, cost and budget errors identify their row and preserve other inputs at three widths');
 
     const wideTag = 'W'.repeat(50);
     await tagInput.fill(wideTag);

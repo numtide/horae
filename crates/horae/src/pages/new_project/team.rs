@@ -12,8 +12,8 @@ use crate::components::form::Input;
 use crate::components::icons::NavIcon;
 use crate::components::select_field::SelectField;
 use crate::models::project_creation::{
-    CreationOptions, CreationPerson, CreationSearch, ProjectForm, ProjectMemberInput,
-    ReportVisibility, TaskAccess,
+    CreationOptions, CreationPerson, CreationSearch, ProjectForm, ProjectFormField,
+    ProjectMemberInput, ReportVisibility, TaskAccess,
 };
 use crate::server_fns;
 
@@ -43,6 +43,8 @@ pub(super) fn Team(
     mut form: Signal<ProjectForm>,
     mut options: Signal<CreationOptions>,
     mut busy: Signal<bool>,
+    #[props(default)] invalid_field: Option<ProjectFormField>,
+    #[props(default)] error_message: Option<String>,
 ) -> Element {
     let query = use_signal(String::new);
     let mut error = use_signal(|| None::<String>);
@@ -84,7 +86,7 @@ pub(super) fn Team(
                 span { class: "text-xs text-subtle", "{form.read().team.len()} people" }
                 span { class: "text-xs text-label ml-auto", "Check = manages this project" }
             }
-            for member in form.read().team.clone() { MemberRow { key: "{member.user_id}", form, options, id: member.user_id } }
+            for member in form.read().team.clone() { MemberRow { key: "{member.user_id}", form, options, id: member.user_id, invalid_field, error_message: error_message.clone() } }
             if form.read().team.is_empty() { p { class: "text-sm text-subtle px-5", "No teammates selected yet." } }
             div { class: "px-5 py-3",
                 p { class: "form-hint mt-0", "Blank billable rates inherit the person's profile, then the client's default. Blank costs inherit only the profile cost. Rates are not converted between currencies. Overrides affect only this project." }
@@ -154,7 +156,13 @@ pub(super) fn Team(
 }
 
 #[component]
-fn MemberRow(mut form: Signal<ProjectForm>, options: Signal<CreationOptions>, id: Uuid) -> Element {
+fn MemberRow(
+    mut form: Signal<ProjectForm>,
+    options: Signal<CreationOptions>,
+    id: Uuid,
+    invalid_field: Option<ProjectFormField>,
+    error_message: Option<String>,
+) -> Element {
     let Some(member) = form
         .read()
         .team
@@ -203,6 +211,7 @@ fn MemberRow(mut form: Signal<ProjectForm>, options: Signal<CreationOptions>, id
                     label { class: "flex items-center gap-2 text-xs text-subtle", r#for: "np-person-rate-{id}",
                         "bill"
                         Input { class: "w-30 max-w-full font-mono text-right", id: "np-person-rate-{id}", label: "Billable rate for {name} ({billing_currency}/h)", value: member.billable_rate,
+                            error_id: (invalid_field == Some(ProjectFormField::PersonRate(id))).then(|| format!("np-person-error-{id}")),
                             placeholder: if org_currency == billing_currency { person.as_ref().and_then(|person| person.billable_rate_cents).map(format_cents_plain).unwrap_or_else(|| "Inherit".into()) } else { "Inherit".into() },
                             oninput: move |event: FormEvent| { if let Some(member) = form.write().team.iter_mut().find(|member| member.user_id == id) { member.billable_rate = event.value(); } }
                         }
@@ -213,6 +222,7 @@ fn MemberRow(mut form: Signal<ProjectForm>, options: Signal<CreationOptions>, id
                     label { class: "flex items-center gap-2 text-xs text-subtle", r#for: "np-cost-rate-{id}",
                         "cost"
                         Input { class: "w-30 max-w-full font-mono text-right", id: "np-cost-rate-{id}", label: "Cost rate for {name} ({org_currency}/h) · admins only", value: member.cost_rate,
+                            error_id: (invalid_field == Some(ProjectFormField::CostRate(id))).then(|| format!("np-person-error-{id}")),
                             placeholder: person.as_ref().and_then(|person| person.cost_rate_cents).map(format_cents_plain).unwrap_or_else(|| "No rate".into()),
                             oninput: move |event: FormEvent| { if let Some(member) = form.write().team.iter_mut().find(|member| member.user_id == id) { member.cost_rate = event.value(); } }
                         }
@@ -222,12 +232,17 @@ fn MemberRow(mut form: Signal<ProjectForm>, options: Signal<CreationOptions>, id
                 if form.read().budget_mode == BudgetMode::HoursPerPerson {
                     label { class: "flex items-center gap-2 text-xs text-subtle", r#for: "np-person-budget-{id}",
                         "budget"
-                        Input { class: "w-30 max-w-full font-mono text-right", id: "np-person-budget-{id}", label: "Budget hours for {name}", value: member.budget, oninput: move |event: FormEvent| { if let Some(member) = form.write().team.iter_mut().find(|member| member.user_id == id) { member.budget = event.value(); } } }
+                        Input { class: "w-30 max-w-full font-mono text-right", id: "np-person-budget-{id}", label: "Budget hours for {name}", value: member.budget,
+                            error_id: (invalid_field == Some(ProjectFormField::PersonBudget(id))).then(|| format!("np-person-error-{id}")),
+                            oninput: move |event: FormEvent| { if let Some(member) = form.write().team.iter_mut().find(|member| member.user_id == id) { member.budget = event.value(); } } }
                         "h"
                     }
                 }
             }
             button { r#type: "button", class: "np-row-remove btn btn-ghost p-0 size-8 text-label", aria_label: "Remove {name} from project", onclick: move |_| remove_member(&mut form.write(), id), "×" }
+        }
+        if matches!(invalid_field, Some(ProjectFormField::PersonRate(row) | ProjectFormField::CostRate(row) | ProjectFormField::PersonBudget(row)) if row == id) {
+            p { id: "np-person-error-{id}", class: "text-sm text-danger px-5", "{error_message.as_deref().unwrap_or_default()}" }
         }
     }
 }

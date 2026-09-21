@@ -9,7 +9,8 @@ use crate::components::form::Input;
 use crate::components::icons::NavIcon;
 use crate::components::modal::Modal;
 use crate::models::project_creation::{
-    CreationOptions, CreationSearch, ProjectForm, ProjectTaskInput, TaskAccess, TaskSource,
+    CreationOptions, CreationSearch, ProjectForm, ProjectFormField, ProjectTaskInput, TaskAccess,
+    TaskSource,
 };
 use crate::server_fns;
 
@@ -17,6 +18,8 @@ use crate::server_fns;
 pub(super) fn Tasks(
     mut form: Signal<ProjectForm>,
     mut options: Signal<CreationOptions>,
+    #[props(default)] invalid_field: Option<ProjectFormField>,
+    #[props(default)] error_message: Option<String>,
 ) -> Element {
     let mut query = use_signal(String::new);
     let mut error = use_signal(|| None::<String>);
@@ -118,7 +121,7 @@ pub(super) fn Tasks(
                 span { "Everyone on the project can track to unrestricted tasks. Open a task's access settings to limit who can." }
             }
             for task in form.read().tasks.clone() {
-                TaskRow { key: "{task.id}", form, options, id: task.id, on_access: move |id| editing_access.set(Some(id)) }
+                TaskRow { key: "{task.id}", form, options, id: task.id, invalid_field, error_message: error_message.clone(), on_access: move |id| editing_access.set(Some(id)) }
             }
             if form.read().tasks.is_empty() { p { class: "text-sm text-subtle px-5", "No tasks selected yet." } }
             div { class: "px-5 py-3",
@@ -174,6 +177,8 @@ fn TaskRow(
     options: Signal<CreationOptions>,
     id: Uuid,
     on_access: EventHandler<Uuid>,
+    invalid_field: Option<ProjectFormField>,
+    error_message: Option<String>,
 ) -> Element {
     let Some(task) = form.read().tasks.iter().find(|task| task.id == id).cloned() else {
         return rsx! {};
@@ -221,6 +226,7 @@ fn TaskRow(
                     label { class: "flex items-center gap-2 text-xs text-subtle", r#for: "np-task-rate-{id}",
                         "rate"
                         Input { class: "w-30 max-w-full font-mono text-right", id: "np-task-rate-{id}", label: "Hourly rate for {name} ({currency})", value: task.rate,
+                            error_id: (invalid_field == Some(ProjectFormField::TaskRate(id))).then(|| format!("np-task-error-{id}")),
                             placeholder: if options.read().organization_currency == currency { catalog.as_ref().and_then(|task| task.default_rate_cents).map(format_cents_plain).unwrap_or_else(|| "Inherit".into()) } else { "Inherit".into() },
                             oninput: move |event: FormEvent| { if let Some(task) = form.write().tasks.iter_mut().find(|task| task.id == id) { task.rate = event.value(); } }
                         }
@@ -230,13 +236,18 @@ fn TaskRow(
                 if matches!(form.read().budget_mode, BudgetMode::HoursPerTask | BudgetMode::FeesPerTask) {
                     label { class: "flex items-center gap-2 text-xs text-subtle", r#for: "np-task-budget-{id}",
                         "budget"
-                        Input { class: "w-30 max-w-full font-mono text-right", id: "np-task-budget-{id}", label: if form.read().budget_mode == BudgetMode::FeesPerTask { format!("Budget for {name} ({currency})") } else { format!("Budget hours for {name}") }, value: task.budget, oninput: move |event: FormEvent| { if let Some(task) = form.write().tasks.iter_mut().find(|task| task.id == id) { task.budget = event.value(); } } }
+                        Input { class: "w-30 max-w-full font-mono text-right", id: "np-task-budget-{id}", label: if form.read().budget_mode == BudgetMode::FeesPerTask { format!("Budget for {name} ({currency})") } else { format!("Budget hours for {name}") }, value: task.budget,
+                            error_id: (invalid_field == Some(ProjectFormField::TaskBudget(id))).then(|| format!("np-task-error-{id}")),
+                            oninput: move |event: FormEvent| { if let Some(task) = form.write().tasks.iter_mut().find(|task| task.id == id) { task.budget = event.value(); } } }
                         if form.read().budget_mode == BudgetMode::FeesPerTask { "{currency}" } else { "h" }
                     }
                 }
                 button { r#type: "button", class: "btn btn-ghost btn-sm", aria_label: "Access for {name}: {access_label}", onclick: move |_| on_access.call(id), "{access_label}" }
             }
             button { r#type: "button", class: "np-row-remove btn btn-ghost p-0 size-8 text-label", aria_label: "Remove task {name}", onclick: move |_| form.write().tasks.retain(|task| task.id != id), "×" }
+        }
+        if matches!(invalid_field, Some(ProjectFormField::TaskRate(row) | ProjectFormField::TaskBudget(row)) if row == id) {
+            p { id: "np-task-error-{id}", class: "text-sm text-danger px-5", "{error_message.as_deref().unwrap_or_default()}" }
         }
     }
 }
