@@ -63,7 +63,7 @@ async fn require_manager(session: &Session) -> Result<uuid::Uuid, StatusCode> {
 }
 
 /// Mirrors the Reports page filters, so a download matches what is on screen.
-/// Absent client/project/user means "all", as on the page.
+/// Absent client/project/user/tag means "all", as on the page.
 #[derive(Deserialize)]
 pub struct ExportParams {
     pub from: String,
@@ -71,6 +71,27 @@ pub struct ExportParams {
     pub client_id: Option<uuid::Uuid>,
     pub project_id: Option<uuid::Uuid>,
     pub user_id: Option<uuid::Uuid>,
+    pub tag_id: Option<uuid::Uuid>,
+}
+
+/// Entity filters shared by grouped reports, detailed rows and downloads.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct ReportFilters {
+    pub client_id: Option<uuid::Uuid>,
+    pub project_id: Option<uuid::Uuid>,
+    pub user_id: Option<uuid::Uuid>,
+    pub tag_id: Option<uuid::Uuid>,
+}
+
+impl ExportParams {
+    fn filters(&self) -> ReportFilters {
+        ReportFilters {
+            client_id: self.client_id,
+            project_id: self.project_id,
+            user_id: self.user_id,
+            tag_id: self.tag_id,
+        }
+    }
 }
 
 /// The rows behind both the CSV/XLSX exports and the manager-only
@@ -79,13 +100,10 @@ pub struct ExportParams {
 pub(crate) async fn fetch_entries<'e>(
     executor: impl sqlx::PgExecutor<'e> + 'e,
     org_id: uuid::Uuid,
-    from: chrono::NaiveDate,
-    to: chrono::NaiveDate,
-    client_id: Option<uuid::Uuid>,
-    project_id: Option<uuid::Uuid>,
-    user_id: Option<uuid::Uuid>,
+    period: (chrono::NaiveDate, chrono::NaiveDate),
+    filters: ReportFilters,
 ) -> Result<Vec<crate::models::DetailedReportRow>, sqlx::Error> {
-    stream_entries(executor, org_id, from, to, client_id, project_id, user_id)
+    stream_entries(executor, org_id, period, filters)
         .try_collect()
         .await
 }
@@ -93,11 +111,8 @@ pub(crate) async fn fetch_entries<'e>(
 fn stream_entries<'e>(
     executor: impl sqlx::PgExecutor<'e> + 'e,
     org_id: uuid::Uuid,
-    from: chrono::NaiveDate,
-    to: chrono::NaiveDate,
-    client_id: Option<uuid::Uuid>,
-    project_id: Option<uuid::Uuid>,
-    user_id: Option<uuid::Uuid>,
+    period: (chrono::NaiveDate, chrono::NaiveDate),
+    filters: ReportFilters,
 ) -> impl Stream<Item = Result<crate::models::DetailedReportRow, sqlx::Error>> + 'e {
     sqlx::query_as!(
         crate::models::DetailedReportRow,
@@ -117,13 +132,18 @@ fn stream_entries<'e>(
            AND ($3::uuid IS NULL OR p.client_id = $3)
            AND ($4::uuid IS NULL OR te.project_id = $4)
            AND ($5::uuid IS NULL OR te.user_id = $5)
+           AND ($7::uuid IS NULL OR EXISTS (
+             SELECT 1 FROM project_tag_links l
+             WHERE l.org_id = te.org_id AND l.project_id = te.project_id AND l.tag_id = $7
+           ))
          ORDER BY te.spent_date, p.name, t.name, te.id"#,
-        from as chrono::NaiveDate,
-        to as chrono::NaiveDate,
-        client_id,
-        project_id,
-        user_id,
+        period.0 as chrono::NaiveDate,
+        period.1 as chrono::NaiveDate,
+        filters.client_id,
+        filters.project_id,
+        filters.user_id,
         org_id,
+        filters.tag_id,
     )
     .fetch(executor)
 }

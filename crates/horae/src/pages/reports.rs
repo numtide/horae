@@ -77,6 +77,7 @@ pub fn Reports() -> Element {
     let mut client_filter = use_signal(String::new);
     let mut project_filter = use_signal(String::new);
     let mut user_filter = use_signal(String::new);
+    let mut tag_filter = use_signal(String::new);
     let mut active_tab = use_signal(|| "time".to_string());
 
     let me = use_resource(|| async move { server_fns::get_me().await });
@@ -84,13 +85,14 @@ pub fn Reports() -> Element {
     // Dropdown sources. Projects narrow to the chosen client.
     let clients = use_resource(|| async move { server_fns::list_clients(false).await });
     let users = use_resource(|| async move { server_fns::list_users(false).await });
+    let mut tags = use_resource(|| async move { server_fns::list_project_tags().await });
     let projects = use_resource(move || {
         let c = opt(client_filter.read().clone());
         async move { server_fns::list_projects(c, false).await }
     });
 
     // Read the signals inside each resource so a filter change re-loads.
-    let summary = use_resource(move || {
+    let mut summary = use_resource(move || {
         let (f, t, g) = (
             from_date.read().clone(),
             to_date.read().clone(),
@@ -101,16 +103,18 @@ pub fn Reports() -> Element {
             opt(project_filter.read().clone()),
             opt(user_filter.read().clone()),
         );
-        async move { server_fns::report_time(f, t, g, cl, pr, us).await }
+        let tag = opt(tag_filter());
+        async move { server_fns::report_time(f, t, g, cl, pr, us, tag).await }
     });
-    let detailed = use_resource(move || {
+    let mut detailed = use_resource(move || {
         let (f, t) = (from_date.read().clone(), to_date.read().clone());
         let (cl, pr, us) = (
             opt(client_filter.read().clone()),
             opt(project_filter.read().clone()),
             opt(user_filter.read().clone()),
         );
-        async move { server_fns::report_detailed(f, t, cl, pr, us).await }
+        let tag = opt(tag_filter());
+        async move { server_fns::report_detailed(f, t, cl, pr, us, tag).await }
     });
 
     // Reports cover every user's time and money, so the endpoints are
@@ -138,6 +142,7 @@ pub fn Reports() -> Element {
             ("client_id", client_filter.read().clone()),
             ("project_id", project_filter.read().clone()),
             ("user_id", user_filter.read().clone()),
+            ("tag_id", tag_filter()),
         ] {
             if !value.is_empty() {
                 q.push_str(&format!("&{name}={value}"));
@@ -180,6 +185,16 @@ pub fn Reports() -> Element {
         .unwrap_or_default();
 
     let tab = active_tab.read().clone();
+    let mut seen_tags = std::collections::BTreeSet::new();
+    let tag_options = tags
+        .read()
+        .as_ref()
+        .and_then(|result| result.as_ref().ok())
+        .into_iter()
+        .flatten()
+        .filter(|tag| seen_tags.insert(tag.tag_id))
+        .map(|tag| (tag.tag_id.to_string(), tag.name.clone()))
+        .collect::<Vec<_>>();
 
     rsx! {
         div {
@@ -243,6 +258,24 @@ pub fn Reports() -> Element {
                         options: user_opts,
                         onselect: move |v| user_filter.set(v),
                     }
+                    if !tag_options.is_empty() || !tag_filter().is_empty() {
+                        FormGroup { label: "Project tag", id: "report-tag",
+                            select { id: "report-tag", class: "form-select", value: tag_filter(),
+                                oninput: move |event| tag_filter.set(event.value()),
+                                option { value: "", "All tags" }
+                                if !tag_filter().is_empty() && !tag_options.iter().any(|(id, _)| *id == tag_filter()) {
+                                    option { value: tag_filter(), disabled: true, "Selected tag unavailable" }
+                                }
+                                for (id, name) in tag_options { option { value: "{id}", "{name}" } }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if matches!(&*tags.read(), Some(Err(_))) {
+                div { class: "alert alert-danger", role: "alert", "Could not load project tags. "
+                    button { class: "btn btn-secondary btn-sm", onclick: move |_| tags.restart(), "Retry tags" }
                 }
             }
 
@@ -260,6 +293,13 @@ pub fn Reports() -> Element {
             }
 
             if tab == "time" {
+                if summary.state()() != UseResourceState::Ready {
+                    p { role: "status", "Loading report…" }
+                } else if matches!(&*summary.read(), Some(Err(_))) {
+                    div { class: "alert alert-danger", role: "alert", "Could not load report. "
+                        button { class: "btn btn-secondary btn-sm", onclick: move |_| summary.restart(), "Retry report" }
+                    }
+                } else {
                 {loaded(&*summary.read(), |rows| {
                         if rows.is_empty() {
                             return rsx! {
@@ -312,9 +352,17 @@ pub fn Reports() -> Element {
                             }
                         }
                 })}
+                }
             }
 
             if tab == "detailed" {
+                if detailed.state()() != UseResourceState::Ready {
+                    p { role: "status", "Loading detailed report…" }
+                } else if matches!(&*detailed.read(), Some(Err(_))) {
+                    div { class: "alert alert-danger", role: "alert", "Could not load detailed report. "
+                        button { class: "btn btn-secondary btn-sm", onclick: move |_| detailed.restart(), "Retry detailed report" }
+                    }
+                } else {
                 {loaded(&*detailed.read(), |entries| {
                     if entries.is_empty() {
                         return rsx! {
@@ -364,6 +412,7 @@ pub fn Reports() -> Element {
                         }
                     }
                 })}
+                }
             }
         }
     }

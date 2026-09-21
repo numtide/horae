@@ -66,9 +66,135 @@ async fn entries(pool: &PgPool, ids: &SeedIds, rows: &[(i32, Option<i32>, bool)]
 
 async fn report(pool: &PgPool, viewer_id: Uuid, dimension: &str) -> Vec<ReportRow> {
     let day = "2026-09-07".parse().unwrap();
-    fetch_report(pool, viewer_id, (day, day), dimension, None, None, None)
+    fetch_report(
+        pool,
+        viewer_id,
+        (day, day),
+        dimension,
+        crate::reports::ReportFilters::default(),
+    )
+    .await
+    .unwrap()
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial]
+async fn tag_filters_keep_report_dimensions_and_details_in_sync(pool: PgPool) {
+    use crate::reports::ReportFilters;
+    let (first, second) = fixtures(&pool, "EUR").await;
+    let foreign = seed(&pool, OrgRole::Manager).await;
+    entries(&pool, &first, &[(60, None, true), (30, None, false)]).await;
+    entries(&pool, &second, &[(120, None, true)]).await;
+    entries(&pool, &foreign, &[(240, None, true)]).await;
+    let tag = Uuid::now_v7();
+    for (id, org, project, name) in [
+        (tag, first.org_id, first.project_id, "Launch"),
+        (Uuid::now_v7(), first.org_id, first.project_id, "Second tag"),
+        (Uuid::now_v7(), foreign.org_id, foreign.project_id, "Launch"),
+    ] {
+        sqlx::query!(
+            "INSERT INTO project_tags (id,org_id,name) VALUES ($1,$2,$3)",
+            id,
+            org,
+            name
+        )
+        .execute(&pool)
         .await
-        .unwrap()
+        .unwrap();
+        sqlx::query!(
+            "INSERT INTO project_tag_links (id,org_id,project_id,tag_id) VALUES ($1,$2,$3,$4)",
+            Uuid::now_v7(),
+            org,
+            project,
+            id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    sqlx::query!(
+        "UPDATE projects SET active = false WHERE id = $1",
+        first.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let day = "2026-09-07".parse().unwrap();
+    let selected = ReportFilters {
+        tag_id: Some(tag),
+        ..Default::default()
+    };
+    for dimension in ["project", "client", "task", "person"] {
+        let rows = fetch_report(&pool, first.user_id, (day, day), dimension, selected)
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 1, "{dimension}");
+        assert_eq!(
+            (
+                rows[0].total_minutes,
+                rows[0].billable_minutes,
+                rows[0].billable_cents
+            ),
+            (90, 60, 9000),
+            "{dimension}"
+        );
+    }
+    let details = crate::reports::fetch_entries(&pool, first.org_id, (day, day), selected)
+        .await
+        .unwrap();
+    assert_eq!(details.len(), 2);
+    assert_eq!(details.iter().map(|row| row.minutes).sum::<i32>(), 90);
+    for filters in [
+        ReportFilters {
+            client_id: Some(second.client_id),
+            ..selected
+        },
+        ReportFilters {
+            project_id: Some(second.project_id),
+            ..selected
+        },
+        ReportFilters {
+            user_id: Some(second.user_id),
+            ..selected
+        },
+        ReportFilters {
+            tag_id: Some(Uuid::now_v7()),
+            ..Default::default()
+        },
+    ] {
+        assert!(
+            fetch_report(&pool, first.user_id, (day, day), "project", filters)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            crate::reports::fetch_entries(&pool, first.org_id, (day, day), filters)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+    }
+    assert!(
+        fetch_report(&pool, foreign.user_id, (day, day), "project", selected)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        crate::reports::fetch_entries(&pool, foreign.org_id, (day, day), selected)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        report(&pool, first.user_id, "project")
+            .await
+            .iter()
+            .map(|row| row.total_minutes)
+            .sum::<i64>(),
+        210
+    );
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -210,9 +336,12 @@ async fn report_uses_current_active_actor_and_tenant_for_every_filter(pool: PgPo
                 first.user_id,
                 (day, day),
                 "project",
-                client,
-                project,
-                user
+                crate::reports::ReportFilters {
+                    client_id: client,
+                    project_id: project,
+                    user_id: user,
+                    ..Default::default()
+                }
             )
             .await
             .unwrap()
@@ -339,9 +468,12 @@ async fn filters_and_renames_keep_report_identity_and_totals(pool: PgPool) {
             first.user_id,
             (day, day),
             "project",
-            client,
-            project,
-            user,
+            crate::reports::ReportFilters {
+                client_id: client,
+                project_id: project,
+                user_id: user,
+                ..Default::default()
+            },
         )
         .await
         .unwrap();
@@ -388,9 +520,7 @@ async fn filters_and_renames_keep_report_identity_and_totals(pool: PgPool) {
             first.user_id,
             (outside, outside),
             "project",
-            None,
-            None,
-            None
+            crate::reports::ReportFilters::default()
         )
         .await
         .unwrap()

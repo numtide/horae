@@ -11,6 +11,7 @@ fn params() -> ExportParams {
         client_id: None,
         project_id: None,
         user_id: None,
+        tag_id: None,
     }
 }
 
@@ -30,6 +31,83 @@ async fn add_entries(pool: &PgPool, ids: &SeedIds, count: usize) {
          SELECT id, $2, $3, $4, $5, '2026-09-07', 60, true FROM unnest($1::uuid[]) id",
         &keys, ids.org_id, ids.user_id, ids.project_id, ids.task_id,
     ).execute(pool).await.unwrap();
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn streamed_tag_filter_excludes_other_projects_without_duplicating_rows(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    let other = SeedIds {
+        project_id: Uuid::now_v7(),
+        org_id: ids.org_id,
+        user_id: ids.user_id,
+        client_id: ids.client_id,
+        task_id: ids.task_id,
+    };
+    sqlx::query!("INSERT INTO projects (id,org_id,client_id,name,currency) VALUES ($1,$2,$3,'Untagged','EUR')", other.project_id, other.org_id, other.client_id).execute(&pool).await.unwrap();
+    add_entries(&pool, &ids, 2).await;
+    add_entries(&pool, &other, 3).await;
+    let selected = Uuid::now_v7();
+    for (tag, name) in [(selected, "Launch"), (Uuid::now_v7(), "Other label")] {
+        sqlx::query!(
+            "INSERT INTO project_tags (id,org_id,name) VALUES ($1,$2,$3)",
+            tag,
+            ids.org_id,
+            name
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            "INSERT INTO project_tag_links (id,org_id,project_id,tag_id) VALUES ($1,$2,$3,$4)",
+            Uuid::now_v7(),
+            ids.org_id,
+            ids.project_id,
+            tag
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    let csv = body(
+        entries(
+            pool.clone(),
+            ids.org_id,
+            ExportParams {
+                tag_id: Some(selected),
+                ..params()
+            },
+        )
+        .await
+        .unwrap(),
+    )
+    .await;
+    let rows: Vec<_> = csv::Reader::from_reader(csv.as_slice())
+        .records()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(rows.len(), 2);
+    assert!(
+        rows.iter()
+            .all(|row| &row[1] == "Widget" && &row[4] == "1.00")
+    );
+    let csv = body(
+        entries(
+            pool,
+            ids.org_id,
+            ExportParams {
+                tag_id: Some(Uuid::now_v7()),
+                ..params()
+            },
+        )
+        .await
+        .unwrap(),
+    )
+    .await;
+    assert_eq!(
+        csv::Reader::from_reader(csv.as_slice()).records().count(),
+        0
+    );
 }
 
 #[sqlx::test(migrations = "./migrations")]

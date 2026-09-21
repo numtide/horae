@@ -131,15 +131,7 @@ pub(super) async fn entries(
             let _ = filename.send("timesheet.csv".to_owned());
             write_rows(
                 &sender,
-                super::stream_entries(
-                    &mut *tx,
-                    org_id,
-                    from,
-                    to,
-                    params.client_id,
-                    params.project_id,
-                    params.user_id,
-                ),
+                super::stream_entries(&mut *tx, org_id, (from, to), params.filters()),
                 &super::ENTRY_EXPORT_HEADERS,
                 |writer, row| super::write_entry_csv(writer, &row),
             )

@@ -42,9 +42,7 @@ async fn configured_project_currency_and_cost_override_keep_their_denominations(
         ids.user_id,
         (day, day),
         "project",
-        None,
-        None,
-        None,
+        crate::reports::ReportFilters::default(),
     )
     .await
     .unwrap();
@@ -93,9 +91,7 @@ async fn configured_fixed_fee_hours_are_not_invoiced_but_legacy_fees_are_unchang
             ids.user_id,
             (day, day),
             "project",
-            None,
-            None,
-            None,
+            crate::reports::ReportFilters::default(),
         )
         .await
         .unwrap();
@@ -271,9 +267,7 @@ async fn selected_project_rate_modes_agree_across_billing_consumers(pool: PgPool
             ids.user_id,
             (day, day),
             "project",
-            None,
-            None,
-            None,
+            crate::reports::ReportFilters::default(),
         )
         .await
         .unwrap();
@@ -337,9 +331,7 @@ async fn billing_cascade_agrees_across_all_four_levels_including_zero(pool: PgPo
             ids.user_id,
             (day, day),
             "project",
-            None,
-            None,
-            None,
+            crate::reports::ReportFilters::default(),
         )
         .await
         .unwrap();
@@ -392,9 +384,7 @@ async fn project_rate_is_used_by_invoices_reports_and_spend(pool: PgPool) {
         ids.user_id,
         (day, day),
         "project",
-        None,
-        None,
-        None,
+        crate::reports::ReportFilters::default(),
     )
     .await
     .unwrap();
@@ -432,9 +422,7 @@ async fn invoiced_amounts_survive_rate_changes_and_void_uses_current_rates(pool:
         ids.user_id,
         (day, day),
         "project",
-        None,
-        None,
-        None,
+        crate::reports::ReportFilters::default(),
     )
     .await
     .unwrap();
@@ -487,9 +475,7 @@ async fn non_billable_context_produces_no_unbilled_amount_on_any_report(pool: Pg
             ids.user_id,
             (day, day),
             "project",
-            None,
-            None,
-            None,
+            crate::reports::ReportFilters::default(),
         )
         .await
         .unwrap();
@@ -506,9 +492,14 @@ async fn non_billable_context_produces_no_unbilled_amount_on_any_report(pool: Pg
                 .await
                 .unwrap();
         assert_eq!((spend[0].spent_minutes, spend[0].spent_cents), (60, 0));
-        let detail = crate::reports::fetch_entries(&pool, ids.org_id, day, day, None, None, None)
-            .await
-            .unwrap();
+        let detail = crate::reports::fetch_entries(
+            &pool,
+            ids.org_id,
+            (day, day),
+            crate::reports::ReportFilters::default(),
+        )
+        .await
+        .unwrap();
         assert!(!detail[0].billable);
         assert!(
             generate_invoice_for_period(&pool, ids.org_id, ids.client_id, day, day)
@@ -546,9 +537,7 @@ async fn invoiced_billability_survives_later_project_changes(pool: PgPool) {
         ids.user_id,
         (day, day),
         "project",
-        None,
-        None,
-        None,
+        crate::reports::ReportFilters::default(),
     )
     .await
     .unwrap();
@@ -642,9 +631,7 @@ async fn large_invoice_and_reports_agree_without_intermediate_overflow(pool: PgP
         ids.user_id,
         (day, day),
         "project",
-        None,
-        None,
-        None,
+        crate::reports::ReportFilters::default(),
     )
     .await
     .unwrap();
@@ -667,9 +654,7 @@ async fn large_invoice_and_reports_agree_without_intermediate_overflow(pool: PgP
         ids.user_id,
         (day, day),
         "project",
-        None,
-        None,
-        None,
+        crate::reports::ReportFilters::default(),
     )
     .await
     .unwrap_err();
@@ -776,9 +761,7 @@ async fn assert_reporting_minutes(
         ids.user_id,
         (day, day),
         "project",
-        None,
-        None,
-        None,
+        crate::reports::ReportFilters::default(),
     )
     .await
     .unwrap();
@@ -800,9 +783,14 @@ async fn assert_reporting_minutes(
         Some(1600),
         "labor cost uses worked minutes"
     );
-    let detail = crate::reports::fetch_entries(pool, ids.org_id, day, day, None, None, None)
-        .await
-        .unwrap();
+    let detail = crate::reports::fetch_entries(
+        pool,
+        ids.org_id,
+        (day, day),
+        crate::reports::ReportFilters::default(),
+    )
+    .await
+    .unwrap();
     assert_eq!(
         detail
             .iter()

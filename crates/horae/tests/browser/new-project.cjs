@@ -425,6 +425,71 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await expect(page.getByRole('button', { name: /^All tags/ })).toBeVisible();
     await readsFinished(page);
     console.log('PASS: real finalized budget reaches the authorized Projects endpoint and display');
+    await page.goto(`${base}/timesheet/week/${process.env.HORAE_TEST_WEEK}`);
+    await page.getByRole('button', { name: 'Add entry', exact: true }).click();
+    const entry = page.getByRole('dialog', { name: /New time entry/ });
+    await entry.getByRole('combobox', { name: 'Project', exact: true }).selectOption(created);
+    await entry.getByRole('combobox', { name: 'Task', exact: true }).selectOption({ label: 'Development' });
+    await entry.getByRole('textbox', { name: 'Duration', exact: true }).fill('1:00');
+    await entry.getByPlaceholder('Notes (optional)').fill('Tagged project report check');
+    await entry.getByRole('button', { name: 'Save entry', exact: true }).click();
+    await expect(entry).not.toBeVisible();
+    await readsFinished(page);
+    await page.getByRole('link', { name: 'Reports', exact: true }).click();
+    await page.locator('input[type="date"]').first().fill(process.env.HORAE_TEST_WEEK);
+    await page.locator('input[type="date"]').last().fill(process.env.HORAE_TEST_WEEK);
+    const reportTag = page.getByRole('combobox', { name: 'Project tag', exact: true });
+    await expect(reportTag).toBeVisible();
+    await readsFinished(page);
+    let releaseReport;
+    await page.route('**/api/report_time*', async route => {
+      const response = await route.fetch();
+      await new Promise(resolve => { releaseReport = resolve; });
+      await route.fulfill({ response });
+    });
+    try {
+      await reportTag.selectOption({ label: 'browser' });
+      await expect.poll(() => !!releaseReport).toBe(true);
+      await expect(page.getByRole('status')).toHaveText('Loading report…');
+      await expect(page.locator('tbody tr')).toHaveCount(0);
+    } finally {
+      releaseReport?.();
+    }
+    const reportRows = page.locator('tbody tr:not(.report-total-row)');
+    await expect(reportRows).toHaveCount(1);
+    await expect(reportRows).toContainText('Recovered latest edit');
+    await expect(reportRows.locator('td').nth(1)).toHaveText('1.00');
+    await readsFinished(page);
+    await page.unroute('**/api/report_time*');
+    const tagId = await reportTag.inputValue();
+    for (const format of ['CSV', 'XLSX']) {
+      const href = await page.getByRole('link', { name: `Export ${format}`, exact: true }).getAttribute('href');
+      assert.equal(new URL(href, base).searchParams.get('tag_id'), tagId);
+      const response = await context.request.get(new URL(href, base).href);
+      assert.equal(response.status(), 200);
+      if (format === 'CSV') {
+        const csv = await response.text();
+        assert.equal(csv.trim().split('\n').length, 2, 'Only the tagged entry is exported');
+        assert.match(csv, /Recovered latest edit/);
+        assert.match(csv, /Tagged project report check/);
+      } else {
+        assert.equal((await response.body()).subarray(0, 2).toString(), 'PK');
+      }
+    }
+    await page.getByRole('button', { name: 'Detailed time', exact: true }).click();
+    await expect(page.locator('tbody tr')).toHaveCount(1);
+    await expect(page.locator('tbody tr')).toContainText('Tagged project report check');
+    await page.getByRole('button', { name: 'Time', exact: true }).click();
+    await page.route('**/api/report_time*', route => route.abort());
+    await reportTag.selectOption('');
+    await expect(page.getByRole('alert')).toContainText('Could not load report');
+    await expect(page.locator('tbody tr')).toHaveCount(0);
+    await readsFinished(page);
+    await page.unroute('**/api/report_time*');
+    await page.getByRole('button', { name: 'Retry report', exact: true }).click();
+    await expect(page.locator('tbody tr')).not.toHaveCount(0);
+    await readsFinished(page);
+    console.log('PASS: a new tagged project reaches reports and both exports; pending/error filters never show stale rows');
     await page.goto(`${base}/projects/new`);
     await expect(screen.getByLabel('Project name', { exact: true })).toHaveValue('');
     await expect(screen.getByRole('status')).toHaveText('No draft saved yet');

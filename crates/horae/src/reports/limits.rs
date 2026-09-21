@@ -88,22 +88,18 @@ pub(super) async fn entries(
                    AND ($3::uuid IS NULL OR p.client_id = $3)
                    AND ($4::uuid IS NULL OR te.project_id = $4)
                    AND ($5::uuid IS NULL OR te.user_id = $5)
+                   AND ($8::uuid IS NULL OR EXISTS (
+                     SELECT 1 FROM project_tag_links l
+                     WHERE l.org_id = te.org_id AND l.project_id = te.project_id AND l.tag_id = $8
+                   ))
                  LIMIT $7) bounded"#,
         from as chrono::NaiveDate, to as chrono::NaiveDate,
-        params.client_id, params.project_id, params.user_id, org_id, XLSX.rows + 1,
+        params.client_id, params.project_id, params.user_id, org_id, XLSX.rows + 1, params.tag_id,
     ).fetch_one(&mut *tx).await.map_err(database_error)?;
     check(size.rows, size.bytes, size.field_bytes, XLSX)?;
-    let rows = super::fetch_entries(
-        &mut *tx,
-        org_id,
-        from,
-        to,
-        params.client_id,
-        params.project_id,
-        params.user_id,
-    )
-    .await
-    .map_err(database_error)?;
+    let rows = super::fetch_entries(&mut *tx, org_id, (from, to), params.filters())
+        .await
+        .map_err(database_error)?;
     tx.commit().await.map_err(database_error)?;
     Ok(rows)
 }
@@ -276,6 +272,7 @@ mod tests {
             client_id: None,
             project_id: None,
             user_id: None,
+            tag_id: None,
         }
     }
 
@@ -307,6 +304,73 @@ mod tests {
 
     #[sqlx::test(migrations = "./migrations")]
     #[serial_test::serial]
+    async fn tag_filter_applies_before_xlsx_size_checks_and_rendering(pool: PgPool) {
+        let ids = seed(&pool, OrgRole::Manager).await;
+        let other = SeedIds {
+            project_id: Uuid::now_v7(),
+            org_id: ids.org_id,
+            user_id: ids.user_id,
+            client_id: ids.client_id,
+            task_id: ids.task_id,
+        };
+        sqlx::query!("INSERT INTO projects (id,org_id,client_id,name,currency) VALUES ($1,$2,$3,'Untagged','EUR')", other.project_id, other.org_id, other.client_id).execute(&pool).await.unwrap();
+        add_entries(&pool, &ids, 1).await;
+        let excluded = add_entries(&pool, &other, 1).await[0];
+        sqlx::query!(
+            "UPDATE time_entries SET notes = repeat('x', 40000) WHERE id = $1",
+            excluded
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let tag = Uuid::now_v7();
+        sqlx::query!(
+            "INSERT INTO project_tags (id,org_id,name) VALUES ($1,$2,'Launch')",
+            tag,
+            ids.org_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            "INSERT INTO project_tag_links (id,org_id,project_id,tag_id) VALUES ($1,$2,$3,$4)",
+            Uuid::now_v7(),
+            ids.org_id,
+            ids.project_id,
+            tag
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        assert!(matches!(
+            entries(&pool, ids.org_id, &params()).await,
+            Err(StatusCode::PAYLOAD_TOO_LARGE)
+        ));
+        let rows = entries(
+            &pool,
+            ids.org_id,
+            &ExportParams {
+                tag_id: Some(tag),
+                ..params()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].project_name, "Widget");
+        let bytes = super::super::entries_xlsx(&rows).unwrap();
+        assert_eq!(
+            xlsx_part(&bytes, "xl/worksheets/sheet1.xml")
+                .matches("<row ")
+                .count(),
+            2
+        );
+        let strings = xlsx_part(&bytes, "xl/sharedStrings.xml");
+        assert!(strings.contains("Widget") && !strings.contains("Untagged"));
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    #[serial_test::serial]
     async fn bounded_entries_enforce_the_row_limit_after_all_filters(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Manager).await;
         let other = seed(&pool, OrgRole::Manager).await;
@@ -332,6 +396,10 @@ mod tests {
             },
             ExportParams {
                 user_id: Some(other.user_id),
+                ..params()
+            },
+            ExportParams {
+                tag_id: Some(Uuid::now_v7()),
                 ..params()
             },
             ExportParams {

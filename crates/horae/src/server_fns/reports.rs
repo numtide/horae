@@ -8,7 +8,7 @@ mod tests;
 // ── Reports (M8) ────────────────────────────────────────────────────────────
 
 /// Grouped time report. Groups by "project", "task", "client", or "person", with
-/// optional client/project/teammate filters. Each group carries billable and cost
+/// optional client/project/teammate/tag filters. Each group carries billable and cost
 /// amounts (rates via FR-024), partitioned by entity identity and currency.
 /// Manager-only: reports span every user's time and money (SPEC §6).
 #[server]
@@ -19,6 +19,7 @@ pub async fn report_time(
     client_id: Option<String>,
     project_id: Option<String>,
     user_id: Option<String>,
+    tag_id: Option<String>,
 ) -> Result<Vec<ReportRow>, ServerFnError> {
     let manager = require_manager().await?;
     let state = crate::state::global_state().await;
@@ -28,15 +29,19 @@ pub async fn report_time(
     let client_filter = parse_opt_uuid(client_id, "client_id")?;
     let project_filter = parse_opt_uuid(project_id, "project_id")?;
     let user_filter = parse_opt_uuid(user_id, "user_id")?;
+    let tag_filter = parse_opt_uuid(tag_id, "tag_id")?;
 
     fetch_report(
         &state.db,
         manager.id,
         (from_date, to_date),
         &group_by,
-        client_filter,
-        project_filter,
-        user_filter,
+        crate::reports::ReportFilters {
+            client_id: client_filter,
+            project_id: project_filter,
+            user_id: user_filter,
+            tag_id: tag_filter,
+        },
     )
     .await
     .map_err(server_err)
@@ -48,9 +53,7 @@ pub(super) async fn fetch_report(
     viewer_id: uuid::Uuid,
     period: (chrono::NaiveDate, chrono::NaiveDate),
     group_by: &str,
-    client_filter: Option<uuid::Uuid>,
-    project_filter: Option<uuid::Uuid>,
-    user_filter: Option<uuid::Uuid>,
+    filters: crate::reports::ReportFilters,
 ) -> Result<Vec<ReportRow>, sqlx::Error> {
     // Grouped in Postgres: a year of entries is a six-figure row count folded
     // down to a few hundred report lines, and none of the per-entry detail
@@ -117,6 +120,10 @@ pub(super) async fn fetch_report(
                AND ($3::uuid IS NULL OR p.client_id = $3)
                AND ($4::uuid IS NULL OR te.project_id = $4)
                AND ($5::uuid IS NULL OR te.user_id = $5)
+               AND ($8::uuid IS NULL OR EXISTS (
+                 SELECT 1 FROM project_tag_links l
+                 WHERE l.org_id = te.org_id AND l.project_id = te.project_id AND l.tag_id = $8
+               ))
            )
            SELECT
              group_id as "group_id!",
@@ -141,11 +148,12 @@ pub(super) async fn fetch_report(
         "#,
         period.0 as chrono::NaiveDate,
         period.1 as chrono::NaiveDate,
-        client_filter,
-        project_filter,
-        user_filter,
+        filters.client_id,
+        filters.project_id,
+        filters.user_id,
         viewer_id,
         group_by,
+        filters.tag_id,
     )
     .fetch_all(pool)
     .await?;
@@ -162,6 +170,7 @@ pub async fn report_detailed(
     client_id: Option<String>,
     project_id: Option<String>,
     user_id: Option<String>,
+    tag_id: Option<String>,
 ) -> Result<Vec<DetailedReportRow>, ServerFnError> {
     let manager = require_manager().await?;
 
@@ -170,6 +179,7 @@ pub async fn report_detailed(
     let client_filter = parse_opt_uuid(client_id, "client_id")?;
     let project_filter = parse_opt_uuid(project_id, "project_id")?;
     let user_filter = parse_opt_uuid(user_id, "user_id")?;
+    let tag_filter = parse_opt_uuid(tag_id, "tag_id")?;
 
     // The CSV/XLSX exports must return exactly these rows, so the query lives
     // once in `crate::reports` and both surfaces call it.
@@ -177,11 +187,13 @@ pub async fn report_detailed(
     crate::reports::fetch_entries(
         &state.db,
         manager.org_id,
-        from_date,
-        to_date,
-        client_filter,
-        project_filter,
-        user_filter,
+        (from_date, to_date),
+        crate::reports::ReportFilters {
+            client_id: client_filter,
+            project_id: project_filter,
+            user_id: user_filter,
+            tag_id: tag_filter,
+        },
     )
     .await
     .map_err(server_err)
