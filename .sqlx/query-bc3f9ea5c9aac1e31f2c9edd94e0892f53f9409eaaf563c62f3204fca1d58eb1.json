@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, org_id, client_id, code, name,\n                project_type as \"project_type: ProjectType\", currency, rate_cents,\n                starts_on as \"starts_on: chrono::NaiveDate\",\n                ends_on as \"ends_on: chrono::NaiveDate\",\n                budget_kind as \"budget_kind: BudgetKind\",\n                budget_amount_cents, budget_minutes, active,\n                created_at as \"created_at: chrono::DateTime<chrono::Utc>\"\n         FROM projects\n         WHERE org_id = $2 AND ($1::bool OR active = true)\n         ORDER BY name ASC",
+  "query": "SELECT p.id, p.org_id, p.client_id, p.code, p.name,\n                p.project_type as \"project_type: ProjectType\", p.currency,\n                CASE WHEN $4 AND a.can_view_rates THEN p.rate_cents END AS rate_cents,\n                p.starts_on as \"starts_on: chrono::NaiveDate\",\n                p.ends_on as \"ends_on: chrono::NaiveDate\",\n                CASE WHEN $4 AND a.can_view_progress THEN p.budget_kind ELSE 'none'::budget_kind END as \"budget_kind!: BudgetKind\",\n                CASE WHEN $4 AND a.can_view_progress THEN p.budget_amount_cents END AS budget_amount_cents,\n                CASE WHEN $4 AND a.can_view_progress THEN p.budget_minutes END AS budget_minutes,\n                p.active, p.created_at as \"created_at: chrono::DateTime<chrono::Utc>\"\n         FROM projects p JOIN project_read_access a ON a.project_id = p.id AND a.org_id = p.org_id\n         WHERE p.org_id = $2 AND ($1::bool OR p.active) AND a.user_id = $3\n           AND (NOT $4 OR a.can_view_progress) AND ($5::uuid IS NULL OR p.client_id = $5)\n         ORDER BY p.name, p.id",
   "describe": {
     "columns": [
       {
@@ -67,7 +67,7 @@
       },
       {
         "ordinal": 10,
-        "name": "budget_kind: BudgetKind",
+        "name": "budget_kind!: BudgetKind",
         "type_info": {
           "Custom": {
             "name": "budget_kind",
@@ -105,6 +105,9 @@
     "parameters": {
       "Left": [
         "Bool",
+        "Uuid",
+        "Uuid",
+        "Bool",
         "Uuid"
       ]
     },
@@ -116,15 +119,15 @@
       false,
       false,
       false,
+      null,
       true,
       true,
-      true,
-      false,
-      true,
-      true,
+      null,
+      null,
+      null,
       false,
       false
     ]
   },
-  "hash": "10f22c98913b68b3076a9ffe9e3a7a4fe144c505d5c6bc1f35ccc0f1d5e70291"
+  "hash": "bc3f9ea5c9aac1e31f2c9edd94e0892f53f9409eaaf563c62f3204fca1d58eb1"
 }

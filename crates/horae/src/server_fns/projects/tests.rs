@@ -193,12 +193,20 @@ async fn project_with_assignment(pool: &PgPool) -> (User, Uuid) {
 #[sqlx::test(migrations = "./migrations")]
 async fn members_can_list_identities_but_not_assignment_rates(pool: PgPool) {
     let (viewer, project) = project_with_assignment(&pool).await;
+    sqlx::query!(
+        "INSERT INTO assignments (id, project_id, user_id) VALUES ($1,$2,$3)",
+        Uuid::now_v7(),
+        project,
+        viewer.id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     let rows = assignments_for_viewer(&pool, &viewer, project)
         .await
         .unwrap();
-    assert_eq!(rows.len(), 1);
-    assert_ne!(rows[0].user_id, viewer.id);
-    assert_eq!(rows[0].rate_cents, None);
+    assert_eq!(rows.len(), 2);
+    assert!(rows.iter().all(|row| row.rate_cents.is_none()));
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -206,6 +214,14 @@ async fn managers_and_admins_can_read_assignment_rates(pool: PgPool) {
     let (mut viewer, project) = project_with_assignment(&pool).await;
     for role in [OrgRole::Manager, OrgRole::Admin] {
         viewer.org_role = role;
+        sqlx::query!(
+            "UPDATE users SET org_role = $2 WHERE id = $1",
+            viewer.id,
+            role as OrgRole
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
         let rows = assignments_for_viewer(&pool, &viewer, project)
             .await
             .unwrap();

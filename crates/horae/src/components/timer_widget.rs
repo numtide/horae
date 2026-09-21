@@ -78,7 +78,7 @@ pub fn TimerWidget() -> Element {
 
     let mut timer = use_running_timer();
     let timer_resource = timer.entry;
-    let projects = use_resource(|| async move { server_fns::list_projects(None, true).await });
+    let projects = use_resource(|| async move { server_fns::list_tracking_projects().await });
 
     let mut picking = use_signal(|| false);
     let mut selected_project = use_signal(String::new);
@@ -88,7 +88,7 @@ pub fn TimerWidget() -> Element {
     let mut saving = use_signal(|| false);
 
     // Task names are shared by the running label and the project-scoped picker.
-    let all_tasks = use_resource(|| async move { server_fns::list_tasks().await });
+    let all_tasks = use_resource(|| async move { server_fns::list_tracking_tasks().await });
 
     // Only resource changes rebuild these lookups, not the one-second tick.
     let project_names = use_memo(move || -> HashMap<Uuid, String> {

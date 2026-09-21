@@ -13,11 +13,14 @@ pub struct Project {
     pub name: String,
     pub project_type: ProjectType,
     pub currency: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub rate_cents: Option<i64>,
     pub starts_on: Option<NaiveDate>,
     pub ends_on: Option<NaiveDate>,
     pub budget_kind: BudgetKind,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub budget_amount_cents: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub budget_minutes: Option<i64>,
     pub active: bool,
     pub created_at: DateTime<Utc>,

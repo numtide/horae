@@ -10,6 +10,7 @@ pub struct Task {
     pub org_id: Uuid,
     pub name: String,
     pub billable_default: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub default_rate_cents: Option<i64>,
     pub active: bool,
 }

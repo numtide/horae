@@ -6,6 +6,9 @@ use super::*;
 mod tests;
 
 #[cfg(all(test, feature = "server"))]
+mod privacy_tests;
+
+#[cfg(all(test, feature = "server"))]
 mod mutation_tests;
 
 #[cfg(all(test, feature = "server"))]
@@ -65,24 +68,64 @@ pub async fn list_projects(
 ) -> Result<Vec<Project>, ServerFnError> {
     let user = require_user().await?;
     let state = crate::state::global_state().await;
-    let _ = client_id;
+    let client_id = parse_opt_uuid(client_id, "client_id")?;
+    projects_for_viewer(
+        &state.db,
+        &user,
+        client_id,
+        include_inactive,
+        ProjectRead::Overview,
+    )
+    .await
+}
+
+/// Minimal project identities for starting time and resolving an own history.
+/// Reporting visibility must not prevent a teammate from using their timesheet.
+#[server]
+pub async fn list_tracking_projects() -> Result<Vec<Project>, ServerFnError> {
+    let user = require_user().await?;
+    let state = crate::state::global_state().await;
+    projects_for_viewer(&state.db, &user, None, true, ProjectRead::Tracking).await
+}
+
+#[cfg(feature = "server")]
+enum ProjectRead {
+    Overview,
+    Tracking,
+}
+
+#[cfg(feature = "server")]
+async fn projects_for_viewer(
+    pool: &sqlx::PgPool,
+    viewer: &User,
+    client_id: Option<uuid::Uuid>,
+    include_inactive: bool,
+    purpose: ProjectRead,
+) -> Result<Vec<Project>, ServerFnError> {
+    let overview = matches!(purpose, ProjectRead::Overview);
 
     let projects = sqlx::query_as!(
         Project,
-        r#"SELECT id, org_id, client_id, code, name,
-                project_type as "project_type: ProjectType", currency, rate_cents,
-                starts_on as "starts_on: chrono::NaiveDate",
-                ends_on as "ends_on: chrono::NaiveDate",
-                budget_kind as "budget_kind: BudgetKind",
-                budget_amount_cents, budget_minutes, active,
-                created_at as "created_at: chrono::DateTime<chrono::Utc>"
-         FROM projects
-         WHERE org_id = $2 AND ($1::bool OR active = true)
-         ORDER BY name ASC"#,
+        r#"SELECT p.id, p.org_id, p.client_id, p.code, p.name,
+                p.project_type as "project_type: ProjectType", p.currency,
+                CASE WHEN $4 AND a.can_view_rates THEN p.rate_cents END AS rate_cents,
+                p.starts_on as "starts_on: chrono::NaiveDate",
+                p.ends_on as "ends_on: chrono::NaiveDate",
+                CASE WHEN $4 AND a.can_view_progress THEN p.budget_kind ELSE 'none'::budget_kind END as "budget_kind!: BudgetKind",
+                CASE WHEN $4 AND a.can_view_progress THEN p.budget_amount_cents END AS budget_amount_cents,
+                CASE WHEN $4 AND a.can_view_progress THEN p.budget_minutes END AS budget_minutes,
+                p.active, p.created_at as "created_at: chrono::DateTime<chrono::Utc>"
+         FROM projects p JOIN project_read_access a ON a.project_id = p.id AND a.org_id = p.org_id
+         WHERE p.org_id = $2 AND ($1::bool OR p.active) AND a.user_id = $3
+           AND (NOT $4 OR a.can_view_progress) AND ($5::uuid IS NULL OR p.client_id = $5)
+         ORDER BY p.name, p.id"#,
         include_inactive,
-        user.org_id,
+        viewer.org_id,
+        viewer.id,
+        overview,
+        client_id,
     )
-    .fetch_all(&state.db)
+    .fetch_all(pool)
     .await
     .map_err(server_err)?;
 
@@ -92,14 +135,13 @@ pub async fn list_projects(
 /// Per-project tracked totals for the overview's Spent column: every project's
 /// total logged minutes plus its billable amount, with each entry's rate resolved
 /// through the FR-024 cascade (task → assignment → project → user default) and summed.
-/// Session-gated only: the Projects overview shows Budget/Spent to every signed-in
-/// user, and these are per-project aggregates, not per-user time or rates.
+/// Only projects whose progress the viewer may read; never per-user time or rates.
 #[server]
 pub async fn list_project_spend() -> Result<Vec<ProjectSpend>, ServerFnError> {
     let user = require_user().await?;
     let state = crate::state::global_state().await;
 
-    fetch_project_spend(&state.db, user.org_id)
+    fetch_project_spend(&state.db, user.org_id, user.id)
         .await
         .map_err(server_err)
 }
@@ -108,6 +150,7 @@ pub async fn list_project_spend() -> Result<Vec<ProjectSpend>, ServerFnError> {
 pub(super) async fn fetch_project_spend(
     pool: &sqlx::PgPool,
     org_id: uuid::Uuid,
+    viewer_id: uuid::Uuid,
 ) -> Result<Vec<ProjectSpend>, sqlx::Error> {
     // Grouped in Postgres, not folded here: the overview needs one number per
     // project, and folding in Rust meant fetching one row per time entry to get
@@ -138,9 +181,13 @@ pub(super) async fn fetch_project_spend(
            LEFT JOIN invoice_line_items line ON line.invoice_id = te.invoice_id AND line.time_entry_id = te.id
            JOIN users u ON u.id = te.user_id
            JOIN organizations o ON o.id = te.org_id
-           WHERE te.org_id = $1
+           WHERE te.org_id = $1 AND EXISTS (
+             SELECT 1 FROM project_read_access access
+             WHERE access.org_id = $1 AND access.project_id = te.project_id
+               AND access.user_id = $2 AND access.can_view_progress)
            GROUP BY te.project_id"#,
         org_id,
+        viewer_id,
     )
     .fetch_all(pool)
     .await?;
@@ -481,19 +528,15 @@ pub async fn list_tasks() -> Result<Vec<Task>, ServerFnError> {
     let user = require_user().await?;
     let state = crate::state::global_state().await;
 
-    let tasks = sqlx::query_as!(
-        Task,
-        "SELECT id, org_id, name, billable_default, default_rate_cents, active
-         FROM tasks
-         WHERE active = true AND org_id = $1
-         ORDER BY name ASC",
-        user.org_id,
-    )
-    .fetch_all(&state.db)
-    .await
-    .map_err(server_err)?;
+    tasks_for_viewer(&state.db, &user, None, TaskRead::Catalog).await
+}
 
-    Ok(tasks)
+/// Rate-free task identities, including archived tasks in the viewer's history.
+#[server]
+pub async fn list_tracking_tasks() -> Result<Vec<Task>, ServerFnError> {
+    let user = require_user().await?;
+    let state = crate::state::global_state().await;
+    tasks_for_viewer(&state.db, &user, None, TaskRead::Tracking).await
 }
 
 /// Lists tasks linked to a specific project via the `project_tasks` join table.
@@ -502,19 +545,45 @@ pub async fn list_project_tasks(project_id: String) -> Result<Vec<Task>, ServerF
     let user = require_user().await?;
     let state = crate::state::global_state().await;
     let project_id = parse_uuid(&project_id, "project_id")?;
+    tasks_for_viewer(&state.db, &user, Some(project_id), TaskRead::Catalog).await
+}
 
+#[cfg(feature = "server")]
+enum TaskRead {
+    Catalog,
+    Tracking,
+}
+
+#[cfg(feature = "server")]
+async fn tasks_for_viewer(
+    pool: &sqlx::PgPool,
+    viewer: &User,
+    project_id: Option<uuid::Uuid>,
+    purpose: TaskRead,
+) -> Result<Vec<Task>, ServerFnError> {
+    let tracking = matches!(purpose, TaskRead::Tracking);
     sqlx::query_as!(
         Task,
-        "SELECT t.id, t.org_id, t.name, t.billable_default, t.default_rate_cents, t.active
-         FROM tasks t
-         JOIN project_tasks pt ON t.id = pt.task_id
-         JOIN projects p ON p.id = pt.project_id
-         WHERE pt.project_id = $1 AND t.active = true AND t.org_id = $2 AND p.org_id = $2
-         ORDER BY t.name",
+        "SELECT t.id, t.org_id, t.name, t.billable_default, t.active,
+                CASE WHEN NOT $4 AND u.org_role IN ('admin', 'manager') THEN t.default_rate_cents END AS default_rate_cents
+         FROM tasks t JOIN users u ON u.id = $1 AND u.org_id = t.org_id AND u.active
+         WHERE t.org_id = $2
+           AND (t.active OR ($4 AND EXISTS (
+             SELECT 1 FROM time_entries te WHERE te.org_id = $2 AND te.user_id = $1 AND te.task_id = t.id)))
+           AND ($3::uuid IS NULL OR EXISTS (
+             SELECT 1 FROM project_tasks pt JOIN project_read_access a ON a.project_id = pt.project_id
+             WHERE pt.task_id = t.id AND pt.project_id = $3 AND a.org_id = $2 AND a.user_id = $1 AND a.can_view_team))
+           AND (u.org_role IN ('admin', 'manager') OR EXISTS (
+             SELECT 1 FROM project_tasks pt JOIN project_read_access a ON a.project_id = pt.project_id
+             WHERE pt.task_id = t.id AND a.org_id = $2 AND a.user_id = $1 AND a.can_view_team)
+           OR EXISTS (SELECT 1 FROM time_entries te WHERE te.org_id = $2 AND te.user_id = $1 AND te.task_id = t.id))
+         ORDER BY t.name, t.id",
+        viewer.id,
+        viewer.org_id,
         project_id,
-        user.org_id,
+        tracking,
     )
-    .fetch_all(&state.db)
+    .fetch_all(pool)
     .await
     .map_err(server_err)
 }
@@ -803,14 +872,15 @@ async fn assignments_for_viewer(
     sqlx::query_as!(
         Assignment,
         r#"SELECT a.id, a.project_id, a.user_id, a.role as "role: ProjectRole",
-                CASE WHEN $3 THEN a.rate_cents ELSE NULL END AS rate_cents,
+                CASE WHEN access.can_view_rates THEN a.rate_cents ELSE NULL END AS rate_cents,
                 a.created_at as "created_at: chrono::DateTime<chrono::Utc>"
          FROM assignments a JOIN projects p ON p.id = a.project_id
-         WHERE a.project_id = $1 AND p.org_id = $2
+         JOIN project_read_access access ON access.project_id = p.id AND access.org_id = p.org_id
+         WHERE a.project_id = $1 AND p.org_id = $2 AND access.user_id = $3 AND access.can_view_team
          ORDER BY a.created_at, a.id"#,
         project_id,
         viewer.org_id,
-        viewer.is_manager_or_above(),
+        viewer.id,
     )
     .fetch_all(db)
     .await

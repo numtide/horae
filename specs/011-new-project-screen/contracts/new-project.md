@@ -47,6 +47,10 @@ Two-tab conflict provides reload-latest without silently discarding local input.
 
 Personal timesheets remain readable by their owner. Project settings do not expose another user's time-entry details. Own running timer stop is safe after restriction revocation; starting/editing restricted work is refused. Historical archived-context edits keep existing permissions. Privileged approvals/imports retain their existing authority.
 
+Project list, spend and team reads use `project_read_access` with the actor's current active database role and organization, not a role cached in a caller DTO. Missing settings preserve assigned legacy-member progress. Project leads/admins receive assigned progress without financial rates; an ordinary assigned member needs `project_members` visibility. Historical own entries grant identity lookup only, never team or progress access.
+
+Timesheet and Timer use separate rate-free `list_tracking_projects`/`list_tracking_tasks` resources. They retain archived identities from the viewer's own history; the ordinary task catalog remains active-only. Unauthorized optional rates/budgets are absent in serialized responses and remain deserializable as absent values. Tracking identities are not a grant to start/edit work: the existing context and mutation guards stay authoritative.
+
 Count, pagination, export and detail queries use the same authorization projection. Do not add private fields to plugin payloads/granted tables. Existing organization-report manager gate remains.
 
 ## Billing and downstream invariants

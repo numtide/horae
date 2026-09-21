@@ -24,6 +24,8 @@ Dates/code stay in existing projects columns. Creation supports EUR/CHF/USD/GBP 
 
 `project_private_settings`: project_id unique, admin_notes (\<=10,000 characters). `project_member_costs`: project_id, user_id, cost_rate_cents with unique (project_id,user_id); administrator-only access. Avoid exposing these through existing Project/Assignment serialization or plugin grants.
 
+Migration 0035 adds the private `project_read_access` view, keyed by current active user/org/project, with `can_view_rates`, `can_view_team` and `can_view_progress` flags. Organization managers/admins retain organization scope; assigned leads/admins can view progress independently of the visibility setting; ordinary assigned members require member-visible progress. A user's own historical time permits project identity only after assignment revocation. Missing settings preserve legacy assigned-member progress. The view has no PUBLIC grant and is not added to the plugin allowlist.
+
 ## Tags
 
 `project_tags`: reusable organization name with unique case-folded normalized key. `project_tag_links`: project_id/tag_id unique. Removing a link never deletes the shared tag. New draft tags are committed with the project, not on each keystroke. List/report filters reference tag identity and org.

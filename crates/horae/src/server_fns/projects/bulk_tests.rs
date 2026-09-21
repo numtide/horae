@@ -79,7 +79,10 @@ async fn bulk_preserves_invoiced_history_assignments_and_spend(pool: PgPool) {
             .unwrap();
         assert_eq!(billing_snapshot(&pool).await, history);
         assert_eq!(
-            fetch_project_spend(&pool, ids.org_id).await.unwrap()[0].spent_cents,
+            fetch_project_spend(&pool, ids.org_id, ids.user_id)
+                .await
+                .unwrap()[0]
+                .spent_cents,
             6000
         );
     }
