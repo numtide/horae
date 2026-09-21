@@ -13,12 +13,16 @@ use uuid::Uuid;
 
 #[path = "../src/components/controls.rs"]
 pub mod controls;
+#[path = "../src/components/date_picker.rs"]
+pub mod date_picker;
 #[path = "../src/components/form.rs"]
 pub mod form;
+#[path = "../src/components/icons.rs"]
+pub mod icons;
 #[path = "../src/components/modal.rs"]
 pub mod modal;
 mod components {
-    pub use super::{controls, form, modal};
+    pub use super::{controls, date_picker, form, icons, modal};
 }
 #[path = "../src/models/project_creation.rs"]
 pub mod project_creation;
@@ -202,6 +206,23 @@ fn with_form(form: ProjectForm) -> Probe {
         }),
         ..Default::default()
     }
+}
+
+#[tokio::test]
+async fn planning_dates_restore_readable_shared_calendar_fields_without_saving() {
+    let probe = with_form(ProjectForm {
+        starts_on: "2026-09-01".into(),
+        ends_on: "2026-10-15".into(),
+        ..Default::default()
+    });
+    let html = render(probe.clone());
+    assert!(html.contains("01 Sep 2026"), "{html}");
+    assert!(html.contains("15 Oct 2026"));
+    assert!(html.contains("popovertarget=\"np-start-calendar\""));
+    assert!(html.contains("aria-label=\"Choose Start date\""));
+    assert!(html.contains("aria-label=\"Clear Start date\""));
+    assert!(!html.contains("type=\"date\""));
+    assert_eq!(probe.writes.get(), 0);
 }
 
 #[tokio::test]

@@ -6,6 +6,7 @@
 - Projects New project/empty-state actions navigate to it. Existing editing and bulk actions remain functional.
 - Heading, label grid, type cards, tasks/team, invoice defaults and persistent footer match the handoff; no DevBar or second sidebar.
 - Form controls have visible labels and stable IDs. Optional dates support clearing; tags use Enter/comma/remove and cannot trigger form submission.
+- Planning dates display `DD Mon YYYY` while preserving ISO dates in the draft. Their 180px fields use `--width-planning-date`, existing form utilities and the shared day-mode `DatePicker`; clearing restores the labelled field's focus. Only the New Project wrapper opts into top-layer placement and calendar focus handling. Reopening resets the browsed month to the selected date; Escape restores the trigger and Tab can leave without trapping focus. Timesheet/gallery calendar defaults are unchanged. Runtime viewport positioning reuses the existing popover script, not inline visual styling in RSX.
 - Cancel/back retains an acknowledged draft; explicit Discard draft confirms deletion. Save project is disabled with missing required fields or pending commit.
 - Use explicit loading/error/empty states, preserve unsaved input, announce errors/save status and restore modal focus.
 

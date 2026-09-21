@@ -10,6 +10,7 @@ use crate::models::project_creation::{
 use crate::server_fns;
 
 use super::FormRow;
+use super::date_field::DateField;
 
 #[component]
 pub(super) fn Basics(
@@ -119,12 +120,12 @@ pub(super) fn Basics(
             }
         }
         FormRow { label: "Dates", hint: "Optional · planning only",
-            div { class: "grid md:grid-cols-2 gap-4",
+            div { class: "flex flex-wrap items-center gap-3",
                 FormGroup { label: "Start date", id: "np-start",
-                    Input { id: "np-start", kind: "date", value: form.read().starts_on.clone(), oninput: move |event: FormEvent| form.write().starts_on = event.value() }
+                    DateField { id: "np-start", label: "Start date", placeholder: "Starts on", value: form.read().starts_on.clone(), onchange: move |value| form.write().starts_on = value }
                 }
                 FormGroup { label: "End date", id: "np-end",
-                    Input { id: "np-end", kind: "date", value: form.read().ends_on.clone(), oninput: move |event: FormEvent| form.write().ends_on = event.value() }
+                    DateField { id: "np-end", label: "End date", placeholder: "Ends on", value: form.read().ends_on.clone(), onchange: move |value| form.write().ends_on = value }
                 }
             }
             p { class: "form-hint", "Dates are advisory and do not prevent time tracking." }

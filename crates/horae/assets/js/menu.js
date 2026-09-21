@@ -3,7 +3,8 @@
 (() => {
   const selector = '.menu-popover[popover]';
   const anchors = new WeakMap();
-  const triggerFor = menu => document.getElementById(`${menu.id}-trigger`);
+  const triggerFor = menu => document.getElementById(menu.dataset.popoverTrigger || `${menu.id}-trigger`);
+  const isCalendar = menu => menu.dataset.calendar === 'true';
   const itemsFor = menu => [...menu.querySelectorAll('[role="menuitem"]:not(:disabled)')];
   const focus = item => item?.focus({ preventScroll: true });
   function focusItem(menu, item) {
@@ -23,7 +24,12 @@
     if (!menu.matches(selector)) return;
     const trigger = triggerFor(menu);
     trigger.setAttribute('aria-expanded', String(event.newState === 'open'));
-    if (event.newState !== 'open') return;
+    if (event.newState !== 'open') {
+      if (isCalendar(menu)) {
+        for (const property of ['left', 'top', 'max-height']) menu.style.removeProperty(property);
+      }
+      return;
+    }
     const anchor = trigger.getBoundingClientRect();
     anchors.set(menu, anchor);
     const gap = 4, edge = 8;
@@ -44,6 +50,10 @@
   document.addEventListener('toggle', event => {
     const menu = event.target;
     if (!menu.matches(selector) || !menu.matches(':popover-open')) return;
+    if (isCalendar(menu)) {
+      focusItem(menu, menu.querySelector('.dp-day.picked') || menu.querySelector('.dp-day'));
+      return;
+    }
     const items = itemsFor(menu);
     focusItem(menu, menu.dataset.last === 'true' ? items.at(-1) : items[0]);
     delete menu.dataset.last;
@@ -60,6 +70,8 @@
     }
     const menu = event.target.closest(selector);
     if (!menu?.matches(':popover-open')) return;
+    // Calendar buttons retain native Tab/Shift+Tab traversal, unlike menu items.
+    if (isCalendar(menu) && event.key !== 'Escape') return;
     if (event.key === 'Escape' || event.key === 'Tab') {
       // Keep Escape from also closing an enclosing mobile navigation panel.
       event.stopPropagation();
@@ -84,10 +96,21 @@
   }, true);
 
   document.addEventListener('click', event => {
+    const clear = event.target.closest('[data-clear-date]');
+    if (clear && !clear.matches(':disabled')) focus(document.getElementById(clear.dataset.clearDate));
+    const calendarButton = event.target.closest('[data-calendar="true"] .dp button:not(.dp-nav):not(:disabled)');
+    const calendar = calendarButton?.closest(selector);
+    if (calendar?.matches(':popover-open')) close(calendar, true);
     const item = event.target.closest('[role="menuitem"]:not(:disabled)');
     const menu = item?.closest(selector);
     if (menu?.matches(':popover-open')) close(menu, true);
   }, true);
+
+  document.addEventListener('focusin', event => {
+    for (const calendar of document.querySelectorAll(`${selector}[data-calendar="true"]:popover-open`)) {
+      if (!calendar.contains(event.target) && event.target !== triggerFor(calendar)) close(calendar);
+    }
+  });
 
   // Dismiss when the anchor moves. Scrolling within a short menu stays usable.
   document.addEventListener('scroll', event => {

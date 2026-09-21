@@ -186,6 +186,21 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
       await expect(page.getByRole('menu')).toBeHidden();
       assert.equal(await page.locator('script[src]').evaluateAll(scripts => scripts.filter(s => /\/menu[^/]*\.js$/.test(s.src)).length), 1);
     });
+    await check('Timesheet keeps the shared calendar and week selection behavior', async () => {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await visit('/timesheet/week/2027-10-04', 'list_time_entries');
+      await page.locator('.ts-pager-label').click();
+      const calendar = page.locator('.dp-pop .dp');
+      await expect(calendar).toBeVisible();
+      await expect(calendar.locator('.dp-day')).toHaveCount(42);
+      await expect(calendar.locator('.dp-day.picked, .dp-day.band')).toHaveCount(7);
+      await calendar.getByRole('button', { name: 'Previous month' }).click();
+      await expect(calendar.locator('.font-display')).toHaveText('September 2027');
+      await calendar.getByRole('button', { name: 'Next month' }).click();
+      await calendar.getByRole('button', { name: '11 October 2027', exact: true }).click();
+      await expect(page).toHaveURL(/\/week\/2027-10-11/);
+      await expect(calendar).toHaveCount(0);
+    });
     assert.deepEqual(errors, []);
     assert.deepEqual(failures, []);
   } finally { await browser.close(); }

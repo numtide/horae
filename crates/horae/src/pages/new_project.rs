@@ -11,6 +11,8 @@ use crate::server_fns;
 mod basics;
 #[path = "new_project/billing.rs"]
 mod billing;
+#[path = "new_project/date_field.rs"]
+mod date_field;
 #[path = "new_project/draft.rs"]
 mod draft;
 #[path = "new_project/invoice_defaults.rs"]

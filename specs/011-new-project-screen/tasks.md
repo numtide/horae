@@ -30,6 +30,7 @@
 - [x] T012 [US1] Implement explicit client-dialog creation/default rate persistence in `crates/horae/src/server_fns/clients.rs` and `crates/horae/src/models/project_creation.rs`, preserving existing client mutations.
 - [x] T013 [US1] Add route/module and Projects creation links in `crates/horae/src/route.rs`, `crates/horae/src/pages.rs`, `crates/horae/src/pages/projects.rs`; keep existing edit/bulk behavior and active Projects navigation.
 - [ ] T014 [US1] Implement basic form/client modal/code suggestion/dates/currency/tags in `crates/horae/src/pages/new_project.rs` using actual options and shared controls.
+  - Planning dates now reuse the shared calendar with readable values, optional clearing, keyboard focus/dismissal, bounded popover placement and ISO draft recovery. The browser regression reproduced and fixed a stale browsed month on reopening. Client/currency selector and tag/code fidelity, plus the full-screen acceptance gates, remain open; this checkpoint does not complete T014.
 - [ ] T015 [US1] Persist/reload details and add tag filtering to project/report consumers in `crates/horae/src/server_fns/projects.rs`, `crates/horae/src/server_fns/reports.rs`, `crates/horae/src/pages/projects.rs`, `crates/horae/src/pages/reports.rs`.
 
 ## Phase 4: US2 — Resume a truthful draft (P1)

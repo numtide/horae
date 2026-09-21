@@ -32,6 +32,20 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
   const readsFinished = tab => expect.poll(() => requests.get(tab).size).toBe(0);
   const screen = page.locator('.np-page');
   const saved = () => expect(screen.getByRole('status')).toContainText('Draft saved at');
+  const chooseDate = async (label, day) => {
+    await screen.getByLabel(label, { exact: true }).click();
+    const calendar = page.getByRole('dialog', { name: `Choose ${label}`, exact: true });
+    await expect(calendar).toBeVisible();
+    const wanted = new Date(day);
+    for (let step = 0; step < 240; step++) {
+      const visibleMonth = new Date(`1 ${await calendar.locator('.font-display').textContent()}`);
+      if (visibleMonth.getMonth() === wanted.getMonth() && visibleMonth.getFullYear() === wanted.getFullYear()) break;
+      await calendar.getByRole('button', { name: visibleMonth < wanted ? 'Next month' : 'Previous month' }).click();
+    }
+    await calendar.getByRole('button', { name: day, exact: true }).click();
+    await expect(calendar).not.toBeVisible();
+    await expect(screen.getByLabel(label, { exact: true })).toBeFocused();
+  };
   try {
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin' }).click();
@@ -52,7 +66,11 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await expect(screen.getByLabel('Client', { exact: true })).toContainText('New project browser client');
     await screen.getByLabel('Project name', { exact: true }).fill('Recoverable browser project');
     await screen.getByLabel('Project code', { exact: true }).fill('BROWSER-NEW');
-    await screen.getByLabel('Start date', { exact: true }).fill('2026-09-01');
+    await chooseDate('Start date', '1 September 2026');
+    await chooseDate('End date', '15 October 2026');
+    await screen.getByRole('button', { name: 'Clear End date', exact: true }).click();
+    await expect(screen.getByLabel('End date', { exact: true })).toHaveText('Ends on');
+    await expect(screen.getByLabel('End date', { exact: true })).toBeFocused();
     await screen.getByLabel('Tags', { exact: true }).fill('browser');
     await screen.getByLabel('Tags', { exact: true }).press('Enter');
     await screen.getByRole('radio', { name: /^Project hourly rate/ }).check();
@@ -94,7 +112,34 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     assert.deepEqual(resolved.tasks.map(task => task.name), ['Development']);
     assert.deepEqual(resolved.people.map(person => person.name), ['Admin User']);
     await expect(screen.getByLabel('Project name', { exact: true })).toHaveValue('Recoverable browser project');
-    await expect(screen.getByLabel('Start date', { exact: true })).toHaveValue('2026-09-01');
+    await expect(screen.getByLabel('Start date', { exact: true })).toHaveText('01 Sep 2026');
+    await expect(screen.getByLabel('End date', { exact: true })).toHaveText('Ends on');
+    // Keyboard selection, Escape and reopening after browsing a different month.
+    const startDate = screen.getByLabel('Start date', { exact: true });
+    const startCalendar = page.getByRole('dialog', { name: 'Choose Start date', exact: true });
+    await startDate.focus();
+    await startDate.press('Enter');
+    await expect(startCalendar.getByRole('button', { name: '1 September 2026', exact: true })).toBeFocused();
+    await startCalendar.getByRole('button', { name: 'Next month' }).click();
+    await page.keyboard.press('Escape');
+    await expect(startCalendar).not.toBeVisible();
+    await expect(startDate).toBeFocused();
+    await startDate.press('Enter');
+    await expect(startCalendar.getByRole('button', { name: '1 September 2026', exact: true })).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(startCalendar.getByRole('button', { name: '2 September 2026', exact: true })).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Enter');
+    await expect(startCalendar).not.toBeVisible();
+    await startDate.click();
+    await screen.getByLabel('End date', { exact: true }).click();
+    await expect(startCalendar).not.toBeVisible();
+    const endCalendar = page.getByRole('dialog', { name: 'Choose End date', exact: true });
+    await expect(endCalendar).toBeVisible();
+    await endCalendar.getByRole('button', { name: 'Today', exact: true }).focus();
+    await page.keyboard.press('Tab');
+    await expect(endCalendar).not.toBeVisible();
+    await expect(screen.getByRole('button', { name: 'Remove tag browser', exact: true })).toBeFocused();
     await expect(screen.locator('#np-project-rate')).toHaveValue('75.25');
     await expect(screen.locator('#np-budget-value')).toHaveValue('120');
     await expect(screen.getByLabel('Days until payment is due', { exact: true })).toHaveValue('21');
@@ -112,6 +157,17 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
       await page.setViewportSize({ width, height: 900 });
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true,
         `New project fits at ${width}px`);
+      await screen.getByLabel('End date', { exact: true }).click();
+      const calendar = page.getByRole('dialog', { name: 'Choose End date', exact: true });
+      await expect(calendar).toBeVisible();
+      await expect(calendar.locator('.dp-day.picked')).toBeFocused();
+      const bounds = await calendar.boundingBox();
+      assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width, `Calendar fits at ${width}px`);
+      if (process.env.HORAE_TEST_SCREENSHOT_DIR) {
+        await page.screenshot({ path: `${process.env.HORAE_TEST_SCREENSHOT_DIR}/new-project-calendar-${width}.png` });
+      }
+      await page.keyboard.press('Escape');
+      await expect(calendar).not.toBeVisible();
       // Screenshots restore caret styling by leaving empty style attributes.
       await expect(screen.locator('[style]:not([style=""])')).toHaveCount(0);
       if (process.env.HORAE_TEST_SCREENSHOT_DIR) {
