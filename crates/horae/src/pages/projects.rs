@@ -1331,7 +1331,7 @@ fn ProjectTasks(project_id: Uuid, can_manage: bool) -> Element {
                         let task_id = selected();
                         saving.set(true);
                         spawn(async move {
-                            match server_fns::link_project_task(project_id.to_string(), task_id).await {
+                            match server_fns::link_project_task(project_id.to_string(), task_id, None).await {
                                 Ok(()) => { error.set(None); selected.set(String::new()); enabled.restart(); }
                                 Err(e) => error.set(Some(e.to_string())),
                             }

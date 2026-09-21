@@ -620,7 +620,11 @@ mod server_fns {
     pub async fn delete_assignment(_id: String) -> Result<(), ServerFnError> {
         panic!("unexpected mutation");
     }
-    pub async fn link_project_task(_project: String, _task: String) -> Result<(), ServerFnError> {
+    pub async fn link_project_task(
+        _project: String,
+        _task: String,
+        _rate: Option<crate::project::ProjectTaskRate>,
+    ) -> Result<(), ServerFnError> {
         panic!("unexpected mutation");
     }
     pub async fn create_task(

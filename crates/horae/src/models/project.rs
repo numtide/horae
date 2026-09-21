@@ -3,6 +3,13 @@ use horae_core::types::{BudgetKind, ProjectType};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+/// An explicit task rate in the currency shown to the project manager.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProjectTaskRate {
+    pub amount: String,
+    pub currency: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "server", derive(sqlx::FromRow))]
 pub struct Project {

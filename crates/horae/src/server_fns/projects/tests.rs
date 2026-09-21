@@ -121,7 +121,7 @@ async fn enabling_is_tenant_scoped_even_for_existing_links_and_preserves_overrid
     let ids = seed(&pool, OrgRole::Manager).await;
     let other = seed(&pool, OrgRole::Manager).await;
     let mut tx = pool.begin().await.unwrap();
-    enable_project_task(&mut tx, ids.org_id, ids.project_id, ids.task_id)
+    enable_project_task(&mut tx, ids.org_id, ids.project_id, ids.task_id, None)
         .await
         .unwrap();
     tx.commit().await.unwrap();
@@ -134,11 +134,11 @@ async fn enabling_is_tenant_scoped_even_for_existing_links_and_preserves_overrid
     .unwrap();
     let mut tx = pool.begin().await.unwrap();
     assert!(
-        enable_project_task(&mut tx, other.org_id, ids.project_id, ids.task_id)
+        enable_project_task(&mut tx, other.org_id, ids.project_id, ids.task_id, None)
             .await
             .is_err()
     );
-    enable_project_task(&mut tx, ids.org_id, ids.project_id, ids.task_id)
+    enable_project_task(&mut tx, ids.org_id, ids.project_id, ids.task_id, None)
         .await
         .unwrap();
     tx.commit().await.unwrap();
@@ -186,7 +186,7 @@ async fn enabling_tasks_only_inherits_rates_used_by_configured_projects(pool: Pg
                     ).execute(&pool).await.unwrap();
                 }
                 let mut tx = pool.begin().await.unwrap();
-                enable_project_task(&mut tx, ids.org_id, ids.project_id, ids.task_id)
+                enable_project_task(&mut tx, ids.org_id, ids.project_id, ids.task_id, None)
                     .await
                     .unwrap();
                 tx.commit().await.unwrap();
@@ -211,6 +211,217 @@ async fn enabling_tasks_only_inherits_rates_used_by_configured_projects(pool: Pg
                 );
             }
         }
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn enabling_tasks_rejects_incompatible_catalog_currency(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Admin).await;
+    sqlx::query!(
+        "UPDATE projects SET currency = 'USD' WHERE id = $1",
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE tasks SET default_rate_cents = 8000 WHERE id = $1",
+        ids.task_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO project_settings (id, org_id, project_id, creator_id, rate_mode) VALUES ($1, $2, $3, $4, 'task')",
+        Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id,
+    ).execute(&pool).await.unwrap();
+    let mut tx = pool.begin().await.unwrap();
+    let error = enable_project_task(&mut tx, ids.org_id, ids.project_id, ids.task_id, None)
+        .await
+        .unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("explicit rate in the project currency")
+    );
+    tx.commit().await.unwrap();
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM project_tasks WHERE project_id = $1",
+            ids.project_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(0)
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn enabling_tasks_accepts_exact_project_currency_rates_and_preserves_existing_links(
+    pool: PgPool,
+) {
+    for (amount, expected) in [
+        ("0", 0),
+        ("80.25", 8025),
+        ("92233720368547758.07", i64::MAX),
+    ] {
+        let ids = seed(&pool, OrgRole::Admin).await;
+        sqlx::query!(
+            "UPDATE projects SET currency = 'USD' WHERE id = $1",
+            ids.project_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            "UPDATE tasks SET default_rate_cents = 8000 WHERE id = $1",
+            ids.task_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            "INSERT INTO project_settings (id, org_id, project_id, creator_id, rate_mode) VALUES ($1, $2, $3, $4, 'task')",
+            Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id,
+        ).execute(&pool).await.unwrap();
+        let mut tx = pool.begin().await.unwrap();
+        let rate = ProjectTaskRate {
+            amount: amount.into(),
+            currency: " usd ".into(),
+        };
+        enable_project_task(
+            &mut tx,
+            ids.org_id,
+            ids.project_id,
+            ids.task_id,
+            Some(&rate),
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+        let mut tx = pool.begin().await.unwrap();
+        enable_project_task(&mut tx, ids.org_id, ids.project_id, ids.task_id, None)
+            .await
+            .unwrap();
+        let other_rate = ProjectTaskRate {
+            amount: "42".into(),
+            currency: "USD".into(),
+        };
+        enable_project_task(
+            &mut tx,
+            ids.org_id,
+            ids.project_id,
+            ids.task_id,
+            Some(&other_rate),
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+        let stored = sqlx::query_scalar!(
+            "SELECT rate_cents FROM project_tasks WHERE project_id = $1 AND task_id = $2",
+            ids.project_id,
+            ids.task_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(stored, Some(expected));
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn enabling_tasks_rejects_invalid_or_wrong_currency_explicit_rates_without_linking(
+    pool: PgPool,
+) {
+    let ids = seed(&pool, OrgRole::Admin).await;
+    for (amount, currency) in [
+        ("80", "USD"),
+        ("80", ""),
+        ("-1", "EUR"),
+        ("", "EUR"),
+        ("1.001", "EUR"),
+        ("NaN", "EUR"),
+        ("92233720368547758.08", "EUR"),
+    ] {
+        let rate = ProjectTaskRate {
+            amount: amount.into(),
+            currency: currency.into(),
+        };
+        let mut tx = pool.begin().await.unwrap();
+        assert!(
+            enable_project_task(
+                &mut tx,
+                ids.org_id,
+                ids.project_id,
+                ids.task_id,
+                Some(&rate)
+            )
+            .await
+            .is_err(),
+            "{rate:?}"
+        );
+        tx.commit().await.unwrap();
+    }
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM project_tasks WHERE project_id = $1",
+            ids.project_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(0)
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn enabling_tasks_rejects_explicit_rates_unused_by_the_project(pool: PgPool) {
+    for (project_type, mode) in [
+        (ProjectType::TimeAndMaterials, "person"),
+        (ProjectType::TimeAndMaterials, "project"),
+        (ProjectType::FixedFee, "task"),
+        (ProjectType::NonBillable, "task"),
+    ] {
+        let ids = seed(&pool, OrgRole::Admin).await;
+        sqlx::query!(
+            "UPDATE projects SET project_type = $2 WHERE id = $1",
+            ids.project_id,
+            project_type as ProjectType
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            "INSERT INTO project_settings (id, org_id, project_id, creator_id, rate_mode) VALUES ($1, $2, $3, $4, $5)",
+            Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id, mode,
+        ).execute(&pool).await.unwrap();
+        let rate = ProjectTaskRate {
+            amount: "0".into(),
+            currency: "EUR".into(),
+        };
+        let mut tx = pool.begin().await.unwrap();
+        let error = enable_project_task(
+            &mut tx,
+            ids.org_id,
+            ids.project_id,
+            ids.task_id,
+            Some(&rate),
+        )
+        .await
+        .unwrap_err();
+        assert!(error.to_string().contains("does not use task rates"));
+        tx.commit().await.unwrap();
+        assert_eq!(
+            sqlx::query_scalar!(
+                "SELECT count(*) FROM project_tasks WHERE project_id = $1",
+                ids.project_id
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+            Some(0)
+        );
     }
 }
 

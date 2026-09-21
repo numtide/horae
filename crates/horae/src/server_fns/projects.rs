@@ -1,7 +1,7 @@
 //! Project, task, and assignment server functions.
 
 use super::*;
-use crate::models::{ProjectDetails, ProjectTagLink};
+use crate::models::{ProjectDetails, ProjectTagLink, ProjectTaskRate};
 
 #[cfg(all(test, feature = "server"))]
 mod tests;
@@ -734,7 +734,7 @@ async fn create_task_for_project(
     .map_err(server_err)?;
 
     if let Some(project_id) = project_id {
-        enable_project_task(&mut tx, org_id, project_id, task.id).await?;
+        enable_project_task(&mut tx, org_id, project_id, task.id, None).await?;
     }
     tx.commit().await.map_err(server_err)?;
     Ok(task)
@@ -892,14 +892,18 @@ async fn lock_task(
 /// project-task link inherits the task's default billable flag; idempotent.
 /// Both the project and the task must belong to the manager's organization.
 #[server]
-pub async fn link_project_task(project_id: String, task_id: String) -> Result<(), ServerFnError> {
+pub async fn link_project_task(
+    project_id: String,
+    task_id: String,
+    rate: Option<ProjectTaskRate>,
+) -> Result<(), ServerFnError> {
     let manager = require_manager().await?;
     let state = crate::state::global_state().await;
     let project_id = parse_uuid(&project_id, "project_id")?;
     let task_id = parse_uuid(&task_id, "task_id")?;
 
     let mut tx = state.db.begin().await.map_err(server_err)?;
-    enable_project_task(&mut tx, manager.org_id, project_id, task_id).await?;
+    enable_project_task(&mut tx, manager.org_id, project_id, task_id, rate.as_ref()).await?;
     tx.commit().await.map_err(server_err)?;
     Ok(())
 }
@@ -910,20 +914,27 @@ async fn enable_project_task(
     org_id: uuid::Uuid,
     project_id: uuid::Uuid,
     task_id: uuid::Uuid,
+    explicit_rate: Option<&ProjectTaskRate>,
 ) -> Result<(), ServerFnError> {
     // Validate before the idempotent insert, including already-linked pairs.
     // Hold these rows until commit so archiving cannot race task enablement.
     let task = sqlx::query!(
-        "SELECT t.billable_default,
+        r#"SELECT t.billable_default, p.currency, o.default_currency AS organization_currency,
+                (ps.project_id IS NOT NULL) AS "configured!",
+                (ps.project_id IS NULL
+                  OR (p.project_type = 'time_and_materials' AND ps.rate_mode = 'task')) AS "uses_task_rates!",
+                EXISTS(SELECT 1 FROM project_tasks pt
+                       WHERE pt.project_id = p.id AND pt.task_id = t.id) AS "linked!",
                 CASE WHEN ps.project_id IS NULL
                        OR (p.project_type = 'time_and_materials' AND ps.rate_mode = 'task')
                      THEN t.default_rate_cents ELSE NULL END AS default_rate_cents
          FROM projects p JOIN clients c ON c.id = p.client_id AND c.org_id = p.org_id
          JOIN tasks t ON t.org_id = p.org_id
+         JOIN organizations o ON o.id = p.org_id
          LEFT JOIN project_settings ps ON ps.project_id = p.id AND ps.org_id = p.org_id
          WHERE p.id = $1 AND t.id = $2 AND p.org_id = $3
            AND p.active AND c.active AND t.active
-         FOR SHARE OF p, c, t",
+         FOR SHARE OF p, c, t, o"#,
         project_id,
         task_id,
         org_id,
@@ -932,13 +943,49 @@ async fn enable_project_task(
     .await
     .map_err(server_err)?
     .ok_or_else(|| not_found("Active project and task not found in this organization"))?;
+    if task.linked {
+        return Ok(());
+    }
+    let rate_cents = if let Some(rate) = explicit_rate {
+        if !task.uses_task_rates {
+            return Err(conflict(
+                "This project's billing mode does not use task rates",
+            ));
+        }
+        if !rate
+            .currency
+            .trim()
+            .eq_ignore_ascii_case(task.currency.trim())
+        {
+            return Err(conflict(
+                "Project currency changed. Reload the project and enter its task rate again",
+            ));
+        }
+        Some(
+            parse_project_rate(&rate.amount)?
+                .ok_or_else(|| conflict("Enter an explicit rate in the project currency"))?,
+        )
+    } else {
+        if task.configured
+            && task.default_rate_cents.is_some()
+            && !task
+                .currency
+                .trim()
+                .eq_ignore_ascii_case(task.organization_currency.trim())
+        {
+            return Err(conflict(
+                "Task rate: enter an explicit rate in the project currency",
+            ));
+        }
+        task.default_rate_cents
+    };
     sqlx::query!(
         "INSERT INTO project_tasks (project_id, task_id, billable, rate_cents)
          VALUES ($1, $2, $3, $4) ON CONFLICT (project_id, task_id) DO NOTHING",
         project_id,
         task_id,
         task.billable_default,
-        task.default_rate_cents,
+        rate_cents,
     )
     .execute(db)
     .await
