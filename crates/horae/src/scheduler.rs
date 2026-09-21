@@ -1,4 +1,4 @@
-//! Periodic detection of forgotten (long-running) timers.
+//! Periodic detection of forgotten timers and configured budget alerts.
 //!
 //! Unlike every other plugin event, `timer_running_too_long` is time-based:
 //! nothing mutates when a timer simply keeps running, so it is found by polling
@@ -17,6 +17,12 @@ pub fn spawn(state: &'static AppState) {
             ticker.tick().await;
             if let Err(e) = sweep(state).await {
                 tracing::warn!("long-timer scheduler tick failed: {e}");
+            }
+            if crate::server_fns::budgets::sweep(&state.db, chrono::Utc::now().date_naive())
+                .await
+                .is_err()
+            {
+                tracing::warn!("budget scheduler tick failed");
             }
         }
     });

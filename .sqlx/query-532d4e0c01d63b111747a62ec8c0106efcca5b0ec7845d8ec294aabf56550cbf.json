@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "ALTER TABLE horae_outbox ADD CONSTRAINT reject_test_budget_email CHECK (event_kind <> 'budget_email')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "532d4e0c01d63b111747a62ec8c0106efcca5b0ec7845d8ec294aabf56550cbf"
+}

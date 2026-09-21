@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE project_settings SET alert_enabled = true, monthly_reset = true WHERE project_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d47c933de96effc3d08c4af774546eeb776fef8603e62d3e6f607a335ff0c48c"
+}

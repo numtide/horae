@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (SELECT 1 FROM pg_class c,\n           LATERAL aclexplode(COALESCE(c.relacl, acldefault('r', c.relowner))) acl\n           WHERE c.oid = 'public.project_budget_notifications'::regclass AND acl.grantee = 0) AS \"access!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "278e7b9c1cb0ab5c2f04e5da11febacde4916dc5258b69c836dc244aa40b0eeb"
+}

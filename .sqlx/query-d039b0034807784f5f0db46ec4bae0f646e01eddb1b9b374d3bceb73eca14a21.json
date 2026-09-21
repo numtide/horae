@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT ps.project_id, ps.org_id FROM project_settings ps\n             JOIN projects p ON p.id = ps.project_id AND p.org_id = ps.org_id\n             WHERE ps.alert_enabled AND p.active AND ps.project_id > $1\n             ORDER BY ps.project_id LIMIT 100",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "project_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "d039b0034807784f5f0db46ec4bae0f646e01eddb1b9b374d3bceb73eca14a21"
+}

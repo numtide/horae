@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE time_entries SET spent_date = '2026-08-31' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "07a624839c38ea715c2cb1f96e2049f26479d69bd96c37afca783c6ad4ebb2eb"
+}

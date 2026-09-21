@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT recipient_id FROM project_budget_notifications ORDER BY recipient_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "recipient_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6df9eed71f3d5af7aa2c438319dba902f89ed3339fe941f6b9345fde1b85a321"
+}

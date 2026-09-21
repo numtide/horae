@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE project_settings SET budget_scope = 'person', alert_enabled = true WHERE project_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8414a53c5ec1a41aad7dea81fbf004e4735969b04e60ff3dc803a515a1df86ff"
+}

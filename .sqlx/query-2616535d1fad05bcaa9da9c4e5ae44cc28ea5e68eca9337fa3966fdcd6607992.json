@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT ps.creator_id, ps.alert_threshold FROM project_settings ps\n         JOIN projects p ON p.id = ps.project_id AND p.org_id = ps.org_id\n         WHERE ps.org_id = $1 AND ps.project_id = $2 AND ps.alert_enabled AND p.active\n         FOR SHARE OF ps, p",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "creator_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "alert_threshold",
+        "type_info": "Int2"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "2616535d1fad05bcaa9da9c4e5ae44cc28ea5e68eca9337fa3966fdcd6607992"
+}

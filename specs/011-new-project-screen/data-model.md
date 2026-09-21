@@ -54,4 +54,6 @@ Default terms 30 days; custom 0–365, dates checked for overflow. Tax/discount 
 
 Use an org-scoped logical notification identity with project, scope entity, period key, integer threshold and recipient. A unique constraint prevents duplicate enqueue. Outbox payload references notification identity and contains no private rates/costs. Current recipients are creator plus project leads/org managers with project authority, deduplicated and active at enqueue/delivery.
 
+Migration 0032 stores these in `project_budget_notifications`. Nullable task/user references identify scopes (both NULL means project); at most one is present. Composite foreign keys enforce organization ownership and `UNIQUE NULLS NOT DISTINCT` treats absent scope keys consistently. Period keys are `lifetime` or `YYYY-MM`. The transaction inserts outbox jobs only for newly inserted notification identities. This table remains outside plugin grants; historical identities are retained when consumption falls.
+
 Reuse horae_outbox lease/token/backoff for the specific event kind; stable Message-ID across retries. Bound delivery attempts and record sanitized terminal failure. Acknowledged messages are not retried. Ambiguous external acknowledgement is documented at-least-once delivery.

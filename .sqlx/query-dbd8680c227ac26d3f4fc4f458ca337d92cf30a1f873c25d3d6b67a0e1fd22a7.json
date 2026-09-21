@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH candidates AS (\n               SELECT * FROM unnest($1::uuid[], $2::uuid[], $3::uuid[])\n                 AS c(notification_id, event_id, recipient_id)\n             ), inserted AS (\n               INSERT INTO project_budget_notifications\n                 (id, org_id, project_id, task_id, user_id, recipient_id, period_key, threshold)\n               SELECT notification_id, $4, $5, $6, $7, recipient_id, $8, $9 FROM candidates\n               ON CONFLICT DO NOTHING RETURNING id\n             )\n             INSERT INTO horae_outbox (id, org_id, event_kind, payload)\n             SELECT c.event_id, $4, 'budget_email', jsonb_build_object('notification_id', i.id)\n             FROM inserted i JOIN candidates c ON c.notification_id = i.id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray",
+        "UuidArray",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int2"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "dbd8680c227ac26d3f4fc4f458ca337d92cf30a1f873c25d3d6b67a0e1fd22a7"
+}

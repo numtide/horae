@@ -32,6 +32,16 @@ fn reached(consumed: i64, budget: i64, band: i32) -> bool {
     i128::from(consumed) * 100 >= i128::from(budget) * i128::from(band)
 }
 
+/// Whether a configured alert's exact percentage has been reached. Zero percent
+/// is supported; absent/non-positive budgets and invalid inputs never alert.
+/// Logical notification deduplication is the caller's responsibility.
+pub fn alert_threshold_reached(consumed: i64, budget: i64, threshold: i32) -> bool {
+    budget > 0
+        && consumed >= 0
+        && (0..=100).contains(&threshold)
+        && reached(consumed, budget, threshold)
+}
+
 /// The highest effective band `consumed` has reached against `budget` (`0` when
 /// none is reached, or the budget is non-positive). Store this as the project's
 /// last-announced band so it advances up and resets down.
@@ -70,6 +80,29 @@ mod tests {
     use super::*;
 
     const BANDS: &[i32] = &[80, 100];
+
+    #[test]
+    fn configured_alert_threshold_is_exact_without_rounding() {
+        assert!(!alert_threshold_reached(239, 300, 80));
+        assert!(alert_threshold_reached(240, 300, 80));
+        assert!(alert_threshold_reached(241, 300, 80));
+    }
+
+    #[test]
+    fn configured_alert_accepts_zero_percent_but_not_zero_budget() {
+        assert!(alert_threshold_reached(0, 100, 0));
+        assert!(!alert_threshold_reached(100, 0, 80));
+        assert!(!alert_threshold_reached(0, -1, 0));
+    }
+
+    #[test]
+    fn configured_alert_rejects_invalid_inputs_and_widens_large_values() {
+        assert!(!alert_threshold_reached(-1, 100, 0));
+        assert!(!alert_threshold_reached(100, 100, -1));
+        assert!(!alert_threshold_reached(100, 100, 101));
+        assert!(alert_threshold_reached(i64::MAX, i64::MAX, 100));
+        assert!(!alert_threshold_reached(i64::MAX - 1, i64::MAX, 100));
+    }
 
     #[test]
     fn current_band_is_the_highest_reached() {
