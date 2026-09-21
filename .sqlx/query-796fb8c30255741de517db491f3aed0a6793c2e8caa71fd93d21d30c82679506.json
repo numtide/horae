@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO project_tags (id,org_id,name) VALUES ($1,$2,'Private tag')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "796fb8c30255741de517db491f3aed0a6793c2e8caa71fd93d21d30c82679506"
+}

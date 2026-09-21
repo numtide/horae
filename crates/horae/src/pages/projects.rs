@@ -10,7 +10,7 @@ use crate::components::icons::NavIcon;
 use crate::components::menu::{Menu, MenuDivider, MenuItem};
 use crate::components::modal::Modal;
 use crate::components::table::DataTable;
-use crate::models::{Client, Project, ProjectBudgetProgress};
+use crate::models::{Client, Project, ProjectBudgetProgress, ProjectDetails, ProjectTagLink};
 use crate::route::Route;
 use crate::server_fns;
 use horae_core::money::{format_cents, format_cents_plain};
@@ -110,6 +110,32 @@ fn configured_row_spend(rows: &[ProjectBudgetProgress]) -> Option<RowSpend> {
 #[cfg(test)]
 mod budget_display_tests {
     use super::*;
+
+    #[test]
+    fn tag_filter_matches_identity_without_duplicates_or_name_collisions() {
+        let tag_id = Uuid::from_u128(1);
+        let project_id = Uuid::from_u128(2);
+        let link = ProjectTagLink {
+            project_id,
+            tag_id,
+            name: "Launch".into(),
+        };
+        let links = [
+            link.clone(),
+            link,
+            ProjectTagLink {
+                project_id: Uuid::from_u128(3),
+                tag_id: Uuid::from_u128(4),
+                name: "Launch".into(),
+            },
+        ];
+        assert_eq!(
+            matching_tag_projects(&links, Some(tag_id)),
+            BTreeSet::from([project_id])
+        );
+        assert!(matching_tag_projects(&links, Some(Uuid::nil())).is_empty());
+        assert!(matching_tag_projects(&[], Some(tag_id)).is_empty());
+    }
 
     fn scope(budget: Option<i64>, consumed: i64) -> ProjectBudgetProgress {
         ProjectBudgetProgress {
@@ -241,6 +267,7 @@ pub fn ProjectList() -> Element {
     let mut projects = use_resource(|| async move { server_fns::list_projects(None, true).await });
     // All clients so projects under deactivated clients still resolve their names.
     let clients_res = use_resource(|| async move { server_fns::list_clients(true).await });
+    let mut tags_res = use_resource(|| async move { server_fns::list_project_tags().await });
     let me = use_resource(|| async move { server_fns::get_me().await });
     let mut spend_res = use_resource(|| async move { server_fns::list_project_spend().await });
     let mut budget_res =
@@ -265,6 +292,7 @@ pub fn ProjectList() -> Element {
     // Status scope: "active" | "budgeted" (has a budget) | "archived" (inactive).
     let mut scope = use_signal(|| "active".to_string());
     let mut client_filter = use_signal(String::new);
+    let mut tag_filter = use_signal(|| None::<Uuid>);
     let mut selected = use_signal(BTreeSet::<Uuid>::new);
     let mut bulk_action = use_signal(|| None::<BulkProjectAction>);
     let mut bulk_busy = use_signal(|| false);
@@ -289,6 +317,29 @@ pub fn ProjectList() -> Element {
     let query_lower = query().to_lowercase();
     // Resources retain their previous value while a restart is pending.
     let projects_loading = projects.state()() != UseResourceState::Ready;
+    let tags_ready =
+        tags_res.state()() == UseResourceState::Ready && matches!(&*tags_res.read(), Some(Ok(_)));
+    let tags = tags_res.read();
+    let tag_links = tags.as_ref().and_then(|result| result.as_ref().ok());
+    let tag_projects = matching_tag_projects(
+        tag_links.map(Vec::as_slice).unwrap_or_default(),
+        tag_filter(),
+    );
+    let mut tag_options = Vec::new();
+    let mut seen_tags = BTreeSet::new();
+    for tag in tag_links.into_iter().flatten() {
+        if seen_tags.insert(tag.tag_id) {
+            tag_options.push((tag.tag_id, tag.name.clone()));
+        }
+    }
+    let tag_label = match tag_filter() {
+        Some(id) => tag_options
+            .iter()
+            .find(|(tag, _)| *tag == id)
+            .map(|(_, name)| format!("Tag: {name}"))
+            .unwrap_or_else(|| "Selected tag unavailable".into()),
+        None => "All tags".into(),
+    };
     let visible: Vec<Project> = projects
         .read()
         .as_ref()
@@ -298,6 +349,7 @@ pub fn ProjectList() -> Element {
         .flatten()
         .filter(|p| {
             matches_project_filters(p, &query_lower, &scope(), &client_filter(), &client_names)
+                && (tag_filter().is_none() || (tags_ready && tag_projects.contains(&p.id)))
         })
         .cloned()
         .collect();
@@ -512,6 +564,16 @@ pub fn ProjectList() -> Element {
                     }
                 }
                 div { class: "flex-1" }
+                if !tag_options.is_empty() || tag_filter().is_some() {
+                    Menu { id: "project-tag-menu", label: tag_label, trigger_class: "text-sm px-4",
+                        MenuItem { selected: tag_filter().is_none(), onclick: move |_| { selected.write().clear(); tag_filter.set(None); }, "All tags" }
+                        for (tag_id, tag_name) in tag_options {
+                            MenuItem { key: "{tag_id}", selected: tag_filter() == Some(tag_id), disabled: !tags_ready,
+                                onclick: move |_| { selected.write().clear(); tag_filter.set(Some(tag_id)); }, "{tag_name}"
+                            }
+                        }
+                    }
+                }
                 Combobox {
                     trigger_class: "text-sm px-4",
                     options: client_options,
@@ -624,7 +686,15 @@ pub fn ProjectList() -> Element {
                 p { class: "text-sm text-secondary mb-4", role: "status", "Loading project progress…" }
             }
 
-            if projects_loading {
+            if matches!(&*tags_res.read(), Some(Err(_))) {
+                div { class: "alert alert-danger", role: "alert",
+                    "Could not load project tags. "
+                    button { r#type: "button", class: "btn btn-secondary btn-sm", onclick: move |_| { selected.write().clear(); tags_res.restart(); }, "Retry tags" }
+                }
+            }
+            if tag_filter().is_some() && !tags_ready {
+                p { class: "text-sm text-secondary", role: "status", "Tagged projects are unavailable until tags finish loading." }
+            } else if projects_loading {
                 p { class: "text-sm text-secondary", aria_busy: "true", "Loading projects…" }
             } else if matches!(&*projects.read(), Some(Err(_))) {
                 div { class: "alert alert-danger", role: "alert",
@@ -689,13 +759,14 @@ pub fn ProjectList() -> Element {
                                     }
                                 } else {
                                     h2 { class: "empty-state-title text-xl m-0", "No projects match your filters" }
-                                    p { class: "empty-state-text empty-state-copy text-subtle m-0", "Try another search, client or project status." }
+                                    p { class: "empty-state-text empty-state-copy text-subtle m-0", "Try another search, client, tag or project status." }
                                     button {
                                         class: "btn btn-secondary",
                                         onclick: move |_| {
                                             selected.write().clear();
                                             query.set(String::new());
                                             client_filter.set(String::new());
+                                            tag_filter.set(None);
                                             scope.set("active".to_string());
                                         },
                                         "Reset filters"
@@ -1006,6 +1077,8 @@ pub fn ProjectDetail(id: Uuid) -> Element {
 
 #[component]
 fn ProjectDetailContent(id: Uuid) -> Element {
+    let mut details =
+        use_resource(move || async move { server_fns::get_project_details(id.to_string()).await });
     let me = use_resource(|| async move { server_fns::get_me().await });
     let assignments = use_resource(move || {
         let pid = id.to_string();
@@ -1045,8 +1118,19 @@ fn ProjectDetailContent(id: Uuid) -> Element {
             div { class: "page-header",
                 h1 { class: "page-title", "Project" }
             }
-            div { class: "card",
-                p { class: "text-muted p-5", "Project detail for {id}" }
+            section { class: "card p-5 wrap-anywhere", aria_label: "Project details",
+                if details.state()() != UseResourceState::Ready {
+                    p { role: "status", "Loading project details…" }
+                } else {
+                    match &*details.read() {
+                        Some(Ok(project)) => rsx! { SavedProjectDetails { project: project.clone() } },
+                        Some(Err(error)) => rsx! {
+                            p { class: "text-danger", role: "alert", "Could not load project details: {error}" }
+                            button { r#type: "button", class: "btn btn-secondary btn-sm", onclick: move |_| details.restart(), "Retry details" }
+                        },
+                        None => rsx! {},
+                    }
+                }
             }
 
             ProjectTasks { project_id: id, can_manage: is_manager(&me) }
@@ -1166,6 +1250,43 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                         }
                     })}
                 }
+            }
+        }
+    }
+}
+
+fn matching_tag_projects(links: &[ProjectTagLink], selected: Option<Uuid>) -> BTreeSet<Uuid> {
+    links
+        .iter()
+        .filter(|link| Some(link.tag_id) == selected)
+        .map(|link| link.project_id)
+        .collect()
+}
+
+#[component]
+fn SavedProjectDetails(project: ProjectDetails) -> Element {
+    rsx! {
+        h2 { class: "text-xl m-0 mb-4", "{project.name}" }
+        dl { class: "grid sm:grid-cols-2 gap-4 m-0",
+            div { dt { class: "text-sm text-subtle", "Client" } dd { class: "m-0", "{project.client_name}" } }
+            div { dt { class: "text-sm text-subtle", "Code" } dd { class: "m-0 font-mono", "{project.code.as_deref().unwrap_or(\"—\")}" } }
+            div { dt { class: "text-sm text-subtle", "Currency" } dd { class: "m-0", "{project.currency}" } }
+            div { dt { class: "text-sm text-subtle", "Planning dates" }
+                dd { class: "m-0",
+                    "{project.starts_on.map(|date| date.format(\"%d %b %Y\").to_string()).unwrap_or_else(|| \"No start date\".into())} — "
+                    "{project.ends_on.map(|date| date.format(\"%d %b %Y\").to_string()).unwrap_or_else(|| \"No end date\".into())}"
+                }
+            }
+        }
+        div { class: "mt-4",
+            h3 { class: "text-sm text-subtle m-0 mb-2", "Tags" }
+            if project.tags.is_empty() { p { class: "text-sm m-0", "No tags" } }
+            else { div { class: "flex flex-wrap gap-2", for tag in project.tags { span { class: "chip", "{tag}" } } } }
+        }
+        if let Some(notes) = project.admin_notes.filter(|notes| !notes.is_empty()) {
+            div { class: "mt-4",
+                h3 { class: "text-sm text-subtle m-0 mb-2", "Administrator notes" }
+                for line in notes.lines() { p { class: "text-sm m-0", "{line}" } }
             }
         }
     }

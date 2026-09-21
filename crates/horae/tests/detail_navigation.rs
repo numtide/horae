@@ -51,23 +51,26 @@ mod user;
 mod models {
     pub use super::{
         client::Client,
-        project::{Project, ProjectBudgetProgress},
+        project::{Project, ProjectBudgetProgress, ProjectDetails, ProjectTagLink},
     };
 }
 
 type InvoiceResponse = Result<invoice::InvoiceWithLines, ServerFnError>;
 type AssignmentResponse = Result<Vec<assignment::Assignment>, ServerFnError>;
+type ProjectDetailsResponse = Result<project::ProjectDetails, ServerFnError>;
 
 #[derive(Clone, Default)]
 struct Probe {
     initial_path: Option<String>,
     requests: Rc<RefCell<Vec<Uuid>>>,
     assignment_requests: Rc<RefCell<Vec<Uuid>>>,
+    detail_requests: Rc<RefCell<Vec<Uuid>>>,
     task_requests: Rc<RefCell<Vec<Uuid>>>,
     navigator: Rc<RefCell<Option<Navigator>>>,
     scope: Rc<RefCell<Option<ScopeId>>>,
     response: Rc<RefCell<Option<oneshot::Receiver<InvoiceResponse>>>>,
     assignment_response: Rc<RefCell<Option<oneshot::Receiver<AssignmentResponse>>>>,
+    detail_response: Rc<RefCell<Option<oneshot::Receiver<ProjectDetailsResponse>>>>,
 }
 
 fn app(probe: Probe) -> Element {
@@ -290,7 +293,7 @@ async fn navigating_between_project_ids_loads_current_assignments_and_tasks() {
     settle(&mut dom);
     let html = dioxus::ssr::render(&dom);
     assert!(
-        html.contains(&format!("Project detail for {second}")),
+        html.contains("Project-2") && html.contains("CODE-2") && html.contains("Tag-2"),
         "rendered: {html}"
     );
     assert_eq!(
@@ -307,11 +310,53 @@ async fn navigating_between_project_ids_loads_current_assignments_and_tasks() {
     assert!(html.contains("Task-2"), "rendered: {html}");
     assert!(!html.contains("User-101"), "rendered: {html}");
     assert!(!html.contains("Task-1"), "rendered: {html}");
+    assert!(!html.contains("CODE-1"), "rendered: {html}");
+    assert!(!html.contains("Tag-1"), "rendered: {html}");
+    assert_eq!(*probe.detail_requests.borrow(), [first, second]);
 
     dom.in_scope(probe.scope.borrow().unwrap(), || navigator.go_back());
     settle(&mut dom);
     assert_eq!(*probe.assignment_requests.borrow(), [first, second, first]);
     assert_eq!(*probe.task_requests.borrow(), [first, second, first]);
+}
+
+#[tokio::test]
+async fn pending_or_failed_project_details_never_show_previous_metadata() {
+    let first = Uuid::from_u128(1);
+    let second = Uuid::from_u128(2);
+    let probe = Probe {
+        initial_path: Some(format!("/projects/{first}")),
+        ..Probe::default()
+    };
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains("CODE-1"));
+    let (send, receive) = oneshot::channel();
+    *probe.detail_response.borrow_mut() = Some(receive);
+    let navigator = probe.navigator.borrow().unwrap();
+    dom.in_scope(probe.scope.borrow().unwrap(), || {
+        navigator.push(route::Route::ProjectDetail { id: second })
+    });
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains("Loading project details"), "{html}");
+    assert!(
+        !html.contains("CODE-1") && !html.contains("Tag-1"),
+        "{html}"
+    );
+    send.send(Err(ServerFnError::new("Metadata unavailable")))
+        .unwrap();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(
+        html.contains("Metadata unavailable") && html.contains("Retry details"),
+        "{html}"
+    );
+    assert!(
+        !html.contains("CODE-1") && !html.contains("Tag-1"),
+        "{html}"
+    );
 }
 
 #[tokio::test]
@@ -465,6 +510,29 @@ mod server_fns {
         _archived: bool,
     ) -> Result<Vec<Project>, ServerFnError> {
         Ok(Vec::new())
+    }
+    pub async fn list_project_tags() -> Result<Vec<project::ProjectTagLink>, ServerFnError> {
+        Ok(Vec::new())
+    }
+    pub async fn get_project_details(id: String) -> ProjectDetailsResponse {
+        let id = Uuid::parse_str(&id).unwrap();
+        let probe = consume_context::<Probe>();
+        probe.detail_requests.borrow_mut().push(id);
+        let response = probe.detail_response.borrow_mut().take();
+        if let Some(response) = response {
+            return response.await.unwrap();
+        }
+        Ok(project::ProjectDetails {
+            id,
+            name: format!("Project-{}", id.as_u128()),
+            code: Some(format!("CODE-{}", id.as_u128())),
+            client_name: "Client".into(),
+            currency: "EUR".into(),
+            starts_on: None,
+            ends_on: None,
+            tags: vec![format!("Tag-{}", id.as_u128())],
+            admin_notes: None,
+        })
     }
     pub async fn list_project_spend() -> Result<Vec<ProjectSpend>, ServerFnError> {
         Ok(Vec::new())

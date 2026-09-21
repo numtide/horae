@@ -1,6 +1,7 @@
 //! Project, task, and assignment server functions.
 
 use super::*;
+use crate::models::{ProjectDetails, ProjectTagLink};
 
 #[cfg(all(test, feature = "server"))]
 mod tests;
@@ -9,12 +10,87 @@ mod tests;
 mod privacy_tests;
 
 #[cfg(all(test, feature = "server"))]
+mod details_tests;
+
+#[cfg(all(test, feature = "server"))]
 mod mutation_tests;
 
 #[cfg(all(test, feature = "server"))]
 mod bulk_tests;
 
 // ── Projects ─────────────────────────────────────────────────────────────────
+
+#[server]
+pub async fn get_project_details(project_id: String) -> Result<ProjectDetails, ServerFnError> {
+    let viewer = require_user().await?;
+    let project_id = parse_uuid(&project_id, "project_id")?;
+    let state = crate::state::global_state().await;
+    fetch_project_details(&state.db, viewer.org_id, viewer.id, project_id)
+        .await
+        .map_err(server_err)?
+        .ok_or_else(|| not_found("Project not found"))
+}
+
+#[cfg(feature = "server")]
+async fn fetch_project_details(
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    viewer_id: uuid::Uuid,
+    project_id: uuid::Uuid,
+) -> Result<Option<ProjectDetails>, sqlx::Error> {
+    sqlx::query_as!(
+        ProjectDetails,
+        r#"SELECT p.id, p.name, p.code, c.name AS client_name, p.currency,
+            p.starts_on as "starts_on: chrono::NaiveDate",
+            p.ends_on as "ends_on: chrono::NaiveDate",
+            ARRAY(SELECT t.name FROM project_tag_links l
+                JOIN project_tags t ON t.id = l.tag_id AND t.org_id = l.org_id
+                WHERE l.project_id = p.id AND l.org_id = p.org_id
+                ORDER BY lower(t.name), t.id) as "tags!",
+            CASE WHEN u.org_role = 'admin' THEN private.admin_notes END AS admin_notes
+        FROM projects p
+        JOIN clients c ON c.id = p.client_id AND c.org_id = p.org_id
+        JOIN project_read_access a ON a.project_id = p.id AND a.org_id = p.org_id
+        JOIN users u ON u.id = a.user_id AND u.org_id = a.org_id
+        LEFT JOIN project_private_settings private ON private.project_id = p.id AND private.org_id = p.org_id
+        WHERE p.org_id = $1 AND a.user_id = $2 AND p.id = $3 AND a.can_view_progress"#,
+        org_id,
+        viewer_id,
+        project_id,
+    )
+    .fetch_optional(pool)
+    .await
+}
+
+#[server]
+pub async fn list_project_tags() -> Result<Vec<ProjectTagLink>, ServerFnError> {
+    let viewer = require_user().await?;
+    let state = crate::state::global_state().await;
+    fetch_project_tags(&state.db, viewer.org_id, viewer.id)
+        .await
+        .map_err(server_err)
+}
+
+#[cfg(feature = "server")]
+async fn fetch_project_tags(
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    viewer_id: uuid::Uuid,
+) -> Result<Vec<ProjectTagLink>, sqlx::Error> {
+    sqlx::query_as!(
+        ProjectTagLink,
+        r#"SELECT l.project_id, l.tag_id, t.name
+        FROM project_tag_links l
+        JOIN project_tags t ON t.id = l.tag_id AND t.org_id = l.org_id
+        JOIN project_read_access a ON a.project_id = l.project_id AND a.org_id = l.org_id
+        WHERE l.org_id = $1 AND a.user_id = $2 AND a.can_view_progress
+        ORDER BY lower(t.name), t.id, l.project_id"#,
+        org_id,
+        viewer_id,
+    )
+    .fetch_all(pool)
+    .await
+}
 
 #[cfg(feature = "server")]
 fn parse_project_rate(value: &str) -> Result<Option<i64>, ServerFnError> {

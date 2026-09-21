@@ -288,6 +288,7 @@ fn type_family() -> Family {
             "overflow: hidden; text-overflow: ellipsis; white-space: nowrap",
         ),
         ("whitespace-nowrap", "white-space: nowrap"),
+        ("wrap-anywhere", "overflow-wrap: anywhere"),
     ];
     for (c, d) in fixed {
         rules.push((c.to_string(), d.to_string()));

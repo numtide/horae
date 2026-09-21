@@ -32,6 +32,7 @@
 - [x] T014 [US1] Implement basic form/client modal/code suggestion/dates/currency/tags in `crates/horae/src/pages/new_project.rs` using actual options and shared controls.
   - Basic fields reuse shared form/menu/chip/calendar primitives with scoped dimensions and neutral chips. Real client search handles pending/error/empty results without changing the selection; explicit currency overrides survive client changes. Code suggestions remain opt-in, date values recover as ISO, and tag batches validate without dropping pending input. Thirty screen tests, nine navigation tests and the actual creation/recovery browser workflow pass, including keyboard and 390/768/1440 layouts. Downstream tag filtering (T015), complete-screen fidelity and cross-screen stability gates remain separate and open.
 - [ ] T015 [US1] Persist/reload details and add tag filtering to project/report consumers in `crates/horae/src/server_fns/projects.rs`, `crates/horae/src/server_fns/reports.rs`, `crates/horae/src/pages/projects.rs`, `crates/horae/src/pages/reports.rs`.
+  - Saved basic details and authorized tag links are connected to Project Detail and the Projects filter, retaining current-role note privacy and bulk-selection reset. Backend/read-navigation checks pass; report filtering and matching report exports are still required before completing this task.
 
 ## Phase 4: US2 — Resume a truthful draft (P1)
 

@@ -220,6 +220,7 @@
 .font-display { font-family: var(--font-family-display); }
 .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .whitespace-nowrap { white-space: nowrap; }
+.wrap-anywhere { overflow-wrap: anywhere; }
 
 /* Text color */
 .text-strong { color: var(--color-text-strong); }

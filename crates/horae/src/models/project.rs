@@ -42,3 +42,26 @@ pub struct ProjectBudgetProgress {
     pub budget: Option<i64>,
     pub consumed: i64,
 }
+
+/// Saved basic project details; private notes are absent for non-administrators.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProjectDetails {
+    pub id: Uuid,
+    pub name: String,
+    pub code: Option<String>,
+    pub client_name: String,
+    pub currency: String,
+    pub starts_on: Option<NaiveDate>,
+    pub ends_on: Option<NaiveDate>,
+    pub tags: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub admin_notes: Option<String>,
+}
+
+/// A tag associated with a project whose progress the caller may read.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProjectTagLink {
+    pub project_id: Uuid,
+    pub tag_id: Uuid,
+    pub name: String,
+}

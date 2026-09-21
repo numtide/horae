@@ -167,6 +167,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await expect(tagField.locator('.chip')).toHaveCount(1);
     await tagInput.fill('');
     await screen.getByRole('radio', { name: /^Project hourly rate/ }).check();
+    await screen.getByLabel('Notes', { exact: true }).fill('W'.repeat(1000));
     await screen.locator('#np-project-rate').fill('75.25');
     await screen.getByLabel('Budget', { exact: true }).selectOption({ label: 'Total project hours' });
     await screen.locator('#np-budget-value').fill('120');
@@ -387,6 +388,19 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await screen.getByRole('button', { name: 'Retry request', exact: true }).click();
     await expect(page).toHaveURL(`${base}/projects/${created}`);
     await expect(page.getByRole('heading', { name: 'Project', exact: true })).toBeVisible();
+    const basics = page.getByRole('region', { name: 'Project details', exact: true });
+    await expect(basics).toContainText('Recovered latest edit');
+    await expect(basics).toContainText('BROWSER-NEW');
+    await expect(basics).toContainText('New project browser client');
+    await expect(basics).toContainText('01 Sep 2026');
+    await expect(basics.locator('.chip')).toHaveText(['browser']);
+    await expect(basics).toContainText('W'.repeat(1000));
+    for (const width of [390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true,
+        `Saved project details fit at ${width}px even with unbroken notes`);
+      assert.equal(await basics.evaluate(element => element.scrollWidth <= element.clientWidth + 1), true);
+    }
     await readsFinished(page);
     const budgetRead = page.waitForResponse(response => response.url().includes('/api/list_project_budget_progress') && response.status() === 200);
     await page.getByRole('link', { name: 'Projects', exact: true }).click();
@@ -398,6 +412,17 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await expect(createdRow.getByRole('progressbar')).toHaveAttribute('value', '0');
     await expect(createdRow).toContainText('120h');
     await expect(createdRow).toContainText('Total tracked: 0h');
+    await page.getByRole('checkbox', { name: 'Select all visible projects', exact: true }).click();
+    await page.getByRole('button', { name: /^All tags/ }).click();
+    await page.getByRole('menuitem', { name: 'browser', exact: true }).click();
+    await expect(page.locator('.proj-row')).toHaveCount(1);
+    await expect(createdRow).toBeVisible();
+    await expect(page.locator('#project-bulk-menu-trigger')).toBeDisabled();
+    await page.getByRole('textbox', { name: 'Search by project or client' }).fill('no matching project');
+    await expect(page.getByRole('heading', { name: 'No projects match your filters', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Reset filters', exact: true }).click();
+    await expect(page.locator('.proj-row')).toHaveCount(3);
+    await expect(page.getByRole('button', { name: /^All tags/ })).toBeVisible();
     await readsFinished(page);
     console.log('PASS: real finalized budget reaches the authorized Projects endpoint and display');
     await page.goto(`${base}/projects/new`);
