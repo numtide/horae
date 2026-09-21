@@ -144,9 +144,11 @@ fn families() -> Vec<Family> {
         ),
         spacing_family(),
         fixed(
-            "Half-step padding",
+            "Half-step spacing",
             &[
                 ("px-2\\.5", "padding-inline: var(--space-2-5)"),
+                ("py-1\\.5", "padding-block: var(--space-1-5)"),
+                ("-ml-2\\.5", "margin-left: calc(-1 * var(--space-2-5))"),
                 ("py-2\\.5", "padding-block: var(--space-2-5)"),
             ],
         ),
@@ -172,6 +174,7 @@ fn families() -> Vec<Family> {
                 ("size-10", "width: var(--space-10); height: var(--space-10)"),
                 ("size-8", "width: var(--space-8); height: var(--space-8)"),
                 ("size-4", "width: var(--space-4); height: var(--space-4)"),
+                ("size-em", "width: 1em; height: 1em"),
                 ("min-w-0", "min-width: 0"),
                 ("min-h-0", "min-height: 0"),
                 ("max-w-project-form", "max-width: var(--width-project-form)"),
@@ -210,6 +213,7 @@ fn families() -> Vec<Family> {
                 ("bg-menu", "background: var(--color-menu)"),
                 ("bg-primary", "background: var(--color-primary)"),
                 ("bg-primary-soft", "background: var(--color-primary-bg)"),
+                ("bg-primary-wash", "background: var(--color-primary-wash)"),
                 ("bg-pine", "background: var(--color-pine)"),
                 (
                     "bg-choice-selected",
@@ -321,6 +325,7 @@ fn type_family() -> Family {
         ("tracking-wide", "letter-spacing: 0.06em"),
         ("tracking-tight", "letter-spacing: -0.015em"),
         ("tracking-wider", "letter-spacing: 0.14em"),
+        ("tracking-eyebrow", "letter-spacing: 0.12em"),
         ("leading-tight", "line-height: 1.2"),
         ("font-sans", "font-family: var(--font-family)"),
         ("font-mono", "font-family: var(--font-family-mono)"),

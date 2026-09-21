@@ -40,6 +40,26 @@ use project_creation::{
     CreationClient, CreationOptions, CreationSearch, DraftSaved, ProjectDraft, ProjectForm,
 };
 
+#[test]
+fn navigation_icons_keep_default_dimensions_and_allow_opt_in_sizing() {
+    let default = dioxus::ssr::render_element(rsx! { icons::NavIcon { name: "projects" } });
+    assert!(default.contains("width=\"15\""));
+    assert!(default.contains("height=\"15\""));
+    assert!(!default.contains("class="));
+
+    let information =
+        dioxus::ssr::render_element(rsx! { icons::NavIcon { name: "info", class: "size-em" } });
+    assert!(information.contains("class=\"size-em\""));
+    assert!(information.contains("<circle"));
+    assert!(information.contains("<path"));
+
+    let back = dioxus::ssr::render_element(
+        rsx! { icons::NavIcon { name: "arrow-left", class: "size-4" } },
+    );
+    assert!(back.contains("class=\"size-4\""));
+    assert!(back.contains("M13 8 H3 M7 4 L3 8 L7 12"));
+}
+
 #[derive(Clone)]
 struct Probe {
     options: CreationOptions,

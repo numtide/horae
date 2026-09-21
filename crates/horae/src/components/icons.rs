@@ -3,8 +3,15 @@ use dioxus::prelude::*;
 /// A 16×16 stroked navigation glyph, drawn in `currentColor` so it inherits the
 /// rail row's muted colour. Unknown names render nothing.
 #[component]
-pub fn NavIcon(name: String) -> Element {
+pub fn NavIcon(name: String, #[props(default)] class: String) -> Element {
     let body = match name.as_str() {
+        "arrow-left" => rsx! {
+            path { d: "M13 8 H3 M7 4 L3 8 L7 12" }
+        },
+        "info" => rsx! {
+            circle { cx: "8", cy: "8", r: "6" }
+            path { d: "M8 7 V11 M8 4.5 V4.6" }
+        },
         "dashboard" => rsx! {
             rect { x: "2", y: "2", width: "5", height: "5", rx: "1" }
             rect { x: "9", y: "2", width: "5", height: "5", rx: "1" }
@@ -69,6 +76,7 @@ pub fn NavIcon(name: String) -> Element {
     };
     rsx! {
         svg {
+            class: if class.is_empty() { None } else { Some(class) },
             width: "15",
             height: "15",
             view_box: "0 0 16 16",

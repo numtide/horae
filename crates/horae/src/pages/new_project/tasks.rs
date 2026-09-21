@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use crate::components::controls::Checkbox;
 use crate::components::form::Input;
+use crate::components::icons::NavIcon;
 use crate::components::modal::Modal;
 use crate::models::project_creation::{
     CreationOptions, CreationSearch, ProjectForm, ProjectTaskInput, TaskAccess, TaskSource,
@@ -106,13 +107,16 @@ pub(super) fn Tasks(
                 span { class: "text-xs text-subtle", "{form.read().tasks.len()} tasks" }
                 if billable_project {
                     div { class: "flex items-center gap-2 ml-auto",
-                        span { class: "text-xs text-faint", "Billable" }
+                        span { class: "text-xs text-label", "Billable" }
                         button { r#type: "button", class: "btn btn-ghost btn-sm", onclick: move |_| { for task in &mut form.write().tasks { task.billable = true; } }, "All" }
                         button { r#type: "button", class: "btn btn-ghost btn-sm", onclick: move |_| { for task in &mut form.write().tasks { task.billable = false; } }, "None" }
                     }
                 }
             }
-            p { class: "text-xs text-subtle px-5 py-3 m-0 border-b", "Everyone on the project can track to unrestricted tasks. Open a task's access settings to limit who can." }
+            p { class: "flex items-center gap-2 px-5 py-2.5 m-0 text-xs text-subtle bg-primary-wash border-b border-light",
+                span { class: "inline-flex flex-none text-sm text-primary", aria_hidden: "true", NavIcon { name: "info", class: "size-em" } }
+                span { "Everyone on the project can track to unrestricted tasks. Open a task's access settings to limit who can." }
+            }
             for task in form.read().tasks.clone() {
                 TaskRow { key: "{task.id}", form, options, id: task.id, on_access: move |id| editing_access.set(Some(id)) }
             }
@@ -124,7 +128,7 @@ pub(super) fn Tasks(
                 if let Some(message) = error() { p { class: "text-sm text-danger", role: "alert", "{message}" } }
                 div { class: "flex flex-wrap items-center gap-3", aria_busy: pending,
                     div { class: "input-group flex-1 basis-assignment-picker min-w-0 h-10 px-3 gap-2",
-                        span { class: "flex items-center text-faint", aria_hidden: "true", "+" }
+                        span { class: "flex items-center text-label", aria_hidden: "true", "+" }
                         input { class: "input-group-field p-0", id: "np-task-search", aria_label: "Find or create a task", value: query(), placeholder: "Add a task and press Enter", oninput: move |event| query.set(event.value()), onkeydown: move |event| { if event.key() == Key::Enter { event.prevent_default(); add_named.call(()); } } }
                     }
                     button { r#type: "button", class: "btn btn-secondary", disabled: !search_ready || query.read().trim().is_empty(), onclick: move |_| {
@@ -232,7 +236,7 @@ fn TaskRow(
                 }
                 button { r#type: "button", class: "btn btn-ghost btn-sm", aria_label: "Access for {name}: {access_label}", onclick: move |_| on_access.call(id), "{access_label}" }
             }
-            button { r#type: "button", class: "np-row-remove btn btn-ghost p-0 size-8", aria_label: "Remove task {name}", onclick: move |_| form.write().tasks.retain(|task| task.id != id), "×" }
+            button { r#type: "button", class: "np-row-remove btn btn-ghost p-0 size-8 text-label", aria_label: "Remove task {name}", onclick: move |_| form.write().tasks.retain(|task| task.id != id), "×" }
         }
     }
 }

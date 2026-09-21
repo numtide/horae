@@ -67,6 +67,45 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await expect(page).toHaveURL(`${base}/projects/new`);
     await expect(draftStatus).toHaveText('No draft saved yet');
     await expect(screen.getByRole('button', { name: 'Save project', exact: true })).toBeDisabled();
+    const taskHint = screen.getByRole('region', { name: 'Tasks', exact: true }).locator('p').filter({ hasText: /^Everyone on the project can track/ });
+    await expect(taskHint).toHaveCSS('padding-top', '10px');
+    await expect(taskHint).toHaveCSS('padding-bottom', '10px');
+    await expect(taskHint).toHaveCSS('gap', '8px');
+    await expect(taskHint.locator('svg')).toHaveCSS('width', '14px');
+    await expect(taskHint.locator('svg')).toHaveCSS('height', '14px');
+    for (const [theme, wash] of [['light', 'rgba(31, 92, 77, 0.06)'], ['dark', 'rgba(79, 183, 154, 0.06)']]) {
+      await page.locator('html').evaluate((root, theme) => { root.dataset.theme = theme; }, theme);
+      await expect(taskHint).toHaveCSS('background-color', wash);
+    }
+    const heading = screen.getByRole('heading', { name: 'New project', exact: true });
+    await expect(heading).toHaveCSS('font-size', '34px');
+    await expect(heading).toHaveCSS('font-weight', '600');
+    await expect(heading).toHaveCSS('letter-spacing', '-0.51px');
+    assert.match(await heading.evaluate(node => getComputedStyle(node).fontFamily), /Newsreader/);
+    await expect(screen.locator('header .uppercase')).toHaveCSS('letter-spacing', '1.44px');
+    for (const title of await screen.locator('section > div > h2').all()) {
+      await expect(title).toHaveCSS('font-size', '20px');
+      await expect(title).toHaveCSS('margin-top', '0px');
+      await expect(title).toHaveCSS('margin-bottom', '0px');
+    }
+    const back = screen.getByRole('button', { name: 'Back to Projects', exact: true });
+    await expect(back).toHaveCSS('padding', '6px 10px');
+    await expect(back).toHaveCSS('margin-left', '-10px');
+    await expect(back).toHaveCSS('color', 'rgb(162, 156, 141)');
+    for (const label of await screen.locator('.np-label > label, .np-label > div').all()) {
+      await expect(label).toHaveCSS('font-size', '14px');
+      await expect(label).toHaveCSS('font-weight', '600');
+      assert.match(await label.evaluate(node => getComputedStyle(node).fontFamily), /Instrument Sans/);
+    }
+    for (const divider of await screen.locator('.np-row, header, #np-invoice-heading').all()) {
+      const border = await divider.evaluate(node => getComputedStyle(node.matches('h2') ? node.parentElement : node).borderBottomColor);
+      assert.equal(border, 'rgb(38, 34, 25)');
+    }
+    console.log('PASS: design typography, section spacing, quiet dividers and theme-aware task information');
+    if (process.env.HORAE_TEST_SCREENSHOT_DIR) {
+      await page.screenshot({ path: `${process.env.HORAE_TEST_SCREENSHOT_DIR}/new-project-heading.png` });
+      await taskHint.screenshot({ path: `${process.env.HORAE_TEST_SCREENSHOT_DIR}/new-project-task-information.png` });
+    }
 
     const typeCards = screen.locator('.np-types');
     await expect(typeCards.locator('[data-project-type-icon] svg')).toHaveCount(3);
@@ -481,7 +520,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await tagInput.press('Enter');
     for (const width of [390, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
-      await screen.getByRole('button', { name: '← Back to Projects', exact: true }).focus();
+      await screen.getByRole('button', { name: 'Back to Projects', exact: true }).focus();
       let reachedSave = false;
       for (let step = 0; step < 120; step++) {
         await page.keyboard.press('Tab');

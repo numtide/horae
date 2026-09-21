@@ -82,7 +82,7 @@ pub(super) fn Team(
             div { class: "flex flex-wrap items-baseline gap-3 py-4 px-5 border-b",
                 h2 { id: "np-team-heading", class: "text-xl font-semibold m-0", "Team" }
                 span { class: "text-xs text-subtle", "{form.read().team.len()} people" }
-                span { class: "text-xs text-faint ml-auto", "Check = manages this project" }
+                span { class: "text-xs text-label ml-auto", "Check = manages this project" }
             }
             for member in form.read().team.clone() { MemberRow { key: "{member.user_id}", form, options, id: member.user_id } }
             if form.read().team.is_empty() { p { class: "text-sm text-subtle px-5", "No teammates selected yet." } }
@@ -227,7 +227,7 @@ fn MemberRow(mut form: Signal<ProjectForm>, options: Signal<CreationOptions>, id
                     }
                 }
             }
-            button { r#type: "button", class: "np-row-remove btn btn-ghost p-0 size-8", aria_label: "Remove {name} from project", onclick: move |_| remove_member(&mut form.write(), id), "×" }
+            button { r#type: "button", class: "np-row-remove btn btn-ghost p-0 size-8 text-label", aria_label: "Remove {name} from project", onclick: move |_| remove_member(&mut form.write(), id), "×" }
         }
     }
 }

@@ -54,7 +54,7 @@ pub(super) fn Billing(mut form: Signal<ProjectForm>, options: Signal<CreationOpt
             div { class: "bg-secondary border rounded-xl p-5 mt-3 flex flex-col gap-5",
                 if project_type == ProjectType::TimeAndMaterials {
                     fieldset { class: "border-0 p-0 m-0",
-                        legend { class: "text-xs uppercase tracking-wide text-faint mb-2", "Billable rates" }
+                        legend { class: "text-xs uppercase tracking-eyebrow text-faint mb-2", "Billable rates" }
                         div { class: "flex flex-col gap-2",
                             for (mode, title, hint) in [
                                 (RateMode::Person, "Person hourly rate", "Use each person's project override or profile rate."),
@@ -127,7 +127,7 @@ fn Budget(mut form: Signal<ProjectForm>, currency: String, email_available: bool
     };
     rsx! {
         div {
-            label { class: "block text-xs uppercase tracking-wide text-faint mb-2", r#for: "np-budget-mode", "Budget" }
+            label { class: "block text-xs uppercase tracking-eyebrow text-faint mb-2", r#for: "np-budget-mode", "Budget" }
             div { class: "flex flex-wrap items-center gap-3",
                 div { class: "w-form-select max-w-full",
                     SelectField { id: "np-budget-mode", label: "Budget", options: select_options, selected,
@@ -186,7 +186,7 @@ fn FeeSchedule(mut form: Signal<ProjectForm>, currency: String) -> Element {
     rsx! {
         div {
             fieldset { class: "border-0 p-0 m-0",
-                legend { class: "text-xs uppercase tracking-wide text-faint mb-2", "Project fee" }
+                legend { class: "text-xs uppercase tracking-eyebrow text-faint mb-2", "Project fee" }
                 div { class: "segmented flex-wrap",
                     for (choice, label) in [(FeeMode::Single, "Single fee"), (FeeMode::Milestones, "Milestones"), (FeeMode::Monthly, "Monthly")] {
                         label { class: if mode == choice { "segmented-item active inline-flex items-center gap-2 cursor-pointer" } else { "segmented-item inline-flex items-center gap-2 cursor-pointer" },
@@ -246,7 +246,7 @@ fn Milestone(mut form: Signal<ProjectForm>, id: Uuid, currency: String) -> Eleme
             Input { id: "np-milestone-name-{id}", label: "Milestone name", placeholder: "Milestone", class: "min-w-0 px-2.5 py-2", value: item.name.clone(), oninput: move |event: FormEvent| { if let Some(item) = form.write().milestones.iter_mut().find(|item| item.id == id) { item.name = event.value(); } } }
             Input { id: "np-milestone-date-{id}", label: "Due date", class: "min-w-0 px-2.5 py-2 font-mono", kind: "date", value: item.due_on, oninput: move |event: FormEvent| { if let Some(item) = form.write().milestones.iter_mut().find(|item| item.id == id) { item.due_on = event.value(); } } }
             Input { id: "np-milestone-amount-{id}", label: "Amount ({currency})", placeholder: "0.00", class: "min-w-0 px-2.5 py-2 font-mono text-right", value: item.amount, oninput: move |event: FormEvent| { if let Some(item) = form.write().milestones.iter_mut().find(|item| item.id == id) { item.amount = event.value(); } } }
-            button { class: "btn btn-ghost p-0 size-10 text-faint", r#type: "button", aria_label: if item.name.is_empty() { "Remove milestone".into() } else { format!("Remove milestone {}", item.name) }, onclick: move |_| {
+            button { class: "btn btn-ghost p-0 size-10 text-label", r#type: "button", aria_label: if item.name.is_empty() { "Remove milestone".into() } else { format!("Remove milestone {}", item.name) }, onclick: move |_| {
                 form.write().milestones.retain(|item| item.id != id);
                 document::eval("document.getElementById('np-add-milestone')?.focus()");
             }, "×" }

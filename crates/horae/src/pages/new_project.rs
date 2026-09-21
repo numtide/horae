@@ -2,6 +2,7 @@
 
 use dioxus::prelude::*;
 
+use crate::components::icons::NavIcon;
 use crate::components::modal::Modal;
 use crate::models::project_creation::{CreationOptions, CreationSearch, ProjectDraft, TaskSource};
 use crate::route::Route;
@@ -221,14 +222,15 @@ fn ProjectEditor(
                 div { class: "max-w-project-form px-project-form pt-6 pb-30",
                     button {
                         r#type: "button",
-                        class: "btn btn-ghost text-sm",
+                        class: "btn btn-ghost text-sm text-muted font-normal border-0 px-2.5 py-1.5 -ml-2.5",
                         disabled: locked || error().is_some(),
                         onclick: move |_| intent.set(Some(Intent::Leave)),
-                        "← Back to Projects"
+                        span { class: "inline-flex", aria_hidden: "true", NavIcon { name: "arrow-left", class: "size-4" } }
+                        "Back to Projects"
                     }
-                    header { class: "flex flex-wrap items-end gap-4 mt-5 pb-6 border-b",
+                    header { class: "flex flex-wrap items-end gap-4 mt-5 pb-6 border-b border-light",
                         div {
-                            div { class: "text-xs uppercase tracking-wider text-label",
+                            div { class: "text-xs uppercase tracking-eyebrow text-label",
                                 "Projects"
                             }
                             h1 { class: "text-4xl font-semibold text-strong tracking-tight mt-2 mb-0",
@@ -236,7 +238,7 @@ fn ProjectEditor(
                             }
                         }
                         p {
-                            class: "text-xs text-subtle ml-auto mb-0",
+                            class: "text-xs text-faint ml-auto mb-0",
                             role: "status",
                             aria_live: "polite",
                             "{status}"
@@ -384,7 +386,7 @@ fn FormRow(
     children: Element,
 ) -> Element {
     rsx! {
-        div { class: "np-row grid gap-6 py-5 border-b",
+        div { class: "np-row grid gap-6 py-5 border-b border-light",
             div { class: "np-label pt-3",
                 if id.is_empty() { div { class: "text-sm font-semibold text-strong", "{label}" } }
                 else { label { r#for: id, class: "text-sm font-semibold text-strong", "{label}" } }

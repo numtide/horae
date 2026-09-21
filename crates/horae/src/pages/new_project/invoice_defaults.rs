@@ -32,8 +32,8 @@ pub(super) fn InvoiceDefaults(mut form: Signal<ProjectForm>) -> Element {
         .collect();
     rsx! {
         section { class: "mt-8", aria_labelledby: "np-invoice-heading",
-            div { class: "flex flex-wrap items-baseline gap-3 pb-2 border-b",
-                h2 { id: "np-invoice-heading", class: "text-xl font-semibold", "Invoice defaults" }
+            div { class: "flex flex-wrap items-baseline gap-3 pb-2 border-b border-light",
+                h2 { id: "np-invoice-heading", class: "text-xl font-semibold m-0", "Invoice defaults" }
                 p { class: "text-xs text-subtle m-0", "Pre-filled when preparing an invoice — editable per invoice" }
             }
             FormRow { label: "Payment terms", id: "np-terms",
