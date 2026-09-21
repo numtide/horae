@@ -172,6 +172,25 @@ fn compact_input_adds_utilities_and_accessible_name_without_losing_native_state(
 }
 
 #[tokio::test]
+async fn assignment_controls_reuse_searchable_picker_and_compact_task_entry() {
+    let html = render(Probe::default());
+    for attribute in [
+        "id=\"np-add-person\"",
+        "aria-label=\"Choose teammate\"",
+        "aria-label=\"Search teammate\"",
+        "aria-label=\"Find or create a task\"",
+        "placeholder=\"Add a task and press Enter\"",
+        "input-group flex-1 basis-assignment-picker min-w-0 h-10",
+    ] {
+        assert!(
+            html.contains(attribute),
+            "Missing assignment control: {attribute}"
+        );
+    }
+    assert!(!html.contains("Search teammates</label>"));
+}
+
+#[tokio::test]
 async fn empty_form_has_labelled_fields_no_demo_data_and_no_spurious_save() {
     let probe = Probe::default();
     let html = render(probe.clone());

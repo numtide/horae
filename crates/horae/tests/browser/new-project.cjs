@@ -31,7 +31,8 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
   // interrupted mutations below still exercise the application's retry paths.
   const readsFinished = tab => expect.poll(() => requests.get(tab).size).toBe(0);
   const screen = page.locator('.np-page');
-  const saved = () => expect(screen.getByRole('status')).toContainText('Draft saved at');
+  const draftStatus = screen.locator('header').getByRole('status');
+  const saved = () => expect(draftStatus).toContainText('Draft saved at');
   const chooseDate = async (label, day) => {
     await screen.getByLabel(label, { exact: true }).click();
     const calendar = page.getByRole('dialog', { name: `Choose ${label}`, exact: true });
@@ -53,7 +54,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await page.getByRole('link', { name: 'Projects', exact: true }).click();
     await page.getByRole('link', { name: 'New project', exact: true }).click();
     await expect(page).toHaveURL(`${base}/projects/new`);
-    await expect(screen.getByRole('status')).toHaveText('No draft saved yet');
+    await expect(draftStatus).toHaveText('No draft saved yet');
     await expect(screen.getByRole('button', { name: 'Save project', exact: true })).toBeDisabled();
 
     const typeCards = screen.locator('.np-types');
@@ -232,13 +233,100 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     assert.ok(Math.abs((budgetTypeBox.y + budgetTypeBox.height / 2) -
       (budgetAmountBox.y + budgetAmountBox.height / 2)) <= 1, 'Budget type and amount align in a desktop row');
     await expect(screen.getByRole('checkbox', { name: /^Email me/ })).toBeDisabled();
+    const addPerson = screen.locator('#np-add-person');
+    assert.equal(await addPerson.evaluate(node => node.tagName), 'BUTTON', 'Team uses the shared searchable selector');
+    await addPerson.click();
+    const peoplePicker = page.getByRole('dialog', { name: 'Choose teammate', exact: true });
+    const peopleSearch = peoplePicker.getByRole('searchbox', { name: 'Search teammate', exact: true });
+    await expect(peopleSearch).toBeFocused();
+    await peopleSearch.fill('No matching teammate');
+    await expect(peoplePicker.getByRole('status')).toHaveText('No matching teammates.');
+    await readsFinished(page);
+    let releasePeople;
+    await page.route('**/api/project_creation_options*', async route => {
+      const response = await route.fetch();
+      await new Promise(resolve => { releasePeople = resolve; });
+      return route.fulfill({ response });
+    });
+    try {
+      await peopleSearch.fill('Admin');
+      await expect(peoplePicker.getByRole('status')).toHaveText('Loading choices…');
+      await expect.poll(() => !!releasePeople).toBe(true);
+      assert.equal(await peoplePicker.getByRole('option').evaluateAll(items => items.every(item => item.disabled)), true);
+      releasePeople();
+      await expect(peoplePicker.getByRole('option', { name: 'Admin User', exact: true })).toBeEnabled();
+      await peopleSearch.press('ArrowDown');
+      await expect(peoplePicker.getByRole('option', { name: 'Admin User', exact: true })).toBeFocused();
+      await page.keyboard.press('Enter');
+      await expect(peoplePicker).not.toBeVisible();
+      await expect(addPerson).toBeFocused();
+      await readsFinished(page);
+    } finally {
+      releasePeople?.();
+      await page.unroute('**/api/project_creation_options*');
+    }
+    await addPerson.click();
+    await expect(peoplePicker.getByRole('option', { name: 'Admin User', exact: true })).toBeDisabled();
+    await readsFinished(page);
+    await page.route('**/api/project_creation_options*', route => route.abort());
+    await peopleSearch.fill('Unavailable teammate search');
+    await expect(peoplePicker.getByRole('alert')).toContainText('Could not search teammates');
+    await expect(screen.getByRole('button', { name: 'Remove Admin User from project', exact: true })).toHaveCount(1);
+    await readsFinished(page);
+    await page.unroute('**/api/project_creation_options*');
+    await peoplePicker.getByRole('button', { name: 'Retry teammate search', exact: true }).click();
+    await expect(peoplePicker.getByRole('status')).toHaveText('No matching teammates.');
+    await peopleSearch.press('Escape');
+    await expect(addPerson).toBeFocused();
+    await screen.getByRole('button', { name: 'Remove Admin User from project', exact: true }).click();
     await screen.getByRole('button', { name: 'Add everyone', exact: true }).click();
     await expect(screen.getByLabel('Project name', { exact: true })).toBeEnabled();
     await expect(screen.getByRole('checkbox', { name: /manages this project/ }).first()).toBeVisible();
     await screen.getByRole('checkbox', { name: /manages this project/ }).first().check();
-    await screen.getByRole('region', { name: 'Tasks', exact: true }).getByRole('button', { name: 'Development', exact: true }).click();
-    await screen.locator('#np-task-search').fill('Browser custom task');
-    await screen.getByRole('button', { name: 'Add task', exact: true }).click();
+    const tasksSection = screen.getByRole('region', { name: 'Tasks', exact: true });
+    const taskSearch = tasksSection.getByRole('textbox', { name: 'Find or create a task', exact: true });
+    const addTask = tasksSection.getByRole('button', { name: 'Add task', exact: true });
+    await readsFinished(page);
+    let releaseTasks;
+    await page.route('**/api/project_creation_options*', async route => {
+      const response = await route.fetch();
+      await new Promise(resolve => { releaseTasks = resolve; });
+      return route.fulfill({ response });
+    });
+    try {
+      await taskSearch.fill('Development');
+      await expect(tasksSection.getByRole('status')).toHaveText('Searching tasks…');
+      await expect.poll(() => !!releaseTasks).toBe(true);
+      await expect(addTask).toBeDisabled();
+      await expect(tasksSection.getByRole('button', { name: 'Design', exact: true })).toHaveCount(0);
+      await taskSearch.press('Enter');
+      await expect(tasksSection.getByRole('button', { name: 'Remove task Development', exact: true })).toHaveCount(0);
+      releaseTasks();
+      await expect(addTask).toBeEnabled();
+      await page.unroute('**/api/project_creation_options*');
+      await taskSearch.press('Enter');
+      await expect(tasksSection.getByRole('button', { name: 'Remove task Development', exact: true })).toHaveCount(1);
+      await readsFinished(page);
+    } finally {
+      releaseTasks?.();
+      await page.unroute('**/api/project_creation_options*');
+    }
+    await expect(tasksSection.getByRole('button', { name: 'Development', exact: true })).toBeDisabled();
+    await page.route('**/api/project_creation_options*', route => route.abort());
+    await taskSearch.fill('Browser custom task');
+    await expect(tasksSection.getByRole('alert')).toContainText('Could not search tasks');
+    await expect(addTask).toBeDisabled();
+    await taskSearch.press('Enter');
+    await expect(taskSearch).toHaveValue('Browser custom task');
+    await expect(tasksSection.getByRole('button', { name: 'Remove task Browser custom task', exact: true })).toHaveCount(0);
+    await readsFinished(page);
+    await page.unroute('**/api/project_creation_options*');
+    await tasksSection.getByRole('button', { name: 'Retry task search', exact: true }).click();
+    await expect(tasksSection.getByRole('status')).toHaveText('No matching tasks. Add this name as a new task.');
+    await addTask.click();
+    await expect(taskSearch).toBeFocused();
+    assert.equal((await taskSearch.locator('..').boundingBox()).height, 40, 'Task entry matches the compact design control');
+    console.log('PASS: task and teammate searches handle pending results, keyboard selection, duplicates and retry');
     const teamSection = screen.getByRole('region', { name: 'Team', exact: true });
     const costInput = teamSection.locator('input[id^="np-cost-rate-"]').first();
     assert.equal((await costInput.boundingBox()).width, 120, 'Project cost overrides are compact');
@@ -255,6 +343,13 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await costInput.fill('0');
     for (const width of [390, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
+      await addPerson.click();
+      await expect(peoplePicker.getByRole('option', { name: 'Admin User', exact: true })).toBeDisabled();
+      const pickerBox = await peoplePicker.boundingBox();
+      assert.ok(pickerBox.x >= 0 && pickerBox.x + pickerBox.width <= width, 'Teammate search fits the viewport');
+      await peopleSearch.press('Escape');
+      await expect(addPerson).toBeFocused();
+      await readsFinished(page);
       for (const input of await teamSection.locator('.np-row-controls input').all()) {
         assert.equal((await input.boundingBox()).width, 120);
       }
@@ -530,7 +625,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
       await screen.getByLabel('Project name', { exact: true }).fill('Older snapshot');
       await expect.poll(() => !!release).toBe(true);
       await screen.getByLabel('Project name', { exact: true }).fill('Edited during save');
-      await expect(screen.getByRole('status')).toHaveText('Saving draft…');
+      await expect(draftStatus).toHaveText('Saving draft…');
       hold = false;
       release();
       await saved();
@@ -559,7 +654,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     });
     await screen.getByLabel('Project name', { exact: true }).fill('Acknowledgement lost');
     await expect(screen.getByRole('alert')).toBeVisible();
-    await expect(screen.getByRole('status')).toHaveText('Changes need attention');
+    await expect(draftStatus).toHaveText('Changes need attention');
     await screen.getByLabel('Project name', { exact: true }).fill('Recovered latest edit');
     await screen.getByRole('button', { name: 'Retry request', exact: true }).click();
     await saved();
@@ -780,7 +875,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     console.log('PASS: project invoice defaults prefill real estimates, stale reviews cannot generate, and editable draft values persist independently');
     await page.goto(`${base}/projects/new`);
     await expect(screen.getByLabel('Project name', { exact: true })).toHaveValue('');
-    await expect(screen.getByRole('status')).toHaveText('No draft saved yet');
+    await expect(draftStatus).toHaveText('No draft saved yet');
     console.log('PASS: lost creation response is idempotent and clears the completed draft');
 
     await screen.getByLabel('Project name', { exact: true }).fill('Two tab draft');
@@ -793,7 +888,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
       await saved();
       await second.getByLabel('Project name', { exact: true }).fill('Stale tab edit');
       await expect(second.locator('.np-page').getByRole('alert')).toBeVisible();
-      await expect(second.locator('.np-page').getByRole('status')).toHaveText('Changes need attention');
+      await expect(second.locator('.np-page header').getByRole('status')).toHaveText('Changes need attention');
       await second.getByRole('button', { name: 'Reload saved draft (lose local edits)', exact: true }).click();
       await expect(second.getByLabel('Project name', { exact: true })).toHaveValue('First tab acknowledged');
     } finally {
@@ -812,7 +907,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await readsFinished(page);
     await page.goto(`${base}/projects/new`);
     await expect(screen.getByLabel('Project name', { exact: true })).toHaveValue('');
-    await expect(screen.getByRole('status')).toHaveText('No draft saved yet');
+    await expect(draftStatus).toHaveText('No draft saved yet');
     console.log('PASS: stale tabs cannot overwrite saved input; explicit discard removes only the draft');
     assert.deepEqual(errors, []);
   } catch (error) {

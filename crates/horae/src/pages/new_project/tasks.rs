@@ -20,7 +20,7 @@ pub(super) fn Tasks(
     let mut query = use_signal(String::new);
     let mut error = use_signal(|| None::<String>);
     let mut editing_access = use_signal(|| None::<Uuid>);
-    let results = use_resource(move || {
+    let mut results = use_resource(move || {
         let query = query();
         async move {
             let mut search = CreationSearch::default();
@@ -28,9 +28,12 @@ pub(super) fn Tasks(
             server_fns::project_creation_options(search).await
         }
     });
+    let pending = results.state()() != UseResourceState::Ready;
+    let search_ready = !pending && matches!(&*results.read(), Some(Ok(_)));
     let choices = results
         .read()
         .as_ref()
+        .filter(|_| !pending)
         .and_then(|result| result.as_ref().ok())
         .map(|result| result.tasks.clone())
         .unwrap_or_default();
@@ -65,6 +68,10 @@ pub(super) fn Tasks(
         query.set(String::new());
     });
     let add_named = use_callback(move |_| {
+        if results.state()() != UseResourceState::Ready || !matches!(&*results.read(), Some(Ok(_)))
+        {
+            return;
+        }
         let name = query.read().trim().to_string();
         if name.is_empty() || name.chars().count() > 200 {
             error.set(Some("Enter a task name from 1 to 200 characters.".into()));
@@ -110,22 +117,25 @@ pub(super) fn Tasks(
                 TaskRow { key: "{task.id}", form, options, id: task.id, on_access: move |id| editing_access.set(Some(id)) }
             }
             if form.read().tasks.is_empty() { p { class: "text-sm text-subtle px-5", "No tasks selected yet." } }
-            div { class: "p-5",
+            div { class: "px-5 py-3",
                 if form.read().project_type == ProjectType::TimeAndMaterials && form.read().rate_mode == RateMode::Task {
                     p { class: "form-hint mt-0", "Blank rates inherit the catalog rate, then the client's default. Rates are not converted between currencies." }
                 }
                 if let Some(message) = error() { p { class: "text-sm text-danger", role: "alert", "{message}" } }
-                label { class: "form-label", r#for: "np-task-search", "Find or create a task" }
-                div { class: "flex flex-wrap gap-3",
-                    input { class: "form-input", id: "np-task-search", value: query(), placeholder: "Task name", oninput: move |event| query.set(event.value()), onkeydown: move |event| { if event.key() == Key::Enter { event.prevent_default(); add_named.call(()); } } }
-                    button { r#type: "button", class: "btn btn-secondary", disabled: query.read().trim().is_empty(), onclick: move |_| add_named.call(()), "Add task" }
-                }
-                p { class: "form-hint", "New catalog tasks are created only when you save this project." }
-                div { class: "flex flex-wrap gap-2 mt-3",
+                div { class: "flex flex-wrap items-center gap-3", aria_busy: pending,
+                    div { class: "input-group flex-1 basis-assignment-picker min-w-0 h-10 px-3 gap-2",
+                        span { class: "flex items-center text-faint", aria_hidden: "true", "+" }
+                        input { class: "input-group-field p-0", id: "np-task-search", aria_label: "Find or create a task", value: query(), placeholder: "Add a task and press Enter", oninput: move |event| query.set(event.value()), onkeydown: move |event| { if event.key() == Key::Enter { event.prevent_default(); add_named.call(()); } } }
+                    }
+                    button { r#type: "button", class: "btn btn-secondary", disabled: !search_ready || query.read().trim().is_empty(), onclick: move |_| {
+                        add_named.call(());
+                        document::eval("document.getElementById('np-task-search')?.focus()");
+                    }, "Add task" }
                     for task in choices {
                         button { key: "{task.id}", r#type: "button", class: "btn btn-secondary btn-sm rounded-full",
                             disabled: form.read().tasks.iter().any(|item| matches!(item.source, TaskSource::Existing { task_id } if task_id == task.id)),
                             onclick: move |_| {
+                                if results.state()() != UseResourceState::Ready { return; }
                                 let id = task.id;
                                 if !options.peek().tasks.iter().any(|item| item.id == id) { options.write().tasks.push(task.clone()); }
                                 add.call(TaskSource::Existing { task_id: id });
@@ -134,10 +144,19 @@ pub(super) fn Tasks(
                         }
                     }
                 }
-                match &*results.read() {
-                    Some(Err(problem)) => rsx! { p { class: "text-sm text-danger", role: "alert", "Could not search tasks: {problem}" } },
-                    Some(Ok(result)) if result.more_tasks => rsx! { p { class: "form-hint", "Showing 50 matches. Refine the name to find another task." } },
-                    _ => rsx! {},
+                p { class: "form-hint", "New catalog tasks are created only when you save this project." }
+                if pending {
+                    p { class: "text-sm text-subtle m-0", role: "status", "Searching tasks…" }
+                } else {
+                    match &*results.read() {
+                        Some(Err(problem)) => rsx! {
+                            p { class: "text-sm text-danger", role: "alert", "Could not search tasks: {problem}" }
+                            button { r#type: "button", class: "btn btn-secondary btn-sm", onclick: move |_| results.restart(), "Retry task search" }
+                        },
+                        Some(Ok(result)) if result.tasks.is_empty() && !query.read().trim().is_empty() => rsx! { p { class: "text-sm text-subtle m-0", role: "status", "No matching tasks. Add this name as a new task." } },
+                        Some(Ok(result)) if result.more_tasks => rsx! { p { class: "form-hint", "Showing 50 matches. Refine the name to find another task." } },
+                        _ => rsx! {},
+                    }
                 }
             }
         }

@@ -8,7 +8,9 @@ use uuid::Uuid;
 
 use crate::components::avatar::{Avatar, first_initial};
 use crate::components::controls::Checkbox;
-use crate::components::form::{FormGroup, Input};
+use crate::components::form::Input;
+use crate::components::icons::NavIcon;
+use crate::components::select_field::SelectField;
 use crate::models::project_creation::{
     CreationOptions, CreationPerson, CreationSearch, ProjectForm, ProjectMemberInput,
     ReportVisibility, TaskAccess,
@@ -42,9 +44,9 @@ pub(super) fn Team(
     mut options: Signal<CreationOptions>,
     mut busy: Signal<bool>,
 ) -> Element {
-    let mut query = use_signal(String::new);
+    let query = use_signal(String::new);
     let mut error = use_signal(|| None::<String>);
-    let people = use_resource(move || {
+    let mut people = use_resource(move || {
         let query = query();
         async move {
             let mut search = CreationSearch::default();
@@ -52,12 +54,29 @@ pub(super) fn Team(
             server_fns::project_creation_options(search).await
         }
     });
+    let pending = people.state()() != UseResourceState::Ready;
     let choices = people
         .read()
         .as_ref()
+        .filter(|_| !pending)
         .and_then(|result| result.as_ref().ok())
         .map(|result| result.people.clone())
         .unwrap_or_default();
+    let choices = std::iter::once((String::new(), "Add a teammate…".into()))
+        .chain(
+            choices
+                .into_iter()
+                .map(|person| (person.id.to_string(), person.name)),
+        )
+        .collect();
+    let disabled_people = std::iter::once(String::new())
+        .chain(
+            form.read()
+                .team
+                .iter()
+                .map(|member| member.user_id.to_string()),
+        )
+        .collect();
     rsx! {
         section { class: "bg-secondary border rounded-xl mt-4", aria_labelledby: "np-team-heading",
             div { class: "flex flex-wrap items-baseline gap-3 py-4 px-5 border-b",
@@ -67,31 +86,39 @@ pub(super) fn Team(
             }
             for member in form.read().team.clone() { MemberRow { key: "{member.user_id}", form, options, id: member.user_id } }
             if form.read().team.is_empty() { p { class: "text-sm text-subtle px-5", "No teammates selected yet." } }
-            div { class: "p-5",
+            div { class: "px-5 py-3",
                 p { class: "form-hint mt-0", "Blank billable rates inherit the person's profile, then the client's default. Blank costs inherit only the profile cost. Rates are not converted between currencies. Overrides affect only this project." }
                 if let Some(message) = error() { p { class: "text-sm text-danger", role: "alert", "{message}" } }
-                FormGroup { label: "Search teammates", id: "np-team-search",
-                    Input { id: "np-team-search", value: query(), oninput: move |event: FormEvent| query.set(event.value()) }
-                }
                 div { class: "flex flex-wrap items-center gap-3",
-                    select { id: "np-add-person", class: "form-select", aria_label: "Add a teammate", disabled: busy(),
-                        onchange: move |event| {
-                            let Ok(id) = Uuid::parse_str(&event.value()) else { return; };
-                            if let Some(Ok(result)) = &*people.read()
-                                && let Some(person) = result.people.iter().find(|person| person.id == id)
-                            {
-                                match add_members(&mut form.write(), std::slice::from_ref(person)) {
-                                    Ok(()) => {
-                                        if !options.peek().people.iter().any(|existing| existing.id == id) { options.write().people.push(person.clone()); }
-                                        error.set(None);
+                    div { class: "flex-1 basis-assignment-picker min-w-0",
+                        SelectField { id: "np-add-person", label: "teammate", options: choices,
+                            selected: "", query: Some(query), disabled_values: disabled_people, pending,
+                            onselect: move |value: String| {
+                                if busy() || people.state()() != UseResourceState::Ready { return; }
+                                let Ok(id) = Uuid::parse_str(&value) else { return; };
+                                if let Some(Ok(result)) = &*people.read()
+                                    && let Some(person) = result.people.iter().find(|person| person.id == id)
+                                {
+                                    match add_members(&mut form.write(), std::slice::from_ref(person)) {
+                                        Ok(()) => {
+                                            if !options.peek().people.iter().any(|existing| existing.id == id) { options.write().people.push(person.clone()); }
+                                            error.set(None);
+                                        }
+                                        Err(message) => error.set(Some(message.into())),
                                     }
-                                    Err(message) => error.set(Some(message.into())),
+                                }
+                            },
+                            if !pending {
+                                match &*people.read() {
+                                    Some(Err(problem)) => rsx! {
+                                        p { class: "text-sm text-danger p-2", role: "alert", "Could not search teammates: {problem}" }
+                                        button { r#type: "button", class: "btn btn-secondary btn-sm", onclick: move |_| people.restart(), "Retry teammate search" }
+                                    },
+                                    Some(Ok(result)) if result.people.is_empty() => rsx! { p { class: "text-sm text-subtle p-2 m-0", role: "status", "No matching teammates." } },
+                                    Some(Ok(result)) if result.more_people => rsx! { p { class: "form-hint p-2", "Showing 50 matches. Refine your search, or use Add everyone for the whole active team." } },
+                                    _ => rsx! {},
                                 }
                             }
-                        },
-                        option { value: "", selected: true, "Add a teammate…" }
-                        for person in choices {
-                            option { key: "{person.id}", value: "{person.id}", disabled: form.read().team.iter().any(|member| member.user_id == person.id), "{person.name}" }
                         }
                     }
                     button { r#type: "button", class: "btn btn-secondary", disabled: busy(), onclick: move |_| {
@@ -119,12 +146,7 @@ pub(super) fn Team(
                             if let Err(message) = result { error.set(Some(message)); }
                             busy.set(false);
                         });
-                    }, if busy() { "Loading everyone…" } else { "Add everyone" } }
-                }
-                match &*people.read() {
-                    Some(Err(problem)) => rsx! { p { class: "text-sm text-danger", role: "alert", "Could not search teammates: {problem}" } },
-                    Some(Ok(result)) if result.more_people => rsx! { p { class: "form-hint", "Showing 50 matches. Refine your search, or use Add everyone for the whole active team." } },
-                    _ => rsx! {},
+                    }, NavIcon { name: "users" } if busy() { "Loading everyone…" } else { "Add everyone" } }
                 }
             }
         }

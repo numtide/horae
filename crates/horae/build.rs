@@ -155,8 +155,13 @@ fn families() -> Vec<Family> {
                 ("w-60", "width: var(--space-60)"),
                 ("w-form-select", "width: var(--width-form-select)"),
                 ("basis-form-select", "flex-basis: var(--width-form-select)"),
+                (
+                    "basis-assignment-picker",
+                    "flex-basis: var(--width-assignment-picker)",
+                ),
                 ("max-w-full", "max-width: 100%"),
                 ("h-full", "height: 100%"),
+                ("h-10", "height: var(--space-10)"),
                 ("size-8", "width: var(--space-8); height: var(--space-8)"),
                 ("size-4", "width: var(--space-4); height: var(--space-4)"),
                 ("min-w-0", "min-width: 0"),
