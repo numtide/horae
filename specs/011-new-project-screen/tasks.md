@@ -116,7 +116,8 @@
 
 - [ ] T051 Perform adversarial review of the complete diff against `specs/011-new-project-screen/spec.md`, Rust skills and shared CSS; fix all material findings and preserve regression tests.
 - [ ] T052 Regenerate `.sqlx/` against isolated migrated PostgreSQL; run core/server tests, server Clippy, WASM check, formatting, generated utilities and flake gates from `specs/011-new-project-screen/quickstart.md`.
-- [ ] T053 Document deployment mail configuration/limits and feature route in `DESIGN.md` and existing appropriate configuration docs; ensure `design/project/` remains unchanged.
+- [x] T053 Document deployment mail configuration/limits and feature route in `DESIGN.md` and existing appropriate configuration docs; ensure `design/project/` remains unchanged.
+  - README documents the creation route, paired optional mail variables, executable/address requirements, NixOS service constraints, 20-second/five-attempt limits, transport acknowledgement semantics and read-only diagnostics. DESIGN records the route, shared-shell opt-in, token/utility mapping and links to the remaining acceptance checklist. Checked against configuration/delivery code and the NixOS module; the documented SQL ran successfully on the isolated schema. No deployment configuration or handoff source was changed.
 - [ ] T054 Commit scoped changes on `feat/new-project-screen`, open a human-readable PR with test evidence and explicit limitations from `specs/011-new-project-screen/quickstart.md`; do not merge.
 
 ## Dependencies and execution
