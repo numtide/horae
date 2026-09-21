@@ -291,7 +291,7 @@ async fn streamed_invoice_uses_stored_exact_cents_and_tenant_scoped_metadata(poo
     let bytes = body(result).await;
     assert_eq!(
         String::from_utf8(bytes).unwrap(),
-        "Description,Hours,Rate,Amount\n\"Quoted \"\"界\"\",\nline\",0.00,92233720368547758.07,92233720368547758.07\nTotal,,,92233720368547758.07\n"
+        "Description,Hours,Rate,Amount,Currency,Issued on,Due on,Payment terms (days),Purchase order\n\"Quoted \"\"界\"\",\nline\",0.00,92233720368547758.07,92233720368547758.07,EUR,2026-09-07,2026-10-07,30,\nSubtotal,,,92233720368547758.07,EUR,2026-09-07,2026-10-07,30,\nTotal,,,92233720368547758.07,EUR,2026-09-07,2026-10-07,30,\n"
     );
     assert_eq!(
         invoice(pool.clone(), other.org_id, invoice_id)
@@ -324,14 +324,40 @@ async fn streamed_fee_invoice_has_no_fabricated_hours_or_hourly_rate(pool: PgPoo
     let ids = seed(&pool, OrgRole::Manager).await;
     let invoice_id = Uuid::now_v7();
     let fee_id = Uuid::now_v7();
-    sqlx::query!("INSERT INTO invoices (id,org_id,client_id,number,issued_on,due_on,currency,total_cents) VALUES ($1,$2,$3,'FEE-1','2026-09-01','2026-10-01','EUR',12500)", invoice_id, ids.org_id, ids.client_id).execute(&pool).await.unwrap();
+    sqlx::query!("INSERT INTO invoices (id,org_id,client_id,number,issued_on,due_on,currency,total_cents,po_number,discount_bps,discount_cents,tax1_bps,tax1_cents,tax2_name,tax2_bps,tax2_cents) VALUES ($1,$2,$3,'FEE-1','2026-09-01','2026-09-22','EUR',13782,$4,1000,1250,2100,2363,$5,150,169)", invoice_id, ids.org_id, ids.client_id, "PO \"界\",\n123", "Local \"tax\"").execute(&pool).await.unwrap();
     sqlx::query!("INSERT INTO project_fee_occurrences (id,org_id,project_id,period_key,due_on,description,amount_cents,currency,invoice_id) VALUES ($1,$2,$3,'single','2026-09-01','Fixed fee',12500,'EUR',$4)", fee_id, ids.org_id, ids.project_id, invoice_id).execute(&pool).await.unwrap();
     sqlx::query!("INSERT INTO invoice_line_items (id,invoice_id,fee_occurrence_id,description,amount_cents) VALUES ($1,$2,$3,'Fixed fee',12500)", Uuid::now_v7(), invoice_id, fee_id).execute(&pool).await.unwrap();
     let bytes = body(invoice(pool, ids.org_id, invoice_id).await.unwrap()).await;
+    let mut reader = csv::Reader::from_reader(bytes.as_slice());
     assert_eq!(
-        String::from_utf8(bytes).unwrap(),
-        "Description,Hours,Rate,Amount\nFixed fee,,,125.00\nTotal,,,125.00\n"
+        reader.headers().unwrap().iter().collect::<Vec<_>>(),
+        super::super::INVOICE_HEADERS
     );
+    let rows = reader.records().collect::<Result<Vec<_>, _>>().unwrap();
+    assert_eq!(rows.len(), 6);
+    for (row, (label, amount)) in rows.iter().zip([
+        ("Fixed fee", "125.00"),
+        ("Subtotal", "125.00"),
+        ("Discount (10.00%)", "-12.50"),
+        ("Tax (21.00%)", "23.63"),
+        ("Local \"tax\" (1.50%)", "1.69"),
+        ("Total", "137.82"),
+    ]) {
+        assert_eq!(
+            row.iter().collect::<Vec<_>>(),
+            [
+                label,
+                "",
+                "",
+                amount,
+                "EUR",
+                "2026-09-01",
+                "2026-09-22",
+                "21",
+                "PO \"界\",\n123"
+            ]
+        );
+    }
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -431,7 +457,7 @@ async fn streamed_invoice_metadata_and_lines_share_one_snapshot(pool: PgPool) {
     let bytes = body(task.await.unwrap().unwrap()).await;
     assert_eq!(
         String::from_utf8(bytes).unwrap(),
-        "Description,Hours,Rate,Amount\nOriginal,1.00,1.00,1.00\nTotal,,,1.00\n"
+        "Description,Hours,Rate,Amount,Currency,Issued on,Due on,Payment terms (days),Purchase order\nOriginal,1.00,1.00,1.00,EUR,2026-09-07,2026-10-07,30,\nSubtotal,,,1.00,EUR,2026-09-07,2026-10-07,30,\nTotal,,,1.00,EUR,2026-09-07,2026-10-07,30,\n"
     );
     export_pool.close().await;
 }

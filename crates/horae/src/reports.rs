@@ -554,6 +554,45 @@ pub async fn export_invoice_xlsx(
     ))
 }
 
+const INVOICE_HEADERS: [&str; 9] = [
+    "Description",
+    "Hours",
+    "Rate",
+    "Amount",
+    "Currency",
+    "Issued on",
+    "Due on",
+    "Payment terms (days)",
+    "Purchase order",
+];
+
+fn invoice_export_metadata(invoice: &crate::models::Invoice) -> [String; 5] {
+    [
+        invoice.currency.trim().into(),
+        invoice.issued_on.to_string(),
+        invoice.due_on.to_string(),
+        invoice.terms_days.to_string(),
+        invoice.po_number.clone(),
+    ]
+}
+
+fn write_invoice_amount(
+    sheet: &mut rust_xlsxwriter::Worksheet,
+    row: u32,
+    column: u16,
+    cents: i64,
+) -> Result<(), StatusCode> {
+    // Excel keeps 15 significant digits. Larger amounts must be text to retain cents.
+    let result = if cents.unsigned_abs() <= 999_999_999_999_999 {
+        sheet.write_number(row, column, cents as f64 / 100.0)
+    } else {
+        sheet.write_string(row, column, format_cents_plain(cents))
+    };
+    result
+        .map(|_| ())
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
 fn invoice_xlsx(
     invoice: &crate::models::Invoice,
     lines: &[crate::models::InvoiceLine],
@@ -561,8 +600,7 @@ fn invoice_xlsx(
     let mut workbook = rust_xlsxwriter::Workbook::new();
     let worksheet = workbook.add_worksheet();
 
-    let headers = ["Description", "Hours", "Rate", "Amount"];
-    for (col, h) in headers.iter().enumerate() {
+    for (col, h) in INVOICE_HEADERS.iter().enumerate() {
         worksheet
             .write_string(0, col as u16, *h)
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -579,23 +617,27 @@ fn invoice_xlsx(
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         }
         if let Some(rate) = line.rate_cents {
-            worksheet
-                .write_number(r, 2, rate as f64 / 100.0)
-                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            write_invoice_amount(worksheet, r, 2, rate)?;
         }
-        worksheet
-            .write_number(r, 3, line.amount_cents as f64 / 100.0)
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        write_invoice_amount(worksheet, r, 3, line.amount_cents)?;
     }
 
-    // Total row
-    let total_row = (lines.len() + 1) as u32;
-    worksheet
-        .write_string(total_row, 0, "Total")
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    worksheet
-        .write_number(total_row, 3, invoice.total_cents as f64 / 100.0)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let breakdown = invoice.breakdown();
+    for (index, (label, cents)) in breakdown.iter().enumerate() {
+        let row = (lines.len() + index + 1) as u32;
+        worksheet
+            .write_string(row, 0, label)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        write_invoice_amount(worksheet, row, 3, *cents)?;
+    }
+    let metadata = invoice_export_metadata(invoice);
+    for row in 1..=(lines.len() + breakdown.len()) as u32 {
+        for (column, value) in metadata.iter().enumerate() {
+            worksheet
+                .write_string(row, column as u16 + 4, value)
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        }
+    }
 
     bounded::workbook_bytes(&mut workbook)
 }

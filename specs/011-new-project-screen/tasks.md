@@ -89,7 +89,7 @@
 - [ ] T042 [US5] Implement project invoice preparation, mixed-default resolution, checked adjustments and draft-only override mutation in `crates/horae/src/server_fns/invoices.rs`.
   - Generation now inherits or explicitly resolves defaults, limits selected projects, snapshots checked components and allows row-locked draft edits. The typed APIs are implemented; read-only preparation/previews and their interactive integration remain required before completing this task. T043/T044 still own editable controls and visible/exported component breakdowns.
 - [ ] T043 [US5] Implement payment terms/custom days/PO/tax/second-tax/discount form controls in `crates/horae/src/pages/new_project.rs` and editable prepared defaults/fee rows in `crates/horae/src/pages/invoices.rs`.
-- [ ] T044 [US5] Render/export invoice-owned components and fee rows in `crates/horae/src/reports.rs`, `crates/horae/src/reports/streaming.rs`, `crates/horae/src/reports/limits.rs`, `crates/horae/templates/invoice.typ`, with CSV/XLSX/PDF regressions.
+- [x] T044 [US5] Render/export invoice-owned components and fee rows in `crates/horae/src/reports.rs`, `crates/horae/src/reports/streaming.rs`, `crates/horae/src/reports/limits.rs`, `crates/horae/templates/invoice.typ`, with CSV/XLSX/PDF regressions.
 
 ## Phase 8: US6 — Design and accessibility (P2)
 

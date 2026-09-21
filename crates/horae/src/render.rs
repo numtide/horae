@@ -47,7 +47,25 @@ fn build_inputs(
         "currency".into(),
         invoice.currency.trim().to_string().into_value(),
     );
-    dict.insert("total_cents".into(), invoice.total_cents.into_value());
+    dict.insert(
+        "terms_days".into(),
+        i64::from(invoice.terms_days).into_value(),
+    );
+    dict.insert("po_number".into(), invoice.po_number.clone().into_value());
+    let breakdown: Vec<Value> = invoice
+        .breakdown()
+        .into_iter()
+        .map(|(label, cents)| {
+            let mut row = Dict::new();
+            row.insert("label".into(), label.into_value());
+            row.insert("cents".into(), cents.into_value());
+            Value::Dict(row)
+        })
+        .collect();
+    dict.insert(
+        "breakdown".into(),
+        Value::Array(breakdown.as_slice().into()),
+    );
     dict.insert("notes".into(), opt(&invoice.notes));
 
     dict.insert("client_name".into(), client_name.to_string().into_value());
@@ -141,6 +159,35 @@ pub fn render_invoice_pdf(
         typst_pdf::pdf(&doc, &options).map_err(|e| anyhow::anyhow!("PDF export failed: {e:?}"))?;
 
     Ok(pdf_bytes)
+}
+
+#[cfg(test)]
+pub(crate) fn invoice_text(
+    invoice: &Invoice,
+    lines: &[InvoiceLine],
+    branding: &OrgBranding,
+) -> String {
+    fn visit(frame: &typst::layout::Frame, text: &mut String) {
+        for (_, item) in frame.items() {
+            match item {
+                typst::layout::FrameItem::Group(group) => visit(&group.frame, text),
+                typst::layout::FrameItem::Text(run) => {
+                    text.push_str(&run.text);
+                    text.push('\n');
+                }
+                _ => {}
+            }
+        }
+    }
+    let document: typst_layout::PagedDocument = build_engine()
+        .compile_with_input(build_inputs(invoice, lines, "Client", None, None, branding))
+        .output
+        .unwrap();
+    let mut text = String::new();
+    for page in document.pages() {
+        visit(&page.frame, &mut text);
+    }
+    text
 }
 
 #[cfg(test)]

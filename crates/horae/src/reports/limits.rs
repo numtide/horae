@@ -147,8 +147,10 @@ async fn read_invoice(
     limits: Limits,
 ) -> Result<(Invoice, Vec<InvoiceLine>), StatusCode> {
     let size = sqlx::query!(
-        r#"SELECT (octet_length(number)::bigint + octet_length(currency) + COALESCE(octet_length(notes), 0)) as "bytes!",
-                  GREATEST(octet_length(number), octet_length(currency), COALESCE(octet_length(notes), 0)) as "field_bytes!"
+        r#"SELECT (octet_length(number)::bigint + octet_length(currency) + COALESCE(octet_length(notes), 0)
+                    + octet_length(po_number) + COALESCE(octet_length(tax2_name), 0)) as "bytes!",
+                  GREATEST(octet_length(number), octet_length(currency), COALESCE(octet_length(notes), 0),
+                    octet_length(po_number), COALESCE(octet_length(tax2_name), 0)) as "field_bytes!"
            FROM invoices WHERE id = $1 AND org_id = $2"#,
         invoice_id, org_id,
     ).fetch_optional(&mut *connection).await.map_err(database_error)?.ok_or(StatusCode::NOT_FOUND)?;
@@ -263,6 +265,103 @@ mod tests {
             element.contains(&format!("<v>{value}</v>")),
             "{cell}: {element}"
         );
+    }
+
+    fn assert_text_cell(workbook: &[u8], cell: &str, expected: &str) {
+        let sheet = xlsx_part(workbook, "xl/worksheets/sheet1.xml");
+        let (_, after) = sheet.split_once(&format!("r=\"{cell}\"")).unwrap();
+        let (element, _) = after.split_once("</c>").unwrap();
+        assert!(element.contains("t=\"s\""), "{cell}: {element}");
+        let index: usize = element
+            .split_once("<v>")
+            .unwrap()
+            .1
+            .split_once("</v>")
+            .unwrap()
+            .0
+            .parse()
+            .unwrap();
+        let strings = xlsx_part(workbook, "xl/sharedStrings.xml");
+        let value = strings
+            .split("<si>")
+            .nth(index + 1)
+            .unwrap()
+            .split_once("</si>")
+            .unwrap()
+            .0;
+        assert_eq!(value, format!("<t>{expected}</t>"), "{cell}");
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    #[serial_test::serial]
+    async fn invoice_exports_show_saved_adjustments_and_exact_large_amounts(pool: PgPool) {
+        let ids = seed(&pool, OrgRole::Manager).await;
+        let (id, _) = add_invoice(&pool, &ids, 1).await;
+        let mut document = pdf(&pool, ids.org_id, id).await.unwrap();
+        let inv = &mut document.invoice;
+        inv.subtotal_cents = 10001;
+        inv.discount_bps = 1250;
+        inv.discount_cents = 1250;
+        inv.tax1_bps = 2100;
+        inv.tax1_cents = 1838;
+        inv.tax2_name = Some("Local <tax>".into());
+        inv.tax2_bps = Some(150);
+        inv.tax2_cents = 131;
+        inv.total_cents = 10720;
+        inv.terms_days = 21;
+        inv.due_on = inv.issued_on + chrono::Duration::days(21);
+        inv.po_number = "PO <123>".into();
+        document.lines[0].amount_cents = 10001;
+        document.lines[0].rate_cents = Some(10001);
+        let workbook = super::super::invoice_xlsx(inv, &document.lines).unwrap();
+        let xml = xlsx_part(&workbook, "xl/worksheets/sheet1.xml");
+        for (row, label, amount) in [
+            (3, "Subtotal", "100.01"),
+            (4, "Discount (12.50%)", "-12.5"),
+            (5, "Tax (21.00%)", "18.38"),
+            (6, "Local &lt;tax&gt; (1.50%)", "1.31"),
+            (7, "Total", "107.2"),
+        ] {
+            assert_text_cell(&workbook, &format!("A{row}"), label);
+            assert_cell(&xml, &format!("D{row}"), amount);
+            assert_text_cell(&workbook, &format!("E{row}"), "EUR");
+            assert_text_cell(&workbook, &format!("G{row}"), "2026-09-28");
+            assert_text_cell(&workbook, &format!("H{row}"), "21");
+            assert_text_cell(&workbook, &format!("I{row}"), "PO &lt;123&gt;");
+        }
+        let text = crate::render::invoice_text(inv, &document.lines, &document.branding);
+        for expected in [
+            "Subtotal",
+            "EUR 100.01",
+            "Discount (12.50%)",
+            "−EUR 12.50",
+            "Tax (21.00%)",
+            "EUR 18.38",
+            "Local <tax> (1.50%)",
+            "EUR 1.31",
+            "EUR 107.20",
+            "Payment terms: 21 days",
+            "Purchase order: PO <123>",
+        ] {
+            assert!(text.contains(expected), "missing {expected}: {text}");
+        }
+        inv.subtotal_cents = i64::MAX;
+        inv.total_cents = i64::MAX;
+        inv.discount_bps = 0;
+        inv.discount_cents = 0;
+        inv.tax1_bps = 0;
+        inv.tax1_cents = 0;
+        inv.tax2_name = None;
+        inv.tax2_bps = None;
+        inv.tax2_cents = 0;
+        document.lines[0].amount_cents = i64::MAX;
+        document.lines[0].rate_cents = Some(i64::MAX);
+        let workbook = super::super::invoice_xlsx(inv, &document.lines).unwrap();
+        for cell in ["C2", "D2", "D3", "D4"] {
+            assert_text_cell(&workbook, cell, "92233720368547758.07");
+        }
+        let text = crate::render::invoice_text(inv, &document.lines, &document.branding);
+        assert!(text.contains("92233720368547758.07"), "{text}");
     }
 
     fn params() -> ExportParams {
@@ -624,6 +723,7 @@ mod tests {
         assert!(!xml.contains("r=\"C2\""));
         assert_cell(&xml, "D2", "125");
         assert_cell(&xml, "D3", "125");
+        assert_cell(&xml, "D4", "125");
         let document = pdf(&pool, ids.org_id, id).await.unwrap();
         tokio::task::spawn_blocking(move || {
             let render = || {
@@ -674,6 +774,7 @@ mod tests {
         assert_cell(&xml, "C2", "12.34");
         assert_cell(&xml, "D2", "12.34");
         assert_cell(&xml, "D3", "12.34");
+        assert_cell(&xml, "D4", "12.34");
         let document = pdf(&pool, ids.org_id, id).await.unwrap();
         tokio::task::spawn_blocking(move || {
             let render = || {

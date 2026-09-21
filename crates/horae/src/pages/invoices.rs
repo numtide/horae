@@ -279,6 +279,16 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
                                     div { class: "text-mono", "{inv.due_on}" }
                                 }
                                 div {
+                                    div { class: "text-sm text-muted", "Payment terms" }
+                                    div { "{inv.terms_days} days" }
+                                }
+                                if !inv.po_number.is_empty() {
+                                    div {
+                                        div { class: "text-sm text-muted", "Purchase order" }
+                                        div { class: "wrap-anywhere", "{inv.po_number}" }
+                                    }
+                                }
+                                div {
                                     div { class: "text-sm text-muted", "Total" }
                                     div { class: "text-mono",
                                         { format!("{} {}", inv.currency.trim(), format_cents_plain(inv.total_cents)) }
@@ -316,10 +326,12 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
                                     }
                                 }
                                 tfoot {
-                                    tr {
-                                        td { colspan: "3", class: "text-right font-semibold", "Total" }
-                                        td { class: "text-mono text-right font-semibold",
-                                            { format!("{} {}", inv.currency.trim(), format_cents_plain(inv.total_cents)) }
+                                    for (label, cents) in inv.breakdown() {
+                                        tr {
+                                            th { scope: "row", colspan: "3", class: "text-right wrap-anywhere", "{label}" }
+                                            td { class: if label == "Total" { "text-mono text-right font-semibold" } else { "text-mono text-right" },
+                                                { format!("{} {}", inv.currency.trim(), format_cents_plain(cents)) }
+                                            }
                                         }
                                     }
                                 }

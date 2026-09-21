@@ -29,6 +29,38 @@ pub struct Invoice {
     pub created_at: DateTime<Utc>,
 }
 
+impl Invoice {
+    /// Stored invoice components, in display order; no project settings are read.
+    pub fn breakdown(&self) -> Vec<(String, i64)> {
+        use horae_core::money::format_cents_plain;
+
+        let mut rows = vec![("Subtotal".into(), self.subtotal_cents)];
+        if self.discount_bps != 0 {
+            rows.push((
+                format!(
+                    "Discount ({}%)",
+                    format_cents_plain(self.discount_bps.into())
+                ),
+                -self.discount_cents,
+            ));
+        }
+        if self.tax1_bps != 0 {
+            rows.push((
+                format!("Tax ({}%)", format_cents_plain(self.tax1_bps.into())),
+                self.tax1_cents,
+            ));
+        }
+        if let (Some(name), Some(bps)) = (&self.tax2_name, self.tax2_bps) {
+            rows.push((
+                format!("{name} ({}%)", format_cents_plain(bps.into())),
+                self.tax2_cents,
+            ));
+        }
+        rows.push(("Total".into(), self.total_cents));
+        rows
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "server", derive(sqlx::FromRow))]
 pub struct InvoiceLine {

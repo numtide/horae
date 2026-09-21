@@ -192,6 +192,52 @@ async fn empty_project_list_links_to_the_importer_route() {
 }
 
 #[tokio::test]
+async fn invoice_detail_shows_saved_adjustments_and_payment_metadata() {
+    let probe = Probe::default();
+    let (send, receive) = oneshot::channel();
+    *probe.response.borrow_mut() = Some(receive);
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    let mut response = dom.in_scope(probe.scope.borrow().unwrap(), || {
+        server_fns::get_invoice(Uuid::from_u128(1).to_string())
+            .now_or_never()
+            .unwrap()
+            .unwrap()
+    });
+    let inv = &mut response.invoice;
+    inv.subtotal_cents = 10001;
+    inv.discount_bps = 1250;
+    inv.discount_cents = 1250;
+    inv.tax1_bps = 2100;
+    inv.tax1_cents = 1838;
+    inv.tax2_name = Some("Local <tax>".into());
+    inv.tax2_bps = Some(150);
+    inv.tax2_cents = 131;
+    inv.total_cents = 10720;
+    inv.terms_days = 21;
+    inv.po_number = "PO <123>".into();
+    send.send(Ok(response)).unwrap();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    for expected in [
+        "Subtotal",
+        "100.01",
+        "Discount (12.50%)",
+        "-12.50",
+        "Tax (21.00%)",
+        "18.38",
+        "Local &#60;tax&#62; (1.50%)",
+        "1.31",
+        "107.20",
+        "21 days",
+        "PO &#60;123&#62;",
+    ] {
+        assert!(html.contains(expected), "missing {expected}: {html}");
+    }
+}
+
+#[tokio::test]
 async fn navigating_between_invoice_ids_loads_the_current_invoice() {
     let probe = Probe::default();
     let mut dom = VirtualDom::new_with_props(app, probe.clone());
