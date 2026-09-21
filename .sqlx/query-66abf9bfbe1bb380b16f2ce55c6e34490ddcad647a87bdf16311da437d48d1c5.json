@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE project_task_settings SET restricted = false WHERE project_id = $1 AND task_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "66abf9bfbe1bb380b16f2ce55c6e34490ddcad647a87bdf16311da437d48d1c5"
+}

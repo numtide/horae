@@ -34,6 +34,8 @@ Reuse catalog tasks, project_tasks and assignments. Store new per-project task s
 
 Reuse assignment roles for project lead designation; never change org_role. Per-person budgets are project configuration, not profile fields. All task/member references are active and same-org on creation. Removal from a draft also removes its scoped budget/access associations. Catalog task creation and project linking commit atomically; explicit client-dialog creation is an independent action.
 
+Migration 0034 replaces the existing new-time context view with the task restriction predicate; it does not rewrite historical migrations. Current restriction rows and matching grants are share-locked during interactive time writes. Historical edits use these grants without the active-context filter, preserving archived work; stopping an own running timer deliberately bypasses the task restriction but retains ownership, open-state and submission guards. Empty restricted membership means no tracking access, including for organization administrators acting on their own timesheets.
+
 ## Fee schedule and invoice occurrences
 
 `project_fee_milestones`: project_id, label, due_on, amount_cents, position. At most 100; required nonempty label, date and nonnegative amount. Single/monthly modes use project settings; monthly day is first/fifteenth/last, computed as a calendar date with leap-year tests.

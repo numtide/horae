@@ -64,6 +64,77 @@ struct NewTimeEntry<'a> {
     is_running: bool,
 }
 
+/// Preserve archived history while enforcing current task grants. Lock both
+/// the restriction and a matching grant so revocation cannot race the write.
+#[cfg(feature = "server")]
+async fn lock_task_access(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    user_id: uuid::Uuid,
+    project_id: uuid::Uuid,
+    task_id: uuid::Uuid,
+) -> Result<(), ServerFnError> {
+    let restricted = sqlx::query_scalar!(
+        "SELECT s.restricted FROM project_task_settings s
+         JOIN users u ON u.org_id = s.org_id AND u.id = $3
+         WHERE s.project_id = $1 AND s.task_id = $2 FOR SHARE OF s",
+        project_id,
+        task_id,
+        user_id,
+    )
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(server_err)?
+    .unwrap_or(false);
+    if restricted {
+        let grant = sqlx::query_scalar!(
+            "SELECT id FROM project_task_members
+             WHERE project_id = $1 AND task_id = $2 AND user_id = $3 FOR SHARE",
+            project_id,
+            task_id,
+            user_id,
+        )
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(server_err)?;
+        if grant.is_none() {
+            return Err(conflict(
+                "Task access is restricted. Refresh the timesheet and try again.",
+            ));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(feature = "server")]
+async fn lock_entry_task_access(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    user_id: uuid::Uuid,
+    ids: &[uuid::Uuid],
+) -> Result<(), ServerFnError> {
+    let entries = sqlx::query!(
+        "SELECT project_id, task_id FROM time_entries
+         WHERE user_id = $1 AND id = ANY($2) ORDER BY id FOR UPDATE",
+        user_id,
+        ids,
+    )
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(server_err)?;
+    if entries.len() != ids.len() {
+        return Err(conflict(
+            "Some entries are unavailable. Refresh the timesheet and try again.",
+        ));
+    }
+    let contexts: std::collections::BTreeSet<_> = entries
+        .iter()
+        .map(|entry| (entry.project_id, entry.task_id))
+        .collect();
+    for (project_id, task_id) in contexts {
+        lock_task_access(tx, user_id, project_id, task_id).await?;
+    }
+    Ok(())
+}
+
 /// Eligibility and effective billability are resolved in the insert's snapshot,
 /// not in a pre-check separated from the write. The timer uniqueness index
 /// arbitrates competing starts without a racy existence check.
@@ -76,6 +147,7 @@ async fn insert_time_entry(
     let mut tx = crate::db::begin_time_entry_write(db, user_id)
         .await
         .map_err(server_err)?;
+    lock_task_access(&mut tx, user_id, input.project_id, input.task_id).await?;
     let entry = sqlx::query_as!(
         TimeEntry,
         r#"INSERT INTO time_entries
@@ -213,7 +285,20 @@ pub async fn stop_timer(entry_id: String) -> Result<TimeEntry, ServerFnError> {
     let user_id = require_user().await?.id;
     let state = crate::state::global_state().await;
     let entry_id = parse_uuid(&entry_id, "entry_id")?;
-    let mut tx = crate::db::begin_time_entry_write(&state.db, user_id)
+    let entry = stop_entry_timer(&state.db, user_id, entry_id).await?;
+    dispatch_time_entry_event(&entry, TimeEntryEvent::Stopped).await;
+    tokio::spawn(check_project_budget(state, entry.project_id));
+    Ok(entry)
+}
+
+#[cfg(feature = "server")]
+async fn stop_entry_timer(
+    db: &sqlx::PgPool,
+    user_id: uuid::Uuid,
+    entry_id: uuid::Uuid,
+) -> Result<TimeEntry, ServerFnError> {
+    // Stopping an own running timer remains possible after task access is revoked.
+    let mut tx = crate::db::begin_time_entry_write(db, user_id)
         .await
         .map_err(server_err)?;
 
@@ -288,8 +373,6 @@ pub async fn stop_timer(entry_id: String) -> Result<TimeEntry, ServerFnError> {
     .ok_or_else(|| not_found("No running timer found for this entry"))?;
 
     tx.commit().await.map_err(server_err)?;
-    dispatch_time_entry_event(&entry, TimeEntryEvent::Stopped).await;
-    tokio::spawn(check_project_budget(state, entry.project_id));
     Ok(entry)
 }
 
@@ -426,6 +509,8 @@ async fn update_entry(
     .map_err(server_err)?
     .ok_or_else(|| conflict("Entry not found or is locked (not in 'open' state)"))?;
 
+    lock_task_access(&mut tx, user_id, before.project_id, before.task_id).await?;
+
     let entry = sqlx::query_as!(
         TimeEntry,
         r#"WITH effective AS (
@@ -472,9 +557,22 @@ pub async fn delete_time_entry(entry_id: String) -> Result<(), ServerFnError> {
     let user_id = require_user().await?.id;
     let state = crate::state::global_state().await;
     let entry_id = parse_uuid(&entry_id, "entry_id")?;
-    let mut tx = crate::db::begin_time_entry_write(&state.db, user_id)
+    let entry = delete_entry(&state.db, user_id, entry_id).await?;
+    dispatch_time_entry_event(&entry, TimeEntryEvent::Deleted).await;
+    tokio::spawn(check_project_budget(state, entry.project_id));
+    Ok(())
+}
+
+#[cfg(feature = "server")]
+async fn delete_entry(
+    db: &sqlx::PgPool,
+    user_id: uuid::Uuid,
+    entry_id: uuid::Uuid,
+) -> Result<TimeEntry, ServerFnError> {
+    let mut tx = crate::db::begin_time_entry_write(db, user_id)
         .await
         .map_err(server_err)?;
+    lock_entry_task_access(&mut tx, user_id, &[entry_id]).await?;
 
     // Delete and capture the row in one statement so the "only open entries"
     // guard holds atomically (no TOCTOU) and the event carries the removed
@@ -500,10 +598,7 @@ pub async fn delete_time_entry(entry_id: String) -> Result<(), ServerFnError> {
     .ok_or_else(|| conflict("Entry not found or is locked (not in 'open' state)"))?;
 
     tx.commit().await.map_err(server_err)?;
-    dispatch_time_entry_event(&entry, TimeEntryEvent::Deleted).await;
-
-    tokio::spawn(check_project_budget(state, entry.project_id));
-    Ok(())
+    Ok(entry)
 }
 
 /// Reschedule a timed entry from a calendar drag: move it (new date and/or start
@@ -520,10 +615,34 @@ pub async fn reschedule_time_entry(
     let state = crate::state::global_state().await;
     let entry_id = parse_uuid(&entry_id, "entry_id")?;
     let spent_date = parse_date(&spent_date, "date")?;
+    let entry = reschedule_entry(
+        &state.db,
+        user_id,
+        entry_id,
+        spent_date,
+        start_minute,
+        minutes,
+    )
+    .await?;
+    dispatch_time_entry_event(&entry, TimeEntryEvent::Updated).await;
+    tokio::spawn(check_project_budget(state, entry.project_id));
+    Ok(entry)
+}
+
+#[cfg(feature = "server")]
+async fn reschedule_entry(
+    db: &sqlx::PgPool,
+    user_id: uuid::Uuid,
+    entry_id: uuid::Uuid,
+    spent_date: chrono::NaiveDate,
+    start_minute: i32,
+    minutes: i32,
+) -> Result<TimeEntry, ServerFnError> {
     let (minutes, start_minute) = normalize_start(minutes, Some(start_minute))?;
-    let mut tx = crate::db::begin_time_entry_write(&state.db, user_id)
+    let mut tx = crate::db::begin_time_entry_write(db, user_id)
         .await
         .map_err(server_err)?;
+    lock_entry_task_access(&mut tx, user_id, &[entry_id]).await?;
 
     let entry = sqlx::query_as!(
         TimeEntry,
@@ -550,9 +669,6 @@ pub async fn reschedule_time_entry(
     .ok_or_else(|| conflict("Entry not found or is locked (not in 'open' state)"))?;
 
     tx.commit().await.map_err(server_err)?;
-    dispatch_time_entry_event(&entry, TimeEntryEvent::Updated).await;
-
-    tokio::spawn(check_project_budget(state, entry.project_id));
     Ok(entry)
 }
 
@@ -588,6 +704,7 @@ async fn reorder_entries(
     let mut tx = crate::db::begin_time_entry_write(pool, user_id)
         .await
         .map_err(server_err)?;
+    lock_entry_task_access(&mut tx, user_id, ids).await?;
 
     let updated = sqlx::query!(
         r#"UPDATE time_entries AS t
