@@ -51,6 +51,17 @@
 - **Alternatives**: Pasted prototype HTML/inline styles, global CSS resets and fabricated data are rejected.
 - **Evidence**: Full New Project reference, design system, `DESIGN.md`, `components/{form,controls,modal,combobox,date_picker}.rs`, `build.rs`.
 
+## Navigation protection implementation seam
+
+- Dioxus 0.7.9 `RouterConfig::on_update` runs after programmatic history changes; native `popstate` uses the history updater directly and does not call it. A redirect-only callback would therefore not protect browser Back and could overwrite a history entry.
+- Pending-navigation work must cover link/programmatic navigation, browser Back/Forward and full-document unload, with cancellation preserving the form and browser history. Do not substitute a `beforeunload` listener alone or change shared routing without focused history tests. The existing explicit Cancel/back buttons already serialize a final draft save.
+
+## Interrupted response-body decoding
+
+- Local Dioxus fullstack 0.7.9 panics at `magic.rs` when `res.bytes()` fails after headers arrive. Initial hard navigations in the browser suite reproduced this; failed requests before headers are already returned to the form's retry path.
+- Upstream [commit c64415c](https://github.com/DioxusLabs/dioxus/commit/c64415c08f7cef3c26cb8d3ab33985a258476a44) replaces the unwrap with error propagation. The latest published release was checked through the GitHub API on 2026-09-21: **v0.7.10 still contains the unwrap**. Updating only to that release would not resolve it. No dependency update has been made.
+- Final recovery verification needs a deterministic truncated-body test and a compatible fix/backport; successful teardown sequencing is not proof that arbitrary network interruptions are safe. Keep T019/T051 open until this path is handled without freezing the form.
+
 ## Clarification coverage
 
 No extra questions were required after the full workflow request. Scope, lifecycle, security, interaction, reliability, dependencies, edge cases, terminology and completion criteria are covered with explicit assumptions in the spec; these are not fabricated user answers. Runtime mail configuration is not an architectural unknown. Research corrected two overstrong inferred guarantees: email receipt and plugin delivery are not exactly-once external effects.

@@ -3,7 +3,7 @@
 use dioxus::prelude::*;
 
 use crate::components::modal::Modal;
-use crate::models::project_creation::{CreationOptions, CreationSearch, ProjectDraft};
+use crate::models::project_creation::{CreationOptions, CreationSearch, ProjectDraft, TaskSource};
 use crate::route::Route;
 use crate::server_fns;
 
@@ -36,6 +36,33 @@ pub fn NewProject() -> Element {
             && let Some(client) = server_fns::project_creation_client(id).await?
         {
             options.clients.push(client);
+        }
+        if let Some(draft) = &draft {
+            let task_ids: Vec<_> = draft
+                .form
+                .tasks
+                .iter()
+                .filter_map(|task| match &task.source {
+                    TaskSource::Existing { task_id }
+                        if !options.tasks.iter().any(|task| task.id == *task_id) =>
+                    {
+                        Some(*task_id)
+                    }
+                    _ => None,
+                })
+                .collect();
+            let user_ids: Vec<_> = draft
+                .form
+                .team
+                .iter()
+                .map(|member| member.user_id)
+                .filter(|id| !options.people.iter().any(|person| person.id == *id))
+                .collect();
+            if !task_ids.is_empty() || !user_ids.is_empty() {
+                let selected = server_fns::project_creation_selection(task_ids, user_ids).await?;
+                options.tasks.extend(selected.tasks);
+                options.people.extend(selected.people);
+            }
         }
         Ok::<_, ServerFnError>((options, draft))
     });

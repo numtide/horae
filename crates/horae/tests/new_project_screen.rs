@@ -37,6 +37,8 @@ struct Probe {
     options: CreationOptions,
     draft: Option<ProjectDraft>,
     selected_client: Option<CreationClient>,
+    selected_tasks: Vec<project_creation::CreationTask>,
+    selected_people: Vec<project_creation::CreationPerson>,
     writes: Rc<Cell<usize>>,
 }
 
@@ -58,6 +60,8 @@ impl Default for Probe {
             },
             draft: None,
             selected_client: None,
+            selected_tasks: vec![],
+            selected_people: vec![],
             writes: Rc::new(Cell::new(0)),
         }
     }
@@ -344,6 +348,53 @@ async fn tasks_and_team_restore_scoped_settings_without_exposing_costs_to_manage
 }
 
 #[tokio::test]
+async fn recovered_tasks_and_people_outside_the_catalog_page_keep_their_identity() {
+    use project_creation::{
+        CreationPerson, CreationTask, ProjectMemberInput, ProjectTaskInput, TaskAccess, TaskSource,
+    };
+    let task_id = Uuid::now_v7();
+    let user_id = Uuid::now_v7();
+    let mut probe = with_form(ProjectForm {
+        tasks: vec![ProjectTaskInput {
+            id: Uuid::now_v7(),
+            source: TaskSource::Existing { task_id },
+            billable: true,
+            rate: String::new(),
+            budget: String::new(),
+            access: TaskAccess::Restricted {
+                user_ids: vec![user_id],
+            },
+        }],
+        team: vec![ProjectMemberInput {
+            user_id,
+            manager: true,
+            billable_rate: String::new(),
+            cost_rate: String::new(),
+            budget: String::new(),
+        }],
+        ..Default::default()
+    });
+    probe.selected_tasks.push(CreationTask {
+        id: task_id,
+        name: "Selected remote task".into(),
+        billable: true,
+        default_rate_cents: None,
+    });
+    probe.selected_people.push(CreationPerson {
+        id: user_id,
+        name: "Selected remote teammate".into(),
+        billable_rate_cents: None,
+        cost_rate_cents: None,
+    });
+    let html = render(probe.clone());
+    assert!(html.contains("Selected remote task"), "{html}");
+    assert!(html.contains("Selected remote teammate"), "{html}");
+    assert!(!html.contains("Unavailable task"));
+    assert!(!html.contains("Unavailable teammate"));
+    assert_eq!(probe.writes.get(), 0);
+}
+
+#[tokio::test]
 async fn invoice_defaults_restore_custom_terms_and_named_second_tax() {
     use project_creation::{InvoiceDefaultsInput, SecondTaxInput};
     let probe = with_form(ProjectForm {
@@ -389,6 +440,24 @@ mod server_fns {
     }
     pub async fn project_creation_client(_: Uuid) -> Result<Option<CreationClient>, ServerFnError> {
         Ok(use_context::<Probe>().selected_client)
+    }
+    pub async fn project_creation_selection(
+        task_ids: Vec<Uuid>,
+        user_ids: Vec<Uuid>,
+    ) -> Result<project_creation::CreationSelection, ServerFnError> {
+        let probe = use_context::<Probe>();
+        Ok(project_creation::CreationSelection {
+            tasks: probe
+                .selected_tasks
+                .into_iter()
+                .filter(|task| task_ids.contains(&task.id))
+                .collect(),
+            people: probe
+                .selected_people
+                .into_iter()
+                .filter(|person| user_ids.contains(&person.id))
+                .collect(),
+        })
     }
     pub async fn load_project_draft() -> Result<Option<ProjectDraft>, ServerFnError> {
         Ok(use_context::<Probe>().draft)

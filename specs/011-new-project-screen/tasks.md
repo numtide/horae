@@ -68,7 +68,7 @@
 - [ ] T035 [US4] Return rate-free allowed project progress and redact unauthorized project/task data in `crates/horae/src/server_fns/projects.rs`; retain manager gate on organization reports.
 - [ ] T036 [US4] Apply consistent authorization to project export count/stream and Harvest project/task/time-entry projections in `crates/horae/src/reports.rs`, `crates/horae/src/reports/limits.rs`, `crates/horae/src/reports/streaming.rs`, `crates/horae/src/harvest/mod.rs`.
 - [ ] T037 [US4] Verify private tables/functions stay outside plugin grants and payloads with tests in `crates/horae/src/plugin/database.rs` and `crates/horae/src/plugin/event.rs`.
-- [ ] T038 [US4] Build task/team selectors, billable all/none, restrictions dialog, Add everyone, project leads, admin-only cost/notes and report visibility in `crates/horae/src/pages/new_project.rs` (or sibling section modules).
+- [x] T038 [US4] Build task/team selectors, billable all/none, restrictions dialog, Add everyone, project leads, admin-only cost/notes and report visibility in `crates/horae/src/pages/new_project.rs` (or sibling section modules).
 - [ ] T039 [US4] Exercise role matrix via browser/direct server responses and existing approval/import regressions in `crates/horae/tests/browser/new-project.cjs` and `specs/011-new-project-screen/quickstart.md`.
 
 ## Phase 7: US5 — Invoice defaults (P2)

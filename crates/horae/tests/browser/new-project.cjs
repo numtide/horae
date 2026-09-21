@@ -36,7 +36,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin' }).click();
     await page.waitForURL(`${base}/`);
-    await page.goto(`${base}/projects`);
+    await page.getByRole('link', { name: 'Projects', exact: true }).click();
     await page.getByRole('link', { name: 'New project', exact: true }).click();
     await expect(page).toHaveURL(`${base}/projects/new`);
     await expect(screen.getByRole('status')).toHaveText('No draft saved yet');
@@ -64,6 +64,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await expect(screen.getByLabel('Project name', { exact: true })).toBeEnabled();
     await expect(screen.getByRole('checkbox', { name: /manages this project/ }).first()).toBeVisible();
     await screen.getByRole('checkbox', { name: /manages this project/ }).first().check();
+    await screen.getByRole('region', { name: 'Tasks', exact: true }).getByRole('button', { name: 'Development', exact: true }).click();
     await screen.locator('#np-task-search').fill('Browser custom task');
     await screen.getByRole('button', { name: 'Add task', exact: true }).click();
     await screen.getByRole('button', { name: /^Access for Browser custom task:/ }).click();
@@ -80,7 +81,18 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await screen.getByLabel('Second tax (%)', { exact: true }).fill('1.5');
     await saved();
     await readsFinished(page);
+    // Simulate a catalog page that does not contain the saved selections. The
+    // selected-ID endpoint still reads the real, isolated database.
+    await page.route('**/api/project_creation_options*', async route => {
+      const response = await route.fetch();
+      const options = await response.json();
+      return route.fulfill({ response, json: { ...options, tasks: [], people: [], more_tasks: true, more_people: true } });
+    });
+    const selectedReady = page.waitForResponse(response => response.url().includes('/api/project_creation_selection') && response.status() === 200);
     await page.reload();
+    const resolved = await (await selectedReady).json();
+    assert.deepEqual(resolved.tasks.map(task => task.name), ['Development']);
+    assert.deepEqual(resolved.people.map(person => person.name), ['Admin User']);
     await expect(screen.getByLabel('Project name', { exact: true })).toHaveValue('Recoverable browser project');
     await expect(screen.getByLabel('Start date', { exact: true })).toHaveValue('2026-09-01');
     await expect(screen.locator('#np-project-rate')).toHaveValue('75.25');
@@ -88,6 +100,12 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await expect(screen.getByLabel('Days until payment is due', { exact: true })).toHaveValue('21');
     await expect(screen.getByLabel('Second tax name', { exact: true })).toHaveValue('Local tax');
     await expect(screen.getByRole('button', { name: /^Access for Browser custom task:/ })).not.toContainText('Everyone');
+    await expect(screen.getByRole('button', { name: 'Remove task Development', exact: true })).toBeVisible();
+    await expect(screen.getByRole('checkbox', { name: 'Admin User manages this project', exact: true })).toBeChecked();
+    await expect(screen).not.toContainText('Unavailable task');
+    await expect(screen).not.toContainText('Unavailable teammate');
+    await readsFinished(page);
+    await page.unroute('**/api/project_creation_options*');
     console.log('PASS: real client, team, task restrictions, billing and invoice defaults survive reload');
 
     for (const width of [390, 768, 1440]) {

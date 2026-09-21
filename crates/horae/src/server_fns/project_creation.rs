@@ -4,7 +4,8 @@ use super::*;
 #[cfg(feature = "server")]
 use crate::models::project_creation::TaskAccess;
 use crate::models::project_creation::{
-    CreationClient, CreationOptions, CreationSearch, DraftSaved, ProjectDraft, ProjectForm,
+    CreationClient, CreationOptions, CreationSearch, CreationSelection, DraftSaved, ProjectDraft,
+    ProjectForm,
 };
 
 #[cfg(feature = "server")]
@@ -18,7 +19,18 @@ use finalize::finalize_draft_record;
 #[cfg(feature = "server")]
 mod options;
 #[cfg(feature = "server")]
-use options::{load_creation_options, load_selected_client};
+use options::{load_creation_options, load_selected_catalog, load_selected_client};
+
+/// Resolve only the selected active task/person identities, independently of pagination.
+#[server]
+pub async fn project_creation_selection(
+    task_ids: Vec<uuid::Uuid>,
+    user_ids: Vec<uuid::Uuid>,
+) -> Result<CreationSelection, ServerFnError> {
+    let actor = require_manager().await?;
+    let state = crate::state::global_state().await;
+    load_selected_catalog(&state.db, actor.id, actor.org_id, &task_ids, &user_ids).await
+}
 
 /// Resolve an existing draft selection without searching or fetching a whole catalog.
 #[server]

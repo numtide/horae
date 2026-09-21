@@ -7,6 +7,123 @@ use super::{lock_creation_actor, lock_creation_client, validate_draft_form};
 use crate::models::project_creation::{ProjectForm, ProjectMemberInput};
 
 #[sqlx::test(migrations = "./migrations")]
+async fn selected_catalog_is_scoped_deduplicated_and_redacts_manager_costs(pool: PgPool) {
+    let owner = seed(&pool, OrgRole::Admin).await;
+    let foreign = seed(&pool, OrgRole::Admin).await;
+    sqlx::query!(
+        "UPDATE users SET cost_rate_cents = 6200 WHERE id = $1",
+        owner.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let task_ids = [
+        owner.task_id,
+        foreign.task_id,
+        Uuid::now_v7(),
+        owner.task_id,
+    ];
+    let user_ids = [
+        owner.user_id,
+        foreign.user_id,
+        Uuid::now_v7(),
+        owner.user_id,
+    ];
+    let selected =
+        super::load_selected_catalog(&pool, owner.user_id, owner.org_id, &task_ids, &user_ids)
+            .await
+            .unwrap();
+    assert_eq!(
+        selected
+            .tasks
+            .iter()
+            .map(|task| task.id)
+            .collect::<Vec<_>>(),
+        [owner.task_id]
+    );
+    assert_eq!(
+        selected
+            .people
+            .iter()
+            .map(|person| person.id)
+            .collect::<Vec<_>>(),
+        [owner.user_id]
+    );
+    assert_eq!(selected.people[0].cost_rate_cents, Some(6200));
+
+    sqlx::query!(
+        "UPDATE users SET org_role = 'manager' WHERE id = $1",
+        owner.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let selected =
+        super::load_selected_catalog(&pool, owner.user_id, owner.org_id, &task_ids, &user_ids)
+            .await
+            .unwrap();
+    assert!(selected.people[0].cost_rate_cents.is_none());
+    assert!(
+        !serde_json::to_string(&selected)
+            .unwrap()
+            .contains("cost_rate_cents")
+    );
+
+    sqlx::query!(
+        "UPDATE tasks SET active = false WHERE id = $1",
+        owner.task_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let selected = super::load_selected_catalog(&pool, owner.user_id, owner.org_id, &task_ids, &[])
+        .await
+        .unwrap();
+    assert!(selected.tasks.is_empty());
+    assert!(selected.people.is_empty());
+    sqlx::query!(
+        "UPDATE users SET org_role = 'member' WHERE id = $1",
+        owner.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(
+        super::load_selected_catalog(&pool, owner.user_id, owner.org_id, &[], &[])
+            .await
+            .is_err()
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn selected_catalog_bounds_requests_and_excludes_inactive_people(pool: PgPool) {
+    let owner = seed(&pool, OrgRole::Admin).await;
+    let person_id = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO users (id,org_id,email,name,org_role,active) VALUES ($1,$2,$3,'Inactive teammate','member',false)",
+        person_id, owner.org_id, format!("{person_id}@example.test"),
+    ).execute(&pool).await.unwrap();
+    let selected =
+        super::load_selected_catalog(&pool, owner.user_id, owner.org_id, &[], &[person_id])
+            .await
+            .unwrap();
+    assert!(selected.people.is_empty());
+    let oversized = vec![Uuid::now_v7(); 501];
+    for (tasks, people) in [(&oversized[..], &[][..]), (&[][..], &oversized[..])] {
+        let error = super::load_selected_catalog(&pool, owner.user_id, owner.org_id, tasks, people)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            super::ServerFnError::ServerError {
+                code: super::BAD_REQUEST,
+                ..
+            }
+        ));
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn selected_client_lookup_is_scoped_and_keeps_archived_identity(pool: PgPool) {
     let owner = seed(&pool, OrgRole::Manager).await;
     let foreign = seed(&pool, OrgRole::Admin).await;

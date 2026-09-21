@@ -17,6 +17,7 @@ All use the existing authenticated Dioxus surface, named error status constants 
 |---|---|---|
 | Creation options | Search/page for client, task or person catalog | Bounded active same-org choices plus archived-client status; permitted rates only, admin costs only; supported currencies and mail availability. |
 | Resolve selected client | Client ID | Minimal same-org client identity/currency, including archived status, for draft selections outside the catalog page; unavailable/foreign IDs return no result. |
+| Resolve selected tasks/people | Task IDs and user IDs, at most 500 each | Active same-org catalog projections independent of pagination; duplicates collapse, unavailable/foreign IDs are omitted and manager responses exclude costs. Creation still revalidates all references. |
 | Load current draft | None | Own current draft/revision/save time or no draft; read does not create a row. |
 | Save draft | Draft ID or new request ID, expected revision, typed raw form values | Acknowledged ID/revision/time; initial save is idempotent; conflict never overwrites. |
 | Discard draft | Draft ID, expected revision | Marks own incomplete draft discarded; stale/completed requests conflict. |

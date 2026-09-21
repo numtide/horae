@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, name, billable_default as billable, default_rate_cents FROM tasks\n         WHERE org_id = $1 AND active AND id = ANY($2) ORDER BY lower(name), id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "billable",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "default_rate_cents",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "4c3d3398985c401e20d297e74d11d5c9d2cca53dcda1f7ddb7ce00ed9fbf3009"
+}

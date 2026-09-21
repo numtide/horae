@@ -1,7 +1,38 @@
 use super::*;
 use crate::models::project_creation::{
-    CreationOptions, CreationPerson, CreationSearch, CreationTask,
+    CreationOptions, CreationPerson, CreationSearch, CreationSelection, CreationTask,
 };
+
+pub(super) async fn load_selected_catalog(
+    pool: &sqlx::PgPool,
+    actor_id: uuid::Uuid,
+    org_id: uuid::Uuid,
+    task_ids: &[uuid::Uuid],
+    user_ids: &[uuid::Uuid],
+) -> Result<CreationSelection, ServerFnError> {
+    if task_ids.len() > 500 || user_ids.len() > 500 {
+        return Err(err(BAD_REQUEST, "Select at most 500 tasks and 500 people"));
+    }
+    let mut tx = pool.begin().await.map_err(storage_error)?;
+    let role = lock_creation_actor(&mut tx, actor_id, org_id).await?;
+    let tasks = sqlx::query_as!(
+        CreationTask,
+        "SELECT id, name, billable_default as billable, default_rate_cents FROM tasks
+         WHERE org_id = $1 AND active AND id = ANY($2) ORDER BY lower(name), id",
+        org_id,
+        task_ids,
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(storage_error)?;
+    let people = sqlx::query_as!(CreationPerson,
+        "SELECT id, name, billable_rate_cents, CASE WHEN $3 THEN cost_rate_cents END as cost_rate_cents FROM users
+         WHERE org_id = $1 AND active AND id = ANY($2) ORDER BY lower(name), id",
+        org_id, user_ids, role == OrgRole::Admin,
+    ).fetch_all(&mut *tx).await.map_err(storage_error)?;
+    tx.commit().await.map_err(storage_error)?;
+    Ok(CreationSelection { tasks, people })
+}
 
 pub(super) async fn load_selected_client(
     pool: &sqlx::PgPool,

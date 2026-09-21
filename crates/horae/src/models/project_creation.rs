@@ -216,6 +216,13 @@ pub struct CreationOptions {
     pub suggested_code: Option<String>,
 }
 
+/// Selected active identities that may be outside the current catalog page.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreationSelection {
+    pub tasks: Vec<CreationTask>,
+    pub people: Vec<CreationPerson>,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CatalogSearch {
