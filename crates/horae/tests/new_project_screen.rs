@@ -376,6 +376,18 @@ async fn time_and_materials_restores_project_rate_and_budget_without_enabling_un
 }
 
 #[tokio::test]
+async fn nonbillable_budget_picker_omits_fee_modes() {
+    let html = render(with_form(ProjectForm {
+        project_type: horae_core::types::ProjectType::NonBillable,
+        ..Default::default()
+    }));
+    assert!(html.contains("aria-label=\"Choose Budget\""));
+    assert!(html.contains("Hours per task"));
+    assert!(!html.contains("Total project fees"));
+    assert!(!html.contains("Fees per task"));
+}
+
+#[tokio::test]
 async fn fixed_fee_restores_each_schedule_and_never_shows_hourly_rate_controls() {
     use horae_core::types::ProjectType;
     use project_creation::{FeeMode, MilestoneInput};

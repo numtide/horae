@@ -186,6 +186,10 @@
 .mx-auto { margin-left: auto; margin-right: auto; }
 .ml-auto { margin-left: auto; }
 
+/* Half-step padding */
+.px-2\.5 { padding-inline: var(--space-2-5); }
+.py-2\.5 { padding-block: var(--space-2-5); }
+
 /* Sizing */
 .w-full { width: 100%; }
 .w-16 { width: var(--space-16); }
@@ -200,6 +204,7 @@
 .max-w-full { max-width: 100%; }
 .h-full { height: 100%; }
 .h-10 { height: var(--space-10); }
+.size-10 { width: var(--space-10); height: var(--space-10); }
 .size-8 { width: var(--space-8); height: var(--space-8); }
 .size-4 { width: var(--space-4); height: var(--space-4); }
 .min-w-0 { min-width: 0; }

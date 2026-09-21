@@ -5,8 +5,9 @@ use horae_core::types::ProjectType;
 use uuid::Uuid;
 
 use crate::components::controls::Checkbox;
-use crate::components::form::{FormGroup, Input, Select};
+use crate::components::form::Input;
 use crate::components::icons::NavIcon;
+use crate::components::select_field::SelectField;
 use crate::models::project_creation::{CreationOptions, FeeMode, MilestoneInput, ProjectForm};
 
 use super::FormRow;
@@ -129,9 +130,9 @@ fn Budget(mut form: Signal<ProjectForm>, currency: String, email_available: bool
             label { class: "block text-xs uppercase tracking-wide text-faint mb-2", r#for: "np-budget-mode", "Budget" }
             div { class: "flex flex-wrap items-center gap-3",
                 div { class: "w-form-select max-w-full",
-                    Select { id: "np-budget-mode", options: select_options, selected,
-                        onchange: move |event: FormEvent| {
-                            if let Some((mode, _, _)) = choices.iter().find(|(_, key, _)| *key == event.value()) { form.write().budget_mode = *mode; }
+                    SelectField { id: "np-budget-mode", label: "Budget", options: select_options, selected,
+                        onselect: move |value: String| {
+                            if let Some((mode, _, _)) = choices.iter().find(|(_, key, _)| *key == value) { form.write().budget_mode = *mode; }
                         }
                     }
                 }
@@ -196,12 +197,12 @@ fn FeeSchedule(mut form: Signal<ProjectForm>, currency: String) -> Element {
                 }
             }
             if mode == FeeMode::Milestones {
-                div { class: "bg-base border rounded-btn mt-4",
+                div { class: "bg-base border border-light rounded-btn mt-4",
                     for milestone in form.read().milestones.clone() {
                         Milestone { key: "{milestone.id}", form, id: milestone.id, currency: currency.clone() }
                     }
-                    div { class: "flex flex-wrap items-center justify-between gap-3 p-3",
-                        button { class: "btn btn-ghost btn-sm", r#type: "button", disabled: form.read().milestones.len() >= 100,
+                    div { class: "flex flex-wrap items-center justify-between gap-3 px-3 py-2.5",
+                        button { id: "np-add-milestone", class: "btn btn-ghost btn-sm", r#type: "button", disabled: form.read().milestones.len() >= 100,
                             onclick: move |_| form.write().milestones.push(MilestoneInput { id: Uuid::now_v7(), name: String::new(), due_on: String::new(), amount: String::new() }), "Add milestone"
                         }
                         span { class: "text-xs text-subtle", "Total " span { class: "font-mono text-default", if let Some(total) = total { "{currency} {format_cents_plain(total)}" } else { "Enter valid amounts" } } }
@@ -216,9 +217,9 @@ fn FeeSchedule(mut form: Signal<ProjectForm>, currency: String) -> Element {
                     if mode == FeeMode::Monthly {
                         label { class: "text-xs text-subtle", r#for: "np-monthly-day", "per month, available to invoice on" }
                         div { class: "w-50 max-w-full",
-                            Select { id: "np-monthly-day", options: vec![("first".into(), "1st of the month".into()), ("fifteenth".into(), "15th of the month".into()), ("last".into(), "Last day of the month".into())],
+                            SelectField { id: "np-monthly-day", label: "Monthly invoice day", options: vec![("first".into(), "1st of the month".into()), ("fifteenth".into(), "15th of the month".into()), ("last".into(), "Last day of the month".into())],
                                 selected: match form.read().monthly_day { MonthlyFeeDay::First => "first", MonthlyFeeDay::Fifteenth => "fifteenth", MonthlyFeeDay::Last => "last" },
-                                onchange: move |event: FormEvent| form.write().monthly_day = match event.value().as_str() { "fifteenth" => MonthlyFeeDay::Fifteenth, "last" => MonthlyFeeDay::Last, _ => MonthlyFeeDay::First }
+                                onselect: move |value: String| form.write().monthly_day = match value.as_str() { "fifteenth" => MonthlyFeeDay::Fifteenth, "last" => MonthlyFeeDay::Last, _ => MonthlyFeeDay::First }
                             }
                         }
                     }
@@ -241,17 +242,14 @@ fn Milestone(mut form: Signal<ProjectForm>, id: Uuid, currency: String) -> Eleme
         return rsx! {};
     };
     rsx! {
-        div { class: "grid md:grid-cols-3 gap-3 p-3 border-b",
-            FormGroup { label: "Milestone name", id: "np-milestone-name-{id}",
-                Input { id: "np-milestone-name-{id}", value: item.name.clone(), oninput: move |event: FormEvent| { if let Some(item) = form.write().milestones.iter_mut().find(|item| item.id == id) { item.name = event.value(); } } }
-            }
-            FormGroup { label: "Due date", id: "np-milestone-date-{id}",
-                Input { id: "np-milestone-date-{id}", kind: "date", value: item.due_on, oninput: move |event: FormEvent| { if let Some(item) = form.write().milestones.iter_mut().find(|item| item.id == id) { item.due_on = event.value(); } } }
-            }
-            FormGroup { label: "Amount ({currency})", id: "np-milestone-amount-{id}",
-                Input { id: "np-milestone-amount-{id}", value: item.amount, oninput: move |event: FormEvent| { if let Some(item) = form.write().milestones.iter_mut().find(|item| item.id == id) { item.amount = event.value(); } } }
-            }
-            button { class: "btn btn-ghost btn-sm", r#type: "button", aria_label: "Remove milestone {item.name}", onclick: move |_| form.write().milestones.retain(|item| item.id != id), "Remove milestone" }
+        div { class: "np-milestone-row grid items-center gap-3 px-3 py-2.5 border-b border-light", role: "group", aria_label: if item.name.is_empty() { "New milestone".into() } else { format!("Milestone {}", item.name) },
+            Input { id: "np-milestone-name-{id}", label: "Milestone name", placeholder: "Milestone", class: "min-w-0 px-2.5 py-2", value: item.name.clone(), oninput: move |event: FormEvent| { if let Some(item) = form.write().milestones.iter_mut().find(|item| item.id == id) { item.name = event.value(); } } }
+            Input { id: "np-milestone-date-{id}", label: "Due date", class: "min-w-0 px-2.5 py-2 font-mono", kind: "date", value: item.due_on, oninput: move |event: FormEvent| { if let Some(item) = form.write().milestones.iter_mut().find(|item| item.id == id) { item.due_on = event.value(); } } }
+            Input { id: "np-milestone-amount-{id}", label: "Amount ({currency})", placeholder: "0.00", class: "min-w-0 px-2.5 py-2 font-mono text-right", value: item.amount, oninput: move |event: FormEvent| { if let Some(item) = form.write().milestones.iter_mut().find(|item| item.id == id) { item.amount = event.value(); } } }
+            button { class: "btn btn-ghost p-0 size-10 text-faint", r#type: "button", aria_label: if item.name.is_empty() { "Remove milestone".into() } else { format!("Remove milestone {}", item.name) }, onclick: move |_| {
+                form.write().milestones.retain(|item| item.id != id);
+                document::eval("document.getElementById('np-add-milestone')?.focus()");
+            }, "×" }
         }
     }
 }

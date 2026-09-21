@@ -33,6 +33,17 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
   const screen = page.locator('.np-page');
   const draftStatus = screen.locator('header').getByRole('status');
   const saved = () => expect(draftStatus).toContainText('Draft saved at');
+  const chooseField = async (id, label, option) => {
+    const trigger = screen.locator(`#${id}`);
+    assert.equal(await trigger.evaluate(node => node.tagName), 'BUTTON', `${label} uses the shared selector`);
+    await trigger.click();
+    const picker = page.getByRole('dialog', { name: `Choose ${label}`, exact: true });
+    await picker.getByRole('option', { name: option, exact: true }).focus();
+    await page.keyboard.press('Enter');
+    await expect(picker).not.toBeVisible();
+    await expect(trigger).toBeFocused();
+    await expect(trigger).toContainText(option);
+  };
   const chooseDate = async (label, day) => {
     await screen.getByLabel(label, { exact: true }).click();
     const calendar = page.getByRole('dialog', { name: `Choose ${label}`, exact: true });
@@ -222,7 +233,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await screen.getByRole('radio', { name: /^Project hourly rate/ }).check();
     await screen.getByLabel('Notes', { exact: true }).fill('W'.repeat(1000));
     await screen.locator('#np-project-rate').fill('75.25');
-    await screen.getByLabel('Budget', { exact: true }).selectOption({ label: 'Total project hours' });
+    await chooseField('np-budget-mode', 'Budget', 'Total project hours');
     await screen.locator('#np-budget-value').fill('120');
     await fieldWidth('np-project-rate', 120, true);
     await fieldWidth('np-budget-mode', 320);
@@ -337,7 +348,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
       assert.ok((await row.boundingBox()).height <= 72, 'Default assignment rows remain compact on desktop');
     }
     await screen.getByRole('radio', { name: /^Person hourly rate/ }).check();
-    await screen.locator('#np-budget-mode').selectOption('hours_per_person');
+    await chooseField('np-budget-mode', 'Budget', 'Hours per person');
     await teamSection.getByLabel('Billable rate for Admin User (EUR/h)', { exact: true }).fill('0');
     await teamSection.getByLabel('Budget hours for Admin User', { exact: true }).fill('12:30');
     await costInput.fill('0');
@@ -360,7 +371,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
       }
     }
     await screen.getByRole('radio', { name: /^Task hourly rate/ }).check();
-    await screen.locator('#np-budget-mode').selectOption('hours_per_task');
+    await chooseField('np-budget-mode', 'Budget', 'Hours per task');
     const taskRate = screen.getByLabel('Hourly rate for Browser custom task (EUR)', { exact: true });
     await taskRate.fill('0');
     await screen.getByLabel('Budget hours for Browser custom task', { exact: true }).fill('4');
@@ -376,14 +387,14 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
       }
     }
     await screen.getByRole('radio', { name: /^Project hourly rate/ }).check();
-    await screen.locator('#np-budget-mode').selectOption('total_hours');
+    await chooseField('np-budget-mode', 'Budget', 'Total project hours');
     await screen.getByRole('button', { name: /^Access for Browser custom task:/ }).click();
     const access = page.getByRole('dialog', { name: 'Who can track to this task?' });
     await access.getByRole('radio', { name: 'Only selected people', exact: true }).check();
     await access.getByRole('checkbox').first().check();
     await access.getByRole('button', { name: 'Apply access', exact: true }).click();
     await expect(access).not.toBeVisible();
-    await screen.getByLabel('Payment terms', { exact: true }).selectOption({ label: 'Custom days' });
+    await chooseField('np-terms', 'Payment terms', 'Custom days');
     await screen.getByLabel('Days until payment is due', { exact: true }).fill('21');
     await screen.getByLabel('Tax (%)', { exact: true }).fill('21');
     await screen.getByRole('button', { name: 'Add a second tax', exact: true }).click();
@@ -445,15 +456,15 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await expect(screen.locator('#np-budget-value')).toHaveValue('120');
     await expect(costInput).toHaveValue('0');
     await screen.getByRole('radio', { name: /^Person hourly rate/ }).check();
-    await screen.locator('#np-budget-mode').selectOption('hours_per_person');
+    await chooseField('np-budget-mode', 'Budget', 'Hours per person');
     await expect(teamSection.getByLabel('Billable rate for Admin User (EUR/h)', { exact: true })).toHaveValue('0');
     await expect(teamSection.getByLabel('Budget hours for Admin User', { exact: true })).toHaveValue('12:30');
     await screen.getByRole('radio', { name: /^Task hourly rate/ }).check();
-    await screen.locator('#np-budget-mode').selectOption('hours_per_task');
+    await chooseField('np-budget-mode', 'Budget', 'Hours per task');
     await expect(taskRate).toHaveValue('0');
     await expect(screen.getByLabel('Budget hours for Browser custom task', { exact: true })).toHaveValue('4');
     await screen.getByRole('radio', { name: /^Project hourly rate/ }).check();
-    await screen.locator('#np-budget-mode').selectOption('total_hours');
+    await chooseField('np-budget-mode', 'Budget', 'Total project hours');
     await expect(screen.getByLabel('Days until payment is due', { exact: true })).toHaveValue('21');
     await expect(screen.getByLabel('Second tax name', { exact: true })).toHaveValue('Local tax');
     await expect(screen.getByRole('button', { name: /^Access for Browser custom task:/ })).not.toContainText('Everyone');
@@ -598,11 +609,65 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await fieldWidth('np-fee-amount', 200, true);
     await screen.getByRole('radio', { name: 'Monthly', exact: true }).check();
     await fieldWidth('np-monthly-day', 200);
+    await chooseField('np-monthly-day', 'Monthly invoice day', 'Last day of the month');
     await screen.getByRole('radio', { name: 'Milestones', exact: true }).check();
     await screen.getByRole('button', { name: 'Add milestone', exact: true }).click();
     await screen.getByLabel('Milestone name', { exact: true }).fill('Delivery');
     await screen.getByLabel('Due date', { exact: true }).fill('2026-10-01');
-    await screen.getByLabel('Amount (EUR)', { exact: true }).fill('1000');
+    await screen.getByLabel('Amount (EUR)', { exact: true }).fill('1000.25');
+    const milestoneRow = screen.getByRole('group', { name: 'Milestone Delivery', exact: true });
+    const milestoneAmount = milestoneRow.getByLabel('Amount (EUR)', { exact: true });
+    assert.equal((await milestoneRow.getByLabel('Due date', { exact: true }).boundingBox()).width, 160);
+    assert.equal((await milestoneAmount.boundingBox()).width, 140);
+    const removeMilestone = milestoneRow.getByRole('button', { name: 'Remove milestone Delivery', exact: true });
+    assert.equal((await removeMilestone.boundingBox()).width, 40);
+    const rowBoxes = await Promise.all([milestoneRow.getByLabel('Milestone name', { exact: true }), milestoneRow.getByLabel('Due date', { exact: true }), milestoneAmount, removeMilestone].map(field => field.boundingBox()));
+    assert.ok(rowBoxes.every(box => Math.abs(box.y + box.height / 2 - rowBoxes[0].y - rowBoxes[0].height / 2) <= 1), 'Milestone fields and removal align in one desktop row');
+    await milestoneRow.getByLabel('Milestone name', { exact: true }).focus();
+    await page.keyboard.press('Tab');
+    await expect(milestoneRow.getByLabel('Due date', { exact: true })).toBeFocused();
+    for (let step = 0; step < 8; step++) {
+      await page.keyboard.press('Tab');
+      if (await milestoneAmount.evaluate(node => node === document.activeElement)) break;
+    }
+    await expect(milestoneAmount).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(removeMilestone).toBeFocused();
+    await screen.getByRole('button', { name: 'Add milestone', exact: true }).click();
+    const extraMilestone = screen.getByRole('group', { name: 'New milestone', exact: true });
+    await extraMilestone.getByLabel('Amount (EUR)', { exact: true }).fill('0.75');
+    await expect(screen).toContainText('Total EUR 1001.00');
+    for (const width of [390, 768, 769, 900, 1180, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      assert.ok(await milestoneRow.evaluate(node => node.scrollWidth <= node.clientWidth), 'Milestone fields fit narrow screens');
+      assert.ok(await screen.evaluate(node => node.scrollWidth <= node.clientWidth), 'Milestones do not widen the form');
+      const nameWidth = (await milestoneRow.getByLabel('Milestone name', { exact: true }).boundingBox()).width;
+      assert.ok(nameWidth >= 120, `Milestone name stays readable at viewport ${width}: ${nameWidth}px`);
+      await milestoneRow.getByLabel('Milestone name', { exact: true }).focus();
+      for (const field of [milestoneRow.getByLabel('Due date', { exact: true }), milestoneAmount, removeMilestone]) {
+        // Native date fields contain several keyboard segments; focus each control
+        // explicitly here, then assert the scrolling panel exposes its whole box.
+        await field.focus();
+        const fieldBox = await field.boundingBox(), footerBox = await screen.locator('footer').boundingBox();
+        assert.ok(fieldBox.y >= 0 && fieldBox.y + fieldBox.height <= footerBox.y + 1, 'Focused milestone control stays above actions');
+      }
+      if (process.env.HORAE_TEST_SCREENSHOT_DIR) {
+        await milestoneRow.screenshot({ path: `${process.env.HORAE_TEST_SCREENSHOT_DIR}/new-project-milestone-${width}.png` });
+      }
+    }
+    await extraMilestone.getByRole('button', { name: 'Remove milestone', exact: true }).focus();
+    await page.keyboard.press('Enter');
+    await expect(screen.getByRole('button', { name: 'Add milestone', exact: true })).toBeFocused();
+    await expect(milestoneAmount).toHaveValue('1000.25');
+    await expect(screen).toContainText('Total EUR 1000.25');
+    await saved();
+    await readsFinished(page);
+    await page.reload();
+    await expect(milestoneRow.getByLabel('Due date', { exact: true })).toHaveValue('2026-10-01');
+    await expect(milestoneAmount).toHaveValue('1000.25');
+    await screen.getByRole('radio', { name: 'Monthly', exact: true }).check();
+    await expect(screen.locator('#np-monthly-day')).toContainText('Last day of the month');
+    await screen.getByRole('radio', { name: 'Milestones', exact: true }).check();
     await screen.getByRole('radio', { name: /^Non-Billable/ }).check();
     await expect(screen.getByRole('heading', { name: 'Invoice defaults', exact: true })).toHaveCount(0);
     await screen.getByRole('radio', { name: /^Time & Materials/ }).check();

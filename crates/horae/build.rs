@@ -144,6 +144,13 @@ fn families() -> Vec<Family> {
         ),
         spacing_family(),
         fixed(
+            "Half-step padding",
+            &[
+                ("px-2\\.5", "padding-inline: var(--space-2-5)"),
+                ("py-2\\.5", "padding-block: var(--space-2-5)"),
+            ],
+        ),
+        fixed(
             "Sizing",
             &[
                 ("w-full", "width: 100%"),
@@ -162,6 +169,7 @@ fn families() -> Vec<Family> {
                 ("max-w-full", "max-width: 100%"),
                 ("h-full", "height: 100%"),
                 ("h-10", "height: var(--space-10)"),
+                ("size-10", "width: var(--space-10); height: var(--space-10)"),
                 ("size-8", "width: var(--space-8); height: var(--space-8)"),
                 ("size-4", "width: var(--space-4); height: var(--space-4)"),
                 ("min-w-0", "min-width: 0"),

@@ -1,7 +1,8 @@
 use dioxus::prelude::*;
 use horae_core::types::ProjectType;
 
-use crate::components::form::{FormGroup, Input, Select};
+use crate::components::form::{FormGroup, Input};
+use crate::components::select_field::SelectField;
 use crate::models::project_creation::{ProjectForm, SecondTaxInput};
 
 use super::FormRow;
@@ -37,10 +38,9 @@ pub(super) fn InvoiceDefaults(mut form: Signal<ProjectForm>) -> Element {
             }
             FormRow { label: "Payment terms", id: "np-terms",
                 div { class: "w-60 max-w-full",
-                    Select { id: "np-terms", options: terms_options,
+                    SelectField { id: "np-terms", label: "Payment terms", options: terms_options,
                         selected: if custom_terms() { "custom".into() } else { form.read().invoice_defaults.terms_days.clone() },
-                        onchange: move |event: FormEvent| {
-                            let value = event.value();
+                        onselect: move |value: String| {
                             custom_terms.set(value == "custom");
                             if value != "custom" { form.write().invoice_defaults.terms_days = value; }
                         }
