@@ -32,6 +32,10 @@ All use the existing authenticated Dioxus surface, named error status constants 
 
 New error handling distinguishes bad input (400), unauthorized (401), forbidden (403), missing/foreign resource (404) and revision/state conflict (409). Foreign draft IDs do not disclose ownership. Unexpected failures log sanitized context and return a safe message.
 
+Invoice-default validation rejections include a typed `details.field` identity (`payment_terms`, `purchase_order`, `tax`, `second_tax_name`, `second_tax` or `discount`), without echoing the submitted value. The screen accepts only recognized field identities on 400 responses, links the input to its visible error and focuses it after unlocking the form. Retry clears the prior field rejection without discarding input or automatically repeating a definitely rejected finalization. Unknown/transport/conflict errors retain the general recovery path. Other creation fields still need equivalent field-level coverage under T046; this contract is not a claim of whole-form completion.
+
+After a definite typed field rejection, Save explicitly resubmits the latest corrected values; Cancel/back preserves the incomplete draft and Discard still requires confirmation. These actions clear the old field error before entering the existing serialized intent path. An uncertain save or finalization has no typed field identity and still requires its original Retry path; it cannot be replaced with an unrelated action or a fresh creation request.
+
 ## Draft concurrency
 
 Save requests serialize per page and carry the last acknowledged server revision. Edits during an in-flight save remain dirty and are coalesced into the next request. Acknowledging an older snapshot never marks newer input saved. Finalization prevents new autosave work and submits the latest snapshot after any pending save finishes. Server checks remain authoritative if clients bypass the UI.

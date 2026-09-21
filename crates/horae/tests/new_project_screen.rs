@@ -167,6 +167,27 @@ fn shared_input_without_options_keeps_its_original_class_and_external_label() {
     let html = dioxus::ssr::render(&dom);
     assert!(html.contains("class=\"form-input\""));
     assert!(!html.contains("aria-label="));
+    assert!(!html.contains("aria-invalid="));
+    assert!(!html.contains("aria-describedby="));
+}
+
+#[test]
+fn an_input_can_link_its_validation_error_without_changing_its_value_or_class() {
+    let mut dom = VirtualDom::new(|| {
+        rsx! {
+            form::Input { id: "tax", value: "101", error_id: "tax-error" }
+        }
+    });
+    dom.rebuild_in_place();
+    let html = dioxus::ssr::render(&dom);
+    for attribute in [
+        "class=\"form-input\"",
+        "value=\"101\"",
+        "aria-invalid=\"true\"",
+        "aria-describedby=\"tax-error\"",
+    ] {
+        assert!(html.contains(attribute), "Missing {attribute}: {html}");
+    }
 }
 
 #[test]

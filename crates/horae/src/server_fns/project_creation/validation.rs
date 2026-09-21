@@ -1,5 +1,5 @@
 use super::*;
-use crate::models::project_creation::{FeeMode, TaskSource};
+use crate::models::project_creation::{FeeMode, ProjectFormField, TaskSource};
 use chrono::NaiveDate;
 use horae_core::project::{BudgetMode, FeeMilestone, FeeSchedule, Percentage, RateMode};
 use std::collections::HashSet;
@@ -93,6 +93,18 @@ fn bounded_text(
         ));
     }
     Ok(())
+}
+
+fn with_field(mut error: ServerFnError, field: ProjectFormField) -> ServerFnError {
+    if let ServerFnError::ServerError {
+        code: BAD_REQUEST,
+        details,
+        ..
+    } = &mut error
+    {
+        *details = Some(serde_json::json!({ "field": field }));
+    }
+    error
 }
 
 fn sum_budgets<'a>(
@@ -258,25 +270,34 @@ pub(super) fn validate_project_form(
     } else {
         &form.invoice_defaults
     };
-    let terms_days = defaults
-        .terms_days
-        .trim()
-        .parse::<i16>()
-        .map_err(|_| err(BAD_REQUEST, "Payment terms: enter 0–365 days"))?;
+    let terms_days = defaults.terms_days.trim().parse::<i16>().map_err(|_| {
+        with_field(
+            err(BAD_REQUEST, "Payment terms: enter 0–365 days"),
+            ProjectFormField::PaymentTerms,
+        )
+    })?;
     if !(0..=365).contains(&terms_days) {
-        return Err(err(BAD_REQUEST, "Payment terms: enter 0–365 days"));
+        return Err(with_field(
+            err(BAD_REQUEST, "Payment terms: enter 0–365 days"),
+            ProjectFormField::PaymentTerms,
+        ));
     }
-    bounded_text(&defaults.po_number, 200, false, "PO number")?;
-    let discount_bps = percentage(&defaults.discount, "Discount")?;
-    let tax1_bps = percentage(&defaults.tax, "Tax")?;
+    bounded_text(&defaults.po_number, 200, false, "PO number")
+        .map_err(|error| with_field(error, ProjectFormField::PurchaseOrder))?;
+    let discount_bps = percentage(&defaults.discount, "Discount")
+        .map_err(|error| with_field(error, ProjectFormField::Discount))?;
+    let tax1_bps = percentage(&defaults.tax, "Tax")
+        .map_err(|error| with_field(error, ProjectFormField::Tax))?;
     let tax2 = defaults
         .second_tax
         .as_ref()
         .map(|tax| {
-            bounded_text(&tax.name, 100, true, "Second tax name")?;
+            bounded_text(&tax.name, 100, true, "Second tax name")
+                .map_err(|error| with_field(error, ProjectFormField::SecondTaxName))?;
             Ok::<_, ServerFnError>((
                 tax.name.trim().into(),
-                percentage(&tax.percentage, "Second tax")?,
+                percentage(&tax.percentage, "Second tax")
+                    .map_err(|error| with_field(error, ProjectFormField::SecondTax))?,
             ))
         })
         .transpose()?;
@@ -354,6 +375,48 @@ pub(super) fn validate_project_form(
 mod tests {
     use super::*;
     use crate::models::project_creation::{InvoiceDefaultsInput, SecondTaxInput};
+
+    #[test]
+    fn invoice_rejections_identify_the_field_without_echoing_input() {
+        for (field, value) in [
+            ("payment_terms", "366".to_owned()),
+            ("purchase_order", "private".repeat(30)),
+            ("discount", "101".to_owned()),
+            ("tax", "1.001".to_owned()),
+            ("second_tax_name", String::new()),
+            ("second_tax", "-1".to_owned()),
+        ] {
+            let mut form = ProjectForm {
+                name: "Valid project".into(),
+                ..Default::default()
+            };
+            let defaults = &mut form.invoice_defaults;
+            defaults.second_tax = Some(SecondTaxInput {
+                name: "Local".into(),
+                percentage: "1.5".into(),
+            });
+            match field {
+                "payment_terms" => defaults.terms_days = value,
+                "purchase_order" => defaults.po_number = value,
+                "discount" => defaults.discount = value,
+                "tax" => defaults.tax = value,
+                "second_tax_name" => defaults.second_tax.as_mut().unwrap().name = value,
+                "second_tax" => defaults.second_tax.as_mut().unwrap().percentage = value,
+                _ => unreachable!(),
+            }
+            let Err(ServerFnError::ServerError {
+                code,
+                message,
+                details,
+            }) = validate_project_form(&form, "EUR", false)
+            else {
+                panic!("Expected a field rejection for {field}");
+            };
+            assert_eq!(code, BAD_REQUEST);
+            assert_eq!(details, Some(serde_json::json!({ "field": field })));
+            assert!(!message.contains("private"));
+        }
+    }
 
     #[test]
     fn non_billable_projects_ignore_hidden_invoice_inputs() {

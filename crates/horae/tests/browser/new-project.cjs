@@ -515,6 +515,65 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await page.unroute('**/api/project_creation_options*');
     console.log('PASS: real client, team, task restrictions, billing and invoice defaults survive reload');
 
+    for (const width of [390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const [id, invalid] of [
+        ['np-terms-days', '366'], ['np-po-number', 'P'.repeat(201)],
+        ['np-tax', '1.001'], ['np-second-tax-name', ''],
+        ['np-second-tax', '-1'], ['np-discount', '101'],
+      ]) {
+        const field = screen.locator(`#${id}`);
+        const original = await field.inputValue();
+        await field.fill(invalid);
+        await saved();
+        await screen.getByRole('button', { name: 'Save project', exact: true }).focus();
+        await page.keyboard.press('Enter');
+        await expect(draftStatus).toHaveText('Changes need attention');
+        await expect(field).toHaveAttribute('aria-invalid', 'true');
+        await expect(field).toHaveAttribute('aria-describedby', 'np-invoice-field-error');
+        await expect(field).toBeFocused();
+        await expect(field).toHaveValue(invalid);
+        await expect(screen.getByRole('button', { name: 'Save project', exact: true })).toBeEnabled();
+        if (width === 390 && id === 'np-tax') {
+          const rejectedAgain = page.waitForResponse(response => response.url().includes('/api/finalize_project_draft') && response.status() === 400);
+          await screen.getByRole('button', { name: 'Save project', exact: true }).focus();
+          await page.keyboard.press('Enter');
+          await (await rejectedAgain).finished();
+          await expect(field).toBeFocused();
+          await expect(field).toHaveValue(invalid);
+        }
+        await expect(screen.locator('#np-form-error-message')).not.toBeEmpty();
+        await expect(screen.locator('#np-invoice-field-error')).toHaveText(await screen.locator('#np-form-error-message').innerText());
+        await expect(screen.getByLabel('Project name', { exact: true })).toHaveValue('Recoverable browser project');
+        const bounds = await field.boundingBox();
+        const footer = await screen.locator('.np-footer').boundingBox();
+        assert.ok(bounds.y >= 0 && bounds.y + bounds.height <= footer.y, `${id} error is not obscured at ${width}`);
+        const errorBounds = await screen.locator('#np-invoice-field-error').boundingBox();
+        assert.ok(errorBounds.y >= 0 && errorBounds.y + errorBounds.height <= footer.y, `${id} error message is visible at ${width}`);
+        if (process.env.HORAE_TEST_SCREENSHOT_DIR && id === 'np-second-tax') {
+          await page.screenshot({ path: `${process.env.HORAE_TEST_SCREENSHOT_DIR}/new-project-field-error-${width}.png` });
+        }
+        if (width === 1440 && id === 'np-discount') {
+          await readsFinished(page);
+          await screen.getByRole('button', { name: 'Cancel', exact: true }).focus();
+          await page.keyboard.press('Enter');
+          await expect(page).toHaveURL(`${base}/projects`);
+          await page.getByRole('link', { name: 'New project', exact: true }).click();
+          await expect(field).toHaveValue(invalid);
+          await field.fill(original);
+          await saved();
+          continue;
+        }
+        await field.fill(original);
+        await screen.getByRole('button', { name: 'Retry request', exact: true }).focus();
+        await page.keyboard.press('Enter');
+        await saved();
+        await expect(screen.locator('[aria-invalid="true"]')).toHaveCount(0);
+        await expect(page).toHaveURL(`${base}/projects/new`);
+      }
+    }
+    console.log('PASS: all invoice-default errors identify and focus their field, preserve input and recover at three widths');
+
     const wideTag = 'W'.repeat(50);
     await tagInput.fill(wideTag);
     await tagInput.press('Enter');
@@ -760,6 +819,8 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await expect(screen.getByRole('alert')).toBeVisible();
     await expect(draftStatus).toHaveText('Changes need attention');
     await screen.getByLabel('Project name', { exact: true }).fill('Recovered latest edit');
+    await expect(screen.getByRole('button', { name: 'Save project', exact: true })).toBeDisabled();
+    await expect(screen.getByRole('button', { name: 'Cancel', exact: true })).toBeDisabled();
     await screen.getByRole('button', { name: 'Retry request', exact: true }).click();
     await saved();
     assert.equal(retry, lost, 'The first retry reuses the exact uncertain request');
@@ -769,6 +830,12 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await page.unroute('**/api/save_project_draft*');
     console.log('PASS: lost acknowledgement retries the same request and preserves newer edits');
 
+    await screen.getByLabel('Tax (%)', { exact: true }).fill('101');
+    await screen.getByRole('button', { name: 'Save project', exact: true }).click();
+    await expect(screen.getByLabel('Tax (%)', { exact: true })).toHaveAttribute('aria-invalid', 'true');
+    await screen.getByLabel('Tax (%)', { exact: true }).fill('21');
+    // A definite field rejection can be corrected and explicitly submitted;
+    // the subsequent uncertain commit must still require its original retry.
     let created;
     await page.route('**/api/finalize_project_draft*', async route => {
       const response = await route.fetch();
@@ -784,6 +851,9 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await screen.getByRole('button', { name: 'Save project', exact: true }).click();
     await expect(screen.getByRole('alert')).toBeVisible();
     await expect(screen.getByLabel('Project name', { exact: true })).toBeDisabled();
+    await expect(screen.getByRole('button', { name: 'Saving project…', exact: true })).toBeDisabled();
+    await expect(screen.getByRole('button', { name: 'Cancel', exact: true })).toBeDisabled();
+    await expect(screen.getByRole('button', { name: 'Back to Projects', exact: true })).toBeDisabled();
     await screen.getByRole('button', { name: 'Retry request', exact: true }).click();
     await expect(page).toHaveURL(`${base}/projects/${created}`);
     await expect(page.getByRole('heading', { name: 'Project', exact: true })).toBeVisible();

@@ -4,7 +4,9 @@ use dioxus::prelude::*;
 
 use crate::components::icons::NavIcon;
 use crate::components::modal::Modal;
-use crate::models::project_creation::{CreationOptions, CreationSearch, ProjectDraft, TaskSource};
+use crate::models::project_creation::{
+    CreationOptions, CreationSearch, ProjectDraft, ProjectFormField, TaskSource,
+};
 use crate::route::Route;
 use crate::server_fns;
 
@@ -104,10 +106,16 @@ fn ProjectEditor(
     let options = use_signal(|| options);
     let mut busy = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
+    let mut invalid_field = use_signal(|| None::<ProjectFormField>);
     let mut intent = use_signal(|| None::<Intent>);
     let mut discard_open = use_signal(|| false);
     let catalog_busy = use_signal(|| false);
     let navigator = use_navigator();
+    let request_intent = use_callback(move |action| {
+        invalid_field.set(None);
+        error.set(None);
+        intent.set(Some(action));
+    });
 
     use_effect(move || {
         let current = form();
@@ -168,7 +176,11 @@ fn ProjectEditor(
                                 if is_definite_rejection(&error) {
                                     intent.set(None);
                                 }
-                                error.to_string()
+                                invalid_field.set(validation_field(&error));
+                                match error {
+                                    ServerFnError::ServerError { message, .. } => message,
+                                    other => other.to_string(),
+                                }
                             })?;
                         intent.set(None);
                         navigator.push(Route::ProjectDetail { id });
@@ -200,6 +212,17 @@ fn ProjectEditor(
 
     let dirty = state.read().is_dirty(&form.read());
     let locked = intent().is_some() || catalog_busy();
+    let unresolved_request = error().is_some() && invalid_field().is_none();
+    use_effect(move || {
+        if let Some(field) = invalid_field()
+            && !busy()
+        {
+            let id = field_id(field);
+            document::eval(&format!(
+                "const field = document.getElementById('{id}'); field?.focus(); field?.scrollIntoView({{block: 'center'}});"
+            ));
+        }
+    });
     let status = if error().is_some() {
         "Changes need attention".to_string()
     } else if busy() || dirty {
@@ -223,8 +246,8 @@ fn ProjectEditor(
                     button {
                         r#type: "button",
                         class: "btn btn-ghost text-sm text-muted font-normal border-0 px-2.5 py-1.5 -ml-2.5",
-                        disabled: locked || error().is_some(),
-                        onclick: move |_| intent.set(Some(Intent::Leave)),
+                        disabled: locked || unresolved_request,
+                        onclick: move |_| request_intent.call(Intent::Leave),
                         span { class: "inline-flex", aria_hidden: "true", NavIcon { name: "arrow-left", class: "size-4" } }
                         "Back to Projects"
                     }
@@ -246,16 +269,20 @@ fn ProjectEditor(
                     }
                     if let Some(message) = error() {
                         div { class: "alert alert-danger mt-4", role: "alert",
-                            p { "{message}" }
+                            p { id: "np-form-error-message", "{message}" }
                             p { class: "text-sm",
-                                "Your input is still here. Retry a failed request, or reload to resolve changes made in another tab."
+                                if invalid_field().is_some() {
+                                    "Your input is still here. Correct the indicated field and save again, or cancel to keep the draft."
+                                } else {
+                                    "Your input is still here. Retry a failed request, or reload to resolve changes made in another tab."
+                                }
                             }
                             div { class: "flex flex-wrap gap-3",
                                 button {
                                     class: "btn btn-secondary",
                                     r#type: "button",
                                     disabled: busy(),
-                                    onclick: move |_| error.set(None),
+                                    onclick: move |_| { invalid_field.set(None); error.set(None); },
                                     "Retry request"
                                 }
                                 button {
@@ -277,7 +304,7 @@ fn ProjectEditor(
                         Billing { form, options }
                         Tasks { form, options }
                         Team { form, options, busy: catalog_busy }
-                        InvoiceDefaults { form }
+                        InvoiceDefaults { form, invalid_field: invalid_field(), error_message: error() }
                     }
                 }
             }
@@ -285,8 +312,8 @@ fn ProjectEditor(
                 button {
                     class: "btn btn-primary",
                     r#type: "button",
-                    disabled: !can_create || locked || error().is_some(),
-                    onclick: move |_| intent.set(Some(Intent::Create)),
+                    disabled: !can_create || locked || unresolved_request,
+                    onclick: move |_| request_intent.call(Intent::Create),
                     if intent() == Some(Intent::Create) {
                         "Saving project…"
                     } else {
@@ -296,14 +323,14 @@ fn ProjectEditor(
                 button {
                     class: "btn btn-secondary",
                     r#type: "button",
-                    disabled: locked || error().is_some(),
-                    onclick: move |_| intent.set(Some(Intent::Leave)),
+                    disabled: locked || unresolved_request,
+                    onclick: move |_| request_intent.call(Intent::Leave),
                     "Cancel"
                 }
                 button {
                     class: "btn btn-ghost ml-auto",
                     r#type: "button",
-                    disabled: busy() || locked || error().is_some(),
+                    disabled: busy() || locked || unresolved_request,
                     onclick: move |_| discard_open.set(true),
                     "Discard draft"
                 }
@@ -323,7 +350,7 @@ fn ProjectEditor(
                         class: "btn btn-danger",
                         onclick: move |_| {
                             discard_open.set(false);
-                            intent.set(Some(Intent::Discard));
+                            request_intent.call(Intent::Discard);
                         },
                         "Discard draft"
                     }
@@ -349,6 +376,31 @@ fn is_validation_error(error: &ServerFnError) -> bool {
     )
 }
 
+fn validation_field(error: &ServerFnError) -> Option<ProjectFormField> {
+    if !is_validation_error(error) {
+        return None;
+    }
+    let ServerFnError::ServerError {
+        details: Some(details),
+        ..
+    } = error
+    else {
+        return None;
+    };
+    serde_json::from_value(details.get("field")?.clone()).ok()
+}
+
+fn field_id(field: ProjectFormField) -> &'static str {
+    match field {
+        ProjectFormField::PaymentTerms => "np-terms-days",
+        ProjectFormField::PurchaseOrder => "np-po-number",
+        ProjectFormField::Tax => "np-tax",
+        ProjectFormField::SecondTaxName => "np-second-tax-name",
+        ProjectFormField::SecondTax => "np-second-tax",
+        ProjectFormField::Discount => "np-discount",
+    }
+}
+
 fn is_definite_rejection(error: &ServerFnError) -> bool {
     matches!(error, ServerFnError::ServerError { code, .. } if (400..500).contains(code))
 }
@@ -356,6 +408,35 @@ fn is_definite_rejection(error: &ServerFnError) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_known_validation_fields_can_target_a_control() {
+        const BAD_REQUEST: u16 = 400;
+        const CONFLICT: u16 = 409;
+        for (code, details, expected) in [
+            (
+                BAD_REQUEST,
+                Some(serde_json::json!({"field": "tax"})),
+                Some(ProjectFormField::Tax),
+            ),
+            (
+                BAD_REQUEST,
+                Some(serde_json::json!({"field": "unknown"})),
+                None,
+            ),
+            (BAD_REQUEST, Some(serde_json::json!({"field": 42})), None),
+            (BAD_REQUEST, None, None),
+            (CONFLICT, Some(serde_json::json!({"field": "tax"})), None),
+        ] {
+            let error = ServerFnError::ServerError {
+                code,
+                details,
+                message: "Rejected".into(),
+            };
+            assert_eq!(validation_field(&error), expected);
+        }
+        assert_eq!(field_id(ProjectFormField::Tax), "np-tax");
+    }
 
     #[test]
     fn a_rejected_creation_can_be_edited_but_an_uncertain_commit_must_be_retried() {

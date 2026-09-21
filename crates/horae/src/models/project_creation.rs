@@ -21,6 +21,18 @@ pub enum FeeMode {
     Monthly,
 }
 
+/// Stable field identities in creation rejections, independent of display text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProjectFormField {
+    PaymentTerms,
+    PurchaseOrder,
+    Tax,
+    SecondTaxName,
+    SecondTax,
+    Discount,
+}
+
 /// Keep raw values so autosaving does not discard an incomplete date or amount.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
