@@ -493,6 +493,7 @@ pub use invoices::*;
 #[allow(unused_imports)]
 pub use organization::*;
 pub use plugins::*;
+pub use project_creation::*;
 pub use projects::*;
 pub use reports::*;
 pub use time_entries::*;

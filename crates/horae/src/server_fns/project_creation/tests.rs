@@ -7,6 +7,51 @@ use super::{lock_creation_actor, lock_creation_client, validate_draft_form};
 use crate::models::project_creation::{ProjectForm, ProjectMemberInput};
 
 #[sqlx::test(migrations = "./migrations")]
+async fn selected_client_lookup_is_scoped_and_keeps_archived_identity(pool: PgPool) {
+    let owner = seed(&pool, OrgRole::Manager).await;
+    let foreign = seed(&pool, OrgRole::Admin).await;
+    let client = super::load_selected_client(&pool, owner.user_id, owner.org_id, owner.client_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(client.name, "Acme");
+    assert_eq!(client.currency, "EUR");
+    for id in [foreign.client_id, Uuid::now_v7()] {
+        assert!(
+            super::load_selected_client(&pool, owner.user_id, owner.org_id, id)
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+    sqlx::query!(
+        "UPDATE clients SET active = false WHERE id = $1",
+        owner.client_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let archived = super::load_selected_client(&pool, owner.user_id, owner.org_id, owner.client_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(!archived.active);
+    assert_eq!(archived.id, owner.client_id);
+    sqlx::query!(
+        "UPDATE users SET org_role = 'member' WHERE id = $1",
+        owner.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(
+        super::load_selected_client(&pool, owner.user_id, owner.org_id, owner.client_id)
+            .await
+            .is_err()
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn missing_draft_responses_do_not_disclose_foreign_ownership(pool: PgPool) {
     let owner = seed(&pool, OrgRole::Admin).await;
     let other = seed(&pool, OrgRole::Admin).await;

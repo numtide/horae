@@ -116,6 +116,8 @@
   --size-empty-icon-tile: 3.25rem;
   --size-icon-lg: 1.375rem;
   --width-empty-copy: 23.75rem;
+  --width-project-form: 73.75rem;
+  --width-form-label: 13.75rem;
   --line-height-copy: 1.55;
 
   /* Border radius */
@@ -777,6 +779,15 @@ h1, h2, h3, h4, h5, h6 {
 .btn-sm { padding: var(--space-2) var(--space-3); font-size: var(--font-size-xs); }
 
 /* Forms */
+/* New Project: structural layout only; control chrome remains shared. */
+.np-page { max-width: var(--width-project-form); }
+.np-row { grid-template-columns: var(--width-form-label) minmax(0, 1fr); }
+.np-footer { position: sticky; bottom: 0; z-index: 5; }
+@media (max-width: 1180px) {
+  .np-page .np-row { grid-template-columns: minmax(0, 1fr); gap: var(--space-2); }
+  .np-row > .np-label { padding-top: 0; }
+}
+
 .form-group { margin-bottom: var(--space-4); }
 .form-label { display: block; font-size: var(--font-size-sm); font-weight: 500; margin-bottom: var(--space-1); color: var(--color-text); }
 .form-input, .form-select, .form-textarea {

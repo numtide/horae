@@ -2,9 +2,9 @@
 
 use super::*;
 #[cfg(feature = "server")]
-use crate::models::project_creation::{CreationClient, TaskAccess};
+use crate::models::project_creation::TaskAccess;
 use crate::models::project_creation::{
-    CreationOptions, CreationSearch, DraftSaved, ProjectDraft, ProjectForm,
+    CreationClient, CreationOptions, CreationSearch, DraftSaved, ProjectDraft, ProjectForm,
 };
 
 #[cfg(feature = "server")]
@@ -18,7 +18,17 @@ use finalize::finalize_draft_record;
 #[cfg(feature = "server")]
 mod options;
 #[cfg(feature = "server")]
-use options::load_creation_options;
+use options::{load_creation_options, load_selected_client};
+
+/// Resolve an existing draft selection without searching or fetching a whole catalog.
+#[server]
+pub async fn project_creation_client(
+    client_id: uuid::Uuid,
+) -> Result<Option<CreationClient>, ServerFnError> {
+    let actor = require_manager().await?;
+    let state = crate::state::global_state().await;
+    load_selected_client(&state.db, actor.id, actor.org_id, client_id).await
+}
 
 #[server]
 pub async fn project_creation_options(

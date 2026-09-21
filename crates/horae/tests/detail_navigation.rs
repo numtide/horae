@@ -95,10 +95,17 @@ mod route {
         InvoiceDetail { id: Uuid },
         #[route("/projects")]
         ProjectList {},
+        #[route("/projects/new")]
+        NewProject {},
         #[route("/projects/:id")]
         ProjectDetail { id: Uuid },
         #[route("/admin/importers")]
         HarvestImport {},
+    }
+
+    #[component]
+    fn NewProject() -> Element {
+        rsx! { h1 { "New project" } }
     }
 
     #[component]
@@ -123,6 +130,34 @@ fn settle(dom: &mut VirtualDom) {
         dom.render_immediate_to_vec();
     }
     panic!("detail navigation did not settle");
+}
+
+#[tokio::test]
+async fn project_creation_links_use_the_static_new_project_route() {
+    let probe = Probe {
+        initial_path: Some("/projects".into()),
+        ..Probe::default()
+    };
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    assert_eq!(
+        dioxus::ssr::render(&dom)
+            .matches("href=\"/projects/new\"")
+            .count(),
+        2
+    );
+
+    let navigator = probe.navigator.borrow().unwrap();
+    dom.in_scope(probe.scope.borrow().unwrap(), || {
+        navigator.push(route::Route::NewProject {})
+    });
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains("New project"));
+    assert!(probe.assignment_requests.borrow().is_empty());
+    dom.in_scope(probe.scope.borrow().unwrap(), || navigator.go_back());
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains("No projects yet"));
 }
 
 #[tokio::test]
@@ -430,17 +465,6 @@ mod server_fns {
     }
     pub async fn list_project_spend() -> Result<Vec<ProjectSpend>, ServerFnError> {
         Ok(Vec::new())
-    }
-    pub async fn create_project(
-        _client: String,
-        _name: String,
-        _kind: String,
-        _currency: String,
-        _budget: String,
-        _value: String,
-        _rate: String,
-    ) -> Result<Project, ServerFnError> {
-        panic!("unexpected mutation");
     }
     pub async fn update_project(
         _id: String,

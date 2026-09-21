@@ -28,7 +28,7 @@
 - [x] T010 [US1] Add failing finalization/client/tag/currency/rollback tests in `crates/horae/src/server_fns/project_creation/tests.rs` (FR-001–005, FR-008–009).
 - [x] T011 [US1] Implement bounded creation options and atomic finalization of project/settings/tasks/team/tags in `crates/horae/src/server_fns/project_creation.rs`, revalidating active role and all org-scoped references under transaction locks.
 - [x] T012 [US1] Implement explicit client-dialog creation/default rate persistence in `crates/horae/src/server_fns/clients.rs` and `crates/horae/src/models/project_creation.rs`, preserving existing client mutations.
-- [ ] T013 [US1] Add route/module and Projects creation links in `crates/horae/src/route.rs`, `crates/horae/src/pages.rs`, `crates/horae/src/pages/projects.rs`; keep existing edit/bulk behavior and active Projects navigation.
+- [x] T013 [US1] Add route/module and Projects creation links in `crates/horae/src/route.rs`, `crates/horae/src/pages.rs`, `crates/horae/src/pages/projects.rs`; keep existing edit/bulk behavior and active Projects navigation.
 - [ ] T014 [US1] Implement basic form/client modal/code suggestion/dates/currency/tags in `crates/horae/src/pages/new_project.rs` using actual options and shared controls.
 - [ ] T015 [US1] Persist/reload details and add tag filtering to project/report consumers in `crates/horae/src/server_fns/projects.rs`, `crates/horae/src/server_fns/reports.rs`, `crates/horae/src/pages/projects.rs`, `crates/horae/src/pages/reports.rs`.
 

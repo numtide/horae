@@ -3,6 +3,22 @@ use crate::models::project_creation::{
     CreationOptions, CreationPerson, CreationSearch, CreationTask,
 };
 
+pub(super) async fn load_selected_client(
+    pool: &sqlx::PgPool,
+    actor_id: uuid::Uuid,
+    org_id: uuid::Uuid,
+    client_id: uuid::Uuid,
+) -> Result<Option<CreationClient>, ServerFnError> {
+    let mut tx = pool.begin().await.map_err(storage_error)?;
+    lock_creation_actor(&mut tx, actor_id, org_id).await?;
+    let client = sqlx::query_as!(CreationClient,
+        "SELECT id, name, currency, active, default_rate_cents FROM clients WHERE org_id = $1 AND id = $2",
+        org_id, client_id,
+    ).fetch_optional(&mut *tx).await.map_err(storage_error)?;
+    tx.commit().await.map_err(storage_error)?;
+    Ok(client)
+}
+
 pub(super) async fn load_creation_options(
     pool: &sqlx::PgPool,
     actor_id: uuid::Uuid,

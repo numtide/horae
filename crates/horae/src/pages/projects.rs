@@ -118,16 +118,14 @@ pub fn ProjectList() -> Element {
     // Management view: `include_inactive = true` also lists deactivated projects
     // so managers can reactivate them; new-entry pickers pass `false`.
     let mut projects = use_resource(|| async move { server_fns::list_projects(None, true).await });
-    // All clients (including inactive) so a project under a deactivated client
-    // still resolves to its real name; the create form filters to active ones.
+    // All clients so projects under deactivated clients still resolve their names.
     let clients_res = use_resource(|| async move { server_fns::list_clients(true).await });
     let me = use_resource(|| async move { server_fns::get_me().await });
     let mut spend_res = use_resource(|| async move { server_fns::list_project_spend().await });
 
     let mut show_form = use_signal(|| false);
-    // `Some(id)` while editing an existing project, `None` while creating.
+    // Creation has its own route; this form only edits an existing project.
     let mut editing_id = use_signal(|| None::<Uuid>);
-    let mut client_id = use_signal(String::new);
     let mut name = use_signal(String::new);
     let mut project_type = use_signal(|| "time_and_materials".to_string());
     let mut currency = use_signal(|| "USD".to_string());
@@ -260,7 +258,6 @@ pub fn ProjectList() -> Element {
 
     let mut reset_form = move || {
         editing_id.set(None);
-        client_id.set(String::new());
         name.set(String::new());
         project_type.set("time_and_materials".to_string());
         currency.set("USD".to_string());
@@ -271,26 +268,6 @@ pub fn ProjectList() -> Element {
         show_form.set(false);
     };
 
-    let form_title = if editing_id().is_some() {
-        "Edit Project"
-    } else {
-        "New Project"
-    };
-    // The create form only offers active clients; the placeholder keeps the
-    // picker unset until one is chosen.
-    let form_client_opts: Vec<(String, String)> =
-        std::iter::once((String::new(), "Select a client...".to_string()))
-            .chain(
-                clients_res
-                    .read()
-                    .as_ref()
-                    .and_then(|r| r.as_ref().ok())
-                    .into_iter()
-                    .flatten()
-                    .filter(|c| c.active)
-                    .map(|c| (c.id.to_string(), c.name.clone())),
-            )
-            .collect();
     // Value is the enum's snake_case `Display`; label via ProjectType::label,
     // so the pill and this picker share one source of truth.
     let type_opts: Vec<(String, String)> = [
@@ -327,14 +304,14 @@ pub fn ProjectList() -> Element {
                 h1 { class: "page-title text-4xl font-semibold text-strong tracking-tight", "Projects" }
                 div { class: "page-actions items-center gap-4",
                     if is_manager {
-                        button {
-                            class: "btn btn-primary py-2 px-4",
-                            onclick: move |_| {
-                                let open = !show_form();
-                                reset_form();
-                                show_form.set(open);
-                            },
-                            if show_form() { "Cancel" } else { "New project" }
+                        if show_form() {
+                            button {
+                                class: "btn btn-secondary py-2 px-4",
+                                onclick: move |_| reset_form(),
+                                "Cancel editing"
+                            }
+                        } else {
+                            Link { to: Route::NewProject {}, class: "btn btn-primary py-2 px-4", "New project" }
                         }
                         Menu {
                             id: "project-bulk-menu", label: "⚡ Actions", align_right: true,
@@ -411,18 +388,7 @@ pub fn ProjectList() -> Element {
             }
 
             if show_form() && is_manager {
-                FormCard { title: "{form_title}", error,
-                    // The client is fixed at creation; only shown when creating.
-                    if editing_id().is_none() {
-                        FormGroup { label: "Client", id: "proj-client",
-                            Select {
-                                id: "proj-client",
-                                options: form_client_opts,
-                                selected: client_id(),
-                                onchange: move |e: FormEvent| client_id.set(e.value()),
-                            }
-                        }
-                    }
+                FormCard { title: "Edit Project", error,
                     FormGroup { label: "Name", id: "proj-name",
                         Input {
                             id: "proj-name",
@@ -480,8 +446,7 @@ pub fn ProjectList() -> Element {
                     button {
                         class: "btn btn-primary",
                         onclick: move |_| {
-                            let editing = editing_id();
-                            let cid = client_id();
+                            let Some(id) = editing_id() else { return; };
                             let n = name();
                             let pt = project_type();
                             let c = currency();
@@ -490,12 +455,7 @@ pub fn ProjectList() -> Element {
                             let rv = rate_value();
                             run_action(
                                 async move {
-                                    match editing {
-                                        Some(id) => {
-                                            server_fns::update_project(id.to_string(), n, pt, c, bk, bv, rv).await
-                                        }
-                                        None => server_fns::create_project(cid, n, pt, c, bk, bv, rv).await,
-                                    }
+                                    server_fns::update_project(id.to_string(), n, pt, c, bk, bv, rv).await
                                 },
                                 projects,
                                 error,
@@ -505,7 +465,7 @@ pub fn ProjectList() -> Element {
                                 },
                             );
                         },
-                        if editing_id().is_some() { "Save Changes" } else { "Create Project" }
+                        "Save Changes"
                     }
                 }
             }
@@ -580,9 +540,9 @@ pub fn ProjectList() -> Element {
                                     }
                                     div { class: "flex flex-wrap items-center justify-center gap-3 mt-1",
                                         if is_manager && !show_form() {
-                                            button {
+                                            Link {
+                                                to: Route::NewProject {},
                                                 class: "btn btn-primary py-3 px-5",
-                                                onclick: move |_| { reset_form(); show_form.set(true); },
                                                 "New project"
                                             }
                                         }
