@@ -565,18 +565,13 @@ async fn tasks_for_viewer(
     sqlx::query_as!(
         Task,
         "SELECT t.id, t.org_id, t.name, t.billable_default, t.active,
-                CASE WHEN NOT $4 AND u.org_role IN ('admin', 'manager') THEN t.default_rate_cents END AS default_rate_cents
-         FROM tasks t JOIN users u ON u.id = $1 AND u.org_id = t.org_id AND u.active
-         WHERE t.org_id = $2
-           AND (t.active OR ($4 AND EXISTS (
-             SELECT 1 FROM time_entries te WHERE te.org_id = $2 AND te.user_id = $1 AND te.task_id = t.id)))
+                CASE WHEN NOT $4 AND access.can_view_rates THEN t.default_rate_cents END AS default_rate_cents
+         FROM tasks t JOIN task_read_access access ON access.task_id = t.id AND access.org_id = t.org_id
+         WHERE t.org_id = $2 AND access.user_id = $1
+           AND (t.active OR ($4 AND access.has_own_history))
            AND ($3::uuid IS NULL OR EXISTS (
              SELECT 1 FROM project_tasks pt JOIN project_read_access a ON a.project_id = pt.project_id
              WHERE pt.task_id = t.id AND pt.project_id = $3 AND a.org_id = $2 AND a.user_id = $1 AND a.can_view_team))
-           AND (u.org_role IN ('admin', 'manager') OR EXISTS (
-             SELECT 1 FROM project_tasks pt JOIN project_read_access a ON a.project_id = pt.project_id
-             WHERE pt.task_id = t.id AND a.org_id = $2 AND a.user_id = $1 AND a.can_view_team)
-           OR EXISTS (SELECT 1 FROM time_entries te WHERE te.org_id = $2 AND te.user_id = $1 AND te.task_id = t.id))
          ORDER BY t.name, t.id",
         viewer.id,
         viewer.org_id,

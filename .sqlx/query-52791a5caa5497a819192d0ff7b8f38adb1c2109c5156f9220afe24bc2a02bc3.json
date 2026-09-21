@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COUNT(*) FROM time_entries te\n         JOIN users viewer ON viewer.id = $8 AND viewer.org_id = te.org_id AND viewer.active\n         WHERE te.org_id = $1 AND (viewer.org_role IN ('admin', 'manager') OR te.user_id = viewer.id)\n           AND ($2::uuid IS NULL OR te.user_id = $2)\n           AND ($3::uuid IS NULL OR te.project_id = $3)\n           AND ($4::date IS NULL OR te.spent_date >= $4::date)\n           AND ($5::date IS NULL OR te.spent_date <= $5::date)\n           AND ($6::bool IS NULL OR te.is_running = $6)\n           AND ($7::timestamptz IS NULL OR te.updated_at >= $7::timestamptz)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Date",
+        "Date",
+        "Bool",
+        "Timestamptz",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "52791a5caa5497a819192d0ff7b8f38adb1c2109c5156f9220afe24bc2a02bc3"
+}

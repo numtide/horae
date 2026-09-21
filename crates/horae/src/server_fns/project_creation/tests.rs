@@ -419,6 +419,25 @@ async fn finalization_persists_task_access_and_project_only_financial_overrides(
         .unwrap(),
         "Private context"
     );
+    let event = sqlx::query_scalar!(
+        "SELECT payload FROM horae_outbox WHERE org_id = $1 AND event_kind = 'project_created'",
+        ids.org_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        event["project"],
+        serde_json::json!({
+            "id": project,
+            "client_id": ids.client_id,
+            "name": "Project",
+            "project_type": "time_and_materials",
+            "budget_kind": "hours",
+            "active": true,
+        })
+    );
+    assert_eq!(event.as_object().unwrap().len(), 4);
     assert_eq!(
         sqlx::query_scalar!(
             "SELECT rate_cents FROM assignments WHERE project_id = $1",

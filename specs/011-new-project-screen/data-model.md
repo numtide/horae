@@ -26,6 +26,8 @@ Dates/code stay in existing projects columns. Creation supports EUR/CHF/USD/GBP 
 
 Migration 0035 adds the private `project_read_access` view, keyed by current active user/org/project, with `can_view_rates`, `can_view_team` and `can_view_progress` flags. Organization managers/admins retain organization scope; assigned leads/admins can view progress independently of the visibility setting; ordinary assigned members require member-visible progress. A user's own historical time permits project identity only after assignment revocation. Missing settings preserve legacy assigned-member progress. The view has no PUBLIC grant and is not added to the plugin allowlist.
 
+Migration 0036 adds private `task_read_access` for current active user/org/task identities, rate visibility and own-history membership. UI and compatibility reads share it; tracking authorization remains in `time_entry_contexts`. No PUBLIC or plugin grant is added.
+
 ## Tags
 
 `project_tags`: reusable organization name with unique case-folded normalized key. `project_tag_links`: project_id/tag_id unique. Removing a link never deletes the shared tag. New draft tags are committed with the project, not on each keystroke. List/report filters reference tag identity and org.

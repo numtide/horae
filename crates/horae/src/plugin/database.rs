@@ -198,6 +198,84 @@ pub(super) mod tests {
     }
 
     #[sqlx::test(migrations = "./migrations")]
+    async fn project_configuration_is_private_even_when_plugin_grants_are_misconfigured(
+        pool: sqlx::PgPool,
+    ) {
+        let reader = Reader::new(&pool).await;
+        let mut connection = reader.pool.acquire().await.unwrap();
+        let mut results = Vec::new();
+        // Identifiers come only from this fixed list, never plugin input.
+        for relation in [
+            "project_drafts",
+            "project_settings",
+            "project_private_settings",
+            "project_member_costs",
+            "project_tags",
+            "project_tag_links",
+            "project_task_settings",
+            "project_task_members",
+            "project_member_budgets",
+            "project_fee_milestones",
+            "project_fee_occurrences",
+            "project_budget_notifications",
+            "project_read_access",
+            "task_read_access",
+        ] {
+            let readable = sqlx::query_scalar!(
+                r#"SELECT has_table_privilege(current_user, $1, 'SELECT') AS "readable!""#,
+                relation,
+            )
+            .fetch_one(&mut *connection)
+            .await
+            .unwrap();
+            sqlx::raw_sql(&format!(
+                "GRANT SELECT ON public.{relation} TO {}",
+                reader.name
+            ))
+            .execute(&pool)
+            .await
+            .unwrap();
+            let validation = validate_connection(&mut connection).await;
+            sqlx::raw_sql(&format!(
+                "REVOKE SELECT ON public.{relation} FROM {}",
+                reader.name
+            ))
+            .execute(&pool)
+            .await
+            .unwrap();
+            results.push((relation, readable, validation));
+        }
+        let executable = sqlx::query_scalar!(
+            r#"SELECT has_function_privilege(current_user,
+                'public.resolve_project_rate(text,bigint,bigint,bigint,bigint,bigint)', 'EXECUTE') AS "executable!""#,
+        ).fetch_one(&mut *connection).await.unwrap();
+        sqlx::raw_sql(&format!(
+            "GRANT EXECUTE ON FUNCTION public.resolve_project_rate(text,bigint,bigint,bigint,bigint,bigint) TO {}",
+            reader.name,
+        )).execute(&pool).await.unwrap();
+        let function_validation = validate_connection(&mut connection).await;
+        drop(connection);
+        reader.finish().await;
+        for (relation, readable, validation) in results {
+            assert!(!readable, "plugin can read {relation} by default");
+            assert!(
+                validation
+                    .unwrap_err()
+                    .to_string()
+                    .contains("non-business data"),
+                "plugin grant accepted for {relation}"
+            );
+        }
+        assert!(!executable, "billing resolver is executable by plugins");
+        assert!(
+            function_validation
+                .unwrap_err()
+                .to_string()
+                .contains("unapproved database function")
+        );
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
     async fn reader_cannot_have_access_to_credentials(pool: sqlx::PgPool) {
         let reader = Reader::new(&pool).await;
         sqlx::raw_sql(&format!(

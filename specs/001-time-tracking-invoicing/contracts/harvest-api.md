@@ -39,6 +39,7 @@ pages with `422`. Horae intentionally retains its numbered-page contract.
 | Unknown query parameters | Ignored by queries but retained in pagination links | Retaining a parameter does not mean its filter is supported; `cursor` is also ignored |
 | Time-entry access | Members read only their own entries; managers/admins read the organization | Manager access follows Horae's policy, not Harvest's assigned-team/project scope |
 | Project access | List, count and detail require project-progress access; managers/admins retain organization scope | Ordinary assigned members require member-visible progress; project leads/admins can read their assigned progress. Hidden projects return `404` on detail and do not enter pagination counts |
+| Task access | Managers/admins see their organization's catalog; members see tasks on assigned projects or in their own time history | Hidden tasks return `404` and do not enter counts. Member rates are omitted; identity access does not authorize tracking |
 | User access | `/users` requires manager/admin; `/users/me` returns the signed-in user | No member listing of teammates' rates |
 | Update timestamps | Time entries use real `updated_at`; projects/clients use `created_at` | Catalog incremental synchronization cannot detect all edits |
 | Task/user `updated_since` | Accepted but ignored | Tasks have empty timestamps; users emit creation time as update time |
@@ -264,9 +265,13 @@ though Horae stores minutes and cents internally.
 1. `timer_started_at` — RFC 3339 timestamp string or `null`.
 1. `billable` — boolean.
 1. `budgeted` — boolean; `true` when the project's budget kind is not `none`.
-1. `billable_rate` — number or `null`, in currency units. Uses the attached invoice
-   line rate when present, otherwise the task → assignment → project → user cascade.
-1. `cost_rate` — number or `null` (user cost rate, in currency units).
+   Omitted without project-progress access, even on the member's own entry.
+1. `billable_rate` — number in currency units, omitted when unavailable or for
+   members. Uses the attached invoice line rate when present, otherwise the
+   configured rate mode or legacy rate cascade. Configured fee work has no hourly rate.
+1. `cost_rate` — number in currency units, omitted when unavailable or for members.
+   Project cost overrides are administrator-only. Managers receive legacy profile
+   costs only when no override exists; inaccessible overrides have no fallback.
 1. `created_at`, `updated_at` — RFC 3339 timestamp strings.
 1. `user` — `{ id, name }`.
 1. `client` — `{ id, name }`.
@@ -310,7 +315,7 @@ though Horae stores minutes and cents internally.
 1. `name` — string.
 1. `is_active` — boolean.
 1. `billable_by_default` — boolean.
-1. `default_hourly_rate` — number or `null` (currency units).
+1. `default_hourly_rate` — number in currency units; omitted for members or when unset.
 1. `created_at`, `updated_at` — strings; currently empty (no timestamp columns
    on the `tasks` table).
 

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT has_table_privilege(current_user, $1, 'SELECT') AS \"readable!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "readable!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "d85e6034221304b47cc63d86a4814b9c0d88be98d0f562e2d69a960a27d620de"
+}

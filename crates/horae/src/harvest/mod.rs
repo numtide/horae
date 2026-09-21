@@ -171,7 +171,7 @@ struct TimeEntryRow {
     // Rates
     billable_rate_cents: Option<i64>,
     user_cost_rate_cents: Option<i64>,
-    budget_kind: String,
+    budget_kind: Option<String>,
 }
 
 fn time_entry_row_to_harvest(
@@ -226,7 +226,7 @@ fn time_entry_row_to_harvest(
         is_running: row.is_running,
         timer_started_at: row.started_at.map(|t| t.to_rfc3339()),
         billable: row.billable,
-        budgeted: row.budget_kind != "none",
+        budgeted: row.budget_kind.as_deref().map(|kind| kind != "none"),
         billable_rate: row
             .billable_rate_cents
             .filter(|_| can_view_rates)
@@ -269,7 +269,7 @@ async fn list_time_entries(
 }
 
 /// Members receive their own entries without rates; managers can read the
-/// organization's entries and financial fields.
+/// organization's entries and billing rates. Project cost overrides are admin-only.
 async fn time_entries_page(
     db: &PgPool,
     caller: &AuthUser,
@@ -282,11 +282,11 @@ async fn time_entries_page(
         .map_err(internal)?;
 
     let total_entries = sqlx::query_scalar!(
-        // The count filters on `te` alone. Joining `projects` (as the page query
-        // below has to) would cost a heap lookup per counted row, which Postgres
-        // cannot elide even though the FK is NOT NULL.
+        // Revalidate the active actor alongside the count so a stale role cannot
+        // turn an own-timesheet request into organization-wide metadata.
         "SELECT COUNT(*) FROM time_entries te
-         WHERE te.org_id = $1
+         JOIN users viewer ON viewer.id = $8 AND viewer.org_id = te.org_id AND viewer.active
+         WHERE te.org_id = $1 AND (viewer.org_role IN ('admin', 'manager') OR te.user_id = viewer.id)
            AND ($2::uuid IS NULL OR te.user_id = $2)
            AND ($3::uuid IS NULL OR te.project_id = $3)
            AND ($4::date IS NULL OR te.spent_date >= $4::date)
@@ -300,6 +300,7 @@ async fn time_entries_page(
         filters.to as Option<NaiveDate>,
         filters.is_running,
         filters.updated_since as Option<DateTime<Utc>>,
+        caller.user_id,
     )
     .fetch_one(db)
     .await
@@ -320,17 +321,20 @@ async fn time_entries_page(
                te.project_id, p.name AS project_name, p.code AS project_code,
                te.task_id, t.name AS task_name,
                p.client_id, c.name AS client_name,
-               COALESCE(line.rate_cents,
+               CASE WHEN viewer.org_role IN ('admin', 'manager') THEN COALESCE(line.rate_cents,
                  CASE WHEN ps.project_id IS NULL OR p.project_type = 'time_and_materials'
                  THEN resolve_project_rate(ps.rate_mode, pt.rate_cents, a.rate_cents, p.rate_cents,
                  CASE WHEN ps.project_id IS NULL OR p.currency = o.default_currency THEN u.billable_rate_cents END,
                  CASE WHEN p.currency = c.currency THEN c.default_rate_cents END
-               ) END) AS "billable_rate_cents?",
-               COALESCE(mc.cost_rate_cents, u.cost_rate_cents) AS user_cost_rate_cents,
-               p.budget_kind::text AS "budget_kind!: String"
+               ) END) END AS "billable_rate_cents?",
+               CASE WHEN viewer.org_role = 'admin' OR (viewer.org_role = 'manager' AND mc.id IS NULL)
+                 THEN COALESCE(mc.cost_rate_cents, u.cost_rate_cents) END AS user_cost_rate_cents,
+               CASE WHEN access.can_view_progress THEN p.budget_kind::text END AS "budget_kind?: String"
          FROM time_entries te
+         JOIN users viewer ON viewer.id = $10 AND viewer.org_id = te.org_id AND viewer.active
          JOIN users u ON u.id = te.user_id
          JOIN projects p ON p.id = te.project_id
+         LEFT JOIN project_read_access access ON access.project_id = p.id AND access.org_id = p.org_id AND access.user_id = viewer.id
          JOIN tasks t ON t.id = te.task_id
          LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
          LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id
@@ -339,7 +343,7 @@ async fn time_entries_page(
          JOIN organizations o ON o.id = te.org_id
          LEFT JOIN project_settings ps ON ps.project_id = p.id
          LEFT JOIN project_member_costs mc ON mc.project_id = te.project_id AND mc.user_id = te.user_id
-         WHERE te.org_id = $1
+         WHERE te.org_id = $1 AND (viewer.org_role IN ('admin', 'manager') OR te.user_id = viewer.id)
            AND ($2::uuid IS NULL OR te.user_id = $2)
            AND ($3::uuid IS NULL OR te.project_id = $3)
            AND ($4::date IS NULL OR te.spent_date >= $4::date)
@@ -357,6 +361,7 @@ async fn time_entries_page(
         filters.updated_since as Option<DateTime<Utc>>,
         per_page,
         offset,
+        caller.user_id,
     )
     .fetch_all(db)
     .await
@@ -409,17 +414,20 @@ async fn time_entry_by_id(db: &PgPool, caller: &AuthUser, id: Uuid) -> ApiResult
                te.project_id, p.name AS project_name, p.code AS project_code,
                te.task_id, t.name AS task_name,
                p.client_id, c.name AS client_name,
-               COALESCE(line.rate_cents,
+               CASE WHEN viewer.org_role IN ('admin', 'manager') THEN COALESCE(line.rate_cents,
                  CASE WHEN ps.project_id IS NULL OR p.project_type = 'time_and_materials'
                  THEN resolve_project_rate(ps.rate_mode, pt.rate_cents, a.rate_cents, p.rate_cents,
                  CASE WHEN ps.project_id IS NULL OR p.currency = o.default_currency THEN u.billable_rate_cents END,
                  CASE WHEN p.currency = c.currency THEN c.default_rate_cents END
-               ) END) AS "billable_rate_cents?",
-               COALESCE(mc.cost_rate_cents, u.cost_rate_cents) AS user_cost_rate_cents,
-               p.budget_kind::text AS "budget_kind!: String"
+               ) END) END AS "billable_rate_cents?",
+               CASE WHEN viewer.org_role = 'admin' OR (viewer.org_role = 'manager' AND mc.id IS NULL)
+                 THEN COALESCE(mc.cost_rate_cents, u.cost_rate_cents) END AS user_cost_rate_cents,
+               CASE WHEN access.can_view_progress THEN p.budget_kind::text END AS "budget_kind?: String"
          FROM time_entries te
+         JOIN users viewer ON viewer.id = $4 AND viewer.org_id = te.org_id AND viewer.active
          JOIN users u ON u.id = te.user_id
          JOIN projects p ON p.id = te.project_id
+         LEFT JOIN project_read_access access ON access.project_id = p.id AND access.org_id = p.org_id AND access.user_id = viewer.id
          JOIN tasks t ON t.id = te.task_id
          JOIN clients c ON c.id = p.client_id
          JOIN organizations o ON o.id = te.org_id
@@ -428,11 +436,12 @@ async fn time_entry_by_id(db: &PgPool, caller: &AuthUser, id: Uuid) -> ApiResult
          LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
          LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id
          LEFT JOIN invoice_line_items line ON line.invoice_id = te.invoice_id AND line.time_entry_id = te.id
-         WHERE te.id = $1 AND te.org_id = $2
+         WHERE te.id = $1 AND te.org_id = $2 AND (viewer.org_role IN ('admin', 'manager') OR te.user_id = viewer.id)
            AND ($3::uuid IS NULL OR te.user_id = $3)"#,
         id,
         caller.org_id,
         user_scope,
+        caller.user_id,
     )
     .fetch_optional(db)
     .await
@@ -764,11 +773,13 @@ async fn list_tasks(
     let (page, per_page, offset) = page_window(filters.page, filters.per_page)?;
 
     let total = sqlx::query_scalar!(
-        "SELECT COUNT(*) FROM tasks
-         WHERE org_id = $1
-           AND ($2::bool IS NULL OR active = $2)",
+        "SELECT COUNT(*) FROM tasks t
+         JOIN task_read_access access ON access.task_id = t.id AND access.org_id = t.org_id
+         WHERE t.org_id = $1 AND access.user_id = $3
+           AND ($2::bool IS NULL OR t.active = $2)",
         user.org_id,
         filters.is_active,
+        user.user_id,
     )
     .fetch_one(&db)
     .await
@@ -777,16 +788,18 @@ async fn list_tasks(
 
     let rows = sqlx::query_as!(
         TaskRow,
-        "SELECT id, name, active, billable_default, default_rate_cents
-         FROM tasks
-         WHERE org_id = $1
-           AND ($2::bool IS NULL OR active = $2)
-         ORDER BY name, id
+        "SELECT t.id, t.name, t.active, t.billable_default,
+                CASE WHEN access.can_view_rates THEN t.default_rate_cents END AS default_rate_cents
+         FROM tasks t JOIN task_read_access access ON access.task_id = t.id AND access.org_id = t.org_id
+         WHERE t.org_id = $1 AND access.user_id = $5
+           AND ($2::bool IS NULL OR t.active = $2)
+         ORDER BY t.name, t.id
          LIMIT $3 OFFSET $4",
         user.org_id,
         filters.is_active,
         per_page,
         offset,
+        user.user_id,
     )
     .fetch_all(&db)
     .await
@@ -807,10 +820,13 @@ async fn get_task(
 ) -> ApiResult<HarvestTask> {
     let row = sqlx::query_as!(
         TaskRow,
-        "SELECT id, name, active, billable_default, default_rate_cents
-         FROM tasks WHERE id = $1 AND org_id = $2",
+        "SELECT t.id, t.name, t.active, t.billable_default,
+                CASE WHEN access.can_view_rates THEN t.default_rate_cents END AS default_rate_cents
+         FROM tasks t JOIN task_read_access access ON access.task_id = t.id AND access.org_id = t.org_id
+         WHERE t.id = $1 AND t.org_id = $2 AND access.user_id = $3",
         id,
         user.org_id,
+        user.user_id,
     )
     .fetch_optional(&db)
     .await
@@ -1021,9 +1037,9 @@ mod tests {
 
     #[sqlx::test(migrations = "./migrations")]
     async fn harvest_entry_rates_respect_selected_project_mode(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Manager).await;
+        let ids = seed(&pool, OrgRole::Admin).await;
         let id = insert_entry(&pool, &ids, ids.user_id, "Selected rates").await;
-        let caller = caller(&ids, OrgRole::Manager);
+        let caller = caller(&ids, OrgRole::Admin);
         sqlx::query!(
             "UPDATE users SET billable_rate_cents = 3000 WHERE id = $1",
             ids.user_id
@@ -1389,6 +1405,19 @@ mod tests {
         );
         assert_eq!(status, StatusCode::NOT_FOUND);
 
+        let status = refused(
+            time_entry_by_id(&pool, &caller(&ids, OrgRole::Manager), theirs).await,
+            "a stale manager role bypassed the current member's scope",
+        );
+        assert_eq!(status, StatusCode::NOT_FOUND);
+
+        sqlx::query!(
+            "UPDATE users SET org_role = 'manager' WHERE id = $1",
+            ids.user_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
         let Json(entry) = time_entry_by_id(&pool, &caller(&ids, OrgRole::Manager), theirs)
             .await
             .expect("a manager was refused an entry in their own org");

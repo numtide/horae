@@ -1,0 +1,55 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT t.id, t.org_id, t.name, t.billable_default, t.active,\n                CASE WHEN NOT $4 AND access.can_view_rates THEN t.default_rate_cents END AS default_rate_cents\n         FROM tasks t JOIN task_read_access access ON access.task_id = t.id AND access.org_id = t.org_id\n         WHERE t.org_id = $2 AND access.user_id = $1\n           AND (t.active OR ($4 AND access.has_own_history))\n           AND ($3::uuid IS NULL OR EXISTS (\n             SELECT 1 FROM project_tasks pt JOIN project_read_access a ON a.project_id = pt.project_id\n             WHERE pt.task_id = t.id AND pt.project_id = $3 AND a.org_id = $2 AND a.user_id = $1 AND a.can_view_team))\n         ORDER BY t.name, t.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "billable_default",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "default_rate_cents",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "dc6528d4a7cc41bd0a9f0227acac156ea4315f35999004989ab614e15807270c"
+}

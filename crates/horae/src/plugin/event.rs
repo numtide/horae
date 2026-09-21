@@ -373,6 +373,25 @@ pub fn active_transition(was_active: Option<bool>, now_active: bool) -> Option<A
 mod tests {
     use super::*;
 
+    #[test]
+    fn project_membership_payload_excludes_private_configuration() {
+        let payload = AssignmentPayload {
+            id: Uuid::nil(),
+            project_id: Uuid::nil(),
+            user_id: Uuid::nil(),
+            role: "lead".into(),
+        };
+        assert_eq!(
+            serde_json::to_value(payload).unwrap(),
+            serde_json::json!({
+                "id": Uuid::nil(),
+                "project_id": Uuid::nil(),
+                "user_id": Uuid::nil(),
+                "role": "lead",
+            })
+        );
+    }
+
     fn sample_entry() -> TimeEntryPayload {
         TimeEntryPayload {
             id: Uuid::nil(),

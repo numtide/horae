@@ -55,6 +55,8 @@ Count, pagination, export and detail queries use the same authorization projecti
 
 Project CSV and XLSX exports require `can_view_progress` just like Projects. XLSX size/count checks apply that filter before limits and share their existing read-only repeatable-read transaction with the payload query. Harvest project counts, pages and detail use the same view; unavailable detail is 404. Own time-entry project identities remain readable without granting project-wide budget access.
 
+UI task reads and Harvest task counts/pages/detail share `task_read_access`: active organization managers/admins see the catalog; members see assigned-project tasks and their own historical task identities. Task identity does not grant tracking access. Member task rates are omitted. Harvest time-entry queries revalidate the current active actor, even if the supplied role is stale. Entries omit `budgeted` without progress access, omit member financial rates, and expose project cost overrides only to administrators. Managers retain legacy profile costs only when no project override exists; an inaccessible override is not replaced with a fabricated fallback.
+
 ## Billing and downstream invariants
 
 Missing settings preserves all legacy rates/amounts. New selected modes have parity across Rust/SQL, project spend, reports, invoice preparation and compatibility exports. Zero is not absent; currency mismatch is not conversion.

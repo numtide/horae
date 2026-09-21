@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, name, active, billable_default, default_rate_cents\n         FROM tasks WHERE id = $1 AND org_id = $2",
+  "query": "SELECT t.id, t.name, t.active, t.billable_default,\n                CASE WHEN access.can_view_rates THEN t.default_rate_cents END AS default_rate_cents\n         FROM tasks t JOIN task_read_access access ON access.task_id = t.id AND access.org_id = t.org_id\n         WHERE t.id = $1 AND t.org_id = $2 AND access.user_id = $3",
   "describe": {
     "columns": [
       {
@@ -32,6 +32,7 @@
     "parameters": {
       "Left": [
         "Uuid",
+        "Uuid",
         "Uuid"
       ]
     },
@@ -40,8 +41,8 @@
       false,
       false,
       false,
-      true
+      null
     ]
   },
-  "hash": "8400e73a8c9aae852593040bfde613d7fb17fa0b527d595b3adb23a1de53ea51"
+  "hash": "d98c597fa0ff3a77afa1cd1ffe9586a87ad11aa7ac6bad170b52b60371cbb5d2"
 }
