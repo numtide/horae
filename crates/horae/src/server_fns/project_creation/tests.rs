@@ -588,6 +588,27 @@ async fn finalize_is_atomic_and_repeated_submission_returns_one_project(pool: Pg
         Some(4)
     );
     assert_eq!(sqlx::query_scalar!("SELECT count(*) FROM horae_outbox WHERE org_id = $1 AND event_kind = 'project_created'", ids.org_id).fetch_one(&pool).await.unwrap(), Some(3));
+    let state = crate::state::AppState::new(
+        pool.clone(),
+        std::sync::Arc::new(crate::plugin::PluginRegistry::empty()),
+    );
+    let worker = crate::jobs::outbox::spawn(&state);
+    tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        loop {
+            let delivered = sqlx::query_scalar!(
+                "SELECT count(*) FROM horae_outbox WHERE org_id = $1 AND event_kind = 'project_created' AND delivered_at IS NOT NULL",
+                ids.org_id,
+            ).fetch_one(&pool).await.unwrap();
+            if delivered == Some(3) {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    }).await.unwrap();
+    worker
+        .shutdown(std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
     assert_eq!(
         sqlx::query_scalar!(
             "SELECT count(*) FROM project_tags WHERE org_id = $1",

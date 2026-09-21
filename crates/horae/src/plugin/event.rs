@@ -1,5 +1,5 @@
 use chrono::{DateTime, NaiveDate, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 // Keep manifest validation, dispatch names, and serialized event tags in one
@@ -9,7 +9,7 @@ macro_rules! app_events {
         $($field:ident: $ty:ty,)*
     },)*) => {
         /// Business events dispatched to subscribed plugins (FR-019).
-        #[derive(Debug, Clone, Serialize)]
+        #[derive(Debug, Clone, Serialize, Deserialize)]
         #[serde(tag = "event")]
         pub enum AppEvent {
             $(#[serde(rename = $hook)] $variant { $($field: $ty,)* },)*
@@ -241,7 +241,7 @@ impl AppEvent {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimeEntryPayload {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -256,7 +256,7 @@ pub struct TimeEntryPayload {
     pub started_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InvoicePayload {
     pub id: Uuid,
     pub client_id: Uuid,
@@ -268,7 +268,7 @@ pub struct InvoicePayload {
     pub total_cents: i64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserPayload {
     pub id: Uuid,
     pub email: String,
@@ -279,7 +279,7 @@ pub struct UserPayload {
     pub method: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubmissionPayload {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -288,7 +288,7 @@ pub struct SubmissionPayload {
     pub total_minutes: i32,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientPayload {
     pub id: Uuid,
     pub name: String,
@@ -296,7 +296,7 @@ pub struct ClientPayload {
     pub active: bool,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectPayload {
     pub id: Uuid,
     pub client_id: Uuid,
@@ -306,7 +306,7 @@ pub struct ProjectPayload {
     pub active: bool,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskPayload {
     pub id: Uuid,
     pub name: String,
@@ -315,7 +315,7 @@ pub struct TaskPayload {
     pub active: bool,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AssignmentPayload {
     pub id: Uuid,
     pub project_id: Uuid,
@@ -324,7 +324,7 @@ pub struct AssignmentPayload {
 }
 
 /// Only non-sensitive branding fields are exposed to plugins (no bank details).
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrgBrandingPayload {
     pub org_id: Uuid,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -334,7 +334,7 @@ pub struct OrgBrandingPayload {
 /// Consumption-vs-budget figures for the derived budget events. Only the fields
 /// matching the project's budget kind are set (minutes for `hours`, cents for
 /// `amount`); the rest are omitted.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BudgetThresholdPayload {
     pub project: ProjectPayload,
     pub threshold_pct: i32,

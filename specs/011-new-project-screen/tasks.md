@@ -38,7 +38,7 @@
 
 - [x] T016 [US2] Add failing ownership, payload-limit, revision-race and completion-retry tests in `crates/horae/src/server_fns/project_creation/tests.rs` (FR-007–008).
 - [x] T017 [US2] Implement idempotent initial draft save, load, compare-and-swap save, discard and completed lookup in `crates/horae/src/server_fns/project_creation.rs`.
-- [ ] T018 [US2] Add one transactional project-created event record and retry-safe dispatch using `crates/horae/src/server_fns/project_creation.rs` and scoped `crates/horae/src/jobs.rs` outbox handling.
+- [x] T018 [US2] Add one transactional project-created event record and retry-safe dispatch using `crates/horae/src/server_fns/project_creation.rs` and scoped `crates/horae/src/jobs.rs` outbox handling.
 - [ ] T019 [US2] Implement debounced serialized autosave, truthful status, pending-navigation warning, retry/conflict/discard and finalization sequencing in `crates/horae/src/pages/new_project.rs`.
 - [x] T020 [US2] Add browser recovery/concurrency cases in `crates/horae/tests/browser/new-project.cjs`, including edits during autosave and no false saved state.
 

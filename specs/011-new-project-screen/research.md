@@ -7,6 +7,12 @@
 - **Alternatives**: Browser-only persistence loses cross-session durability; inactive projects are genuine archived data, not drafts; sequential public calls can leave orphan associations.
 - **Evidence**: `server_fns/projects.rs::{create_project,enable_project_task}`, `server_fns.rs::lock_project`, role-change serialization in `server_fns/users.rs`.
 
+## Project-created delivery
+
+- The project transaction already writes exactly one `project_created` outbox row. A separate server worker claims only that event kind, validates the stored event's organization/type and waits for subscribed plugins before acknowledging the lease. It starts/stops alongside the import worker but does not occupy the import execution loop.
+- Existing non-durable plugin dispatch remains unchanged. The confirmed path reuses its bounded invocation, memory/fuel limits and capacity permits; overload or a failed plugin causes an outbox retry. A failed subscriber does not suppress calls to other subscribers. The whole delivery has a 60-second deadline, shorter than the five-minute claim lease.
+- Acknowledgement/failure updates remain fenced by organization and claim token. Failures persist fixed messages, never arbitrary plugin errors or payloads. Restart or uncertain acknowledgement can repeat successful plugin calls; consumers can deduplicate a project-created event by its stable project identity. This is not exactly-once external delivery. No subscribed plugins means no pending plugin delivery; unavailable future plugins are not retroactive recipients.
+
 ## Legacy financial compatibility
 
 - **Decision**: Missing configuration means legacy task → assignment → project → user rate cascade. New rows select person/task/project modes; configured fixed fees do not become hourly charges. Zero remains explicit.
