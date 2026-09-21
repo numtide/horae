@@ -40,6 +40,25 @@ Run database commands only with the isolated DATABASE_URL. Regenerate the SQLx c
 
 Record commands/results and outstanding limitations in the PR. Check off tasks only after their acceptance checks pass. Requirements checklist completion is not implementation completion. Final gate: complete workflow, adversarial review, supported build/test checks and a scoped PR ready for human review; no automatic merge.
 
+## Optional budget mail validation
+
+Production configuration uses `HORAE_SENDMAIL_PATH` (absolute executable path, no arguments) and `HORAE_MAIL_FROM` (plain ASCII mailbox). Both are unset by default; a partial or invalid configuration rejects startup. The existing mail service must support `-i -f FROM -- TO`. No SMTP credentials or shell command are accepted by Horae. See `.env.example` for the supported address subset and limits.
+
+On NixOS, supply these through `systemd.services.horae.environment` or the existing environment file. The transport must work as the service user under `NoNewPrivileges`, `ProtectSystem` and `ProtectHome`; a mail wrapper requiring privilege elevation or a home-directory configuration will not work with that hardening. Configure a compatible unprivileged transport separately; enabling budget email does not weaken the service sandbox.
+
+Delivery has a 20-second deadline and at most five attempts. Stdout/stderr are discarded. An exit-zero acknowledgement means acceptance by the configured transport, not final receipt; a crash after acceptance can cause a repeated delivery with the same Message-ID. Unauthorized/inactive recipients and disabled/archived projects are not sent pending messages. Failed events are retained rather than reported delivered.
+
+Operators can inspect statuses using their administrative database connection:
+
+```sql
+SELECT id, attempts, delivered_at, failed_at, last_error
+FROM horae_outbox
+WHERE event_kind = 'budget_email'
+ORDER BY created_at DESC;
+```
+
+Tests must never use deployment mail configuration: `notifications::tests` constructs temporary executable stubs, and the browser runner explicitly unsets both mail variables. Do not run a real transport as a test fixture.
+
 ## Execution log — 2026-09-21
 
 - Spec Kit prerequisites/plan/tasks setup executed in the isolated worktree. Requirements checklist 16/16; analysis mapped 20 functional requirements and 7 success criteria to 54 tasks without material gaps.
@@ -88,3 +107,6 @@ Record commands/results and outstanding limitations in the PR. Check off tasks o
 - Budget TDD: the new threshold tests initially failed at the missing helper; integration tests likewise failed before the evaluator/notification schema existed. The implemented evaluator covers project hours/fees, task hours/fees, person hours, monthly/non-billable inclusion and locked rounding. All 108 core tests and 15 focused budget integration tests passed, including leap February, tenant/recipient isolation, exact zero rates, concurrent checks, repeated crossings, independent months, periodic recovery and notification/outbox rollback. The notification schema has no PUBLIC grant and outbox payloads contain only the notification ID.
 - Migration 0032 was applied additively to the same isolated `horae_new_project_fees` database (32 migrations); no prior migration checksum or real data was changed. Post-write checks and the minute scheduler now use the configured evaluator while legacy projects retain their hours/plugin-band path. Notifications remain pending jobs, not delivered email. T024 is complete; T025 remains open for authorized/displayed project progress, and T027/T028 still own delivery. Full browser/flake gates and the unapproved Dioxus transport fix remain outstanding.
 - Budget regression gates: the final batched-enqueue implementation passed all 623 server-bin tests (11 pre-existing ignored). SQLx preparation succeeded with 741 entries (48 new, zero existing modifications/deletions); strict core/server Clippy and WASM compilation passed. Targeted no-cache formatting passed for all nine Rust/Spec Kit files without changes, and `git diff --check` passed. No shared CSS, design sources, dependency or running preview was changed. This increment does not claim a browser or full flake rerun.
+- Mail TDD: transport tests first failed at the missing configuration/render/send functions; queue tests then failed before the delivery consumer and terminal schema existed. Temporary executable stubs verify fixed arguments, injection rejection, bounded execution/output, cancellation, stable identity, retry recovery, five-attempt exhaustion, revoked/foreign recipients, stale leases, disabled configuration and kind-scoped shutdown. An additional adversarial test reproduced overlong body lines; bounded Unicode wrapping fixed it. No real mail transport was executed.
+- Mail verification: all 641 server-bin tests passed (11 pre-existing ignored), including 17 notification tests and environment configuration coverage. Migration 0033 was applied only to the isolated `horae_new_project_fees` database; SQLx preparation succeeded with 752 entries (14 new and three replaced outbox queries removed). Strict server Clippy and WASM compilation passed. The browser runner now clears deployment mail variables before starting fixtures. T027/T028 are complete; project progress/privacy, final browser/flake gates and the unapproved Dioxus response-body fix remain open.
+- Mail finishing checks: targeted no-cache formatting passed for all 16 changed Rust/shell/Spec Kit files with zero changes; shell syntax and `git diff --check` passed. No dependency, design asset, shared CSS, real imported database or running preview changed. This checkpoint does not claim visual or full flake verification.

@@ -48,7 +48,14 @@ pub async fn project_creation_options(
 ) -> Result<CreationOptions, ServerFnError> {
     let actor = require_manager().await?;
     let state = crate::state::global_state().await;
-    load_creation_options(&state.db, actor.id, actor.org_id, &search, false).await
+    load_creation_options(
+        &state.db,
+        actor.id,
+        actor.org_id,
+        &search,
+        state.mail.is_some(),
+    )
+    .await
 }
 
 #[server]
@@ -66,7 +73,7 @@ pub async fn finalize_project_draft(
         draft_id,
         expected_revision,
         &form,
-        false,
+        state.mail.is_some(),
     )
     .await
 }

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "WITH candidate AS (\n             SELECT id FROM horae_outbox\n              WHERE delivered_at IS NULL AND available_at <= now() AND event_kind = $2\n              ORDER BY available_at, created_at\n              FOR UPDATE SKIP LOCKED LIMIT 1\n           )\n           UPDATE horae_outbox o\n              SET attempts = o.attempts + 1,\n                  claim_token = $1,\n                  available_at = now() + interval '5 minutes'\n             FROM candidate\n            WHERE o.id = candidate.id\n        RETURNING o.id, o.org_id, o.event_kind, o.payload, o.attempts,\n                  o.claim_token as \"claim_token!\"",
+  "query": "WITH candidate AS (\n             SELECT id FROM horae_outbox\n              WHERE delivered_at IS NULL AND failed_at IS NULL AND available_at <= now() AND event_kind = $2\n              ORDER BY available_at, created_at\n              FOR UPDATE SKIP LOCKED LIMIT 1\n           )\n           UPDATE horae_outbox o\n              SET attempts = o.attempts + 1,\n                  claim_token = $1,\n                  available_at = now() + interval '5 minutes'\n             FROM candidate\n            WHERE o.id = candidate.id\n        RETURNING o.id, o.org_id, o.event_kind, o.payload, o.attempts,\n                  o.claim_token as \"claim_token!\"",
   "describe": {
     "columns": [
       {
@@ -49,5 +49,5 @@
       true
     ]
   },
-  "hash": "4c10dcdb71e7d3878afb757716146cce6107064b640a6063bd15df23ba3dfa31"
+  "hash": "cb17c43bca1e8395ce0c6bdf7e65f0f7f1571e694fe241564b4a2533606108bb"
 }

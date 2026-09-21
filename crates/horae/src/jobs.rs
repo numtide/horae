@@ -104,7 +104,7 @@ pub async fn claim_outbox(
     let row = sqlx::query!(
         r#"WITH candidate AS (
              SELECT id FROM horae_outbox
-              WHERE delivered_at IS NULL AND available_at <= now() AND event_kind = $2
+              WHERE delivered_at IS NULL AND failed_at IS NULL AND available_at <= now() AND event_kind = $2
               ORDER BY available_at, created_at
               FOR UPDATE SKIP LOCKED LIMIT 1
            )
@@ -138,7 +138,7 @@ pub async fn mark_outbox_delivered(
     let result = sqlx::query!(
         r#"UPDATE horae_outbox SET delivered_at = now(), last_error = NULL, claim_token = NULL
             WHERE id = $1 AND org_id = $2 AND claim_token = $3
-              AND delivered_at IS NULL AND available_at > now()"#,
+              AND delivered_at IS NULL AND failed_at IS NULL AND available_at > now()"#,
         event.id,
         event.org_id,
         event.claim_token,
@@ -158,7 +158,27 @@ pub async fn mark_outbox_failed(
               SET available_at = now() + LEAST(power(2::double precision, LEAST(attempts, 9)), 300)::int * interval '1 second',
                   last_error = $4, claim_token = NULL
             WHERE id = $1 AND org_id = $2 AND claim_token = $3
-              AND delivered_at IS NULL AND available_at > now()"#,
+              AND delivered_at IS NULL AND failed_at IS NULL AND available_at > now()"#,
+        event.id,
+        event.org_id,
+        event.claim_token,
+        error,
+    )
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected() == 1)
+}
+
+/// Retain a terminal failure without acknowledging delivery or permitting another claim.
+pub(crate) async fn stop_outbox_delivery(
+    pool: &sqlx::PgPool,
+    event: &OutboxEvent,
+    error: &str,
+) -> anyhow::Result<bool> {
+    let result = sqlx::query!(
+        "UPDATE horae_outbox SET failed_at = now(), last_error = $4, claim_token = NULL
+         WHERE id = $1 AND org_id = $2 AND claim_token = $3
+           AND delivered_at IS NULL AND failed_at IS NULL AND available_at > now()",
         event.id,
         event.org_id,
         event.claim_token,
@@ -528,6 +548,13 @@ pub struct Worker {
 }
 
 impl Worker {
+    pub(crate) fn new(
+        stop: tokio::sync::watch::Sender<bool>,
+        task: tokio::task::JoinHandle<()>,
+    ) -> Self {
+        Self { stop, task }
+    }
+
     pub fn stop_sender(&self) -> tokio::sync::watch::Sender<bool> {
         self.stop.clone()
     }

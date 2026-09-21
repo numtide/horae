@@ -19,6 +19,8 @@ mod init;
 #[cfg(feature = "server")]
 mod jobs;
 #[cfg(feature = "server")]
+mod notifications;
+#[cfg(feature = "server")]
 mod plugin;
 #[cfg(feature = "server")]
 mod render;
@@ -226,6 +228,7 @@ fn main() -> anyhow::Result<()> {
                     cfg.oidc.clone(),
                     cfg.harvest.clone(),
                     cfg.job_policy,
+                    cfg.mail.clone(),
                 )
                 .await;
 
@@ -282,21 +285,28 @@ fn main() -> anyhow::Result<()> {
                 let listener = tokio::net::TcpListener::bind(&addr).await?;
                 let worker = jobs::spawn(state::global_state().await);
                 let outbox = jobs::outbox::spawn(state::global_state().await);
+                let mail = notifications::spawn(state::global_state().await);
                 let stop_worker = worker.stop_sender();
                 let stop_outbox = outbox.stop_sender();
+                let stop_mail = mail.stop_sender();
                 tracing::info!("Listening on {addr}");
                 let server_result = axum::serve(listener, router)
                     .with_graceful_shutdown(async move {
                         shutdown_signal().await;
                         stop_worker.send_replace(true);
                         stop_outbox.send_replace(true);
+                        stop_mail.send_replace(true);
                     })
                     .await;
                 let grace = std::time::Duration::from_secs(30);
-                let (worker_result, outbox_result) =
-                    tokio::join!(worker.shutdown(grace), outbox.shutdown(grace));
+                let (worker_result, outbox_result, mail_result) = tokio::join!(
+                    worker.shutdown(grace),
+                    outbox.shutdown(grace),
+                    mail.shutdown(grace)
+                );
                 worker_result?;
                 outbox_result?;
+                mail_result?;
                 server_result?;
                 anyhow::Ok(())
             })?;

@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Browser fixtures must never inherit a developer's real outbound mail transport.
+unset HORAE_SENDMAIL_PATH HORAE_MAIL_FROM
+
 # CI supplies a built server with its public/ directory beside it. Everything
 # else is created here: this runner never connects to an existing database.
 : "${HORAE_TEST_SERVER:?Set the absolute path to the built server}"
