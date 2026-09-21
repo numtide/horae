@@ -61,6 +61,8 @@
 - Local Dioxus fullstack 0.7.9 panics at `magic.rs` when `res.bytes()` fails after headers arrive. Initial hard navigations in the browser suite reproduced this; failed requests before headers are already returned to the form's retry path.
 - Upstream [commit c64415c](https://github.com/DioxusLabs/dioxus/commit/c64415c08f7cef3c26cb8d3ab33985a258476a44) replaces the unwrap with error propagation. The latest published release was checked through the GitHub API on 2026-09-21: **v0.7.10 still contains the unwrap**. Updating only to that release would not resolve it. No dependency update has been made.
 - Final recovery verification needs a deterministic truncated-body test and a compatible fix/backport; successful teardown sequencing is not proof that arbitrary network interruptions are safe. Keep T019/T051 open until this path is handled without freezing the form.
+- The upstream fix's workspace is `0.8.0-alpha.0`, so pointing Cargo directly at that revision is not a compatible 0.7 patch. A local backport of the single-line change to the published 0.7.9 crate is awaiting approval; no dependency source or version has changed.
+- `new-project-transport.cjs` now deterministically reproduces the body-read panic on the current build. It forwards a real save, preserves its successful headers and URL, then injects a failing response stream and verifies that the body reader was reached. Preserving the URL is essential: a synthetic Response's empty URL otherwise causes an earlier, recoverable request error and a misleading green test. The expected behavior remains error status, identical retry, subsequent newer edits and successful reopen without a WASM panic.
 
 ## Clarification coverage
 
