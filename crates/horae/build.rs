@@ -160,6 +160,8 @@ fn families() -> Vec<Family> {
                 ("size-8", "width: var(--space-8); height: var(--space-8)"),
                 ("size-4", "width: var(--space-4); height: var(--space-4)"),
                 ("min-w-0", "min-width: 0"),
+                ("min-h-0", "min-height: 0"),
+                ("max-w-project-form", "max-width: var(--width-project-form)"),
                 ("max-w-sm", "max-width: 24rem"),
                 ("max-w-md", "max-width: 28rem"),
                 ("max-w-lg", "max-width: 32rem"),
@@ -188,6 +190,7 @@ fn families() -> Vec<Family> {
             "Background",
             &[
                 ("bg-base", "background: var(--color-bg)"),
+                ("bg-cell-empty", "background: var(--color-cell-empty-bg)"),
                 ("bg-secondary", "background: var(--color-bg-secondary)"),
                 ("bg-tertiary", "background: var(--color-bg-tertiary)"),
                 ("bg-overlay", "background: var(--color-bg-overlay)"),
@@ -211,6 +214,7 @@ fn families() -> Vec<Family> {
                 ("border-b", "border-bottom: 1px solid var(--color-border)"),
                 ("border-l", "border-left: 1px solid var(--color-border)"),
                 ("border-r", "border-right: 1px solid var(--color-border)"),
+                ("border-light", "border-color: var(--color-border-light)"),
                 ("rounded-sm", "border-radius: var(--radius-sm)"),
                 ("rounded", "border-radius: var(--radius)"),
                 ("rounded-lg", "border-radius: var(--radius-lg)"),
@@ -233,6 +237,7 @@ fn families() -> Vec<Family> {
                 ("inset-0", "inset: 0"),
                 ("overflow-hidden", "overflow: hidden"),
                 ("overflow-x-auto", "overflow-x: auto"),
+                ("overflow-y-auto", "overflow-y: auto"),
                 ("cursor-pointer", "cursor: pointer"),
                 ("cursor-text", "cursor: text"),
                 ("opacity-60", "opacity: 0.6"),
@@ -244,6 +249,11 @@ fn families() -> Vec<Family> {
 
 fn spacing_family() -> Family {
     let mut rules = Vec::new();
+    rules.push((
+        "px-project-form".into(),
+        "padding-inline: var(--project-form-gutter)".into(),
+    ));
+    rules.push(("pb-30".into(), "padding-bottom: var(--space-30)".into()));
     for (n, v) in space() {
         rules.push((format!("p-{n}"), format!("padding: {v}")));
         rules.push((

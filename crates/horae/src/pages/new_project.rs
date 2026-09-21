@@ -216,49 +216,120 @@ fn ProjectEditor(
             .any(|client| Some(client.id) == form.read().client_id && client.active);
 
     rsx! {
-        div { class: "np-page",
-            button { r#type: "button", class: "btn btn-ghost text-sm", disabled: locked || error().is_some(), onclick: move |_| intent.set(Some(Intent::Leave)), "← Back to Projects" }
-            header { class: "flex flex-wrap items-end gap-4 mt-5 pb-6 border-b",
-                div {
-                    div { class: "text-xs uppercase tracking-wider text-label", "Projects" }
-                    h1 { class: "text-4xl font-semibold text-strong tracking-tight mt-2 mb-0", "New project" }
-                }
-                p { class: "text-xs text-subtle ml-auto mb-0", role: "status", aria_live: "polite", "{status}" }
-            }
-            if let Some(message) = error() {
-                div { class: "alert alert-danger mt-4", role: "alert",
-                    p { "{message}" }
-                    p { class: "text-sm", "Your input is still here. Retry a failed request, or reload to resolve changes made in another tab." }
-                    div { class: "flex flex-wrap gap-3",
-                        button { class: "btn btn-secondary", r#type: "button", disabled: busy(), onclick: move |_| error.set(None), "Retry request" }
-                        button { class: "btn btn-ghost", r#type: "button", disabled: busy(), onclick: move |_| on_reload.call(()), "Reload saved draft (lose local edits)" }
+        div { class: "np-page flex flex-col h-full",
+            div { class: "np-scroll flex-1 min-h-0 overflow-y-auto",
+                div { class: "max-w-project-form px-project-form pt-6 pb-30",
+                    button {
+                        r#type: "button",
+                        class: "btn btn-ghost text-sm",
+                        disabled: locked || error().is_some(),
+                        onclick: move |_| intent.set(Some(Intent::Leave)),
+                        "← Back to Projects"
+                    }
+                    header { class: "flex flex-wrap items-end gap-4 mt-5 pb-6 border-b",
+                        div {
+                            div { class: "text-xs uppercase tracking-wider text-label",
+                                "Projects"
+                            }
+                            h1 { class: "text-4xl font-semibold text-strong tracking-tight mt-2 mb-0",
+                                "New project"
+                            }
+                        }
+                        p {
+                            class: "text-xs text-subtle ml-auto mb-0",
+                            role: "status",
+                            aria_live: "polite",
+                            "{status}"
+                        }
+                    }
+                    if let Some(message) = error() {
+                        div { class: "alert alert-danger mt-4", role: "alert",
+                            p { "{message}" }
+                            p { class: "text-sm",
+                                "Your input is still here. Retry a failed request, or reload to resolve changes made in another tab."
+                            }
+                            div { class: "flex flex-wrap gap-3",
+                                button {
+                                    class: "btn btn-secondary",
+                                    r#type: "button",
+                                    disabled: busy(),
+                                    onclick: move |_| error.set(None),
+                                    "Retry request"
+                                }
+                                button {
+                                    class: "btn btn-ghost",
+                                    r#type: "button",
+                                    disabled: busy(),
+                                    onclick: move |_| on_reload.call(()),
+                                    "Reload saved draft (lose local edits)"
+                                }
+                            }
+                        }
+                    }
+                    fieldset {
+                        class: "border-0 p-0 m-0 min-w-0",
+                        disabled: locked,
+                        aria_label: "Project settings",
+                        Basics { form, options }
+                        Visibility { form }
+                        Billing { form, options }
+                        Tasks { form, options }
+                        Team { form, options, busy: catalog_busy }
+                        InvoiceDefaults { form }
                     }
                 }
             }
-            fieldset { class: "border-0 p-0 m-0 min-w-0", disabled: locked, aria_label: "Project settings",
-                Basics { form, options }
-                Visibility { form }
-                Billing { form, options }
-                Tasks { form, options }
-                Team { form, options, busy: catalog_busy }
-                InvoiceDefaults { form }
-            }
-            footer { class: "np-footer flex flex-wrap items-center gap-3 py-4 bg-base border-t",
-                button { class: "btn btn-primary", r#type: "button", disabled: !can_create || locked || error().is_some(), onclick: move |_| intent.set(Some(Intent::Create)),
-                    if intent() == Some(Intent::Create) { "Saving project…" } else { "Save project" }
+            footer { class: "np-footer flex flex-none flex-wrap items-center gap-3 py-4 px-project-form bg-cell-empty border-t border-light",
+                button {
+                    class: "btn btn-primary",
+                    r#type: "button",
+                    disabled: !can_create || locked || error().is_some(),
+                    onclick: move |_| intent.set(Some(Intent::Create)),
+                    if intent() == Some(Intent::Create) {
+                        "Saving project…"
+                    } else {
+                        "Save project"
+                    }
                 }
-                button { class: "btn btn-secondary", r#type: "button", disabled: locked || error().is_some(), onclick: move |_| intent.set(Some(Intent::Leave)), "Cancel" }
-                button { class: "btn btn-ghost ml-auto", r#type: "button", disabled: busy() || locked || error().is_some(), onclick: move |_| discard_open.set(true), "Discard draft" }
+                button {
+                    class: "btn btn-secondary",
+                    r#type: "button",
+                    disabled: locked || error().is_some(),
+                    onclick: move |_| intent.set(Some(Intent::Leave)),
+                    "Cancel"
+                }
+                button {
+                    class: "btn btn-ghost ml-auto",
+                    r#type: "button",
+                    disabled: busy() || locked || error().is_some(),
+                    onclick: move |_| discard_open.set(true),
+                    "Discard draft"
+                }
                 p { class: "text-xs text-subtle m-0", "Cancel keeps your draft." }
             }
         }
-        Modal { id: "np-discard-dialog", labelledby: "np-discard-title", open: discard_open(), on_dismiss: move |_| discard_open.set(false),
+        Modal {
+            id: "np-discard-dialog",
+            labelledby: "np-discard-title",
+            open: discard_open(),
+            on_dismiss: move |_| discard_open.set(false),
             div { class: "modal-body",
                 h2 { id: "np-discard-title", class: "modal-title", "Discard this draft?" }
                 p { "The draft will be removed. Clients you created will remain available." }
                 div { class: "modal-actions",
-                    button { class: "btn btn-danger", onclick: move |_| { discard_open.set(false); intent.set(Some(Intent::Discard)); }, "Discard draft" }
-                    button { class: "btn btn-secondary", onclick: move |_| discard_open.set(false), "Keep editing" }
+                    button {
+                        class: "btn btn-danger",
+                        onclick: move |_| {
+                            discard_open.set(false);
+                            intent.set(Some(Intent::Discard));
+                        },
+                        "Discard draft"
+                    }
+                    button {
+                        class: "btn btn-secondary",
+                        onclick: move |_| discard_open.set(false),
+                        "Keep editing"
+                    }
                 }
             }
         }

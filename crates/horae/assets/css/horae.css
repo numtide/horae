@@ -792,7 +792,24 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Forms */
 /* New Project: structural layout only; control chrome remains shared. */
-.np-page { max-width: var(--width-project-form); }
+/* Opt in only while this editor is mounted; other routes retain document scrolling. */
+.app-shell:has(> .app-content > .np-page) { height: 100dvh; min-height: 0; overflow: hidden; }
+.app-content:has(> .np-page) { padding: 0; }
+.np-page { --project-form-gutter: var(--space-10); }
+.np-scroll { scroll-padding-block: var(--space-4); }
+@media (max-width: 1320px) {
+  .np-page { --project-form-gutter: var(--space-6); }
+}
+@media (max-width: 900px) {
+  .np-page { --project-form-gutter: var(--space-5); }
+}
+@media (max-width: 768px) {
+  .app-shell:has(> .app-content > .np-page) { display: grid; grid-template-rows: auto minmax(0, 1fr); }
+  .app-shell:has(> .app-content > .np-page) > .mobile-nav-toggle { justify-self: start; }
+  /* The expanded navigation stays in document flow, including on short screens. */
+  .app-shell.mobile-open:has(> .app-content > .np-page) { display: block; height: auto; min-height: 100dvh; overflow: visible; }
+  .app-shell.mobile-open > .app-content:has(> .np-page) { height: 100dvh; }
+}
 .np-client-select { flex: 1 1 var(--width-form-select); }
 .np-currency-select { width: var(--width-form-select); max-width: 100%; }
 .np-code.form-input { width: var(--width-project-code); }
@@ -817,7 +834,6 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: inset 0 0 0 var(--space-1) var(--color-bg);
 }
 .np-page input[type="radio"] { accent-color: var(--color-primary); }
-.np-footer { position: sticky; bottom: 0; z-index: 5; }
 @media (max-width: 1180px) {
   .np-page .np-types { grid-template-columns: minmax(0, 1fr); }
   .np-page .np-row { grid-template-columns: minmax(0, 1fr); gap: var(--space-2); }

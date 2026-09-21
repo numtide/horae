@@ -321,6 +321,37 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await tagInput.press('Enter');
     for (const width of [390, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
+      await screen.getByRole('button', { name: '← Back to Projects', exact: true }).focus();
+      let reachedSave = false;
+      for (let step = 0; step < 120; step++) {
+        await page.keyboard.press('Tab');
+        const focus = await page.evaluate(() => {
+          const active = document.activeElement;
+          const footer = document.querySelector('.np-footer');
+          const box = active.getBoundingClientRect();
+          return { name: active.getAttribute('aria-label') || active.id || active.textContent,
+            save: active === [...footer.querySelectorAll('button')].find(button => button.textContent === 'Save project'),
+            inForm: !!active.closest('.np-page') && !footer.contains(active),
+            top: box.top, bottom: box.bottom, footerTop: footer.getBoundingClientRect().top,
+            scrollTop: document.querySelector('.np-scroll')?.getBoundingClientRect().top || 0 };
+        });
+        if (focus.save) { reachedSave = true; break; }
+        assert.ok(focus.inForm, `Tab stays in the form until its actions: ${focus.name}`);
+        assert.ok(focus.top >= focus.scrollTop - 1 && focus.bottom <= focus.footerTop + 1,
+          `Focused ${focus.name} is not obscured at ${width}px: ${JSON.stringify(focus)}`);
+      }
+      assert.ok(reachedSave, `Keyboard reaches Save project at ${width}px`);
+      assert.equal(await screen.locator('.np-footer').evaluate(node => getComputedStyle(node).paddingLeft),
+        width < 900 ? '20px' : '40px');
+      const frame = await screen.locator('.np-footer').evaluate(footer => ({
+        footerBottom: footer.getBoundingClientRect().bottom,
+        scrollBottom: document.querySelector('.np-scroll').getBoundingClientRect().bottom,
+        footerTop: footer.getBoundingClientRect().top,
+        documentHeight: document.documentElement.scrollHeight,
+      }));
+      assert.equal(frame.footerBottom, 900);
+      assert.equal(frame.documentHeight, 900);
+      assert.equal(frame.scrollBottom, frame.footerTop, 'Actions do not overlap the scrolling form');
       await fieldWidth('np-project-rate', 120, true);
       await fieldWidth('np-budget-value', 160, true);
       await fieldWidth('np-terms', 240);
@@ -371,9 +402,36 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
         await screen.getByRole('region', { name: 'Invoice defaults', exact: true }).screenshot({ path: `${process.env.HORAE_TEST_SCREENSHOT_DIR}/new-project-invoice-defaults-${width}.png` });
       }
     }
+    const collapse = page.getByRole('button', { name: 'Collapse sidebar', exact: true });
+    await collapse.click();
+    await expect(page.locator('.app-sidebar')).toHaveCSS('width', '68px');
+    assert.equal((await screen.locator('.np-footer').boundingBox()).x, 68);
+    await collapse.click();
     await page.setViewportSize({ width: 390, height: 320 });
+    const mobileOpen = page.getByRole('button', { name: 'Open navigation', exact: true });
+    await mobileOpen.click();
+    const sidebar = page.locator('.app-sidebar');
+    await expect(sidebar).toBeVisible();
+    await sidebar.locator('.sidebar-footer').scrollIntoViewIfNeeded();
+    const account = await sidebar.locator('.sidebar-footer').boundingBox();
+    assert.ok(account.y >= 0 && account.y + account.height <= 320, 'Short-screen navigation remains reachable');
+    await page.keyboard.press('Escape');
+    await expect(sidebar).toBeHidden();
+    await expect(mobileOpen).toBeFocused();
+    assert.equal(await page.evaluate(() => document.documentElement.scrollHeight), 320);
     const clientTrigger = screen.getByRole('button', { name: 'Client', exact: true });
-    await clientTrigger.evaluate(element => window.scrollTo(0, scrollY + element.getBoundingClientRect().top - 200));
+    await clientTrigger.click();
+    await expect(clientSearch).toBeFocused();
+    const shortPanel = await clientPicker.boundingBox();
+    assert.ok(shortPanel.y >= 0 && shortPanel.y + shortPanel.height <= 320, 'Choices fit the short viewport');
+    await clientSearch.press('Escape');
+    // Leave room for the persistent actions and a trigger in the lower half.
+    await page.setViewportSize({ width: 390, height: 420 });
+    await clientTrigger.evaluate(element => {
+      const scroller = element.closest('.np-scroll');
+      const target = Math.min(innerHeight / 2 + 20, scroller.getBoundingClientRect().bottom - element.offsetHeight);
+      scroller.scrollBy(0, element.getBoundingClientRect().top - target);
+    });
     await clientTrigger.focus();
     await clientTrigger.press('Enter');
     await expect(clientPicker.getByRole('option', { name: 'New project browser client', exact: true })).toBeEnabled();
