@@ -9,7 +9,10 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
   const page = await browser.newPage({ viewport: { width: 320, height: 1000 }, hasTouch: true });
   const errors = [], failures = [];
-  page.on('pageerror', error => errors.push(error.message));
+  page.on('pageerror', error => errors.push({ url: page.url(), stack: error.stack || error.message }));
+  page.on('console', message => {
+    if (message.type() === 'error' && message.text().includes('panicked at')) console.error(message.text());
+  });
   async function visit(path, resource) {
     const ready = page.waitForResponse(r => r.url().includes(`/api/${resource}`) && r.status() === 200);
     await page.goto(`${base}${path}`);

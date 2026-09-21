@@ -23,7 +23,7 @@ All use the existing authenticated Dioxus surface, named error status constants 
 | Discard draft | Draft ID, expected revision | Marks own incomplete draft discarded; stale/completed requests conflict. |
 | Finalize draft | Draft ID, expected revision, latest form snapshot | Atomic validated creation, returns project ID; completed retry returns same ID; unauthorized/invalid request changes nothing. |
 | Create client from dialog | Name, supported currency, optional default rate | Explicit authorized creation and selected client result; no prototype defaults. |
-| Project progress | Project ID | Allowed hours/budget progress only, no rates/costs/notes; managers and member visibility handled explicitly. |
+| Project progress | None | Batch of authorized configured project/task/person budget rows for the current UTC month (or lifetime when reset is disabled); scope labels, units, allowance and consumption only, never rates/costs/notes. Current actor and member visibility are checked in the database. |
 | Prepare project invoice | Project IDs and period | Eligible time/fee occurrences and defaults or explicit mixed-default/currency conflict. |
 | Create/update invoice | Prepared selection plus explicit defaults/overrides | Draft invoice with frozen exact components; normal role/lock/void rules retained. |
 
@@ -64,6 +64,8 @@ Grouped reports resolve organization and manager/admin authority from the curren
 Missing settings preserves all legacy rates/amounts. New selected modes have parity across Rust/SQL, project spend, reports, invoice preparation and compatibility exports. Zero is not absent; currency mismatch is not conversion.
 
 Configured fixed fees use fee occurrences, not synthetic time. Non-billable projects never supply invoice lines. Monthly budgets use the selected month; lifetime tracked totals remain available separately. Per-task/person budgets are keyed to real selected entities.
+
+Projects uses the same configured consumption evaluator as budget alerts. The overview selects the current UTC month and identifies it explicitly; lifetime tracked hours are shown separately. Task/person scopes have a keyboard-accessible native disclosure below the project identity so a combined allowance cannot hide an individual overrun. This disclosure extends the handoff's three existing budget columns without changing their grid or shared component styles. Negative remaining hours/amounts retain their sign; display percentages use integer arithmetic. An unallocated budget is absent, not zero, and partial/overflowed allowances are not presented as a complete total. Loading or failed progress never falls back to lifetime figures. Projects without settings keep their lifetime overview and existing plugin alert path.
 
 Invoice defaults are snapshots, editable on drafts; conflicting defaults require explicit resolution. CSV/XLSX/PDF and displayed totals include every adjustment component and identify currency. A new project does not issue invoices or send client email.
 

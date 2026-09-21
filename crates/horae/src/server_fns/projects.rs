@@ -146,6 +146,24 @@ pub async fn list_project_spend() -> Result<Vec<ProjectSpend>, ServerFnError> {
         .map_err(server_err)
 }
 
+/// Configured budgets use their own period and scope; tracked totals remain
+/// available separately through `list_project_spend`.
+#[server]
+pub async fn list_project_budget_progress()
+-> Result<Vec<crate::models::ProjectBudgetProgress>, ServerFnError> {
+    let user = require_user().await?;
+    let state = crate::state::global_state().await;
+    let mut connection = state.db.acquire().await.map_err(server_err)?;
+    super::budgets::progress_for_viewer(
+        &mut connection,
+        user.org_id,
+        user.id,
+        chrono::Utc::now().date_naive(),
+    )
+    .await
+    .map_err(server_err)
+}
+
 #[cfg(feature = "server")]
 pub(super) async fn fetch_project_spend(
     pool: &sqlx::PgPool,

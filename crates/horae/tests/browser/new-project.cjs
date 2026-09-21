@@ -205,6 +205,18 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await expect(page).toHaveURL(`${base}/projects/${created}`);
     await expect(page.getByRole('heading', { name: 'Project', exact: true })).toBeVisible();
     await readsFinished(page);
+    const budgetRead = page.waitForResponse(response => response.url().includes('/api/list_project_budget_progress') && response.status() === 200);
+    await page.getByRole('link', { name: 'Projects', exact: true }).click();
+    const budgets = await (await budgetRead).json();
+    const budget = budgets.find(row => row.project_id === created);
+    assert.ok(budget, 'The real created project has configured progress');
+    assert.deepEqual([budget.kind, budget.budget, budget.consumed, budget.period_key], ['hours', 7200, 0, 'lifetime']);
+    const createdRow = page.locator('.proj-row').filter({ has: page.getByRole('link', { name: '[BROWSER-NEW] Recovered latest edit', exact: true }) });
+    await expect(createdRow.getByRole('progressbar')).toHaveAttribute('value', '0');
+    await expect(createdRow).toContainText('120h');
+    await expect(createdRow).toContainText('Total tracked: 0h');
+    await readsFinished(page);
+    console.log('PASS: real finalized budget reaches the authorized Projects endpoint and display');
     await page.goto(`${base}/projects/new`);
     await expect(screen.getByLabel('Project name', { exact: true })).toHaveValue('');
     await expect(screen.getByRole('status')).toHaveText('No draft saved yet');

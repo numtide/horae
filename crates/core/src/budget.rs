@@ -13,6 +13,15 @@
 /// configured warning threshold.
 pub const OVER_BUDGET_BAND: i32 = 100;
 
+/// Rounded consumption for a progress bar. The remaining percentage is its
+/// complement; absent/non-positive budgets have no meaningful percentage.
+pub fn used_percent(consumed: i64, budget: i64) -> Option<u8> {
+    (budget > 0).then(|| {
+        ((i128::from(consumed) * 100 + i128::from(budget) / 2) / i128::from(budget)).clamp(0, 100)
+            as u8
+    })
+}
+
 /// The effective bands: the configured warning percentages plus the implicit
 /// over-budget line, positive-only, sorted and de-duplicated.
 fn effective_bands(thresholds: &[i32]) -> Vec<i32> {
@@ -80,6 +89,17 @@ mod tests {
     use super::*;
 
     const BANDS: &[i32] = &[80, 100];
+
+    #[test]
+    fn display_percentage_rounds_clamps_and_never_overflows() {
+        assert_eq!(used_percent(1, 8), Some(13));
+        assert_eq!(used_percent(120, 100), Some(100));
+        assert_eq!(used_percent(-1, 100), Some(0));
+        assert_eq!(used_percent(i64::MAX, i64::MAX), Some(100));
+        assert_eq!(used_percent(i64::MAX, 1), Some(100));
+        assert_eq!(used_percent(0, 0), None);
+        assert_eq!(used_percent(0, -1), None);
+    }
 
     #[test]
     fn configured_alert_threshold_is_exact_without_rounding() {

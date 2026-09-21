@@ -10,14 +10,24 @@ use crate::components::icons::NavIcon;
 use crate::components::menu::{Menu, MenuDivider, MenuItem};
 use crate::components::modal::Modal;
 use crate::components::table::DataTable;
-use crate::models::{Client, Project};
+use crate::models::{Client, Project, ProjectBudgetProgress};
 use crate::route::Route;
 use crate::server_fns;
 use horae_core::money::{format_cents, format_cents_plain};
 use horae_core::types::{BudgetKind, ProjectType};
 
 fn hours(minutes: i64) -> String {
-    format!("{}h", horae_core::duration::format_decimal(minutes))
+    // Remaining budgets can be negative. Keep the sign and round integer
+    // minutes to hundredths without the tracking formatter's zero clamp.
+    let hundredths = (u128::from(minutes.unsigned_abs()) * 100 + 30) / 60;
+    let fraction = format!("{:02}", hundredths % 100);
+    let fraction = fraction.trim_end_matches('0');
+    let sign = if minutes < 0 { "-" } else { "" };
+    if fraction.is_empty() {
+        format!("{sign}{}h", hundredths / 100)
+    } else {
+        format!("{sign}{}.{fraction}h", hundredths / 100)
+    }
 }
 
 /// Budget / Spent / Budget-remaining for one row, expressed in the project's own
@@ -34,55 +44,166 @@ struct RowSpend {
 }
 
 fn row_spend(p: &Project, spent_minutes: i64, spent_cents: i64) -> RowSpend {
-    let cur = p.currency.trim();
-    let recurring = matches!(p.project_type, ProjectType::Retainer);
-    // The bar fills with what has been consumed; the label beside "Budget
-    // remaining" states what is left, so the two read as complements.
-    let pct_of = |spent: i64, budget: i64| -> (Option<u8>, Option<String>) {
-        if budget > 0 {
-            let consumed = (spent as f64 / budget as f64 * 100.0).round() as i64;
-            let left = ((budget - spent) as f64 / budget as f64 * 100.0).round() as i64;
-            (
-                Some(consumed.clamp(0, 100) as u8),
-                Some(format!("({}%)", left.max(0))),
-            )
-        } else {
-            (None, None)
-        }
+    let (budget, spent) = match p.budget_kind {
+        BudgetKind::Amount => (p.budget_amount_cents, spent_cents),
+        BudgetKind::Hours => (p.budget_minutes, spent_minutes),
+        BudgetKind::None => (None, spent_cents),
     };
-    match p.budget_kind {
-        BudgetKind::Amount => {
-            let budget = p.budget_amount_cents.unwrap_or(0);
-            let (pct, pct_label) = pct_of(spent_cents, budget);
-            RowSpend {
-                budget: format_cents(budget, cur),
-                recurring,
-                spent: format_cents(spent_cents, cur),
-                remaining: format_cents(budget - spent_cents, cur),
-                pct,
-                pct_label,
-            }
+    budget_display(
+        p.budget_kind,
+        &p.currency,
+        budget,
+        Some(spent),
+        p.project_type == ProjectType::Retainer,
+    )
+}
+
+fn budget_display(
+    kind: BudgetKind,
+    currency: &str,
+    budget: Option<i64>,
+    spent: Option<i64>,
+    recurring: bool,
+) -> RowSpend {
+    let format = |amount| match kind {
+        BudgetKind::Hours => hours(amount),
+        _ => format_cents(amount, currency.trim()),
+    };
+    let pct = budget
+        .zip(spent)
+        .and_then(|(b, s)| horae_core::budget::used_percent(s, b));
+    RowSpend {
+        budget: budget.map(format).unwrap_or_else(|| "—".to_string()),
+        recurring,
+        spent: spent
+            .map(format)
+            .unwrap_or_else(|| "Unavailable".to_string()),
+        remaining: budget
+            .zip(spent)
+            .and_then(|(b, s)| b.checked_sub(s))
+            .map(format)
+            .unwrap_or_else(|| "—".to_string()),
+        pct,
+        pct_label: pct.map(|used| format!("({}%)", 100 - used)),
+    }
+}
+
+fn configured_row_spend(rows: &[ProjectBudgetProgress]) -> Option<RowSpend> {
+    let first = rows.first().filter(|row| row.kind != BudgetKind::None)?;
+    // A partially allocated budget is not a project-wide allowance. Overflow
+    // also stays unavailable rather than wrapping into a plausible total.
+    let budget = rows
+        .iter()
+        .try_fold(0_i64, |total, row| total.checked_add(row.budget?));
+    let spent = rows
+        .iter()
+        .try_fold(0_i64, |total, row| total.checked_add(row.consumed));
+    Some(budget_display(
+        first.kind,
+        &first.currency,
+        budget,
+        spent,
+        first.period_key != "lifetime",
+    ))
+}
+
+#[cfg(test)]
+mod budget_display_tests {
+    use super::*;
+
+    fn scope(budget: Option<i64>, consumed: i64) -> ProjectBudgetProgress {
+        ProjectBudgetProgress {
+            project_id: Uuid::nil(),
+            task_id: Some(Uuid::nil()),
+            user_id: None,
+            scope: "task".to_string(),
+            label: Some("Development".to_string()),
+            kind: BudgetKind::Hours,
+            currency: "EUR".to_string(),
+            period_key: "2026-09".to_string(),
+            budget,
+            consumed,
         }
-        BudgetKind::Hours => {
-            let budget = p.budget_minutes.unwrap_or(0);
-            let (pct, pct_label) = pct_of(spent_minutes, budget);
-            RowSpend {
-                budget: hours(budget),
-                recurring,
-                spent: hours(spent_minutes),
-                remaining: hours(budget - spent_minutes),
-                pct,
-                pct_label,
-            }
-        }
-        BudgetKind::None => RowSpend {
-            budget: "—".to_string(),
-            recurring,
-            spent: format_cents(spent_cents, cur),
-            remaining: "—".to_string(),
-            pct: None,
-            pct_label: None,
-        },
+    }
+
+    #[test]
+    fn configured_scopes_sum_without_hiding_an_individual_overrun() {
+        let rows = [scope(Some(60), 120), scope(Some(180), 0)];
+        let total = configured_row_spend(&rows).unwrap();
+        assert_eq!(
+            (
+                total.budget.as_str(),
+                total.spent.as_str(),
+                total.remaining.as_str()
+            ),
+            ("4h", "2h", "2h")
+        );
+        assert_eq!(
+            (total.pct, total.pct_label.as_deref(), total.recurring),
+            (Some(50), Some("(50%)"), true)
+        );
+        let first = budget_display(
+            rows[0].kind,
+            &rows[0].currency,
+            rows[0].budget,
+            Some(rows[0].consumed),
+            false,
+        );
+        assert_eq!(first.remaining, "-1h");
+        assert_eq!(
+            (first.pct, first.pct_label.as_deref()),
+            (Some(100), Some("(0%)"))
+        );
+    }
+
+    #[test]
+    fn unallocated_zero_and_overflow_budgets_are_not_conflated() {
+        let unallocated = configured_row_spend(&[scope(Some(60), 30), scope(None, 60)]).unwrap();
+        assert_eq!(
+            (
+                unallocated.budget.as_str(),
+                unallocated.spent.as_str(),
+                unallocated.remaining.as_str()
+            ),
+            ("—", "1.5h", "—")
+        );
+        assert_eq!(unallocated.pct, None);
+        let zero = configured_row_spend(&[scope(Some(0), 60)]).unwrap();
+        assert_eq!(
+            (zero.budget.as_str(), zero.remaining.as_str(), zero.pct),
+            ("0h", "-1h", None)
+        );
+        let overflow =
+            configured_row_spend(&[scope(Some(i64::MAX), i64::MAX), scope(Some(1), 1)]).unwrap();
+        assert_eq!(
+            (
+                overflow.budget.as_str(),
+                overflow.spent.as_str(),
+                overflow.remaining.as_str()
+            ),
+            ("—", "Unavailable", "—")
+        );
+        assert!(configured_row_spend(&[]).is_none());
+        let mut no_budget = scope(None, 0);
+        no_budget.kind = BudgetKind::None;
+        assert!(configured_row_spend(&[no_budget]).is_none());
+    }
+
+    #[test]
+    fn display_preserves_units_sign_and_large_integer_values() {
+        assert_eq!(hours(-1), "-0.02h");
+        assert_eq!(hours(59), "0.98h");
+        assert_eq!(hours(60), "1h");
+        assert_eq!(hours(i64::MIN), "-153722867280912930.13h");
+        let amount = budget_display(BudgetKind::Amount, " EUR ", Some(100), Some(150), false);
+        assert_eq!(
+            (
+                amount.budget.as_str(),
+                amount.spent.as_str(),
+                amount.remaining.as_str()
+            ),
+            ("EUR 1.00", "EUR 1.50", "EUR -0.50")
+        );
     }
 }
 
@@ -122,6 +243,8 @@ pub fn ProjectList() -> Element {
     let clients_res = use_resource(|| async move { server_fns::list_clients(true).await });
     let me = use_resource(|| async move { server_fns::get_me().await });
     let mut spend_res = use_resource(|| async move { server_fns::list_project_spend().await });
+    let mut budget_res =
+        use_resource(|| async move { server_fns::list_project_budget_progress().await });
 
     let mut show_form = use_signal(|| false);
     // Creation has its own route; this form only edits an existing project.
@@ -154,7 +277,10 @@ pub fn ProjectList() -> Element {
 
     let can_import = is_admin(&me);
     let is_manager = is_manager(&me);
-    let spend_ready = matches!(&*spend_res.read(), Some(Ok(_)));
+    let spend_ready = spend_res.state()() == UseResourceState::Ready
+        && budget_res.state()() == UseResourceState::Ready
+        && matches!(&*spend_res.read(), Some(Ok(_)))
+        && matches!(&*budget_res.read(), Some(Ok(_)));
 
     let client_names: HashMap<Uuid, String> = match &*clients_res.read() {
         Some(Ok(cs)) => cs.iter().map(|c| (c.id, c.name.clone())).collect(),
@@ -221,6 +347,15 @@ pub fn ProjectList() -> Element {
             .collect(),
         _ => HashMap::new(),
     };
+    let mut budget_map: HashMap<Uuid, Vec<ProjectBudgetProgress>> = HashMap::new();
+    if spend_ready && let Some(Ok(rows)) = &*budget_res.read() {
+        for row in rows {
+            budget_map
+                .entry(row.project_id)
+                .or_default()
+                .push(row.clone());
+        }
+    }
     let (active_count, budgeted_count, archived_count) = match &*projects.read() {
         Some(Ok(list)) => (
             list.iter().filter(|p| p.active).count(),
@@ -461,6 +596,7 @@ pub fn ProjectList() -> Element {
                                 error,
                                 move || {
                                     spend_res.restart();
+                                    budget_res.restart();
                                     reset_form();
                                 },
                             );
@@ -476,15 +612,16 @@ pub fn ProjectList() -> Element {
             if let Some(message) = bulk_success() {
                 div { class: "alert alert-success", role: "status", "{message}" }
             }
-            match &*spend_res.read() {
-                None => rsx! { p { class: "text-sm text-secondary mb-4", role: "status", "Loading project spend…" } },
-                Some(Err(_)) => rsx! {
+            if matches!(&*spend_res.read(), Some(Err(_))) || matches!(&*budget_res.read(), Some(Err(_))) {
                     div { class: "alert alert-danger", role: "alert",
-                        "Could not load project spend. Spent and remaining amounts are unavailable. "
-                        button { class: "btn btn-secondary btn-sm", onclick: move |_| spend_res.restart(), "Retry" }
+                        "Could not load project progress. Budget, spent and remaining amounts are unavailable. "
+                        button { class: "btn btn-secondary btn-sm", onclick: move |_| {
+                            spend_res.restart();
+                            budget_res.restart();
+                        }, "Retry" }
                     }
-                },
-                Some(Ok(_)) => rsx! {},
+            } else if !spend_ready {
+                p { class: "text-sm text-secondary mb-4", role: "status", "Loading project progress…" }
             }
 
             if projects_loading {
@@ -594,7 +731,8 @@ pub fn ProjectList() -> Element {
                                     for p in group {
                                         {
                                             let (sm, sc) = spend_map.get(&p.id).copied().unwrap_or((0, 0));
-                                            let rs = row_spend(&p, sm, sc);
+                                            let budget_rows = budget_map.get(&p.id).map(Vec::as_slice).unwrap_or_default();
+                                            let rs = configured_row_spend(budget_rows).unwrap_or_else(|| row_spend(&p, sm, sc));
                                             let pname = match &p.code {
                                                 Some(c) => format!("[{c}] {}", p.name),
                                                 None => p.name.clone(),
@@ -613,7 +751,8 @@ pub fn ProjectList() -> Element {
                                                     }
                                                 }
                                             }
-                                            div { class: "flex items-center gap-3 min-w-0",
+                                            div { class: "min-w-0",
+                                              div { class: "flex items-center gap-3 min-w-0",
                                                 Link {
                                                     to: Route::ProjectDetail { id: p.id },
                                                     class: "font-semibold text-strong min-w-0 proj-namelink",
@@ -623,11 +762,40 @@ pub fn ProjectList() -> Element {
                                                 if !p.active {
                                                     span { class: "badge badge-neutral", "Inactive" }
                                                 }
+                                              }
+                                              if let Some(config) = budget_rows.first().filter(|row| row.kind != BudgetKind::None) {
+                                                p { class: "text-xs text-muted mt-2",
+                                                    if config.period_key != "lifetime" { "Budget period: {config.period_key} · " }
+                                                    "Total tracked: {hours(sm)}"
+                                                }
+                                                if config.scope != "project" {
+                                                  details { class: "mt-2 text-xs",
+                                                    summary { class: "cursor-pointer text-primary", "Budget by {config.scope}" }
+                                                    ul { class: "mt-2",
+                                                      for row in budget_rows {
+                                                        {
+                                                            let values = budget_display(row.kind, &row.currency, row.budget, Some(row.consumed), false);
+                                                            let label = row.label.as_deref().unwrap_or("No allocated budget");
+                                                            rsx! { li { class: "py-2",
+                                                                span { class: "font-semibold", "{label}: " }
+                                                                if row.budget.is_some() { "Budget {values.budget} · " } else { "No budget set · " }
+                                                                "Spent {values.spent} · Remaining {values.remaining}"
+                                                            } }
+                                                        }
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              }
                                             }
                                             div { class: "flex items-center justify-end gap-2 font-mono",
-                                                span { class: "whitespace-nowrap", "{rs.budget}" }
-                                                if rs.recurring {
-                                                    span { class: "text-faint", "⟳" }
+                                                if spend_ready {
+                                                    span { class: "whitespace-nowrap", "{rs.budget}" }
+                                                    if rs.recurring {
+                                                        span { class: "text-faint", aria_label: "Recurring budget", "⟳" }
+                                                    }
+                                                } else {
+                                                    span { class: "text-muted", aria_label: "Budget unavailable", "—" }
                                                 }
                                             }
                                             div { class: "flex items-center justify-end gap-3 font-mono",

@@ -49,7 +49,10 @@ mod task;
 #[path = "../src/models/user.rs"]
 mod user;
 mod models {
-    pub use super::{client::Client, project::Project};
+    pub use super::{
+        client::Client,
+        project::{Project, ProjectBudgetProgress},
+    };
 }
 
 type InvoiceResponse = Result<invoice::InvoiceWithLines, ServerFnError>;
@@ -464,6 +467,10 @@ mod server_fns {
         Ok(Vec::new())
     }
     pub async fn list_project_spend() -> Result<Vec<ProjectSpend>, ServerFnError> {
+        Ok(Vec::new())
+    }
+    pub async fn list_project_budget_progress()
+    -> Result<Vec<crate::models::ProjectBudgetProgress>, ServerFnError> {
         Ok(Vec::new())
     }
     pub async fn update_project(

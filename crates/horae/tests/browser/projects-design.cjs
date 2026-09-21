@@ -19,6 +19,10 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
   let spendFails = false;
   let holdSpend = false;
   let releaseSpend;
+  let budgetRows = [];
+  let budgetFails = false;
+  let holdBudget = false;
+  let releaseBudget;
   let fixtureProject;
   page.on('pageerror', error => errors.push(error.message));
   try {
@@ -35,6 +39,11 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
         if (holdSpend) await new Promise(resolve => { releaseSpend = resolve; });
         if (spendFails) return route.abort();
         return route.fulfill({ json: [{ project_id: '01950000-0000-7000-8000-000000000005', spent_minutes: 60, spent_cents: 5000 }] });
+      }
+      if (path.startsWith('/api/list_project_budget_progress')) {
+        if (holdBudget) await new Promise(resolve => { releaseBudget = resolve; });
+        if (budgetFails) return route.abort();
+        return route.fulfill({ json: budgetRows });
       }
       if (path.startsWith('/api/list_clients')) {
         const response = await route.fetch();
@@ -59,6 +68,8 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
       return route.continue();
     });
     async function visit() {
+      // Finish body decoding before replacing the document (Dioxus 0.7).
+      await page.waitForLoadState('networkidle');
       const ready = page.waitForResponse(r => r.url().includes('/api/list_projects') && r.status() === 200);
       const [response] = await Promise.all([ready, page.goto(`${base}/projects`)]);
       await response.finished();
@@ -167,7 +178,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
 
     holdSpend = true;
     await visit();
-    await expect(page.getByRole('status')).toHaveText('Loading project spend…');
+    await expect(page.getByRole('status')).toHaveText('Loading project progress…');
     await expect(page.locator('.proj-row [aria-label="Spent unavailable"]')).toHaveText('—');
     await expect(page.getByRole('progressbar')).toHaveCount(0);
     holdSpend = false;
@@ -177,7 +188,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
 
     spendFails = true;
     await visit();
-    await expect(page.getByRole('alert')).toContainText('Could not load project spend');
+    await expect(page.getByRole('alert')).toContainText('Could not load project progress');
     await expect(page.locator('.proj-row [aria-label="Spent unavailable"]')).toHaveText('—');
     await expect(page.locator('.proj-row [aria-label="Remaining unavailable"]')).toHaveText('—');
     await expect(page.getByRole('progressbar')).toHaveCount(0);
@@ -186,6 +197,59 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
     await expect(progress).toHaveAttribute('value', '50');
     await expect(page.getByRole('alert')).toHaveCount(0);
     console.log('PASS: failed spend is unavailable; retry restores real amounts');
+
+    const configuredBudget = {
+      project_id: '01950000-0000-7000-8000-000000000005', task_id: null, user_id: null,
+      scope: 'project', label: null, kind: 'amount', currency: 'EUR',
+      period_key: '2026-09', budget: 10000, consumed: 2500,
+    };
+    budgetRows = [configuredBudget];
+    holdBudget = true;
+    await visit();
+    await expect(page.getByRole('status')).toHaveText('Loading project progress…');
+    await expect(page.locator('.proj-row [aria-label="Budget unavailable"]')).toHaveText('—');
+    await expect(page.getByRole('progressbar')).toHaveCount(0);
+    await expect.poll(() => typeof releaseBudget).toBe('function');
+    holdBudget = false;
+    releaseBudget();
+    await expect(progress).toHaveAttribute('value', '25');
+    await expect(page.locator('.proj-row')).toContainText('Budget period: 2026-09');
+    await expect(page.locator('.proj-row')).toContainText('Total tracked: 1h');
+    await expect(page.locator('.proj-row')).toContainText('EUR 75.00');
+    await expect(page.locator('[aria-label="Recurring budget"]')).toHaveCount(1);
+    console.log('PASS: configured monthly consumption replaces lifetime spend only after loading');
+
+    budgetRows = [
+      { ...configuredBudget, scope: 'task', task_id: '01950000-0000-7000-8000-000000000010', label: 'Development', budget: 6000, consumed: 8000 },
+      { ...configuredBudget, scope: 'task', task_id: '01950000-0000-7000-8000-000000000011', label: 'Review', budget: 4000, consumed: 0 },
+    ];
+    await visit();
+    await expect(progress).toHaveAttribute('value', '80');
+    const breakdown = page.locator('.proj-row details');
+    await breakdown.locator('summary').focus();
+    await page.keyboard.press('Enter');
+    await expect(breakdown).toHaveAttribute('open', '');
+    await expect(breakdown.locator('li').first()).toHaveText('Development: Budget EUR 60.00 · Spent EUR 80.00 · Remaining EUR -20.00');
+    await expect(breakdown.locator('li').nth(1)).toHaveText('Review: Budget EUR 40.00 · Spent EUR 0.00 · Remaining EUR 40.00');
+    for (const width of [390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
+      if (process.env.HORAE_TEST_SCREENSHOT_DIR)
+        await page.screenshot({ path: `${process.env.HORAE_TEST_SCREENSHOT_DIR}/projects-budget-${width}.png` });
+    }
+    await expect(page.locator('.proj-row [style]')).toHaveCount(0);
+    console.log('PASS: keyboard-accessible scope breakdown exposes overruns without layout overflow');
+
+    budgetFails = true;
+    await visit();
+    await expect(page.getByRole('alert')).toContainText('Could not load project progress');
+    await expect(page.locator('.proj-row [aria-label="Budget unavailable"]')).toHaveText('—');
+    await expect(page.getByRole('progressbar')).toHaveCount(0);
+    budgetFails = false;
+    await page.getByRole('button', { name: 'Retry', exact: true }).click();
+    await expect(progress).toHaveAttribute('value', '80');
+    console.log('PASS: failed configured budget never falls back to lifetime figures');
+    budgetRows = [];
 
     empty = true;
     for (const [orgRole, canCreate, canImport] of [['admin', true, true], ['manager', true, false], ['member', false, false]]) {

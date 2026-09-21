@@ -17,7 +17,10 @@ const sunday = new Date(monday.getTime() + 6 * 86400000).toISOString().slice(0, 
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   const errors = [];
   const failures = [];
-  page.on('pageerror', error => errors.push(error.message));
+  page.on('pageerror', error => errors.push({ url: page.url(), stack: error.stack || error.message }));
+  page.on('console', message => {
+    if (message.type() === 'error' && message.text().includes('panicked at')) console.error(message.text());
+  });
   async function visit(path, resource) {
     const ready = page.waitForResponse(r => r.url().includes(`/api/${resource}`) && r.status() === 200);
     await page.goto(`${base}${path}`);

@@ -25,3 +25,20 @@ pub struct Project {
     pub active: bool,
     pub created_at: DateTime<Utc>,
 }
+
+/// Authorized budget consumption, without entry details or billing/cost rates.
+/// A missing budget is unallocated, not a zero allowance. Legacy projects have
+/// no configured progress rows and retain their lifetime overview totals.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProjectBudgetProgress {
+    pub project_id: Uuid,
+    pub task_id: Option<Uuid>,
+    pub user_id: Option<Uuid>,
+    pub scope: String,
+    pub label: Option<String>,
+    pub kind: BudgetKind,
+    pub currency: String,
+    pub period_key: String,
+    pub budget: Option<i64>,
+    pub consumed: i64,
+}

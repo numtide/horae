@@ -139,29 +139,77 @@ pub(super) async fn configured_progress(
     project_id: Uuid,
     date: NaiveDate,
 ) -> Result<Vec<BudgetProgress>, sqlx::Error> {
+    Ok(
+        fetch_progress(connection, org_id, Some(project_id), None, date)
+            .await?
+            .into_iter()
+            .filter(|row| row.kind != horae_core::types::BudgetKind::None)
+            .filter_map(|row| {
+                Some(BudgetProgress {
+                    task_id: row.task_id,
+                    user_id: row.user_id,
+                    period_key: row.period_key,
+                    consumed: row.consumed,
+                    budget: row.budget?,
+                })
+            })
+            .collect(),
+    )
+}
+
+/// Batch overview projection. Authorization is checked against the current
+/// database actor, not a role cached in the session or supplied by the caller.
+pub(super) async fn progress_for_viewer(
+    connection: &mut PgConnection,
+    org_id: Uuid,
+    viewer_id: Uuid,
+    date: NaiveDate,
+) -> Result<Vec<crate::models::ProjectBudgetProgress>, sqlx::Error> {
+    fetch_progress(connection, org_id, None, Some(viewer_id), date).await
+}
+
+async fn fetch_progress(
+    connection: &mut PgConnection,
+    org_id: Uuid,
+    project_id: Option<Uuid>,
+    viewer_id: Option<Uuid>,
+    date: NaiveDate,
+) -> Result<Vec<crate::models::ProjectBudgetProgress>, sqlx::Error> {
+    use crate::models::ProjectBudgetProgress;
+    use horae_core::types::BudgetKind;
+
     sqlx::query_as!(
-        BudgetProgress,
+        ProjectBudgetProgress,
         r#"WITH config AS (
              SELECT p.id, p.budget_kind, p.budget_minutes, p.budget_amount_cents,
                     p.project_type, p.currency, p.rate_cents, p.client_id,
                     ps.budget_scope, ps.monthly_reset, ps.include_nonbillable, ps.rate_mode
              FROM projects p JOIN project_settings ps ON ps.project_id = p.id AND ps.org_id = p.org_id
-             WHERE p.org_id = $1 AND p.id = $2 AND p.budget_kind <> 'none'
+             WHERE p.org_id = $1 AND ($2::uuid IS NULL OR p.id = $2)
+               AND ($4::uuid IS NULL OR EXISTS (
+                 SELECT 1 FROM project_read_access access
+                 WHERE access.org_id = p.org_id AND access.project_id = p.id
+                   AND access.user_id = $4 AND access.can_view_progress))
            ), scopes AS (
-             SELECT NULL::uuid AS task_id, NULL::uuid AS user_id,
+             SELECT c.id AS project_id, NULL::uuid AS task_id, NULL::uuid AS user_id,
+                    NULL::text AS label,
                     CASE WHEN c.budget_kind = 'hours' THEN c.budget_minutes ELSE c.budget_amount_cents END AS budget
              FROM config c WHERE c.budget_scope = 'project'
              UNION ALL
-             SELECT s.task_id, NULL::uuid,
+             SELECT c.id, pt.task_id, NULL::uuid, t.name,
                     CASE WHEN c.budget_kind = 'hours' THEN s.budget_minutes ELSE s.budget_cents END
-             FROM config c JOIN project_task_settings s ON s.project_id = c.id AND s.org_id = $1
+             FROM config c JOIN project_tasks pt ON pt.project_id = c.id
+             JOIN tasks t ON t.id = pt.task_id AND t.org_id = $1
+             LEFT JOIN project_task_settings s ON s.project_id = c.id AND s.org_id = $1 AND s.task_id = pt.task_id
              WHERE c.budget_scope = 'task'
              UNION ALL
-             SELECT NULL::uuid, s.user_id, s.budget_minutes
-             FROM config c JOIN project_member_budgets s ON s.project_id = c.id AND s.org_id = $1
+             SELECT c.id, NULL::uuid, a.user_id, u.name, s.budget_minutes
+             FROM config c JOIN assignments a ON a.project_id = c.id
+             JOIN users u ON u.id = a.user_id AND u.org_id = $1
+             LEFT JOIN project_member_budgets s ON s.project_id = c.id AND s.org_id = $1 AND s.user_id = a.user_id
              WHERE c.budget_scope = 'person' AND c.budget_kind = 'hours'
            ), entries AS (
-             SELECT te.task_id, te.user_id,
+             SELECT c.id AS project_id, te.task_id, te.user_id,
                     CASE WHEN c.budget_kind = 'hours'
                       THEN effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir)::bigint
                       ELSE COALESCE(line.amount_cents, line_amount_cents(
@@ -178,24 +226,28 @@ pub(super) async fn configured_progress(
              LEFT JOIN project_tasks pt ON pt.project_id = c.id AND pt.task_id = te.task_id
              LEFT JOIN assignments a ON a.project_id = c.id AND a.user_id = te.user_id
              LEFT JOIN invoice_line_items line ON line.invoice_id = te.invoice_id AND line.time_entry_id = te.id
-             WHERE (NOT c.monthly_reset OR (
+             WHERE c.budget_kind <> 'none' AND (NOT c.monthly_reset OR (
                       te.spent_date >= date_trunc('month', $3::date)::date
                       AND te.spent_date < (date_trunc('month', $3::date) + interval '1 month')::date))
                AND (c.include_nonbillable OR c.project_type = 'non_billable'
                     OR (te.billable AND (te.invoice_id IS NOT NULL OR COALESCE(pt.billable, t.billable_default))))
            )
-           SELECT s.task_id AS "task_id?", s.user_id AS "user_id?", s.budget AS "budget!",
+           SELECT c.id AS "project_id!", s.task_id AS "task_id?", s.user_id AS "user_id?",
+                  s.label AS "label?", c.budget_scope AS "scope!", c.currency AS "currency!",
+                  c.budget_kind AS "kind!: BudgetKind", s.budget AS "budget?",
                   CASE WHEN c.monthly_reset THEN to_char($3::date, 'YYYY-MM') ELSE 'lifetime' END AS "period_key!",
                   COALESCE(SUM(e.consumed), 0)::bigint AS "consumed!"
-           FROM scopes s CROSS JOIN config c
-           LEFT JOIN entries e ON (s.task_id IS NULL OR e.task_id = s.task_id)
+           FROM config c LEFT JOIN scopes s ON s.project_id = c.id
+           LEFT JOIN entries e ON e.project_id = c.id
+                             AND (s.task_id IS NULL OR e.task_id = s.task_id)
                              AND (s.user_id IS NULL OR e.user_id = s.user_id)
-           WHERE s.budget IS NOT NULL
-           GROUP BY s.task_id, s.user_id, s.budget, c.monthly_reset
-           ORDER BY s.task_id, s.user_id"#,
+           GROUP BY c.id, c.budget_kind, c.budget_scope, c.currency, c.monthly_reset,
+                    s.task_id, s.user_id, s.label, s.budget
+           ORDER BY c.id, s.label, s.task_id, s.user_id"#,
         org_id,
         project_id,
         date as NaiveDate,
+        viewer_id,
     )
     .fetch_all(connection)
     .await
