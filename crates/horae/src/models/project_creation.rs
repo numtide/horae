@@ -43,6 +43,8 @@ pub enum ProjectFormField {
     MilestoneName(Uuid),
     MilestoneDate(Uuid),
     MilestoneAmount(Uuid),
+    TaskName(Uuid),
+    TaskAccess(Uuid),
     TaskRate(Uuid),
     TaskBudget(Uuid),
     PersonRate(Uuid),

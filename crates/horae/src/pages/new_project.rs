@@ -410,6 +410,8 @@ fn field_id(field: ProjectFormField) -> String {
         ProjectFormField::MilestoneName(id) => return format!("np-milestone-name-{id}"),
         ProjectFormField::MilestoneDate(id) => return format!("np-milestone-date-{id}"),
         ProjectFormField::MilestoneAmount(id) => return format!("np-milestone-amount-{id}"),
+        ProjectFormField::TaskName(id) => return format!("np-task-remove-{id}"),
+        ProjectFormField::TaskAccess(id) => return format!("np-task-access-{id}"),
         ProjectFormField::TaskRate(id) => return format!("np-task-rate-{id}"),
         ProjectFormField::TaskBudget(id) => return format!("np-task-budget-{id}"),
         ProjectFormField::PersonRate(id) => return format!("np-person-rate-{id}"),

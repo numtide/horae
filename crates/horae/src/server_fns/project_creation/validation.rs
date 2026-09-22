@@ -418,9 +418,13 @@ pub(super) fn validate_project_form(
                 return Err(err(BAD_REQUEST, "A task can only be selected once"));
             }
             TaskSource::New { name } => {
-                bounded_text(name, 200, true, "Task name")?;
+                bounded_text(name, 200, true, "Task name")
+                    .map_err(|error| with_field(error, ProjectFormField::TaskName(task.id)))?;
                 if !new_task_names.insert(name.trim().to_lowercase()) {
-                    return Err(err(BAD_REQUEST, "Duplicate new task name"));
+                    return Err(with_field(
+                        err(BAD_REQUEST, "Duplicate new task name"),
+                        ProjectFormField::TaskName(task.id),
+                    ));
                 }
             }
             _ => {}
@@ -428,9 +432,9 @@ pub(super) fn validate_project_form(
         if let TaskAccess::Restricted { user_ids } = &task.access
             && user_ids.iter().any(|id| !people.contains(id))
         {
-            return Err(err(
-                BAD_REQUEST,
-                "Task access must refer to selected teammates",
+            return Err(with_field(
+                err(BAD_REQUEST, "Task access must refer to selected teammates"),
+                ProjectFormField::TaskAccess(task.id),
             ));
         }
         if is_hourly && form.rate_mode == RateMode::Task {
@@ -463,6 +467,49 @@ mod tests {
     use super::*;
     use crate::models::project_creation::{InvoiceDefaultsInput, SecondTaxInput};
     use uuid::Uuid;
+
+    #[test]
+    fn task_name_and_access_rejections_identify_the_invalid_row() {
+        use crate::models::project_creation::ProjectTaskInput;
+        let first = Uuid::now_v7();
+        let second = Uuid::now_v7();
+        for case in ["empty", "long", "duplicate", "access"] {
+            let mut form = ProjectForm {
+                name: "Valid project".into(),
+                tasks: [(first, "First"), (second, "Second")]
+                    .map(|(id, name)| ProjectTaskInput {
+                        id,
+                        source: TaskSource::New { name: name.into() },
+                        billable: true,
+                        rate: String::new(),
+                        budget: String::new(),
+                        access: TaskAccess::Everyone,
+                    })
+                    .to_vec(),
+                ..Default::default()
+            };
+            if case == "access" {
+                form.tasks[1].access = TaskAccess::Restricted {
+                    user_ids: vec![Uuid::now_v7()],
+                };
+            } else {
+                form.tasks[1].source = TaskSource::New {
+                    name: match case {
+                        "empty" => "  ".into(),
+                        "long" => "é".repeat(201),
+                        "duplicate" => " FIRST ".into(),
+                        _ => unreachable!(),
+                    },
+                };
+            }
+            let field = if case == "access" {
+                "task_access"
+            } else {
+                "task_name"
+            };
+            assert_rejection_field(&form, false, serde_json::json!({ field: second }));
+        }
+    }
 
     #[test]
     fn assignment_rejections_identify_the_invalid_row() {

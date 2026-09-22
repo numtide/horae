@@ -254,12 +254,25 @@ fn TaskRow(
                         if form.read().budget_mode == BudgetMode::FeesPerTask { "{currency}" } else { "h" }
                     }
                 }
-                button { r#type: "button", class: "btn btn-ghost btn-sm", aria_label: "Access for {name}: {access_label}", onclick: move |_| on_access.call(id), "{access_label}" }
+                button { id: "np-task-access-{id}", r#type: "button", class: "btn btn-ghost btn-sm", aria_label: "Access for {name}: {access_label}",
+                    aria_invalid: (invalid_field == Some(ProjectFormField::TaskAccess(id))).then_some("true"),
+                    aria_describedby: (invalid_field == Some(ProjectFormField::TaskAccess(id))).then(|| format!("np-task-error-{id}")),
+                    onclick: move |_| on_access.call(id), "{access_label}" }
             }
-            button { r#type: "button", class: "np-row-remove btn btn-ghost p-0 size-8 text-label", aria_label: "Remove task {name}", onclick: move |_| form.write().tasks.retain(|task| task.id != id), "×" }
+            button { id: "np-task-remove-{id}", r#type: "button", class: "np-row-remove btn btn-ghost p-0 size-8 text-label", aria_label: "Remove task {name}",
+                aria_invalid: (invalid_field == Some(ProjectFormField::TaskName(id))).then_some("true"),
+                aria_describedby: (invalid_field == Some(ProjectFormField::TaskName(id))).then(|| format!("np-task-error-{id}")),
+                onclick: move |_| {
+                    form.write().tasks.retain(|task| task.id != id);
+                    document::eval("document.getElementById('np-task-search')?.focus()");
+                }, "×" }
         }
-        if matches!(invalid_field, Some(ProjectFormField::TaskRate(row) | ProjectFormField::TaskBudget(row)) if row == id) {
-            p { id: "np-task-error-{id}", class: "text-sm text-danger px-5", "{error_message.as_deref().unwrap_or_default()}" }
+        if matches!(invalid_field, Some(ProjectFormField::TaskName(row) | ProjectFormField::TaskAccess(row) | ProjectFormField::TaskRate(row) | ProjectFormField::TaskBudget(row)) if row == id) {
+            p { id: "np-task-error-{id}", class: "text-sm text-danger px-5",
+                "{error_message.as_deref().unwrap_or_default()}"
+                if invalid_field == Some(ProjectFormField::TaskName(id)) { " Remove this row and add the corrected task name below." }
+                if invalid_field == Some(ProjectFormField::TaskAccess(id)) { " Open access settings and choose everyone or select the current teammates again." }
+            }
         }
     }
 }
