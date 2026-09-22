@@ -78,6 +78,8 @@ Grouped reports resolve organization and manager/admin authority from the curren
 
 ## Billing and downstream invariants
 
+Client default amounts belong to the client's currency, including zero. The existing client editor locks the row and rejects a different currency when a default rate exists, because that request contains no replacement amount. Rejection changes no fields and retains the form input. Equivalent case/whitespace preserves the stored currency; other details remain editable and idempotent. Clients without a default rate retain legacy currency editing. The check uses the latest locked row, including a concurrently added default rate.
+
 Missing settings preserves all legacy rates/amounts. New selected modes have parity across Rust/SQL, project spend, reports, invoice preparation and compatibility exports. Zero is not absent; currency mismatch is not conversion.
 
 Catalog task amounts carry an optional source currency rather than assuming the workspace denomination. A configured task-billed project can inherit a non-null amount only when its known currency matches the project; unknown/incompatible currencies require an explicit amount, including zero. Named-task reuse applies the same rule as UUID selection. Creation errors identify the task row and preserve the draft; UI placeholders show only compatible defaults and otherwise request a rate. A null catalog amount still allows the existing client fallback. Existing project-task snapshots and legacy inheritance remain unchanged; neither migrations nor import retries guess or overwrite historical currencies.

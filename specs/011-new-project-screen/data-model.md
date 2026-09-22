@@ -34,6 +34,8 @@ Migration 0036 adds private `task_read_access` for current active user/org/task 
 
 ## Tasks and team
 
+`clients.default_rate_cents` is denominated in `clients.currency`, with zero distinct from absence. Existing client detail mutations cannot change that denomination without an explicit replacement amount; they lock and recheck the current row before updating. No migration or automatic conversion is performed, and clients without a default rate retain their previous editing behavior.
+
 Reuse catalog tasks, project_tasks and assignments. Store new per-project task settings (restriction flag, budget minutes/cents) and allowed-user links in org-scoped relations. Restricted with an empty allowed set means nobody, not everyone. Default is unrestricted.
 
 Additive migration 0038 adds nullable `tasks.default_rate_currency`, an uppercase three-letter source denomination. Existing catalog amounts remain unchanged with unknown currency; do not backfill from the workspace or linked projects. New CSV tasks retain a valid explicit source currency; API catalog tasks without source currency remain unknown. Native changes to the default amount use workspace currency; renames/no-ops preserve the prior denomination. Configured task-rate creation and enablement require an explicit project rate when a non-null catalog rate has unknown or incompatible currency, including zero. Compatible rates are snapshotted into project_tasks; legacy links and existing project amounts are unchanged. Preview checkpoints preserve this metadata, with older snapshots remaining unknown. Authorized creation options include the denomination so the UI cannot present an incompatible default as an inherited amount.

@@ -145,6 +145,29 @@ async fn update_client_record(
     let mut tx = db.begin().await.map_err(server_err)?;
     let before = lock_client(&mut tx, org_id, client_id).await?;
 
+    // This editor cannot replace the rate, so changing its denomination would
+    // silently reinterpret the amount inherited by projects.
+    let currency = if currency != before.currency
+        && sqlx::query_scalar!(
+            r#"SELECT default_rate_cents IS NOT NULL AS "has_rate!"
+               FROM clients WHERE id = $1 AND org_id = $2"#,
+            client_id,
+            org_id,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(server_err)?
+    {
+        if !currency.trim().eq_ignore_ascii_case(before.currency.trim()) {
+            return Err(conflict(
+                "Cannot change currency while the client has a default rate; keep its current currency",
+            ));
+        }
+        before.currency.as_str()
+    } else {
+        currency
+    };
+
     let client = sqlx::query_as!(
         Client,
         r#"UPDATE clients SET name = $3, currency = $4, address = $5, tax_id = $6
