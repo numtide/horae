@@ -36,7 +36,19 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
       if (path === '/admin/importers') {
         await expect(page.getByText('Checking connection…', { exact: true })).toHaveCount(0);
       }
-      if (path === '/reports') await expect(page.getByRole('link', { name: 'Export XLSX', exact: true })).toBeVisible();
+      if (path === '/reports') {
+        // The default end date is today; crossing midnight can add a seeded
+        // project row and change the page height without any style change.
+        const dates = page.locator('input[type="date"]');
+        await expect(dates).toHaveCount(2);
+        for (const date of await dates.all()) {
+          if (await date.inputValue() === week) continue;
+          const updated = page.waitForResponse(r => r.url().includes('/api/report_time') && r.status() === 200);
+          await date.fill(week);
+          await (await updated).finished();
+        }
+        await expect(page.getByRole('link', { name: 'Export XLSX', exact: true })).toBeVisible();
+      }
       await page.evaluate(() => document.fonts.ready);
       for (const width of [320, 768, 1440]) {
         await page.setViewportSize({ width, height: 900 });

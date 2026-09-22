@@ -24,7 +24,7 @@ assert.ok(task.default_rate_cents > 0);
   page.on('requestfinished', request => pending.delete(request));
   page.on('requestfailed', request => pending.delete(request));
   const readsFinished = () => expect.poll(() => pending.size).toBe(0);
-  const createProject = async (mode, currency = 'USD') => {
+  const createProject = async (mode, currency = 'USD', budgetScope) => {
     await readsFinished();
     await page.goto(`${base}/projects/new`);
     const screen = page.locator('.np-page');
@@ -42,6 +42,10 @@ assert.ok(task.default_rate_cents > 0);
       await screen.getByRole('radio', { name: new RegExp(`^${mode} hourly rate`) }).check();
       if (mode === 'Project') await screen.getByLabel(`Hourly rate (${currency})`, { exact: true }).fill('90');
     }
+    if (budgetScope) {
+      await screen.locator('#np-budget-mode').click();
+      await page.getByRole('listbox', { name: 'Choose Budget', exact: true }).getByRole('option', { name: `Hours per ${budgetScope}`, exact: true }).click();
+    }
     await expect(screen.locator('header').getByRole('status')).toContainText('Draft saved at');
     await screen.getByRole('button', { name: 'Save project', exact: true }).click();
     await expect(page).toHaveURL(/\/projects\/[0-9a-f-]{36}$/);
@@ -52,14 +56,94 @@ assert.ok(task.default_rate_cents > 0);
     return id;
   };
   const storedRate = projectId => sql(`SELECT rate_cents FROM project_tasks WHERE project_id = '${projectId}' AND task_id = '${task.id}'`);
+  const selectEditor = async id => {
+    const row = page.locator('.proj-row').filter({ has: page.locator(`a[href="/projects/${id}"]`) });
+    await row.getByRole('button', { name: 'Actions' }).click();
+    await row.getByRole('menuitem', { name: 'Edit', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Edit Project', exact: true })).toBeVisible();
+    return row;
+  };
+  const openEditor = async id => {
+    await readsFinished();
+    await page.goto(`${base}/projects`);
+    return selectEditor(id);
+  };
+  const verifyEditor = async (id, mode, pendingRead = false) => {
+    let releaseRead;
+    if (pendingRead) {
+      const blocked = new Promise(resolve => { releaseRead = resolve; });
+      await page.route('**/api/get_project_edit_policy*', async route => { await blocked; await route.abort(); });
+    }
+    try {
+      await openEditor(id);
+      if (pendingRead) {
+        await expect(page.getByText('Loading project editing options…', { exact: true })).toBeVisible();
+        await expect(page.locator('#proj-name')).toHaveCount(0);
+        await expect(page.getByRole('button', { name: 'Save Changes', exact: true })).toHaveCount(0);
+      }
+    } finally { if (releaseRead) releaseRead(); }
+    if (pendingRead) {
+      await expect(page.getByRole('alert')).toContainText('Could not load project editing options');
+      await expect(page.locator('#proj-name')).toHaveCount(0);
+      await readsFinished();
+      await page.unroute('**/api/get_project_edit_policy*');
+      await page.getByRole('button', { name: 'Retry editing options', exact: true }).click();
+    }
+    await expect(page.getByLabel('Type', { exact: true })).toBeDisabled();
+    await expect(page.getByLabel('Currency', { exact: true })).toBeDisabled();
+    const rate = page.getByLabel('Hourly rate', { exact: true });
+    if (mode === 'Project') {
+      await expect(rate).toBeEnabled();
+      await rate.fill('');
+      await page.getByRole('button', { name: 'Save Changes', exact: true }).click();
+      await expect(page.locator('.card .alert-danger')).toContainText('Project rate is required');
+      await rate.fill('0');
+    } else {
+      await expect(rate).toBeDisabled();
+    }
+    const monetary = !['fixed', 'nonbillable'].includes(mode);
+    await expect(page.locator('#proj-budget option[value="amount"]')).toHaveCount(monetary ? 1 : 0);
+    await page.getByLabel('Budget', { exact: true }).selectOption('hours');
+    await page.getByLabel('Budget hours', { exact: true }).fill('3:30');
+    const name = `Edited ${id}`;
+    await page.getByLabel('Name', { exact: true }).fill(name);
+    if (process.env.HORAE_TEST_SCREENSHOT_DIR) await page.locator('.card').filter({ has: page.getByRole('heading', { name: 'Edit Project', exact: true }) }).screenshot({ path: `${process.env.HORAE_TEST_SCREENSHOT_DIR}/project-editor-${mode}-${page.viewportSize().width}.png` });
+    let releaseSave;
+    const blocked = new Promise(resolve => { releaseSave = resolve; });
+    await page.route('**/api/update_project*', async route => { await blocked; await route.abort(); });
+    try {
+      await page.getByRole('button', { name: 'Save Changes', exact: true }).click();
+      await expect(page.getByLabel('Name', { exact: true })).toBeDisabled();
+      await expect(page.getByLabel('Budget hours', { exact: true })).toBeDisabled();
+      await expect(page.getByRole('button', { name: 'Save Changes', exact: true })).toBeDisabled();
+      await expect(page.locator('.page-header').getByRole('button', { name: 'Cancel', exact: true })).toBeDisabled();
+    } finally { releaseSave(); }
+    await expect(page.locator('.card .alert-danger')).toBeVisible();
+    await expect(page.getByLabel('Name', { exact: true })).toBeEnabled();
+    await expect(page.getByLabel('Name', { exact: true })).toHaveValue(name);
+    await expect(page.getByLabel('Budget hours', { exact: true })).toHaveValue('3:30');
+    if (mode === 'Project') await expect(rate).toHaveValue('0');
+    await readsFinished();
+    await page.unroute('**/api/update_project*');
+    await page.getByRole('button', { name: 'Save Changes', exact: true }).focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('heading', { name: 'Edit Project', exact: true })).toHaveCount(0);
+    assert.equal(sql(`SELECT name FROM projects WHERE id = '${id}'`), name);
+    assert.equal(sql(`SELECT budget_minutes FROM projects WHERE id = '${id}'`), '210');
+    if (mode === 'Project') assert.equal(sql(`SELECT rate_cents FROM projects WHERE id = '${id}'`), '0');
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+    await readsFinished();
+  };
   try {
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
     await page.waitForURL(`${base}/`);
     await page.waitForLoadState('networkidle');
+    let firstConfiguredId;
     for (const [width, amount, cents] of [[390, '80.25', '8025'], [768, '0', '0'], [1440, '123.45', '12345']]) {
       await page.setViewportSize({ width, height: 900 });
       const id = await createProject('Task');
+      firstConfiguredId ??= id;
       const rate = page.getByLabel('Task hourly rate (USD)', { exact: true });
       await expect(rate).toBeVisible();
       await page.getByLabel('Enable an existing task', { exact: true }).selectOption(task.id);
@@ -98,12 +182,41 @@ assert.ok(task.default_rate_cents > 0);
       await expect(page.locator(`#project-task option[value="${task.id}"]`)).toBeDisabled();
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
       if (process.env.HORAE_TEST_SCREENSHOT_DIR) await page.screenshot({ path: `${process.env.HORAE_TEST_SCREENSHOT_DIR}/project-task-rate-${width}.png` });
+      await verifyEditor(id, 'Task', width === 390);
     }
     for (const mode of ['Person', 'Project', 'fixed', 'nonbillable']) {
-      await createProject(mode);
+      const id = await createProject(mode);
       await expect(page.locator('#project-task-rate')).toHaveCount(0);
       await expect(page.getByLabel('Enable an existing task', { exact: true })).toBeVisible();
+      await verifyEditor(id, mode);
     }
+    for (const scope of ['task', 'person']) {
+      const id = await createProject(scope === 'task' ? 'Task' : 'Person', 'EUR', scope);
+      await openEditor(id);
+      await expect(page.getByLabel('Budget', { exact: true })).toBeDisabled();
+      await expect(page.getByLabel('Budget hours', { exact: true })).toBeDisabled();
+      await page.getByLabel('Name', { exact: true }).fill(`Scoped ${scope}`);
+      await page.getByRole('button', { name: 'Save Changes', exact: true }).click();
+      await expect(page.getByRole('heading', { name: 'Edit Project', exact: true })).toHaveCount(0);
+      assert.equal(sql(`SELECT budget_scope FROM project_settings WHERE project_id = '${id}'`), scope);
+      assert.equal(sql(`SELECT budget_minutes FROM projects WHERE id = '${id}'`), '');
+    }
+    await openEditor('01950000-0000-7000-8000-000000000005');
+    for (const label of ['Name', 'Type', 'Currency', 'Hourly rate', 'Budget']) await expect(page.getByLabel(label, { exact: true })).toBeEnabled();
+    await expect(page.getByText("Leave blank to use the user's default. Task and assignment overrides take priority. Zero is a free rate.", { exact: true })).toBeVisible();
+    let releaseSwitch;
+    const switching = new Promise(resolve => { releaseSwitch = resolve; });
+    await page.route('**/api/get_project_edit_policy*', async route => { await switching; await route.continue(); });
+    try {
+      await selectEditor(firstConfiguredId);
+      await expect(page.getByText('Loading project editing options…', { exact: true })).toBeVisible();
+      await expect(page.locator('#proj-type')).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Save Changes', exact: true })).toHaveCount(0);
+    } finally { releaseSwitch(); }
+    await expect(page.getByLabel('Type', { exact: true })).toBeDisabled();
+    await readsFinished();
+    await page.unroute('**/api/get_project_edit_policy*');
+    await page.locator('.page-header').getByRole('button', { name: 'Cancel', exact: true }).click();
     const id = await createProject('Task', 'EUR');
     await page.getByLabel('Enable an existing task', { exact: true }).selectOption(task.id);
     await page.getByRole('button', { name: 'Enable task', exact: true }).click();
@@ -111,7 +224,7 @@ assert.ok(task.default_rate_cents > 0);
     assert.equal(storedRate(id), String(task.default_rate_cents));
     await readsFinished();
     assert.deepEqual(errors, []);
-    console.log('PASS: New Project task-rate modes reach detail; cross-currency rejection, exact/zero recovery, failed requests, keyboard and three viewport widths preserve values and stored rates');
+    console.log('PASS: New Project task rates and editor capabilities preserve configured/legacy modes, scoped budgets, exact/zero values and keyboard recovery across three widths');
   } catch (error) {
     console.error({ url: page.url(), errors, page: await page.locator('body').ariaSnapshot() });
     throw error;

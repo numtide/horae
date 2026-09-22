@@ -1,7 +1,7 @@
 //! Project, task, and assignment server functions.
 
 use super::*;
-use crate::models::{ProjectDetails, ProjectTagLink, ProjectTaskRate};
+use crate::models::{ProjectDetails, ProjectEditPolicy, ProjectTagLink, ProjectTaskRate};
 
 #[cfg(all(test, feature = "server"))]
 mod tests;
@@ -19,6 +19,42 @@ mod mutation_tests;
 mod bulk_tests;
 
 // ── Projects ─────────────────────────────────────────────────────────────────
+
+#[server]
+pub async fn get_project_edit_policy(
+    project_id: String,
+) -> Result<ProjectEditPolicy, ServerFnError> {
+    let manager = require_manager().await?;
+    let project_id = parse_uuid(&project_id, "project_id")?;
+    let state = crate::state::global_state().await;
+    fetch_project_edit_policy(&state.db, manager.org_id, manager.id, project_id)
+        .await
+        .map_err(server_err)?
+        .ok_or_else(|| not_found("Project not found"))
+}
+
+#[cfg(feature = "server")]
+async fn fetch_project_edit_policy(
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    viewer_id: uuid::Uuid,
+    project_id: uuid::Uuid,
+) -> Result<Option<ProjectEditPolicy>, sqlx::Error> {
+    sqlx::query_as!(
+        ProjectEditPolicy,
+        r#"SELECT p.id AS project_id, (ps.project_id IS NOT NULL) AS "configured!",
+            (ps.project_id IS NULL OR (p.project_type = 'time_and_materials' AND ps.rate_mode = 'project')) AS "rate_editable!",
+            (ps.project_id IS NULL OR ps.budget_scope = 'project') AS "budget_editable!",
+            (ps.project_id IS NULL OR p.project_type = 'time_and_materials') AS "monetary_budget_allowed!"
+         FROM projects p JOIN users u ON u.org_id = p.org_id
+         LEFT JOIN project_settings ps ON ps.project_id = p.id AND ps.org_id = p.org_id
+         WHERE p.org_id = $1 AND u.id = $2 AND p.id = $3
+           AND u.active AND u.org_role IN ('admin', 'manager')"#,
+        org_id,
+        viewer_id,
+        project_id,
+    ).fetch_optional(pool).await
+}
 
 #[server]
 pub async fn get_project_details(project_id: String) -> Result<ProjectDetails, ServerFnError> {

@@ -570,6 +570,11 @@ mod server_fns {
     pub async fn list_project_tags() -> Result<Vec<project::ProjectTagLink>, ServerFnError> {
         Ok(Vec::new())
     }
+    pub async fn get_project_edit_policy(
+        _id: String,
+    ) -> Result<project::ProjectEditPolicy, ServerFnError> {
+        panic!("unexpected project editor read");
+    }
     pub async fn get_project_details(id: String) -> ProjectDetailsResponse {
         let id = Uuid::parse_str(&id).unwrap();
         let probe = consume_context::<Probe>();

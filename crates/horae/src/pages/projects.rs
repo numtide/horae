@@ -278,6 +278,15 @@ pub fn ProjectList() -> Element {
     let mut show_form = use_signal(|| false);
     // Creation has its own route; this form only edits an existing project.
     let mut editing_id = use_signal(|| None::<Uuid>);
+    let mut edit_busy = use_signal(|| false);
+    let mut edit_policy = use_resource(move || async move {
+        match editing_id() {
+            Some(id) => server_fns::get_project_edit_policy(id.to_string())
+                .await
+                .map(Some),
+            None => Ok(None),
+        }
+    });
     let mut name = use_signal(String::new);
     let mut project_type = use_signal(|| "time_and_materials".to_string());
     let mut currency = use_signal(|| "USD".to_string());
@@ -486,6 +495,17 @@ pub fn ProjectList() -> Element {
     } else {
         "Total fees in the project's currency. Leave blank to set it later."
     };
+    let current_policy = if edit_policy.state()() == UseResourceState::Ready {
+        edit_policy
+            .read()
+            .as_ref()
+            .and_then(|result| result.as_ref().ok())
+            .and_then(Option::as_ref)
+            .filter(|policy| Some(policy.project_id) == editing_id())
+            .cloned()
+    } else {
+        None
+    };
 
     rsx! {
         div {
@@ -496,6 +516,7 @@ pub fn ProjectList() -> Element {
                         if show_form() {
                             button {
                                 class: "btn btn-secondary py-2 px-4",
+                                disabled: edit_busy(),
                                 onclick: move |_| reset_form(),
                                 "Cancel"
                             }
@@ -588,6 +609,11 @@ pub fn ProjectList() -> Element {
 
             if show_form() && is_manager {
                 FormCard { title: "Edit Project", error,
+                  if let Some(policy) = current_policy {
+                    fieldset { class: "border-0 p-0 m-0 min-w-0", disabled: edit_busy(),
+                    if policy.configured {
+                        p { class: "form-hint", "Type and currency are fixed here to preserve configured rates and fees." }
+                    }
                     FormGroup { label: "Name", id: "proj-name",
                         Input {
                             id: "proj-name",
@@ -599,6 +625,7 @@ pub fn ProjectList() -> Element {
                     FormGroup { label: "Type", id: "proj-type",
                         Select {
                             id: "proj-type",
+                            disabled: policy.configured,
                             options: type_opts,
                             selected: project_type(),
                             onchange: move |e: FormEvent| project_type.set(e.value()),
@@ -607,35 +634,45 @@ pub fn ProjectList() -> Element {
                     FormGroup { label: "Currency", id: "proj-currency",
                         Input {
                             id: "proj-currency",
+                            disabled: policy.configured,
                             placeholder: "USD",
                             value: "{currency}",
                             oninput: move |e: FormEvent| currency.set(e.value()),
                         }
                     }
-                    FormGroup { label: "Hourly rate", id: "proj-rate", hint: "Leave blank to use the user's default. Task and assignment overrides take priority. Zero is a free rate.",
+                    FormGroup { label: "Hourly rate", id: "proj-rate", hint: if !policy.configured {
+                        "Leave blank to use the user's default. Task and assignment overrides take priority. Zero is a free rate."
+                    } else if policy.rate_editable {
+                        "Hourly rate in the project's currency. Required; enter 0 for a zero rate."
+                    } else {
+                        "This project's billing configuration does not use a project hourly rate."
+                    },
                         Input {
                             id: "proj-rate",
-                            placeholder: "120.00",
+                            disabled: !policy.rate_editable,
+                            placeholder: if policy.rate_editable { "120.00" } else { "" },
                             value: "{rate_value}",
                             oninput: move |e: FormEvent| rate_value.set(e.value()),
                         }
                     }
-                    FormGroup { label: "Budget", id: "proj-budget",
+                    FormGroup { label: "Budget", id: "proj-budget", hint: if policy.budget_editable { "" } else { "Allocated per task or person; totals cannot be changed independently here." },
                         Select {
                             id: "proj-budget",
+                            disabled: !policy.budget_editable,
                             options: vec![
                                 ("none".to_string(), "None".to_string()),
                                 ("amount".to_string(), "Amount".to_string()),
                                 ("hours".to_string(), "Hours".to_string()),
-                            ],
+                            ].into_iter().filter(|(value, _)| value != "amount" || policy.monetary_budget_allowed).collect(),
                             selected: budget_kind(),
                             onchange: move |e: FormEvent| budget_kind.set(e.value()),
                         }
                     }
                     if budget_kind() != "none" {
-                        FormGroup { label: "{budget_label}", id: "proj-budget-value", hint: "{budget_hint}",
+                        FormGroup { label: "{budget_label}", id: "proj-budget-value", hint: if policy.budget_editable { budget_hint } else { "Scoped allocation total (read only)." },
                             Input {
                                 id: "proj-budget-value",
+                                disabled: !policy.budget_editable,
                                 placeholder: "{budget_placeholder}",
                                 value: "{budget_value}",
                                 oninput: move |e: FormEvent| budget_value.set(e.value()),
@@ -645,6 +682,7 @@ pub fn ProjectList() -> Element {
                     button {
                         class: "btn btn-primary",
                         onclick: move |_| {
+                            if edit_busy() { return; }
                             let Some(id) = editing_id() else { return; };
                             let n = name();
                             let pt = project_type();
@@ -652,21 +690,27 @@ pub fn ProjectList() -> Element {
                             let bk = budget_kind();
                             let bv = budget_value();
                             let rv = rate_value();
-                            run_action(
-                                async move {
-                                    server_fns::update_project(id.to_string(), n, pt, c, bk, bv, rv).await
-                                },
-                                projects,
-                                error,
-                                move || {
-                                    spend_res.restart();
-                                    budget_res.restart();
-                                    reset_form();
-                                },
-                            );
+                            error.set(None);
+                            edit_busy.set(true);
+                            spawn(async move {
+                                match server_fns::update_project(id.to_string(), n, pt, c, bk, bv, rv).await {
+                                    Ok(_) => {
+                                        projects.restart(); spend_res.restart(); budget_res.restart(); reset_form();
+                                    }
+                                    Err(e) => error.set(Some(e.to_string())),
+                                }
+                                edit_busy.set(false);
+                            });
                         },
                         "Save Changes"
                     }
+                    }
+                  } else if edit_policy.state()() == UseResourceState::Ready && matches!(&*edit_policy.read(), Some(Err(_))) {
+                    div { class: "alert alert-danger", role: "alert", "Could not load project editing options." }
+                    button { class: "btn btn-secondary", onclick: move |_| edit_policy.restart(), "Retry editing options" }
+                  } else {
+                    p { role: "status", "Loading project editing options…" }
+                  }
                 }
             }
 
@@ -899,6 +943,7 @@ pub fn ProjectList() -> Element {
                                                 if is_manager {
                                                     Menu { id: "project-actions-{p.id}", label: "Actions", align_right: true,
                                                         MenuItem {
+                                                            disabled: edit_busy(),
                                                             onclick: {
                                                                 let p = p.clone();
                                                                 move |_| {
