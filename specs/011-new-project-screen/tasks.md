@@ -122,6 +122,7 @@
 - [x] T049 [US6] Integrate New Project tests into `crates/horae/tests/browser/run-design-checks.sh` and run all existing navigation/menu/project selection/recovery checks plus Clients/Timesheet/Invoices smoke checks.
   - The unfiltered nine-suite runner passes on the milestone/selector build, including Clients/Timesheet/Invoices responsive smoke checks, shared menus, mobile navigation, bulk selection/recovery, action errors, New Project and invoice preparation. Earlier intermittent failures and the deterministic interrupted-response-body regression are not resolved by this green run; T019/T051 remain open.
 - [ ] T050 [US6] Verify every displayed control against persisted/downstream behavior and record design deviations and basic-creation timing in `specs/011-new-project-screen/quickstart.md`.
+  - The control-to-consumer inventory now maps all form inputs, nested task/team/fee/invoice inputs, client creation and draft actions to operational tables, downstream consumers and named checks. It distinguishes hidden draft values from active billing settings and records deliberate design deviations and automated timing. The monthly/non-billable budget checkbox path has an explicit browser-to-database regression. Final acceptance remains open for the fee-line decision and pending-navigation/interrupted-body behavior; a mapping alone does not prove those gates.
 
 ## Phase 9: Final verification and PR
 

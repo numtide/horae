@@ -236,6 +236,31 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
           await screen.locator('#np-fee-amount').focus();
           await page.keyboard.type('100');
         }
+        if (type === 'Time & Materials') {
+          await choose('np-budget-mode', 'Budget', 'Total project hours');
+          await screen.locator('#np-budget-value').focus();
+          await page.keyboard.type('30:30');
+          for (const label of ['Budget resets every month', 'Include non-billable time in the budget']) {
+            await screen.getByRole('checkbox', { name: label, exact: true }).focus();
+            await page.keyboard.press('Space');
+          }
+          await saved();
+          await readsFinished();
+          await page.reload();
+          await saved();
+          await expect(screen.locator('#np-budget-value')).toHaveValue('30:30');
+          for (const label of ['Budget resets every month', 'Include non-billable time in the budget']) {
+            const checkbox = screen.getByRole('checkbox', { name: label, exact: true });
+            await expect(checkbox).toBeChecked();
+            if (width === 768) {
+              await checkbox.focus();
+              await page.keyboard.press('Space');
+              await expect(checkbox).not.toBeChecked();
+            }
+          }
+          // Hidden draft values must not become operational budget settings.
+          if (width === 1440) await choose('np-budget-mode', 'Budget', 'No budget');
+        }
         await activate(screen.getByRole('button', { name: 'Save project', exact: true }));
         await page.waitForURL(/\/projects\/[0-9a-f-]{36}$/);
         const detail = page.getByRole('region', { name: 'Project details', exact: true });
@@ -254,6 +279,12 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
           'Time & Materials': 'time_and_materials', 'Fixed Fee': 'fixed_fee', 'Non-Billable': 'non_billable',
         }[type]);
         if (type === 'Fixed Fee') assert.equal(sql(`SELECT fee_amount_cents FROM project_settings WHERE project_id = '${id}' AND fee_mode = 'single'`), '10000');
+        if (type === 'Time & Materials') {
+          const budget = JSON.parse(sql(`SELECT json_build_array(p.budget_minutes, s.monthly_reset, s.include_nonbillable, s.alert_enabled)
+            FROM projects p JOIN project_settings s ON s.project_id = p.id WHERE p.id = '${id}'`));
+          assert.deepEqual(budget, [width === 1440 ? null : 1830, width === 390, width === 390, false]);
+          console.log(`PASS: budget amount and checkbox choices survive draft reload and finalize correctly at ${width}px`);
+        }
         console.log(`PASS: keyboard-only ${type} creation at ${width}px took ${Math.round(elapsed)}ms and survives reopening`);
       }
     }
