@@ -172,7 +172,7 @@ async fn enabling_tasks_only_inherits_rates_used_by_configured_projects(pool: Pg
                 .await
                 .unwrap();
                 sqlx::query!(
-                    "UPDATE tasks SET default_rate_cents = $2 WHERE id = $1",
+                    "UPDATE tasks SET default_rate_cents = $2, default_rate_currency = 'EUR' WHERE id = $1",
                     ids.task_id,
                     default_rate
                 )
@@ -225,7 +225,7 @@ async fn enabling_tasks_rejects_incompatible_catalog_currency(pool: PgPool) {
     .await
     .unwrap();
     sqlx::query!(
-        "UPDATE tasks SET default_rate_cents = 8000 WHERE id = $1",
+        "UPDATE tasks SET default_rate_cents = 8000, default_rate_currency = 'EUR' WHERE id = $1",
         ids.task_id
     )
     .execute(&pool)
@@ -258,6 +258,55 @@ async fn enabling_tasks_rejects_incompatible_catalog_currency(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
+async fn unknown_catalog_currency_requires_explicit_configured_rates_but_preserves_legacy(
+    pool: PgPool,
+) {
+    for rate in [0_i64, 8000] {
+        for mode in [None, Some("task"), Some("person")] {
+            let ids = seed(&pool, OrgRole::Admin).await;
+            sqlx::query!(
+                "UPDATE tasks SET default_rate_cents = $2 WHERE id = $1",
+                ids.task_id,
+                rate
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            if let Some(mode) = mode {
+                sqlx::query!(
+                    "INSERT INTO project_settings (id,org_id,project_id,creator_id,rate_mode) VALUES ($1,$2,$3,$4,$5)",
+                    Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id, mode,
+                ).execute(&pool).await.unwrap();
+            }
+            let mut tx = pool.begin().await.unwrap();
+            let result =
+                enable_project_task(&mut tx, ids.org_id, ids.project_id, ids.task_id, None).await;
+            if mode == Some("task") {
+                let error = result.unwrap_err();
+                assert!(
+                    error
+                        .to_string()
+                        .contains("currency is unknown or incompatible"),
+                    "{error}"
+                );
+            } else {
+                result.unwrap();
+                let stored = sqlx::query_scalar!(
+                    "SELECT rate_cents FROM project_tasks WHERE project_id = $1 AND task_id = $2",
+                    ids.project_id,
+                    ids.task_id,
+                )
+                .fetch_one(&mut *tx)
+                .await
+                .unwrap();
+                assert_eq!(stored, if mode.is_none() { Some(rate) } else { None });
+            }
+            tx.rollback().await.unwrap();
+        }
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn enabling_tasks_accepts_exact_project_currency_rates_and_preserves_existing_links(
     pool: PgPool,
 ) {
@@ -275,7 +324,7 @@ async fn enabling_tasks_accepts_exact_project_currency_rates_and_preserves_exist
         .await
         .unwrap();
         sqlx::query!(
-            "UPDATE tasks SET default_rate_cents = 8000 WHERE id = $1",
+            "UPDATE tasks SET default_rate_cents = 8000, default_rate_currency = 'EUR' WHERE id = $1",
             ids.task_id
         )
         .execute(&pool)

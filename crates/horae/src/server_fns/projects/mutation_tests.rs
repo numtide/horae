@@ -683,6 +683,37 @@ mod task {
     use super::*;
 
     #[sqlx::test(migrations = "./migrations")]
+    async fn rate_edits_set_currency_without_relabelling_renames_or_noops(pool: PgPool) {
+        let ids = seed(&pool, OrgRole::Admin).await;
+        sqlx::query!(
+            "UPDATE tasks SET default_rate_cents = 8000 WHERE id = $1",
+            ids.task_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        for (name, rate, currency) in [
+            ("Renamed", Some(8000), None),
+            ("Renamed", Some(8000), None),
+            ("Renamed", Some(0), Some("EUR")),
+            ("Again", Some(0), Some("EUR")),
+            ("Again", None, None),
+        ] {
+            update_task_record(&pool, ids.org_id, ids.task_id, name, true, rate)
+                .await
+                .unwrap();
+            let stored = sqlx::query_scalar!(
+                "SELECT default_rate_currency FROM tasks WHERE id = $1",
+                ids.task_id
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+            assert_eq!(stored.as_deref(), currency);
+        }
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
     async fn each_detail_field_changes_once_and_preserves_inactive_status(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Admin).await;
         let (mut expected, _) = set_task_active_record(&pool, ids.org_id, ids.task_id, false)

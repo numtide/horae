@@ -888,7 +888,11 @@ async fn update_task_record(
     let task = sqlx::query_as!(
         Task,
         "UPDATE tasks
-            SET name = $3, billable_default = $4, default_rate_cents = $5
+            SET name = $3, billable_default = $4, default_rate_cents = $5,
+                default_rate_currency = CASE
+                  WHEN default_rate_cents IS NOT DISTINCT FROM $5 THEN default_rate_currency
+                  WHEN $5::bigint IS NULL THEN NULL
+                  ELSE (SELECT upper(btrim(default_currency)) FROM organizations WHERE id = $2) END
           WHERE id = $1 AND org_id = $2
             AND (name, billable_default, default_rate_cents) IS DISTINCT FROM ($3, $4, $5)
          RETURNING id, org_id, name, billable_default, default_rate_cents, active",
@@ -1023,7 +1027,7 @@ async fn enable_project_task(
     // Preserve legacy catalog inheritance, including non-billable projects,
     // while accepting explicit overrides only where billing uses them.
     let task = sqlx::query!(
-        r#"SELECT t.billable_default, p.currency, o.default_currency AS organization_currency,
+        r#"SELECT t.billable_default, p.currency, t.default_rate_currency,
                 (ps.project_id IS NOT NULL) AS "configured!",
                 (p.project_type <> 'non_billable' AND (ps.project_id IS NULL
                   OR (p.project_type = 'time_and_materials' AND ps.rate_mode = 'task'))) AS "uses_task_rates!",
@@ -1073,12 +1077,12 @@ async fn enable_project_task(
         if task.configured
             && task.default_rate_cents.is_some()
             && !task
-                .currency
-                .trim()
-                .eq_ignore_ascii_case(task.organization_currency.trim())
+                .default_rate_currency
+                .as_deref()
+                .is_some_and(|source| source.eq_ignore_ascii_case(task.currency.trim()))
         {
             return Err(conflict(
-                "Task rate: enter an explicit rate in the project currency",
+                "Task rate: currency is unknown or incompatible; enter an explicit rate in the project currency",
             ));
         }
         task.default_rate_cents

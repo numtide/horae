@@ -129,8 +129,8 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
         (TASK_REVIEW_ID, "Code Review", true, 11000i64),
     ] {
         sqlx::query!(
-            "INSERT INTO tasks (id, org_id, name, billable_default, default_rate_cents)
-             VALUES ($1, $2, $3, $4, $5)",
+            "INSERT INTO tasks (id, org_id, name, billable_default, default_rate_cents, default_rate_currency)
+             VALUES ($1, $2, $3, $4, $5, 'EUR')",
             id,
             ORG_ID,
             name,

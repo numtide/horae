@@ -8,9 +8,10 @@ const database = new URL(process.env.DATABASE_URL);
 assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port === '8093');
 assert.equal(database.pathname, '/horae');
 assert.ok(database.searchParams.get('host')?.startsWith('/tmp/'));
-const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v', 'ON_ERROR_STOP=1', '-At', '-c', query], { encoding: 'utf8' }).trim();
-const task = JSON.parse(sql("SELECT row_to_json(t) FROM (SELECT t.id, t.default_rate_cents, o.default_currency FROM tasks t JOIN organizations o ON o.id = t.org_id WHERE t.name = 'Development' AND o.name = 'Demo Org') t"));
+const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v', 'ON_ERROR_STOP=1', '-qAt', '-c', query], { encoding: 'utf8' }).trim();
+const task = JSON.parse(sql("SELECT row_to_json(t) FROM (SELECT t.id, t.default_rate_cents, t.default_rate_currency, o.default_currency FROM tasks t JOIN organizations o ON o.id = t.org_id WHERE t.name = 'Development' AND o.name = 'Demo Org') t"));
 assert.equal(task.default_currency, 'EUR');
+assert.equal(task.default_rate_currency, 'EUR');
 assert.ok(task.default_rate_cents > 0);
 
 (async () => {
@@ -24,7 +25,7 @@ assert.ok(task.default_rate_cents > 0);
   page.on('requestfinished', request => pending.delete(request));
   page.on('requestfailed', request => pending.delete(request));
   const readsFinished = () => expect.poll(() => pending.size).toBe(0);
-  const createProject = async (mode, currency = 'USD', budgetScope) => {
+  const createProject = async (mode, currency = 'USD', budgetScope, catalog) => {
     await readsFinished();
     await page.goto(`${base}/projects/new`);
     const screen = page.locator('.np-page');
@@ -46,7 +47,22 @@ assert.ok(task.default_rate_cents > 0);
       await screen.locator('#np-budget-mode').click();
       await page.getByRole('listbox', { name: 'Choose Budget', exact: true }).getByRole('option', { name: `Hours per ${budgetScope}`, exact: true }).click();
     }
-    await expect(screen.locator('header').getByRole('status')).toContainText('Draft saved at');
+    if (catalog) {
+      await screen.getByRole('button', { name: 'Development', exact: true }).click();
+      const rate = screen.getByRole('textbox', { name: `Hourly rate for Development (${currency})`, exact: true });
+      await expect(rate).toHaveAttribute('placeholder', catalog.placeholder);
+      if (catalog.override !== undefined) {
+        await screen.getByRole('button', { name: 'Save project', exact: true }).click();
+        await expect(screen.getByRole('alert')).toContainText('currency is unknown or incompatible');
+        await expect(rate).toBeFocused();
+        await expect(rate).toHaveValue('');
+        await expect(rate).toHaveAttribute('aria-invalid', 'true');
+        await rate.fill(catalog.override);
+      }
+    }
+    await expect(screen.locator('header').getByRole('status')).toContainText(
+      catalog?.override !== undefined ? 'Changes need attention' : 'Draft saved at'
+    );
     await screen.getByRole('button', { name: 'Save project', exact: true }).click();
     await expect(page).toHaveURL(/\/projects\/[0-9a-f-]{36}$/);
     await expect(page.getByRole('region', { name: 'Project details', exact: true })).toContainText(`Task rate browser ${mode} ${currency}`);
@@ -201,7 +217,14 @@ assert.ok(task.default_rate_cents > 0);
       assert.equal(sql(`SELECT budget_scope FROM project_settings WHERE project_id = '${id}'`), scope);
       assert.equal(sql(`SELECT budget_minutes FROM projects WHERE id = '${id}'`), '');
     }
-    await openEditor('01950000-0000-7000-8000-000000000005');
+    // Invoice preparation configures the seeded projects. Give this legacy
+    // assertion its own project instead of depending on another suite's state.
+    const legacyId = '01960000-0000-7000-8000-000000000001';
+    assert.equal(sql(`INSERT INTO projects (id, org_id, client_id, name, currency)
+      SELECT '${legacyId}', c.org_id, c.id, 'Legacy editor fixture', c.currency
+      FROM clients c JOIN tasks t ON t.org_id = c.org_id
+      WHERE t.id = '${task.id}' AND c.active ORDER BY c.id LIMIT 1 RETURNING id`), legacyId);
+    await openEditor(legacyId);
     for (const label of ['Name', 'Type', 'Currency', 'Hourly rate', 'Budget']) await expect(page.getByLabel(label, { exact: true })).toBeEnabled();
     await expect(page.getByText("Leave blank to use the user's default. Task and assignment overrides take priority. Zero is a free rate.", { exact: true })).toBeVisible();
     let releaseSwitch;
@@ -222,9 +245,19 @@ assert.ok(task.default_rate_cents > 0);
     await page.getByRole('button', { name: 'Enable task', exact: true }).click();
     await expect(page.getByLabel('Enable an existing task', { exact: true })).toHaveValue('');
     assert.equal(storedRate(id), String(task.default_rate_cents));
+    for (const [source, amount, currency, placeholder, override, expected] of [
+      ['USD', 8000, 'USD', '80.00', undefined, '8000'],
+      [null, 0, 'EUR', 'Enter rate', '0', '0'],
+      ['USD', 8000, 'EUR', 'Enter rate', '8.25', '825'],
+    ]) {
+      sql(`UPDATE tasks SET default_rate_cents = ${amount}, default_rate_currency = ${source === null ? 'NULL' : `'${source}'`} WHERE id = '${task.id}'`);
+      const project = await createProject('Task', currency, undefined, { placeholder, override });
+      assert.equal(storedRate(project), expected);
+    }
+    sql(`UPDATE tasks SET default_rate_cents = ${task.default_rate_cents}, default_rate_currency = '${task.default_rate_currency}' WHERE id = '${task.id}'`);
     await readsFinished();
     assert.deepEqual(errors, []);
-    console.log('PASS: New Project task rates and editor capabilities preserve configured/legacy modes, scoped budgets, exact/zero values and keyboard recovery across three widths');
+    console.log('PASS: New Project task rates and editor capabilities preserve configured/legacy modes, source currencies, unknown/zero recovery, scoped budgets and keyboard recovery across three widths');
   } catch (error) {
     console.error({ url: page.url(), errors, page: await page.locator('body').ariaSnapshot() });
     throw error;

@@ -17,7 +17,7 @@ pub(super) async fn load_selected_catalog(
     let role = lock_creation_actor(&mut tx, actor_id, org_id).await?;
     let tasks = sqlx::query_as!(
         CreationTask,
-        "SELECT id, name, billable_default as billable, default_rate_cents FROM tasks
+        "SELECT id, name, billable_default as billable, default_rate_cents, default_rate_currency FROM tasks
          WHERE org_id = $1 AND active AND id = ANY($2) ORDER BY lower(name), id",
         org_id,
         task_ids,
@@ -93,7 +93,7 @@ pub(super) async fn load_creation_options(
     .map_err(storage_error)?;
     let mut tasks = sqlx::query_as!(
         CreationTask,
-        "SELECT id, name, billable_default as billable, default_rate_cents FROM tasks
+        "SELECT id, name, billable_default as billable, default_rate_cents, default_rate_currency FROM tasks
          WHERE org_id = $1 AND active AND strpos(lower(name), lower($2)) > 0
          ORDER BY lower(name), id LIMIT 51 OFFSET $3",
         org_id,

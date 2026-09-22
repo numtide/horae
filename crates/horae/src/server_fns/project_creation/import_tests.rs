@@ -5,11 +5,155 @@ use crate::models::project_creation::{
     ProjectTaskInput, SecondTaxInput, TaskAccess, TaskSource,
 };
 use crate::server_fns::test_seed::seed;
+use dioxus::prelude::ServerFnError;
 use horae_core::importers::harvest::types::{ImportMode, SourceKind, SourceRow};
 use horae_core::project::{BudgetMode, RateMode};
 use horae_core::types::{OrgRole, ProjectType};
 use sqlx::PgPool;
 use uuid::Uuid;
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn imported_catalog_rate_cannot_be_relabelled_as_workspace_currency(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Admin).await;
+    let csv = format!(
+        "Date,Client,Project,Task,Email,Hours,Billable?,Billable Rate,Currency\n\
+         2026-09-07,Foreign client,Foreign project,Imported task,{}@test.com,1,Yes,80,USD\n",
+        ids.user_id,
+    );
+    let report = import_body(
+        &pool,
+        ids.org_id,
+        "EUR",
+        axum::body::Body::from(csv),
+        ImportMode::Commit,
+    )
+    .await
+    .unwrap();
+    assert!(report.row_errors.is_empty(), "{:?}", report.row_errors);
+    let task = sqlx::query!(
+        "SELECT id, default_rate_cents FROM tasks WHERE org_id = $1 AND name = 'Imported task'",
+        ids.org_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(task.default_rate_cents, Some(8000));
+    let form = ProjectForm {
+        client_id: Some(ids.client_id),
+        name: "Euro billing".into(),
+        rate_mode: RateMode::Task,
+        tasks: vec![ProjectTaskInput {
+            id: Uuid::now_v7(),
+            source: TaskSource::Existing { task_id: task.id },
+            billable: true,
+            rate: String::new(),
+            budget: String::new(),
+            access: TaskAccess::Everyone,
+        }],
+        ..Default::default()
+    };
+    let draft = Uuid::now_v7();
+    save_draft_record(&pool, ids.user_id, ids.org_id, draft, 0, &form)
+        .await
+        .unwrap();
+    let error = finalize_draft_record(&pool, ids.user_id, ids.org_id, draft, 1, &form, false)
+        .await
+        .expect_err("USD catalog rate must not become an EUR project rate");
+    assert!(error.to_string().contains("explicit rate"), "{error}");
+    let mut corrected = form.clone();
+    corrected.tasks[0].rate = "0".into();
+    let project =
+        finalize_draft_record(&pool, ids.user_id, ids.org_id, draft, 1, &corrected, false)
+            .await
+            .unwrap();
+    let rate = sqlx::query_scalar!(
+        "SELECT rate_cents FROM project_tasks WHERE project_id = $1 AND task_id = $2",
+        project,
+        task.id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(rate, Some(0));
+
+    // The source USD amount is compatible with USD even in an EUR workspace.
+    let mut compatible = form;
+    compatible.currency = Some("USD".into());
+    compatible.tasks[0].source = TaskSource::New {
+        name: " imported task ".into(),
+    };
+    let draft = Uuid::now_v7();
+    save_draft_record(&pool, ids.user_id, ids.org_id, draft, 0, &compatible)
+        .await
+        .unwrap();
+    let project =
+        finalize_draft_record(&pool, ids.user_id, ids.org_id, draft, 1, &compatible, false)
+            .await
+            .unwrap();
+    let rate = sqlx::query_scalar!(
+        "SELECT rate_cents FROM project_tasks WHERE project_id = $1 AND task_id = $2",
+        project,
+        task.id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(rate, Some(8000));
+
+    // Old catalog rates and API catalog rates can have no known denomination.
+    // Even zero requires confirmation; guessing would establish a false unit.
+    sqlx::query!(
+        "UPDATE tasks SET default_rate_cents = 0, default_rate_currency = NULL WHERE id = $1",
+        task.id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let draft = Uuid::now_v7();
+    save_draft_record(&pool, ids.user_id, ids.org_id, draft, 0, &compatible)
+        .await
+        .unwrap();
+    for source in [
+        TaskSource::Existing { task_id: task.id },
+        TaskSource::New {
+            name: " imported task ".into(),
+        },
+    ] {
+        compatible.tasks[0].source = source;
+        let error =
+            finalize_draft_record(&pool, ids.user_id, ids.org_id, draft, 1, &compatible, false)
+                .await
+                .unwrap_err();
+        let ServerFnError::ServerError {
+            details: Some(details),
+            ..
+        } = error
+        else {
+            panic!("expected a field-specific rejection");
+        };
+        assert_eq!(
+            details["field"],
+            serde_json::to_value(crate::models::project_creation::ProjectFormField::TaskRate(
+                compatible.tasks[0].id
+            ))
+            .unwrap()
+        );
+    }
+    let rate = sqlx::query_scalar!(
+        "SELECT rate_cents FROM project_tasks WHERE project_id = $1 AND task_id = $2",
+        project,
+        task.id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        rate,
+        Some(8000),
+        "catalog edits cannot change the project snapshot"
+    );
+}
 
 async fn configuration(pool: &PgPool, org: Uuid) -> serde_json::Value {
     sqlx::query_scalar!(

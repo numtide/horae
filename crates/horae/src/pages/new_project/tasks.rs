@@ -126,7 +126,7 @@ pub(super) fn Tasks(
             if form.read().tasks.is_empty() { p { class: "text-sm text-subtle px-5", "No tasks selected yet." } }
             div { class: "px-5 py-3",
                 if form.read().project_type == ProjectType::TimeAndMaterials && form.read().rate_mode == RateMode::Task {
-                    p { class: "form-hint mt-0", "Blank rates inherit the catalog rate, then the client's default. Rates are not converted between currencies." }
+                    p { class: "form-hint mt-0", "Blank rates inherit a compatible catalog rate, then the client's default. Unknown or different catalog currencies require an explicit rate. Rates are not converted." }
                 }
                 if let Some(message) = error() { p { class: "text-sm text-danger", role: "alert", "{message}" } }
                 div { class: "flex flex-wrap items-center gap-3", aria_busy: pending,
@@ -217,6 +217,18 @@ fn TaskRow(
         })
         .unwrap_or_else(|| "project currency".into());
     let billable_project = form.read().project_type != ProjectType::NonBillable;
+    let rate_placeholder = match catalog
+        .as_ref()
+        .and_then(|task| task.default_rate_cents.map(|amount| (task, amount)))
+    {
+        Some((task, amount))
+            if task.default_rate_currency.as_deref() == Some(currency.as_str()) =>
+        {
+            format_cents_plain(amount)
+        }
+        Some(_) => "Enter rate".into(),
+        None => "Inherit".into(),
+    };
     rsx! {
         div { class: "np-assignment-row grid items-center gap-4 px-5 py-3 border-b border-light",
             Checkbox { checked: task.billable && billable_project, compact: true, disabled: !billable_project, label: "{name} is billable", onclick: move |_| { if let Some(task) = form.write().tasks.iter_mut().find(|task| task.id == id) { task.billable = !task.billable; } } }
@@ -227,7 +239,7 @@ fn TaskRow(
                         "rate"
                         Input { class: "w-30 max-w-full font-mono text-right", id: "np-task-rate-{id}", label: "Hourly rate for {name} ({currency})", value: task.rate,
                             error_id: (invalid_field == Some(ProjectFormField::TaskRate(id))).then(|| format!("np-task-error-{id}")),
-                            placeholder: if options.read().organization_currency == currency { catalog.as_ref().and_then(|task| task.default_rate_cents).map(format_cents_plain).unwrap_or_else(|| "Inherit".into()) } else { "Inherit".into() },
+                            placeholder: rate_placeholder,
                             oninput: move |event: FormEvent| { if let Some(task) = form.write().tasks.iter_mut().find(|task| task.id == id) { task.rate = event.value(); } }
                         }
                         "{currency}/h"

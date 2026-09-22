@@ -584,6 +584,7 @@ async fn tasks_and_team_restore_scoped_settings_without_exposing_costs_to_manage
         name: "Release preparation".into(),
         billable: true,
         default_rate_cents: Some(8000),
+        default_rate_currency: Some("EUR".into()),
     });
     probe.options.people.push(CreationPerson {
         id: user_id,
@@ -619,6 +620,49 @@ async fn tasks_and_team_restore_scoped_settings_without_exposing_costs_to_manage
 }
 
 #[tokio::test]
+async fn task_rate_placeholders_use_source_currency_not_workspace_currency() {
+    use horae_core::project::RateMode;
+    use project_creation::{CreationTask, ProjectTaskInput, TaskAccess, TaskSource};
+    let task_id = Uuid::now_v7();
+    for (source_currency, amount, placeholder) in [
+        (Some("USD"), Some(8000), "80.00"),
+        (Some("EUR"), Some(8000), "Enter rate"),
+        (None, Some(0), "Enter rate"),
+        (None, None, "Inherit"),
+    ] {
+        let mut probe = with_form(ProjectForm {
+            currency: Some("USD".into()),
+            rate_mode: RateMode::Task,
+            tasks: vec![ProjectTaskInput {
+                id: Uuid::now_v7(),
+                source: TaskSource::Existing { task_id },
+                billable: true,
+                rate: "0".into(),
+                budget: String::new(),
+                access: TaskAccess::Everyone,
+            }],
+            ..Default::default()
+        });
+        probe.options.organization_currency = "EUR".into();
+        probe.options.tasks.push(CreationTask {
+            id: task_id,
+            name: "Imported task".into(),
+            billable: true,
+            default_rate_cents: amount,
+            default_rate_currency: source_currency.map(String::from),
+        });
+        let html = render(probe.clone());
+        assert!(
+            html.contains(&format!("placeholder=\"{placeholder}\"")),
+            "{html}"
+        );
+        assert!(html.contains("Hourly rate for Imported task (USD)"));
+        assert!(html.contains("value=\"0\""));
+        assert_eq!(probe.writes.get(), 0);
+    }
+}
+
+#[tokio::test]
 async fn recovered_tasks_and_people_outside_the_catalog_page_keep_their_identity() {
     use project_creation::{
         CreationPerson, CreationTask, ProjectMemberInput, ProjectTaskInput, TaskAccess, TaskSource,
@@ -650,6 +694,7 @@ async fn recovered_tasks_and_people_outside_the_catalog_page_keep_their_identity
         name: "Selected remote task".into(),
         billable: true,
         default_rate_cents: None,
+        default_rate_currency: None,
     });
     probe.selected_people.push(CreationPerson {
         id: user_id,

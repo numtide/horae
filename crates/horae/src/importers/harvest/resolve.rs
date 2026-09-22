@@ -479,16 +479,25 @@ pub async fn resolve_task(
         return Err(RowFailure::new("task name is empty"));
     }
     let default_rate_cents = rate_cents(row.billable_rate)?;
+    let rate_currency = row
+        .rate_currency
+        .map(|value| value.trim().to_ascii_uppercase())
+        .filter(|value| {
+            default_rate_cents.is_some()
+                && value.len() == 3
+                && value.bytes().all(|byte| byte.is_ascii_uppercase())
+        });
     let id = Uuid::now_v7();
     sqlx::query!(
-        "INSERT INTO tasks (id, org_id, name, billable_default, default_rate_cents, active)
-         VALUES ($1, $2, $3, $4, $5, $6)",
+        "INSERT INTO tasks (id, org_id, name, billable_default, default_rate_cents, active, default_rate_currency)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)",
         id,
         org.org_id,
         name,
         row.task_billable_default,
         default_rate_cents,
         row.task_active,
+        rate_currency,
     )
     .execute(&mut *conn)
     .await?;

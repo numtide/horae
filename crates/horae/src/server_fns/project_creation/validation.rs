@@ -97,7 +97,7 @@ fn bounded_text(
     Ok(())
 }
 
-fn with_field(mut error: ServerFnError, field: ProjectFormField) -> ServerFnError {
+pub(super) fn with_field(mut error: ServerFnError, field: ProjectFormField) -> ServerFnError {
     if let ServerFnError::ServerError {
         code: BAD_REQUEST,
         details,

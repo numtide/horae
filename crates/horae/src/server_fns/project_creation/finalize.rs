@@ -1,6 +1,6 @@
-use super::validation::{optional_amount, optional_hours};
+use super::validation::{optional_amount, optional_hours, with_field};
 use super::*;
-use crate::models::project_creation::{ReportVisibility, TaskSource};
+use crate::models::project_creation::{ProjectFormField, ReportVisibility, TaskSource};
 use horae_core::project::{BudgetMode, FeeSchedule, MonthlyFeeDay, RateMode};
 use std::collections::HashSet;
 use uuid::Uuid;
@@ -133,7 +133,7 @@ pub(super) async fn finalize_draft_record(
         .map_err(storage_error)?;
     }
     save_members(&mut tx, org_id, project_id, form, currency == org_currency).await?;
-    save_tasks(&mut tx, org_id, project_id, form, currency == org_currency).await?;
+    save_tasks(&mut tx, org_id, project_id, form, currency).await?;
 
     let event = crate::plugin::AppEvent::ProjectCreated {
         occurred_at: project.created_at,
@@ -218,24 +218,24 @@ async fn save_tasks(
     org_id: Uuid,
     project_id: Uuid,
     form: &ProjectForm,
-    uses_org_currency: bool,
+    currency: &str,
 ) -> Result<(), ServerFnError> {
     let task_rates =
         form.project_type == ProjectType::TimeAndMaterials && form.rate_mode == RateMode::Task;
     let mut attached = HashSet::new();
     for task in &form.tasks {
-        let (task_id, default_rate) = match &task.source {
+        let (task_id, default_rate, rate_currency) = match &task.source {
             TaskSource::Existing { task_id } => {
                 let row = sqlx::query!(
-                    "SELECT id, default_rate_cents FROM tasks WHERE id = $1 AND org_id = $2 AND active FOR SHARE",
+                    "SELECT id, default_rate_cents, default_rate_currency FROM tasks WHERE id = $1 AND org_id = $2 AND active FOR SHARE",
                     task_id, org_id,
                 ).fetch_optional(&mut **tx).await.map_err(storage_error)?
                     .ok_or_else(|| not_found("Select active tasks in this organization"))?;
-                (row.id, row.default_rate_cents)
+                (row.id, row.default_rate_cents, row.default_rate_currency)
             }
             TaskSource::New { name } => {
                 let existing = sqlx::query!(
-                    "SELECT id, active, default_rate_cents FROM tasks WHERE org_id = $1 AND lower(btrim(name)) = lower(btrim($2)) ORDER BY id LIMIT 1 FOR SHARE",
+                    "SELECT id, active, default_rate_cents, default_rate_currency FROM tasks WHERE org_id = $1 AND lower(btrim(name)) = lower(btrim($2)) ORDER BY id LIMIT 1 FOR SHARE",
                     org_id, name,
                 ).fetch_optional(&mut **tx).await.map_err(storage_error)?;
                 if let Some(row) = existing {
@@ -244,7 +244,7 @@ async fn save_tasks(
                             "A task with this name is archived. Reactivate it or choose another name.",
                         ));
                     }
-                    (row.id, row.default_rate_cents)
+                    (row.id, row.default_rate_cents, row.default_rate_currency)
                 } else {
                     let id = Uuid::now_v7();
                     sqlx::query!(
@@ -257,7 +257,7 @@ async fn save_tasks(
                     .execute(&mut **tx)
                     .await
                     .map_err(storage_error)?;
-                    (id, None)
+                    (id, None, None)
                 }
             }
         };
@@ -266,10 +266,18 @@ async fn save_tasks(
         }
         let rate = if task_rates {
             let explicit = optional_amount(&task.rate, "Task rate")?;
-            if explicit.is_none() && default_rate.is_some() && !uses_org_currency {
-                return Err(err(
-                    BAD_REQUEST,
-                    "Task rate: enter an explicit rate in the project currency",
+            if explicit.is_none()
+                && default_rate.is_some()
+                && !rate_currency
+                    .as_deref()
+                    .is_some_and(|source| source.eq_ignore_ascii_case(currency.trim()))
+            {
+                return Err(with_field(
+                    err(
+                        BAD_REQUEST,
+                        "Task rate: currency is unknown or incompatible; enter an explicit rate in the project currency",
+                    ),
+                    ProjectFormField::TaskRate(task.id),
                 ));
             }
             explicit.or(default_rate)
