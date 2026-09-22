@@ -24,7 +24,13 @@
     const trigger = triggerFor(menu);
     const scrollTop = menu.scrollTop;
     const anchor = trigger.getBoundingClientRect();
-    anchors.set(menu, anchor);
+    const scrollSizes = new Map();
+    for (let parent = trigger.parentElement; parent; parent = parent.parentElement)
+      scrollSizes.set(parent, {
+        width: parent.scrollWidth, height: parent.scrollHeight,
+        left: parent.scrollLeft, top: parent.scrollTop,
+      });
+    anchors.set(menu, { rect: anchor, scrollSizes });
     const gap = 4, edge = 8;
     // Measure before opening without painting or scrolling the containing table.
     menu.style.display = 'block';
@@ -152,8 +158,18 @@
     for (const menu of document.querySelectorAll(`${selector}:popover-open`)) {
       if (menu.contains(event.target)) continue;
       const previous = anchors.get(menu), current = triggerFor(menu).getBoundingClientRect();
+      const scroller = event.target === document ? document.scrollingElement : event.target;
+      const size = previous.scrollSizes.get(scroller);
+      // Font/data reflow can clamp a scroll offset without a deliberate scroll.
+      // Only retain it for that exact clamp, not a coincident deliberate scroll.
+      if (size && (size.width > scroller.scrollWidth || size.height > scroller.scrollHeight)
+        && scroller.scrollLeft === Math.min(size.left, scroller.scrollWidth - scroller.clientWidth)
+        && scroller.scrollTop === Math.min(size.top, scroller.scrollHeight - scroller.clientHeight)) {
+        position(menu);
+        continue;
+      }
       // A scroll that revealed the trigger may still be queued when it opens.
-      if (previous.x !== current.x || previous.y !== current.y)
+      if (previous.rect.x !== current.x || previous.rect.y !== current.y)
         close(menu, menu.contains(document.activeElement));
     }
   }, true);

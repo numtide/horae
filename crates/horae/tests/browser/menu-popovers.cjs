@@ -38,6 +38,47 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin' }).click();
     await page.waitForURL(`${base}/`);
+    await check('content reflow preserves an open menu while deliberate scrolling still dismisses it', async () => {
+      await visit('/projects', 'list_projects');
+      await page.evaluate(() => document.fonts.ready);
+      const row = page.locator('.proj-row').first();
+      const trigger = row.getByRole('button', { name: 'Actions' });
+      const menu = row.getByRole('menu');
+      const scroller = page.locator('.proj-scroll');
+      // Simulate the shrinking scroll range observed during a late font swap,
+      // independently of external font downloads and their timing.
+      await page.locator('.proj-grid').evaluate(el => { el.style.paddingRight = '64px'; });
+      await scroller.evaluate(el => { el.scrollLeft = el.scrollWidth; });
+      await trigger.click();
+      await expect(menu.getByRole('menuitem', { name: 'Edit', exact: true })).toBeFocused();
+      const before = await scroller.evaluate(el => ({ width: el.scrollWidth, left: el.scrollLeft }));
+      await page.locator('.proj-grid').evaluate(el => { el.style.paddingRight = '0px'; });
+      await expect.poll(() => scroller.evaluate(el => el.scrollWidth)).toBeLessThan(before.width);
+      await expect.poll(() => scroller.evaluate(el => el.scrollLeft)).toBeLessThan(before.left);
+      await expect(menu).toBeVisible();
+      await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+      const geometry = await visibleItems(menu);
+      assert.ok(geometry.inside && geometry.items.every(item => item.hit), JSON.stringify(geometry));
+      await expect.poll(() => menu.evaluate(el => {
+        const anchor = document.getElementById(el.getAttribute('aria-labelledby')).getBoundingClientRect();
+        return Math.abs(anchor.right - el.getBoundingClientRect().right);
+      })).toBeLessThan(1);
+      await expect(menu.getByRole('menuitem', { name: 'Edit', exact: true })).toBeFocused();
+      await scroller.evaluate(el => { el.scrollLeft -= 40; });
+      await expect(menu).toBeHidden();
+      await expect(trigger).toBeFocused();
+      await page.locator('.proj-grid').evaluate(el => { el.style.paddingRight = '64px'; });
+      await scroller.evaluate(el => { el.scrollLeft = el.scrollWidth; });
+      await trigger.click();
+      await expect(menu.getByRole('menuitem', { name: 'Edit', exact: true })).toBeFocused();
+      // A genuine scroll in the same frame as reflow must still dismiss.
+      await scroller.evaluate(el => {
+        el.querySelector('.proj-grid').style.paddingRight = '0px';
+        el.scrollLeft -= 40;
+      });
+      await expect(menu).toBeHidden();
+      await expect(trigger).toBeFocused();
+    });
     await check('first and last project-row actions are initially visible and clickable', async () => {
       for (const [width, height] of [[320, 1000], [390, 320], [1440, 800]]) {
         await page.setViewportSize({ width, height });
