@@ -148,6 +148,14 @@
   }, true);
 
   document.addEventListener('focusin', event => {
+    const editor = event.target.closest('.np-scroll');
+    // Native focus scrolling can expose only the centre of an overlaid radio
+    // card. Keep its whole control above this editor's persistent action bar.
+    if (editor && !event.target.closest('[popover]')) {
+      const control = event.target.getBoundingClientRect(), viewport = editor.getBoundingClientRect();
+      if (control.top < viewport.top || control.bottom > viewport.bottom)
+        event.target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
     for (const panel of document.querySelectorAll(`${selector}:popover-open`)) {
       if ((isCalendar(panel) || isSelect(panel)) && !panel.contains(event.target) && event.target !== triggerFor(panel)) close(panel);
     }
