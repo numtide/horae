@@ -84,7 +84,8 @@
 - [x] T037 [US4] Verify private tables/functions stay outside plugin grants and payloads with tests in `crates/horae/src/plugin/database.rs` and `crates/horae/src/plugin/event.rs`.
   - A real restricted database role has no default access to all 14 new configuration tables/views or the rate resolver; intentionally granting each is rejected by the existing validator. Exact payload checks cover memberships and the actual transactional project-created outbox event from a form containing private notes/costs. No plugin allowlist expansion.
 - [x] T038 [US4] Build task/team selectors, billable all/none, restrictions dialog, Add everyone, project leads, admin-only cost/notes and report visibility in `crates/horae/src/pages/new_project.rs` (or sibling section modules).
-- [ ] T039 [US4] Exercise role matrix via browser/direct server responses and existing approval/import regressions in `crates/horae/tests/browser/new-project.cjs` and `specs/011-new-project-screen/quickstart.md`.
+- [x] T039 [US4] Exercise role matrix via browser/direct server responses and existing approval/import regressions in `crates/horae/tests/browser/new-project-permissions.cjs` and `specs/011-new-project-screen/quickstart.md`.
+  - Real sessions verify administrator, manager, project lead/admin and assigned-member visibility in the rendered creation/detail/list screens and actual server responses. Coverage includes private-field omission, draft ownership, cross-organization references, role changes, revoked assignments, own-history identity, exports/reports, inactive/anonymous rejection and successful manager creation without private overrides. All 736 server-bin tests (11 pre-existing ignored) and 36 integration tests pass, including approval/import regressions. The independent browser suite is included last in the standard runner; transport resilience and final unfiltered acceptance remain separate gates.
 
 ## Phase 7: US5 — Invoice defaults (P2)
 
