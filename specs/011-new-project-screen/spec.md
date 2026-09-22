@@ -10,6 +10,8 @@
 
 The reference is `design/project/app/13_New Project.dc.html` from the September 21 handoff. This feature delivers its project-creation workflow, including the behavior behind the displayed controls. Prototype sample people, clients, amounts and saved timestamps are not product defaults. Existing projects and existing screens must retain their behavior.
 
+**Scope extension (2026-09-22)**: The user requested that Edit open the same designed editor with the existing project's values, that the old editor be removed, and that this ship in PR #207. US7 supersedes the original decision to retain the separate Projects edit form; it does not authorize rewriting historical financial records.
+
 ## User Scenarios & Testing
 
 ### User Story 1 - Create a usable project (Priority: P1)
@@ -108,6 +110,23 @@ The creator uses a screen faithful to the handoff inside the existing Horae shel
 1. **Given** keyboard or assistive-technology use, **When** selecting, removing, opening dialogs and submitting, **Then** controls have names, states, visible focus and understandable errors; dialogs restore focus on close.
 1. **Given** a failed initial load, empty catalog or pending submission, **When** the screen displays the state, **Then** it offers a useful retry/empty action and prevents duplicate submission.
 
+### User Story 7 - Edit in the same project editor (Priority: P1)
+
+An authorized manager or administrator edits an existing project using the same layout and controls as creation, populated from its actual saved settings.
+
+**Independent Test**: Open Edit for a configured project and an imported/legacy project, inspect all prefilled values, cancel without changes, save changes, reload and verify the same project identity and unchanged historical time/invoices.
+
+**Acceptance Scenarios**:
+
+1. Every project Edit action opens `/projects/:id/edit` in the shared editor; the old inline Projects form is absent. Direct navigation and reload work.
+1. Basic details, selected client/currency, type, billing/budgets, fee schedule, tags, task/team settings, visibility, authorized private fields and invoice defaults are loaded from operational records, not from a creation draft or prototype defaults.
+1. Editing does not create, consume or overwrite the user's New Project draft. Save changes updates the existing project atomically; Cancel leaves operational data unchanged. Unsaved navigation requires an explicit choice.
+1. Validation/network failures preserve entered values and offer recovery. A concurrent change cannot be silently overwritten; retrying an uncertain successful update neither duplicates associations/events nor reapplies an older edit after a later update.
+1. Existing projects without creation settings, including imported projects and retainers, preserve their actual billing semantics and currencies. Unsupported changes are explained, not silently converted or replaced with new-project defaults. Unchanged unavailable selections remain identifiable and do not prevent unrelated safe edits.
+1. Time entries, invoice lines, materialized fee identities and invoice snapshots remain intact. Removing referenced tasks/people or changing charged fee schedules is validated transactionally; rejection makes no partial changes. Existing association identities and project roles survive unrelated edits.
+1. Current organization/role authority is rechecked on load and save. Managers cannot receive or erase administrator-only notes/costs by saving a redacted form; cross-organization and inactive actors are denied.
+1. The shared editor remains accessible at 390/768/1440 and desktop 200% text. Creation, Projects selection/bulk actions and unrelated shared-screen styles retain their regression coverage.
+
 ### Edge Cases
 
 - Whitespace-only names; unknown currencies; negative, overflowing or over-precision amounts; percentage outside 0–100; custom terms outside 0–365 days; end before start.
@@ -143,6 +162,9 @@ The creator uses a screen faithful to the handoff inside the existing Horae shel
 - **FR-018**: Every selector, conditional panel, error, loading state, modal, draft state and action MUST work with keyboard navigation, accessible labels and visible focus. Errors MUST preserve input and identify the affected field.
 - **FR-019**: The screen MUST follow the handoff's content hierarchy, spacing, typography and responsive intent within the current shared shell; changes MUST preserve the appearance and behavior of existing screens.
 - **FR-020**: Suggestions and status text MUST derive from actual data. The form MUST NOT display prototype identities, rates, codes, saved timestamps or success messages as real workspace state.
+- **FR-021**: Creation and editing MUST share the designed form sections; all project Edit entry points MUST load the existing project's complete authorized configuration, and the obsolete inline editor and unused handlers MUST be removed.
+- **FR-022**: Editing MUST use explicit atomic updates to the same project, isolated from creation drafts, with conflict detection, safe uncertain-request retries and unsaved-navigation protection. Cancel MUST NOT persist edits.
+- **FR-023**: Editing MUST preserve existing legacy semantics, referenced entity identities, private fields outside the actor's authority and historical time/invoice sources. Guarded changes MUST have explicit user-facing explanations and server-side enforcement.
 
 ### Key Entities
 
@@ -165,10 +187,11 @@ The creator uses a screen faithful to the handoff inside the existing Horae shel
 - **SC-005**: For every billing/budget type, independently calculated fixtures exactly match reported spend, budget consumption and invoice components, with no changes to legacy fixtures.
 - **SC-006**: All creation flows can be completed at 390, 768 and 1440 pixel viewport widths and with keyboard alone; no focused control is obscured by the footer.
 - **SC-007**: Projects selection/actions, Clients, Timesheet, Invoices and shared navigation retain their existing regression checks after the new screen is introduced.
+- **SC-008**: Configured and legacy projects round-trip through the shared editor without unintended field changes, duplicate projects/events, silent concurrent overwrites, private-data loss or altered historical invoice/time records; the old edit form is no longer reachable or present in source.
 
 ## Assumptions
 
-- The complete creation workflow is in scope, not a cosmetic form with inert advanced settings. A general project-dashboard redesign, organization/auth redesign and migration of existing projects to new billing semantics are out of scope.
+- The complete creation workflow and unified editing workflow are in scope, not cosmetic forms with inert advanced settings. A general project-dashboard redesign, organization/auth redesign and automatic migration of existing projects to new billing semantics are out of scope.
 - Scheduled fees describe billing availability; invoice preparation and issuing remain explicit user actions. Creating a project does not automatically issue invoices or email clients.
 - Budget email uses an optionally configured self-hosted delivery service, not an assumed third-party account. Tests must use an isolated delivery stub and must not send messages to real users. A lost acknowledgement after acceptance may cause a duplicate delivery on retry; exactly-once email receipt is not promised.
 - One resumable current creation draft per creator is sufficient; explicit discard starts a new one. A client created explicitly in the client dialog remains a real client even if the project draft is discarded.

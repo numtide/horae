@@ -207,6 +207,29 @@ pub struct ProjectDraft {
     pub form: ProjectForm,
 }
 
+/// Operational settings for the shared editor, never a creator-owned draft.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EditableProject {
+    pub id: Uuid,
+    pub revision: i64,
+    pub configured: bool,
+    pub active: bool,
+    pub form: ProjectForm,
+    pub client: CreationClient,
+    pub selection: CreationSelection,
+    pub inactive_task_ids: Vec<Uuid>,
+    pub inactive_user_ids: Vec<Uuid>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProjectEditRequest {
+    pub id: Uuid,
+    pub project_id: Uuid,
+    pub expected_revision: i64,
+    pub form: ProjectForm,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DraftSaved {
     pub id: Uuid,

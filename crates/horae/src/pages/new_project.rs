@@ -1,11 +1,13 @@
-//! The creation screen keeps incomplete input separate from operational projects.
+//! Shared project fields with separate draft-creation and explicit-edit lifecycles.
 
 use dioxus::prelude::*;
+use uuid::Uuid;
 
 use crate::components::icons::NavIcon;
 use crate::components::modal::Modal;
 use crate::models::project_creation::{
-    CreationOptions, CreationSearch, ProjectDraft, ProjectFormField, TaskSource,
+    CreationOptions, CreationSearch, EditableProject, ProjectDraft, ProjectEditRequest,
+    ProjectFormField, TaskSource,
 };
 use crate::route::Route;
 use crate::server_fns;
@@ -88,9 +90,50 @@ pub fn NewProject() -> Element {
     }
 }
 
+#[component]
+pub fn EditProject(id: Uuid) -> Element {
+    let mut initial = use_resource(use_reactive!(|id| async move {
+        let mut options = server_fns::project_creation_options(CreationSearch::default()).await?;
+        let project = server_fns::load_project_editor(id).await?;
+        options
+            .clients
+            .retain(|client| client.id != project.client.id);
+        options.clients.push(project.client.clone());
+        for task in &project.selection.tasks {
+            options.tasks.retain(|existing| existing.id != task.id);
+            options.tasks.push(task.clone());
+        }
+        for person in &project.selection.people {
+            options.people.retain(|existing| existing.id != person.id);
+            options.people.push(person.clone());
+        }
+        Ok::<_, ServerFnError>((options, project))
+    }));
+    if initial.state()() != UseResourceState::Ready {
+        return rsx! { p { role: "status", "Loading project…" } };
+    }
+    match &*initial.read() {
+        Some(Ok((options, project))) if project.id == id => rsx! {
+            ProjectEditor {
+                key: "{project.id}-{project.revision}",
+                options: options.clone(), draft: None, existing: Some(project.clone()),
+                on_reload: move |_| initial.restart(),
+            }
+        },
+        Some(Err(error)) => rsx! {
+            h1 { class: "text-4xl font-semibold text-strong", "Edit project" }
+            div { class: "alert alert-danger", role: "alert", "Could not load project: {error}" }
+            button { class: "btn btn-secondary", onclick: move |_| initial.restart(), "Retry" }
+            Link { to: Route::ProjectList {}, class: "btn btn-ghost", "Back to Projects" }
+        },
+        Some(Ok(_)) | None => rsx! { p { role: "status", "Loading project…" } },
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Intent {
     Create,
+    Save,
     Leave,
     Discard,
 }
@@ -99,25 +142,50 @@ enum Intent {
 fn ProjectEditor(
     options: CreationOptions,
     draft: Option<ProjectDraft>,
+    #[props(default)] existing: Option<EditableProject>,
     on_reload: EventHandler<()>,
 ) -> Element {
+    let existing = use_signal(|| existing);
+    let editing = existing.read().is_some();
     let mut state = use_signal(|| DraftState::new(draft));
-    let form = use_signal(|| state.peek().saved.clone());
+    let form = use_signal(|| {
+        existing.peek().as_ref().map_or_else(
+            || state.peek().saved.clone(),
+            |project| project.form.clone(),
+        )
+    });
     let options = use_signal(|| options);
     let mut busy = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
     let mut invalid_field = use_signal(|| None::<ProjectFormField>);
     let mut intent = use_signal(|| None::<Intent>);
     let mut discard_open = use_signal(|| false);
+    let mut reload_open = use_signal(|| false);
+    let mut pending_edit = use_signal(|| None::<ProjectEditRequest>);
     let catalog_busy = use_signal(|| false);
     let navigator = use_navigator();
     let request_intent = use_callback(move |action| {
+        if editing && action == Intent::Leave {
+            if existing
+                .peek()
+                .as_ref()
+                .is_some_and(|project| project.form != *form.peek())
+            {
+                discard_open.set(true);
+            } else {
+                navigator.push(Route::ProjectList {});
+            }
+            return;
+        }
         invalid_field.set(None);
         error.set(None);
         intent.set(Some(action));
     });
 
     use_effect(move || {
+        if editing {
+            return;
+        }
         let current = form();
         let dirty = state.read().is_dirty(&current);
         let requested = intent();
@@ -198,7 +266,7 @@ fn ProjectEditor(
                         intent.set(None);
                         navigator.push(Route::ProjectList {});
                     }
-                    None => {}
+                    Some(Intent::Save) | None => {}
                 }
                 Ok(())
             }
@@ -210,9 +278,57 @@ fn ProjectEditor(
         });
     });
 
-    let dirty = state.read().is_dirty(&form.read());
+    use_effect(move || {
+        if !editing || intent() != Some(Intent::Save) || busy() || error().is_some() {
+            return;
+        }
+        let Some(project) = existing.peek().clone() else {
+            return;
+        };
+        let request = pending_edit
+            .write()
+            .get_or_insert_with(|| ProjectEditRequest {
+                id: Uuid::now_v7(),
+                project_id: project.id,
+                expected_revision: project.revision,
+                form: form.peek().clone(),
+            })
+            .clone();
+        busy.set(true);
+        spawn(async move {
+            match server_fns::save_project_editor(request).await {
+                Ok(id) => {
+                    pending_edit.set(None);
+                    intent.set(None);
+                    leave_project_editor(navigator, Route::ProjectDetail { id }).await;
+                }
+                Err(rejection) => {
+                    if is_definite_rejection(&rejection) {
+                        pending_edit.set(None);
+                        intent.set(None);
+                    }
+                    invalid_field.set(validation_field(&rejection));
+                    error.set(Some(match rejection {
+                        ServerFnError::ServerError { message, .. } => message,
+                        other => other.to_string(),
+                    }));
+                }
+            }
+            busy.set(false);
+        });
+    });
+
+    let dirty = if let Some(project) = existing.read().as_ref() {
+        project.form != *form.read()
+    } else {
+        state.read().is_dirty(&form.read())
+    };
     let locked = intent().is_some() || catalog_busy();
-    let unresolved_request = error().is_some() && invalid_field().is_none();
+    let unresolved_request = if editing {
+        pending_edit.read().is_some()
+    } else {
+        error().is_some() && invalid_field().is_none()
+    };
     use_effect(move || {
         if let Some(field) = invalid_field()
             && !busy()
@@ -225,6 +341,15 @@ fn ProjectEditor(
     });
     let status = if error().is_some() {
         "Changes need attention".to_string()
+    } else if editing {
+        if busy() {
+            "Saving changes…"
+        } else if dirty {
+            "Unsaved changes"
+        } else {
+            "No unsaved changes"
+        }
+        .to_owned()
     } else if busy() || dirty {
         "Saving draft…".to_string()
     } else if let Some(at) = state.read().saved_at {
@@ -233,14 +358,18 @@ fn ProjectEditor(
         "No draft saved yet".to_string()
     };
     let can_create = !form.read().name.trim().is_empty()
-        && options
-            .read()
-            .clients
-            .iter()
-            .any(|client| Some(client.id) == form.read().client_id && client.active);
+        && options.read().clients.iter().any(|client| {
+            Some(client.id) == form.read().client_id
+                && (client.active
+                    || existing
+                        .read()
+                        .as_ref()
+                        .is_some_and(|project| project.form.client_id == Some(client.id)))
+        });
 
     rsx! {
         div { class: "np-page flex flex-col h-full",
+            "data-project-edit-state": if !editing { "clean" } else if locked || unresolved_request { "pending" } else if dirty { "dirty" } else { "clean" },
             div { class: "np-scroll flex-1 min-h-0 overflow-y-auto",
                 div { class: "max-w-project-form px-project-form pt-6 pb-30",
                     button {
@@ -257,7 +386,7 @@ fn ProjectEditor(
                                 "Projects"
                             }
                             h1 { class: "text-4xl font-semibold text-strong tracking-tight mt-2 mb-0",
-                                "New project"
+                                if editing { "Edit project" } else { "New project" }
                             }
                         }
                         p {
@@ -271,7 +400,9 @@ fn ProjectEditor(
                         div { class: "alert alert-danger mt-4", role: "alert",
                             p { id: "np-form-error-message", "{message}" }
                             p { class: "text-sm",
-                                if invalid_field().is_some() {
+                                if editing {
+                                    "Your input is still here. Correct the problem and save again. If another session changed this project, reload its current data before continuing."
+                                } else if invalid_field().is_some() {
                                     "Your input is still here. Correct the indicated field and save again, or cancel to keep the draft."
                                 } else {
                                     "Your input is still here. Retry a failed request, or reload to resolve changes made in another tab."
@@ -282,15 +413,20 @@ fn ProjectEditor(
                                     class: "btn btn-secondary",
                                     r#type: "button",
                                     disabled: busy(),
-                                    onclick: move |_| { invalid_field.set(None); error.set(None); },
+                                    onclick: move |_| {
+                                        invalid_field.set(None); error.set(None);
+                                        if editing { intent.set(Some(Intent::Save)); }
+                                    },
                                     "Retry request"
                                 }
                                 button {
                                     class: "btn btn-ghost",
                                     r#type: "button",
                                     disabled: busy(),
-                                    onclick: move |_| on_reload.call(()),
-                                    "Reload saved draft (lose local edits)"
+                                    onclick: move |_| {
+                                        if editing { reload_open.set(true); } else { on_reload.call(()); }
+                                    },
+                                    if editing { "Reload project…" } else { "Reload saved draft (lose local edits)" }
                                 }
                             }
                         }
@@ -299,12 +435,16 @@ fn ProjectEditor(
                         class: "border-0 p-0 m-0 min-w-0",
                         disabled: locked,
                         aria_label: "Project settings",
-                        Basics { form, options, invalid_field: invalid_field(), error_message: error() }
-                        Visibility { form }
+                        Basics { form, options, editing, invalid_field: invalid_field(), error_message: error() }
+                        Visibility { form, legacy: existing.read().as_ref().is_some_and(|project| !project.configured) }
                         Billing { form, options, invalid_field: invalid_field(), error_message: error() }
-                        Tasks { form, options, invalid_field: invalid_field(), error_message: error() }
-                        Team { form, options, busy: catalog_busy, invalid_field: invalid_field(), error_message: error() }
-                        InvoiceDefaults { form, invalid_field: invalid_field(), error_message: error() }
+                        Tasks { form, options, inactive_ids: existing.read().as_ref().map(|project| project.inactive_task_ids.clone()).unwrap_or_default(), invalid_field: invalid_field(), error_message: error() }
+                        Team { form, options, busy: catalog_busy, inactive_ids: existing.read().as_ref().map(|project| project.inactive_user_ids.clone()).unwrap_or_default(), invalid_field: invalid_field(), error_message: error() }
+                        if existing.read().as_ref().is_none_or(|project| project.configured) {
+                            InvoiceDefaults { form, invalid_field: invalid_field(), error_message: error() }
+                        } else {
+                            p { class: "form-hint", "This project keeps its existing invoice defaults. Changing to the new billing configuration requires a migration." }
+                        }
                     }
                 }
             }
@@ -313,8 +453,12 @@ fn ProjectEditor(
                     class: "btn btn-primary",
                     r#type: "button",
                     disabled: !can_create || locked || unresolved_request,
-                    onclick: move |_| request_intent.call(Intent::Create),
-                    if intent() == Some(Intent::Create) {
+                    onclick: move |_| request_intent.call(if editing { Intent::Save } else { Intent::Create }),
+                    if busy() && editing {
+                        "Saving changes…"
+                    } else if editing {
+                        "Save changes"
+                    } else if intent() == Some(Intent::Create) {
                         "Saving project…"
                     } else {
                         "Save project"
@@ -327,14 +471,14 @@ fn ProjectEditor(
                     onclick: move |_| request_intent.call(Intent::Leave),
                     "Cancel"
                 }
-                button {
+                if !editing { button {
                     class: "btn btn-ghost ml-auto",
                     r#type: "button",
                     disabled: busy() || locked || unresolved_request,
                     onclick: move |_| discard_open.set(true),
                     "Discard draft"
-                }
-                p { class: "text-xs text-subtle m-0", "Cancel keeps your draft." }
+                } }
+                p { class: "text-xs text-subtle m-0", if editing { "Changes are saved only when you save." } else { "Cancel keeps your draft." } }
             }
         }
         Modal {
@@ -343,16 +487,18 @@ fn ProjectEditor(
             open: discard_open(),
             on_dismiss: move |_| discard_open.set(false),
             div { class: "modal-body",
-                h2 { id: "np-discard-title", class: "modal-title", "Discard this draft?" }
-                p { "The draft will be removed. Clients you created will remain available." }
+                h2 { id: "np-discard-title", class: "modal-title", if editing { "Discard changes?" } else { "Discard this draft?" } }
+                p { if editing { "Your unsaved changes will be lost. The saved project will not be changed." } else { "The draft will be removed. Clients you created will remain available." } }
                 div { class: "modal-actions",
                     button {
                         class: "btn btn-danger",
                         onclick: move |_| {
                             discard_open.set(false);
-                            request_intent.call(Intent::Discard);
+                            if editing {
+                                spawn(leave_project_editor(navigator, Route::ProjectList {}));
+                            } else { request_intent.call(Intent::Discard); }
                         },
-                        "Discard draft"
+                        if editing { "Discard changes" } else { "Discard draft" }
                     }
                     button {
                         class: "btn btn-secondary",
@@ -362,7 +508,28 @@ fn ProjectEditor(
                 }
             }
         }
+        Modal {
+            id: "np-reload-dialog", labelledby: "np-reload-title", open: reload_open(),
+            on_dismiss: move |_| reload_open.set(false),
+            div { class: "modal-body",
+                h2 { id: "np-reload-title", class: "modal-title", "Reload project?" }
+                p { "Your local edits will be discarded and replaced with the current saved project." }
+                div { class: "modal-actions",
+                    button { class: "btn btn-danger", onclick: move |_| on_reload.call(()), "Reload project" }
+                    button { class: "btn btn-secondary", onclick: move |_| reload_open.set(false), "Keep editing" }
+                }
+            }
+        }
     }
+}
+
+async fn leave_project_editor(navigator: dioxus::router::Navigator, destination: Route) {
+    // Saving or explicitly confirming discard has already resolved the edits.
+    let _ = document::eval(
+        "document.querySelector('[data-project-edit-state]')?.setAttribute('data-project-edit-leaving', '');",
+    )
+    .await;
+    navigator.push(destination);
 }
 
 fn is_validation_error(error: &ServerFnError) -> bool {

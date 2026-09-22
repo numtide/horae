@@ -8,6 +8,8 @@
 
 Implement `/projects/new` in the existing application shell using shared controls and utility CSS. Add private versioned drafts, atomic final creation, real billing/budget settings, task/team permissions and invoice defaults. Preserve existing/imported projects with explicit legacy semantics.
 
+The approved US7 extension adds `/projects/:id/edit` with the same form sections and a distinct explicit-save lifecycle. Load operational settings with current authorization, update the existing graph transactionally and remove the inline Projects editor after its behavior and regression checks are migrated. Keep this in PR #207 and the existing worktree.
+
 Implementation is incremental; the basic form is the first testable slice, not completion of the full goal.
 
 ## Technical Context
@@ -28,7 +30,7 @@ Implementation is incremental; the basic form is the first testable slice, not c
 
 **Constraints**: Never use imported production data for tests. Integer minutes/cents. New currency choices EUR/CHF/USD/GBP follow the handoff and current two-decimal monetary support. Shared CSS/control defaults stay unchanged; opt-in extensions only. No automatic invoice issuing or external mail during tests.
 
-**Scale/Scope**: One creation surface plus necessary downstream consumers. General Project Detail redesign, existing-project migration and organization/auth redesign are excluded.
+**Scale/Scope**: Shared creation/editing surface plus necessary downstream consumers. General Project Detail redesign, automatic existing-project conversion and organization/auth redesign are excluded.
 
 ## Constitution Check
 
@@ -77,7 +79,7 @@ crates/horae/src/notifications.rs               bounded optional mail delivery
 crates/horae/src/jobs.rs                        scoped outbox claiming
 crates/horae/src/pages/new_project.rs           composition and draft lifecycle
 crates/horae/src/pages/new_project/             form sections if needed
-crates/horae/src/pages/projects.rs              entry links; preserve existing editing
+crates/horae/src/pages/projects.rs              creation/edit entry links; remove old inline editor
 crates/horae/src/pages/invoices.rs              defaults and fee preparation
 crates/horae/src/route.rs / src/pages.rs        registration
 crates/horae/src/components/                   opt-in shared capabilities
@@ -97,6 +99,15 @@ crates/horae/tests/browser/new-project.cjs
 1. Integrate rate modes, scoped budgets, fixed-fee occurrences and invoice-owned defaults across all consumers. Missing configuration means legacy behavior, including legacy fixed-fee hourly invoicing.
 1. Record budget alerts in the existing outbox with unique logical identity; filter claims by event kind. Optional direct sendmail invocation has bounded timeout, sanitized headers and stable Message-ID. Document ambiguous acknowledgement/at-least-once delivery.
 1. Finish responsive/accessibility states and adversarial/regression review. Open one scoped reviewed PR, without automatically merging.
+
+## Unified editing execution (US7)
+
+1. Add a failing real-browser Edit → shared prefilled editor → Cancel/Save/reload regression before redirecting existing actions.
+1. Add an authorized operational-to-form projection for configured and legacy projects. Recover selected identities independently of catalog pagination; distinguish inherited, absent and explicit-zero values. Preserve association/milestone identity and private-field boundaries.
+1. Add an atomic edit mutation with current actor/reference checks, concurrent-edit detection and retry identity. Share parsing/validation and graph helpers where their creation assumptions also hold for existing records; do not implement editing by deleting/recreating the project or finalizing another draft.
+1. Reuse the existing sections/layout with mode-specific headings and footer actions. Creation keeps its durable draft lifecycle; editing uses explicit Save changes and unsaved-navigation protection. Guard historical financial changes with visible explanations, not silent conversion.
+1. Redirect every Edit entry point and remove the old form, state, obsolete endpoint/DTO paths once no callers remain. Migrate old edit regressions to the new route without reducing their assertions.
+1. Verify configured/legacy/no-op round trips, real persisted edits, cancel/conflict/uncertain retries, role changes, historical/invoiced sources, creation and whole-browser/style regressions. Regenerate SQLx and rerun build/lint/format gates before updating PR #207.
 
 ## Agent Context and Hooks
 

@@ -161,7 +161,7 @@ pub async fn generate_invoice(
 }
 
 #[cfg(all(test, feature = "server"))]
-async fn generate_invoice_for_period(
+pub(super) async fn generate_invoice_for_period(
     pool: &sqlx::PgPool,
     org_id: uuid::Uuid,
     client_id: uuid::Uuid,

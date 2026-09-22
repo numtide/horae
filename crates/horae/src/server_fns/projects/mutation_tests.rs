@@ -4,16 +4,9 @@ use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
 use sqlx::PgPool;
 use std::time::Duration;
 
-fn project_edit(name: &str) -> ProjectEdit<'_> {
-    ProjectEdit {
-        name,
-        project_type: "time_and_materials",
-        currency: "EUR",
-        budget_kind: "none",
-        budget_value: "",
-        rate_value: "",
-    }
-}
+use crate::models::project_creation::ProjectEditRequest;
+use crate::server_fns::project_creation::editing::{load_editable_project, save_editable_project};
+use horae_core::project::BudgetMode;
 
 mod project {
     use super::*;
@@ -56,97 +49,79 @@ mod project {
         ids
     }
 
+    async fn request(pool: &PgPool, ids: &SeedIds) -> ProjectEditRequest {
+        let project = load_editable_project(pool, ids.user_id, ids.org_id, ids.project_id)
+            .await
+            .unwrap();
+        ProjectEditRequest {
+            id: uuid::Uuid::now_v7(),
+            project_id: project.id,
+            expected_revision: project.revision,
+            form: project.form,
+        }
+    }
+
+    async fn save(
+        pool: &PgPool,
+        ids: &SeedIds,
+        request: &ProjectEditRequest,
+    ) -> Result<(Project, bool), ServerFnError> {
+        save_editable_project(pool, ids.user_id, ids.org_id, request, false).await
+    }
+
     #[sqlx::test(migrations = "./migrations")]
     async fn configured_edits_reject_incompatible_financial_changes_atomically(pool: PgPool) {
-        let original = ProjectEdit {
-            budget_kind: "hours",
-            budget_value: "2",
-            ..project_edit("Must not be saved")
-        };
-        for (mode, scope, fields, message) in [
-            (
-                "task",
-                "project",
-                ProjectEdit {
-                    currency: "USD",
-                    ..original
-                },
-                "currency",
-            ),
-            (
-                "person",
-                "project",
-                ProjectEdit {
-                    project_type: "fixed_fee",
-                    ..original
-                },
-                "type",
-            ),
-            (
-                "project",
-                "project",
-                ProjectEdit { ..original },
-                "rate is required",
-            ),
-            (
-                "task",
-                "project",
-                ProjectEdit {
-                    rate_value: "1",
-                    ..original
-                },
-                "rate mode",
-            ),
-            (
-                "person",
-                "project",
-                ProjectEdit {
-                    rate_value: "1",
-                    ..original
-                },
-                "rate mode",
-            ),
-            (
-                "task",
-                "task",
-                ProjectEdit {
-                    budget_value: "3",
-                    ..original
-                },
-                "scoped budget",
-            ),
-            (
-                "person",
-                "person",
-                ProjectEdit {
-                    budget_kind: "amount",
-                    budget_value: "2",
-                    ..original
-                },
-                "scoped budget",
-            ),
+        for (mode, scope, field, value, message) in [
+            ("task", "project", "currency", "USD", "currency"),
+            ("project", "project", "rate", "", "rate is required"),
+            ("task", "task", "task_budget", "-1", "valid hours"),
+            ("person", "person", "person_budget", "NaN", "valid hours"),
         ] {
             let ids = configured_project(&pool, mode, scope).await;
+            let mut edit = request(&pool, &ids).await;
+            edit.form.name = "Must not be saved".into();
+            match field {
+                "currency" => edit.form.currency = Some(value.into()),
+                "rate" => edit.form.project_rate = value.into(),
+                "task_budget" => edit.form.tasks[0].budget = value.into(),
+                "person_budget" => edit.form.team[0].budget = value.into(),
+                _ => unreachable!(),
+            }
             let before = version(&pool, ids.project_id).await;
-            let error = update_project_record(&pool, ids.org_id, ids.project_id, &fields)
-                .await
-                .expect_err(message);
-            assert!(error.to_string().contains(message), "{error}");
+            let error = save(&pool, &ids, &edit).await.expect_err(message);
+            assert!(
+                error.to_string().to_lowercase().contains(message),
+                "{error}"
+            );
             assert_eq!(version(&pool, ids.project_id).await, before, "{message}");
         }
     }
 
     #[sqlx::test(migrations = "./migrations")]
     async fn configured_edits_preserve_compatible_changes_and_idempotence(pool: PgPool) {
-        for (mode, scope, kind, value, rate, expected_spend) in [
-            ("task", "task", "hours", "2", "", 8000),
-            ("person", "person", "hours", "2", "", 9000),
-            ("task", "project", "hours", "3", "", 8000),
-            ("person", "project", "hours", "0", "", 9000),
-            ("project", "project", "hours", "2", "0", 0),
-            ("project", "project", "hours", "2", "80.25", 8025),
-            ("task", "project", "amount", "1.25", "", 8000),
-            ("person", "project", "none", "", "", 9000),
+        for (mode, scope, budget, value, rate, expected_spend) in [
+            ("task", "task", BudgetMode::HoursPerTask, "2", "", 8000),
+            (
+                "person",
+                "person",
+                BudgetMode::HoursPerPerson,
+                "2",
+                "",
+                9000,
+            ),
+            ("task", "project", BudgetMode::TotalHours, "3", "", 8000),
+            ("person", "project", BudgetMode::TotalHours, "0", "", 9000),
+            ("project", "project", BudgetMode::TotalHours, "2", "0", 0),
+            (
+                "project",
+                "project",
+                BudgetMode::TotalHours,
+                "2",
+                "80.25",
+                8025,
+            ),
+            ("task", "project", BudgetMode::TotalFees, "1.25", "", 8000),
+            ("person", "project", BudgetMode::None, "", "", 9000),
         ] {
             let ids = configured_project(&pool, mode, scope).await;
             crate::server_fns::test_seed::time_entry(
@@ -155,37 +130,38 @@ mod project {
                 horae_core::types::EntryState::Open,
             )
             .await;
-            let fields = ProjectEdit {
-                currency: " eur ",
-                budget_kind: kind,
-                budget_value: value,
-                rate_value: rate,
-                ..project_edit("Renamed")
-            };
-            let (updated, changed) =
-                update_project_record(&pool, ids.org_id, ids.project_id, &fields)
-                    .await
-                    .unwrap();
+            let mut edit = request(&pool, &ids).await;
+            edit.form.name = "Renamed".into();
+            edit.form.currency = Some(" eur ".into());
+            edit.form.budget_mode = budget;
+            edit.form.budget_value = value.into();
+            edit.form.project_rate = rate.into();
+            let (updated, changed) = save(&pool, &ids, &edit).await.unwrap();
             assert!(changed);
             assert_eq!(updated.name, "Renamed");
             assert_eq!(updated.currency, "EUR");
+            let expected_budget = match value {
+                "" => (None, None),
+                "0" => (None, Some(0)),
+                "2" => (None, Some(120)),
+                "3" => (None, Some(180)),
+                "1.25" => (Some(125), None),
+                _ => unreachable!("fixture budget must have an explicit expectation"),
+            };
             assert_eq!(
                 (updated.budget_amount_cents, updated.budget_minutes),
-                parse_budget(kind.parse().unwrap(), value).unwrap()
+                expected_budget
             );
             assert_eq!(updated.rate_cents, parse_project_rate(rate).unwrap());
             let before = version(&pool, ids.project_id).await;
-            let (repeated, changed) =
-                update_project_record(&pool, ids.org_id, ids.project_id, &fields)
-                    .await
-                    .unwrap();
+            let (repeated, changed) = save(&pool, &ids, &edit).await.unwrap();
             assert_eq!(
                 (repeated, changed, version(&pool, ids.project_id).await),
                 (updated, false, before)
             );
             let settings = sqlx::query!(
                 "SELECT rate_mode, budget_scope FROM project_settings WHERE project_id = $1",
-                ids.project_id,
+                ids.project_id
             )
             .fetch_one(&pool)
             .await
@@ -208,6 +184,8 @@ mod project {
     #[sqlx::test(migrations = "./migrations")]
     async fn configured_edits_recheck_settings_after_waiting_for_the_project(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Admin).await;
+        let mut edit = request(&pool, &ids).await;
+        edit.form.name = "Must not be saved".into();
         let mut first = pool.begin().await.unwrap();
         let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
             .fetch_one(&mut *first)
@@ -222,20 +200,17 @@ mod project {
              VALUES ($1, $2, $3, $4, $5, $6)",
             uuid::Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id, "person", "project",
         ).execute(&mut *first).await.unwrap();
-        let before = version(&pool, ids.project_id).await;
+        let before = sqlx::query_scalar!(
+            "SELECT xmin::text FROM projects WHERE id = $1",
+            ids.project_id
+        )
+        .fetch_one(&mut *first)
+        .await
+        .unwrap();
         let run_pool = pool.clone();
         let mut run = tokio::task::JoinSet::new();
         run.spawn(async move {
-            update_project_record(
-                &run_pool,
-                ids.org_id,
-                ids.project_id,
-                &ProjectEdit {
-                    currency: "USD",
-                    ..project_edit("Must not be saved")
-                },
-            )
-            .await
+            save_editable_project(&run_pool, ids.user_id, ids.org_id, &edit, false).await
         });
         wait_for_blocked(&pool, blocker).await;
         first.commit().await.unwrap();
@@ -245,7 +220,10 @@ mod project {
             .unwrap()
             .unwrap()
             .unwrap_err();
-        assert!(error.to_string().contains("currency"), "{error}");
+        assert!(
+            matches!(error, ServerFnError::ServerError { code: CONFLICT, .. }),
+            "{error}"
+        );
         assert_eq!(version(&pool, ids.project_id).await, before);
     }
 
@@ -256,28 +234,17 @@ mod project {
             sqlx::query!(
                 "UPDATE projects SET project_type = $2 WHERE id = $1",
                 ids.project_id,
-                project_type as ProjectType,
+                project_type as ProjectType
             )
             .execute(&pool)
             .await
             .unwrap();
             if project_type == ProjectType::FixedFee {
-                sqlx::query!(
-                    "UPDATE project_settings SET fee_mode = 'single', fee_amount_cents = 10000 WHERE project_id = $1",
-                    ids.project_id,
-                ).execute(&pool).await.unwrap();
+                sqlx::query!("UPDATE project_settings SET fee_mode = 'single', fee_amount_cents = 10000 WHERE project_id = $1", ids.project_id).execute(&pool).await.unwrap();
             }
-            let kind = project_type.to_string();
-            let original = ProjectEdit {
-                project_type: &kind,
-                budget_kind: "hours",
-                budget_value: "2",
-                ..project_edit("Renamed")
-            };
-            let (updated, changed) =
-                update_project_record(&pool, ids.org_id, ids.project_id, &original)
-                    .await
-                    .unwrap();
+            let mut edit = request(&pool, &ids).await;
+            edit.form.name = "Renamed".into();
+            let (updated, changed) = save(&pool, &ids, &edit).await.unwrap();
             assert!(changed);
             assert_eq!(
                 (
@@ -287,99 +254,91 @@ mod project {
                 ),
                 ("Renamed", project_type, None)
             );
-            let before = version(&pool, ids.project_id).await;
-            for fields in [
-                ProjectEdit {
-                    project_type: "time_and_materials",
-                    ..original
-                },
-                ProjectEdit {
-                    currency: "USD",
-                    ..original
-                },
-                ProjectEdit {
-                    rate_value: "1",
-                    ..original
-                },
-                ProjectEdit {
-                    budget_kind: "amount",
-                    ..original
-                },
-            ] {
-                assert!(
-                    update_project_record(&pool, ids.org_id, ids.project_id, &fields)
-                        .await
-                        .is_err()
-                );
+            crate::server_fns::test_seed::time_entry(
+                &pool,
+                &ids,
+                horae_core::types::EntryState::Open,
+            )
+            .await;
+            for field in ["type", "currency", "budget"] {
+                let mut rejected = request(&pool, &ids).await;
+                match field {
+                    "type" => rejected.form.project_type = ProjectType::TimeAndMaterials,
+                    "currency" => rejected.form.currency = Some("USD".into()),
+                    "budget" => rejected.form.budget_mode = BudgetMode::TotalFees,
+                    _ => unreachable!(),
+                }
+                let before = version(&pool, ids.project_id).await;
+                assert!(save(&pool, &ids, &rejected).await.is_err());
                 assert_eq!(version(&pool, ids.project_id).await, before);
             }
+            let mut irrelevant_rate = request(&pool, &ids).await;
+            irrelevant_rate.form.project_rate = "1".into();
+            let (unchanged, changed) = save(&pool, &ids, &irrelevant_rate).await.unwrap();
+            assert!(
+                !changed,
+                "Hidden hourly input must not change non-hourly billing"
+            );
+            assert_eq!(unchanged.rate_cents, None);
         }
     }
 
     #[sqlx::test(migrations = "./migrations")]
-    async fn each_detail_field_changes_once_on_an_inactive_project(pool: PgPool) {
-        for fields in [
-            ProjectEdit {
-                name: "Renamed",
-                ..project_edit("Widget")
-            },
-            ProjectEdit {
-                project_type: "fixed_fee",
-                ..project_edit("Widget")
-            },
-            ProjectEdit {
-                currency: "USD",
-                ..project_edit("Widget")
-            },
-        ] {
-            let ids = seed(&pool, OrgRole::Admin).await;
-            let (mut expected, _) =
-                set_project_active_record(&pool, ids.org_id, ids.project_id, false)
-                    .await
-                    .unwrap();
-            expected.name = fields.name.into();
-            expected.project_type = parse_enum(fields.project_type, "project_type").unwrap();
-            expected.currency = fields.currency.into();
-            let (updated, changed) =
-                update_project_record(&pool, ids.org_id, ids.project_id, &fields)
-                    .await
-                    .unwrap();
-            assert_eq!((changed, updated), (true, expected.clone()));
-            let before = version(&pool, ids.project_id).await;
-            let (repeated, changed) =
-                update_project_record(&pool, ids.org_id, ids.project_id, &fields)
-                    .await
-                    .unwrap();
-            let after = version(&pool, ids.project_id).await;
-            assert_eq!((changed, repeated, after), (false, expected, before));
+    async fn inactive_project_edits_preserve_identity_and_reject_implicit_migrations(pool: PgPool) {
+        let ids = seed(&pool, OrgRole::Admin).await;
+        let (mut expected, _) = set_project_active_record(&pool, ids.org_id, ids.project_id, false)
+            .await
+            .unwrap();
+        let mut edit = request(&pool, &ids).await;
+        edit.form.name = "Renamed".into();
+        expected.name = "Renamed".into();
+        let (updated, changed) = save(&pool, &ids, &edit).await.unwrap();
+        assert_eq!((changed, updated), (true, expected.clone()));
+        let before = version(&pool, ids.project_id).await;
+        let (repeated, changed) = save(&pool, &ids, &edit).await.unwrap();
+        assert_eq!(
+            (changed, repeated, version(&pool, ids.project_id).await),
+            (false, expected, before.clone())
+        );
+        for field in ["type", "currency"] {
+            let mut rejected = request(&pool, &ids).await;
+            if field == "type" {
+                rejected.form.project_type = ProjectType::FixedFee;
+            } else {
+                rejected.form.currency = Some("USD".into());
+            }
+            assert!(save(&pool, &ids, &rejected).await.is_err());
+            assert_eq!(version(&pool, ids.project_id).await, before);
         }
     }
 
     #[sqlx::test(migrations = "./migrations")]
     async fn budgets_and_rates_distinguish_null_zero_and_normalized_values(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Admin).await;
-        for (kind, value, rate, amount, minutes, cents) in [
-            ("amount", "1.25", "", Some(125), None, None),
-            ("amount", "0", "", Some(0), None, None),
-            ("amount", "", "", None, None, None),
-            ("hours", "1:30", "", None, Some(90), None),
-            ("hours", "2", "", None, Some(120), None),
-            ("hours", "", "", None, None, None),
-            ("hours", "", "0", None, None, Some(0)),
-            ("hours", "", "120.50", None, None, Some(12050)),
-            ("hours", "", "", None, None, None),
-            ("none", "", "", None, None, None),
+        for (budget, value, rate, amount, minutes, cents) in [
+            (BudgetMode::TotalFees, "1.25", "", Some(125), None, None),
+            (BudgetMode::TotalFees, "0", "", Some(0), None, None),
+            (BudgetMode::TotalFees, "", "", None, None, None),
+            (BudgetMode::TotalHours, "1:30", "", None, Some(90), None),
+            (BudgetMode::TotalHours, "2", "", None, Some(120), None),
+            (BudgetMode::TotalHours, "", "", None, None, None),
+            (BudgetMode::TotalHours, "", "0", None, None, Some(0)),
+            (
+                BudgetMode::TotalHours,
+                "",
+                "120.50",
+                None,
+                None,
+                Some(12050),
+            ),
+            (BudgetMode::TotalHours, "", "", None, None, None),
+            (BudgetMode::None, "", "", None, None, None),
         ] {
-            let fields = ProjectEdit {
-                budget_kind: kind,
-                budget_value: value,
-                rate_value: rate,
-                ..project_edit("Widget")
-            };
-            let (updated, changed) =
-                update_project_record(&pool, ids.org_id, ids.project_id, &fields)
-                    .await
-                    .unwrap();
+            let mut edit = request(&pool, &ids).await;
+            edit.form.budget_mode = budget;
+            edit.form.budget_value = value.into();
+            edit.form.project_rate = rate.into();
+            let (updated, changed) = save(&pool, &ids, &edit).await.unwrap();
             assert_eq!(
                 (
                     changed,
@@ -390,19 +349,14 @@ mod project {
                 (true, amount, minutes, cents)
             );
             let before = version(&pool, ids.project_id).await;
-            let padded_value = format!(" {value} ");
-            let padded_rate = format!(" {rate} ");
-            let normalized = ProjectEdit {
-                budget_value: &padded_value,
-                rate_value: &padded_rate,
-                ..fields
-            };
-            let (repeated, changed) =
-                update_project_record(&pool, ids.org_id, ids.project_id, &normalized)
-                    .await
-                    .unwrap();
-            let after = version(&pool, ids.project_id).await;
-            assert_eq!((changed, repeated, after), (false, updated, before));
+            let mut normalized = request(&pool, &ids).await;
+            normalized.form.budget_value = format!(" {value} ");
+            normalized.form.project_rate = format!(" {rate} ");
+            let (repeated, changed) = save(&pool, &ids, &normalized).await.unwrap();
+            assert_eq!(
+                (changed, repeated, version(&pool, ids.project_id).await),
+                (false, updated, before)
+            );
         }
     }
 
@@ -410,47 +364,39 @@ mod project {
     async fn invalid_project_fields_leave_the_row_unchanged(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Admin).await;
         let before = version(&pool, ids.project_id).await;
-        for fields in [
-            ProjectEdit {
-                project_type: "unknown",
-                ..project_edit("Widget")
-            },
-            ProjectEdit {
-                budget_kind: "unknown",
-                ..project_edit("Widget")
-            },
-            ProjectEdit {
-                budget_kind: "amount",
-                budget_value: "-1",
-                ..project_edit("Widget")
-            },
-            ProjectEdit {
-                budget_kind: "hours",
-                budget_value: "NaN",
-                ..project_edit("Widget")
-            },
-            ProjectEdit {
-                rate_value: "-1",
-                ..project_edit("Widget")
-            },
-            ProjectEdit {
-                rate_value: "92233720368547758.08",
-                ..project_edit("Widget")
-            },
+        for (field, value) in [
+            ("amount", "-1"),
+            ("hours", "NaN"),
+            ("rate", "-1"),
+            ("rate", "92233720368547758.08"),
         ] {
-            assert!(
-                update_project_record(&pool, ids.org_id, ids.project_id, &fields)
-                    .await
-                    .is_err()
-            );
+            let mut edit = request(&pool, &ids).await;
+            match field {
+                "amount" => {
+                    edit.form.budget_mode = BudgetMode::TotalFees;
+                    edit.form.budget_value = value.into();
+                }
+                "hours" => {
+                    edit.form.budget_mode = BudgetMode::TotalHours;
+                    edit.form.budget_value = value.into();
+                }
+                "rate" => edit.form.project_rate = value.into(),
+                _ => unreachable!(),
+            }
+            assert!(save(&pool, &ids, &edit).await.is_err());
+        }
+        for field in ["project_type", "budget_mode"] {
+            let mut payload = serde_json::to_value(request(&pool, &ids).await).unwrap();
+            payload["form"][field] = serde_json::json!("unknown");
+            assert!(serde_json::from_value::<ProjectEditRequest>(payload).is_err());
         }
         assert_eq!(version(&pool, ids.project_id).await, before);
     }
 
     async fn edit(pool: &PgPool, ids: &SeedIds, name: &str) -> (Project, bool) {
-        update_project_record(pool, ids.org_id, ids.project_id, &project_edit(name))
-            .await
-            .unwrap()
+        let mut request = request(pool, ids).await;
+        request.form.name = name.into();
+        save(pool, ids, &request).await.unwrap()
     }
 
     async fn version(pool: &PgPool, id: uuid::Uuid) -> Option<String> {
@@ -484,8 +430,10 @@ mod project {
         assert_eq!((transition, returned.active, after), (None, true, before));
     }
 
-    async fn competing_edit(pool: &PgPool, name: &'static str) -> (Project, bool) {
+    async fn competing_edit(pool: &PgPool, name: &'static str) -> ServerFnError {
         let ids = seed(pool, OrgRole::Admin).await;
+        let mut pending = request(pool, &ids).await;
+        pending.form.name = name.into();
         let mut first = pool.begin().await.unwrap();
         let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
             .fetch_one(&mut *first)
@@ -501,26 +449,37 @@ mod project {
         .unwrap();
         let run_pool = pool.clone();
         let mut run = tokio::task::JoinSet::new();
-        run.spawn(async move { edit(&run_pool, &ids, name).await });
+        run.spawn(async move {
+            save_editable_project(&run_pool, ids.user_id, ids.org_id, &pending, false).await
+        });
         wait_for_blocked(pool, blocker).await;
         first.commit().await.unwrap();
-        tokio::time::timeout(Duration::from_secs(5), run.join_next())
+        let error = tokio::time::timeout(Duration::from_secs(5), run.join_next())
             .await
             .unwrap()
             .unwrap()
             .unwrap()
+            .unwrap_err();
+        assert_eq!(request(pool, &ids).await.form.name, "Changed");
+        error
     }
 
     #[sqlx::test(migrations = "./migrations")]
-    async fn repeating_a_competing_edit_does_not_report_a_change(pool: PgPool) {
-        let (returned, changed) = competing_edit(&pool, "Changed").await;
-        assert_eq!((changed, returned.name.as_str()), (false, "Changed"));
+    async fn repeating_a_competing_edit_requires_a_fresh_revision(pool: PgPool) {
+        let error = competing_edit(&pool, "Changed").await;
+        assert!(matches!(
+            error,
+            ServerFnError::ServerError { code: CONFLICT, .. }
+        ));
     }
 
     #[sqlx::test(migrations = "./migrations")]
-    async fn restoring_a_competing_edit_reports_a_change(pool: PgPool) {
-        let (returned, changed) = competing_edit(&pool, "Widget").await;
-        assert_eq!((changed, returned.name.as_str()), (true, "Widget"));
+    async fn restoring_a_competing_edit_does_not_overwrite_the_other_session(pool: PgPool) {
+        let error = competing_edit(&pool, "Widget").await;
+        assert!(matches!(
+            error,
+            ServerFnError::ServerError { code: CONFLICT, .. }
+        ));
     }
 
     async fn competing_activation(
@@ -580,7 +539,14 @@ mod project {
             (ids.org_id, uuid::Uuid::now_v7()),
             (other.org_id, ids.project_id),
         ] {
-            let error = update_project_record(&pool, org_id, id, &project_edit("Widget"))
+            let mut pending = request(&pool, &ids).await;
+            pending.project_id = id;
+            let actor = if org_id == ids.org_id {
+                ids.user_id
+            } else {
+                other.user_id
+            };
+            let error = save_editable_project(&pool, actor, org_id, &pending, false)
                 .await
                 .unwrap_err();
             assert!(matches!(
@@ -629,9 +595,10 @@ mod project {
     }
 
     #[sqlx::test(migrations = "./migrations")]
-    async fn concurrent_deletion_returns_not_found_for_both_mutations(pool: PgPool) {
+    async fn concurrent_deletion_is_rejected_by_both_mutations(pool: PgPool) {
         for activation in [false, true] {
             let ids = seed(&pool, OrgRole::Admin).await;
+            let pending = request(&pool, &ids).await;
             let mut first = pool.begin().await.unwrap();
             let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
                 .fetch_one(&mut *first)
@@ -650,14 +617,9 @@ mod project {
                         .await
                         .map(|_| ())
                 } else {
-                    update_project_record(
-                        &run_pool,
-                        ids.org_id,
-                        ids.project_id,
-                        &project_edit("Widget"),
-                    )
-                    .await
-                    .map(|_| ())
+                    save_editable_project(&run_pool, ids.user_id, ids.org_id, &pending, false)
+                        .await
+                        .map(|_| ())
                 }
             });
             wait_for_blocked(&pool, blocker).await;
@@ -671,7 +633,7 @@ mod project {
             assert!(matches!(
                 error,
                 ServerFnError::ServerError {
-                    code: NOT_FOUND,
+                    code: NOT_FOUND | CONFLICT,
                     ..
                 }
             ));

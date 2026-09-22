@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO assignments (id,project_id,user_id,role,rate_cents) VALUES ($1,$2,$3,$4,$5)\n         ON CONFLICT (project_id,user_id) DO UPDATE SET rate_cents=EXCLUDED.rate_cents,\n           role=CASE WHEN $6 THEN EXCLUDED.role ELSE assignments.role END",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        {
+          "Custom": {
+            "name": "project_role",
+            "kind": {
+              "Enum": [
+                "lead",
+                "freelancer",
+                "admin"
+              ]
+            }
+          }
+        },
+        "Int8",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f9c1d9b706b49d05c619c69267d5cf82517ce82aab42dd59feb19ac02c7af6eb"
+}

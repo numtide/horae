@@ -164,8 +164,9 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
     await actions.focus();
     await page.keyboard.press('Enter');
     await page.getByRole('menuitem', { name: 'Edit', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Edit Project', exact: true })).toBeVisible();
-    await page.locator('.page-header').getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(page).toHaveURL(/\/projects\/[0-9a-f-]{36}\/edit$/);
+    await expect(page.locator('.np-page').getByRole('heading', { name: 'Edit project', exact: true })).toBeVisible();
+    await page.locator('.np-footer').getByRole('button', { name: 'Cancel', exact: true }).click();
     await page.getByRole('button', { name: 'Export', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Export projects' });
     await expect(dialog.getByRole('link', { name: 'Export projects' })).toHaveAttribute('href', '/api/projects/export/csv?scope=active');

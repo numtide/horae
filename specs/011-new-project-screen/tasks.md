@@ -139,6 +139,22 @@
 - [ ] T054 Commit scoped changes on `feat/new-project-screen`, open a human-readable PR with test evidence and explicit limitations from `specs/011-new-project-screen/quickstart.md`; do not merge.
   - Base audit finds design refresh #206 still open. The feature starts at its `554e140` commit and leaves `design/project/` unchanged relative to it. Use that dependency branch as the PR base unless its merge is verified first; do not compare this feature against the stale local master or silently merge the prerequisite.
 
+## Phase 10: US7 — Unified existing-project editing (approved 2026-09-22)
+
+This extension supersedes T013's retention of the old inline editor. Completion requires a shared, fully populated editor and removal of the obsolete UI, not a redirect to an empty creation form.
+
+- [x] T055 [US7] Add and run failing browser/server tests for configured and legacy Edit → prefilled shared form → Cancel/Save/reload, without new projects or creation-draft changes.
+  - The initial legacy route and loader/save failures are recorded above. The expanded browser suite now passes legacy Cancel/Save/reload at three widths and configured edits/no-op saves, with database identity/history and draft-isolation assertions.
+- [x] T056 [US7] Implement the current-authority operational-to-form projection, complete settings/associations and unavailable selected identities; preserve explicit zero, legacy modes, private-field redaction and stable IDs.
+  - Six PostgreSQL-backed `project_creation::editing::tests` pass: legacy retainer/JPY/zero and no draft/config creation; complete configured settings with private-field redaction; current-role/active/tenant checks; archived client/task/person identities and absent overrides; single/milestone/monthly schedules with operational IDs; all six budget scopes.
+- [x] T057 [US7] Implement atomic existing-project updates with concurrency/retry protection, complete graph validation, administrator-field preservation and unchanged historical time/invoice/fee identities; add rollback/race/legacy regressions and regenerate SQLx metadata.
+  - Fifteen focused database tests pass, including the final legacy visibility/hour-budget projection check. The full server-bin run passed 750 tests before the last two added cases; strict all-target Clippy and complete SQLx preparation passed. UI and final-state gates remain open below.
+- [x] T058 [US7] Share creation form sections/layout at `/projects/:id/edit`, add explicit Save changes/Cancel and unsaved-navigation protection, and verify errors, loading/retry, keyboard/mobile and creation-draft isolation.
+  - The disposable browser suite passes prefill/Cancel/Save/reload at 390/768/1440px, rejected sidebar/back/forward/reload/replacement navigation, exact retries after a committed response is lost, and two-tab conflict recovery. Pending saves prevent same-document navigation; full-document exits use the browser confirmation. The loader/task-rate suite verifies loading, retry and field recovery; all editing paths leave creation drafts untouched.
+- [x] T059 [US7] Move every Edit entry point to the shared editor, remove the obsolete inline form/state and unused endpoint/DTO paths, and migrate all old editor regressions without dropping behavioral assertions.
+  - The inline form/state, policy endpoint/DTO and old update mutation are removed. Sixteen migrated mutation tests pass against the shared saver; action-errors, menu-popovers and project-task-rates pass against the shared screen. The unused old creation endpoint and its budget parser are also removed; no production caller remains. Final build/regression checks after this last deletion belong to T060.
+- [ ] T060 [US7] Run adversarial review, full configured/legacy/permissions/history tests, existing creation/browser/style regressions and build/Clippy/SQLx/format gates; update PR #207 with evidence and refresh the local preview after verification.
+
 ## Dependencies and execution
 
 Setup → Foundation → US1 → US2 → US3 → US4 → US5 → US6 → Final. Each story has independent fixtures but end-to-end UI completion depends on prior persistence. US1 may call the provisional draft finalization path established in Foundation; US2 adds recovery/concurrency behavior. No intermediate slice is the final feature.
@@ -163,5 +179,6 @@ First prove exact validation and atomic basic creation. Add one verified story a
 | SC-001–002 | T010–015, T029, T038, T043, T050 |
 | SC-003–005 | T016–018, T021, T024, T030–039, T040–044 |
 | SC-006–007 | T046–052 |
+| FR-021–023, SC-008 | T055–060 |
 
-**Counts**: 54 tasks; setup 3, foundation 6, US1 6, US2 5, US3 10, US4 9, US5 5, US6 6, final 4.
+**Counts**: 60 tasks; setup 3, foundation 6, US1 6, US2 5, US3 10, US4 9, US5 5, US6 6, final 4, US7 extension 6.

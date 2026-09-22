@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO project_private_settings (id,org_id,project_id,admin_notes) VALUES ($1,$2,$3,$4)\n                 ON CONFLICT (project_id) DO UPDATE SET admin_notes = EXCLUDED.admin_notes",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4a32ecf681bc5e61cbdb893774ebd87adc5e1539bcd1208f669a241837c79eba"
+}

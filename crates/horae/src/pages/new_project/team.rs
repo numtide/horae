@@ -20,10 +20,10 @@ use crate::server_fns;
 use super::FormRow;
 
 #[component]
-pub(super) fn Visibility(mut form: Signal<ProjectForm>) -> Element {
+pub(super) fn Visibility(mut form: Signal<ProjectForm>, #[props(default)] legacy: bool) -> Element {
     rsx! {
         FormRow { label: "Report visibility",
-            fieldset { class: "border-0 p-0 m-0 flex flex-col gap-2", aria_label: "Report visibility",
+            fieldset { class: "border-0 p-0 m-0 flex flex-col gap-2", aria_label: "Report visibility", disabled: legacy,
                 for (value, label, hint) in [
                     (ReportVisibility::Managers, "Managers only", "Organization managers and this project's leads can see progress."),
                     (ReportVisibility::ProjectMembers, "Everyone on the project", "Project members can also see progress, without private rates or costs."),
@@ -34,6 +34,7 @@ pub(super) fn Visibility(mut form: Signal<ProjectForm>) -> Element {
                     }
                 }
             }
+            if legacy { p { class: "form-hint", "This project keeps its existing member visibility. Changing to the new visibility configuration requires a migration." } }
         }
     }
 }
@@ -43,6 +44,7 @@ pub(super) fn Team(
     mut form: Signal<ProjectForm>,
     mut options: Signal<CreationOptions>,
     mut busy: Signal<bool>,
+    #[props(default)] inactive_ids: Vec<Uuid>,
     #[props(default)] invalid_field: Option<ProjectFormField>,
     #[props(default)] error_message: Option<String>,
 ) -> Element {
@@ -86,10 +88,16 @@ pub(super) fn Team(
                 span { class: "text-xs text-subtle", "{form.read().team.len()} people" }
                 span { class: "text-xs text-label ml-auto", "Check = manages this project" }
             }
-            for member in form.read().team.clone() { MemberRow { key: "{member.user_id}", form, options, id: member.user_id, invalid_field, error_message: error_message.clone() } }
+            for member in form.read().team.clone() { MemberRow { key: "{member.user_id}", form, options, id: member.user_id, inactive: inactive_ids.contains(&member.user_id), invalid_field, error_message: error_message.clone() } }
             if form.read().team.is_empty() { p { class: "text-sm text-subtle px-5", "No teammates selected yet." } }
             div { class: "px-5 py-3",
-                p { class: "form-hint mt-0", "Blank billable rates inherit the person's profile, then the client's default. Blank costs inherit only the profile cost. Rates are not converted between currencies. Overrides affect only this project." }
+                p { class: "form-hint mt-0",
+                    if form.read().rate_mode == RateMode::Legacy {
+                        "Person rates apply after task overrides and before the project and profile rates. Blank costs inherit the profile cost. Rates are not converted between currencies."
+                    } else {
+                        "Blank billable rates inherit the person's profile, then the client's default. Blank costs inherit only the profile cost. Rates are not converted between currencies. Overrides affect only this project."
+                    }
+                }
                 if let Some(message) = error() { p { class: "text-sm text-danger", role: "alert", "{message}" } }
                 div { class: "flex flex-wrap items-center gap-3",
                     div { class: "flex-1 basis-assignment-picker min-w-0",
@@ -160,6 +168,7 @@ fn MemberRow(
     mut form: Signal<ProjectForm>,
     options: Signal<CreationOptions>,
     id: Uuid,
+    #[props(default)] inactive: bool,
     invalid_field: Option<ProjectFormField>,
     error_message: Option<String>,
 ) -> Element {
@@ -197,17 +206,18 @@ fn MemberRow(
         })
         .unwrap_or_else(|| "project currency".into());
     rsx! {
-        div { class: "np-assignment-row grid items-center gap-4 px-5 py-3 border-b border-light",
+        fieldset { class: "np-assignment-row grid items-center gap-4 px-5 py-3 border-0 border-b border-light m-0 min-w-0", disabled: inactive,
             Checkbox { checked: member.manager, compact: true, label: "{name} manages this project", onclick: move |_| { if let Some(member) = form.write().team.iter_mut().find(|member| member.user_id == id) { member.manager = !member.manager; } } }
             div { class: "flex items-center gap-4 min-w-0",
                 Avatar { initials: first_initial(&name), size: "project" }
                 div { class: "min-w-0",
                     div { class: "text-sm text-strong truncate", title: "{name}", "{name}" }
+                    if inactive { div { class: "text-xs text-subtle", "Inactive · read only" } }
                     div { class: "text-xs text-subtle", if member.manager { "Project manager" } else { "Project member" } }
                 }
             }
             div { class: "np-row-controls flex flex-wrap items-center gap-4 min-w-0",
-                if form.read().project_type == ProjectType::TimeAndMaterials && form.read().rate_mode == RateMode::Person {
+                if (form.read().project_type == ProjectType::TimeAndMaterials && form.read().rate_mode == RateMode::Person) || form.read().rate_mode == RateMode::Legacy {
                     label { class: "flex items-center gap-2 text-xs text-subtle", r#for: "np-person-rate-{id}",
                         "bill"
                         Input { class: "w-30 max-w-full font-mono text-right", id: "np-person-rate-{id}", label: "Billable rate for {name} ({billing_currency}/h)", value: member.billable_rate,

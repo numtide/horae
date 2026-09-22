@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO project_tasks (project_id,task_id,billable,rate_cents) VALUES ($1,$2,$3,$4)\n            ON CONFLICT (project_id,task_id) DO UPDATE SET billable=EXCLUDED.billable, rate_cents=EXCLUDED.rate_cents",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "63dc5212b834674d3ee6cade87b8129d6b244a12365e2c3db03fc1c551537d69"
+}

@@ -16,6 +16,8 @@ Draft payload retains strings for partially typed amounts/dates and local stable
 
 ## Project configuration
 
+The shared editor projects operational rows into `ProjectForm` using one repeatable-read transaction after checking the current active manager/admin. `EditableProject` also carries the actual client and assigned catalog identities, including archived status, so pagination or archival cannot substitute defaults. A missing configuration remains `RateMode::Legacy`; reading does not create a settings row. Money, percentages and minutes are rendered from their exact stored integers, keeping absent overrides distinct from zero. Private notes and both project/profile cost values are redacted for managers. Milestones use their persisted IDs; existing tasks use catalog IDs as stable form-row identities.
+
 Keep the current Project read model compatible. Add `project_settings` related 1:1 by unique project_id, with creator_id, rate_mode, budget_scope, monthly_reset, include_nonbillable, alert_enabled, alert_threshold, report_visibility, fee_mode/amount/monthly_day and invoice-default fields.
 
 No settings row means legacy behavior. New rate modes: person/task/project; fixed and non-billable type governs whether hourly billing applies. Existing retainer rows remain legacy. For person mode assignment override falls back to compatible profile/client rate; task mode project-task override falls back to compatible catalog/client rate; project mode requires an explicit project rate. Snapshot default rates at creation where their currency cannot otherwise be represented unambiguously.
@@ -27,6 +29,14 @@ Dates/code stay in existing projects columns. Creation supports EUR/CHF/USD/GBP 
 Migration 0035 adds the private `project_read_access` view, keyed by current active user/org/project, with `can_view_rates`, `can_view_team` and `can_view_progress` flags. Organization managers/admins retain organization scope; assigned leads/admins can view progress independently of the visibility setting; ordinary assigned members require member-visible progress. A user's own historical time permits project identity only after assignment revocation. Missing settings preserve legacy assigned-member progress. The view has no PUBLIC grant and is not added to the plugin allowlist.
 
 Migration 0036 adds private `task_read_access` for current active user/org/task identities, rate visibility and own-history membership. UI and compatibility reads share it; tracking authorization remains in `time_entry_contexts`. No PUBLIC or plugin grant is added.
+
+## Existing-project edit concurrency
+
+Migration 0039 adds `projects.edit_revision` and database triggers covering project rows and their settings, assignments, task links, private overrides, allocations, access links, tag links, milestones and fee occurrences. A changed operational row advances the revision; unchanged upserts do not. This covers existing detail actions and import writers as well as the shared editor, without requiring each caller to remember an invalidation step.
+
+`project_edit_requests` records the UUID v7 request identity, organization, project, actor, expected/completed revisions and bounded form payload. It is private and receives no plugin grants. A committed retry is acknowledged only for the same actor/project/payload and unchanged completed revision; it never replays over a subsequent edit. The mutation rechecks current authority, locks the project, validates the graph and commits all changes and the request acknowledgement in one serializable transaction. Serialization/deadlock conflicts return a recoverable conflict, without partial writes.
+
+Operational assignment/settings/access IDs survive upserts, and unchanged project-manager flags preserve existing Lead/Admin roles. Managers cannot write private values or indirectly erase a cost override by removing its assignment. Referenced tasks/people cannot be removed. Milestone position uniqueness becomes deferred so ordering can change without replacing persisted IDs; materialized invoice sources and charged milestone values cannot be rewritten. Invoice rows/lines and time entries are never updated by the editor.
 
 ## Tags
 

@@ -15,7 +15,7 @@ use crate::models::{
 };
 use crate::route::Route;
 use crate::server_fns;
-use horae_core::money::{format_cents, format_cents_plain};
+use horae_core::money::format_cents;
 use horae_core::types::{BudgetKind, ProjectType};
 
 fn hours(minutes: i64) -> String {
@@ -275,26 +275,7 @@ pub fn ProjectList() -> Element {
     let mut budget_res =
         use_resource(|| async move { server_fns::list_project_budget_progress().await });
 
-    let mut show_form = use_signal(|| false);
-    // Creation has its own route; this form only edits an existing project.
-    let mut editing_id = use_signal(|| None::<Uuid>);
-    let mut edit_busy = use_signal(|| false);
-    let mut edit_policy = use_resource(move || async move {
-        match editing_id() {
-            Some(id) => server_fns::get_project_edit_policy(id.to_string())
-                .await
-                .map(Some),
-            None => Ok(None),
-        }
-    });
-    let mut name = use_signal(String::new);
-    let mut project_type = use_signal(|| "time_and_materials".to_string());
-    let mut currency = use_signal(|| "USD".to_string());
-    let mut rate_value = use_signal(String::new);
-    let mut budget_kind = use_signal(|| "none".to_string());
-    // The figure that goes with the kind — an amount or a number of hours.
-    let mut budget_value = use_signal(String::new);
-    let mut error = use_signal(|| None::<String>);
+    let navigator = use_navigator();
     let action_error = use_signal(|| None::<String>);
 
     // Filters over the loaded list (client-side; the design's status/client
@@ -454,75 +435,13 @@ pub fn ProjectList() -> Element {
         _ => Vec::new(),
     };
 
-    let mut reset_form = move || {
-        editing_id.set(None);
-        name.set(String::new());
-        project_type.set("time_and_materials".to_string());
-        currency.set("USD".to_string());
-        rate_value.set(String::new());
-        budget_kind.set("none".to_string());
-        budget_value.set(String::new());
-        error.set(None);
-        show_form.set(false);
-    };
-
-    // Value is the enum's snake_case `Display`; label via ProjectType::label,
-    // so the pill and this picker share one source of truth.
-    let type_opts: Vec<(String, String)> = [
-        ProjectType::TimeAndMaterials,
-        ProjectType::FixedFee,
-        ProjectType::NonBillable,
-        ProjectType::Retainer,
-    ]
-    .iter()
-    .map(|t| (t.to_string(), t.label().to_string()))
-    .collect();
-    let budget_is_hours = budget_kind() == "hours";
-    let budget_label = if budget_is_hours {
-        "Budget hours"
-    } else {
-        "Budget amount"
-    };
-    let budget_placeholder = if budget_is_hours {
-        "120 or 7:30"
-    } else {
-        "12000 or 12,000.50"
-    };
-    // The figure only means something once a kind is chosen, and what it means
-    // differs, so the field follows the kind.
-    let budget_hint = if budget_is_hours {
-        "Total hours for this project. Leave blank to set it later."
-    } else {
-        "Total fees in the project's currency. Leave blank to set it later."
-    };
-    let current_policy = if edit_policy.state()() == UseResourceState::Ready {
-        edit_policy
-            .read()
-            .as_ref()
-            .and_then(|result| result.as_ref().ok())
-            .and_then(Option::as_ref)
-            .filter(|policy| Some(policy.project_id) == editing_id())
-            .cloned()
-    } else {
-        None
-    };
-
     rsx! {
         div {
             div { class: "page-header mb-5",
                 h1 { class: "page-title text-4xl font-semibold text-strong tracking-tight", "Projects" }
                 div { class: "page-actions items-center gap-4",
                     if is_manager {
-                        if show_form() {
-                            button {
-                                class: "btn btn-secondary py-2 px-4",
-                                disabled: edit_busy(),
-                                onclick: move |_| reset_form(),
-                                "Cancel"
-                            }
-                        } else {
-                            Link { to: Route::NewProject {}, class: "btn btn-primary py-2 px-4", "New project" }
-                        }
+                        Link { to: Route::NewProject {}, class: "btn btn-primary py-2 px-4", "New project" }
                         Menu {
                             id: "project-bulk-menu", label: "⚡ Actions", align_right: true,
                             trigger_class: "text-sm py-2 px-4",
@@ -607,112 +526,6 @@ pub fn ProjectList() -> Element {
                 }
             }
 
-            if show_form() && is_manager {
-                FormCard { title: "Edit Project", error,
-                  if let Some(policy) = current_policy {
-                    fieldset { class: "border-0 p-0 m-0 min-w-0", disabled: edit_busy(),
-                    if policy.configured {
-                        p { class: "form-hint", "Type and currency are fixed here to preserve configured rates and fees." }
-                    }
-                    FormGroup { label: "Name", id: "proj-name",
-                        Input {
-                            id: "proj-name",
-                            placeholder: "Project name",
-                            value: "{name}",
-                            oninput: move |e: FormEvent| name.set(e.value()),
-                        }
-                    }
-                    FormGroup { label: "Type", id: "proj-type",
-                        Select {
-                            id: "proj-type",
-                            disabled: policy.configured,
-                            options: type_opts,
-                            selected: project_type(),
-                            onchange: move |e: FormEvent| project_type.set(e.value()),
-                        }
-                    }
-                    FormGroup { label: "Currency", id: "proj-currency",
-                        Input {
-                            id: "proj-currency",
-                            disabled: policy.configured,
-                            placeholder: "USD",
-                            value: "{currency}",
-                            oninput: move |e: FormEvent| currency.set(e.value()),
-                        }
-                    }
-                    FormGroup { label: "Hourly rate", id: "proj-rate", hint: if !policy.configured {
-                        "Leave blank to use the user's default. Task and assignment overrides take priority. Zero is a free rate."
-                    } else if policy.rate_editable {
-                        "Hourly rate in the project's currency. Required; enter 0 for a zero rate."
-                    } else {
-                        "This project's billing configuration does not use a project hourly rate."
-                    },
-                        Input {
-                            id: "proj-rate",
-                            disabled: !policy.rate_editable,
-                            placeholder: if policy.rate_editable { "120.00" } else { "" },
-                            value: "{rate_value}",
-                            oninput: move |e: FormEvent| rate_value.set(e.value()),
-                        }
-                    }
-                    FormGroup { label: "Budget", id: "proj-budget", hint: if policy.budget_editable { "" } else { "Allocated per task or person; totals cannot be changed independently here." },
-                        Select {
-                            id: "proj-budget",
-                            disabled: !policy.budget_editable,
-                            options: vec![
-                                ("none".to_string(), "None".to_string()),
-                                ("amount".to_string(), "Amount".to_string()),
-                                ("hours".to_string(), "Hours".to_string()),
-                            ].into_iter().filter(|(value, _)| value != "amount" || policy.monetary_budget_allowed).collect(),
-                            selected: budget_kind(),
-                            onchange: move |e: FormEvent| budget_kind.set(e.value()),
-                        }
-                    }
-                    if budget_kind() != "none" {
-                        FormGroup { label: "{budget_label}", id: "proj-budget-value", hint: if policy.budget_editable { budget_hint } else { "Scoped allocation total (read only)." },
-                            Input {
-                                id: "proj-budget-value",
-                                disabled: !policy.budget_editable,
-                                placeholder: "{budget_placeholder}",
-                                value: "{budget_value}",
-                                oninput: move |e: FormEvent| budget_value.set(e.value()),
-                            }
-                        }
-                    }
-                    button {
-                        class: "btn btn-primary",
-                        onclick: move |_| {
-                            if edit_busy() { return; }
-                            let Some(id) = editing_id() else { return; };
-                            let n = name();
-                            let pt = project_type();
-                            let c = currency();
-                            let bk = budget_kind();
-                            let bv = budget_value();
-                            let rv = rate_value();
-                            error.set(None);
-                            edit_busy.set(true);
-                            spawn(async move {
-                                match server_fns::update_project(id.to_string(), n, pt, c, bk, bv, rv).await {
-                                    Ok(_) => {
-                                        projects.restart(); spend_res.restart(); budget_res.restart(); reset_form();
-                                    }
-                                    Err(e) => error.set(Some(e.to_string())),
-                                }
-                                edit_busy.set(false);
-                            });
-                        },
-                        "Save Changes"
-                    }
-                    }
-                  } else if edit_policy.state()() == UseResourceState::Ready && matches!(&*edit_policy.read(), Some(Err(_))) {
-                    div { class: "alert alert-danger", role: "alert", "Could not load project editing options." }
-                    button { class: "btn btn-secondary", onclick: move |_| edit_policy.restart(), "Retry editing options" }
-                  } else {
-                    p { role: "status", "Loading project editing options…" }
-                  }
-                }
-            }
 
             if let Some(message) = action_error() {
                 div { class: "alert alert-danger", role: "alert", "Could not change project status: {message}" }
@@ -792,7 +605,7 @@ pub fn ProjectList() -> Element {
                                         }
                                     }
                                     div { class: "flex flex-wrap items-center justify-center gap-3 mt-1",
-                                        if is_manager && !show_form() {
+                                        if is_manager {
                                             Link {
                                                 to: Route::NewProject {},
                                                 class: "btn btn-primary py-3 px-5",
@@ -943,33 +756,9 @@ pub fn ProjectList() -> Element {
                                                 if is_manager {
                                                     Menu { id: "project-actions-{p.id}", label: "Actions", align_right: true,
                                                         MenuItem {
-                                                            disabled: edit_busy(),
                                                             onclick: {
-                                                                let p = p.clone();
-                                                                move |_| {
-                                                                    editing_id.set(Some(p.id));
-                                                                    name.set(p.name.clone());
-                                                                    project_type.set(p.project_type.to_string());
-                                                                    currency.set(p.currency.clone());
-                                                                    rate_value.set(p.rate_cents.map(format_cents_plain).unwrap_or_default());
-                                                                    budget_kind.set(p.budget_kind.to_string());
-                                                                    // Seed the figure so saving an untouched
-                                                                    // form doesn't clear the budget.
-                                                                    budget_value
-                                                                        .set(match p.budget_kind {
-                                                                            BudgetKind::Amount => p
-                                                                                .budget_amount_cents
-                                                                                .map(format_cents_plain)
-                                                                                .unwrap_or_default(),
-                                                                            BudgetKind::Hours => p
-                                                                                .budget_minutes
-                                                                                .map(horae_core::duration::format_hhmm)
-                                                                                .unwrap_or_default(),
-                                                                            BudgetKind::None => String::new(),
-                                                                        });
-                                                                    error.set(None);
-                                                                    show_form.set(true);
-                                                                }
+                                                                let id = p.id;
+                                                                move |_| { navigator.push(Route::EditProject { id }); }
                                                             },
                                                             "Edit"
                                                         }

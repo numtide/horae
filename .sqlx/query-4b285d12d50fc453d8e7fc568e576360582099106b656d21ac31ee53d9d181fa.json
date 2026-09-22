@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM project_task_members WHERE project_id=$1 AND org_id=$2 AND task_id=$3 AND NOT(user_id=ANY($4))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4b285d12d50fc453d8e7fc568e576360582099106b656d21ac31ee53d9d181fa"
+}

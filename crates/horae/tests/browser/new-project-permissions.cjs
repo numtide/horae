@@ -103,7 +103,6 @@ const name = 'Permission fixture project';
     const today = sql('SELECT CURRENT_DATE::text');
     const reportArgs = { from: today, to: today, group_by: 'project', client_id: null, project_id: projectId, user_id: null, tag_id: null };
     const optionsArgs = { search: { clients: { query: '', offset: 0 }, tasks: { query: '', offset: 0 }, people: { query: '', offset: 0 } } };
-    const originalProject = sql(`SELECT row_to_json(p)::text FROM projects p WHERE id = '${projectId}'`);
     const cases = [
       { label: 'organization admin', role: 'admin', assignment: 'freelancer', visibility: 'managers', progress: true, rates: true, private: true },
       { label: 'organization manager', role: 'manager', assignment: 'freelancer', visibility: 'managers', progress: true, rates: true, private: false },
@@ -117,6 +116,9 @@ const name = 'Permission fixture project';
       sql(`UPDATE users SET org_role = '${scenario.role}' WHERE id = '${actor.id}';
         UPDATE assignments SET role = '${scenario.assignment}' WHERE project_id = '${projectId}' AND user_id = '${actor.id}';
         UPDATE project_settings SET report_visibility = '${scenario.visibility}' WHERE project_id = '${projectId}'`);
+      // Fixture role/visibility changes invalidate open editors. Reads and denied
+      // mutations below must preserve the whole row, including that new revision.
+      const originalProject = sql(`SELECT row_to_json(p)::text FROM projects p WHERE id = '${projectId}'`);
       await visit('/projects');
       await expect.poll(() => endpoints.has('list_project_budget_progress')).toBe(true);
       await readsFinished();

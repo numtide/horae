@@ -4,8 +4,8 @@ use super::*;
 #[cfg(feature = "server")]
 use crate::models::project_creation::TaskAccess;
 use crate::models::project_creation::{
-    CreationClient, CreationOptions, CreationSearch, CreationSelection, DraftSaved, ProjectDraft,
-    ProjectForm,
+    CreationClient, CreationOptions, CreationSearch, CreationSelection, DraftSaved,
+    EditableProject, ProjectDraft, ProjectEditRequest, ProjectForm,
 };
 
 #[cfg(feature = "server")]
@@ -17,6 +17,8 @@ mod finalize;
 #[cfg(feature = "server")]
 use finalize::finalize_draft_record;
 #[cfg(feature = "server")]
+pub(super) mod editing;
+#[cfg(feature = "server")]
 mod options;
 #[cfg(feature = "server")]
 use options::{load_creation_options, load_selected_catalog, load_selected_client};
@@ -26,6 +28,38 @@ mod assignment_tests;
 
 #[cfg(all(test, feature = "server"))]
 mod import_tests;
+
+/// Load the existing project into the same form used for creation.
+#[server]
+pub async fn load_project_editor(project_id: uuid::Uuid) -> Result<EditableProject, ServerFnError> {
+    let actor = require_manager().await?;
+    let state = crate::state::global_state().await;
+    editing::load_editable_project(&state.db, actor.id, actor.org_id, project_id).await
+}
+
+#[server]
+pub async fn save_project_editor(request: ProjectEditRequest) -> Result<uuid::Uuid, ServerFnError> {
+    let actor = require_manager().await?;
+    let state = crate::state::global_state().await;
+    let (project, changed) = editing::save_editable_project(
+        &state.db,
+        actor.id,
+        actor.org_id,
+        &request,
+        state.mail.is_some(),
+    )
+    .await?;
+    if changed {
+        state
+            .plugins
+            .dispatch(crate::plugin::AppEvent::ProjectUpdated {
+                occurred_at: chrono::Utc::now(),
+                org_id: actor.org_id,
+                project: project_payload(&project),
+            });
+    }
+    Ok(project.id)
+}
 
 /// Resolve only the selected active task/person identities, independently of pagination.
 #[server]
@@ -129,6 +163,13 @@ pub async fn discard_project_draft(
 
 #[cfg(feature = "server")]
 fn storage_error(error: sqlx::Error) -> ServerFnError {
+    if error
+        .as_database_error()
+        .and_then(|error| error.code())
+        .is_some_and(|code| matches!(code.as_ref(), "40001" | "40P01"))
+    {
+        return conflict("The project changed while saving. Reload before retrying.");
+    }
     tracing::error!(code = ?error.as_database_error().and_then(|error| error.code()), "Project creation database operation failed");
     server_err("Could not save or load the project. Please retry.")
 }

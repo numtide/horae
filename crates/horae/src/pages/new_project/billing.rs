@@ -78,6 +78,7 @@ pub(super) fn Billing(
             .flatten()
     };
     let project_type = form.read().project_type;
+    let legacy = form.read().rate_mode == RateMode::Legacy;
     let currency = form.read().currency.clone().or_else(|| {
         options
             .read()
@@ -89,7 +90,7 @@ pub(super) fn Billing(
     let currency_label = currency.unwrap_or_else(|| "Select a currency".into());
     rsx! {
         FormRow { label: "Project type", hint: "How this project bills",
-            div { class: "np-types grid grid-cols-3 gap-3", role: "group", aria_label: "Project type",
+            fieldset { class: "np-types grid grid-cols-3 gap-3 border-0 p-0 m-0", aria_label: "Project type", disabled: legacy,
                 for (kind, icon, hint) in [
                     (ProjectType::TimeAndMaterials, "time", "Bill by the hour at your team's billable rates."),
                     (ProjectType::FixedFee, "invoices", "Bill a set fee, in one go or across a schedule."),
@@ -117,9 +118,20 @@ pub(super) fn Billing(
                     }
                 }
             }
+            if legacy {
+                p { class: "form-hint", "Current type: {project_type.label()}. This project keeps its existing billing rules; changing to a new billing configuration requires a migration." }
+            }
             if let Some(message) = error_for(ProjectFormField::ProjectType) { p { id: "np-billing-field-error", class: "text-sm text-danger", "{message}" } }
             div { class: "bg-secondary border rounded-xl p-5 mt-3 flex flex-col gap-5",
-                if project_type == ProjectType::TimeAndMaterials {
+                if legacy {
+                    div {
+                        p { id: "np-rate-mode", class: "text-sm font-semibold m-0", "Existing rate hierarchy" }
+                        p { class: "form-hint", "Task override, then person override, then project rate, then profile rate. Empty inherits; zero is an explicit rate." }
+                        label { class: "block text-sm mb-2", r#for: "np-project-rate", "Project hourly rate ({currency_label})" }
+                        Input { id: "np-project-rate", error_id: error_id(ProjectFormField::ProjectRate), class: "w-30 max-w-full font-mono text-right", value: form.read().project_rate.clone(), placeholder: "Inherit", oninput: move |event: FormEvent| form.write().project_rate = event.value() }
+                        if let Some(message) = error_for(ProjectFormField::ProjectRate) { p { id: "np-billing-field-error", class: "text-sm text-danger", "{message}" } }
+                    }
+                } else if project_type == ProjectType::TimeAndMaterials {
                     fieldset { class: "border-0 p-0 m-0",
                         legend { class: "text-xs uppercase tracking-eyebrow text-faint mb-2", "Billable rates" }
                         div { class: "flex flex-col gap-2",
@@ -154,10 +166,10 @@ pub(super) fn Billing(
                         }
                     }
                 }
-                if project_type == ProjectType::FixedFee {
+                if project_type == ProjectType::FixedFee && !legacy {
                     FeeSchedule { form, currency: currency_label.clone(), invalid_field, error_message: error_message.clone() }
                 }
-                Budget { form, currency: currency_label, email_available: options.read().email_available, invalid_field, error_message: error_message.clone() }
+                Budget { form, currency: currency_label, email_available: options.read().email_available, legacy, invalid_field, error_message: error_message.clone() }
                 if project_type == ProjectType::NonBillable {
                     p { class: "text-xs text-subtle m-0", "Internal work, R&D, sales. This project's time is non-billable and cannot be invoiced." }
                 }
@@ -171,6 +183,7 @@ fn Budget(
     mut form: Signal<ProjectForm>,
     currency: String,
     email_available: bool,
+    #[props(default)] legacy: bool,
     invalid_field: Option<ProjectFormField>,
     error_message: Option<String>,
 ) -> Element {
@@ -189,7 +202,16 @@ fn Budget(
         ),
     ]
     .into_iter()
-    .filter(|(mode, _, _)| mode.validate_for(form.read().project_type).is_ok())
+    .filter(|(mode, _, _)| {
+        if legacy {
+            matches!(
+                mode,
+                BudgetMode::None | BudgetMode::TotalHours | BudgetMode::TotalFees
+            )
+        } else {
+            mode.validate_for(form.read().project_type).is_ok()
+        }
+    })
     .collect();
     let selected = choices
         .iter()
@@ -229,7 +251,10 @@ fn Budget(
             }
             if matches!(mode, BudgetMode::HoursPerTask | BudgetMode::FeesPerTask) { p { class: "form-hint", "Enter each task's budget in the Tasks section below." } }
             if mode == BudgetMode::HoursPerPerson { p { class: "form-hint", "Enter each person's budget in the Team section below." } }
-            if mode != BudgetMode::None {
+            if legacy && mode == BudgetMode::TotalHours {
+                p { class: "form-hint", "This project's hour budget includes billable and non-billable time, without a monthly reset." }
+            }
+            if mode != BudgetMode::None && !legacy {
                 div { class: "flex flex-col gap-3 mt-4",
                     div { class: "flex flex-wrap items-center gap-3",
                         Checkbox { id: "np-budget-alert", error_id: error_id(ProjectFormField::BudgetAlert), checked: form.read().budget_alert, label: "Email me and project managers when the budget passes the threshold", disabled: !email_available && !form.read().budget_alert,

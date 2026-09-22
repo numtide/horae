@@ -18,9 +18,11 @@ use crate::server_fns;
 pub(super) fn Tasks(
     mut form: Signal<ProjectForm>,
     mut options: Signal<CreationOptions>,
+    #[props(default)] inactive_ids: Vec<Uuid>,
     #[props(default)] invalid_field: Option<ProjectFormField>,
     #[props(default)] error_message: Option<String>,
 ) -> Element {
+    let inactive_ids = use_signal(|| inactive_ids);
     let mut query = use_signal(String::new);
     let mut error = use_signal(|| None::<String>);
     let mut editing_access = use_signal(|| None::<Uuid>);
@@ -111,8 +113,8 @@ pub(super) fn Tasks(
                 if billable_project {
                     div { class: "flex items-center gap-2 ml-auto",
                         span { class: "text-xs text-label", "Billable" }
-                        button { r#type: "button", class: "btn btn-ghost btn-sm", onclick: move |_| { for task in &mut form.write().tasks { task.billable = true; } }, "All" }
-                        button { r#type: "button", class: "btn btn-ghost btn-sm", onclick: move |_| { for task in &mut form.write().tasks { task.billable = false; } }, "None" }
+                        button { r#type: "button", class: "btn btn-ghost btn-sm", onclick: move |_| { for task in &mut form.write().tasks { if !matches!(task.source, TaskSource::Existing { task_id } if inactive_ids.read().contains(&task_id)) { task.billable = true; } } }, "All" }
+                        button { r#type: "button", class: "btn btn-ghost btn-sm", onclick: move |_| { for task in &mut form.write().tasks { if !matches!(task.source, TaskSource::Existing { task_id } if inactive_ids.read().contains(&task_id)) { task.billable = false; } } }, "None" }
                     }
                 }
             }
@@ -121,11 +123,13 @@ pub(super) fn Tasks(
                 span { "Everyone on the project can track to unrestricted tasks. Open a task's access settings to limit who can." }
             }
             for task in form.read().tasks.clone() {
-                TaskRow { key: "{task.id}", form, options, id: task.id, invalid_field, error_message: error_message.clone(), on_access: move |id| editing_access.set(Some(id)) }
+                TaskRow { key: "{task.id}", form, options, id: task.id, inactive: matches!(task.source, TaskSource::Existing { task_id } if inactive_ids.read().contains(&task_id)), invalid_field, error_message: error_message.clone(), on_access: move |id| editing_access.set(Some(id)) }
             }
             if form.read().tasks.is_empty() { p { class: "text-sm text-subtle px-5", "No tasks selected yet." } }
             div { class: "px-5 py-3",
-                if form.read().project_type == ProjectType::TimeAndMaterials && form.read().rate_mode == RateMode::Task {
+                if form.read().rate_mode == RateMode::Legacy {
+                    p { class: "form-hint mt-0", "Task rates override person and project rates. Blank uses the existing rate hierarchy; zero is an explicit rate. Rates are not converted." }
+                } else if form.read().project_type == ProjectType::TimeAndMaterials && form.read().rate_mode == RateMode::Task {
                     p { class: "form-hint mt-0", "Blank rates inherit a compatible catalog rate, then the client's default. Unknown or different catalog currencies require an explicit rate. Rates are not converted." }
                 }
                 if let Some(message) = error() { p { class: "text-sm text-danger", role: "alert", "{message}" } }
@@ -176,6 +180,7 @@ fn TaskRow(
     mut form: Signal<ProjectForm>,
     options: Signal<CreationOptions>,
     id: Uuid,
+    #[props(default)] inactive: bool,
     on_access: EventHandler<Uuid>,
     invalid_field: Option<ProjectFormField>,
     error_message: Option<String>,
@@ -230,11 +235,11 @@ fn TaskRow(
         None => "Inherit".into(),
     };
     rsx! {
-        div { class: "np-assignment-row grid items-center gap-4 px-5 py-3 border-b border-light",
+        fieldset { class: "np-assignment-row grid items-center gap-4 px-5 py-3 border-0 border-b border-light m-0 min-w-0", disabled: inactive,
             Checkbox { checked: task.billable && billable_project, compact: true, disabled: !billable_project, label: "{name} is billable", onclick: move |_| { if let Some(task) = form.write().tasks.iter_mut().find(|task| task.id == id) { task.billable = !task.billable; } } }
-            span { class: "text-sm text-strong truncate", title: "{name}", "{name}" }
+            span { class: "text-sm text-strong truncate", title: "{name}", "{name}" if inactive { span { class: "block text-xs text-subtle", "Archived · read only" } } }
             div { class: "np-row-controls flex flex-wrap items-center gap-4 min-w-0",
-                if form.read().project_type == ProjectType::TimeAndMaterials && form.read().rate_mode == RateMode::Task {
+                if (form.read().project_type == ProjectType::TimeAndMaterials && form.read().rate_mode == RateMode::Task) || form.read().rate_mode == RateMode::Legacy {
                     label { class: "flex items-center gap-2 text-xs text-subtle", r#for: "np-task-rate-{id}",
                         "rate"
                         Input { class: "w-30 max-w-full font-mono text-right", id: "np-task-rate-{id}", label: "Hourly rate for {name} ({currency})", value: task.rate,

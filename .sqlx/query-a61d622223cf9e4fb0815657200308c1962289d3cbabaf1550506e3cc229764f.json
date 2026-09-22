@@ -1,0 +1,113 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT rate_mode, budget_scope, monthly_reset, include_nonbillable,\n           alert_enabled, alert_threshold, report_visibility, fee_mode, fee_amount_cents,\n           monthly_day, terms_days, po_number, discount_bps, tax1_bps, tax2_name, tax2_bps\n         FROM project_settings WHERE project_id = $1 AND org_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "rate_mode",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "budget_scope",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "monthly_reset",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "include_nonbillable",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "alert_enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "alert_threshold",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 6,
+        "name": "report_visibility",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "fee_mode",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "fee_amount_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "monthly_day",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "terms_days",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 11,
+        "name": "po_number",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "discount_bps",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 13,
+        "name": "tax1_bps",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 14,
+        "name": "tax2_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "tax2_bps",
+        "type_info": "Int2"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "a61d622223cf9e4fb0815657200308c1962289d3cbabaf1550506e3cc229764f"
+}

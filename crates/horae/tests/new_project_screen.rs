@@ -63,6 +63,7 @@ fn navigation_icons_keep_default_dimensions_and_allow_opt_in_sizing() {
 #[derive(Clone)]
 struct Probe {
     options: CreationOptions,
+    existing: Option<project_creation::EditableProject>,
     draft: Option<ProjectDraft>,
     selected_client: Option<CreationClient>,
     selected_tasks: Vec<project_creation::CreationTask>,
@@ -73,6 +74,7 @@ struct Probe {
 impl Default for Probe {
     fn default() -> Self {
         Self {
+            existing: None,
             options: CreationOptions {
                 organization_currency: "EUR".into(),
                 can_edit_private_settings: false,
@@ -96,9 +98,13 @@ impl Default for Probe {
 }
 
 fn app(probe: Probe) -> Element {
+    let initial_path = probe.existing.as_ref().map_or_else(
+        || "/projects/new".to_owned(),
+        |project| format!("/projects/{}/edit", project.id),
+    );
     use_context_provider(|| probe);
     rsx! {
-        HistoryProvider { history: |_| Rc::new(MemoryHistory::with_initial_path("/projects/new")) as Rc<dyn History>,
+        HistoryProvider { history: move |_| Rc::new(MemoryHistory::with_initial_path(initial_path.clone())) as Rc<dyn History>,
             Router::<route::Route> {}
         }
     }
@@ -106,7 +112,7 @@ fn app(probe: Probe) -> Element {
 
 mod route {
     use super::*;
-    use new_project::NewProject;
+    use new_project::{EditProject, NewProject};
 
     #[derive(Clone, PartialEq, Routable)]
     pub enum Route {
@@ -114,6 +120,8 @@ mod route {
         ProjectList {},
         #[route("/projects/new")]
         NewProject {},
+        #[route("/projects/:id/edit")]
+        EditProject { id: Uuid },
         #[route("/projects/:id")]
         ProjectDetail { id: Uuid },
     }
@@ -137,6 +145,66 @@ fn render(probe: Probe) -> String {
         dom.render_immediate_to_vec();
     }
     panic!("new project render did not settle");
+}
+
+#[tokio::test]
+async fn edit_prefills_legacy_currency_and_type_without_reading_or_saving_a_draft() {
+    let client_id = Uuid::now_v7();
+    let mut probe = Probe::default();
+    probe.options.can_edit_private_settings = true;
+    probe.existing = Some(project_creation::EditableProject {
+        id: Uuid::now_v7(),
+        revision: 9,
+        configured: false,
+        active: false,
+        form: ProjectForm {
+            client_id: Some(client_id),
+            name: "Imported retainer".into(),
+            code: "LEGACY-01".into(),
+            currency: Some("JPY".into()),
+            project_type: horae_core::types::ProjectType::Retainer,
+            rate_mode: horae_core::project::RateMode::Legacy,
+            project_rate: "0.00".into(),
+            admin_notes: "Existing private notes".into(),
+            report_visibility: project_creation::ReportVisibility::ProjectMembers,
+            ..Default::default()
+        },
+        client: CreationClient {
+            id: client_id,
+            name: "Archived client".into(),
+            currency: "JPY".into(),
+            active: false,
+            default_rate_cents: None,
+        },
+        selection: project_creation::CreationSelection {
+            tasks: vec![],
+            people: vec![],
+        },
+        inactive_task_ids: vec![],
+        inactive_user_ids: vec![],
+    });
+    let writes = probe.writes.clone();
+    let html = render(probe);
+    for expected in [
+        "Edit project",
+        "Imported retainer",
+        "LEGACY-01",
+        "Archived client",
+        "JPY",
+        "Current type: Retainer",
+        "Existing rate hierarchy",
+        "Existing private notes",
+        "Save changes",
+        "No unsaved changes",
+    ] {
+        assert!(
+            html.contains(expected),
+            "Missing existing project value: {expected}"
+        );
+    }
+    assert!(!html.contains("Discard draft"));
+    assert!(!html.contains("Saving draft"));
+    assert_eq!(writes.get(), 0);
 }
 
 #[tokio::test]
@@ -776,7 +844,26 @@ mod server_fns {
         })
     }
     pub async fn load_project_draft() -> Result<Option<ProjectDraft>, ServerFnError> {
-        Ok(use_context::<Probe>().draft)
+        let probe = use_context::<Probe>();
+        assert!(
+            probe.existing.is_none(),
+            "editing must not load a creation draft"
+        );
+        Ok(probe.draft)
+    }
+    pub async fn load_project_editor(
+        id: Uuid,
+    ) -> Result<project_creation::EditableProject, ServerFnError> {
+        let project = use_context::<Probe>()
+            .existing
+            .expect("creation must not load an existing project");
+        assert_eq!(project.id, id);
+        Ok(project)
+    }
+    pub async fn save_project_editor(
+        _: project_creation::ProjectEditRequest,
+    ) -> Result<Uuid, ServerFnError> {
+        panic!("creation must not update an existing project");
     }
     pub async fn save_project_draft(
         _: Uuid,

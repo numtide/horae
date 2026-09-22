@@ -10,16 +10,6 @@ pub struct ProjectTaskRate {
     pub currency: String,
 }
 
-/// Current manager-only capabilities of the existing project editor.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ProjectEditPolicy {
-    pub project_id: Uuid,
-    pub configured: bool,
-    pub rate_editable: bool,
-    pub budget_editable: bool,
-    pub monetary_budget_allowed: bool,
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "server", derive(sqlx::FromRow))]
 pub struct Project {

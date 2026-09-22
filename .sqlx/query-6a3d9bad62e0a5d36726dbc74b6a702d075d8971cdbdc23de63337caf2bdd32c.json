@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.user_id, a.role as \"role: ProjectRole\", a.rate_cents,\n           CASE WHEN $3 THEN c.cost_rate_cents END as \"cost_rate_cents?\", b.budget_minutes as \"budget_minutes?\"\n           FROM assignments a JOIN users u ON u.id = a.user_id AND u.org_id = $2\n           LEFT JOIN project_member_costs c ON c.project_id = a.project_id AND c.user_id = a.user_id AND c.org_id = $2\n           LEFT JOIN project_member_budgets b ON b.project_id = a.project_id AND b.user_id = a.user_id AND b.org_id = $2\n           WHERE a.project_id = $1 ORDER BY a.user_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "role: ProjectRole",
+        "type_info": {
+          "Custom": {
+            "name": "project_role",
+            "kind": {
+              "Enum": [
+                "lead",
+                "freelancer",
+                "admin"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "rate_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "cost_rate_cents?",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "budget_minutes?",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      null,
+      false
+    ]
+  },
+  "hash": "6a3d9bad62e0a5d36726dbc74b6a702d075d8971cdbdc23de63337caf2bdd32c"
+}

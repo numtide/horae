@@ -26,7 +26,7 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated, seeded test instance');
     {
       name: 'project archive', path: '/projects', resource: 'list_projects',
       endpoint: 'set_project_active', form: /^Actions/,
-      formEndpoint: 'update_project', submit: 'Save Changes',
+      formEndpoint: 'save_project_editor', submit: 'Save changes', separatePage: true,
       openForm: async () => {
         await page.locator('.proj-row').getByRole('button', { name: /^Actions/ }).first().click();
         await page.getByRole('menuitem', { name: 'Edit', exact: true }).click();
@@ -63,6 +63,29 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated, seeded test instance');
         await rejected;
         await expect(page.locator('.alert-danger')).toBeVisible();
         await expect(page.getByRole('alert')).toBeVisible();
+        if (scenario.separatePage) {
+          // The editor now has its own route. A list popover must not hide a
+          // failed archive; the editor must independently preserve failed input.
+          await page.locator('.proj-row').getByRole('button', { name: /^Actions/ }).first().click();
+          await page.keyboard.press('Escape');
+          await expect(page.getByRole('alert')).toBeVisible();
+          await scenario.openForm();
+          await expect(page).toHaveURL(/\/projects\/[0-9a-f-]{36}\/edit$/);
+          const editor = page.locator('.np-page');
+          const originalName = await editor.locator('#np-name').inputValue();
+          const formRejected = page.waitForEvent('requestfailed', r => r.url().includes(`/api/${scenario.formEndpoint}`));
+          await editor.getByRole('button', { name: scenario.submit, exact: true }).click();
+          await formRejected;
+          await expect(editor.getByRole('alert')).toBeVisible();
+          await expect(editor.locator('#np-name')).toHaveValue(originalName);
+          await expect(editor.getByRole('button', { name: 'Cancel', exact: true })).toBeDisabled();
+          await page.unroute(formPattern);
+          await editor.getByRole('button', { name: 'Retry request', exact: true }).click();
+          await expect(page).toHaveURL(/\/projects\/[0-9a-f-]{36}$/);
+          await expect(page.getByRole('alert')).toHaveCount(0);
+          console.log('PASS: archive failure survives menu dismissal; shared edit failure preserves input and safely retries');
+          continue;
+        }
         // Opening and cancelling an unrelated form must not clear an action error.
         if (scenario.openForm) await scenario.openForm();
         else await page.getByRole('button', { name: scenario.form, exact: true }).click();

@@ -108,6 +108,8 @@ mod route {
         ProjectList {},
         #[route("/projects/new")]
         NewProject {},
+        #[route("/projects/:id/edit")]
+        EditProject { id: Uuid },
         #[route("/projects/:id")]
         ProjectDetail { id: Uuid },
         #[route("/admin/importers")]
@@ -117,6 +119,11 @@ mod route {
     #[component]
     fn NewProject() -> Element {
         rsx! { h1 { "New project" } }
+    }
+
+    #[component]
+    fn EditProject(id: Uuid) -> Element {
+        rsx! { h1 { "Edit project {id}" } }
     }
 
     #[component]
@@ -570,11 +577,6 @@ mod server_fns {
     pub async fn list_project_tags() -> Result<Vec<project::ProjectTagLink>, ServerFnError> {
         Ok(Vec::new())
     }
-    pub async fn get_project_edit_policy(
-        _id: String,
-    ) -> Result<project::ProjectEditPolicy, ServerFnError> {
-        panic!("unexpected project editor read");
-    }
     pub async fn get_project_details(id: String) -> ProjectDetailsResponse {
         let id = Uuid::parse_str(&id).unwrap();
         let probe = consume_context::<Probe>();
@@ -602,17 +604,6 @@ mod server_fns {
     pub async fn list_project_budget_progress()
     -> Result<Vec<crate::models::ProjectBudgetProgress>, ServerFnError> {
         Ok(Vec::new())
-    }
-    pub async fn update_project(
-        _id: String,
-        _name: String,
-        _kind: String,
-        _currency: String,
-        _budget: String,
-        _value: String,
-        _rate: String,
-    ) -> Result<Project, ServerFnError> {
-        panic!("unexpected mutation");
     }
     pub async fn set_project_active(_id: String, _active: bool) -> Result<(), ServerFnError> {
         panic!("unexpected mutation");

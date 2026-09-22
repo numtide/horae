@@ -207,6 +207,7 @@ pub(super) mod tests {
         // Identifiers come only from this fixed list, never plugin input.
         for relation in [
             "project_drafts",
+            "project_edit_requests",
             "project_settings",
             "project_private_settings",
             "project_member_costs",

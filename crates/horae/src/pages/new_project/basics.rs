@@ -17,6 +17,7 @@ use super::date_field::DateField;
 pub(super) fn Basics(
     mut form: Signal<ProjectForm>,
     mut options: Signal<CreationOptions>,
+    #[props(default)] editing: bool,
     #[props(default)] invalid_field: Option<ProjectFormField>,
     #[props(default)] error_message: Option<String>,
 ) -> Element {
@@ -61,13 +62,21 @@ pub(super) fn Basics(
         .unwrap_or_else(|| "Client default (select a client)".into());
     let unavailable_client =
         selected.is_some() && selected_client.is_none_or(|client| !client.active);
-    let currency_options = std::iter::once((String::new(), inherited_currency))
-        .chain(
-            PROJECT_CURRENCIES
-                .iter()
-                .map(|currency| (currency.to_string(), currency.to_string())),
-        )
-        .collect();
+    let currency_options = if editing {
+        form.read()
+            .currency
+            .iter()
+            .map(|currency| (currency.clone(), currency.clone()))
+            .collect()
+    } else {
+        std::iter::once((String::new(), inherited_currency))
+            .chain(
+                PROJECT_CURRENCIES
+                    .iter()
+                    .map(|currency| (currency.to_string(), currency.to_string())),
+            )
+            .collect()
+    };
     let missing_client =
         selected.is_some() && !choices.iter().any(|client| Some(client.id) == selected);
     let previous_code = catalog.previous_code.clone();
@@ -131,7 +140,7 @@ pub(super) fn Basics(
                     button { r#type: "button", class: "btn btn-secondary", onclick: move |_| client_open.set(true), "+ New client" }
                 }
                 if unavailable_client {
-                    p { class: "text-sm text-warning", "This client is archived or unavailable. Choose an active client before saving the project." }
+                    p { class: "text-sm text-warning", if editing { "This client is archived. You can keep the current client or select an active client." } else { "This client is archived or unavailable. Choose an active client before saving the project." } }
                 }
                 if let Some(message) = error_for(&[ProjectFormField::Client]) {
                     p { id: "np-basic-field-error", class: "text-sm text-danger", "{message}" }
@@ -217,11 +226,13 @@ pub(super) fn Basics(
         }
         FormRow { label: "Currency", id: "np-currency", hint: "For billing and project rates",
             div { class: "np-currency-select",
+                fieldset { class: "border-0 p-0 m-0", disabled: editing,
                 SelectField { id: "np-currency", error_id: error_id(ProjectFormField::Currency), label: "Currency", options: currency_options, selected: form.read().currency.clone().unwrap_or_default(), onselect: move |value: String| {
                     form.write().currency = (!value.is_empty()).then_some(value);
-                } }
+                } } }
             }
             p { class: "form-hint", "Sets the currency for rates, fees and budgets. Costs use the workspace currency ({organization_currency})." }
+            if editing { p { class: "form-hint", "Changing an existing project's currency requires a data migration." } }
             if let Some(message) = error_for(&[ProjectFormField::Currency]) {
                 p { id: "np-basic-field-error", class: "text-sm text-danger", "{message}" }
             }

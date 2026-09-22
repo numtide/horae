@@ -93,9 +93,9 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
             await page.screenshot({ path: process.env.HORAE_TEST_SCREENSHOT });
           const edit = geometry.items.find(item => item.text === 'Edit');
           await page.mouse.click(edit.x, edit.y);
-          await expect(page.getByRole('heading', { name: 'Edit Project', exact: true })).toBeVisible();
+          await expect(page.locator('.np-page').getByRole('heading', { name: 'Edit project', exact: true })).toBeVisible();
           await expect(menu).toBeHidden();
-          await page.locator('.page-header').getByRole('button', { name: 'Cancel', exact: true }).click();
+          await page.locator('.np-footer').getByRole('button', { name: 'Cancel', exact: true }).click();
         }
       }
     });

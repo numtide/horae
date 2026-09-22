@@ -19,8 +19,7 @@ pub use invoice::{Invoice, InvoiceWithLines};
 pub use jobs::{JobStatus, RetryAvailability};
 pub use organization::OrgBranding;
 pub use project::{
-    Project, ProjectBudgetProgress, ProjectDetails, ProjectEditPolicy, ProjectTagLink,
-    ProjectTaskRate,
+    Project, ProjectBudgetProgress, ProjectDetails, ProjectTagLink, ProjectTaskRate,
 };
 pub use task::Task;
 pub use time_entry::TimeEntry;
