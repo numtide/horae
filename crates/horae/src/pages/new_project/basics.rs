@@ -103,6 +103,7 @@ pub(super) fn Basics(
                 div { class: "flex flex-wrap items-center gap-3",
                     div { class: "np-client-select min-w-0",
                         SelectField { id: "np-client", label: "Client", options: client_choices,
+                            error_id: error_id(ProjectFormField::Client),
                             selected: selected.map(|id| id.to_string()).unwrap_or_default(),
                             disabled_values: disabled_clients, query: Some(client_query),
                             pending: clients_pending,
@@ -131,6 +132,9 @@ pub(super) fn Basics(
                 }
                 if unavailable_client {
                     p { class: "text-sm text-warning", "This client is archived or unavailable. Choose an active client before saving the project." }
+                }
+                if let Some(message) = error_for(&[ProjectFormField::Client]) {
+                    p { id: "np-basic-field-error", class: "text-sm text-danger", "{message}" }
                 }
             }
         }

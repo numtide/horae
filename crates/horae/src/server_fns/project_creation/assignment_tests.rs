@@ -232,6 +232,8 @@ async fn invalid_assignment_graphs_leave_no_partial_creation_or_draft_change(poo
         .unwrap();
     let counts = creation_counts(&pool, owner.org_id).await;
     for (case, expected_code) in [
+        ("foreign client", NOT_FOUND),
+        ("missing client", NOT_FOUND),
         ("duplicate person", BAD_REQUEST),
         ("foreign person", NOT_FOUND),
         ("inactive person", NOT_FOUND),
@@ -248,6 +250,8 @@ async fn invalid_assignment_graphs_leave_no_partial_creation_or_draft_change(poo
     ] {
         let mut invalid = form.clone();
         match case {
+            "foreign client" => invalid.client_id = Some(foreign.client_id),
+            "missing client" => invalid.client_id = Some(Uuid::now_v7()),
             "duplicate person" => invalid.team.push(member_input(teammate)),
             "foreign person" => invalid.team.push(member_input(foreign.user_id)),
             "inactive person" => invalid.team.push(member_input(inactive)),
@@ -304,6 +308,27 @@ async fn invalid_assignment_graphs_leave_no_partial_creation_or_draft_change(poo
             matches!(error, ServerFnError::ServerError { code, .. } if code == expected_code),
             "{case}: {error:?}"
         );
+        let expected_field = match case {
+            "foreign client" | "missing client" => Some(serde_json::json!("client")),
+            "foreign person" | "inactive person" | "missing person" => {
+                Some(serde_json::json!({"person": invalid.team.last().unwrap().user_id}))
+            }
+            "foreign task" | "inactive task" | "missing task" => {
+                Some(serde_json::json!({"task": invalid.tasks[1].id}))
+            }
+            "archived named task" => Some(serde_json::json!({"task_name": invalid.tasks[1].id})),
+            _ => None,
+        };
+        if let Some(expected) = expected_field {
+            let ServerFnError::ServerError { details, .. } = &error else {
+                unreachable!()
+            };
+            assert_eq!(
+                details.as_ref().and_then(|value| value.get("field")),
+                Some(&expected),
+                "{case}"
+            );
+        }
         assert_eq!(creation_counts(&pool, owner.org_id).await, counts, "{case}");
         assert_eq!(
             load_draft_record(&pool, owner.user_id, owner.org_id)

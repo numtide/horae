@@ -37,10 +37,15 @@ pub(super) async fn finalize_draft_record(
         ));
     }
     let payload = validate_draft_form(form, role == OrgRole::Admin)?;
-    let client_id = form
-        .client_id
-        .ok_or_else(|| err(BAD_REQUEST, "Client is required"))?;
-    let client = lock_creation_client(&mut tx, client_id, org_id).await?;
+    let client_id = form.client_id.ok_or_else(|| {
+        with_field(
+            err(BAD_REQUEST, "Client is required"),
+            ProjectFormField::Client,
+        )
+    })?;
+    let client = lock_creation_client(&mut tx, client_id, org_id)
+        .await
+        .map_err(|error| with_field(error, ProjectFormField::Client))?;
     let currency = form.currency.as_deref().unwrap_or(&client.currency);
     let org_currency = sqlx::query_scalar!(
         "SELECT default_currency FROM organizations WHERE id = $1 FOR SHARE",
@@ -170,7 +175,7 @@ async fn save_members(
             "SELECT billable_rate_cents FROM users WHERE id = $1 AND org_id = $2 AND active FOR SHARE",
             member.user_id, org_id,
         ).fetch_optional(&mut **tx).await.map_err(storage_error)?
-            .ok_or_else(|| not_found("Select active teammates in this organization"))?;
+            .ok_or_else(|| with_field(not_found("Select active teammates in this organization"), ProjectFormField::Person(member.user_id)))?;
         let rate = if person_rates {
             optional_amount(&member.billable_rate, "Person rate")?
         } else {
@@ -230,7 +235,7 @@ async fn save_tasks(
                     "SELECT id, default_rate_cents, default_rate_currency FROM tasks WHERE id = $1 AND org_id = $2 AND active FOR SHARE",
                     task_id, org_id,
                 ).fetch_optional(&mut **tx).await.map_err(storage_error)?
-                    .ok_or_else(|| not_found("Select active tasks in this organization"))?;
+                    .ok_or_else(|| with_field(not_found("Select active tasks in this organization"), ProjectFormField::Task(task.id)))?;
                 (row.id, row.default_rate_cents, row.default_rate_currency)
             }
             TaskSource::New { name } => {
@@ -240,8 +245,11 @@ async fn save_tasks(
                 ).fetch_optional(&mut **tx).await.map_err(storage_error)?;
                 if let Some(row) = existing {
                     if !row.active {
-                        return Err(conflict(
-                            "A task with this name is archived. Reactivate it or choose another name.",
+                        return Err(with_field(
+                            conflict(
+                                "A task with this name is archived. Reactivate it or choose another name.",
+                            ),
+                            ProjectFormField::TaskName(task.id),
                         ));
                     }
                     (row.id, row.default_rate_cents, row.default_rate_currency)
@@ -262,7 +270,10 @@ async fn save_tasks(
             }
         };
         if !attached.insert(task_id) {
-            return Err(err(BAD_REQUEST, "A task can only be selected once"));
+            return Err(with_field(
+                err(BAD_REQUEST, "A task can only be selected once"),
+                ProjectFormField::Task(task.id),
+            ));
         }
         let rate = if task_rates {
             let explicit = optional_amount(&task.rate, "Task rate")?;

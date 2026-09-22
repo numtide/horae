@@ -260,17 +260,18 @@ fn TaskRow(
                     onclick: move |_| on_access.call(id), "{access_label}" }
             }
             button { id: "np-task-remove-{id}", r#type: "button", class: "np-row-remove btn btn-ghost p-0 size-8 text-label", aria_label: "Remove task {name}",
-                aria_invalid: (invalid_field == Some(ProjectFormField::TaskName(id))).then_some("true"),
-                aria_describedby: (invalid_field == Some(ProjectFormField::TaskName(id))).then(|| format!("np-task-error-{id}")),
+                aria_invalid: matches!(invalid_field, Some(ProjectFormField::TaskName(row) | ProjectFormField::Task(row)) if row == id).then_some("true"),
+                aria_describedby: matches!(invalid_field, Some(ProjectFormField::TaskName(row) | ProjectFormField::Task(row)) if row == id).then(|| format!("np-task-error-{id}")),
                 onclick: move |_| {
                     form.write().tasks.retain(|task| task.id != id);
                     document::eval("document.getElementById('np-task-search')?.focus()");
                 }, "×" }
         }
-        if matches!(invalid_field, Some(ProjectFormField::TaskName(row) | ProjectFormField::TaskAccess(row) | ProjectFormField::TaskRate(row) | ProjectFormField::TaskBudget(row)) if row == id) {
+        if matches!(invalid_field, Some(ProjectFormField::Task(row) | ProjectFormField::TaskName(row) | ProjectFormField::TaskAccess(row) | ProjectFormField::TaskRate(row) | ProjectFormField::TaskBudget(row)) if row == id) {
             p { id: "np-task-error-{id}", class: "text-sm text-danger px-5",
                 "{error_message.as_deref().unwrap_or_default()}"
                 if invalid_field == Some(ProjectFormField::TaskName(id)) { " Remove this row and add the corrected task name below." }
+                if invalid_field == Some(ProjectFormField::Task(id)) { " Remove this row and select an available task below." }
                 if invalid_field == Some(ProjectFormField::TaskAccess(id)) { " Open access settings and choose everyone or select the current teammates again." }
             }
         }

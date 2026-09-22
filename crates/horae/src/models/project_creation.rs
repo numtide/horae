@@ -25,6 +25,7 @@ pub enum FeeMode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ProjectFormField {
+    Client,
     Name,
     Code,
     StartsOn,
@@ -45,6 +46,8 @@ pub enum ProjectFormField {
     MilestoneAmount(Uuid),
     TaskName(Uuid),
     TaskAccess(Uuid),
+    Task(Uuid),
+    Person(Uuid),
     TaskRate(Uuid),
     TaskBudget(Uuid),
     PersonRate(Uuid),

@@ -377,21 +377,34 @@ fn is_validation_error(error: &ServerFnError) -> bool {
 }
 
 fn validation_field(error: &ServerFnError) -> Option<ProjectFormField> {
-    if !is_validation_error(error) {
-        return None;
-    }
+    const BAD_REQUEST: u16 = 400;
+    const NOT_FOUND: u16 = 404;
+    const CONFLICT: u16 = 409;
     let ServerFnError::ServerError {
+        code,
         details: Some(details),
         ..
     } = error
     else {
         return None;
     };
-    serde_json::from_value(details.get("field")?.clone()).ok()
+    let field = serde_json::from_value(details.get("field")?.clone()).ok()?;
+    // Missing selections and archived-name conflicts are correctable. Draft
+    // revision conflicts and uncertain responses must retain their retry path.
+    match (*code, field) {
+        (BAD_REQUEST, _)
+        | (
+            NOT_FOUND,
+            ProjectFormField::Client | ProjectFormField::Task(_) | ProjectFormField::Person(_),
+        )
+        | (CONFLICT, ProjectFormField::TaskName(_)) => Some(field),
+        _ => None,
+    }
 }
 
 fn field_id(field: ProjectFormField) -> String {
     match field {
+        ProjectFormField::Client => "np-client",
         ProjectFormField::Name => "np-name",
         ProjectFormField::Code => "np-code",
         ProjectFormField::StartsOn => "np-start",
@@ -411,6 +424,8 @@ fn field_id(field: ProjectFormField) -> String {
         ProjectFormField::MilestoneDate(id) => return format!("np-milestone-date-{id}"),
         ProjectFormField::MilestoneAmount(id) => return format!("np-milestone-amount-{id}"),
         ProjectFormField::TaskName(id) => return format!("np-task-remove-{id}"),
+        ProjectFormField::Task(id) => return format!("np-task-remove-{id}"),
+        ProjectFormField::Person(id) => return format!("np-person-remove-{id}"),
         ProjectFormField::TaskAccess(id) => return format!("np-task-access-{id}"),
         ProjectFormField::TaskRate(id) => return format!("np-task-rate-{id}"),
         ProjectFormField::TaskBudget(id) => return format!("np-task-budget-{id}"),
@@ -439,6 +454,8 @@ mod tests {
     fn only_known_validation_fields_can_target_a_control() {
         const BAD_REQUEST: u16 = 400;
         const CONFLICT: u16 = 409;
+        const NOT_FOUND: u16 = 404;
+        const FORBIDDEN: u16 = 403;
         let row = uuid::Uuid::now_v7();
         for (code, details, expected) in [
             (
@@ -464,6 +481,33 @@ mod tests {
             (BAD_REQUEST, Some(serde_json::json!({"field": 42})), None),
             (BAD_REQUEST, None, None),
             (CONFLICT, Some(serde_json::json!({"field": "tax"})), None),
+            (
+                NOT_FOUND,
+                Some(serde_json::json!({"field": "client"})),
+                Some(ProjectFormField::Client),
+            ),
+            (
+                NOT_FOUND,
+                Some(serde_json::json!({"field": {"task": row}})),
+                Some(ProjectFormField::Task(row)),
+            ),
+            (
+                NOT_FOUND,
+                Some(serde_json::json!({"field": {"person": row}})),
+                Some(ProjectFormField::Person(row)),
+            ),
+            (
+                CONFLICT,
+                Some(serde_json::json!({"field": {"task_name": row}})),
+                Some(ProjectFormField::TaskName(row)),
+            ),
+            (NOT_FOUND, Some(serde_json::json!({"field": "name"})), None),
+            (
+                FORBIDDEN,
+                Some(serde_json::json!({"field": "client"})),
+                None,
+            ),
+            (CONFLICT, None, None),
         ] {
             let error = ServerFnError::ServerError {
                 code,

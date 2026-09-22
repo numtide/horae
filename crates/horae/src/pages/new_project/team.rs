@@ -239,10 +239,19 @@ fn MemberRow(
                     }
                 }
             }
-            button { r#type: "button", class: "np-row-remove btn btn-ghost p-0 size-8 text-label", aria_label: "Remove {name} from project", onclick: move |_| remove_member(&mut form.write(), id), "×" }
+            button { id: "np-person-remove-{id}", r#type: "button", class: "np-row-remove btn btn-ghost p-0 size-8 text-label", aria_label: "Remove {name} from project",
+                aria_invalid: (invalid_field == Some(ProjectFormField::Person(id))).then_some("true"),
+                aria_describedby: (invalid_field == Some(ProjectFormField::Person(id))).then(|| format!("np-person-error-{id}")),
+                onclick: move |_| {
+                    remove_member(&mut form.write(), id);
+                    document::eval("document.getElementById('np-add-person')?.focus()");
+                }, "×" }
         }
-        if matches!(invalid_field, Some(ProjectFormField::PersonRate(row) | ProjectFormField::CostRate(row) | ProjectFormField::PersonBudget(row)) if row == id) {
-            p { id: "np-person-error-{id}", class: "text-sm text-danger px-5", "{error_message.as_deref().unwrap_or_default()}" }
+        if matches!(invalid_field, Some(ProjectFormField::Person(row) | ProjectFormField::PersonRate(row) | ProjectFormField::CostRate(row) | ProjectFormField::PersonBudget(row)) if row == id) {
+            p { id: "np-person-error-{id}", class: "text-sm text-danger px-5",
+                "{error_message.as_deref().unwrap_or_default()}"
+                if invalid_field == Some(ProjectFormField::Person(id)) { " Remove this person and select an available teammate below." }
+            }
         }
     }
 }
