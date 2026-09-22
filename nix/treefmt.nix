@@ -40,6 +40,7 @@ _: {
       ".agents/**"
       ".claude/skills/**"
       ".sqlx/**"
+      "vendor/dioxus-fullstack-0.7.9/**"
     ];
 
     # When several tools touch the same files, group them into a pipeline and

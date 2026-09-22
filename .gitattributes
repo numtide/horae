@@ -1,0 +1,3 @@
+vendor/dioxus-fullstack-0.7.9/** linguist-vendored
+# Preserve the published crate's README byte-for-byte.
+vendor/dioxus-fullstack-0.7.9/README.md whitespace=-blank-at-eof

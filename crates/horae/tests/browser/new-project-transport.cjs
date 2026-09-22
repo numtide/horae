@@ -49,16 +49,17 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await page.getByRole('link', { name: 'Projects', exact: true }).click();
     await page.getByRole('link', { name: 'New project', exact: true }).click();
     const screen = page.locator('.np-page');
-    await expect(screen.getByRole('status')).toHaveText('No draft saved yet');
+    const draftStatus = screen.locator('header').getByRole('status');
+    await expect(draftStatus).toHaveText('No draft saved yet');
 
     await screen.getByLabel('Project name', { exact: true }).fill('Body interrupted after commit');
     await expect.poll(() => page.evaluate(() => window.transportProbe.injected)).toBe(1);
     await expect.poll(() => page.evaluate(() => window.transportProbe.bodyReads)).toBe(1);
-    await expect(screen.getByRole('status')).toHaveText('Changes need attention');
+    await expect(draftStatus).toHaveText('Changes need attention');
     await expect(screen.getByRole('alert')).toBeVisible();
     await screen.getByLabel('Project name', { exact: true }).fill('Latest edit survives body failure');
     await screen.getByRole('button', { name: 'Retry request', exact: true }).click();
-    await expect(screen.getByRole('status')).toContainText('Draft saved at');
+    await expect(draftStatus).toContainText('Draft saved at');
     const bodies = await page.evaluate(() => window.transportProbe.bodies);
     assert.equal(bodies.length, 3, 'Retry acknowledges the uncertain save before sending newer edits');
     assert.equal(bodies[1], bodies[0], 'Retry preserves the committed request identity and snapshot');
