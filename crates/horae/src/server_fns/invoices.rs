@@ -3,7 +3,7 @@
 use super::*;
 use crate::models::invoice::{
     InvoiceDefaults, InvoiceDraftEdit, InvoiceDraftSave, InvoiceEditReview, InvoiceEditor,
-    InvoicePreparation,
+    InvoiceFeeSelection, InvoiceGenerationRequest, InvoicePreparation, InvoiceSource,
 };
 
 #[cfg(feature = "server")]
@@ -85,6 +85,7 @@ pub async fn prepare_invoice(
     period_to: String,
     project_ids: Option<Vec<String>>,
     overrides: Option<InvoiceDefaults>,
+    fees: Option<Vec<InvoiceFeeSelection>>,
 ) -> Result<InvoicePreparation, ServerFnError> {
     let manager = require_manager().await?;
     let state = crate::state::global_state().await;
@@ -101,7 +102,7 @@ pub async fn prepare_invoice(
                 .collect::<Result<Vec<_>, _>>()
         })
         .transpose()?;
-    preview::prepare(
+    preview::prepare_with_edits(
         &state.db,
         manager.org_id,
         parse_uuid(&client_id, "client_id")?,
@@ -111,6 +112,7 @@ pub async fn prepare_invoice(
         ),
         selected.as_deref(),
         overrides.as_ref(),
+        fees.as_deref(),
     )
     .await
 }
@@ -177,7 +179,7 @@ pub async fn generate_invoice(
     period_to: String,
     project_ids: Option<Vec<String>>,
     overrides: Option<InvoiceDefaults>,
-    request_id: String,
+    request: InvoiceGenerationRequest,
 ) -> Result<InvoiceWithLines, ServerFnError> {
     let manager = require_manager().await?;
     let state = crate::state::global_state().await;
@@ -198,10 +200,6 @@ pub async fn generate_invoice(
                 .collect::<Result<Vec<_>, _>>()
         })
         .transpose()?;
-    let request_id = parse_uuid(&request_id, "request_id")?;
-    if request_id.get_version_num() != 7 {
-        return Err(err(BAD_REQUEST, "Request identity must be a UUID v7"));
-    }
     let (result, created) = generate_invoice_with_request(
         &state.db,
         manager.org_id,
@@ -209,7 +207,7 @@ pub async fn generate_invoice(
         (from, to),
         project_ids.as_deref(),
         overrides.as_ref(),
-        Some((request_id, manager.id)),
+        Some((&request, manager.id)),
     )
     .await?;
     if created {
@@ -265,8 +263,19 @@ async fn generate_invoice_with_request(
     (from, to): (chrono::NaiveDate, chrono::NaiveDate),
     project_ids: Option<&[uuid::Uuid]>,
     overrides: Option<&InvoiceDefaults>,
-    request: Option<(uuid::Uuid, uuid::Uuid)>,
+    request: Option<(&InvoiceGenerationRequest, uuid::Uuid)>,
 ) -> Result<(InvoiceWithLines, bool), ServerFnError> {
+    if request.is_some_and(|(request, _)| {
+        request.request_id.get_version_num() != 7
+            || request.review.lines.len() > 20000
+            || request.review.projects.len() > 1000
+            || request.confirmed_excess.len() > 10000
+    }) {
+        return Err(err(
+            BAD_REQUEST,
+            "Invalid invoice request identity or source count",
+        ));
+    }
     if from > to {
         return Err(err(BAD_REQUEST, "Invoice period ends before it starts"));
     }
@@ -297,14 +306,39 @@ async fn generate_invoice_with_request(
     let mut tx = pool.begin().await.map_err(server_err)?;
 
     balances::lock_invoices(&mut tx, org_id).await?;
+    let canonical = request.map(|(request, _)| {
+        let mut request = request.clone();
+        request.review.lines.sort_by(|a, b| a.source.cmp(&b.source));
+        request
+            .review
+            .projects
+            .sort_by_key(|project| project.project_id);
+        request
+            .confirmed_excess
+            .sort_by(|a, b| a.source.cmp(&b.source));
+        request
+    });
     let payload = serde_json::json!({
         "client_id": client_id, "from": from, "to": to,
-        "projects": selected, "overrides": overrides,
+        "projects": selected, "overrides": overrides, "request": canonical,
     });
-    if let Some((request_id, actor_id)) = request
+    if let Some((_, actor_id)) = request {
+        editing::lock_actor(&mut tx, org_id, actor_id).await?;
+        let size = sqlx::query_scalar!(
+            r#"SELECT octet_length($1::jsonb::text) AS "size!""#,
+            payload
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(server_err)?;
+        if size > 262144 {
+            return Err(err(BAD_REQUEST, "Invoice request exceeds 256 KiB"));
+        }
+    }
+    if let Some((request, actor_id)) = request
         && let Some(previous) = sqlx::query!(
             "SELECT actor_id, invoice_id, payload FROM invoice_generation_requests WHERE id = $1 AND org_id = $2",
-            request_id, org_id,
+            request.request_id, org_id,
         ).fetch_optional(&mut *tx).await.map_err(server_err)? {
             if previous.actor_id != actor_id || previous.payload != payload {
                 return Err(conflict("This request identity was already used with different invoice values"));
@@ -342,14 +376,29 @@ async fn generate_invoice_with_request(
     )
     .await?;
 
-    let fees =
-        fees::prepare_fees(&mut tx, org_id, client_id, from, to, selected.as_deref()).await?;
+    let fee_selection = canonical
+        .as_ref()
+        .map(|request| request.review.fee_selection());
+    let fees = fees::prepare_fees(
+        &mut tx,
+        org_id,
+        client_id,
+        from,
+        to,
+        selected.as_deref(),
+        fee_selection.as_deref(),
+    )
+    .await?;
     let currency = entries
         .first()
         .map(|entry| entry.currency.trim())
         .or_else(|| fees.first().map(|fee| fee.currency.trim()))
         .ok_or_else(|| {
-            not_found("No billable, un-invoiced time or fees found for this client and period.")
+            if request.is_some() {
+                conflict("Invoice sources or fee balances changed. Review the invoice again.")
+            } else {
+                not_found("No billable, un-invoiced time or fees found for this client and period.")
+            }
         })?;
     if entries
         .iter()
@@ -395,49 +444,102 @@ async fn generate_invoice_with_request(
     let due_on = horae_core::project::payment_due_date(issued_on, settings.terms_days as u16)
         .map_err(|error| err(BAD_REQUEST, error.to_string()))?;
 
-    // Build line items and compute total.
-    let mut lines = Vec::with_capacity(entries.len() + fees.len());
-    let mut total_cents: i64 = 0;
+    let mut prepared = entries
+        .iter()
+        .map(entries::EntryWithRates::preview)
+        .collect::<Result<Vec<_>, _>>()?;
+    prepared.extend(
+        fees::preview_fees(&mut tx, org_id, client_id, from, to, selected.as_deref()).await?,
+    );
+    if let Some(request) = &canonical {
+        let current_sources: std::collections::BTreeSet<_> =
+            prepared.iter().map(|line| &line.source).collect();
+        let reviewed_sources: std::collections::BTreeSet<_> = request
+            .review
+            .lines
+            .iter()
+            .map(|line| &line.source)
+            .collect();
+        if current_sources != reviewed_sources
+            || reviewed_sources.len() != request.review.lines.len()
+        {
+            return Err(conflict(
+                "Invoice sources or fee balances changed. Review the invoice again.",
+            ));
+        }
+        preview::apply_fee_selection(&mut prepared, &request.review.fee_selection())?;
+    }
+    preview::allocate_lines(&mut prepared, settings.discount_bps)?;
+    let subtotal_cents = preview::subtotal(&prepared)?;
+    let amounts = defaults::amounts(&settings, subtotal_cents)?;
+    if let Some(request) = &canonical {
+        let review = &request.review;
+        let mut current_lines = prepared.clone();
+        current_lines.sort_by(|a, b| a.source.cmp(&b.source));
+        if review.lines != current_lines
+            || review.defaults.as_ref() != Some(&settings)
+            || review.currency != currency
+            || review.issued_on != issued_on
+            || review.due_on != Some(due_on)
+            || review.subtotal_cents != subtotal_cents
+            || review.amounts != Some(amounts)
+        {
+            return Err(conflict(
+                "Invoice sources or fee balances changed. Review the invoice again.",
+            ));
+        }
+    }
+    let excess = preview::excess(&prepared)?;
+    if canonical
+        .as_ref()
+        .map(|request| request.confirmed_excess.as_slice())
+        .unwrap_or_default()
+        != excess
+    {
+        return Err(conflict(
+            "Confirm the exact amount exceeding the fee balance before generating.",
+        ));
+    }
+    if !prepared.iter().any(|line| line.selected) {
+        return Err(err(BAD_REQUEST, "Select at least one invoice charge"));
+    }
 
-    for e in &entries {
-        let rate = e.rate_cents.unwrap_or(0);
-
-        let amount = e.amount()?;
-        total_cents = total_cents.checked_add(amount).ok_or_else(|| {
-            conflict("Invoice total exceeds the supported range; select a shorter period.")
-        })?;
-
-        let description = e.description();
-
+    let fee_ids: std::collections::BTreeMap<_, _> = fees
+        .iter()
+        .map(|fee| ((fee.project_id, fee.period_key.as_str()), fee.id))
+        .collect();
+    let mut lines = Vec::with_capacity(prepared.len());
+    let mut line_discounts = Vec::with_capacity(prepared.len());
+    for line in prepared.iter().filter(|line| line.selected) {
+        let (time_entry_id, fee_occurrence_id) = match &line.source {
+            InvoiceSource::Time { entry_id } => (Some(*entry_id), None),
+            InvoiceSource::Fee {
+                project_id,
+                period_key,
+            } => (
+                None,
+                Some(
+                    *fee_ids
+                        .get(&(*project_id, period_key.as_str()))
+                        .ok_or_else(|| conflict("Fee source changed. Review the invoice again."))?,
+                ),
+            ),
+        };
+        let net = line
+            .net_before_tax_cents
+            .ok_or_else(|| conflict("Invoice contributions are unavailable"))?;
+        line_discounts.push(line.amount_cents - net);
         lines.push(InvoiceLine {
             id: uuid::Uuid::now_v7(),
             invoice_id,
-            time_entry_id: Some(e.entry_id),
-            fee_occurrence_id: None,
-            description,
-            minutes: Some(e.minutes),
-            rate_cents: Some(rate),
-            amount_cents: amount,
+            time_entry_id,
+            fee_occurrence_id,
+            description: line.description.clone(),
+            minutes: line.minutes,
+            rate_cents: line.rate_cents,
+            amount_cents: line.amount_cents,
         });
     }
-
-    for fee in &fees {
-        total_cents = total_cents.checked_add(fee.amount_cents).ok_or_else(|| {
-            conflict("Invoice total exceeds the supported range; select a shorter period.")
-        })?;
-        lines.push(InvoiceLine {
-            id: uuid::Uuid::now_v7(),
-            invoice_id,
-            time_entry_id: None,
-            fee_occurrence_id: Some(fee.id),
-            description: fee.description.clone(),
-            minutes: None,
-            rate_cents: None,
-            amount_cents: fee.amount_cents,
-        });
-    }
-
-    let amounts = defaults::amounts(&settings, total_cents)?;
     let total_cents = amounts.total_cents;
 
     // Insert invoice-owned values; later project edits cannot alter this snapshot.
@@ -486,8 +588,8 @@ async fn generate_invoice_with_request(
     let line_amounts: Vec<i64> = lines.iter().map(|l| l.amount_cents).collect();
 
     sqlx::query!(
-        r#"INSERT INTO invoice_line_items (id, invoice_id, time_entry_id, description, minutes, rate_cents, amount_cents, fee_occurrence_id)
-           SELECT * FROM unnest($1::uuid[], $2::uuid[], $3::uuid[], $4::text[], $5::int4[], $6::int8[], $7::int8[], $8::uuid[])"#,
+        r#"INSERT INTO invoice_line_items (id, invoice_id, time_entry_id, description, minutes, rate_cents, amount_cents, fee_occurrence_id, allocated_discount_cents)
+           SELECT * FROM unnest($1::uuid[], $2::uuid[], $3::uuid[], $4::text[], $5::int4[], $6::int8[], $7::int8[], $8::uuid[], $9::bigint[])"#,
         &line_ids,
         &line_invoice_ids,
         &line_entry_ids as &[Option<uuid::Uuid>],
@@ -496,6 +598,7 @@ async fn generate_invoice_with_request(
         &line_rates as &[Option<i64>],
         &line_amounts,
         &line_fee_ids as &[Option<uuid::Uuid>],
+        &line_discounts,
     )
     .execute(&mut *tx)
     .await
@@ -531,11 +634,10 @@ async fn generate_invoice_with_request(
         ));
     }
 
-    balances::replace_contributions(&mut tx, org_id, invoice_id, settings.discount_bps).await?;
-    if let Some((request_id, actor_id)) = request {
+    if let Some((request, actor_id)) = request {
         sqlx::query!(
             "INSERT INTO invoice_generation_requests (id,org_id,actor_id,invoice_id,payload) VALUES ($1,$2,$3,$4,$5)",
-            request_id, org_id, actor_id, invoice_id, payload,
+            request.request_id, org_id, actor_id, invoice_id, payload,
         ).execute(&mut *tx).await.map_err(server_err)?;
     }
 

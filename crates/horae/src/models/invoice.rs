@@ -186,6 +186,7 @@ pub struct InvoiceFeeBalance {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct InvoicePreviewLine {
     pub source: InvoiceSource,
+    pub selected: bool,
     pub project_id: Uuid,
     pub currency: String,
     pub description: String,
@@ -195,6 +196,45 @@ pub struct InvoicePreviewLine {
     pub fee_balance: Option<InvoiceFeeBalance>,
     /// Absent until conflicting invoice defaults have been resolved.
     pub net_before_tax_cents: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InvoiceFeeSelection {
+    pub source: InvoiceSource,
+    pub description: String,
+    pub amount_cents: i64,
+    pub selected: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InvoiceSourceExcess {
+    pub source: InvoiceSource,
+    pub excess_cents: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InvoiceGenerationRequest {
+    pub request_id: Uuid,
+    pub review: InvoicePreparation,
+    pub confirmed_excess: Vec<InvoiceSourceExcess>,
+}
+
+impl InvoicePreparation {
+    pub fn fee_selection(&self) -> Vec<InvoiceFeeSelection> {
+        self.lines
+            .iter()
+            .filter(|line| matches!(line.source, InvoiceSource::Fee { .. }))
+            .map(|line| InvoiceFeeSelection {
+                source: line.source.clone(),
+                description: line.description.clone(),
+                amount_cents: line.amount_cents,
+                selected: line.selected,
+            })
+            .collect()
+    }
 }
 
 /// Only existing fee lines are editable; time quantities and rates stay frozen.

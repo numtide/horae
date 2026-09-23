@@ -108,6 +108,7 @@ pub(super) async fn preview_fees(
     Ok(fees
         .into_iter()
         .map(|(fee, remaining)| InvoicePreviewLine {
+            selected: true,
             source: InvoiceSource::Fee {
                 project_id: fee.project_id,
                 period_key: fee.period_key,
@@ -138,8 +139,9 @@ pub(super) async fn prepare_fees(
     from: NaiveDate,
     to: NaiveDate,
     selected: Option<&[Uuid]>,
+    fee_selection: Option<&[crate::models::invoice::InvoiceFeeSelection]>,
 ) -> Result<Vec<FeeLine>, ServerFnError> {
-    let occurrences = scheduled_fees(
+    let mut occurrences = scheduled_fees(
         tx,
         org_id,
         client_id,
@@ -149,6 +151,19 @@ pub(super) async fn prepare_fees(
         SourceRead::Generate,
     )
     .await?;
+    if let Some(selection) = fee_selection {
+        let selected_sources: std::collections::BTreeSet<_> = selection
+            .iter()
+            .filter(|fee| fee.selected)
+            .map(|fee| &fee.source)
+            .collect();
+        occurrences.retain(|fee| {
+            selected_sources.contains(&InvoiceSource::Fee {
+                project_id: fee.project_id,
+                period_key: fee.period_key.clone(),
+            })
+        });
+    }
     let ids: Vec<Uuid> = occurrences.iter().map(|_| Uuid::now_v7()).collect();
     let project_ids: Vec<Uuid> = occurrences.iter().map(|fee| fee.project_id).collect();
     let milestone_ids: Vec<Option<Uuid>> = occurrences.iter().map(|fee| fee.milestone_id).collect();

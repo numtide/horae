@@ -689,7 +689,7 @@ mod server_fns {
         _to: String,
         _projects: Option<Vec<String>>,
         _overrides: Option<crate::invoice::InvoiceDefaults>,
-        _request_id: String,
+        _request: crate::invoice::InvoiceGenerationRequest,
     ) -> Result<InvoiceWithLines, ServerFnError> {
         panic!("navigation must not generate invoices");
     }
@@ -700,6 +700,7 @@ mod server_fns {
         _to: String,
         _projects: Option<Vec<String>>,
         _overrides: Option<crate::invoice::InvoiceDefaults>,
+        _fees: Option<Vec<crate::invoice::InvoiceFeeSelection>>,
     ) -> Result<crate::invoice::InvoicePreparation, ServerFnError> {
         panic!("navigation must not prepare invoices");
     }

@@ -19,6 +19,472 @@ async fn single_fee(pool: &PgPool) -> SeedIds {
 
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]
+async fn reviewed_generation_bills_partial_fees_and_rejects_stale_balances(pool: PgPool) {
+    use crate::models::invoice::{InvoiceFeeSelection, InvoiceGenerationRequest};
+    let ids = single_fee(&pool).await;
+    let period = ("2026-09-01".parse().unwrap(), "2026-09-30".parse().unwrap());
+    let defaults = InvoiceDefaults::default();
+    let initial = preview::prepare(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        Some(&defaults),
+    )
+    .await
+    .unwrap();
+    let edits = vec![InvoiceFeeSelection {
+        source: initial.lines[0].source.clone(),
+        description: "First installment".into(),
+        amount_cents: 6000,
+        selected: true,
+    }];
+    let review = preview::prepare_with_edits(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        Some(&defaults),
+        Some(&edits),
+    )
+    .await
+    .unwrap();
+    assert_eq!(review.subtotal_cents, 6000);
+    let request = InvoiceGenerationRequest {
+        request_id: Uuid::now_v7(),
+        review,
+        confirmed_excess: vec![],
+    };
+    let (invoice, created) = generate_invoice_with_request(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        Some(&defaults),
+        Some((&request, ids.user_id)),
+    )
+    .await
+    .unwrap();
+    assert!(created);
+    assert_eq!(invoice.lines[0].amount_cents, 6000);
+    assert_eq!(invoice.lines[0].description, "First installment");
+    let (replay, created) = generate_invoice_with_request(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        Some(&defaults),
+        Some((&request, ids.user_id)),
+    )
+    .await
+    .unwrap();
+    assert!(!created);
+    assert_eq!(replay.invoice.id, invoice.invoice.id);
+    let stale = InvoiceGenerationRequest {
+        request_id: Uuid::now_v7(),
+        ..request
+    };
+    assert!(matches!(
+        generate_invoice_with_request(
+            &pool,
+            ids.org_id,
+            ids.client_id,
+            period,
+            None,
+            Some(&defaults),
+            Some((&stale, ids.user_id))
+        )
+        .await,
+        Err(ServerFnError::ServerError { code: CONFLICT, .. })
+    ));
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM invoices WHERE org_id = $1",
+            ids.org_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(1)
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT amount_cents FROM project_fee_occurrences WHERE id = $1",
+            invoice.lines[0].fee_occurrence_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        12500
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn reviewed_generation_requires_exact_excess_and_current_authority(pool: PgPool) {
+    use crate::models::invoice::{InvoiceFeeSelection, InvoiceSourceExcess};
+    let ids = single_fee(&pool).await;
+    let period = ("2026-09-01".parse().unwrap(), "2026-09-30".parse().unwrap());
+    let defaults = InvoiceDefaults {
+        discount_bps: 1000,
+        tax1_bps: 2100,
+        ..Default::default()
+    };
+    let initial = preview::prepare(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        Some(&defaults),
+    )
+    .await
+    .unwrap();
+    let edits = vec![InvoiceFeeSelection {
+        source: initial.lines[0].source.clone(),
+        description: "Additional scope".into(),
+        amount_cents: 14000,
+        selected: true,
+    }];
+    let review = preview::prepare_with_edits(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        Some(&defaults),
+        Some(&edits),
+    )
+    .await
+    .unwrap();
+    let mut request = InvoiceGenerationRequest {
+        request_id: Uuid::now_v7(),
+        review,
+        confirmed_excess: vec![],
+    };
+    let error = generate_invoice_with_request(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        Some(&defaults),
+        Some((&request, ids.user_id)),
+    )
+    .await
+    .unwrap_err();
+    assert!(error.to_string().contains("exact amount"), "{error}");
+    request.confirmed_excess = vec![InvoiceSourceExcess {
+        source: edits[0].source.clone(),
+        excess_cents: 99,
+    }];
+    assert!(
+        generate_invoice_with_request(
+            &pool,
+            ids.org_id,
+            ids.client_id,
+            period,
+            None,
+            Some(&defaults),
+            Some((&request, ids.user_id))
+        )
+        .await
+        .is_err()
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM project_fee_occurrences WHERE org_id = $1",
+            ids.org_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(0)
+    );
+    request.confirmed_excess[0].excess_cents = 100;
+    let foreign = seed(&pool, OrgRole::Manager).await;
+    assert!(
+        generate_invoice_with_request(
+            &pool,
+            ids.org_id,
+            ids.client_id,
+            period,
+            None,
+            Some(&defaults),
+            Some((&request, foreign.user_id))
+        )
+        .await
+        .is_err()
+    );
+    let (invoice, _) = generate_invoice_with_request(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        Some(&defaults),
+        Some((&request, ids.user_id)),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        invoice.invoice.subtotal_cents - invoice.invoice.discount_cents,
+        12600
+    );
+    sqlx::query!(
+        "UPDATE users SET org_role='member' WHERE id=$1",
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(
+        generate_invoice_with_request(
+            &pool,
+            ids.org_id,
+            ids.client_id,
+            period,
+            None,
+            Some(&defaults),
+            Some((&request, ids.user_id))
+        )
+        .await
+        .is_err()
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn reviewed_generation_does_not_materialize_unselected_months(pool: PgPool) {
+    let ids = single_fee(&pool).await;
+    sqlx::query!("UPDATE project_settings SET fee_mode = 'monthly', monthly_day = 'last' WHERE project_id = $1", ids.project_id).execute(&pool).await.unwrap();
+    let period = ("2028-02-16".parse().unwrap(), "2028-03-31".parse().unwrap());
+    let defaults = InvoiceDefaults::default();
+    let initial = preview::prepare(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        Some(&defaults),
+    )
+    .await
+    .unwrap();
+    let mut edits = initial.fee_selection();
+    edits[1].selected = false;
+    let review = preview::prepare_with_edits(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        Some(&defaults),
+        Some(&edits),
+    )
+    .await
+    .unwrap();
+    assert_eq!(review.subtotal_cents, 12500);
+    assert_eq!(review.lines[1].net_before_tax_cents, Some(0));
+    let request = InvoiceGenerationRequest {
+        request_id: Uuid::now_v7(),
+        review,
+        confirmed_excess: vec![],
+    };
+    let (invoice, _) = generate_invoice_with_request(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        Some(&defaults),
+        Some((&request, ids.user_id)),
+    )
+    .await
+    .unwrap();
+    assert_eq!(invoice.lines.len(), 1);
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM project_fee_occurrences WHERE org_id = $1",
+            ids.org_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(1)
+    );
+    let remaining = preview::prepare(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        Some(&defaults),
+    )
+    .await
+    .unwrap();
+    assert_eq!(remaining.lines[0].source, edits[1].source);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn reviewed_generation_rejects_changed_time_before_claiming_it(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    let entry = crate::server_fns::test_seed::time_entry(&pool, &ids, EntryState::Open).await;
+    let period = ("2026-09-01".parse().unwrap(), "2026-09-30".parse().unwrap());
+    let defaults = InvoiceDefaults::default();
+    let review = preview::prepare(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        Some(&defaults),
+    )
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE time_entries SET minutes=minutes+60 WHERE id=$1",
+        entry
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let request = InvoiceGenerationRequest {
+        request_id: Uuid::now_v7(),
+        review,
+        confirmed_excess: vec![],
+    };
+    let error = generate_invoice_with_request(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        Some(&defaults),
+        Some((&request, ids.user_id)),
+    )
+    .await
+    .unwrap_err();
+    assert!(
+        matches!(error, ServerFnError::ServerError { code: CONFLICT, .. }),
+        "{error}"
+    );
+    assert_eq!(
+        sqlx::query_scalar!("SELECT invoice_id FROM time_entries WHERE id=$1", entry)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        None
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM invoices WHERE org_id = $1",
+            ids.org_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(0)
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn prepared_fee_selection_rejects_invalid_values_and_empty_generation(pool: PgPool) {
+    let ids = single_fee(&pool).await;
+    let period = ("2026-09-01".parse().unwrap(), "2026-09-30".parse().unwrap());
+    let defaults = InvoiceDefaults::default();
+    let initial = preview::prepare(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        Some(&defaults),
+    )
+    .await
+    .unwrap();
+    for case in 0..7 {
+        let mut edits = initial.fee_selection();
+        match case {
+            0 => edits[0].amount_cents = -1,
+            1 => edits[0].amount_cents = 0,
+            2 => edits[0].description = " ".into(),
+            3 => edits[0].description = "x\0y".into(),
+            4 => edits.push(edits[0].clone()),
+            5 => edits.clear(),
+            _ => {
+                edits[0].source = InvoiceSource::Time {
+                    entry_id: Uuid::now_v7(),
+                }
+            }
+        }
+        assert!(
+            preview::prepare_with_edits(
+                &pool,
+                ids.org_id,
+                ids.client_id,
+                period,
+                None,
+                Some(&defaults),
+                Some(&edits)
+            )
+            .await
+            .is_err(),
+            "case {case}"
+        );
+    }
+    let mut edits = initial.fee_selection();
+    edits[0].selected = false;
+    edits[0].amount_cents = 0;
+    let review = preview::prepare_with_edits(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        Some(&defaults),
+        Some(&edits),
+    )
+    .await
+    .unwrap();
+    assert_eq!(review.amounts.unwrap().total_cents, 0);
+    let request = InvoiceGenerationRequest {
+        request_id: Uuid::now_v7(),
+        review,
+        confirmed_excess: vec![],
+    };
+    assert!(
+        generate_invoice_with_request(
+            &pool,
+            ids.org_id,
+            ids.client_id,
+            period,
+            None,
+            Some(&defaults),
+            Some((&request, ids.user_id))
+        )
+        .await
+        .is_err()
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM project_fee_occurrences WHERE org_id = $1",
+            ids.org_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(0)
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
 async fn fee_preview_keeps_source_identity_and_reports_discounted_draft_balances(pool: PgPool) {
     use crate::models::invoice::{InvoiceFeeBalance, InvoiceSource};
 
@@ -576,7 +1042,22 @@ async fn concurrent_discounted_invoice_retries_return_one_invoice(pool: PgPool) 
         discount_bps: 1000,
         ..Default::default()
     };
-    let request = Some((Uuid::now_v7(), ids.user_id));
+    let review = preview::prepare(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        Some(&defaults),
+    )
+    .await
+    .unwrap();
+    let mutation = InvoiceGenerationRequest {
+        request_id: Uuid::now_v7(),
+        review,
+        confirmed_excess: Vec::new(),
+    };
+    let request = Some((&mutation, ids.user_id));
     let (a, b) = tokio::join!(
         generate_invoice_with_request(
             &pool,

@@ -6,7 +6,7 @@ use crate::components::controls::Checkbox;
 use crate::components::form::{FormCard, FormGroup, Input, Select};
 use crate::components::table::DataTable;
 use crate::models::Project;
-use crate::models::invoice::{InvoiceDefaults, InvoicePreparation};
+use crate::models::invoice::{InvoiceDefaults, InvoiceGenerationRequest, InvoicePreparation};
 use crate::models::project_creation::InvoiceDefaultsInput;
 use crate::server_fns;
 
@@ -44,7 +44,7 @@ pub(super) fn PrepareInvoice(
     let mut started = use_signal(|| false);
     let mut preview = use_signal(|| None::<InvoicePreparation>);
     let mut reviewed = use_signal(|| None::<InvoiceRequest>);
-    let mut generation = use_signal(|| None::<(InvoiceRequest, Uuid)>);
+    let mut generation = use_signal(|| None::<(InvoiceRequest, InvoiceGenerationRequest)>);
     let mut uncertain = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
 
@@ -156,12 +156,13 @@ pub(super) fn PrepareInvoice(
                         };
                         error.set(None);
                         reviewed.set(None);
+                        generation.set(None);
                         preview.set(None);
                         busy.set(true);
                         spawn(async move {
                             let result = async {
                                 projects.set(server_fns::list_projects(Some(request.client.clone()), true).await?);
-                                server_fns::prepare_invoice(request.client.clone(), request.from.clone(), request.to.clone(), request.projects.clone(), request.overrides.clone()).await
+                                server_fns::prepare_invoice(request.client.clone(), request.from.clone(), request.to.clone(), request.projects.clone(), request.overrides.clone(), None).await
                             }.await;
                             match result {
                                 Ok(estimate) => {
@@ -187,16 +188,17 @@ pub(super) fn PrepareInvoice(
                         let Ok(request) = current.clone() else { return; };
                         // An uncertain response must retry the same mutation, even after
                         // reviewing again. Changed inputs represent a different request.
-                        let request_id = generation.peek().as_ref()
+                        let Some(review) = preview.peek().clone() else { return; };
+                        let mutation = generation.peek().as_ref()
                             .filter(|(previous, _)| previous == &request)
-                            .map(|(_, id)| *id)
-                            .unwrap_or_else(Uuid::now_v7);
-                        generation.set(Some((request.clone(), request_id)));
+                            .map(|(_, mutation)| mutation.clone())
+                            .unwrap_or_else(|| InvoiceGenerationRequest { request_id: Uuid::now_v7(), review, confirmed_excess: Vec::new() });
+                        generation.set(Some((request.clone(), mutation.clone())));
                         uncertain.set(false);
                         busy.set(true);
                         error.set(None);
                         spawn(async move {
-                            let result = server_fns::generate_invoice(request.client, request.from, request.to, request.projects, request.overrides, request_id.to_string()).await;
+                            let result = server_fns::generate_invoice(request.client, request.from, request.to, request.projects, request.overrides, mutation).await;
                             busy.set(false);
                             match result {
                                 Ok(data) => oncreated.call(data.invoice.id),

@@ -85,6 +85,26 @@ pub(super) async fn read(
 }
 
 impl EntryWithRates {
+    pub(super) fn preview(
+        &self,
+    ) -> Result<crate::models::invoice::InvoicePreviewLine, ServerFnError> {
+        use crate::models::invoice::{InvoicePreviewLine, InvoiceSource};
+        Ok(InvoicePreviewLine {
+            source: InvoiceSource::Time {
+                entry_id: self.entry_id,
+            },
+            selected: true,
+            project_id: self.project_id,
+            description: self.description(),
+            amount_cents: self.amount()?,
+            currency: self.currency.clone(),
+            minutes: Some(self.minutes),
+            rate_cents: Some(self.rate_cents.unwrap_or(0)),
+            fee_balance: None,
+            net_before_tax_cents: None,
+        })
+    }
+
     pub(super) fn amount(&self) -> Result<i64, ServerFnError> {
         horae_core::invoice::line_amount_cents(self.rate_cents.unwrap_or(0), self.minutes)
             .map_err(|_| conflict("Invoice line amount exceeds the supported range."))

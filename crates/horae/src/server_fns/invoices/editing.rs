@@ -3,7 +3,7 @@ use crate::models::invoice::{InvoiceExcessConfirmation, InvoiceFeeEdit, InvoiceF
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
-async fn lock_actor(
+pub(super) async fn lock_actor(
     tx: &mut Transaction<'_, Postgres>,
     org_id: Uuid,
     actor_id: Uuid,

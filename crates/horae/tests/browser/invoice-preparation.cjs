@@ -95,6 +95,19 @@ const feesBefore = Number(sql('SELECT count(*) FROM project_fee_occurrences'));
       await page.setViewportSize({ width, height: 900 });
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
     }
+    // A new review must replace the entire generation request, even when the
+    // user's client/period/default fields have not changed.
+    for (const amount of [13000, 12500]) {
+      sql(`UPDATE project_settings SET fee_amount_cents=${amount} WHERE project_id='${project.id}'`);
+      await generate.click();
+      await expect(page.locator('.alert-danger')).toContainText('sources or fee balances changed');
+      await expect(generate).toBeDisabled();
+      assert.equal(Number(sql('SELECT count(*) FROM invoices')), invoicesBefore);
+      assert.equal(Number(sql('SELECT count(*) FROM project_fee_occurrences')), feesBefore);
+      await review.click();
+      await expect(generate).toBeEnabled();
+      await expect(charges.locator('tbody')).toContainText(`Agreed: EUR ${amount === 13000 ? '130.00' : '125.00'}`);
+    }
     let committed;
     let initialPayload;
     await page.route('**/api/generate_invoice*', async route => {
