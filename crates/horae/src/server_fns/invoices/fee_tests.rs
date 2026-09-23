@@ -19,6 +19,64 @@ async fn single_fee(pool: &PgPool) -> SeedIds {
 
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]
+async fn draft_fee_edit_replaces_amount_and_preserves_source_and_retry_identity(pool: PgPool) {
+    let ids = single_fee(&pool).await;
+    let from = "2026-09-01".parse().unwrap();
+    let to = "2026-09-30".parse().unwrap();
+    let invoice = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, from, to)
+        .await
+        .unwrap();
+    let mut editor = editing::load(&pool, ids.org_id, ids.user_id, invoice.invoice.id)
+        .await
+        .unwrap();
+    editor.edit.fees[0].amount_cents = 6000;
+    editor.edit.fees[0].description = "First installment".into();
+    let review = editing::review(
+        &pool,
+        ids.org_id,
+        ids.user_id,
+        invoice.invoice.id,
+        &editor.edit,
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        (review.amounts.total_cents, review.fees[0].remaining_cents),
+        (6000, 6500)
+    );
+    let request = InvoiceDraftSave {
+        request_id: Uuid::now_v7(),
+        edit: editor.edit,
+        review,
+        confirmed_excess: Vec::new(),
+    };
+    let saved = editing::save(&pool, ids.org_id, ids.user_id, invoice.invoice.id, &request)
+        .await
+        .unwrap();
+    let retry = editing::save(&pool, ids.org_id, ids.user_id, invoice.invoice.id, &request)
+        .await
+        .unwrap();
+    assert_eq!(saved, retry);
+    assert_eq!(saved.lines[0].id, invoice.lines[0].id);
+    assert_eq!(saved.lines[0].description, "First installment");
+    let remaining = preview::prepare(&pool, ids.org_id, ids.client_id, (from, to), None, None)
+        .await
+        .unwrap();
+    assert_eq!(remaining.subtotal_cents, 6500);
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT amount_cents FROM project_fee_occurrences WHERE id = $1",
+            saved.lines[0].fee_occurrence_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        12500
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
 async fn discounted_fee_leaves_a_balance_and_void_releases_only_its_contribution(pool: PgPool) {
     let ids = single_fee(&pool).await;
     let period = ("2026-09-01".parse().unwrap(), "2026-09-30".parse().unwrap());
@@ -80,6 +138,266 @@ async fn discounted_fee_leaves_a_balance_and_void_releases_only_its_contribution
         .await
         .unwrap();
     assert_eq!(restored.subtotal_cents, 12500);
+}
+
+async fn edit_request(
+    pool: &PgPool,
+    ids: &SeedIds,
+    invoice_id: Uuid,
+    amount: i64,
+) -> InvoiceDraftSave {
+    let mut editor = editing::load(pool, ids.org_id, ids.user_id, invoice_id)
+        .await
+        .unwrap();
+    editor.edit.fees[0].amount_cents = amount;
+    let review = editing::review(pool, ids.org_id, ids.user_id, invoice_id, &editor.edit)
+        .await
+        .unwrap();
+    InvoiceDraftSave {
+        request_id: Uuid::now_v7(),
+        edit: editor.edit,
+        review,
+        confirmed_excess: Vec::new(),
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn draft_fee_edit_requires_current_balance_and_exact_excess_confirmation(pool: PgPool) {
+    let ids = single_fee(&pool).await;
+    let from = "2026-09-01".parse().unwrap();
+    let to = "2026-09-30".parse().unwrap();
+    let first = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, from, to)
+        .await
+        .unwrap();
+    let first_id = first.invoice.id;
+    let partial = edit_request(&pool, &ids, first_id, 6000).await;
+    editing::save(&pool, ids.org_id, ids.user_id, first_id, &partial)
+        .await
+        .unwrap();
+    let mut stale = edit_request(&pool, &ids, first_id, 7000).await;
+    let second = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, from, to)
+        .await
+        .unwrap();
+    assert_eq!(second.invoice.total_cents, 6500);
+    let error = editing::save(&pool, ids.org_id, ids.user_id, first_id, &stale)
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("balances changed"), "{error}");
+    stale.review = editing::review(&pool, ids.org_id, ids.user_id, first_id, &stale.edit)
+        .await
+        .unwrap();
+    assert_eq!(
+        (
+            stale.review.fees[0].remaining_cents,
+            stale.review.fees[0].excess_cents
+        ),
+        (-1000, 1000)
+    );
+    assert!(
+        editing::save(&pool, ids.org_id, ids.user_id, first_id, &stale)
+            .await
+            .is_err()
+    );
+    stale
+        .confirmed_excess
+        .push(crate::models::invoice::InvoiceExcessConfirmation {
+            line_id: stale.edit.fees[0].line_id,
+            excess_cents: 999,
+        });
+    assert!(
+        editing::save(&pool, ids.org_id, ids.user_id, first_id, &stale)
+            .await
+            .is_err()
+    );
+    let unchanged = editing::load(&pool, ids.org_id, ids.user_id, first_id)
+        .await
+        .unwrap();
+    assert_eq!(
+        (unchanged.edit.revision, unchanged.edit.fees[0].amount_cents),
+        (stale.edit.revision, 6000)
+    );
+    stale.confirmed_excess[0].excess_cents = 1000;
+    let saved = editing::save(&pool, ids.org_id, ids.user_id, first_id, &stale)
+        .await
+        .unwrap();
+    assert_eq!(saved.invoice.total_cents, 7000);
+    assert_eq!(
+        editing::load(&pool, ids.org_id, ids.user_id, first_id)
+            .await
+            .unwrap()
+            .review
+            .fees[0]
+            .remaining_cents,
+        -1000
+    );
+    transition_invoice(&pool, ids.org_id, first_id, InvoiceStatus::Void)
+        .await
+        .unwrap();
+    assert_eq!(
+        preview::prepare(&pool, ids.org_id, ids.client_id, (from, to), None, None)
+            .await
+            .unwrap()
+            .subtotal_cents,
+        6000
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn draft_fee_edit_serializes_retries_and_rejects_stale_revisions(pool: PgPool) {
+    let ids = single_fee(&pool).await;
+    let invoice = generate_invoice_for_period(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        "2026-09-01".parse().unwrap(),
+        "2026-09-30".parse().unwrap(),
+    )
+    .await
+    .unwrap();
+    let id = invoice.invoice.id;
+    let request = edit_request(&pool, &ids, id, 6000).await;
+    let (a, b) = tokio::join!(
+        editing::save(&pool, ids.org_id, ids.user_id, id, &request),
+        editing::save(&pool, ids.org_id, ids.user_id, id, &request)
+    );
+    assert_eq!(a.unwrap(), b.unwrap());
+    let mut changed = request.clone();
+    changed.edit.fees[0].description = "Different payload".into();
+    assert!(
+        editing::save(&pool, ids.org_id, ids.user_id, id, &changed)
+            .await
+            .is_err()
+    );
+    changed.request_id = Uuid::now_v7();
+    assert!(
+        editing::save(&pool, ids.org_id, ids.user_id, id, &changed)
+            .await
+            .is_err()
+    );
+    let newer = edit_request(&pool, &ids, id, 7000).await;
+    editing::save(&pool, ids.org_id, ids.user_id, id, &newer)
+        .await
+        .unwrap();
+    assert!(
+        editing::save(&pool, ids.org_id, ids.user_id, id, &request)
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        editing::load(&pool, ids.org_id, ids.user_id, id)
+            .await
+            .unwrap()
+            .edit
+            .fees[0]
+            .amount_cents,
+        7000
+    );
+    transition_invoice(&pool, ids.org_id, id, InvoiceStatus::Sent)
+        .await
+        .unwrap();
+    assert!(
+        editing::save(&pool, ids.org_id, ids.user_id, id, &newer)
+            .await
+            .is_err()
+    );
+    assert!(
+        editing::load(&pool, ids.org_id, ids.user_id, id)
+            .await
+            .is_err()
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn draft_fee_edit_rejects_invalid_lines_and_current_unauthorized_actors(pool: PgPool) {
+    let ids = single_fee(&pool).await;
+    let invoice = generate_invoice_for_period(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        "2026-09-01".parse().unwrap(),
+        "2026-09-30".parse().unwrap(),
+    )
+    .await
+    .unwrap();
+    let id = invoice.invoice.id;
+    let request = edit_request(&pool, &ids, id, 6000).await;
+    let mut invalid = Vec::new();
+    for amount in [-1, 0] {
+        let mut edit = request.edit.clone();
+        edit.fees[0].amount_cents = amount;
+        invalid.push(edit);
+    }
+    for description in [" ".into(), "x".repeat(1001), "a\0b".into()] {
+        let mut edit = request.edit.clone();
+        edit.fees[0].description = description;
+        invalid.push(edit);
+    }
+    let mut duplicate = request.edit.clone();
+    duplicate.fees.push(duplicate.fees[0].clone());
+    invalid.push(duplicate);
+    let mut unknown = request.edit.clone();
+    unknown.fees[0].line_id = Uuid::now_v7();
+    invalid.push(unknown);
+    for edit in invalid {
+        assert!(
+            editing::review(&pool, ids.org_id, ids.user_id, id, &edit)
+                .await
+                .is_err()
+        );
+    }
+    let outsider = seed(&pool, OrgRole::Manager).await;
+    assert!(
+        editing::load(&pool, outsider.org_id, outsider.user_id, id)
+            .await
+            .is_err()
+    );
+    assert!(
+        editing::save(&pool, outsider.org_id, outsider.user_id, id, &request)
+            .await
+            .is_err()
+    );
+    assert!(
+        editing::save(&pool, ids.org_id, outsider.user_id, id, &request)
+            .await
+            .is_err()
+    );
+    sqlx::query!(
+        "UPDATE users SET org_role='member' WHERE id=$1",
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(
+        editing::load(&pool, ids.org_id, ids.user_id, id)
+            .await
+            .is_err()
+    );
+    assert!(
+        editing::save(&pool, ids.org_id, ids.user_id, id, &request)
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT amount_cents FROM invoice_line_items WHERE id=$1",
+            invoice.lines[0].id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        12500
+    );
+    assert_eq!(
+        sqlx::query_scalar!("SELECT count(*) FROM invoice_edit_requests")
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        Some(0)
+    );
 }
 
 #[sqlx::test(migrations = "./migrations")]

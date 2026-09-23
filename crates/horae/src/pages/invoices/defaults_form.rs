@@ -2,10 +2,9 @@ use dioxus::prelude::*;
 use horae_core::money::format_cents_plain;
 use horae_core::project::Percentage;
 
-use crate::components::form::{FormCard, FormGroup, Input, Select};
+use crate::components::form::{FormGroup, Input, Select};
 use crate::models::invoice::{Invoice, InvoiceDefaults};
 use crate::models::project_creation::{InvoiceDefaultsInput, SecondTaxInput};
-use crate::server_fns;
 
 pub(super) fn fields_from(defaults: &InvoiceDefaults) -> InvoiceDefaultsInput {
     InvoiceDefaultsInput {
@@ -142,48 +141,12 @@ pub(super) fn DraftDefaults(
     mut busy: Signal<bool>,
     onsaved: EventHandler<()>,
 ) -> Element {
-    let mut fields = use_signal(InvoiceDefaultsInput::default);
-    let mut error = use_signal(|| None::<String>);
-    let invoice_id = invoice.id;
     rsx! {
         if editing() {
-            FormCard { title: "Edit invoice values", error,
-                p { class: "text-sm text-muted", "Only this draft changes. Project defaults and line items stay unchanged." }
-                DefaultsFields { fields, disabled: busy() }
-                div { class: "flex flex-wrap gap-3",
-                    button { r#type: "button", class: "btn btn-primary", disabled: busy(),
-                        onclick: move |_| {
-                            if busy() { return; }
-                            let overrides = match parse_fields(&fields.read()) {
-                                Ok(value) => value,
-                                Err(message) => { error.set(Some(message)); return; }
-                            };
-                            error.set(None);
-                            busy.set(true);
-                            spawn(async move {
-                                match server_fns::update_invoice_defaults(invoice_id.to_string(), overrides).await {
-                                    Ok(_) => { editing.set(false); onsaved.call(()); }
-                                    Err(err) => error.set(Some(err.to_string())),
-                                }
-                                busy.set(false);
-                            });
-                        },
-                        if busy() { "Saving…" } else { "Save invoice values" }
-                    }
-                    button { r#type: "button", class: "btn btn-secondary", disabled: busy(), onclick: move |_| editing.set(false), "Cancel changes" }
-                }
-            }
+            super::editing::DraftEditor { id: invoice.id, editing, busy, onsaved }
         } else {
             button { r#type: "button", class: "btn btn-secondary mb-6", disabled: busy(),
                 onclick: move |_| {
-                    fields.set(InvoiceDefaultsInput {
-                        terms_days: invoice.terms_days.to_string(), po_number: invoice.po_number.clone(),
-                        tax: format_cents_plain(invoice.tax1_bps.into()), discount: format_cents_plain(invoice.discount_bps.into()),
-                        second_tax: invoice.tax2_name.as_ref().zip(invoice.tax2_bps).map(|(name, bps)| SecondTaxInput {
-                            name: name.clone(), percentage: format_cents_plain(bps.into()),
-                        }),
-                    });
-                    error.set(None);
                     editing.set(true);
                 }, "Edit invoice values"
             }

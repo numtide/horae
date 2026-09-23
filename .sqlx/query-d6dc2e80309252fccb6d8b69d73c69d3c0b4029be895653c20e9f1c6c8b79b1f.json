@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT org_role as \"role: OrgRole\" FROM users WHERE id=$1 AND org_id=$2 AND active FOR SHARE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "role: OrgRole",
+        "type_info": {
+          "Custom": {
+            "name": "org_role",
+            "kind": {
+              "Enum": [
+                "admin",
+                "manager",
+                "member"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d6dc2e80309252fccb6d8b69d73c69d3c0b4029be895653c20e9f1c6c8b79b1f"
+}

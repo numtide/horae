@@ -704,11 +704,22 @@ mod server_fns {
         panic!("navigation must not prepare invoices");
     }
 
-    pub async fn update_invoice_defaults(
+    pub async fn get_invoice_editor(
         _id: String,
-        _overrides: crate::invoice::InvoiceDefaults,
-    ) -> Result<Invoice, ServerFnError> {
-        panic!("navigation must not edit invoice values");
+    ) -> Result<crate::invoice::InvoiceEditor, ServerFnError> {
+        panic!("navigation must not load the invoice editor");
+    }
+    pub async fn review_invoice_edit(
+        _id: String,
+        _edit: crate::invoice::InvoiceDraftEdit,
+    ) -> Result<crate::invoice::InvoiceEditReview, ServerFnError> {
+        panic!("navigation must not review invoice edits");
+    }
+    pub async fn save_invoice_draft(
+        _id: String,
+        _request: crate::invoice::InvoiceDraftSave,
+    ) -> Result<InvoiceWithLines, ServerFnError> {
+        panic!("navigation must not save invoice edits");
     }
 
     pub async fn update_invoice_status(

@@ -1,7 +1,10 @@
 //! Invoice server functions.
 
 use super::*;
-use crate::models::invoice::{InvoiceDefaults, InvoicePreparation};
+use crate::models::invoice::{
+    InvoiceDefaults, InvoiceDraftEdit, InvoiceDraftSave, InvoiceEditReview, InvoiceEditor,
+    InvoicePreparation,
+};
 
 #[cfg(feature = "server")]
 mod defaults;
@@ -17,6 +20,56 @@ mod preview;
 
 #[cfg(feature = "server")]
 mod balances;
+
+#[cfg(feature = "server")]
+mod editing;
+
+#[server]
+pub async fn get_invoice_editor(invoice_id: String) -> Result<InvoiceEditor, ServerFnError> {
+    let manager = require_manager().await?;
+    let state = crate::state::global_state().await;
+    editing::load(
+        &state.db,
+        manager.org_id,
+        manager.id,
+        parse_uuid(&invoice_id, "invoice_id")?,
+    )
+    .await
+}
+
+#[server]
+pub async fn review_invoice_edit(
+    invoice_id: String,
+    edit: InvoiceDraftEdit,
+) -> Result<InvoiceEditReview, ServerFnError> {
+    let manager = require_manager().await?;
+    let state = crate::state::global_state().await;
+    editing::review(
+        &state.db,
+        manager.org_id,
+        manager.id,
+        parse_uuid(&invoice_id, "invoice_id")?,
+        &edit,
+    )
+    .await
+}
+
+#[server]
+pub async fn save_invoice_draft(
+    invoice_id: String,
+    request: InvoiceDraftSave,
+) -> Result<InvoiceWithLines, ServerFnError> {
+    let manager = require_manager().await?;
+    let state = crate::state::global_state().await;
+    editing::save(
+        &state.db,
+        manager.org_id,
+        manager.id,
+        parse_uuid(&invoice_id, "invoice_id")?,
+        &request,
+    )
+    .await
+}
 
 #[cfg(feature = "server")]
 #[derive(Clone, Copy)]
@@ -515,72 +568,32 @@ async fn generate_invoice_with_request(
     Ok((InvoiceWithLines { invoice, lines }, true))
 }
 
-/// Override only an editable invoice; project defaults and source lines stay intact.
-#[server]
-pub async fn update_invoice_defaults(
-    invoice_id: String,
-    overrides: InvoiceDefaults,
-) -> Result<Invoice, ServerFnError> {
-    let manager = require_manager().await?;
-    let state = crate::state::global_state().await;
-    let id = parse_uuid(&invoice_id, "invoice_id")?;
-    update_invoice_defaults_in_db(&state.db, manager.org_id, id, &overrides).await
-}
-
-#[cfg(feature = "server")]
+#[cfg(all(test, feature = "server"))]
 async fn update_invoice_defaults_in_db(
     pool: &sqlx::PgPool,
     org_id: uuid::Uuid,
     id: uuid::Uuid,
     overrides: &InvoiceDefaults,
 ) -> Result<Invoice, ServerFnError> {
-    let mut tx = pool.begin().await.map_err(server_err)?;
-    balances::lock_invoices(&mut tx, org_id).await?;
-    let current = sqlx::query!(
-        r#"SELECT status as "status: InvoiceStatus", subtotal_cents,
-                  issued_on as "issued_on: chrono::NaiveDate"
-           FROM invoices WHERE org_id = $1 AND id = $2 FOR UPDATE"#,
+    let actor = sqlx::query_scalar!("SELECT id FROM users WHERE org_id=$1 AND active AND org_role IN ('admin','manager') ORDER BY id LIMIT 1", org_id)
+        .fetch_one(pool).await.map_err(server_err)?;
+    let mut editor = editing::load(pool, org_id, actor, id).await?;
+    editor.edit.defaults = overrides.clone();
+    let review = editing::review(pool, org_id, actor, id, &editor.edit).await?;
+    editing::save(
+        pool,
         org_id,
+        actor,
         id,
+        &InvoiceDraftSave {
+            request_id: uuid::Uuid::now_v7(),
+            edit: editor.edit,
+            review,
+            confirmed_excess: Vec::new(),
+        },
     )
-    .fetch_optional(&mut *tx)
     .await
-    .map_err(server_err)?
-    .ok_or_else(|| not_found("Invoice not found"))?;
-    if current.status != InvoiceStatus::Draft {
-        return Err(conflict("Only draft invoices can be edited"));
-    }
-    let amounts = defaults::amounts(overrides, current.subtotal_cents)?;
-    balances::replace_contributions(&mut tx, org_id, id, overrides.discount_bps).await?;
-    let due_on =
-        horae_core::project::payment_due_date(current.issued_on, overrides.terms_days as u16)
-            .map_err(|error| err(BAD_REQUEST, error.to_string()))?;
-    sqlx::query!(
-        "UPDATE invoices SET due_on=$3,po_number=$4,discount_bps=$5,tax1_bps=$6,
-            tax2_name=$7,tax2_bps=$8,discount_cents=$9,tax1_cents=$10,tax2_cents=$11,total_cents=$12
-         WHERE org_id=$1 AND id=$2",
-        org_id,
-        id,
-        due_on as chrono::NaiveDate,
-        overrides.po_number,
-        overrides.discount_bps,
-        overrides.tax1_bps,
-        overrides.tax2_name,
-        overrides.tax2_bps,
-        amounts.discount_cents,
-        amounts.tax1_cents,
-        amounts.tax2_cents,
-        amounts.total_cents,
-    )
-    .execute(&mut *tx)
-    .await
-    .map_err(server_err)?;
-    let invoice = crate::reports::fetch_invoice_metadata(&mut *tx, id, org_id)
-        .await
-        .map_err(server_err)?
-        .ok_or_else(|| not_found("Invoice not found"))?;
-    tx.commit().await.map_err(server_err)?;
-    Ok(invoice)
+    .map(|saved| saved.invoice)
 }
 
 #[server]

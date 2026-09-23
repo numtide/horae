@@ -209,6 +209,7 @@ pub(super) mod tests {
             "project_drafts",
             "project_edit_requests",
             "invoice_generation_requests",
+            "invoice_edit_requests",
             "project_settings",
             "project_private_settings",
             "project_member_costs",

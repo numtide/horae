@@ -15,6 +15,9 @@ mod defaults_form;
 #[path = "invoices/preparation.rs"]
 mod preparation;
 
+#[path = "invoices/editing.rs"]
+mod editing;
+
 /// The badge class for an invoice status — one convention for list and detail.
 fn invoice_badge_class(status: InvoiceStatus) -> &'static str {
     match status {

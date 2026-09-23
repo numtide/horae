@@ -169,3 +169,62 @@ pub struct InvoicePreviewLine {
     pub rate_cents: Option<i64>,
     pub amount_cents: i64,
 }
+
+/// Only existing fee lines are editable; time quantities and rates stay frozen.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InvoiceFeeEdit {
+    pub line_id: Uuid,
+    pub description: String,
+    pub amount_cents: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InvoiceDraftEdit {
+    pub revision: i64,
+    pub defaults: InvoiceDefaults,
+    pub fees: Vec<InvoiceFeeEdit>,
+}
+
+/// Availability excludes this draft's old contribution before replacement.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InvoiceFeeReview {
+    pub line_id: Uuid,
+    pub project_id: Uuid,
+    pub period_key: String,
+    pub agreed_cents: i64,
+    pub other_invoiced_cents: i64,
+    pub net_cents: i64,
+    pub remaining_cents: i64,
+    pub excess_cents: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InvoiceEditReview {
+    pub fees: Vec<InvoiceFeeReview>,
+    pub amounts: horae_core::invoice::InvoiceAmounts,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InvoiceEditor {
+    pub edit: InvoiceDraftEdit,
+    pub review: InvoiceEditReview,
+    pub currency: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InvoiceExcessConfirmation {
+    pub line_id: Uuid,
+    pub excess_cents: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InvoiceDraftSave {
+    pub request_id: Uuid,
+    pub edit: InvoiceDraftEdit,
+    pub review: InvoiceEditReview,
+    pub confirmed_excess: Vec<InvoiceExcessConfirmation>,
+}
