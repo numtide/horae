@@ -3,6 +3,7 @@ use horae_core::money::{format_cents_plain, parse_cents};
 use uuid::Uuid;
 
 use super::defaults_form::{DefaultsFields, fields_from, parse_fields};
+use super::recovery::{PendingInvoice, RecoveryStorage};
 use crate::components::form::{FormCard, FormGroup, Input};
 use crate::components::modal::Modal;
 use crate::models::invoice::*;
@@ -83,6 +84,7 @@ fn DraftEditForm(
     mut busy: Signal<bool>,
     onsaved: EventHandler<()>,
 ) -> Element {
+    let storage = use_context::<RecoveryStorage>();
     let fields = use_signal(|| fields_from(&snapshot.edit.defaults));
     let mut fees = use_signal(|| {
         snapshot
@@ -102,6 +104,7 @@ fn DraftEditForm(
     let mut confirm = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
     let current = parse_edit(snapshot.edit.revision, &fields.read(), &fees.read());
+    let dirty = current.as_ref() != Ok(&snapshot.edit);
     let ready = reviewed
         .read()
         .as_ref()
@@ -147,18 +150,38 @@ fn DraftEditForm(
         busy.set(true);
         error.set(None);
         spawn(async move {
-            match server_fns::save_invoice_draft(id.to_string(), next).await {
-                Ok(_) => {
-                    busy.set(false);
-                    editing.set(false);
-                    onsaved.call(());
-                }
+            let pending = PendingInvoice::Save {
+                invoice_id: id,
+                request: next,
+            };
+            if let Err(message) = storage.store(&pending).await {
+                busy.set(false);
+                error.set(Some(format!("{message} No invoice request was sent.")));
+                return;
+            }
+            match pending.submit().await {
+                Ok(_) => match storage.clear().await {
+                    Ok(()) => {
+                        busy.set(false);
+                        editing.set(false);
+                        onsaved.call(());
+                    }
+                    Err(message) => {
+                        uncertain.set(true);
+                        error.set(Some(format!(
+                            "The invoice is saved, but recovery could not be cleared: {message}"
+                        )));
+                    }
+                },
                 Err(err) => {
                     if matches!(&err, ServerFnError::ServerError {code, ..} if (400..500).contains(code))
                     {
-                        busy.set(false);
                         reviewed.set(None);
                         error.set(Some(err.to_string()));
+                        if let Err(message) = storage.clear().await {
+                            error.set(Some(format!("{err}. {message}")));
+                        }
+                        busy.set(false);
                     } else {
                         uncertain.set(true);
                         error.set(Some("The save may have completed. Retry the same changes to recover the result safely.".into()));
@@ -172,6 +195,7 @@ fn DraftEditForm(
         .is_some_and(|(_, review)| review.fees.iter().any(|fee| fee.excess_cents > 0));
     let currency = snapshot.currency.trim();
     rsx! {
+        div { "data-editor-kind": "invoice", "data-editor-state": if busy() { "pending" } else if dirty { "dirty" } else { "clean" },
         FormCard { title: "Edit invoice values", error,
             p { class: "text-sm text-muted mb-4", "Only this draft changes. Agreed project fees, time entries and other invoices stay unchanged. Other invoiced amounts include draft reservations; balances exclude tax." }
             DefaultsFields { fields, disabled: busy() }
@@ -238,6 +262,7 @@ fn DraftEditForm(
                 button { class: "btn btn-danger", disabled: busy(), onclick: move |_| save.call(true), "Confirm excess and save" }
                 button { class: "btn btn-secondary", disabled: busy(), onclick: move |_| confirm.set(false), "Cancel over-invoicing" }
             }
+        }
         }
     }
 }

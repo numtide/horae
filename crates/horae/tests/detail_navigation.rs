@@ -259,6 +259,12 @@ async fn navigating_between_invoice_ids_loads_the_current_invoice() {
     let second = Uuid::from_u128(2);
     assert_eq!(*probe.requests.borrow(), [first]);
     assert!(dioxus::ssr::render(&dom).contains("Invoice INV-1"));
+    let html = dioxus::ssr::render(&dom);
+    assert!(
+        !html.contains("Mark Sent"),
+        "SSR must wait for browser recovery before exposing mutations"
+    );
+    assert!(!html.contains("Edit invoice values"));
 
     let navigator = probe.navigator.borrow().unwrap();
     dom.in_scope(probe.scope.borrow().unwrap(), || {

@@ -141,13 +141,17 @@ pub(super) fn DraftDefaults(
     mut busy: Signal<bool>,
     onsaved: EventHandler<()>,
 ) -> Element {
+    let storage = use_context::<super::recovery::RecoveryStorage>();
+    if !storage.ready() {
+        return rsx! {};
+    }
     rsx! {
         if editing() {
             super::editing::DraftEditor { id: invoice.id, editing, busy, onsaved }
         } else {
             button { r#type: "button", class: "btn btn-secondary mb-6", disabled: busy(),
                 onclick: move |_| {
-                    editing.set(true);
+                    if storage.ready() { editing.set(true); }
                 }, "Edit invoice values"
             }
         }

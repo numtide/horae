@@ -17,6 +17,8 @@ mod preparation;
 
 #[path = "invoices/editing.rs"]
 mod editing;
+#[path = "invoices/recovery.rs"]
+mod recovery;
 
 /// The badge class for an invoice status — one convention for list and detail.
 fn invoice_badge_class(status: InvoiceStatus) -> &'static str {
@@ -30,6 +32,12 @@ fn invoice_badge_class(status: InvoiceStatus) -> &'static str {
 
 #[component]
 pub fn InvoiceList() -> Element {
+    rsx! { recovery::RecoveryGate { InvoiceListContent {} } }
+}
+
+#[component]
+fn InvoiceListContent() -> Element {
+    let storage = use_context::<recovery::RecoveryStorage>();
     let invoices = use_resource(|| async move { server_fns::list_invoices(None).await });
     let clients = use_resource(|| async move { server_fns::list_clients(false).await });
 
@@ -63,13 +71,15 @@ pub fn InvoiceList() -> Element {
             div { class: "page-header",
                 h1 { class: "page-title", "Invoices" }
                 div { class: "page-actions",
+                    if storage.ready() {
                     button {
                         class: "btn btn-primary",
                         disabled: busy(),
                         onclick: move |_| {
-                            if !busy() { show_form.toggle(); }
+                            if !busy() && storage.ready() { show_form.toggle(); }
                         },
                         if show_form() { "Cancel" } else { "New Invoice" }
+                    }
                     }
                 }
             }
@@ -150,11 +160,12 @@ pub fn InvoiceList() -> Element {
 pub fn InvoiceDetail(id: Uuid) -> Element {
     // A keyed fragment resets invoice-local resources and actions when the
     // router reuses this page for another ID.
-    rsx! { for id in [id] { InvoiceDetailContent { key: "{id}", id } } }
+    rsx! { for id in [id] { recovery::RecoveryGate { key: "{id}", InvoiceDetailContent { id } } } }
 }
 
 #[component]
 fn InvoiceDetailContent(id: Uuid) -> Element {
+    let storage = use_context::<recovery::RecoveryStorage>();
     let mut invoice_data =
         use_resource(move || async move { server_fns::get_invoice(id.to_string()).await });
     let clients = use_resource(|| async move { server_fns::list_clients(false).await });
@@ -175,13 +186,16 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
     // One button per status transition; the four share everything but the
     // target status, label, and emphasis.
     let status_btn = move |to: &'static str, label: &'static str, primary: bool| {
+        if !storage.ready() {
+            return rsx! {};
+        }
         rsx! {
             button {
                 class: if primary { "btn btn-primary" } else { "btn btn-secondary" },
                 style: if !primary { "margin-left: 0.5rem;" },
                 disabled: busy() || editing(),
                 onclick: move |_| {
-                    if busy() || editing() { return; }
+                    if busy() || editing() || !storage.ready() { return; }
                     error.set(None);
                     busy.set(true);
                     spawn(async move {

@@ -14,6 +14,7 @@ use crate::models::project_creation::InvoiceDefaultsInput;
 use crate::server_fns;
 
 use super::defaults_form::{DefaultsFields, fields_from, parse_fields};
+use super::recovery::{PendingInvoice, RecoveryStorage, release_navigation};
 
 #[path = "preparation/fees.rs"]
 mod fees;
@@ -51,6 +52,7 @@ pub(super) fn PrepareInvoice(
     mut busy: Signal<bool>,
     oncreated: EventHandler<Uuid>,
 ) -> Element {
+    let storage = use_context::<RecoveryStorage>();
     let mut client = use_signal(String::new);
     let mut from = use_signal(String::new);
     let mut to = use_signal(String::new);
@@ -146,23 +148,44 @@ pub(super) fn PrepareInvoice(
         busy.set(true);
         error.set(None);
         spawn(async move {
-            let result = server_fns::generate_invoice(
-                request.client,
-                request.from,
-                request.to,
-                request.projects,
-                request.overrides,
-                mutation,
-            )
-            .await;
-            busy.set(false);
+            let pending = PendingInvoice::Generate {
+                client: request.client,
+                from: request.from,
+                to: request.to,
+                projects: request.projects,
+                overrides: request.overrides,
+                request: Box::new(mutation),
+            };
+            if let Err(message) = storage.store(&pending).await {
+                busy.set(false);
+                error.set(Some(format!("{message} No invoice request was sent.")));
+                return;
+            }
+            let result = pending.submit().await;
             match result {
-                Ok(data) => oncreated.call(data.invoice.id),
+                Ok(id) => match storage.clear().await {
+                    Ok(()) => {
+                        release_navigation().await;
+                        busy.set(false);
+                        oncreated.call(id);
+                    }
+                    Err(message) => {
+                        error.set(Some(format!(
+                            "The invoice is saved, but recovery could not be cleared: {message}"
+                        )));
+                        uncertain.set(true);
+                        busy.set(true);
+                    }
+                },
                 Err(err) => {
                     if matches!(&err, ServerFnError::ServerError { code, .. } if (400..500).contains(code))
                     {
                         error.set(Some(err.to_string()));
                         reviewed.set(None);
+                        if let Err(message) = storage.clear().await {
+                            error.set(Some(format!("{err}. {message}")));
+                        }
+                        busy.set(false);
                     } else {
                         error.set(Some("The invoice may have been saved. Retry the same request to recover it without creating another draft.".into()));
                         uncertain.set(true);
@@ -174,6 +197,7 @@ pub(super) fn PrepareInvoice(
     });
 
     rsx! {
+        div { "data-editor-kind": "invoice", "data-editor-state": if busy() { "pending" } else if !client().is_empty() || !from().is_empty() || !to().is_empty() || started() { "dirty" } else { "clean" },
         FormCard { title: "Prepare invoice", error,
             p { class: "text-muted text-sm",
                 "Review unbilled time and monthly fees in this period, plus overdue single fees and milestones. The estimate reserves nothing; generation rechecks available charges. Nothing is sent automatically."
@@ -328,6 +352,7 @@ pub(super) fn PrepareInvoice(
                 button { r#type: "button", class: "btn btn-danger", disabled: busy() || !ready, onclick: move |_| generate.call(true), "Confirm excess and generate" }
                 button { r#type: "button", class: "btn btn-secondary", disabled: busy(), onclick: move |_| confirm.set(false), "Cancel over-invoicing" }
             }
+        }
         }
     }
 }

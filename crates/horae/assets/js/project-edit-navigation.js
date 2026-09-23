@@ -12,15 +12,18 @@
   replace(tagged(history.state, current), '');
 
   const state = () => {
-    const editor = document.querySelector('[data-project-edit-state]');
-    return editor?.hasAttribute('data-project-edit-leaving') ? 'clean' : editor?.dataset.projectEditState;
+    const editor = document.querySelector('[data-editor-state], [data-project-edit-state]');
+    return editor?.hasAttribute('data-editor-leaving') || editor?.hasAttribute('data-project-edit-leaving')
+      ? 'clean' : editor?.dataset.editorState ?? editor?.dataset.projectEditState;
   };
   const canLeave = () => {
+    const invoice = document.querySelector('[data-editor-kind="invoice"]');
     if (state() === 'pending') {
-      alert('A project save is unresolved. Wait for it to finish, or retry the request before leaving.');
+      alert(invoice ? 'An invoice request is unresolved. Wait for it to finish, or recover the request before leaving.'
+        : 'A project save is unresolved. Wait for it to finish, or retry the request before leaving.');
       return false;
     }
-    return state() !== 'dirty' || confirm('Discard unsaved project changes?');
+    return state() !== 'dirty' || confirm(invoice ? 'Discard unsaved invoice changes?' : 'Discard unsaved project changes?');
   };
 
   history.pushState = (data, title, url) => {
