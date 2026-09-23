@@ -56,6 +56,8 @@ Migration 0034 replaces the existing new-time context view with the task restric
 
 ## Fee schedule and invoice occurrences
 
+The occurrence/claim schema below describes the current implementation. FR-024/025, clarified on 2026-09-23, require partial allocations and discounted billed contributions across invoices instead of treating a single `invoice_id` as proof that the entire fee was consumed. Revising that model, preserving historical snapshots and defining exact discount allocation are required planning work before T043 implementation; this section is not yet the target schema for those requirements.
+
 `project_fee_milestones`: project_id, label, due_on, amount_cents, position. At most 100; required nonempty label, date and nonnegative amount. Single/monthly modes use project settings; monthly day is first/fifteenth/last, computed as a calendar date with leap-year tests.
 
 `project_fee_occurrences`: project_id, milestone_id nullable, period_key, due_on, amount_cents, currency, invoice_id nullable. Unique (project_id,period_key) identifies single, milestone or calendar-month occurrence. Materialize when explicitly generating the draft invoice; its read-only preparation preview does not create or reserve occurrences. Do not issue invoices on schedule automatically.

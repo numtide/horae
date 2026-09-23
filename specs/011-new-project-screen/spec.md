@@ -12,6 +12,13 @@ The reference is `design/project/app/13_New Project.dc.html` from the September 
 
 **Scope extension (2026-09-22)**: The user requested that Edit open the same designed editor with the existing project's values, that the old editor be removed, and that this ship in PR #207. US7 supersedes the original decision to retain the separate Projects edit form; it does not authorize rewriting historical financial records.
 
+## Clarifications
+
+### Session 2026-09-23
+
+- Q: May invoicing exceed an agreed fixed fee? → A: Allow partial invoicing and invoice-owned description/amount edits without changing the project's agreed fee. Exceeding the remaining balance requires explicit confirmation and displays the resulting negative balance as over-invoiced.
+- Q: Does a discount waive the corresponding remaining fixed fee? → A: No. Follow the observed Harvest behavior: invoicing EUR 1,000 with a 10% discount and no taxes counts as EUR 900 invoiced and leaves EUR 100 available for a later invoice. The project's agreed fee remains EUR 1,000.
+
 ## User Scenarios & Testing
 
 ### User Story 1 - Create a usable project (Priority: P1)
@@ -94,6 +101,11 @@ A creator sets payment terms, purchase order, tax and discount defaults so proje
 1. **Given** a discount and one or two named taxes, **When** the invoice is calculated, **Then** totals match exact rounding rules and their components are visible.
 1. **Given** prefilled invoice values, **When** the user edits them, **Then** only that invoice changes; previous invoices retain their saved totals.
 1. **Given** projects with incompatible defaults, **When** they are selected together for an invoice, **Then** the user must explicitly resolve the conflict rather than silently inherit one project's settings.
+1. **Given** an agreed fixed fee of EUR 1,000 with no discount or taxes, **When** an authorized user invoices EUR 600, **Then** EUR 400 remains available for a later invoice and the project's agreed fee remains EUR 1,000.
+1. **Given** the same fee with EUR 600 already invoiced, **When** the user proposes another EUR 600, **Then** the system shows the EUR 200 excess and requires explicit confirmation before saving; cancelling makes no changes, while confirming leaves a visible EUR -200 remaining balance without increasing the agreed fee.
+1. **Given** a fixed-fee invoice in preparation or draft, **When** its line description or amount is edited, **Then** that invoice uses the edited values without changing the project's fee schedule, tracked time or other invoices.
+1. **Given** an agreed fixed fee of EUR 1,000 with no taxes, **When** a draft for EUR 1,000 with a 10% discount is saved, **Then** its total is EUR 900, the project shows EUR 900 invoiced and EUR 100 uninvoiced, and preparing another invoice offers that EUR 100 without changing the agreed fee.
+1. **Given** that discounted draft, **When** its discount is changed to zero, **Then** the same invoice counts as EUR 1,000 invoiced and the remaining fee becomes zero; retrying the update does not add another charge. Voiding the invoice restores the fee balance without rewriting its historical lines or saved adjustments.
 
 ### User Story 6 - Use the designed screen across devices (Priority: P2)
 
@@ -137,6 +149,7 @@ An authorized manager or administrator edits an existing project using the same 
 - Autosave arriving after final creation, an old tab saving after draft discard, lost final responses and retry after an interrupted transaction.
 - No mail delivery configured, permanent delivery failure and retries after a threshold notification has already been acknowledged.
 - Mixed-project invoices, unassigned teammates, direct compatibility/export requests and imported legacy projects must respect their existing contracts and the new privacy boundaries.
+- Partial fixed-fee billing must not consume the entire agreed fee. Concurrent billing or a changed amount must not silently reuse confirmation of a different remaining balance or excess; uncertain retries must not duplicate the billed amount.
 
 ## Requirements
 
@@ -165,6 +178,8 @@ An authorized manager or administrator edits an existing project using the same 
 - **FR-021**: Creation and editing MUST share the designed form sections; all project Edit entry points MUST load the existing project's complete authorized configuration, and the obsolete inline editor and unused handlers MUST be removed.
 - **FR-022**: Editing MUST use explicit atomic updates to the same project, isolated from creation drafts, with conflict detection, safe uncertain-request retries and unsaved-navigation protection. Cancel MUST NOT persist edits.
 - **FR-023**: Editing MUST preserve existing legacy semantics, referenced entity identities, private fields outside the actor's authority and historical time/invoice sources. Guarded changes MUST have explicit user-facing explanations and server-side enforcement.
+- **FR-024**: Authorized invoice creators MUST be able to edit fixed-fee line descriptions and amounts during preparation and on drafts, including partial billing across invoices, without changing the project's agreed fee or other invoices. Preparation MUST show agreed, already invoiced and remaining amounts. Exceeding the remaining balance MUST require explicit confirmation of the current proposed excess before saving; a negative remaining balance MUST retain its sign and be labelled as over-invoiced, not conveyed by color alone. The server MUST revalidate the balance and confirmation at save time. Unconfirmed excess MUST write nothing; retries MUST NOT bill the same request twice.
+- **FR-025**: A discount MUST reduce the fixed-fee amount counted as invoiced, leaving the discounted portion available for later invoicing rather than waiving it or reducing the agreed project fee. Saving or editing a draft MUST update the billed contribution and remaining balance atomically; an update replaces that invoice's contribution rather than adding it again. Preparation and project displays MUST agree on the remaining amount. Voiding MUST release only that invoice's contribution while preserving its historical amounts. Time-backed invoice sources MUST retain their existing eligibility semantics.
 
 ### Key Entities
 
@@ -174,6 +189,7 @@ An authorized manager or administrator edits an existing project using the same 
 - **Project membership**: A person's project access, manager designation and explicit project-only financial overrides.
 - **Fee schedule**: Single, milestone or monthly fee amounts and applicable dates/day rules.
 - **Invoice defaults**: Project payment terms, PO, discount and tax defaults, copied into an invoice without linking subsequent edits.
+- **Fixed-fee invoice line**: Invoice-owned description, gross amount and discounted billed contribution linked to its fee source, distinct from the project's agreed amount; partial billing and discounts leave an explicit remaining balance.
 - **Budget notification**: Threshold, consumption period, intended recipients and delivery state for deduplication/retry.
 
 ## Success Criteria
@@ -201,4 +217,5 @@ An authorized manager or administrator edits an existing project using the same 
 - One project-created event means one transactional event record; downstream plugin delivery retains its documented retry/availability semantics, not an exactly-once external side effect.
 - Dates and monthly budget periods follow the organization's existing date convention; introducing organization timezone management is outside this feature.
 - No external payment collection, tax-law determination or currency conversion is included. Rates and taxes are user-entered settings, not jurisdictional recommendations.
+- Fixed-fee balance accounting uses billed amounts after discount and before taxes; tax components remain separate from fee consumption. For mixed-project invoices, discount allocation must be proportional to line amounts, deterministic and conserve the exact invoice discount without cross-project balance drift. These are accounting assumptions for planning, not additional behaviors verified by the single-project, tax-free Harvest test; the plan must specify minor-unit remainder allocation and regression fixtures before implementation.
 - The existing production/import database is not a test fixture; validation uses isolated development/test data.
