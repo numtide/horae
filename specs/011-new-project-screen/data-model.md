@@ -56,15 +56,19 @@ Migration 0034 replaces the existing new-time context view with the task restric
 
 ## Fee schedule and invoice occurrences
 
-The occurrence/claim schema below describes the current implementation. FR-024/025, clarified on 2026-09-23, require partial allocations and discounted billed contributions across invoices instead of treating a single `invoice_id` as proof that the entire fee was consumed. Revising that model, preserving historical snapshots and defining exact discount allocation are required planning work before T043 implementation; this section is not yet the target schema for those requirements.
+The target below replaces exclusive whole-fee claims for FR-024/025. Implementation is tracked by T061–T068; the existing schema still has the invoice pointer until the forward migration lands.
 
 `project_fee_milestones`: project_id, label, due_on, amount_cents, position. At most 100; required nonempty label, date and nonnegative amount. Single/monthly modes use project settings; monthly day is first/fifteenth/last, computed as a calendar date with leap-year tests.
 
-`project_fee_occurrences`: project_id, milestone_id nullable, period_key, due_on, amount_cents, currency, invoice_id nullable. Unique (project_id,period_key) identifies single, milestone or calendar-month occurrence. Materialize when explicitly generating the draft invoice; its read-only preparation preview does not create or reserve occurrences. Do not issue invoices on schedule automatically.
+`project_fee_occurrences`: project_id, milestone_id nullable, period_key, due_on, amount_cents, currency. Unique (project_id,period_key) identifies single, milestone or calendar-month occurrence. Materialize when explicitly generating the draft invoice; its read-only preparation preview does not create or reserve occurrences. Do not issue invoices on schedule automatically.
 
-Occurrences also snapshot the line description. Keys are `single`, `milestone:<uuid>` or `month:<YYYY-MM>`. Composite foreign keys keep project/milestone/invoice references in the same organization. Claimed occurrences remain available as historical invoice sources after a void releases their current claim; later generation reuses the occurrence identity and frozen amount.
+Occurrences also snapshot the original description. Keys are `single`, `milestone:<uuid>` or `month:<YYYY-MM>`. Composite foreign keys keep references in the same organization. Later partial invoices reuse the occurrence identity and agreed amount; invoice line descriptions may differ. A monthly balance belongs to its own month and cannot consume another month's fee.
 
-Invoice lines allow exactly one of time_entry_id or fee_occurrence_id, enforced by CHECK. Existing time-backed rows retain their source. Fee rows do not fabricate minutes/hourly rates. Invoice transaction claims available occurrences; void releases claims but leaves original invoice snapshots immutable.
+Invoice lines allow exactly one of time_entry_id or fee_occurrence_id, enforced by CHECK. Existing time-backed rows retain their source. Fee rows do not fabricate minutes/hourly rates. Each line stores `net_before_tax_cents` between zero and its gross amount. Across an invoice these contributions sum to subtotal minus discount; taxes are excluded. Non-void contributions, including draft reservations, consume the occurrence; void leaves the amounts intact but excludes that invoice from balances. Index occurrence references for aggregation and retain uniqueness within each invoice.
+
+Allocate the header discount proportionally across all gross lines using integer floors, then assign remaining cents by descending fractional remainder and stable source order. Preparation and persistence use the same ordering: time-entry UUID, then fee `(project_id, period_key)`. Zero subtotal means all contributions are zero. A forward migration computes contributions for existing lines without changing their gross values, headers or source identities, then removes the obsolete invoice pointer. No parallel legacy balance path is needed.
+
+Invoice mutation requests retain UUID v7 identity, organization/actor, canonical bounded request, invoice identity and completed revision. Identical requests cannot create a second invoice or apply an edit twice; stale draft revisions conflict. Keep this private table outside plugin grants. All invoice writers share the organization advisory lock before invoice/occurrence row locks. Draft replacement validates balances excluding its own previous contribution, then atomically replaces lines, contributions, header and revision. Confirmed overbilling is bound to the reviewed balance and proposed net excess, never a blanket bypass flag.
 
 ## Invoice-owned defaults and calculations
 

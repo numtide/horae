@@ -38,8 +38,56 @@ pub struct InvoiceAmounts {
 pub enum InvoiceAmountError {
     #[error("Invoice subtotal must not be negative")]
     NegativeSubtotal,
+    #[error("Invoice line amounts must not be negative")]
+    NegativeLine,
     #[error("Invoice total exceeds the supported range")]
     Overflow,
+}
+
+/// Return each line's contribution after discount and before taxes.
+///
+/// Allocates the rounded invoice discount proportionally using largest
+/// remainders. Equal remainders favor earlier input lines; callers must use
+/// stable source order so preview, save and draft edits allocate identically.
+/// Zero-subtotal invoices return zero contributions.
+///
+/// # Errors
+/// Rejects negative lines or a subtotal exceeding `i64::MAX`.
+pub fn allocate_invoice_discount(
+    gross_lines: &[i64],
+    discount: Percentage,
+) -> Result<Vec<i64>, InvoiceAmountError> {
+    let subtotal = gross_lines.iter().try_fold(0_i64, |sum, &amount| {
+        if amount < 0 {
+            return Err(InvoiceAmountError::NegativeLine);
+        }
+        sum.checked_add(amount).ok_or(InvoiceAmountError::Overflow)
+    })?;
+    if subtotal == 0 {
+        return Ok(vec![0; gross_lines.len()]);
+    }
+    let discount_cents =
+        invoice_amounts(subtotal, discount, Percentage::ZERO, Percentage::ZERO)?.discount_cents;
+    let mut remaining = discount_cents;
+    let mut contributions = Vec::with_capacity(gross_lines.len());
+    let mut remainders = Vec::with_capacity(gross_lines.len());
+    for (index, &gross) in gross_lines.iter().enumerate() {
+        let numerator = i128::from(gross) * i128::from(discount_cents);
+        let share = i64::try_from(numerator / i128::from(subtotal))
+            .map_err(|_| InvoiceAmountError::Overflow)?;
+        contributions.push(gross - share);
+        remaining -= share;
+        remainders.push((index, numerator % i128::from(subtotal)));
+    }
+    remainders.sort_unstable_by_key(|&(index, remainder)| (std::cmp::Reverse(remainder), index));
+    for (index, _) in remainders {
+        if remaining == 0 {
+            break;
+        }
+        contributions[index] -= 1;
+        remaining -= 1;
+    }
+    Ok(contributions)
 }
 
 /// Apply the discount before independently rounded taxes, using exact minor units.
@@ -108,6 +156,86 @@ pub fn line_amount_cents(rate_cents: i64, minutes: i32) -> Result<i64, std::num:
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn discounted_fee_contribution_leaves_discount_available() {
+        let net = allocate_invoice_discount(&[100_000], "10".parse().unwrap()).unwrap();
+        assert_eq!(net, [90_000]);
+        assert_eq!(100_000 - net[0], 10_000);
+    }
+
+    #[test]
+    fn discount_allocation_uses_largest_remainder_then_stable_source_order() {
+        assert_eq!(
+            allocate_invoice_discount(&[1, 3, 1], "20".parse().unwrap()).unwrap(),
+            [1, 2, 1]
+        );
+        assert_eq!(
+            allocate_invoice_discount(&[1, 1, 1], "50".parse().unwrap()).unwrap(),
+            [0, 0, 1]
+        );
+    }
+
+    #[test]
+    fn discount_allocation_handles_empty_zero_and_full_discounts() {
+        let full = "100".parse().unwrap();
+        assert!(allocate_invoice_discount(&[], full).unwrap().is_empty());
+        assert_eq!(allocate_invoice_discount(&[0, 0], full).unwrap(), [0, 0]);
+        assert_eq!(
+            allocate_invoice_discount(&[1, 99, 0], Percentage::ZERO).unwrap(),
+            [1, 99, 0]
+        );
+        assert_eq!(
+            allocate_invoice_discount(&[1, 99, 0], full).unwrap(),
+            [0, 0, 0]
+        );
+    }
+
+    #[test]
+    fn discount_allocation_rejects_negative_lines_and_subtotal_overflow() {
+        assert!(allocate_invoice_discount(&[100, -1], Percentage::ZERO).is_err());
+        assert_eq!(
+            allocate_invoice_discount(&[i64::MAX, 1], Percentage::ZERO),
+            Err(InvoiceAmountError::Overflow)
+        );
+    }
+
+    #[test]
+    fn discount_allocation_supports_maximum_representable_subtotal() {
+        let half = "50".parse().unwrap();
+        assert_eq!(
+            allocate_invoice_discount(&[i64::MAX - 1, 1], half).unwrap(),
+            [i64::MAX / 2, 0]
+        );
+    }
+
+    #[test]
+    fn discount_allocation_conserves_header_amount_and_bounds_each_line() {
+        for a in 0..=6 {
+            for b in 0..=6 {
+                for c in 0..=6 {
+                    let gross = [a, b, c];
+                    for bps in [0, 1, 2500, 3333, 5000, 9999, 10_000] {
+                        let discount = Percentage::try_from(bps).unwrap();
+                        let net = allocate_invoice_discount(&gross, discount).unwrap();
+                        let amounts = invoice_amounts(
+                            a + b + c,
+                            discount,
+                            Percentage::ZERO,
+                            Percentage::ZERO,
+                        )
+                        .unwrap();
+                        assert_eq!(net.iter().sum::<i64>(), amounts.total_cents);
+                        assert!(
+                            net.iter()
+                                .zip(gross)
+                                .all(|(&net, gross)| (0..=gross).contains(&net))
+                        );
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn selected_rate_mode_ignores_unselected_rate_sources() {

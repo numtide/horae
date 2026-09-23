@@ -37,7 +37,27 @@ Run database commands only with the isolated DATABASE_URL. Regenerate the SQLx c
 1. Inspect real application at widths 390/768/1440 and keyboard-only operation. Exercise each modal, error, empty and pending state. Do not execute/render prototype files.
 1. Run existing Projects selection/bulk recovery, Clients, Timesheet, Invoices, navigation and menu regression suites, then full flake CI.
 
+## Partial fixed-fee acceptance (T061–T068)
+
+Use the isolated database and Nix commands above; no production deployment exists, but the user's imported development database is not disposable.
+
+1. Single fee EUR 1,000: save a EUR 600 draft, verify EUR 400 remains; invoice that EUR 400 and verify zero. The agreed amount stays EUR 1,000 throughout.
+1. Fee EUR 1,000, gross invoice EUR 1,000, discount 10%, no taxes: verify EUR 900 consumed and EUR 100 offered by the next preparation. Remove the discount on the same draft: EUR 1,000 consumed, no duplicated contribution. Void releases only that invoice's contribution without erasing its lines or adjustments.
+1. After EUR 600 consumed, propose another EUR 600. Cancel excess confirmation and verify no database writes; confirm EUR 200 excess and verify remaining EUR -200 labelled Over-invoiced. A changed balance, amount or discount must invalidate confirmation.
+1. Concurrent generation/default edits and uncertain response retries must produce one mutation per request identity, no silent stale overwrite and no unconfirmed excess. Sent/paid/void drafts cannot be edited; tax-only edits leave consumption unchanged.
+1. Mix time and fee lines, multiple projects and penny-sized amounts. Compare independent integer fixtures: line contributions sum to the header subtotal minus discount, even for ties and 100% discounts. Monthly balances remain isolated by occurrence. Gross/header/export snapshots stay consistent.
+1. Check real browser fee edits and confirmation by keyboard at narrow/desktop widths, then project balance privacy, time eligibility, imports, exports, existing project editing and unchanged shared styles. Do not mark these scenarios passed from unit tests alone.
+
 ## Completion evidence
+
+### Partial allocation arithmetic checkpoint (2026-09-23)
+
+- Spec Kit setup-plan/setup-tasks and implementation prerequisite scripts were executed in `feat/new-project-screen`; plan, research, data model, contract and tasks now describe partial balances without a parallel compatibility model. The requirements checklist passes 16/16. There are no extension hooks or agent-context update script in this repository.
+- T061 red: the new allocation tests failed to compile because `allocate_invoice_discount` did not exist.
+- T061 green: `nix develop --offline --command bash -c 'CARGO_TARGET_DIR=/tmp/horae-unified-project-editor/target cargo test -p horae-core && CARGO_TARGET_DIR=/tmp/horae-unified-project-editor/target cargo clippy -p horae-core --all-targets --locked -- -D warnings'` passed: 115 core tests, no failures, strict Clippy clean.
+- Six new tests cover the confirmed EUR 1,000/10% example, proportional allocation, stable tie-breaking, empty/zero/full discounts, negative lines, sum overflow, widened maximum-value arithmetic and 2,401 small-input conservation cases. Callers must supply stable source order; the helper does not invent source identities.
+- No migration, server financial mutation, UI/CSS change or database write is part of this checkpoint. T062–T068, browser acceptance and PR readiness remain open.
+- The `nix fmt --offline` wrapper failed while building its dependency closure (fixed-output source hash mismatch). Scoped formatting succeeded with the dev-shell `rustfmt` and the already-installed Nix-store `mdformat`; this is not a passing full-flake formatting gate.
 
 Record commands/results and outstanding limitations in the PR. Check off tasks only after their acceptance checks pass. Requirements checklist completion is not implementation completion. Final gate: complete workflow, adversarial review, supported build/test checks and a scoped PR ready for human review; no automatic merge.
 

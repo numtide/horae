@@ -156,6 +156,22 @@ This extension supersedes T013's retention of the old inline editor. Completion 
 - [x] T060 [US7] Run adversarial review, full configured/legacy/permissions/history tests, existing creation/browser/style regressions and build/Clippy/SQLx/format gates; update PR #207 with evidence and refresh the local preview after verification.
   - Implementation `e2d10d9` is pushed to PR #207 with updated scope/evidence. Final gates pass: 1,016 Rust tests, 15 browser suites across regression/focused runs, eight-screen style comparison, offline native/WASM builds, strict all-target Clippy, regenerated SQLx metadata and formatting. The refreshed demo preview on 8094 passes an actual Actions → prefilled Edit smoke check without project writes or creation-draft access. The original feature's separate T019/T043/T050–T052 acceptance items remain open; this editing extension does not mark the whole draft PR ready to merge.
 
+## Phase 11: US5 — Partial fixed-fee balances (approved 2026-09-23)
+
+These tasks supersede whole-occurrence consumption, not time-entry eligibility. The app is not in production; use a single clean model while retaining imported development data. T043 stays open until the integrated behavior passes.
+
+- [x] T061 [US5] Add failing exact proportional-discount allocation tests in `crates/core/src/invoice.rs`, including rounding ties, mixed line sizes, zero/full discounts, negative input and overflow; implement the checked pure helper (FR-017, FR-025).
+  - New tests first failed because the allocation function was absent; the implementation now passes all 115 core tests and strict all-target core Clippy. The small-input conservation matrix covers 2,401 combinations. This verifies arithmetic only; persistence, canonical source ordering and browser behavior remain T062–T068.
+- [ ] T062 [US5] Add the forward migration under `crates/horae/migrations/` for line contributions, invoice revision/retry identity and removal of exclusive occurrence claims; verify existing fixture amounts and private table grants, then regenerate `.sqlx/`.
+- [ ] T063 [US5] Add failing partial/discount/draft-replacement/void and concurrency/retry cases in `crates/horae/src/server_fns/invoices/fee_tests.rs`, including stale excess confirmation and mixed time/fee sources (FR-024–025).
+- [ ] T064 [US5] Implement stable source previews and shared fee balances in `crates/horae/src/models/invoice.rs` and `crates/horae/src/server_fns/invoices/{fees,preview}.rs`; integrate checked allocation into preparation/generation.
+- [ ] T065 [US5] Implement serialized, revision-checked and idempotent generation/draft fee edits/status transitions in `crates/horae/src/server_fns/invoices.rs`; replace contributions atomically and reject unconfirmed or stale overbilling without writes.
+- [ ] T066 [US5] Add editable fee rows, balance context and accessible exact-excess confirmation to `crates/horae/src/pages/invoices.rs` and its sibling modules; preserve inputs and request identity on uncertain errors, using existing controls/utilities.
+- [ ] T067 [US5] Expose the same authorized invoiced/remaining fee context through `crates/horae/src/server_fns/projects.rs` and the existing project surface; verify member redaction, signed overbilling and per-occurrence monthly semantics.
+- [ ] T068 [US5] Extend `crates/horae/tests/browser/invoice-preparation.cjs` for partial/discounted billing, draft edits, overbilling cancel/confirm and uncertain retries; run export/import/edit/privacy regressions, build/SQLx/Clippy/format checks and adversarial review, recording evidence in `specs/011-new-project-screen/quickstart.md`.
+
+Dependency order: T061 → T062/T063 → T064 → T065 → T066/T067 → T068. Tasks sharing invoice files run sequentially. T043, T050–T052 and PR readiness require T068, not merely passing arithmetic tests.
+
 ## Dependencies and execution
 
 Setup → Foundation → US1 → US2 → US3 → US4 → US5 → US6 → Final. Each story has independent fixtures but end-to-end UI completion depends on prior persistence. US1 may call the provisional draft finalization path established in Foundation; US2 adds recovery/concurrency behavior. No intermediate slice is the final feature.
@@ -181,5 +197,6 @@ First prove exact validation and atomic basic creation. Add one verified story a
 | SC-003–005 | T016–018, T021, T024, T030–039, T040–044 |
 | SC-006–007 | T046–052 |
 | FR-021–023, SC-008 | T055–060 |
+| FR-024–025 | T061–068, T043 |
 
-**Counts**: 60 tasks; setup 3, foundation 6, US1 6, US2 5, US3 10, US4 9, US5 5, US6 6, final 4, US7 extension 6.
+**Counts**: 68 tasks; setup 3, foundation 6, US1 6, US2 5, US3 10, US4 9, US5 5, US6 6, final 4, US7 extension 6, partial-billing extension 8.

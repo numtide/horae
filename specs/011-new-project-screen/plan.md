@@ -109,6 +109,20 @@ crates/horae/tests/browser/new-project.cjs
 1. Redirect every Edit entry point and remove the old form, state, obsolete endpoint/DTO paths once no callers remain. Migrate old edit regressions to the new route without reducing their assertions.
 1. Verify configured/legacy/no-op round trips, real persisted edits, cancel/conflict/uncertain retries, role changes, historical/invoiced sources, creation and whole-browser/style regressions. Regenerate SQLx and rerun build/lint/format gates before updating PR #207.
 
+## Partial fixed-fee billing execution (US5, 2026-09-23)
+
+The application is not in production. Use one clean balance model, not a parallel compatibility implementation. Preserve the user's imported development data; use a forward migration because development databases have already applied the existing migrations. All mutation tests use disposable databases.
+
+1. Add pure, checked discount allocation in `crates/core/src/invoice.rs`. Allocate the invoice's rounded discount across all time and fee lines proportionally. Floor each share, then award remaining cents in descending fractional-remainder order, breaking ties by stable source order. Callers sort by time-entry UUID or `(project_id, period_key)` before allocation. Return results in input order; zero-subtotal invoices allocate zero. Negative lines and overflowing sums fail.
+1. Replace the exclusive occurrence claim with existing invoice lines as the ledger. Persist each line's post-discount, pre-tax contribution; sum contributions of non-void invoices for the occurrence balance. Drafts reserve the balance immediately. Sending does not consume it again; voiding releases only that invoice by status. Keep original gross lines and headers unchanged when migrating existing fixtures.
+1. Give preparation stable source identities without materializing occurrences. Show agreed, already invoiced (including draft reservations), remaining and proposed net amounts. Editable fee amounts/descriptions belong to the invoice, never its schedule. Preserve time-backed eligibility. Monthly balances remain per calendar-month occurrence, not a project-wide amount transferable between months.
+1. Reuse the organization invoice advisory lock before invoice/source row locks on generation, draft editing and status changes. Validate the current balance and exact confirmed excess under that lock. Draft editing excludes its old contributions before validating replacements. Changed selection, amounts, discount or balance invalidates the prior review/confirmation. Tax changes do not consume additional fees.
+1. Use a caller-stable UUID v7 request identity and persisted canonical payload for generation and draft edits. Identical retries acknowledge the same mutation; changed payloads under the same identity conflict. Draft revisions reject stale edits, including replay after a newer edit. Do not emit another creation event for a replay.
+1. Reuse invoice form controls and existing tokens/utilities for fee rows and explicit overbilling confirmation. Never rely on color alone for negative balances. Expose the same authorized balance calculation in project context; do not modify global CSS defaults or introduce a new design system.
+1. Prove partial billing, discount remainders, mixed time/fee allocations, draft replacement, void, stale confirmation, concurrent writers and uncertain retry behavior. Run browser, export, import, project-edit and authorization regressions before marking T043 or the PR complete.
+
+**Constitution recheck**: Pass. Integer arithmetic remains in the pure core crate; PostgreSQL persists contributions and retry identities; authenticated server functions own writes; existing Nix/test/format gates remain required. No dependency or new crate is needed.
+
 ## Agent Context and Hooks
 
 Checked-in Spec Kit provides setup/prerequisite scripts but no `update-agent-context.sh`; record context here rather than claim an absent script ran. No `.specify/extensions.yml` exists, so no hooks apply.
