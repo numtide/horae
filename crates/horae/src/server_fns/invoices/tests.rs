@@ -116,6 +116,7 @@ async fn invoice_preview_requires_explicit_resolution_and_scopes_selected_projec
     .unwrap();
     assert_eq!(preview.projects.len(), 2);
     assert_eq!(preview.lines.len(), 1);
+    assert_eq!(preview.lines[0].net_before_tax_cents, None);
     assert_eq!(
         (preview.defaults, preview.amounts, preview.due_on),
         (None, None, None)
@@ -137,6 +138,7 @@ async fn invoice_preview_requires_explicit_resolution_and_scopes_selected_projec
     .unwrap();
     assert_eq!(resolved.due_on, Some(resolved.issued_on));
     assert_eq!(resolved.amounts.unwrap().total_cents, 0);
+    assert_eq!(resolved.lines[0].net_before_tax_cents, Some(0));
     let inherited = preview::prepare(&pool, ids.org_id, ids.client_id, (day, day), None, None)
         .await
         .unwrap();

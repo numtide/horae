@@ -55,16 +55,15 @@ pub(super) async fn read_lines(
     .map_err(server_err)
 }
 
-pub(super) fn allocate(rows: &[BalanceLine], discount_bps: i16) -> Result<Vec<i64>, ServerFnError> {
-    if rows.len() > 20000 {
+pub(super) fn allocate(gross: &[i64], discount_bps: i16) -> Result<Vec<i64>, ServerFnError> {
+    if gross.len() > 20000 {
         return Err(conflict("Too many lines for one invoice"));
     }
     let discount = u16::try_from(discount_bps)
         .ok()
         .and_then(|bps| Percentage::try_from(bps).ok())
         .ok_or_else(|| err(BAD_REQUEST, "Discount must be between 0 and 100"))?;
-    let gross: Vec<_> = rows.iter().map(|row| row.amount_cents).collect();
-    horae_core::invoice::allocate_invoice_discount(&gross, discount)
+    horae_core::invoice::allocate_invoice_discount(gross, discount)
         .map_err(|error| conflict(error.to_string()))
 }
 
@@ -77,7 +76,8 @@ pub(super) async fn replace_contributions(
     discount_bps: i16,
 ) -> Result<(), ServerFnError> {
     let rows = read_lines(tx, org_id, invoice_id).await?;
-    let net = allocate(&rows, discount_bps)?;
+    let gross: Vec<_> = rows.iter().map(|row| row.amount_cents).collect();
+    let net = allocate(&gross, discount_bps)?;
     for (row, &contribution) in rows.iter().zip(&net) {
         if row.fee_id.is_some()
             && row

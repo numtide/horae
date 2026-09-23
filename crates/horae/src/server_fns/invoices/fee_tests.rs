@@ -19,6 +19,173 @@ async fn single_fee(pool: &PgPool) -> SeedIds {
 
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]
+async fn fee_preview_keeps_source_identity_and_reports_discounted_draft_balances(pool: PgPool) {
+    use crate::models::invoice::{InvoiceFeeBalance, InvoiceSource};
+
+    let ids = single_fee(&pool).await;
+    let period = ("2026-09-01".parse().unwrap(), "2026-09-30".parse().unwrap());
+    let defaults = InvoiceDefaults {
+        discount_bps: 1000,
+        tax1_bps: 2100,
+        ..Default::default()
+    };
+    let initial = preview::prepare(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        Some(&defaults),
+    )
+    .await
+    .unwrap();
+    let source = InvoiceSource::Fee {
+        project_id: ids.project_id,
+        period_key: "single".into(),
+    };
+    assert_eq!(initial.lines[0].source, source);
+    assert_eq!(initial.lines[0].net_before_tax_cents, Some(11250));
+    assert_eq!(
+        initial.lines[0].fee_balance,
+        Some(InvoiceFeeBalance {
+            agreed_cents: 12500,
+            invoiced_cents: 0,
+            remaining_cents: 12500,
+        })
+    );
+    let invoice = generate_invoice_with_options(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        Some(&defaults),
+    )
+    .await
+    .unwrap();
+    let remaining = preview::prepare(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        Some(&defaults),
+    )
+    .await
+    .unwrap();
+    assert_eq!(remaining.lines[0].source, source);
+    assert_eq!(remaining.lines[0].amount_cents, 1250);
+    assert_eq!(remaining.lines[0].net_before_tax_cents, Some(1125));
+    assert_eq!(
+        remaining.lines[0].fee_balance,
+        Some(InvoiceFeeBalance {
+            agreed_cents: 12500,
+            invoiced_cents: 11250,
+            remaining_cents: 1250,
+        })
+    );
+    transition_invoice(&pool, ids.org_id, invoice.invoice.id, InvoiceStatus::Void)
+        .await
+        .unwrap();
+    let restored = preview::prepare(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        Some(&defaults),
+    )
+    .await
+    .unwrap();
+    assert_eq!(restored.lines, initial.lines);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn fee_preview_discount_ties_follow_source_keys_not_display_dates(pool: PgPool) {
+    use crate::models::invoice::InvoiceSource;
+
+    let ids = single_fee(&pool).await;
+    sqlx::query!("UPDATE project_settings SET fee_mode = 'milestones', fee_amount_cents = NULL WHERE project_id = $1", ids.project_id).execute(&pool).await.unwrap();
+    let mut milestones = [Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7()];
+    milestones.sort();
+    for (position, date) in [(0_i16, "2026-09-30"), (1, "2026-09-15"), (2, "2026-09-01")] {
+        sqlx::query!("INSERT INTO project_fee_milestones (id,org_id,project_id,name,due_on,amount_cents,position) VALUES ($1,$2,$3,$4,$5,$6,$7)", milestones[position as usize], ids.org_id, ids.project_id, format!("Milestone {position}"), date.parse::<chrono::NaiveDate>().unwrap() as chrono::NaiveDate, 1_i64, position)
+            .execute(&pool).await.unwrap();
+    }
+    let period = ("2026-09-01".parse().unwrap(), "2026-09-30".parse().unwrap());
+    let defaults = InvoiceDefaults {
+        discount_bps: 5000,
+        ..Default::default()
+    };
+    let preview = preview::prepare(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        Some(&defaults),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        preview
+            .lines
+            .iter()
+            .map(|line| (&line.source, line.net_before_tax_cents))
+            .collect::<Vec<_>>(),
+        vec![
+            (
+                &InvoiceSource::Fee {
+                    project_id: ids.project_id,
+                    period_key: format!("milestone:{}", milestones[2])
+                },
+                Some(1)
+            ),
+            (
+                &InvoiceSource::Fee {
+                    project_id: ids.project_id,
+                    period_key: format!("milestone:{}", milestones[1])
+                },
+                Some(0)
+            ),
+            (
+                &InvoiceSource::Fee {
+                    project_id: ids.project_id,
+                    period_key: format!("milestone:{}", milestones[0])
+                },
+                Some(0)
+            ),
+        ]
+    );
+    let invoice = generate_invoice_with_options(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        Some(&defaults),
+    )
+    .await
+    .unwrap();
+    let persisted = sqlx::query!(
+        "SELECT description, net_before_tax_cents FROM invoice_line_items WHERE invoice_id = $1",
+        invoice.invoice.id
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    for line in &preview.lines {
+        let saved = persisted
+            .iter()
+            .find(|saved| saved.description == line.description)
+            .unwrap();
+        assert_eq!(saved.net_before_tax_cents, line.net_before_tax_cents);
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
 async fn draft_fee_edit_replaces_amount_and_preserves_source_and_retry_identity(pool: PgPool) {
     let ids = single_fee(&pool).await;
     let from = "2026-09-01".parse().unwrap();
@@ -501,6 +668,29 @@ async fn mixed_time_and_fee_discount_conserves_cents_without_reopening_time(pool
         discount_bps: 5000,
         ..Default::default()
     };
+    let preview = preview::prepare(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        Some(&defaults),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        preview.lines[0].source,
+        crate::models::invoice::InvoiceSource::Time { entry_id: entry }
+    );
+    assert_eq!(preview.lines[0].fee_balance, None);
+    assert_eq!(
+        preview
+            .lines
+            .iter()
+            .map(|line| line.net_before_tax_cents)
+            .collect::<Vec<_>>(),
+        vec![Some(0), Some(1)]
+    );
     let invoice = generate_invoice_with_options(
         &pool,
         ids.org_id,
@@ -951,6 +1141,23 @@ async fn monthly_fees_use_calendar_dates_and_skip_already_claimed_months(pool: P
     .await
     .unwrap();
     assert_eq!(estimate.lines.len(), 2);
+    assert_eq!(
+        estimate
+            .lines
+            .iter()
+            .map(|line| line.source.clone())
+            .collect::<Vec<_>>(),
+        vec![
+            crate::models::invoice::InvoiceSource::Fee {
+                project_id: ids.project_id,
+                period_key: "month:2028-02".into()
+            },
+            crate::models::invoice::InvoiceSource::Fee {
+                project_id: ids.project_id,
+                period_key: "month:2028-03".into()
+            },
+        ]
+    );
     assert_eq!(estimate.amounts.unwrap().total_cents, 25000);
     let first = generate_invoice_for_period(
         &pool,

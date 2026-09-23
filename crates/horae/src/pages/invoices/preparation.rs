@@ -238,7 +238,22 @@ fn PreparedLines(estimate: InvoicePreparation) -> Element {
                 tbody {
                     for (index, line) in estimate.lines.iter().enumerate() {
                         tr { key: "{index}",
-                            td { "{line.description}" }
+                            td {
+                                "{line.description}"
+                                if let Some(balance) = line.fee_balance {
+                                    div { class: "text-sm text-muted mt-2 wrap-anywhere",
+                                        p { "Agreed: {estimate.currency} " {format_cents_plain(balance.agreed_cents)} }
+                                        p { "Invoiced (including drafts): {estimate.currency} " {format_cents_plain(balance.invoiced_cents)} }
+                                        p {
+                                            if balance.remaining_cents < 0 { "Over-invoiced: " } else { "Available: " }
+                                            "{estimate.currency} " {format_cents_plain(balance.remaining_cents)}
+                                        }
+                                        if let Some(net) = line.net_before_tax_cents {
+                                            p { "Proposed net before tax: {estimate.currency} " {format_cents_plain(net)} }
+                                        }
+                                    }
+                                }
+                            }
                             td { class: "text-mono text-right", {line.minutes.map(|minutes| horae_core::duration::format_hhmm(minutes.into())).unwrap_or_else(|| "—".into())} }
                             td { class: "text-mono text-right", {line.rate_cents.map(|rate| format!("{}/hr", format_cents_plain(rate))).unwrap_or_else(|| "—".into())} }
                             td { class: "text-mono text-right", {format_cents_plain(line.amount_cents)} }

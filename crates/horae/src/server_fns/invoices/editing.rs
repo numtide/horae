@@ -151,7 +151,8 @@ fn evaluate(
         row.amount_cents = fee.amount_cents;
         row.description = fee.description.trim().to_owned();
     }
-    let net = balances::allocate(rows, edit.defaults.discount_bps)?;
+    let gross: Vec<_> = rows.iter().map(|row| row.amount_cents).collect();
+    let net = balances::allocate(&gross, edit.defaults.discount_bps)?;
     let subtotal = rows
         .iter()
         .try_fold(0_i64, |sum, row| sum.checked_add(row.amount_cents))

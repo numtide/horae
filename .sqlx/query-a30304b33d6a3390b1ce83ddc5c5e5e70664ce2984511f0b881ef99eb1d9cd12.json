@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT description, net_before_tax_cents FROM invoice_line_items WHERE invoice_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "net_before_tax_cents",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "a30304b33d6a3390b1ce83ddc5c5e5e70664ce2984511f0b881ef99eb1d9cd12"
+}

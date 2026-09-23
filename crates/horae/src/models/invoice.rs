@@ -159,15 +159,42 @@ pub struct InvoiceProjectDefaults {
     pub defaults: InvoiceDefaults,
 }
 
+/// Stable before a fee occurrence is materialized. Variant and field order also
+/// define discount tie-breaking: time UUIDs, then project UUID and period key.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub enum InvoiceSource {
+    Time {
+        entry_id: Uuid,
+    },
+    Fee {
+        project_id: Uuid,
+        period_key: String,
+    },
+}
+
+/// Non-void invoices, including draft reservations, consume the agreed fee.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InvoiceFeeBalance {
+    pub agreed_cents: i64,
+    pub invoiced_cents: i64,
+    /// Signed balance before applying the proposed invoice.
+    pub remaining_cents: i64,
+}
+
 /// Fee previews have neither a time quantity nor an hourly rate.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct InvoicePreviewLine {
+    pub source: InvoiceSource,
     pub project_id: Uuid,
     pub currency: String,
     pub description: String,
     pub minutes: Option<i32>,
     pub rate_cents: Option<i64>,
     pub amount_cents: i64,
+    pub fee_balance: Option<InvoiceFeeBalance>,
+    /// Absent until conflicting invoice defaults have been resolved.
+    pub net_before_tax_cents: Option<i64>,
 }
 
 /// Only existing fee lines are editable; time quantities and rates stay frozen.

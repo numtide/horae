@@ -1,5 +1,5 @@
 use super::*;
-use crate::models::invoice::{InvoicePreviewLine, InvoiceProjectDefaults};
+use crate::models::invoice::{InvoicePreviewLine, InvoiceProjectDefaults, InvoiceSource};
 use std::collections::BTreeSet;
 
 pub(super) async fn prepare(
@@ -53,12 +53,17 @@ pub(super) async fn prepare(
     let mut lines = Vec::with_capacity(entries.len());
     for entry in entries {
         lines.push(InvoicePreviewLine {
+            source: InvoiceSource::Time {
+                entry_id: entry.entry_id,
+            },
             project_id: entry.project_id,
             description: entry.description(),
             amount_cents: entry.amount()?,
             currency: entry.currency,
             minutes: Some(entry.minutes),
             rate_cents: Some(entry.rate_cents.unwrap_or(0)),
+            fee_balance: None,
+            net_before_tax_cents: None,
         });
     }
     lines.extend(
@@ -136,6 +141,20 @@ pub(super) async fn prepare(
         .as_ref()
         .map(|defaults| defaults::amounts(defaults, subtotal_cents))
         .transpose()?;
+    if let Some(defaults) = &defaults {
+        // Display order follows dates; discount ties must follow stable sources
+        // just like persisted invoice contributions, not the displayed position.
+        let mut order: Vec<_> = (0..lines.len()).collect();
+        order.sort_by(|&a, &b| lines[a].source.cmp(&lines[b].source));
+        let gross: Vec<_> = order
+            .iter()
+            .map(|&index| lines[index].amount_cents)
+            .collect();
+        let net = balances::allocate(&gross, defaults.discount_bps)?;
+        for (index, net) in order.into_iter().zip(net) {
+            lines[index].net_before_tax_cents = Some(net);
+        }
+    }
     let due_on = defaults
         .as_ref()
         .map(|defaults| {

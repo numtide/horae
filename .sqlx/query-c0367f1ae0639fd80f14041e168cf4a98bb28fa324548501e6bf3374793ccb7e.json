@@ -1,0 +1,68 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT f.id,f.project_id,f.description, f.amount_cents AS agreed_cents,\n                   (f.amount_cents::numeric - billed.amount)::bigint AS \"amount_cents!\",\n                   f.currency,f.period_key,f.due_on as \"due_on: NaiveDate\"\n         FROM project_fee_occurrences f JOIN projects p ON p.id = f.project_id\n         CROSS JOIN LATERAL (\n           SELECT COALESCE(sum(l.net_before_tax_cents::numeric), 0) AS amount, count(*) AS lines\n           FROM invoice_line_items l JOIN invoices i ON i.id = l.invoice_id\n           WHERE l.fee_occurrence_id = f.id AND i.org_id = f.org_id AND i.status <> 'void'\n         ) billed\n         WHERE f.org_id = $1 AND p.client_id = $2 AND p.project_type = 'fixed_fee'\n           AND (f.amount_cents > billed.amount OR (f.amount_cents = 0 AND billed.lines = 0))\n           AND f.due_on <= $4\n           AND (f.period_key NOT LIKE 'month:%' OR f.due_on >= $3)\n           AND ($5::uuid[] IS NULL OR f.project_id = ANY($5))\n         ORDER BY f.due_on,f.project_id,f.period_key LIMIT 10001 ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "project_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "agreed_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "amount_cents!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "currency",
+        "type_info": "Bpchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "period_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "due_on: NaiveDate",
+        "type_info": "Date"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Date",
+        "Date",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "c0367f1ae0639fd80f14041e168cf4a98bb28fa324548501e6bf3374793ccb7e"
+}

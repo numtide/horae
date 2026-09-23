@@ -1,4 +1,5 @@
 use super::*;
+use crate::models::invoice::{InvoiceFeeBalance, InvoicePreviewLine, InvoiceSource};
 use chrono::{Datelike, Months, NaiveDate};
 use horae_core::project::{MonthlyFeeDay, monthly_fee_date};
 use uuid::Uuid;
@@ -12,6 +13,7 @@ pub(super) struct FeeLine {
     pub period_key: String,
     pub description: String,
     pub amount_cents: i64,
+    pub agreed_cents: i64,
     pub currency: String,
 }
 
@@ -32,7 +34,7 @@ pub(super) async fn preview_fees(
     from: NaiveDate,
     to: NaiveDate,
     selected: Option<&[Uuid]>,
-) -> Result<Vec<crate::models::invoice::InvoicePreviewLine>, ServerFnError> {
+) -> Result<Vec<InvoicePreviewLine>, ServerFnError> {
     let mut planned = scheduled_fees(
         tx,
         org_id,
@@ -64,6 +66,13 @@ pub(super) async fn preview_fees(
         .map(|row| (row.project_id, row.period_key))
         .collect();
     planned.retain(|fee| !existing.contains(&(fee.project_id, fee.period_key.clone())));
+    let mut fees: Vec<_> = planned
+        .into_iter()
+        .map(|fee| {
+            let remaining = fee.amount_cents;
+            (fee, remaining)
+        })
+        .collect();
     for fee in available_fees(
         tx,
         org_id,
@@ -75,33 +84,46 @@ pub(super) async fn preview_fees(
     )
     .await?
     {
-        planned.push(Occurrence {
-            project_id: fee.project_id,
-            milestone_id: None,
-            period_key: fee.period_key,
-            due_on: fee.due_on,
-            description: fee.description,
-            amount_cents: fee.amount_cents,
-            currency: fee.currency,
-        });
+        fees.push((
+            Occurrence {
+                project_id: fee.project_id,
+                milestone_id: None,
+                period_key: fee.period_key,
+                due_on: fee.due_on,
+                description: fee.description,
+                amount_cents: fee.agreed_cents,
+                currency: fee.currency,
+            },
+            fee.amount_cents,
+        ));
     }
-    if planned.len() > MAX_FEE_OCCURRENCES {
+    if fees.len() > MAX_FEE_OCCURRENCES {
         return Err(conflict(
             "Too many fees for one invoice; select a shorter period.",
         ));
     }
-    planned.sort_by(|a, b| {
+    fees.sort_by(|(a, _), (b, _)| {
         (a.due_on, a.project_id, &a.period_key).cmp(&(b.due_on, b.project_id, &b.period_key))
     });
-    Ok(planned
+    Ok(fees
         .into_iter()
-        .map(|fee| crate::models::invoice::InvoicePreviewLine {
+        .map(|(fee, remaining)| InvoicePreviewLine {
+            source: InvoiceSource::Fee {
+                project_id: fee.project_id,
+                period_key: fee.period_key,
+            },
             project_id: fee.project_id,
             currency: fee.currency,
             description: fee.description,
             minutes: None,
             rate_cents: None,
-            amount_cents: fee.amount_cents,
+            amount_cents: remaining,
+            fee_balance: Some(InvoiceFeeBalance {
+                agreed_cents: fee.amount_cents,
+                invoiced_cents: fee.amount_cents - remaining,
+                remaining_cents: remaining,
+            }),
+            net_before_tax_cents: None,
         })
         .collect())
 }
@@ -340,7 +362,7 @@ async fn available_fees(
         ($suffix:literal) => {
             sqlx::query_as!(
                 FeeLine,
-                r#"SELECT f.id,f.project_id,f.description,
+                r#"SELECT f.id,f.project_id,f.description, f.amount_cents AS agreed_cents,
                    (f.amount_cents::numeric - billed.amount)::bigint AS "amount_cents!",
                    f.currency,f.period_key,f.due_on as "due_on: NaiveDate"
          FROM project_fee_occurrences f JOIN projects p ON p.id = f.project_id

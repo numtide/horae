@@ -76,6 +76,8 @@ Migration 0041 adds `invoices.edit_revision`, advanced by changed header or line
 
 ## Invoice-owned defaults and calculations
 
+Preparation identifies time lines by entry UUID and fee lines by `(project_id, period_key)`, without needing a persisted occurrence ID. Fee context reports agreed amount, non-void contributions including drafts, and the signed balance before the proposed invoice. Each line's proposed net is absent until invoice defaults are resolved. Allocation uses source order (time UUID, then project UUID/period key) independently of date-based display order, sharing the checked helper used by persisted generation and draft edits. This read projection does not yet bind generation to a reviewed snapshot or enable editing initial fee selection.
+
 Add invoice snapshot fields: terms_days, po_number, discount_bps, tax1_bps, tax2_name/tax2_bps, subtotal_cents, discount_cents, tax1_cents, tax2_cents. Existing rows backfill zero adjustments and subtotal=total.
 
 Additive migration 0037 introduces these without rewriting already-applied 0031. Stored generated columns derive `terms_days` from the invoice's own dates and `subtotal_cents` from its own total/adjustment components, never from project settings. This preserves existing dates and totals, including legacy writers that omit new fields. Numeric intermediates avoid overflow before the final bigint subtotal. Checks require the stored discount and each non-compounding tax to match exact half-up basis-point arithmetic; optional second-tax name/rate are paired.

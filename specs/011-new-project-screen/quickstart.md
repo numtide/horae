@@ -50,6 +50,14 @@ Use the isolated database and Nix commands above; no production deployment exist
 
 ## Completion evidence
 
+### Stable preparation source and balance checkpoint (2026-09-23)
+
+- Preparation now returns stable time-entry and fee keys, agreed/invoiced/remaining fee context, and proposed net-before-tax contributions. The existing preparation table displays those balances, including draft reservations, without changing shared CSS or controls. Source eligibility and financial mutations are unchanged; rows are still read-only.
+- The new database regression first failed on missing source/balance fields. The expanded invoice-related run passes 76 tests, including two new database cases for stable identities across discounted billing/void and source-ordered penny ties when date display order is reversed. Mixed time/fee, monthly identity and unresolved/full-discount cases also pass. The allocation uses the existing checked core helper and matches saved contributions.
+- The browser regression first failed because the agreed balance was absent. The updated real-browser invoice suite passes, including the new agreed/draft-invoiced/available/proposed-net assertions, existing lost-response retries, draft editing/excess confirmation, keyboard and 390/768/1440 layouts. The eight-screen style comparison at three widths is unchanged. Native/WASM builds pass; the user's preview servers and imported database were not changed.
+- SQLx preparation with incremental compilation initially omitted unchanged query records. Re-running with `CARGO_INCREMENTAL=0` regenerated the complete cache: only two replaced queries are removed and three records added. Strict all-target workspace Clippy passes online and in a non-incremental offline compilation; scoped formatting and diff checks pass. Scoped review checked source-order parity, unresolved defaults, unchanged source eligibility and snapshot/tenant filters. No migration, dependency or shared-style change is included. Validation logs are `/tmp/horae-source-preview-*.log`.
+- This is a partial T064/T066 checkpoint, not full feature acceptance. Editable initial fee selection, settled-source overbilling, generation's reviewed-source/balance binding, project context and invoice navigation/reload recovery remain open. PR #207 stays a draft; full flake and whole-feature acceptance are not claimed.
+
 ### Editable draft fee checkpoint (2026-09-23)
 
 - Added the draft editor in the existing worktree/PR with no dependency or CSS changes. Spec Kit prerequisites ran and the requirements checklist remains 16/16. The implementation follows the Rust/testing guidance: real transactional fixtures, checked core allocation, compile-time SQL and no parallel legacy writer. There is no invoice prototype in this handoff; the form reuses existing controls and Modal rather than claiming a new visual match.
