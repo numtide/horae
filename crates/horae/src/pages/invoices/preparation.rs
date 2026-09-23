@@ -81,6 +81,8 @@ pub(super) fn PrepareInvoice(
         .read()
         .as_ref()
         .is_some_and(|last| last.same_sources(&source_request));
+    // Source refresh must work without parsing or replacing unfinished field edits.
+    let refresh_request = source_request.clone();
     let current = if started() {
         parse_fields(&fields.read()).map(Some)
     } else {
@@ -327,6 +329,30 @@ pub(super) fn PrepareInvoice(
                 button { r#type: "button", class: "btn btn-primary", disabled: (busy() && !uncertain()) || !ready || !has_selection,
                     onclick: move |_| { if uncertain() { generate.call(false); } else if has_excess { confirm.set(true); } else { generate.call(false); } },
                     if uncertain() { "Retry generation" } else { "Generate draft" }
+                }
+                if same_sources {
+                    button { r#type: "button", class: "btn btn-secondary", disabled: busy(),
+                        onclick: move |_| {
+                            if busy() { return; }
+                            let request = refresh_request.clone();
+                            busy.set(true); error.set(None); reviewed.set(None); generation.set(None); confirm.set(false);
+                            spawn(async move {
+                                let result = async {
+                                    projects.set(server_fns::list_projects(Some(request.client.clone()), true).await?);
+                                    server_fns::prepare_invoice(request.client, request.from, request.to, request.projects, None, None).await
+                                }.await;
+                                match result {
+                                    Ok(estimate) => {
+                                        let refreshed = fees::refresh(&fees.peek(), fees::from_review(&estimate));
+                                        fees.set(refreshed);
+                                        preview.set(Some(estimate));
+                                    }
+                                    Err(err) => error.set(Some(err.to_string())),
+                                }
+                                busy.set(false);
+                            });
+                        }, "Refresh fee sources"
+                    }
                 }
             }
             if started() && !ready && !busy() {

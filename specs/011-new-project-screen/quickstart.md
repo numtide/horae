@@ -50,6 +50,13 @@ Use the isolated database and Nix commands above; no production deployment exist
 
 ## Completion evidence
 
+### Fee source refresh checkpoint (2026-09-23)
+
+- T066 now includes explicit source refresh without parsing or discarding unfinished invoice values. Identity includes currency: a changed denomination cannot reinterpret an existing amount. Missing rows require explicit removal and new sources are unselected.
+- Red checks reproduced the missing refresh helper and absent browser control. Green unit/Chromium checks preserve invalid raw amounts, descriptions and payment terms across network errors, schedule changes, currency changes and restored sources. Refresh/review does not create invoices or occurrences.
+- The actual server/WASM build, invoice-preparation browser suite and eight-screen computed-style comparison at three widths pass. All 1,048 Rust tests pass (776 server-bin, 157 external-suite, 115 core; 11 existing manual server tests remain ignored), followed by strict offline all-target server Clippy.
+- No query, migration, dependency, shared CSS or control defaults changed. This closes T066 only; project fee context (T067), integrated acceptance (T068) and the original whole-feature review/flake gates remain open.
+
 ### Invoice navigation and reload recovery checkpoint (2026-09-23)
 
 - Preparation and draft editing now reuse the installed history guard with invoice-specific messages. Dirty exits require explicit discard; pending/uncertain same-document exits are blocked. Reload/full-document warnings preserve the existing native behavior. An acknowledged generation releases the guard before navigating to its invoice.
