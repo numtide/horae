@@ -4,13 +4,19 @@ use uuid::Uuid;
 
 use crate::components::controls::Checkbox;
 use crate::components::form::{FormCard, FormGroup, Input, Select};
+use crate::components::modal::Modal;
 use crate::components::table::DataTable;
 use crate::models::Project;
-use crate::models::invoice::{InvoiceDefaults, InvoiceGenerationRequest, InvoicePreparation};
+use crate::models::invoice::{
+    InvoiceDefaults, InvoiceFeeSelection, InvoiceGenerationRequest, InvoicePreparation,
+};
 use crate::models::project_creation::InvoiceDefaultsInput;
 use crate::server_fns;
 
 use super::defaults_form::{DefaultsFields, fields_from, parse_fields};
+
+#[path = "preparation/fees.rs"]
+mod fees;
 
 #[derive(Clone, PartialEq, Eq)]
 struct InvoiceRequest {
@@ -19,6 +25,16 @@ struct InvoiceRequest {
     to: String,
     projects: Option<Vec<String>>,
     overrides: Option<InvoiceDefaults>,
+    fees: Option<Vec<InvoiceFeeSelection>>,
+}
+
+impl InvoiceRequest {
+    fn same_sources(&self, other: &Self) -> bool {
+        self.client == other.client
+            && self.from == other.from
+            && self.to == other.to
+            && self.projects == other.projects
+    }
 }
 
 // A preview is usable only for the exact values that were reviewed. Invalid
@@ -47,21 +63,115 @@ pub(super) fn PrepareInvoice(
     let mut generation = use_signal(|| None::<(InvoiceRequest, InvoiceGenerationRequest)>);
     let mut uncertain = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
+    let mut fees = use_signal(Vec::<fees::FeeInput>::new);
+    let mut loaded = use_signal(|| None::<InvoiceRequest>);
+    let mut confirm = use_signal(|| false);
 
+    let source_request = InvoiceRequest {
+        client: client(),
+        from: from(),
+        to: to(),
+        projects: selected(),
+        overrides: None,
+        fees: None,
+    };
+    let same_sources = loaded
+        .read()
+        .as_ref()
+        .is_some_and(|last| last.same_sources(&source_request));
     let current = if started() {
         parse_fields(&fields.read()).map(Some)
     } else {
         Ok(None)
     }
-    .map(|overrides| InvoiceRequest {
-        client: client(),
-        from: from(),
-        to: to(),
-        projects: selected(),
-        overrides,
+    .and_then(|overrides| {
+        let selected_fees = if same_sources {
+            Some(fees::parse(&fees.read())?)
+        } else {
+            None
+        };
+        Ok(InvoiceRequest {
+            overrides,
+            fees: selected_fees,
+            ..source_request
+        })
     });
     let ready = is_reviewed(current.as_ref().ok(), reviewed.read().as_ref());
     let review_request = current.clone();
+    let has_selection = preview
+        .read()
+        .as_ref()
+        .is_some_and(|review| review.lines.iter().any(|line| line.selected));
+    let has_excess = ready
+        && preview
+            .read()
+            .as_ref()
+            .is_some_and(|review| !review.excess.is_empty());
+    let generate = EventHandler::new(move |confirm_excess: bool| {
+        if (busy() && !uncertain())
+            || !is_reviewed(current.as_ref().ok(), reviewed.peek().as_ref())
+            || !has_selection
+        {
+            return;
+        }
+        let Ok(request) = current.clone() else {
+            return;
+        };
+        let mutation = if uncertain() {
+            generation
+                .peek()
+                .as_ref()
+                .filter(|(previous, _)| previous == &request)
+                .map(|(_, mutation)| mutation.clone())
+        } else {
+            preview.peek().clone().map(|review| {
+                let confirmed_excess = if confirm_excess {
+                    review.excess.clone()
+                } else {
+                    Vec::new()
+                };
+                InvoiceGenerationRequest {
+                    request_id: Uuid::now_v7(),
+                    review,
+                    confirmed_excess,
+                }
+            })
+        };
+        let Some(mutation) = mutation else {
+            return;
+        };
+        generation.set(Some((request.clone(), mutation.clone())));
+        uncertain.set(false);
+        confirm.set(false);
+        busy.set(true);
+        error.set(None);
+        spawn(async move {
+            let result = server_fns::generate_invoice(
+                request.client,
+                request.from,
+                request.to,
+                request.projects,
+                request.overrides,
+                mutation,
+            )
+            .await;
+            busy.set(false);
+            match result {
+                Ok(data) => oncreated.call(data.invoice.id),
+                Err(err) => {
+                    if matches!(&err, ServerFnError::ServerError { code, .. } if (400..500).contains(code))
+                    {
+                        error.set(Some(err.to_string()));
+                        reviewed.set(None);
+                    } else {
+                        error.set(Some("The invoice may have been saved. Retry the same request to recover it without creating another draft.".into()));
+                        uncertain.set(true);
+                        busy.set(true);
+                    }
+                }
+            }
+        });
+    });
 
     rsx! {
         FormCard { title: "Prepare invoice", error,
@@ -78,6 +188,9 @@ pub(super) fn PrepareInvoice(
                             fields.set(InvoiceDefaultsInput::default());
                             started.set(false);
                             preview.set(None);
+                            fees.set(Vec::new());
+                            loaded.set(None);
+                            confirm.set(false);
                             reviewed.set(None);
                             error.set(None);
                         }
@@ -146,6 +259,9 @@ pub(super) fn PrepareInvoice(
                 h4 { class: "text-sm font-semibold mb-4", "Invoice values" }
                 DefaultsFields { fields, disabled: busy() }
             }
+            if same_sources && !fees.read().is_empty() {
+                fees::FeeFields { fees, disabled: busy() }
+            }
             div { class: "flex flex-wrap gap-3 mb-4",
                 button { r#type: "button", class: "btn btn-secondary", disabled: busy(),
                     onclick: move |_| {
@@ -157,18 +273,20 @@ pub(super) fn PrepareInvoice(
                         error.set(None);
                         reviewed.set(None);
                         generation.set(None);
-                        preview.set(None);
+                        confirm.set(false);
                         busy.set(true);
                         spawn(async move {
                             let result = async {
                                 projects.set(server_fns::list_projects(Some(request.client.clone()), true).await?);
-                                server_fns::prepare_invoice(request.client.clone(), request.from.clone(), request.to.clone(), request.projects.clone(), request.overrides.clone(), None).await
+                                server_fns::prepare_invoice(request.client.clone(), request.from.clone(), request.to.clone(), request.projects.clone(), request.overrides.clone(), request.fees.clone()).await
                             }.await;
                             match result {
                                 Ok(estimate) => {
+                                    fees.set(fees::from_review(&estimate));
+                                    loaded.set(Some(request.clone()));
                                     if let Some(defaults) = &estimate.defaults {
                                         fields.set(fields_from(defaults));
-                                        reviewed.set(Some(InvoiceRequest { overrides: Some(defaults.clone()), ..request }));
+                                        reviewed.set(Some(InvoiceRequest { overrides: Some(defaults.clone()), fees: Some(estimate.fee_selection()), ..request }));
                                     } else {
                                         fields.set(InvoiceDefaultsInput { terms_days: String::new(), ..Default::default() });
                                     }
@@ -182,39 +300,9 @@ pub(super) fn PrepareInvoice(
                     },
                     if busy() { "Working…" } else { "Review invoice" }
                 }
-                button { r#type: "button", class: "btn btn-primary", disabled: (busy() && !uncertain()) || !ready,
-                    onclick: move |_| {
-                        if (busy() && !uncertain()) || !is_reviewed(current.as_ref().ok(), reviewed.peek().as_ref()) { return; }
-                        let Ok(request) = current.clone() else { return; };
-                        // An uncertain response must retry the same mutation, even after
-                        // reviewing again. Changed inputs represent a different request.
-                        let Some(review) = preview.peek().clone() else { return; };
-                        let mutation = generation.peek().as_ref()
-                            .filter(|(previous, _)| previous == &request)
-                            .map(|(_, mutation)| mutation.clone())
-                            .unwrap_or_else(|| InvoiceGenerationRequest { request_id: Uuid::now_v7(), review, confirmed_excess: Vec::new() });
-                        generation.set(Some((request.clone(), mutation.clone())));
-                        uncertain.set(false);
-                        busy.set(true);
-                        error.set(None);
-                        spawn(async move {
-                            let result = server_fns::generate_invoice(request.client, request.from, request.to, request.projects, request.overrides, mutation).await;
-                            busy.set(false);
-                            match result {
-                                Ok(data) => oncreated.call(data.invoice.id),
-                                Err(err) => {
-                                    if matches!(&err, ServerFnError::ServerError { code, .. } if (400..500).contains(code)) {
-                                        error.set(Some(err.to_string()));
-                                        reviewed.set(None);
-                                    } else {
-                                        error.set(Some("The invoice may have been saved. Retry the same request to recover it without creating another draft.".into()));
-                                        uncertain.set(true);
-                                        busy.set(true);
-                                    }
-                                }
-                            }
-                        });
-                    }, if uncertain() { "Retry generation" } else { "Generate draft" }
+                button { r#type: "button", class: "btn btn-primary", disabled: (busy() && !uncertain()) || !ready || !has_selection,
+                    onclick: move |_| { if uncertain() { generate.call(false); } else if has_excess { confirm.set(true); } else { generate.call(false); } },
+                    if uncertain() { "Retry generation" } else { "Generate draft" }
                 }
             }
             if started() && !ready && !busy() {
@@ -224,6 +312,21 @@ pub(super) fn PrepareInvoice(
                 if let Some(estimate) = preview.read().as_ref() {
                     PreparedLines { estimate: estimate.clone() }
                 }
+            }
+        }
+        Modal { id: "generation-excess", labelledby: "generation-excess-title", open: confirm() && ready, busy: busy(), on_dismiss: move |_| confirm.set(false),
+            h2 { id: "generation-excess-title", "Confirm over-invoicing" }
+            p { class: "text-sm mb-4", "Generating this draft will exceed the agreed fees by the amounts below, before tax. Cancelling creates nothing." }
+            if let Some(review) = preview.read().as_ref().filter(|_| ready) {
+                for excess in &review.excess {
+                    if let Some(line) = review.lines.iter().find(|line| line.source == excess.source) {
+                        p { key: "{excess.source:?}", class: "wrap-anywhere", "{line.description} · Excess: {review.currency} " {format_cents_plain(excess.excess_cents)} }
+                    }
+                }
+            }
+            div { class: "flex flex-wrap gap-3 mt-4",
+                button { r#type: "button", class: "btn btn-danger", disabled: busy() || !ready, onclick: move |_| generate.call(true), "Confirm excess and generate" }
+                button { r#type: "button", class: "btn btn-secondary", disabled: busy(), onclick: move |_| confirm.set(false), "Cancel over-invoicing" }
             }
         }
     }
@@ -238,7 +341,7 @@ fn PreparedLines(estimate: InvoicePreparation) -> Element {
                 caption { class: "text-sm text-muted text-left", "Estimated invoice charges ({estimate.currency})" }
                 thead { tr { th { "Description" } th { class: "text-right", "Hours" } th { class: "text-right", "Rate" } th { class: "text-right", "Amount" } } }
                 tbody {
-                    for (index, line) in estimate.lines.iter().enumerate() {
+                    for (index, line) in estimate.lines.iter().enumerate().filter(|(_, line)| line.selected) {
                         tr { key: "{index}",
                             td {
                                 "{line.description}"
@@ -287,6 +390,7 @@ mod tests {
             to: "2026-01-31".into(),
             projects: None,
             overrides: Some(InvoiceDefaults::default()),
+            fees: None,
         };
         assert!(is_reviewed(Some(&request), Some(&request)));
         assert!(!is_reviewed(None, Some(&request)));
@@ -311,6 +415,10 @@ mod tests {
             },
             InvoiceRequest {
                 overrides: None,
+                ..request.clone()
+            },
+            InvoiceRequest {
+                fees: Some(Vec::new()),
                 ..request.clone()
             },
             InvoiceRequest {

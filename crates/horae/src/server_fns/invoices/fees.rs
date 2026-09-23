@@ -14,6 +14,7 @@ pub(super) struct FeeLine {
     pub description: String,
     pub amount_cents: i64,
     pub agreed_cents: i64,
+    pub available: bool,
     pub currency: String,
 }
 
@@ -48,7 +49,7 @@ pub(super) async fn preview_fees(
     let projects: Vec<_> = planned.iter().map(|fee| fee.project_id).collect();
     let keys: Vec<_> = planned.iter().map(|fee| fee.period_key.as_str()).collect();
     // Existing identities win even outside this period. A changed schedule
-    // must not replace a stored charge; only its remaining balance is offered.
+    // must not replace a stored agreement, including a settled occurrence.
     let existing = sqlx::query!(
         "SELECT f.project_id, f.period_key FROM project_fee_occurrences f
          JOIN unnest($2::uuid[], $3::text[]) AS wanted(project_id, period_key)
@@ -70,10 +71,10 @@ pub(super) async fn preview_fees(
         .into_iter()
         .map(|fee| {
             let remaining = fee.amount_cents;
-            (fee, remaining)
+            (fee, remaining, true)
         })
         .collect();
-    for fee in available_fees(
+    for fee in stored_fees(
         tx,
         org_id,
         client_id,
@@ -95,6 +96,7 @@ pub(super) async fn preview_fees(
                 currency: fee.currency,
             },
             fee.amount_cents,
+            fee.available,
         ));
     }
     if fees.len() > MAX_FEE_OCCURRENCES {
@@ -102,31 +104,35 @@ pub(super) async fn preview_fees(
             "Too many fees for one invoice; select a shorter period.",
         ));
     }
-    fees.sort_by(|(a, _), (b, _)| {
+    fees.sort_by(|(a, _, _), (b, _, _)| {
         (a.due_on, a.project_id, &a.period_key).cmp(&(b.due_on, b.project_id, &b.period_key))
     });
-    Ok(fees
-        .into_iter()
-        .map(|(fee, remaining)| InvoicePreviewLine {
-            selected: true,
-            source: InvoiceSource::Fee {
+    fees.into_iter()
+        .map(|(fee, remaining, available)| {
+            Ok(InvoicePreviewLine {
+                selected: available,
+                source: InvoiceSource::Fee {
+                    project_id: fee.project_id,
+                    period_key: fee.period_key,
+                },
                 project_id: fee.project_id,
-                period_key: fee.period_key,
-            },
-            project_id: fee.project_id,
-            currency: fee.currency,
-            description: fee.description,
-            minutes: None,
-            rate_cents: None,
-            amount_cents: remaining,
-            fee_balance: Some(InvoiceFeeBalance {
-                agreed_cents: fee.amount_cents,
-                invoiced_cents: fee.amount_cents - remaining,
-                remaining_cents: remaining,
-            }),
-            net_before_tax_cents: None,
+                currency: fee.currency,
+                description: fee.description,
+                minutes: None,
+                rate_cents: None,
+                amount_cents: remaining.max(0),
+                fee_balance: Some(InvoiceFeeBalance {
+                    agreed_cents: fee.amount_cents,
+                    invoiced_cents: fee
+                        .amount_cents
+                        .checked_sub(remaining)
+                        .ok_or_else(|| conflict("Fee balance exceeds the supported range"))?,
+                    remaining_cents: remaining,
+                }),
+                net_before_tax_cents: None,
+            })
         })
-        .collect())
+        .collect()
 }
 
 /// Prepare stable occurrences inside the invoice transaction. Only monthly
@@ -191,7 +197,7 @@ pub(super) async fn prepare_fees(
         &dates as &[NaiveDate], &descriptions as &[&str], &amounts, &currencies as &[&str],
     ).execute(&mut **tx).await.map_err(server_err)?;
 
-    available_fees(
+    stored_fees(
         tx,
         org_id,
         client_id,
@@ -364,7 +370,7 @@ async fn scheduled_fees(
     Ok(occurrences)
 }
 
-async fn available_fees(
+async fn stored_fees(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     org_id: Uuid,
     client_id: Uuid,
@@ -378,6 +384,7 @@ async fn available_fees(
             sqlx::query_as!(
                 FeeLine,
                 r#"SELECT f.id,f.project_id,f.description, f.amount_cents AS agreed_cents,
+                   (f.amount_cents > billed.amount OR (f.amount_cents = 0 AND billed.lines = 0)) AS "available!",
                    (f.amount_cents::numeric - billed.amount)::bigint AS "amount_cents!",
                    f.currency,f.period_key,f.due_on as "due_on: NaiveDate"
          FROM project_fee_occurrences f JOIN projects p ON p.id = f.project_id
@@ -387,7 +394,6 @@ async fn available_fees(
            WHERE l.fee_occurrence_id = f.id AND i.org_id = f.org_id AND i.status <> 'void'
          ) billed
          WHERE f.org_id = $1 AND p.client_id = $2 AND p.project_type = 'fixed_fee'
-           AND (f.amount_cents > billed.amount OR (f.amount_cents = 0 AND billed.lines = 0))
            AND f.due_on <= $4
            AND (f.period_key NOT LIKE 'month:%' OR f.due_on >= $3)
            AND ($5::uuid[] IS NULL OR f.project_id = ANY($5))

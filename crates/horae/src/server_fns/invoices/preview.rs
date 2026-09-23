@@ -86,6 +86,7 @@ pub(super) async fn prepare_with_edits(
     }
     let contributing: Vec<_> = lines
         .iter()
+        .filter(|line| line.selected)
         .map(|line| line.project_id)
         .collect::<BTreeSet<_>>()
         .into_iter()
@@ -130,23 +131,16 @@ pub(super) async fn prepare_with_edits(
             },
         })
         .collect();
-    let currency = lines
-        .first()
-        .map(|line| line.currency.trim().to_owned())
-        .ok_or_else(|| {
-            not_found("No billable, un-invoiced time or fees found for this client and period.")
-        })?;
-    if lines.iter().any(|line| line.currency.trim() != currency) {
-        return Err(conflict(
-            "Projects with different billing currencies cannot share an invoice.",
-        ));
-    }
+    let currency = currency(&lines)?;
     let subtotal_cents = subtotal(&lines)?;
     let inherited = projects
         .first()
         .map(|project| &project.defaults)
         .filter(|first| projects.iter().all(|project| &project.defaults == *first));
-    let defaults = overrides.or(inherited).cloned();
+    let defaults = overrides
+        .or(inherited)
+        .cloned()
+        .or_else(|| projects.is_empty().then(InvoiceDefaults::default));
     let issued_on = chrono::Utc::now().date_naive();
     let amounts = defaults
         .as_ref()
@@ -155,6 +149,11 @@ pub(super) async fn prepare_with_edits(
     if let Some(defaults) = &defaults {
         allocate_lines(&mut lines, defaults.discount_bps)?;
     }
+    let excess = if defaults.is_some() {
+        excess(&lines)?
+    } else {
+        Vec::new()
+    };
     let due_on = defaults
         .as_ref()
         .map(|defaults| {
@@ -172,7 +171,27 @@ pub(super) async fn prepare_with_edits(
         lines,
         subtotal_cents,
         amounts,
+        excess,
     })
+}
+
+pub(super) fn currency(lines: &[InvoicePreviewLine]) -> Result<String, ServerFnError> {
+    let currency = lines
+        .iter()
+        .find(|line| line.selected)
+        .or_else(|| lines.first())
+        .map(|line| line.currency.trim().to_owned())
+        .ok_or_else(|| not_found("No billable time or fees found for this client and period."))?;
+    if lines
+        .iter()
+        .filter(|line| line.selected)
+        .any(|line| line.currency.trim() != currency)
+    {
+        return Err(conflict(
+            "Projects with different billing currencies cannot share an invoice.",
+        ));
+    }
+    Ok(currency)
 }
 
 pub(super) fn apply_fee_selection(
@@ -268,8 +287,9 @@ pub(super) fn excess(
                 .net_before_tax_cents
                 .ok_or_else(|| conflict("Resolve invoice defaults before generating"))?;
             let remaining = balance
-                .remaining_cents
-                .checked_sub(net)
+                .invoiced_cents
+                .checked_add(net)
+                .and_then(|invoiced| balance.agreed_cents.checked_sub(invoiced))
                 .ok_or_else(|| conflict("Fee balance exceeds the supported range"))?;
             if remaining < 0 {
                 excess.push(InvoiceSourceExcess {
@@ -283,4 +303,54 @@ pub(super) fn excess(
     }
     excess.sort_by(|a, b| a.source.cmp(&b.source));
     Ok(excess)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::invoice::InvoiceFeeBalance;
+
+    fn fee() -> InvoicePreviewLine {
+        let project_id = uuid::Uuid::now_v7();
+        InvoicePreviewLine {
+            source: InvoiceSource::Fee {
+                project_id,
+                period_key: "single".into(),
+            },
+            selected: true,
+            project_id,
+            currency: "EUR".into(),
+            description: "Fee".into(),
+            minutes: None,
+            rate_cents: None,
+            amount_cents: 1,
+            fee_balance: Some(InvoiceFeeBalance {
+                agreed_cents: i64::MAX,
+                invoiced_cents: i64::MAX,
+                remaining_cents: 0,
+            }),
+            net_before_tax_cents: Some(1),
+        }
+    }
+
+    #[test]
+    fn excess_rejects_an_unrepresentable_total_even_when_the_remainder_fits() {
+        assert!(
+            excess(&[fee()])
+                .unwrap_err()
+                .to_string()
+                .contains("supported range")
+        );
+    }
+
+    #[test]
+    fn unselected_fee_currencies_do_not_relabel_or_block_selected_charges() {
+        let mut settled = fee();
+        settled.currency = "USD".into();
+        settled.selected = false;
+        let mut lines = [settled, fee()];
+        assert_eq!(currency(&lines).unwrap(), "EUR");
+        lines[0].selected = true;
+        assert!(currency(&lines).is_err());
+    }
 }

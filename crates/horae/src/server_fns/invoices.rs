@@ -1,9 +1,11 @@
 //! Invoice server functions.
 
 use super::*;
+#[cfg(feature = "server")]
+use crate::models::invoice::InvoiceSource;
 use crate::models::invoice::{
     InvoiceDefaults, InvoiceDraftEdit, InvoiceDraftSave, InvoiceEditReview, InvoiceEditor,
-    InvoiceFeeSelection, InvoiceGenerationRequest, InvoicePreparation, InvoiceSource,
+    InvoiceFeeSelection, InvoiceGenerationRequest, InvoicePreparation,
 };
 
 #[cfg(feature = "server")]
@@ -269,6 +271,7 @@ async fn generate_invoice_with_request(
         request.request_id.get_version_num() != 7
             || request.review.lines.len() > 20000
             || request.review.projects.len() > 1000
+            || request.review.excess.len() > 10000
             || request.confirmed_excess.len() > 10000
     }) {
         return Err(err(
@@ -313,6 +316,10 @@ async fn generate_invoice_with_request(
             .review
             .projects
             .sort_by_key(|project| project.project_id);
+        request
+            .review
+            .excess
+            .sort_by(|a, b| a.source.cmp(&b.source));
         request
             .confirmed_excess
             .sort_by(|a, b| a.source.cmp(&b.source));
@@ -389,31 +396,39 @@ async fn generate_invoice_with_request(
         fee_selection.as_deref(),
     )
     .await?;
-    let currency = entries
-        .first()
-        .map(|entry| entry.currency.trim())
-        .or_else(|| fees.first().map(|fee| fee.currency.trim()))
-        .ok_or_else(|| {
-            if request.is_some() {
-                conflict("Invoice sources or fee balances changed. Review the invoice again.")
-            } else {
-                not_found("No billable, un-invoiced time or fees found for this client and period.")
-            }
-        })?;
-    if entries
+    let mut prepared = entries
         .iter()
-        .any(|entry| entry.currency.trim() != currency)
-        || fees.iter().any(|fee| fee.currency.trim() != currency)
-    {
-        return Err(conflict(
-            "Projects with different billing currencies cannot share an invoice.",
-        ));
+        .map(entries::EntryWithRates::preview)
+        .collect::<Result<Vec<_>, _>>()?;
+    prepared.extend(
+        fees::preview_fees(&mut tx, org_id, client_id, from, to, selected.as_deref()).await?,
+    );
+    if let Some(request) = &canonical {
+        let current_sources: std::collections::BTreeSet<_> =
+            prepared.iter().map(|line| &line.source).collect();
+        let reviewed_sources: std::collections::BTreeSet<_> = request
+            .review
+            .lines
+            .iter()
+            .map(|line| &line.source)
+            .collect();
+        if current_sources != reviewed_sources
+            || reviewed_sources.len() != request.review.lines.len()
+        {
+            return Err(conflict(
+                "Invoice sources or fee balances changed. Review the invoice again.",
+            ));
+        }
+        preview::apply_fee_selection(&mut prepared, &request.review.fee_selection())?;
     }
-
-    let billed_projects: Vec<_> = entries
+    let currency = preview::currency(&prepared)?;
+    if !prepared.iter().any(|line| line.selected) {
+        return Err(err(BAD_REQUEST, "Select at least one invoice charge"));
+    }
+    let billed_projects: Vec<_> = prepared
         .iter()
-        .map(|entry| entry.project_id)
-        .chain(fees.iter().map(|fee| fee.project_id))
+        .filter(|line| line.selected)
+        .map(|line| line.project_id)
         .collect::<std::collections::BTreeSet<_>>()
         .into_iter()
         .collect();
@@ -443,35 +458,10 @@ async fn generate_invoice_with_request(
     let issued_on = now.date_naive();
     let due_on = horae_core::project::payment_due_date(issued_on, settings.terms_days as u16)
         .map_err(|error| err(BAD_REQUEST, error.to_string()))?;
-
-    let mut prepared = entries
-        .iter()
-        .map(entries::EntryWithRates::preview)
-        .collect::<Result<Vec<_>, _>>()?;
-    prepared.extend(
-        fees::preview_fees(&mut tx, org_id, client_id, from, to, selected.as_deref()).await?,
-    );
-    if let Some(request) = &canonical {
-        let current_sources: std::collections::BTreeSet<_> =
-            prepared.iter().map(|line| &line.source).collect();
-        let reviewed_sources: std::collections::BTreeSet<_> = request
-            .review
-            .lines
-            .iter()
-            .map(|line| &line.source)
-            .collect();
-        if current_sources != reviewed_sources
-            || reviewed_sources.len() != request.review.lines.len()
-        {
-            return Err(conflict(
-                "Invoice sources or fee balances changed. Review the invoice again.",
-            ));
-        }
-        preview::apply_fee_selection(&mut prepared, &request.review.fee_selection())?;
-    }
     preview::allocate_lines(&mut prepared, settings.discount_bps)?;
     let subtotal_cents = preview::subtotal(&prepared)?;
     let amounts = defaults::amounts(&settings, subtotal_cents)?;
+    let excess = preview::excess(&prepared)?;
     if let Some(request) = &canonical {
         let review = &request.review;
         let mut current_lines = prepared.clone();
@@ -483,13 +473,13 @@ async fn generate_invoice_with_request(
             || review.due_on != Some(due_on)
             || review.subtotal_cents != subtotal_cents
             || review.amounts != Some(amounts)
+            || review.excess != excess
         {
             return Err(conflict(
                 "Invoice sources or fee balances changed. Review the invoice again.",
             ));
         }
     }
-    let excess = preview::excess(&prepared)?;
     if canonical
         .as_ref()
         .map(|request| request.confirmed_excess.as_slice())
@@ -500,10 +490,6 @@ async fn generate_invoice_with_request(
             "Confirm the exact amount exceeding the fee balance before generating.",
         ));
     }
-    if !prepared.iter().any(|line| line.selected) {
-        return Err(err(BAD_REQUEST, "Select at least one invoice charge"));
-    }
-
     let fee_ids: std::collections::BTreeMap<_, _> = fees
         .iter()
         .map(|fee| ((fee.project_id, fee.period_key.as_str()), fee.id))

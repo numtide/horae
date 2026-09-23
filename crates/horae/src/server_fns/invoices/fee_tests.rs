@@ -19,6 +19,82 @@ async fn single_fee(pool: &PgPool) -> SeedIds {
 
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]
+async fn settled_fee_sources_remain_reviewable_without_automatic_charges(pool: PgPool) {
+    let ids = single_fee(&pool).await;
+    let period = ("2026-09-01".parse().unwrap(), "2026-09-30".parse().unwrap());
+    let defaults = InvoiceDefaults::default();
+    generate_invoice_for_period(&pool, ids.org_id, ids.client_id, period.0, period.1)
+        .await
+        .unwrap();
+    let settled = preview::prepare(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        Some(&defaults),
+    )
+    .await
+    .expect("settled sources must remain available for explicit overbilling");
+    assert_eq!(settled.lines.len(), 1);
+    assert!(!settled.lines[0].selected);
+    assert_eq!(settled.lines[0].amount_cents, 0);
+    assert_eq!(settled.subtotal_cents, 0);
+    let mut edits = settled.fee_selection();
+    edits[0].selected = true;
+    edits[0].amount_cents = 100;
+    let review = preview::prepare_with_edits(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        Some(&defaults),
+        Some(&edits),
+    )
+    .await
+    .unwrap();
+    assert_eq!(review.excess[0].excess_cents, 100);
+    let request = InvoiceGenerationRequest {
+        request_id: Uuid::now_v7(),
+        confirmed_excess: review.excess.clone(),
+        review,
+    };
+    generate_invoice_with_request(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        Some(&defaults),
+        Some((&request, ids.user_id)),
+    )
+    .await
+    .unwrap();
+    let overdrawn = preview::prepare(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        Some(&defaults),
+    )
+    .await
+    .unwrap();
+    assert!(!overdrawn.lines[0].selected);
+    assert_eq!(
+        overdrawn.lines[0].fee_balance.unwrap().remaining_cents,
+        -100
+    );
+    assert_eq!(
+        overdrawn.lines[0].fee_balance.unwrap().invoiced_cents,
+        12600
+    );
+    assert_eq!(overdrawn.lines[0].fee_balance.unwrap().agreed_cents, 12500);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
 async fn reviewed_generation_bills_partial_fees_and_rejects_stale_balances(pool: PgPool) {
     use crate::models::invoice::{InvoiceFeeSelection, InvoiceGenerationRequest};
     let ids = single_fee(&pool).await;
@@ -326,7 +402,13 @@ async fn reviewed_generation_does_not_materialize_unselected_months(pool: PgPool
     )
     .await
     .unwrap();
-    assert_eq!(remaining.lines[0].source, edits[1].source);
+    let selected: Vec<_> = remaining
+        .lines
+        .iter()
+        .filter(|line| line.selected)
+        .collect();
+    assert_eq!(selected.len(), 1);
+    assert_eq!(selected[0].source, edits[1].source);
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -759,11 +841,11 @@ async fn discounted_fee_leaves_a_balance_and_void_releases_only_its_contribution
     )
     .await
     .unwrap();
-    assert!(
-        preview::prepare(&pool, ids.org_id, ids.client_id, period, None, None)
-            .await
-            .is_err()
-    );
+    let settled = preview::prepare(&pool, ids.org_id, ids.client_id, period, None, None)
+        .await
+        .unwrap();
+    assert!(settled.lines.iter().all(|line| !line.selected));
+    assert_eq!(settled.subtotal_cents, 0);
     transition_invoice(&pool, ids.org_id, first.invoice.id, InvoiceStatus::Void)
         .await
         .unwrap();
@@ -1267,11 +1349,11 @@ async fn zero_fee_is_invoiced_once_until_voided(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(invoice.invoice.total_cents, 0);
-    assert!(
-        preview::prepare(&pool, ids.org_id, ids.client_id, period, None, None)
-            .await
-            .is_err()
-    );
+    let settled = preview::prepare(&pool, ids.org_id, ids.client_id, period, None, None)
+        .await
+        .unwrap();
+    assert!(settled.lines.iter().all(|line| !line.selected));
+    assert_eq!(settled.subtotal_cents, 0);
     transition_invoice(&pool, ids.org_id, invoice.invoice.id, InvoiceStatus::Void)
         .await
         .unwrap();
@@ -1363,11 +1445,11 @@ async fn invoice_preview_does_not_materialize_fees_and_preserves_released_snapsh
         generate_invoice_for_period(&pool, ids.org_id, ids.client_id, period.0, period.1)
             .await
             .unwrap();
-    assert!(
-        preview::prepare(&pool, ids.org_id, ids.client_id, period, None, None)
-            .await
-            .is_err()
-    );
+    let settled = preview::prepare(&pool, ids.org_id, ids.client_id, period, None, None)
+        .await
+        .unwrap();
+    assert!(settled.lines.iter().all(|line| !line.selected));
+    assert_eq!(settled.subtotal_cents, 0);
     transition_invoice(&pool, ids.org_id, generated.invoice.id, InvoiceStatus::Void)
         .await
         .unwrap();
@@ -1665,9 +1747,11 @@ async fn monthly_fees_use_calendar_dates_and_skip_already_claimed_months(pool: P
     )
     .await
     .unwrap();
-    assert_eq!(estimate.lines.len(), 1);
+    assert_eq!(estimate.lines.len(), 3);
     assert_eq!(estimate.amounts.unwrap().total_cents, 12500);
-    assert!(estimate.lines[0].description.contains("2028-04"));
+    let selected: Vec<_> = estimate.lines.iter().filter(|line| line.selected).collect();
+    assert_eq!(selected.len(), 1);
+    assert!(selected[0].description.contains("2028-04"));
     let next = generate_invoice_for_period(
         &pool,
         ids.org_id,

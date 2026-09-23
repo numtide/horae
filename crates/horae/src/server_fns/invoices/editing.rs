@@ -169,9 +169,10 @@ fn evaluate(
         else {
             return Err(server_err("Invoice fee source is unavailable"));
         };
-        let remaining_cents = agreed_cents
-            .checked_sub(row.other_invoiced_cents)
-            .and_then(|v| v.checked_sub(*net_cents))
+        let remaining_cents = row
+            .other_invoiced_cents
+            .checked_add(*net_cents)
+            .and_then(|invoiced| agreed_cents.checked_sub(invoiced))
             .ok_or_else(|| conflict("Fee balance exceeds the supported range"))?;
         let excess_cents = if remaining_cents < 0 {
             remaining_cents

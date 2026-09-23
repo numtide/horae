@@ -105,6 +105,8 @@ pub struct InvoicePreparation {
     pub lines: Vec<InvoicePreviewLine>,
     pub subtotal_cents: i64,
     pub amounts: Option<horae_core::invoice::InvoiceAmounts>,
+    /// Exact source-level excesses computed by the server for this review.
+    pub excess: Vec<InvoiceSourceExcess>,
 }
 
 impl InvoicePreparation {
