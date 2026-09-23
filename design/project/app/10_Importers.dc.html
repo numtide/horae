@@ -326,7 +326,7 @@
           <div style="display:flex; align-items:center; gap:12px; padding:16px 20px; background:rgba(217,154,60,.09); border:1px solid #453818; border-radius:12px; flex-wrap:wrap;">
             <span style="width:26px; height:26px; flex:0 0 26px; border-radius:50%; background:#2B2413; border:1px solid #453818; display:flex; align-items:center; justify-content:center; color:#E7C079; font-size:12px;"><i class="ph ph-dots-three" aria-hidden="true" style="font-size:12px; line-height:1; display:block;"></i></span>
             <div style="min-width:200px; flex:1;"><div style="font-size:14px; font-weight:600; color:#E7C079;">Preview only — nothing was written</div><div style="font-size:12px; color:#8F8676; margin-top:4px;">Review the numbers, then commit.</div></div>
-            <button onClick="{{ goCommit }}" class="hb-primary" style="padding:8px 16px; background:#4FB79A; color:#0D211B; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap;">Commit this import</button>
+            <button onClick="{{ goCommit }}" class="hb-primary" style="display:inline-flex; align-items:center; height:44px; padding:0 16px; background:#4FB79A; color:#0D211B; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap;">Commit this import</button>
           </div>
           </sc-if>
 
@@ -411,7 +411,7 @@
 
           <sc-if value="{{ showResync }}" hint-placeholder-val="{{ false }}">
           <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-            <button onClick="{{ goRunning }}" class="hb-secondary" style="padding:8px 16px; background:#232019; color:#EFEAE0; border:1px solid #3D382E; border-radius:8px; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap;">Re-sync changes</button>
+            <button onClick="{{ goRunning }}" class="hb-secondary" style="display:inline-flex; align-items:center; height:44px; padding:0 16px; background:#232019; color:#EFEAE0; border:1px solid #3D382E; border-radius:8px; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap;">Re-sync changes</button>
             <span style="font-size:12px; color:#8F8676;">Incremental — only what changed since the last sync. Local edits are never overwritten.</span>
           </div>
           </sc-if>

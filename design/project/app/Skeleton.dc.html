@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+  body { margin:0; background:#100F0C; }
+  @keyframes hz-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+  .hz-sk { background: linear-gradient(90deg, #232019 0%, #2C2820 40%, #232019 80%); background-size: 200% 100%; animation: hz-shimmer 1.6s ease-in-out infinite; border-radius:6px; }
+  @media (prefers-reduced-motion: reduce) { .hz-sk { animation:none; background:#232019; } }
+</style>
+</helmet>
+<div aria-busy="true" aria-label="Loading" style="{{ wrap }}">
+  <sc-for list="{{ rows }}" as="r" hint-placeholder-count="6">
+  <div style="{{ r.style }}">
+    <sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="5">
+    <div style="{{ c.align }}"><span class="hz-sk" style="{{ c.style }}"></span></div>
+    </sc-for>
+  </div>
+  </sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:900,&quot;height&quot;:420},&quot;kind&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;table&quot;,&quot;tiles&quot;,&quot;text&quot;],&quot;default&quot;:&quot;table&quot;,&quot;tsType&quot;:&quot;'table'|'tiles'|'text'&quot;},&quot;rows&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:6,&quot;min&quot;:1,&quot;max&quot;:12,&quot;tsType&quot;:&quot;number&quot;},&quot;columns&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;minmax(220px,1fr) 110px 150px 150px 120px&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;widths&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;number[]&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props;
+    const kind = p.kind ?? 'table';            // 'table' | 'tiles' | 'text'
+    const count = p.rows ?? 6;
+    const columns = p.columns ?? 'minmax(220px,1fr) 110px 150px 150px 120px';
+    const widths = p.widths ?? [];              // optional per-column width overrides in % of cell
+    const seed = (i, j) => 45 + ((i * 7 + j * 13) % 40); // deterministic variety: 45–85%
+    const bar = (w, h = 12) => 'display:inline-block; width:' + w + '; height:' + h + 'px;';
+    let rows = [];
+    if (kind === 'table') {
+      const n = columns.trim().split(/\s+(?![^()]*\))/).length;
+      rows = Array.from({ length: count }, (_, i) => ({
+        style: 'display:grid; grid-template-columns:' + columns + '; align-items:center; gap:16px; padding:18px 20px;' + (i < count - 1 ? ' border-bottom:1px solid #262219;' : ''),
+        cells: Array.from({ length: n }, (_, j) => ({
+          align: 'display:flex; ' + (j === 0 ? 'justify-content:flex-start; gap:12px;' : 'justify-content:flex-end;'),
+          style: bar((widths[j] ?? (j === 0 ? seed(i, j) + 10 : seed(i, j))) + '%', j === 0 ? 14 : 12),
+        })),
+      }));
+    } else if (kind === 'tiles') {
+      rows = [{ style: 'display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px;', cells: Array.from({ length: count }, (_, j) => ({ align: 'background:#1A1813; border:1px solid #322E26; border-radius:12px; padding:16px 20px; display:flex; flex-direction:column; gap:12px;', style: bar('58%', 12) + ' box-shadow:0 40px 0 -28px #232019;' })) }];
+    } else {
+      rows = Array.from({ length: count }, (_, i) => ({ style: 'padding:6px 0;', cells: [{ align: '', style: bar((i === count - 1 ? 40 : 70 + (i * 11) % 25) + '%', 12) }] }));
+    }
+    return {
+      wrap: kind === 'table' ? 'background:#1A1813; border:1px solid #322E26; border-radius:16px; overflow:hidden;' : '',
+      rows,
+    };
+  }
+}
+</script>
+</body>
+</html>

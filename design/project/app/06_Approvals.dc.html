@@ -89,7 +89,7 @@
     <div style="display:flex; align-items:center; padding:24px 40px 0;">
       <h1 style="font-family:'Newsreader',serif; font-size:34px; font-weight:600; color:#F6F2E9; margin:0; letter-spacing:-.015em;">Approvals</h1>
       <div style="flex:1;"></div>
-      <button class="hb-secondary" style="display:flex; align-items:center; gap:8px; padding:8px 16px; background:#232019; border:1px solid #3D382E; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap;">Remind team <span style="display:inline-flex; color:#8F8676;"><i class="ph ph-arrow-up-right" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span></button>
+      <button class="hb-secondary" style="display:flex; align-items:center; gap:8px; height:44px; padding:0 16px; background:#232019; border:1px solid #3D382E; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap;">Remind team <span style="display:inline-flex; color:#8F8676;"><i class="ph ph-arrow-up-right" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span></button>
     </div>
 
     <!-- filter bar -->
@@ -105,11 +105,11 @@
     <div style="padding:20px 40px 0;">
       <div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353; margin-bottom:8px;">Filter</div>
       <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-        <dc-import name="Dropdown" items="{{ clientItems }}" value="{{ clientValue }}" on-select="{{ setClient }}" placeholder="Client" searchable="{{ true }}" width="260" hint-size="110px,44px"></dc-import>
-        <dc-import name="Dropdown" items="{{ projectItems }}" value="{{ projectValue }}" on-select="{{ setProject }}" placeholder="Project" searchable="{{ true }}" width="260" hint-size="110px,44px"></dc-import>
-        <dc-import name="Dropdown" items="{{ roleItems }}" value="{{ roleValue }}" on-select="{{ setRole }}" placeholder="Role" searchable="{{ true }}" width="260" hint-size="110px,44px"></dc-import>
+        <dc-import name="Dropdown" items="{{ clientItems }}" value="{{ clientValue }}" on-select="{{ setClient }}" empty-label="Client" searchable="{{ true }}" width="260" hint-size="110px,44px"></dc-import>
+        <dc-import name="Dropdown" items="{{ projectItems }}" value="{{ projectValue }}" on-select="{{ setProject }}" empty-label="Project" searchable="{{ true }}" width="260" hint-size="110px,44px"></dc-import>
+        <dc-import name="Dropdown" items="{{ roleItems }}" value="{{ roleValue }}" on-select="{{ setRole }}" empty-label="Role" searchable="{{ true }}" width="260" hint-size="110px,44px"></dc-import>
         <button style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:#161510; border:1px solid #262219; border-radius:8px; color:#5A5446; font-family:inherit; font-size:14px; cursor:not-allowed; white-space:nowrap;">Department <span style="display:inline-flex; align-items:center; justify-content:center; font-size:12px;"><i class="ph ph-caret-down" aria-hidden="true" style="font-size:12px; line-height:1; display:block;"></i></span></button>
-        <dc-import name="Dropdown" items="{{ teammateItems }}" value="{{ teammateValue }}" on-select="{{ setTeammate }}" placeholder="Teammate" searchable="{{ true }}" width="260" hint-size="110px,44px"></dc-import>
+        <dc-import name="Dropdown" items="{{ teammateItems }}" value="{{ teammateValue }}" on-select="{{ setTeammate }}" empty-label="Teammate" searchable="{{ true }}" width="260" hint-size="110px,44px"></dc-import>
       </div>
     </div>
 

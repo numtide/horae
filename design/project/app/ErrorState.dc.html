@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#100F0C; }
+  button { transition: background .14s ease, box-shadow .16s ease, transform .08s ease, border-color .14s ease; }
+  button:active { transform: translateY(1px); }
+  .hb-primary:hover { background:#63C9AC !important; box-shadow:0 6px 18px -8px rgba(79,183,154,.65) !important; }
+  .hb-secondary:hover { background:#2C2820 !important; border-color:#5A5446 !important; }
+  a { color:#4FB79A; text-decoration:none; } a:hover { color:#6ECAB0; }
+</style>
+</helmet>
+<div role="alert" style="display:flex; flex-direction:column; align-items:center; text-align:center; gap:12px; padding:64px 24px; background:#1A1813; border:1px solid #322E26; border-radius:16px; font-family:'Instrument Sans',sans-serif; color:#EFEAE0;">
+  <div style="width:52px; height:52px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:#2E1817; border:1px solid #4D2523; color:#EC8683;"><i class="{{ iconCls }}" aria-hidden="true" style="font-size:22px; line-height:1; display:block;"></i></div>
+  <div style="font-family:'Newsreader',serif; font-size:20px; font-weight:600; color:#F6F2E9; margin-top:4px;">{{ title }}</div>
+  <div style="font-size:14px; color:#8F8676; max-width:420px; line-height:1.55;">{{ body }}</div>
+  <sc-if value="{{ hasCode }}" hint-placeholder-val="{{ false }}">
+  <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6A6353; padding:6px 10px; background:#100F0C; border:1px solid #262219; border-radius:6px;">{{ code }}</div>
+  </sc-if>
+  <div style="display:flex; align-items:center; gap:16px; margin-top:4px; flex-wrap:wrap; justify-content:center;">
+    <button onClick="{{ onRetry }}" class="hb-primary" style="display:inline-flex; align-items:center; gap:8px; padding:12px 20px; background:#4FB79A; color:#0D211B; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap;"><i class="ph-bold ph-arrows-clockwise" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i>{{ retryLabel }}</button>
+    <sc-if value="{{ hasLink }}" hint-placeholder-val="{{ false }}">
+    <a href="{{ linkHref }}" style="font-size:14px; font-weight:600;">{{ linkLabel }}</a>
+    </sc-if>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:640,&quot;height&quot;:360},&quot;kind&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;network&quot;,&quot;server&quot;,&quot;permission&quot;],&quot;default&quot;:&quot;network&quot;,&quot;tsType&quot;:&quot;'network'|'server'|'permission'&quot;},&quot;title&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;body&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;code&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;GET /projects · 503 · req_8f2a1c&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;retryLabel&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Try again&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;onRetry&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;},&quot;linkLabel&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;linkHref&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;icon&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props;
+    const kind = p.kind ?? 'network';   // 'network' | 'server' | 'permission'
+    const preset = {
+      network: { icon: 'wifi-slash', title: "Couldn't load projects", body: 'Horae lost the connection while fetching. Your data is safe — check the network and try again.' },
+      server: { icon: 'warning-octagon', title: 'Something went wrong on our side', body: 'The request failed. We have been notified; retrying usually fixes it.' },
+      permission: { icon: 'lock-simple', title: 'You don’t have access to this', body: 'Ask a workspace admin to grant you the Manager role for these projects.' },
+    }[kind];
+    return {
+      iconCls: 'ph ph-' + (p.icon ?? preset.icon),
+      title: p.title ?? preset.title, body: p.body ?? preset.body,
+      hasCode: !!p.code, code: p.code ?? '',
+      retryLabel: p.retryLabel ?? 'Try again', onRetry: p.onRetry ?? (() => {}),
+      hasLink: !!p.linkLabel, linkLabel: p.linkLabel ?? '', linkHref: p.linkHref ?? '#',
+    };
+  }
+}
+</script>
+</body>
+</html>

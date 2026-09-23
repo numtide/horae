@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#100F0C; }
+  * { box-sizing:border-box; }
+  button, .hm-row, .hm-chip, .hm-ws { transition: background .14s ease, transform .08s ease, box-shadow .16s ease, border-color .14s ease, color .14s ease; }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(79,183,154,.35) !important; }
+  button:disabled { cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+  .hb-primary:hover:not(:disabled) { background:#63C9AC !important; box-shadow:0 6px 18px -8px rgba(79,183,154,.65) !important; }
+  .hb-solid:hover:not(:disabled) { background:#27705E !important; box-shadow:0 6px 18px -8px rgba(31,92,77,.7) !important; }
+  .hb-accent:hover:not(:disabled) { background:#E5AB52 !important; box-shadow:0 6px 18px -8px rgba(217,154,60,.6) !important; }
+  .hb-secondary:hover:not(:disabled) { background:#2C2820 !important; border-color:#5A5446 !important; }
+  .hb-ghost:hover:not(:disabled) { background:rgba(79,183,154,.10) !important; color:#6ECAB0 !important; }
+  .hb-danger:hover:not(:disabled) { background:rgba(224,102,97,.12) !important; border-color:#8D4441 !important; color:#EC8683 !important; }
+  .hb-icon:hover:not(:disabled) { background:#2C2820 !important; border-color:#5A5446 !important; color:#EFEAE0 !important; }
+  .hb-caret:hover:not(:disabled) { background:#1B5347 !important; }
+  .hb-seg:not(.hb-seg-on):hover:not(:disabled) { background:#232019 !important; color:#EFEAE0 !important; }
+  .hm-row:hover { background:#2A2620 !important; }
+  .hm-row:hover .hm-ico { color:#EFEAE0 !important; }
+  .hm-danger:hover { background:rgba(224,102,97,.12) !important; color:#EC8683 !important; }
+  .hm-ws:hover { background:#2A2620 !important; }
+  .hm-chip:hover { background:#2C2820 !important; border-color:#5A5446 !important; }
+  ::selection { background:#1F5C4D; color:#F6F2E9; }
+  ::-moz-selection { background:#1F5C4D; color:#F6F2E9; }
+  * { scrollbar-width: thin; scrollbar-color: #3D382E transparent; }
+  ::-webkit-scrollbar { width:10px; height:10px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:#3D382E; border-radius:999px; border:2px solid transparent; background-clip:content-box; }
+  ::-webkit-scrollbar-thumb:hover { background:#5A5446; background-clip:content-box; }
+  ::-webkit-scrollbar-corner { background:transparent; }
+  .hb-seg:hover { background:#232019; color:#EFEAE0; }
+  .hz-bulk:hover { background:#2A2620; }
+  .hf { transition: border-color .14s ease, background .14s ease, box-shadow .16s ease; width:100%; padding:12px 12px; background:#100F0C; border:1px solid #3D382E; border-radius:8px; color:#EFEAE0; font-family:'Instrument Sans',sans-serif; font-size:14px; }
+  .hf::placeholder { color:#6A6353; }
+  .hf:hover:not(:focus) { border-color:#5A5446; background:#161510; }
+  .hf:focus { outline:none; border-color:#4FB79A; box-shadow:0 0 0 3px rgba(79,183,154,.18); }
+  a { color:#4FB79A; text-decoration:none; }
+  a:hover { color:#6ECAB0; }
+  input.hf { min-height:44px; }
+  input.hf, textarea.hf { width:100%; padding:12px 12px; background:#100F0C; border:1px solid #3D382E; border-radius:8px; font-family:'Instrument Sans',sans-serif; font-size:14px; color:#EFEAE0; outline:none; transition: border-color .14s ease, box-shadow .16s ease; }
+  input.hf::placeholder, textarea.hf::placeholder { color:#5A5446; }
+  input.hf:focus, textarea.hf:focus { border-color:#4FB79A; box-shadow:0 0 0 3px rgba(79,183,154,.18); }
+  .hz-back:hover { background:#232019; color:#EFEAE0; } .hz-back:hover .hz-back-arrow { transform:translateX(-2px); }
+  .hz-type { transition: border-color .14s ease, background .14s ease, box-shadow .16s ease; } .hz-type:hover { border-color:#5A5446 !important; }
+  .hz-chip-x:hover { color:#EC8683 !important; }
+  @media (max-width: 1180px) { .hz-form-row { grid-template-columns:1fr !important; gap:8px !important; } .hz-form-row > .hz-label { padding-top:0 !important; } .hz-types { grid-template-columns:1fr !important; } }
+  .hz-opt { transition: box-shadow .14s ease; }
+  .hz-opt:hover { box-shadow: inset 0 0 0 999px rgba(239,234,224,.05); }
+  .hz-link { transition: color .14s ease; }
+  .hz-link:hover { color:#6ECAB0 !important; }
+  .hz-link-muted { transition: color .14s ease; }
+  .hz-link-muted:hover { color:#EFEAE0 !important; }
+  .hz-row-link { transition: color .14s ease; }
+  .hz-row-link:hover { color:#4FB79A !important; }
+  .hz-nav { transition: background .14s ease, color .14s ease; }
+  .hz-nav:hover { background:#232019 !important; color:#EFEAE0 !important; }
+  .hz-nav:hover .hm-ico { color:#EFEAE0 !important; }
+  @media (max-width: 1320px) {
+    .hz-rail { width:216px !important; flex-basis:216px !important; }
+    .hz-split { gap:32px !important; padding-left:24px !important; padding-right:24px !important; }
+    .hz-pad { padding-left:24px !important; padding-right:24px !important; }
+  }
+  @media (max-width: 1180px) {
+    .hz-split { flex-direction:column !important; gap:24px !important; }
+    .hz-subnav { width:100% !important; flex:none !important; }
+    .hz-subnav > div:first-child { max-width:420px; }
+    .hz-subnav > div:not(:first-child) { flex-direction:row !important; flex-wrap:wrap !important; gap:8px !important; }
+  }
+  @media (max-width: 900px) {
+    .hz-rail { display:none !important; }
+    .hz-shell { height:auto !important; min-height:100vh !important; }
+    .hz-pad { padding-left:20px !important; padding-right:20px !important; }
+  }
+</style>
+</helmet>
+
+<div class="hz-shell" style="display:flex; height:100vh; background:#100F0C; color:#EFEAE0; font-family:'Instrument Sans',sans-serif; overflow:hidden;">
+  <dc-import name="Rail" active="projects" hint-size="264px,100%" style="display:flex; flex:0 0 auto; align-self:stretch;"></dc-import>
+
+  <!-- ================= MAIN ================= -->
+  <div style="flex:1; min-width:0; display:flex; flex-direction:column; overflow:hidden;">
+    <dc-import name="DevBar" label="Page state" options="{{ devOptions }}" value="{{ devValue }}" on-change="{{ setDev }}" hint-size="100%,52px" style="display:block;"></dc-import>
+    <div style="flex:1; overflow-y:auto; min-height:0;">
+    <div class="hz-pad" style="padding:24px 40px 120px; max-width:1180px;">
+      <a href="05_Projects.dc.html" class="hz-back" style="display:inline-flex; align-items:center; gap:8px; font-size:14px; color:#A29C8D; padding:6px 10px; margin-left:-10px; border-radius:8px;"><span class="hz-back-arrow" style="display:inline-flex; transition:transform .14s ease;"><i class="ph ph-arrow-left" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span> Back to Projects</a>
+      <div style="display:flex; align-items:flex-end; gap:16px; flex-wrap:wrap; margin-top:20px; padding-bottom:24px; border-bottom:1px solid #262219;">
+        <div>
+          <div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6A6353;">Projects</div>
+          <h1 style="font-family:'Newsreader',serif; font-size:34px; font-weight:600; color:#F6F2E9; margin:8px 0 0; letter-spacing:-.015em;">New project</h1>
+        </div>
+        <div style="flex:1;"></div>
+        <div style="font-size:12px; color:#7C7565;">Saves as draft as you type · <span style="font-family:'IBM Plex Mono',monospace; color:#A29C8D;">{{ savedAt }}</span></div>
+      </div>
+
+      <!-- ===== BASICS ===== -->
+      <div class="hz-form-row" style="display:grid; grid-template-columns:220px minmax(0,1fr); gap:24px; padding:20px 0; border-bottom:1px solid #262219;">
+        <div class="hz-label" style="padding-top:12px;"><div style="font-size:14px; font-weight:600; color:#F6F2E9;">Client</div><div style="font-size:12px; color:#7C7565; margin-top:4px;">Who this project is for</div></div>
+        <div style="min-width:0;"><div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;"><div style="flex:1 1 320px; min-width:0;"><dc-import name="Dropdown" items="{{ clientItems }}" value="{{ client }}" on-select="{{ setClient }}" empty-label="Choose a client…" searchable="{{ true }}" surface="#100F0C" fill="{{ true }}" hint-size="100%,44px" style="display:block;"></dc-import></div><span style="font-size:14px; color:#6A6353;">or</span><button onClick="{{ openNewClient }}" class="hb-secondary" style="display:inline-flex; align-items:center; gap:8px; height:44px; padding:0 16px; background:#232019; border:1px solid #3D382E; border-radius:8px; color:#EFEAE0; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap;"><i class="ph ph-plus" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i>New client</button></div></div>
+      </div>
+      <div class="hz-form-row" style="display:grid; grid-template-columns:220px minmax(0,1fr); gap:24px; padding:20px 0; border-bottom:1px solid #262219;">
+        <div class="hz-label" style="padding-top:12px;"><div style="font-size:14px; font-weight:600; color:#F6F2E9;">Project name</div></div>
+        <div style="min-width:0;"><input class="hf" value="{{ name }}" onChange="{{ setName }}" placeholder="e.g. Atlas Platform — phase 2" /></div>
+      </div>
+      <div class="hz-form-row" style="display:grid; grid-template-columns:220px minmax(0,1fr); gap:24px; padding:20px 0; border-bottom:1px solid #262219;">
+        <div class="hz-label" style="padding-top:12px;"><div style="font-size:14px; font-weight:600; color:#F6F2E9;">Project code</div><div style="font-size:12px; color:#7C7565; margin-top:4px;">Optional</div></div>
+        <div style="min-width:0;"><div style="display:flex; align-items:center; gap:12px;"><input class="hf" value="{{ code }}" onChange="{{ setCode }}" placeholder="4210" style="width:160px; font-family:'IBM Plex Mono',monospace;" /><span style="font-size:14px; color:#8F8676;">Last code: <span style="font-family:'IBM Plex Mono',monospace; color:#A29C8D;">4207</span> · <a href="#" onClick="{{ suggestCode }}" style="font-weight:600;">use 4208</a></span></div><div style="font-size:12px; color:#7C7565; margin-top:8px; line-height:1.5; max-width:720px;">Shows in front of the name everywhere — timer, reports, invoices. Numbers or letters.</div></div>
+      </div>
+      <div class="hz-form-row" style="display:grid; grid-template-columns:220px minmax(0,1fr); gap:24px; padding:20px 0; border-bottom:1px solid #262219;">
+        <div class="hz-label" style="padding-top:12px;"><div style="font-size:14px; font-weight:600; color:#F6F2E9;">Dates</div><div style="font-size:12px; color:#7C7565; margin-top:4px;">Optional</div></div>
+        <div style="min-width:0;"><div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;"><div style="position:relative;"><input class="hf" value="{{ startsOn }}" readOnly="{{ true }}" onClick="{{ openStart }}" placeholder="Starts on" style="width:180px; font-family:'IBM Plex Mono',monospace; cursor:pointer; padding-right:36px;" /><span style="position:absolute; right:12px; top:14px; color:#6A6353; display:inline-flex; pointer-events:none;"><i class="ph ph-calendar-blank" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span><sc-if value="{{ startOpen }}" hint-placeholder-val="{{ false }}"><div style="position:absolute; left:0; top:52px; z-index:80;"><dc-import name="DatePicker" mode="day" value="{{ startIso }}" on-pick="{{ pickStart }}" hint-size="308px,380px"></dc-import></div></sc-if></div><span style="font-size:14px; color:#6A6353;">to</span><div style="position:relative;"><input class="hf" value="{{ endsOn }}" readOnly="{{ true }}" onClick="{{ openEnd }}" placeholder="Ends on" style="width:180px; font-family:'IBM Plex Mono',monospace; cursor:pointer; padding-right:36px;" /><span style="position:absolute; right:12px; top:14px; color:#6A6353; display:inline-flex; pointer-events:none;"><i class="ph ph-calendar-blank" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span><sc-if value="{{ endOpen }}" hint-placeholder-val="{{ false }}"><div style="position:absolute; left:0; top:52px; z-index:80;"><dc-import name="DatePicker" mode="day" value="{{ endIso }}" on-pick="{{ pickEnd }}" hint-size="308px,380px"></dc-import></div></sc-if></div></div><div style="font-size:12px; color:#7C7565; margin-top:8px; line-height:1.5; max-width:720px;">Time can still be tracked outside this range; it only shapes the schedule and budget burn.</div></div>
+      </div>
+      <div class="hz-form-row" style="display:grid; grid-template-columns:220px minmax(0,1fr); gap:24px; padding:20px 0; border-bottom:1px solid #262219;">
+        <div class="hz-label" style="padding-top:12px;"><div style="font-size:14px; font-weight:600; color:#F6F2E9;">Tags</div><div style="font-size:12px; color:#7C7565; margin-top:4px;">Optional</div></div>
+        <div style="min-width:0;"><div onClick="{{ focusTags }}" style="display:flex; align-items:center; flex-wrap:wrap; gap:8px; min-height:44px; padding:6px 8px; background:#100F0C; border:1px solid #3D382E; border-radius:8px; cursor:text;"><sc-for list="{{ tags }}" as="tg" hint-placeholder-count="2"><span style="display:inline-flex; align-items:center; gap:6px; padding:4px 8px 4px 10px; background:#232019; border:1px solid #3D382E; border-radius:999px; font-size:12px; color:#EFEAE0; white-space:nowrap;">{{ tg.label }}<span onClick="{{ tg.remove }}" class="hz-chip-x" style="display:inline-flex; color:#8F8676; cursor:pointer;"><i class="ph ph-x" aria-hidden="true" style="font-size:12px; line-height:1; display:block;"></i></span></span></sc-for><input value="{{ tagDraft }}" onChange="{{ setTagDraft }}" onKeyDown="{{ tagKey }}" placeholder="{{ tagPlaceholder }}" style="flex:1; min-width:140px; background:transparent; border:none; outline:none; color:#EFEAE0; font-family:inherit; font-size:14px; padding:4px;" /></div><div style="font-size:12px; color:#7C7565; margin-top:8px; line-height:1.5; max-width:720px;">Enter or comma adds a tag. Filter and report by them; removing a tag here does not delete it workspace-wide.</div></div>
+      </div>
+      <div class="hz-form-row" style="display:grid; grid-template-columns:220px minmax(0,1fr); gap:24px; padding:20px 0; border-bottom:1px solid #262219;">
+        <div class="hz-label" style="padding-top:12px;"><div style="font-size:14px; font-weight:600; color:#F6F2E9;">Billing currency</div></div>
+        <div style="min-width:0;"><div style="width:320px; max-width:100%;"><dc-import name="Dropdown" items="{{ currencyItems }}" value="{{ currency }}" on-select="{{ setCurrency }}" surface="#100F0C" fill="{{ true }}" hint-size="100%,44px" style="display:block;"></dc-import></div><div style="font-size:12px; color:#7C7565; margin-top:8px; line-height:1.5; max-width:720px;">Sets the currency for rates, fees and budgets on this project. Costs always use the workspace currency (EUR).</div></div>
+      </div>
+      <div class="hz-form-row" style="display:grid; grid-template-columns:220px minmax(0,1fr); gap:24px; padding:20px 0; border-bottom:1px solid #262219;">
+        <div class="hz-label" style="padding-top:12px;"><div style="font-size:14px; font-weight:600; color:#F6F2E9;">Notes</div><div style="font-size:12px; color:#7C7565; margin-top:4px;">Admins only</div></div>
+        <div style="min-width:0;"><textarea class="hf" rows="{{ 3 }}" placeholder="Invoice schedule, PO references, anything you’ll want when billing…" style="resize:vertical; min-height:88px; line-height:1.5;"></textarea></div>
+      </div>
+      <div class="hz-form-row" style="display:grid; grid-template-columns:220px minmax(0,1fr); gap:24px; padding:20px 0; ">
+        <div class="hz-label" style="padding-top:12px;"><div style="font-size:14px; font-weight:600; color:#F6F2E9;">Report visibility</div></div>
+        <div style="min-width:0;"><div style="display:flex; flex-direction:column; gap:8px;"><sc-for list="{{ visibilityItems }}" as="vi" hint-placeholder-count="2"><div onClick="{{ vi.pick }}" class="hz-opt" style="{{ vi.style }}"><span style="{{ vi.radio }}"></span><div style="min-width:0;"><div style="font-size:14px; color:#F6F2E9;">{{ vi.label }}</div><div style="font-size:12px; color:#8F8676; margin-top:2px;">{{ vi.hint }}</div></div></div></sc-for></div></div>
+      </div>
+
+      <!-- ===== PROJECT TYPE ===== -->
+      <div style="height:1px; background:#262219;"></div>
+      <div class="hz-form-row" style="display:grid; grid-template-columns:220px minmax(0,1fr); gap:24px; padding:24px 0 20px;">
+        <div class="hz-label" style="padding-top:12px;"><div style="font-size:14px; font-weight:600; color:#F6F2E9;">Project type</div><div style="font-size:12px; color:#7C7565; margin-top:4px;">How this project bills</div></div>
+        <div style="min-width:0;">
+          <div class="hz-types" style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px;">
+            <sc-for list="{{ typeItems }}" as="ty" hint-placeholder-count="3"><div onClick="{{ ty.pick }}" class="hz-type" style="{{ ty.style }}"><div style="display:flex; align-items:center; gap:10px;"><span style="{{ ty.icoWrap }}"><i class="{{ ty.icon }}" aria-hidden="true" style="font-size:18px; line-height:1; display:block;"></i></span><span style="font-size:14px; font-weight:600; color:#F6F2E9;">{{ ty.label }}</span></div><div style="font-size:12px; color:#8F8676; margin-top:8px; line-height:1.5;">{{ ty.hint }}</div></div></sc-for>
+          </div>
+
+          <!-- T&M panel -->
+          <sc-if value="{{ isTM }}" hint-placeholder-val="{{ true }}">
+          <div style="margin-top:12px; background:#1A1813; border:1px solid #322E26; border-radius:12px; padding:20px; display:flex; flex-direction:column; gap:20px;">
+            <div><div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#7C7565; margin-bottom:8px;">Billable rates</div><div style="display:flex; flex-direction:column; gap:8px;"><sc-for list="{{ rateItems }}" as="ri" hint-placeholder-count="3"><div onClick="{{ ri.pick }}" class="hz-opt" style="{{ ri.style }}"><span style="{{ ri.radio }}"></span><div style="flex:1; min-width:0;"><div style="font-size:14px; color:#F6F2E9;">{{ ri.label }}</div><div style="font-size:12px; color:#8F8676; margin-top:2px;">{{ ri.hint }}</div></div><sc-if value="{{ ri.hasInput }}" hint-placeholder-val="{{ false }}"><div style="display:flex; align-items:center; gap:8px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:14px; color:#8F8676;">{{ currencySymbol }}</span><input class="hf" value="{{ projectRate }}" onChange="{{ setProjectRate }}" placeholder="95.00" style="width:120px; font-family:'IBM Plex Mono',monospace; text-align:right;" /><span style="font-size:12px; color:#8F8676;">/ h</span></div></sc-if></div></sc-for></div></div>
+            <div style="height:1px; background:#262219;"></div>
+            <div><div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#7C7565; margin-bottom:8px;">Budget</div><div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;"><div style="width:320px; max-width:100%;"><dc-import name="Dropdown" items="{{ budgetItems }}" value="{{ budgetType }}" on-select="{{ setBudgetType }}" surface="#100F0C" fill="{{ true }}" hint-size="100%,44px" style="display:block;"></dc-import></div><sc-if value="{{ hasBudgetAmount }}" hint-placeholder-val="{{ true }}"><div style="display:flex; align-items:center; gap:8px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:14px; color:#8F8676;">{{ budgetPrefix }}</span><input class="hf" value="{{ budgetAmount }}" onChange="{{ setBudgetAmount }}" placeholder="{{ budgetPlaceholder }}" style="width:160px; font-family:'IBM Plex Mono',monospace; text-align:right;" /><span style="font-size:12px; color:#8F8676;">{{ budgetSuffix }}</span></div></sc-if></div>
+              <sc-if value="{{ hasBudgetAmount }}" hint-placeholder-val="{{ true }}"><div style="display:flex; flex-direction:column; gap:10px; margin-top:16px;"><label style="display:flex; align-items:center; gap:12px; font-size:14px; color:#EFEAE0; cursor:pointer;"><span onClick="{{ alertToggle }}" class="hz-opt" style="{{ alertBox }}">{{ alertMark }}</span> Email me and project managers when the budget passes <input class="hf" value="{{ alertAt }}" onChange="{{ setAlertAt }}" style="width:64px; padding:6px 8px; font-family:'IBM Plex Mono',monospace; text-align:right;" /><span style="color:#8F8676;">%</span></label><label style="display:flex; align-items:center; gap:12px; font-size:14px; color:#EFEAE0; cursor:pointer;"><span onClick="{{ resetsToggle }}" class="hz-opt" style="{{ resetsBox }}">{{ resetsMark }}</span> Budget resets every month</label><label style="display:flex; align-items:center; gap:12px; font-size:14px; color:#EFEAE0; cursor:pointer;"><span onClick="{{ nonbillToggle }}" class="hz-opt" style="{{ nonbillBox }}">{{ nonbillMark }}</span> Include non-billable time in the budget</label></div></sc-if>
+            </div>
+          </div>
+          </sc-if>
+
+          <!-- Fixed Fee panel -->
+          <sc-if value="{{ isFixed }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:12px; background:#1A1813; border:1px solid #322E26; border-radius:12px; padding:20px; display:flex; flex-direction:column; gap:20px;">
+            <div><div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#7C7565; margin-bottom:8px;">Project fee</div><div style="font-size:12px; color:#8F8676; margin:-4px 0 12px;">How you’ll invoice the fee.</div><dc-import name="SegmentedControl" options="{{ feeModes }}" value="{{ feeMode }}" on-change="{{ setFeeMode }}" size="md" hint-size="360px,44px"></dc-import>
+              <sc-if value="{{ feeIsSingle }}" hint-placeholder-val="{{ true }}"><div style="display:flex; align-items:center; gap:8px; margin-top:16px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:14px; color:#8F8676;">{{ currencySymbol }}</span><input class="hf" value="{{ feeAmount }}" onChange="{{ setFeeAmount }}" placeholder="12,000.00" style="width:200px; font-family:'IBM Plex Mono',monospace; text-align:right;" /><span style="font-size:12px; color:#8F8676;">invoiced once, on completion or a date you pick</span></div></sc-if>
+              <sc-if value="{{ feeIsMilestone }}" hint-placeholder-val="{{ false }}"><div style="margin-top:16px; background:#100F0C; border:1px solid #262219; border-radius:8px; overflow:hidden;"><sc-for list="{{ milestones }}" as="ms" hint-placeholder-count="2"><div style="display:grid; grid-template-columns:minmax(0,1fr) 160px 140px 40px; gap:12px; align-items:center; padding:10px 12px; border-bottom:1px solid #262219;"><input class="hf" value="{{ ms.name }}" onChange="{{ ms.setName }}" placeholder="Milestone" style="padding:8px 10px;" /><input class="hf" value="{{ ms.date }}" onChange="{{ ms.setDate }}" placeholder="Due" style="padding:8px 10px; font-family:'IBM Plex Mono',monospace;" /><input class="hf" value="{{ ms.amount }}" onChange="{{ ms.setAmount }}" placeholder="0.00" style="padding:8px 10px; font-family:'IBM Plex Mono',monospace; text-align:right;" /><span onClick="{{ ms.remove }}" class="hz-chip-x" style="display:inline-flex; justify-content:center; color:#6A6353; cursor:pointer;"><i class="ph ph-x" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span></div></sc-for><div style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px;"><a href="#" onClick="{{ addMilestone }}" style="display:inline-flex; align-items:center; gap:6px; font-size:14px; font-weight:600;"><i class="ph ph-plus" aria-hidden="true" style="font-size:14px; line-height:1; display:block;"></i>Add milestone</a><span style="font-size:12px; color:#8F8676;">Total <span style="font-family:'IBM Plex Mono',monospace; color:#EFEAE0;">{{ milestoneTotal }}</span></span></div></div></sc-if>
+              <sc-if value="{{ feeIsMonthly }}" hint-placeholder-val="{{ false }}"><div style="display:flex; align-items:center; gap:8px; margin-top:16px; flex-wrap:wrap;"><span style="font-family:'IBM Plex Mono',monospace; font-size:14px; color:#8F8676;">{{ currencySymbol }}</span><input class="hf" value="{{ feeAmount }}" onChange="{{ setFeeAmount }}" placeholder="2,500.00" style="width:200px; font-family:'IBM Plex Mono',monospace; text-align:right;" /><span style="font-size:12px; color:#8F8676;">per month, invoiced on the</span><div style="width:200px;"><dc-import name="Dropdown" items="{{ monthlyDayItems }}" value="{{ monthlyDay }}" on-select="{{ setMonthlyDay }}" surface="#100F0C" fill="{{ true }}" hint-size="100%,44px" style="display:block;"></dc-import></div></div></sc-if>
+            </div>
+            <div style="height:1px; background:#262219;"></div>
+            <div><div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#7C7565; margin-bottom:8px;">Budget</div><div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;"><div style="width:320px; max-width:100%;"><dc-import name="Dropdown" items="{{ fixedBudgetItems }}" value="{{ budgetType }}" on-select="{{ setBudgetType }}" surface="#100F0C" fill="{{ true }}" hint-size="100%,44px" style="display:block;"></dc-import></div><sc-if value="{{ hasBudgetAmount }}" hint-placeholder-val="{{ false }}"><div style="display:flex; align-items:center; gap:8px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:14px; color:#8F8676;">{{ budgetPrefix }}</span><input class="hf" value="{{ budgetAmount }}" onChange="{{ setBudgetAmount }}" placeholder="{{ budgetPlaceholder }}" style="width:160px; font-family:'IBM Plex Mono',monospace; text-align:right;" /><span style="font-size:12px; color:#8F8676;">{{ budgetSuffix }}</span></div></sc-if></div></div>
+          </div>
+          </sc-if>
+
+          <!-- Non-billable panel -->
+          <sc-if value="{{ isNonBill }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:12px; background:#1A1813; border:1px solid #322E26; border-radius:12px; padding:20px;">
+            <div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#7C7565; margin-bottom:8px;">Budget</div><div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;"><div style="width:320px; max-width:100%;"><dc-import name="Dropdown" items="{{ nonbillBudgetItems }}" value="{{ budgetType }}" on-select="{{ setBudgetType }}" surface="#100F0C" fill="{{ true }}" hint-size="100%,44px" style="display:block;"></dc-import></div><sc-if value="{{ hasBudgetAmount }}" hint-placeholder-val="{{ false }}"><div style="display:flex; align-items:center; gap:8px;"><input class="hf" value="{{ budgetAmount }}" onChange="{{ setBudgetAmount }}" placeholder="{{ budgetPlaceholder }}" style="width:160px; font-family:'IBM Plex Mono',monospace; text-align:right;" /><span style="font-size:12px; color:#8F8676;">{{ budgetSuffix }}</span></div></sc-if></div>
+            <div style="font-size:12px; color:#7C7565; margin-top:12px;">Internal work, R&amp;D, sales. Time shows in reports as non-billable and never reaches an invoice.</div>
+          </div>
+          </sc-if>
+        </div>
+      </div>
+
+      <!-- ===== TASKS ===== -->
+      <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; overflow:hidden; margin-top:8px;">
+        <div style="display:flex; align-items:baseline; gap:12px; padding:16px 20px; border-bottom:1px solid #322E26; flex-wrap:wrap;"><span style="font-family:'Newsreader',serif; font-size:20px; font-weight:600; color:#F6F2E9;">Tasks</span><span style="font-size:12px; color:#8F8676;">{{ taskCount }}</span><div style="flex:1;"></div><span style="font-size:12px; color:#6A6353;">Billable <a href="#" onClick="{{ billAll }}">all</a> · <a href="#" onClick="{{ billNone }}">none</a></span></div>
+        <div style="padding:10px 20px; background:rgba(79,183,154,.06); border-bottom:1px solid #262219; font-size:12px; color:#8F8676; display:flex; align-items:center; gap:8px;"><i class="ph ph-info" aria-hidden="true" style="font-size:14px; line-height:1; display:block; color:#4FB79A;"></i>Everyone on the project can track to every task. Open a task to limit who can.</div>
+        <sc-for list="{{ tasks }}" as="tk" hint-placeholder-count="5">
+        <div class="hz-task-row" style="display:flex; align-items:center; gap:16px; padding:12px 20px; border-bottom:1px solid #262219;">
+          <span onClick="{{ tk.toggleBill }}" class="hz-opt" title="Billable" style="{{ tk.box }}">{{ tk.mark }}</span>
+          <span style="flex:1; min-width:0; font-size:14px; color:#F6F2E9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ tk.name }}</span>
+          <span style="{{ tk.rateStyle }}">{{ tk.rate }}</span>
+          <a href="#" onClick="{{ noop }}" style="font-size:12px; font-weight:600; white-space:nowrap;">Everyone</a>
+          <span onClick="{{ tk.remove }}" class="hz-chip-x" title="Remove task" style="display:inline-flex; color:#6A6353; cursor:pointer;"><i class="ph ph-x" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span>
+        </div>
+        </sc-for>
+        <div style="display:flex; align-items:center; gap:12px; padding:12px 20px; flex-wrap:wrap;">
+          <div style="display:flex; align-items:center; gap:8px; flex:1 1 260px; min-width:0; height:40px; padding:0 12px; background:#100F0C; border:1px solid #3D382E; border-radius:8px;"><i class="ph ph-plus" aria-hidden="true" style="font-size:16px; line-height:1; display:block; color:#6A6353;"></i><input value="{{ taskDraft }}" onChange="{{ setTaskDraft }}" onKeyDown="{{ taskKey }}" placeholder="Add a task and press Enter" style="flex:1; min-width:0; background:transparent; border:none; outline:none; color:#EFEAE0; font-family:inherit; font-size:14px;" /></div>
+          <sc-for list="{{ suggestedTasks }}" as="st" hint-placeholder-count="3"><span onClick="{{ st.add }}" class="hz-opt" style="display:inline-flex; align-items:center; padding:6px 12px; background:#232019; border:1px solid #3D382E; border-radius:999px; font-size:12px; color:#A29C8D; cursor:pointer; white-space:nowrap;">{{ st.label }}</span></sc-for>
+        </div>
+      </div>
+
+      <!-- ===== TEAM ===== -->
+      <div style="background:#1A1813; border:1px solid #322E26; border-radius:16px; overflow:hidden; margin-top:16px;">
+        <div style="display:flex; align-items:baseline; gap:12px; padding:16px 20px; border-bottom:1px solid #322E26; flex-wrap:wrap;"><span style="font-family:'Newsreader',serif; font-size:20px; font-weight:600; color:#F6F2E9;">Team</span><span style="font-size:12px; color:#8F8676;">{{ teamCount }}</span><div style="flex:1;"></div><span style="font-size:12px; color:#6A6353;">Check = manages this project</span></div>
+        <sc-for list="{{ team }}" as="tm" hint-placeholder-count="2">
+        <div class="hz-team-row" style="display:flex; align-items:center; gap:16px; padding:12px 20px; border-bottom:1px solid #262219;">
+          <span onClick="{{ tm.toggleManager }}" class="hz-opt" title="Manages this project" style="{{ tm.box }}">{{ tm.mark }}</span>
+          <span style="width:30px; height:30px; flex:0 0 30px; border-radius:50%; background:{{ tm.color }}; display:inline-flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:14px; color:#EFEAE0;">{{ tm.initial }}</span>
+          <div style="flex:1; min-width:0;"><div style="font-size:14px; color:#F6F2E9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ tm.name }}</div><div style="font-size:12px; color:#8F8676;">{{ tm.role }}</div></div>
+          <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap; justify-content:flex-end;">
+            <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D; white-space:nowrap;">bill <span style="color:#EFEAE0;">{{ tm.bill }}</span></span>
+            <sc-if value="{{ tm.hasCost }}" hint-placeholder-val="{{ true }}"><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#A29C8D; white-space:nowrap;">cost <span style="color:#EFEAE0;">{{ tm.cost }}</span></span></sc-if>
+            <sc-if value="{{ tm.noCost }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px; color:#E0B45F; white-space:nowrap;">No cost rate · <a href="#" onClick="{{ tm.applyRate }}" style="font-weight:600;">apply €62.00</a></span></sc-if>
+          </div>
+          <span onClick="{{ tm.remove }}" class="hz-chip-x" title="Remove from project" style="display:inline-flex; color:#6A6353; cursor:pointer;"><i class="ph ph-x" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span>
+        </div>
+        </sc-for>
+        <div style="display:flex; align-items:center; gap:12px; padding:12px 20px; flex-wrap:wrap;">
+          <div style="flex:1 1 260px; min-width:0;"><dc-import name="Dropdown" items="{{ peopleItems }}" on-select="{{ addPerson }}" empty-label="Add a teammate…" searchable="{{ true }}" surface="#100F0C" fill="{{ true }}" hint-size="100%,44px" style="display:block;"></dc-import></div>
+          <span onClick="{{ addEveryone }}" class="hz-opt" style="display:inline-flex; align-items:center; gap:6px; height:44px; padding:0 12px; background:#232019; border:1px solid #3D382E; border-radius:8px; font-size:14px; color:#EFEAE0; cursor:pointer; white-space:nowrap;"><i class="ph ph-users-three" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i>Add everyone</span>
+        </div>
+      </div>
+
+      <!-- ===== INVOICE DEFAULTS ===== -->
+      <sc-if value="{{ billable }}" hint-placeholder-val="{{ true }}">
+      <div style="margin-top:32px;">
+        <div style="display:flex; align-items:baseline; gap:12px; padding-bottom:8px; border-bottom:1px solid #262219;"><span style="font-family:'Newsreader',serif; font-size:20px; font-weight:600; color:#F6F2E9;">Invoice defaults</span><span style="font-size:12px; color:#8F8676;">Pre-filled on every invoice for this project — editable per invoice</span></div>
+      <div class="hz-form-row" style="display:grid; grid-template-columns:220px minmax(0,1fr); gap:24px; padding:20px 0; border-bottom:1px solid #262219;">
+        <div class="hz-label" style="padding-top:12px;"><div style="font-size:14px; font-weight:600; color:#F6F2E9;">Payment terms</div></div>
+        <div style="min-width:0;"><div style="width:240px; max-width:100%;"><dc-import name="Dropdown" items="{{ termsItems }}" value="{{ terms }}" on-select="{{ setTerms }}" surface="#100F0C" fill="{{ true }}" hint-size="100%,44px" style="display:block;"></dc-import></div></div>
+      </div>
+      <div class="hz-form-row" style="display:grid; grid-template-columns:220px minmax(0,1fr); gap:24px; padding:20px 0; border-bottom:1px solid #262219;">
+        <div class="hz-label" style="padding-top:12px;"><div style="font-size:14px; font-weight:600; color:#F6F2E9;">PO number</div><div style="font-size:12px; color:#7C7565; margin-top:4px;">Optional</div></div>
+        <div style="min-width:0;"><input class="hf" placeholder="PO-2026-…" style="width:240px; font-family:'IBM Plex Mono',monospace;" /></div>
+      </div>
+      <div class="hz-form-row" style="display:grid; grid-template-columns:220px minmax(0,1fr); gap:24px; padding:20px 0; border-bottom:1px solid #262219;">
+        <div class="hz-label" style="padding-top:12px;"><div style="font-size:14px; font-weight:600; color:#F6F2E9;">Tax</div></div>
+        <div style="min-width:0;"><div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;"><div style="display:flex; align-items:center; gap:8px;"><input class="hf" value="{{ tax }}" onChange="{{ setTax }}" placeholder="21" style="width:96px; font-family:'IBM Plex Mono',monospace; text-align:right;" /><span style="font-size:14px; color:#8F8676;">%</span></div><sc-if value="{{ noTax2 }}" hint-placeholder-val="{{ true }}"><a href="#" onClick="{{ enableTax2 }}" style="font-size:14px; font-weight:600;">Add a second tax</a></sc-if><sc-if value="{{ hasTax2 }}" hint-placeholder-val="{{ false }}"><div style="display:flex; align-items:center; gap:8px;"><span style="font-size:14px; color:#6A6353;">+</span><input class="hf" placeholder="Second tax name" style="width:160px;" /><input class="hf" placeholder="0" style="width:96px; font-family:'IBM Plex Mono',monospace; text-align:right;" /><span style="font-size:14px; color:#8F8676;">%</span><span onClick="{{ disableTax2 }}" class="hz-chip-x" style="display:inline-flex; color:#6A6353; cursor:pointer;"><i class="ph ph-x" aria-hidden="true" style="font-size:16px; line-height:1; display:block;"></i></span></div></sc-if></div></div>
+      </div>
+      <div class="hz-form-row" style="display:grid; grid-template-columns:220px minmax(0,1fr); gap:24px; padding:20px 0; ">
+        <div class="hz-label" style="padding-top:12px;"><div style="font-size:14px; font-weight:600; color:#F6F2E9;">Discount</div><div style="font-size:12px; color:#7C7565; margin-top:4px;">Optional</div></div>
+        <div style="min-width:0;"><div style="display:flex; align-items:center; gap:8px;"><input class="hf" value="{{ discount }}" onChange="{{ setDiscount }}" placeholder="0" style="width:96px; font-family:'IBM Plex Mono',monospace; text-align:right;" /><span style="font-size:14px; color:#8F8676;">%</span></div></div>
+      </div>
+      </div>
+      </sc-if>
+    </div>
+    </div>
+
+    <!-- ===== STICKY ACTION BAR ===== -->
+    <div class="hz-pad" style="display:flex; align-items:center; gap:12px; padding:16px 40px; background:#161510; border-top:1px solid #262219; flex-wrap:wrap;">
+      <button onClick="{{ save }}" class="hb-primary" disabled="{{ cannotSave }}" style="{{ saveStyle }}">Save project</button>
+      <a href="05_Projects.dc.html" class="hb-secondary" style="display:inline-flex; align-items:center; height:44px; padding:0 20px; background:#232019; border:1px solid #3D382E; border-radius:8px; color:#EFEAE0; font-size:14px;">Cancel</a>
+      <div style="flex:1;"></div>
+      <span style="font-size:12px; color:#7C7565;">{{ saveHint }}</span>
+    </div>
+
+    <!-- NEW CLIENT SHEET -->
+    <sc-if value="{{ newClientOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeNewClient }}" style="position:fixed; inset:0; background:rgba(8,7,5,.68); display:flex; align-items:flex-start; justify-content:center; padding-top:64px; z-index:60;">
+      <div onClick="{{ stopProp }}" style="width:560px; max-width:92vw; background:#1A1813; border:1px solid #322E26; border-radius:16px; box-shadow:0 24px 60px -18px rgba(0,0,0,.8);">
+        <div style="padding:16px 24px; border-bottom:1px solid #322E26;"><span style="font-family:'Newsreader',serif; font-size:18px; font-weight:600; color:#F6F2E9;">New client</span></div>
+        <div style="padding:24px; display:flex; flex-direction:column; gap:16px;">
+          <div><div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#7C7565; margin-bottom:8px;">Client name</div><input class="hf" value="{{ newClientName }}" onChange="{{ setNewClientName }}" placeholder="Acme Studio" /></div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;"><div><div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#7C7565; margin-bottom:8px;">Currency</div><dc-import name="Dropdown" items="{{ currencyCodes }}" value="{{ newClientCurrency }}" on-select="{{ setNewClientCurrency }}" surface="#100F0C" fill="{{ true }}" hint-size="100%,44px" style="display:block;"></dc-import></div><div><div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#7C7565; margin-bottom:8px;">Default rate</div><input class="hf" placeholder="85.00" style="font-family:'IBM Plex Mono',monospace;" /></div></div>
+          <div style="display:flex; align-items:center; gap:12px; margin-top:4px;"><button class="hb-primary" onClick="{{ saveNewClient }}" style="padding:12px 20px; background:#4FB79A; color:#0D211B; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap;">Create and select</button><button class="hb-secondary" onClick="{{ closeNewClient }}" style="padding:12px 20px; background:#232019; color:#EFEAE0; border:1px solid #3D382E; border-radius:8px; font-family:inherit; font-size:14px; cursor:pointer; white-space:nowrap;">Cancel</button></div>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+    <dc-import name="Toast" open="{{ toast }}" message="{{ toastMsg }}" on-close="{{ hideToast }}" hint-size="0,0"></dc-import>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:1000}}">
+class Component extends DCLogic {
+  state = { type: 'tm', client: 'Solvind AB', name: 'Atlas Platform — phase 2', code: '4208', tags: ['Q3', 'platform'], tagDraft: '', currency: 'Same as client', visibility: 'managers', rateMode: 'person', projectRate: '', budgetType: 'Total project hours', budgetAmount: '', alert: true, resets: false, nonbill: false, feeMode: 'Single fee', feeAmount: '', monthlyDay: '1st of the month', milestones: [{ name: 'Discovery', date: '30 Sep 2026', amount: '4,000.00' }, { name: 'Beta', date: '15 Nov 2026', amount: '8,000.00' }],
+    tasks: [{ name: 'Programming', rate: '95.00', bill: true }, { name: 'Design', rate: '95.00', bill: true }, { name: 'Project Management', rate: '110.00', bill: true }, { name: 'Meetings', rate: '95.00', bill: true }, { name: 'QA', rate: '80.00', bill: true }], taskDraft: '',
+    team: [{ name: 'Mira Kovač', role: 'Admin · Designer', initial: 'M', color: '#1F5C4D', bill: '95.00', cost: '58.00', manager: true }, { name: 'Tomas Lindqvist', role: 'Manager · Engineer', initial: 'T', color: '#3A3323', bill: '95.00', cost: null, manager: false }],
+    terms: 'Net 30', tax: '21', discount: '', tax2: false };
+  renderVals() {
+    const s = this.state;
+    const set = (k) => (v) => this.setState({ [k]: v });
+    const inp = (k) => (e) => this.setState({ [k]: e.target.value });
+    const clients = { 'Meridian Health': 'CHF', 'Rún Collective': 'EUR', 'Tidewell / HarborDesk': 'EUR', 'Casa Vireo / Larkfield / Guild': 'EUR', 'Solvind AB': 'EUR', 'Northmoor': 'EUR' };
+    const clientCur = s.client ? clients[s.client] || 'EUR' : 'EUR';
+    const cur = s.currency === 'Same as client' ? clientCur : s.currency;
+    const sym = { EUR: '€', CHF: 'CHF', USD: '$', GBP: '£' }[cur] || '€';
+    const radio = (on) => 'width:16px; height:16px; flex:0 0 16px; border-radius:50%; border:1.5px solid ' + (on ? '#4FB79A' : '#5A5446') + ';' + (on ? ' background:#4FB79A; box-shadow:inset 0 0 0 4px #100F0C;' : '');
+    const optRow = (on) => 'display:flex; align-items:center; gap:12px; padding:12px; background:#100F0C; border:1px solid ' + (on ? '#4FB79A' : '#3D382E') + '; border-radius:8px; cursor:pointer;' + (on ? ' box-shadow:0 0 0 3px rgba(79,183,154,.14);' : '');
+    const box = (on) => 'width:18px; height:18px; border-radius:4px; border:1px solid ' + (on ? '#4FB79A' : '#5A5446') + '; background:' + (on ? '#4FB79A' : 'transparent') + '; color:#0D211B; font-size:12px; line-height:16px; text-align:center; cursor:pointer; display:inline-block;';
+    const isTM = s.type === 'tm', isFixed = s.type === 'fixed', isNonBill = s.type === 'nonbill';
+    const types = [
+      { key: 'tm', label: 'Time & Materials', hint: 'Bill by the hour with billable rates.', icon: 'ph ph-clock' },
+      { key: 'fixed', label: 'Fixed Fee', hint: 'Bill a set price, regardless of time tracked.', icon: 'ph ph-receipt' },
+      { key: 'nonbill', label: 'Non-billable', hint: 'Internal work, never invoiced.', icon: 'ph ph-prohibit' },
+    ];
+    const budgetItems = isTM ? ['No budget', 'Total project hours', 'Total project fees', 'Hours per task', 'Fees per task', 'Hours per person'] : isFixed ? ['No budget', 'Total project hours', 'Hours per task', 'Hours per person'] : ['No budget', 'Total project hours', 'Hours per task', 'Hours per person'];
+    const bt = budgetItems.includes(s.budgetType) ? s.budgetType : budgetItems[1];
+    const isFees = /fees/i.test(bt);
+    const canSave = !!s.client && s.name.trim().length > 0;
+    const msTotal = s.milestones.reduce((a, m) => a + (parseFloat(String(m.amount).replace(/,/g, '')) || 0), 0);
+    return {
+      devOptions: ['Blank', 'Filled in', 'Fixed fee'], devValue: s.dev ?? 'Filled in',
+      setDev: (v) => { if (v === 'Blank') this.setState({ dev: v, client: undefined, name: '', code: '', tags: [], type: 'tm', tasks: [], team: [] }); else if (v === 'Fixed fee') this.setState({ dev: v, client: 'Meridian Health', name: 'Patient portal audit', code: '4208', type: 'fixed', feeMode: 'Milestone payments', tasks: this.state.tasks.length ? this.state.tasks : [{ name: 'Audit', rate: '—', bill: true }], team: this.state.team.length ? this.state.team : [{ name: 'Mira Kovač', role: 'Admin · Designer', initial: 'M', color: '#1F5C4D', bill: '—', cost: '58.00', manager: true }] }); else this.setState({ dev: v, client: 'Solvind AB', name: 'Atlas Platform — phase 2', code: '4208', type: 'tm' }); },
+      savedAt: s.name ? 'draft saved 14:02' : 'not saved yet',
+      clientItems: [{ group: 'Active clients' }, ...Object.keys(clients).map(k => ({ value: k, label: k, meta: clients[k] })), { group: 'Archived' }, { value: 'Pelham & Roe', label: 'Pelham & Roe', meta: 'GBP', disabled: true }],
+      client: s.client, setClient: set('client'),
+      name: s.name, setName: inp('name'), code: s.code, setCode: inp('code'), suggestCode: (e) => { e.preventDefault(); this.setState({ code: '4208' }); },
+      startsOn: s.startsOn ?? '', endsOn: s.endsOn ?? '', startOpen: s.startOpen === true, endOpen: s.endOpen === true,
+      openStart: () => this.setState({ startOpen: true, endOpen: false }), openEnd: () => this.setState({ endOpen: true, startOpen: false }),
+      startIso: s.startIsoV ?? '2026-09-17', endIso: s.endIsoV ?? '2026-12-18',
+      pickStart: (d) => this.setState({ startOpen: false, startIsoV: d.toISOString(), startsOn: String(d.getDate()).padStart(2, '0') + ' ' + d.toLocaleDateString('en-GB', { month: 'short' }) + ' ' + d.getFullYear() }),
+      pickEnd: (d) => this.setState({ endOpen: false, endIsoV: d.toISOString(), endsOn: String(d.getDate()).padStart(2, '0') + ' ' + d.toLocaleDateString('en-GB', { month: 'short' }) + ' ' + d.getFullYear() }),
+      tags: s.tags.map((t, i) => ({ label: t, remove: (e) => { e.stopPropagation(); this.setState(x => ({ tags: x.tags.filter((_, j) => j !== i) })); } })),
+      tagDraft: s.tagDraft, setTagDraft: inp('tagDraft'), tagPlaceholder: s.tags.length ? '' : 'Add tags…', focusTags: () => {},
+      tagKey: (e) => { if ((e.key === 'Enter' || e.key === ',') && e.target.value.trim()) { e.preventDefault(); const v = e.target.value.replace(/,/g, '').trim(); this.setState(x => ({ tags: [...x.tags, v], tagDraft: '' })); } if (e.key === 'Backspace' && !e.target.value && s.tags.length) this.setState(x => ({ tags: x.tags.slice(0, -1) })); },
+      currencyItems: [{ value: 'Same as client', label: 'Same as client — ' + clientCur }, { sep: true }, 'EUR', 'CHF', 'USD', 'GBP'], currency: s.currency, setCurrency: set('currency'), currencySymbol: sym, currencyCodes: ['EUR', 'CHF', 'USD', 'GBP'],
+      visibilityItems: [{ key: 'managers', label: 'Admins and people who manage this project', hint: 'Budget, fees and rates stay private to managers.' }, { key: 'everyone', label: 'Everyone on this project', hint: 'Teammates see hours and budget progress, never rates.' }].map(v => ({ ...v, pick: () => this.setState({ visibility: v.key }), style: optRow(s.visibility === v.key), radio: radio(s.visibility === v.key) })),
+      typeItems: types.map(t => { const on = s.type === t.key; return { ...t, pick: () => this.setState({ type: t.key }), style: 'padding:16px; background:' + (on ? 'rgba(31,92,77,.18)' : '#1A1813') + '; border:1px solid ' + (on ? '#4FB79A' : '#322E26') + '; border-radius:12px; cursor:pointer;' + (on ? ' box-shadow:0 0 0 3px rgba(79,183,154,.14);' : ''), icoWrap: 'width:32px; height:32px; flex:0 0 32px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; ' + (on ? 'background:#1F5C4D; color:#EFEAE0;' : 'background:#232019; color:#8F8676;') }; }),
+      isTM, isFixed, isNonBill, billable: !isNonBill,
+      rateItems: [{ key: 'person', label: 'Person rates', hint: 'Each teammate’s billable rate from their profile.' }, { key: 'task', label: 'Task rates', hint: 'Set a rate per task below; overrides person rates.' }, { key: 'project', label: 'One project rate', hint: 'Everyone bills at the same hourly rate.', input: true }].map(r => ({ ...r, hasInput: !!r.input && s.rateMode === 'project', pick: () => this.setState({ rateMode: r.key }), style: optRow(s.rateMode === r.key), radio: radio(s.rateMode === r.key) })),
+      projectRate: s.projectRate, setProjectRate: inp('projectRate'),
+      budgetItems, fixedBudgetItems: budgetItems, nonbillBudgetItems: budgetItems, budgetType: bt, setBudgetType: set('budgetType'),
+      hasBudgetAmount: bt !== 'No budget' && !/per task|per person/i.test(bt), budgetPrefix: isFees ? sym : '', budgetAmount: s.budgetAmount, setBudgetAmount: inp('budgetAmount'), budgetPlaceholder: isFees ? '12,000.00' : '120', budgetSuffix: isFees ? 'total' : 'hours',
+      alertToggle: () => this.setState(x => ({ alert: !x.alert })), alertBox: box(s.alert), alertMark: s.alert ? '✓' : '', alertAt: s.alertAt ?? '80', setAlertAt: inp('alertAt'),
+      resetsToggle: () => this.setState(x => ({ resets: !x.resets })), resetsBox: box(s.resets), resetsMark: s.resets ? '✓' : '',
+      nonbillToggle: () => this.setState(x => ({ nonbill: !x.nonbill })), nonbillBox: box(s.nonbill), nonbillMark: s.nonbill ? '✓' : '',
+      feeModes: ['Single fee', 'Milestone payments', 'Monthly'], feeMode: s.feeMode, setFeeMode: set('feeMode'), feeIsSingle: s.feeMode === 'Single fee', feeIsMilestone: s.feeMode === 'Milestone payments', feeIsMonthly: s.feeMode === 'Monthly',
+      feeAmount: s.feeAmount, setFeeAmount: inp('feeAmount'), monthlyDayItems: ['1st of the month', '15th of the month', 'Last day of the month'], monthlyDay: s.monthlyDay, setMonthlyDay: set('monthlyDay'),
+      milestones: s.milestones.map((m, i) => ({ ...m, setName: (e) => this.setState(x => ({ milestones: x.milestones.map((y, j) => j === i ? { ...y, name: e.target.value } : y) })), setDate: (e) => this.setState(x => ({ milestones: x.milestones.map((y, j) => j === i ? { ...y, date: e.target.value } : y) })), setAmount: (e) => this.setState(x => ({ milestones: x.milestones.map((y, j) => j === i ? { ...y, amount: e.target.value } : y) })), remove: () => this.setState(x => ({ milestones: x.milestones.filter((_, j) => j !== i) })) })),
+      addMilestone: (e) => { e.preventDefault(); this.setState(x => ({ milestones: [...x.milestones, { name: '', date: '', amount: '' }] })); },
+      milestoneTotal: sym + (sym === 'CHF' ? ' ' : '') + msTotal.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      taskCount: s.tasks.length + (s.tasks.length === 1 ? ' task' : ' tasks'),
+      tasks: s.tasks.map((t, i) => ({ name: t.name, rate: isTM && s.rateMode === 'task' ? sym + t.rate + ' / h' : (isTM && s.rateMode === 'project' && s.projectRate ? sym + s.projectRate + ' / h' : (isTM ? 'person rate' : 'not billed')), rateStyle: "font-family:'IBM Plex Mono',monospace; font-size:12px; white-space:nowrap; color:" + (isTM && (s.rateMode === 'task' || (s.rateMode === 'project' && s.projectRate)) ? '#EFEAE0' : '#6A6353') + ';', toggleBill: () => this.setState(x => ({ tasks: x.tasks.map((y, j) => j === i ? { ...y, bill: !y.bill } : y) })), box: box(t.bill), mark: t.bill ? '✓' : '', remove: () => this.setState(x => ({ tasks: x.tasks.filter((_, j) => j !== i) })) })),
+      billAll: (e) => { e.preventDefault(); this.setState(x => ({ tasks: x.tasks.map(y => ({ ...y, bill: true })) })); }, billNone: (e) => { e.preventDefault(); this.setState(x => ({ tasks: x.tasks.map(y => ({ ...y, bill: false })) })); },
+      taskDraft: s.taskDraft, setTaskDraft: inp('taskDraft'), taskKey: (e) => { if (e.key === 'Enter' && e.target.value.trim()) { const v = e.target.value.trim(); this.setState(x => ({ tasks: [...x.tasks, { name: v, rate: '95.00', bill: !isNonBill }], taskDraft: '' })); } },
+      suggestedTasks: ['Business Development', 'DevOps', 'Marketing', 'Research', 'Support'].filter(n => !s.tasks.some(t => t.name === n)).slice(0, 4).map(n => ({ label: n, add: () => this.setState(x => ({ tasks: [...x.tasks, { name: n, rate: '95.00', bill: !isNonBill }] })) })),
+      teamCount: s.team.length + (s.team.length === 1 ? ' person' : ' people') + ' · ' + s.team.filter(t => t.manager).length + (s.team.filter(t => t.manager).length === 1 ? ' manager' : ' managers'),
+      team: s.team.map((p, i) => ({ ...p, bill: isNonBill ? '—' : (isTM && s.rateMode === 'person' ? sym + p.bill : '—'), hasCost: !!p.cost, noCost: !p.cost, cost: p.cost ? '€' + p.cost : '', applyRate: (e) => { e.preventDefault(); this.setState(x => ({ team: x.team.map((y, j) => j === i ? { ...y, cost: '62.00' } : y) })); }, toggleManager: () => this.setState(x => ({ team: x.team.map((y, j) => j === i ? { ...y, manager: !y.manager } : y) })), box: box(p.manager), mark: p.manager ? '✓' : '', remove: () => this.setState(x => ({ team: x.team.filter((_, j) => j !== i) })) })),
+      peopleItems: [{ group: 'Not on this project' }, ...['Ada Okafor', 'June Park', 'Théo Marchand', 'Lena Fischer', 'Omar Haddad', 'Priya Nair', 'Sam Whitfield'].filter(n => !s.team.some(t => t.name === n)).map(n => ({ value: n, label: n, meta: 'Member' }))],
+      addPerson: (n) => this.setState(x => ({ team: [...x.team, { name: n, role: 'Member · Engineer', initial: n[0], color: '#2A3A33', bill: '85.00', cost: null, manager: false }] })),
+      addEveryone: () => this.setState(x => ({ team: [...x.team, ...['Ada Okafor', 'June Park', 'Théo Marchand', 'Lena Fischer', 'Omar Haddad', 'Priya Nair', 'Sam Whitfield'].filter(n => !x.team.some(t => t.name === n)).map(n => ({ name: n, role: 'Member', initial: n[0], color: '#2A3A33', bill: '85.00', cost: '55.00', manager: false }))] })),
+      noop: (e) => e.preventDefault(),
+      termsItems: ['Due on receipt', 'Net 15', 'Net 30', 'Net 45', 'Net 60', 'Custom'], terms: s.terms, setTerms: set('terms'),
+      tax: s.tax, setTax: inp('tax'), discount: s.discount, setDiscount: inp('discount'),
+      noTax2: !s.tax2, hasTax2: s.tax2, enableTax2: (e) => { e.preventDefault(); this.setState({ tax2: true }); }, disableTax2: () => this.setState({ tax2: false }),
+      cannotSave: !canSave,
+      saveStyle: 'height:44px; padding:0 20px; background:#4FB79A; color:#0D211B; border:none; border-radius:8px; font-family:inherit; font-size:14px; font-weight:700; cursor:' + (canSave ? 'pointer' : 'not-allowed') + '; white-space:nowrap;' + (canSave ? '' : ' opacity:.45;'),
+      saveHint: canSave ? 'Creates the project and opens it. Teammates get access immediately.' : (!s.client ? 'Pick a client to continue' : 'Give the project a name to continue'),
+      save: () => { if (canSave) this.setState({ toast: true, toastMsg: 'Project created — opening…' }); setTimeout(() => { if (canSave) location.href = '11_Project Detail.dc.html'; }, 900); },
+      newClientOpen: s.newClientOpen === true, openNewClient: () => this.setState({ newClientOpen: true }), closeNewClient: () => this.setState({ newClientOpen: false }), stopProp: (e) => e.stopPropagation(),
+      newClientName: s.newClientName ?? '', setNewClientName: inp('newClientName'), newClientCurrency: s.newClientCurrency ?? 'EUR', setNewClientCurrency: set('newClientCurrency'),
+      saveNewClient: () => { const n = (s.newClientName || 'New client').trim(); this.setState({ newClientOpen: false, client: n, toast: true, toastMsg: n + ' created and selected' }); },
+      toast: s.toast === true, toastMsg: s.toastMsg ?? '', hideToast: () => this.setState({ toast: false }),
+    };
+  }
+}
+</script>
+</body>
+</html>
