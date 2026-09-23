@@ -817,8 +817,6 @@ h1, h2, h3, h4, h5, h6 {
   .app-shell.mobile-open:has(> .app-content > .np-page) { display: block; height: auto; min-height: 100dvh; overflow: visible; }
   .app-shell.mobile-open > .app-content:has(> .np-page) { height: 100dvh; }
 }
-.np-client-select { flex: 1 1 var(--width-form-select); }
-.np-currency-select { width: var(--width-form-select); max-width: 100%; }
 .np-code.form-input { width: var(--width-project-code); }
 .np-tags { min-height: var(--height-form-control); }
 .np-tags .chip { max-width: 100%; }

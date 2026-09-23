@@ -50,6 +50,13 @@ Use the isolated database and Nix commands above; no production deployment exist
 
 ## Completion evidence
 
+### Calendar focus and utility review (2026-09-23)
+
+- The release-browser focus failure was intermittent on ordinary replay. A deterministic regression runs the real calendar remount handler after native opening, then waits for the old day node to be detached. It fails against the previous release package because focus falls back to the document body.
+- The shared popover script now observes direct calendar mounts only while open, recovering that lost focus without stealing it from a deliberately focused control. Closing disconnects the observer. The updated browser passes both forced-order cases and the existing calendar keyboard sequence; full-suite completion is recorded separately rather than inferred from those focused assertions.
+- Framework review removed the client/currency wrapper rules that duplicated existing sizing utilities. No token or shared control default changed. Browser checks assert the handoff's 320px currency width and client flex basis, and the eight-screen/three-width computed-style comparison passes. An initial new test used 240px incorrectly; the handoff and existing token both specify 320px, so the test was corrected without changing the product width.
+- The combined server/WASM bundle builds, all 43 editor SSR tests pass, and Rust formatting/diff checks pass. The complete New Project suite, shared menu/layout/mobile regressions and style comparison pass. Running creation before bulk actions caused the latter's seeded two-project count to see three; this was a runner-order mistake, not a passing full run. The unmodified default suite order is being rerun against a fresh disposable database. Nix release/gate checks remain in progress. No query, migration, dependency, imported database or user preview changed.
+
 ### Invoice transition authority review (2026-09-23)
 
 - Adversarial review reproduced a revoked manager voiding a draft after waiting for the invoice lock, releasing its reserved fee balance. Status transitions now reuse the transactional actor check used by generation and draft editing, after the organization lock and before invoice mutation.

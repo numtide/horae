@@ -3,6 +3,7 @@
 (() => {
   const selector = '.menu-popover[popover]';
   const anchors = new WeakMap();
+  const calendarMounts = new WeakMap();
   const triggerFor = menu => document.getElementById(menu.dataset.popoverTrigger || `${menu.id}-trigger`);
   const isCalendar = menu => menu.dataset.calendar === 'true';
   const isSelect = menu => menu.dataset.select === 'true';
@@ -67,12 +68,24 @@
     triggerFor(menu).setAttribute('aria-expanded', String(event.newState === 'open'));
     if (event.newState !== 'open') {
       resize.unobserve(menu);
+      calendarMounts.get(menu)?.disconnect();
+      calendarMounts.delete(menu);
       if (isCalendar(menu) || isSelect(menu)) {
         for (const property of ['left', 'top', 'max-height', 'width']) menu.style.removeProperty(property);
       }
       return;
     }
     position(menu);
+    if (isCalendar(menu)) {
+      // A keyed calendar can mount after native opening has focused its old
+      // day. Recover only lost focus, never a deliberate move to another control.
+      const mount = new MutationObserver(() => {
+        if (menu.matches(':popover-open') && document.activeElement === document.body)
+          focusItem(menu, menu.querySelector('.dp-day.picked') || menu.querySelector('.dp-day'));
+      });
+      mount.observe(menu, { childList: true });
+      calendarMounts.set(menu, mount);
+    }
   }, true);
 
   document.addEventListener('toggle', event => {

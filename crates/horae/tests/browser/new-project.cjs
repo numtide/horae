@@ -217,6 +217,12 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
       }
     };
     await fieldWidth('np-terms', 240);
+    await fieldWidth('np-currency', 320);
+    const clientLayout = await screen.locator('#np-client').evaluate(field => {
+      const wrapper = getComputedStyle(field.parentElement);
+      return [wrapper.flexGrow, wrapper.flexShrink, wrapper.flexBasis, wrapper.minWidth];
+    });
+    assert.deepEqual(clientLayout, ['1', '1', '320px', '0px']);
     await fieldWidth('np-po-number', 240);
     await fieldWidth('np-tax', 96, true);
     await fieldWidth('np-discount', 96, true);
@@ -558,6 +564,27 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await startDate.focus();
     await startDate.press('Enter');
     await expect(startCalendar.getByRole('button', { name: '1 September 2026', exact: true })).toBeFocused();
+    // Native opening can focus the old calendar before Dioxus commits its keyed
+    // remount. Run that click handler after opening, suppressing only its native
+    // toggle, to exercise the same ordering without scheduler-dependent sleeps.
+    const replacedDay = await startCalendar.getByRole('button', { name: '1 September 2026', exact: true }).elementHandle();
+    await startDate.evaluate(trigger => {
+      trigger.addEventListener('click', event => event.preventDefault(), { once: true });
+      trigger.click();
+    });
+    await expect.poll(() => replacedDay.evaluate(day => day.isConnected)).toBe(false);
+    await replacedDay.dispose();
+    await expect(startCalendar.getByRole('button', { name: '1 September 2026', exact: true })).toBeFocused();
+    // A deliberate move back to the trigger must survive a later remount too.
+    await startDate.focus();
+    const unfocusedDay = await startCalendar.getByRole('button', { name: '1 September 2026', exact: true }).elementHandle();
+    await startDate.evaluate(trigger => {
+      trigger.addEventListener('click', event => event.preventDefault(), { once: true });
+      trigger.click();
+    });
+    await expect.poll(() => unfocusedDay.evaluate(day => day.isConnected)).toBe(false);
+    await unfocusedDay.dispose();
+    await expect(startDate).toBeFocused();
     await startCalendar.getByRole('button', { name: 'Next month' }).click();
     await page.keyboard.press('Escape');
     await expect(startCalendar).not.toBeVisible();

@@ -110,7 +110,7 @@ pub(super) fn Basics(
         FormRow { label: "Client", id: "np-client", hint: "Who this project is for",
             div { class: "flex flex-col gap-3",
                 div { class: "flex flex-wrap items-center gap-3",
-                    div { class: "np-client-select min-w-0",
+                    div { class: "flex-1 basis-form-select min-w-0",
                         SelectField { id: "np-client", label: "Client", options: client_choices,
                             error_id: error_id(ProjectFormField::Client),
                             selected: selected.map(|id| id.to_string()).unwrap_or_default(),
@@ -225,7 +225,7 @@ pub(super) fn Basics(
             if let Some(message) = tag_error() { p { id: "np-tags-error", class: "text-sm text-danger", role: "alert", "{message}" } }
         }
         FormRow { label: "Currency", id: "np-currency", hint: "For billing and project rates",
-            div { class: "np-currency-select",
+            div { class: "w-form-select max-w-full",
                 fieldset { class: "border-0 p-0 m-0", disabled: editing,
                 SelectField { id: "np-currency", error_id: error_id(ProjectFormField::Currency), label: "Currency", options: currency_options, selected: form.read().currency.clone().unwrap_or_default(), onselect: move |value: String| {
                     form.write().currency = (!value.is_empty()).then_some(value);
