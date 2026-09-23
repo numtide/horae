@@ -50,7 +50,7 @@ Existing-project editing is separate: it never autosaves operational settings. S
 
 Save requests serialize per page and carry the last acknowledged server revision. Edits during an in-flight save remain dirty and are coalesced into the next request. Acknowledging an older snapshot never marks newer input saved. Finalization prevents new autosave work and submits the latest snapshot after any pending save finishes. Server checks remain authoritative if clients bypass the UI.
 
-Two-tab conflict provides reload-latest without silently discarding local input. Navigation with unacknowledged changes offers wait/retry or explicit discard; acknowledged Cancel/back preserves the draft. No fake timestamps or unconditional success toast.
+Two-tab conflict provides reload-latest without silently discarding local input. Creation uses the shared editor navigation guard from the first dirty value through debounce, outstanding writes and uncertain responses. Same-document links and programmatic history changes are blocked until acknowledgement or recovery; rejected Back/Forward restores the original entry without unmounting the form or adding history entries. Reload and full-document exits use the browser's native confirmation, which can explicitly accept losing unacknowledged local input. Cancel/back serializes a final save before leaving; confirmed discard and successful creation explicitly release the guard. Acknowledged drafts remain resumable. No fake timestamps or unconditional success toast.
 
 ## Authorization matrix
 

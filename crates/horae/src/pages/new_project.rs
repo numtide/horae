@@ -251,11 +251,11 @@ fn ProjectEditor(
                                 }
                             })?;
                         intent.set(None);
-                        navigator.push(Route::ProjectDetail { id });
+                        leave_project_editor(navigator, Route::ProjectDetail { id }).await;
                     }
                     Some(Intent::Leave) => {
                         intent.set(None);
-                        navigator.push(Route::ProjectList {});
+                        leave_project_editor(navigator, Route::ProjectList {}).await;
                     }
                     Some(Intent::Discard) => {
                         if revision > 0 {
@@ -264,7 +264,7 @@ fn ProjectEditor(
                                 .map_err(|error| error.to_string())?;
                         }
                         intent.set(None);
-                        navigator.push(Route::ProjectList {});
+                        leave_project_editor(navigator, Route::ProjectList {}).await;
                     }
                     Some(Intent::Save) | None => {}
                 }
@@ -369,7 +369,7 @@ fn ProjectEditor(
 
     rsx! {
         div { class: "np-page flex flex-col h-full",
-            "data-project-edit-state": if !editing { "clean" } else if locked || unresolved_request { "pending" } else if dirty { "dirty" } else { "clean" },
+            "data-project-edit-state": if locked || unresolved_request || (!editing && (busy() || dirty)) { "pending" } else if dirty { "dirty" } else { "clean" },
             div { class: "np-scroll flex-1 min-h-0 overflow-y-auto",
                 div { class: "max-w-project-form px-project-form pt-6 pb-30",
                     button {

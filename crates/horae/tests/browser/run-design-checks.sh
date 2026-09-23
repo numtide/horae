@@ -9,7 +9,8 @@ unset HORAE_SENDMAIL_PATH HORAE_MAIL_FROM
 : "${HORAE_TEST_SERVER:?Set the absolute path to the built server}"
 : "${PLAYWRIGHT_MODULE:?Set the path to playwright/test}"
 browser_tests=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-test_dir=$(mktemp -d)
+# Keep the socket under the test-only prefix also when Nix sets TMPDIR=/build.
+test_dir=$(mktemp -d /tmp/horae-browser.XXXXXX)
 export PGDATA="$test_dir/postgres"
 export DATABASE_URL="postgres://postgres@localhost/horae?host=$test_dir"
 export HORAE_TEST_URL=http://127.0.0.1:8093
@@ -64,7 +65,7 @@ fi
 # Explicit filenames allow focused iteration without bypassing database isolation.
 suites=("$@")
 if [[ ${#suites[@]} == 0 ]]; then
-  suites=(projects-design responsive-layout menu-popovers mobile-navigation project-bulk-actions project-bulk-recovery action-errors new-project invoice-preparation project-task-rates new-project-permissions new-project-task-errors new-project-keyboard new-project-transport project-edit)
+  suites=(projects-design responsive-layout menu-popovers mobile-navigation project-bulk-actions project-bulk-recovery action-errors new-project invoice-preparation project-task-rates new-project-permissions new-project-task-errors new-project-keyboard new-project-transport project-edit new-project-navigation)
 fi
 for suite in "${suites[@]}"; do
   if [[ ! $suite =~ ^[a-z][a-z-]*$ || ! -f "$browser_tests/$suite.cjs" ]]; then
