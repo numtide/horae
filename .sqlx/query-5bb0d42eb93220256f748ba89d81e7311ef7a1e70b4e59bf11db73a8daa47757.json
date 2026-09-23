@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO project_member_costs (id,org_id,project_id,user_id,cost_rate_cents) VALUES ($1,$2,$3,$4,$5)\n                ON CONFLICT (project_id,user_id) DO UPDATE SET cost_rate_cents=EXCLUDED.cost_rate_cents",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5bb0d42eb93220256f748ba89d81e7311ef7a1e70b4e59bf11db73a8daa47757"
+}

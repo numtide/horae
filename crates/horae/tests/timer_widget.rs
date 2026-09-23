@@ -180,10 +180,7 @@ mod server_fns {
         }))
     }
 
-    pub async fn list_projects(
-        _: Option<String>,
-        _: bool,
-    ) -> Result<Vec<NamedRecord>, ServerFnError> {
+    pub async fn list_tracking_projects() -> Result<Vec<NamedRecord>, ServerFnError> {
         consume_context::<Sources>()
             .projects
             .read()
@@ -191,7 +188,7 @@ mod server_fns {
             .ok_or_else(|| ServerFnError::new("unavailable"))
     }
 
-    pub async fn list_tasks() -> Result<Vec<NamedRecord>, ServerFnError> {
+    pub async fn list_tracking_tasks() -> Result<Vec<NamedRecord>, ServerFnError> {
         consume_context::<Sources>()
             .tasks
             .read()

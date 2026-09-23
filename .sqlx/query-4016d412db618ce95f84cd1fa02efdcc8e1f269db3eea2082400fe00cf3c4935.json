@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE projects SET project_type = 'retainer', currency = 'JPY', rate_cents = 0,\n         code = 'OLD-01', budget_kind = 'hours', budget_minutes = 1830, active = false WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4016d412db618ce95f84cd1fa02efdcc8e1f269db3eea2082400fe00cf3c4935"
+}

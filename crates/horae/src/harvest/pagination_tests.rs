@@ -303,6 +303,15 @@ async fn harvest_pagination_empty_and_out_of_range_pages_keep_the_contract(pool:
 #[serial_test::serial]
 async fn harvest_pagination_router_preserves_session_and_tenant_guards(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
+    sqlx::query!(
+        "INSERT INTO assignments (id,project_id,user_id) VALUES ($1,$2,$3)",
+        Uuid::now_v7(),
+        ids.project_id,
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     let other = seed(&pool, OrgRole::Manager).await;
     let own_entry = time_entry(&pool, &ids, EntryState::Open).await;
     let other_entry = time_entry(&pool, &other, EntryState::Open).await;
@@ -354,5 +363,349 @@ async fn harvest_pagination_router_preserves_session_and_tenant_guards(pool: PgP
     assert_eq!(
         request(&app, "/harvest/v2/time_entries").await.0,
         StatusCode::UNAUTHORIZED
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn harvest_project_progress_permissions_cover_counts_pages_and_details(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Member).await;
+    let foreign = seed(&pool, OrgRole::Admin).await;
+    let own_entry = time_entry(&pool, &ids, EntryState::Open).await;
+    sqlx::query!(
+        "INSERT INTO assignments (id,project_id,user_id) VALUES ($1,$2,$3)",
+        Uuid::now_v7(),
+        ids.project_id,
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!("INSERT INTO project_settings (id,org_id,project_id,creator_id,rate_mode) VALUES ($1,$2,$3,$4,'project')", Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id).execute(&pool).await.unwrap();
+    sqlx::query!(
+        "UPDATE projects SET budget_kind = 'hours', budget_minutes = 600 WHERE id = $1",
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let unassigned = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO projects (id,org_id,client_id,name,currency) VALUES ($1,$2,$3,'Hidden','EUR')",
+        unassigned,
+        ids.org_id,
+        ids.client_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let app = signed_in(&pool, ids.user_id).await;
+    let detail = format!("/harvest/v2/projects/{}", ids.project_id);
+    for query in ["", "?per_page=1", "?page=2&per_page=1", "?is_active=true"] {
+        let body = page(&app, &format!("/harvest/v2/projects{query}")).await;
+        assert_eq!(body["total_entries"], 0, "hidden projects counted");
+        assert!(body["projects"].as_array().unwrap().is_empty());
+    }
+    assert_eq!(request(&app, &detail).await.0, StatusCode::NOT_FOUND);
+    // Project privacy never takes away the owner's timesheet identity.
+    assert_eq!(
+        page(&app, &format!("/harvest/v2/time_entries/{own_entry}")).await["project"]["id"],
+        ids.project_id.to_string()
+    );
+    for lead in [false, true] {
+        sqlx::query!(
+            "UPDATE assignments SET role = $2 WHERE project_id = $1 AND user_id = $3",
+            ids.project_id,
+            if lead {
+                horae_core::types::ProjectRole::Lead
+            } else {
+                horae_core::types::ProjectRole::Freelancer
+            } as horae_core::types::ProjectRole,
+            ids.user_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            "UPDATE project_settings SET report_visibility = $2 WHERE project_id = $1",
+            ids.project_id,
+            if lead { "managers" } else { "project_members" }
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        walk(&app, "projects", "is_active=true", &[ids.project_id]).await;
+        let body = page(&app, &detail).await;
+        assert_eq!(body["budget"], 10.0);
+        assert!(body.get("rate_cents").is_none());
+        assert!(body.get("admin_notes").is_none());
+        assert_eq!(
+            request(
+                &app,
+                &format!("/harvest/v2/projects/{}", foreign.project_id)
+            )
+            .await
+            .0,
+            StatusCode::NOT_FOUND
+        );
+    }
+    sqlx::query!(
+        "DELETE FROM assignments WHERE project_id = $1 AND user_id = $2",
+        ids.project_id,
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(request(&app, &detail).await.0, StatusCode::NOT_FOUND);
+    for role in [OrgRole::Manager, OrgRole::Admin] {
+        sqlx::query!(
+            "UPDATE users SET org_role = $2 WHERE id = $1",
+            ids.user_id,
+            role as OrgRole
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        walk(
+            &app,
+            "projects",
+            "is_active=true",
+            &[unassigned, ids.project_id],
+        )
+        .await;
+        assert_eq!(page(&app, &detail).await["budget"], 10.0);
+    }
+    sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        request(&app, "/harvest/v2/projects").await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(request(&app, &detail).await.0, StatusCode::UNAUTHORIZED);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn harvest_task_access_filters_counts_and_preserves_rate_free_history(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Member).await;
+    let other = seed(&pool, OrgRole::Admin).await;
+    let hidden = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO tasks (id,org_id,name,default_rate_cents) VALUES ($1,$2,'Hidden',8765)",
+        hidden,
+        ids.org_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE tasks SET default_rate_cents = 1234 WHERE id = $1",
+        ids.task_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let app = signed_in(&pool, ids.user_id).await;
+    assert_eq!(page(&app, "/harvest/v2/tasks").await["total_entries"], 0);
+    assert_eq!(
+        request(&app, &format!("/harvest/v2/tasks/{}", ids.task_id))
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
+    sqlx::query!(
+        "INSERT INTO assignments (id,project_id,user_id) VALUES ($1,$2,$3)",
+        Uuid::now_v7(),
+        ids.project_id,
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO project_tasks (project_id,task_id,billable) VALUES ($1,$2,true)",
+        ids.project_id,
+        ids.task_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    walk(&app, "tasks", "is_active=true", &[ids.task_id]).await;
+    for body in [
+        page(&app, &format!("/harvest/v2/tasks/{}", ids.task_id)).await,
+        page(&app, "/harvest/v2/tasks").await["tasks"][0].clone(),
+    ] {
+        assert!(
+            body.get("default_hourly_rate").is_none(),
+            "member received task rate: {body}"
+        );
+    }
+    time_entry(&pool, &ids, EntryState::Open).await;
+    sqlx::query!(
+        "DELETE FROM assignments WHERE project_id = $1 AND user_id = $2",
+        ids.project_id,
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!("UPDATE tasks SET active = false WHERE id = $1", ids.task_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        page(&app, "/harvest/v2/tasks?is_active=true").await["total_entries"],
+        0
+    );
+    walk(&app, "tasks", "is_active=false", &[ids.task_id]).await;
+    assert_eq!(
+        request(&app, &format!("/harvest/v2/tasks/{}", other.task_id))
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
+    for role in [OrgRole::Manager, OrgRole::Admin] {
+        sqlx::query!(
+            "UPDATE users SET org_role = $2 WHERE id = $1",
+            ids.user_id,
+            role as OrgRole
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        walk(&app, "tasks", "", &[ids.task_id, hidden]).await;
+        assert_eq!(
+            page(&app, &format!("/harvest/v2/tasks/{}", ids.task_id)).await["default_hourly_rate"],
+            12.34
+        );
+    }
+    sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        request(&app, "/harvest/v2/tasks").await.0,
+        StatusCode::UNAUTHORIZED
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn harvest_own_time_omits_private_project_budget_metadata(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Member).await;
+    let entry = time_entry(&pool, &ids, EntryState::Open).await;
+    sqlx::query!(
+        "INSERT INTO assignments (id,project_id,user_id) VALUES ($1,$2,$3)",
+        Uuid::now_v7(),
+        ids.project_id,
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!("INSERT INTO project_settings (id,org_id,project_id,creator_id,rate_mode) VALUES ($1,$2,$3,$4,'project')", Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id).execute(&pool).await.unwrap();
+    sqlx::query!(
+        "UPDATE projects SET budget_kind = 'hours', budget_minutes = 600 WHERE id = $1",
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let app = signed_in(&pool, ids.user_id).await;
+    let detail = format!("/harvest/v2/time_entries/{entry}");
+    for body in [
+        page(&app, &detail).await,
+        page(&app, "/harvest/v2/time_entries").await["time_entries"][0].clone(),
+    ] {
+        assert_eq!(body["hours"], 1.0);
+        for field in ["budgeted", "billable_rate", "cost_rate"] {
+            assert!(body.get(field).is_none(), "private field {field}: {body}");
+        }
+    }
+    sqlx::query!(
+        "UPDATE project_settings SET report_visibility = 'project_members' WHERE project_id = $1",
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(page(&app, &detail).await["budgeted"], true);
+    sqlx::query!(
+        "DELETE FROM assignments WHERE project_id = $1 AND user_id = $2",
+        ids.project_id,
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(page(&app, &detail).await.get("budgeted").is_none());
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn harvest_project_cost_overrides_require_admin_without_fabricated_fallback(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    let entry = time_entry(&pool, &ids, EntryState::Open).await;
+    sqlx::query!(
+        "INSERT INTO assignments (id,project_id,user_id) VALUES ($1,$2,$3)",
+        Uuid::now_v7(),
+        ids.project_id,
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE users SET cost_rate_cents = 1000 WHERE id = $1",
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!("INSERT INTO project_member_costs (id,org_id,project_id,user_id,cost_rate_cents) VALUES ($1,$2,$3,$4,1500)", Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id).execute(&pool).await.unwrap();
+    let app = signed_in(&pool, ids.user_id).await;
+    let detail = format!("/harvest/v2/time_entries/{entry}");
+    for body in [
+        page(&app, &detail).await,
+        page(&app, "/harvest/v2/time_entries").await["time_entries"][0].clone(),
+    ] {
+        assert!(
+            body.get("cost_rate").is_none(),
+            "manager received confidential cost: {body}"
+        );
+    }
+    sqlx::query!(
+        "UPDATE users SET org_role = 'admin' WHERE id = $1",
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(page(&app, &detail).await["cost_rate"], 15.0);
+    assert_eq!(
+        page(&app, "/harvest/v2/time_entries").await["time_entries"][0]["cost_rate"],
+        15.0
+    );
+    sqlx::query!(
+        "DELETE FROM project_member_costs WHERE project_id = $1",
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE users SET org_role = 'manager' WHERE id = $1",
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        page(&app, &detail).await["cost_rate"],
+        10.0,
+        "legacy profile costs stay unchanged"
     );
 }

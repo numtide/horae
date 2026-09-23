@@ -1,0 +1,118 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT client_id, name, code, currency, active, rate_cents, edit_revision,\n           project_type as \"project_type: ProjectType\", budget_kind as \"budget_kind: BudgetKind\",\n           budget_minutes, budget_amount_cents,\n           starts_on as \"starts_on: chrono::NaiveDate\", ends_on as \"ends_on: chrono::NaiveDate\"\n           FROM projects WHERE id = $1 AND org_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "client_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "currency",
+        "type_info": "Bpchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "rate_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "edit_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "project_type: ProjectType",
+        "type_info": {
+          "Custom": {
+            "name": "project_type",
+            "kind": {
+              "Enum": [
+                "time_and_materials",
+                "fixed_fee",
+                "non_billable",
+                "retainer"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "budget_kind: BudgetKind",
+        "type_info": {
+          "Custom": {
+            "name": "budget_kind",
+            "kind": {
+              "Enum": [
+                "none",
+                "amount",
+                "hours"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "budget_minutes",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "budget_amount_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "starts_on: chrono::NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 12,
+        "name": "ends_on: chrono::NaiveDate",
+        "type_info": "Date"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "958c071e9353469cdf8c844639d82e5eeb38122427f01d180987f5b9b16cf5a5"
+}

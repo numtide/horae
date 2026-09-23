@@ -88,22 +88,18 @@ pub(super) async fn entries(
                    AND ($3::uuid IS NULL OR p.client_id = $3)
                    AND ($4::uuid IS NULL OR te.project_id = $4)
                    AND ($5::uuid IS NULL OR te.user_id = $5)
+                   AND ($8::uuid IS NULL OR EXISTS (
+                     SELECT 1 FROM project_tag_links l
+                     WHERE l.org_id = te.org_id AND l.project_id = te.project_id AND l.tag_id = $8
+                   ))
                  LIMIT $7) bounded"#,
         from as chrono::NaiveDate, to as chrono::NaiveDate,
-        params.client_id, params.project_id, params.user_id, org_id, XLSX.rows + 1,
+        params.client_id, params.project_id, params.user_id, org_id, XLSX.rows + 1, params.tag_id,
     ).fetch_one(&mut *tx).await.map_err(database_error)?;
     check(size.rows, size.bytes, size.field_bytes, XLSX)?;
-    let rows = super::fetch_entries(
-        &mut *tx,
-        org_id,
-        from,
-        to,
-        params.client_id,
-        params.project_id,
-        params.user_id,
-    )
-    .await
-    .map_err(database_error)?;
+    let rows = super::fetch_entries(&mut *tx, org_id, (from, to), params.filters())
+        .await
+        .map_err(database_error)?;
     tx.commit().await.map_err(database_error)?;
     Ok(rows)
 }
@@ -111,6 +107,7 @@ pub(super) async fn entries(
 pub(super) async fn projects(
     pool: &PgPool,
     org_id: Uuid,
+    viewer_id: Uuid,
     scope: &str,
 ) -> Result<Vec<ProjectExportRow>, StatusCode> {
     let mut tx = begin(pool).await?;
@@ -122,19 +119,21 @@ pub(super) async fn projects(
                     octet_length(name), octet_length(currency))), 0) as "field_bytes!"
            FROM (SELECT c.name client_name, p.code, p.name, p.currency
                  FROM projects p JOIN clients c ON c.id = p.client_id
-                 WHERE p.org_id = $1 AND CASE $2
+                 JOIN project_read_access access ON access.project_id = p.id AND access.org_id = p.org_id
+                 WHERE p.org_id = $1 AND access.user_id = $4 AND access.can_view_progress AND CASE $2
                    WHEN 'budgeted' THEN p.active AND p.budget_kind <> 'none'
                    WHEN 'archived' THEN NOT p.active ELSE p.active END
                  LIMIT $3) bounded"#,
         org_id,
         scope,
         XLSX.rows + 1,
+        viewer_id,
     )
     .fetch_one(&mut *tx)
     .await
     .map_err(database_error)?;
     check(size.rows, size.bytes, size.field_bytes, XLSX)?;
-    let rows = super::fetch_projects_export(&mut *tx, org_id, scope)
+    let rows = super::fetch_projects_export(&mut *tx, org_id, viewer_id, scope)
         .await
         .map_err(database_error)?;
     tx.commit().await.map_err(database_error)?;
@@ -148,8 +147,10 @@ async fn read_invoice(
     limits: Limits,
 ) -> Result<(Invoice, Vec<InvoiceLine>), StatusCode> {
     let size = sqlx::query!(
-        r#"SELECT (octet_length(number)::bigint + octet_length(currency) + COALESCE(octet_length(notes), 0)) as "bytes!",
-                  GREATEST(octet_length(number), octet_length(currency), COALESCE(octet_length(notes), 0)) as "field_bytes!"
+        r#"SELECT (octet_length(number)::bigint + octet_length(currency) + COALESCE(octet_length(notes), 0)
+                    + octet_length(po_number) + COALESCE(octet_length(tax2_name), 0)) as "bytes!",
+                  GREATEST(octet_length(number), octet_length(currency), COALESCE(octet_length(notes), 0),
+                    octet_length(po_number), COALESCE(octet_length(tax2_name), 0)) as "field_bytes!"
            FROM invoices WHERE id = $1 AND org_id = $2"#,
         invoice_id, org_id,
     ).fetch_optional(&mut *connection).await.map_err(database_error)?.ok_or(StatusCode::NOT_FOUND)?;
@@ -266,6 +267,103 @@ mod tests {
         );
     }
 
+    fn assert_text_cell(workbook: &[u8], cell: &str, expected: &str) {
+        let sheet = xlsx_part(workbook, "xl/worksheets/sheet1.xml");
+        let (_, after) = sheet.split_once(&format!("r=\"{cell}\"")).unwrap();
+        let (element, _) = after.split_once("</c>").unwrap();
+        assert!(element.contains("t=\"s\""), "{cell}: {element}");
+        let index: usize = element
+            .split_once("<v>")
+            .unwrap()
+            .1
+            .split_once("</v>")
+            .unwrap()
+            .0
+            .parse()
+            .unwrap();
+        let strings = xlsx_part(workbook, "xl/sharedStrings.xml");
+        let value = strings
+            .split("<si>")
+            .nth(index + 1)
+            .unwrap()
+            .split_once("</si>")
+            .unwrap()
+            .0;
+        assert_eq!(value, format!("<t>{expected}</t>"), "{cell}");
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    #[serial_test::serial]
+    async fn invoice_exports_show_saved_adjustments_and_exact_large_amounts(pool: PgPool) {
+        let ids = seed(&pool, OrgRole::Manager).await;
+        let (id, _) = add_invoice(&pool, &ids, 1).await;
+        let mut document = pdf(&pool, ids.org_id, id).await.unwrap();
+        let inv = &mut document.invoice;
+        inv.subtotal_cents = 10001;
+        inv.discount_bps = 1250;
+        inv.discount_cents = 1250;
+        inv.tax1_bps = 2100;
+        inv.tax1_cents = 1838;
+        inv.tax2_name = Some("Local <tax>".into());
+        inv.tax2_bps = Some(150);
+        inv.tax2_cents = 131;
+        inv.total_cents = 10720;
+        inv.terms_days = 21;
+        inv.due_on = inv.issued_on + chrono::Duration::days(21);
+        inv.po_number = "PO <123>".into();
+        document.lines[0].amount_cents = 10001;
+        document.lines[0].rate_cents = Some(10001);
+        let workbook = super::super::invoice_xlsx(inv, &document.lines).unwrap();
+        let xml = xlsx_part(&workbook, "xl/worksheets/sheet1.xml");
+        for (row, label, amount) in [
+            (3, "Subtotal", "100.01"),
+            (4, "Discount (12.50%)", "-12.5"),
+            (5, "Tax (21.00%)", "18.38"),
+            (6, "Local &lt;tax&gt; (1.50%)", "1.31"),
+            (7, "Total", "107.2"),
+        ] {
+            assert_text_cell(&workbook, &format!("A{row}"), label);
+            assert_cell(&xml, &format!("D{row}"), amount);
+            assert_text_cell(&workbook, &format!("E{row}"), "EUR");
+            assert_text_cell(&workbook, &format!("G{row}"), "2026-09-28");
+            assert_text_cell(&workbook, &format!("H{row}"), "21");
+            assert_text_cell(&workbook, &format!("I{row}"), "PO &lt;123&gt;");
+        }
+        let text = crate::render::invoice_text(inv, &document.lines, &document.branding);
+        for expected in [
+            "Subtotal",
+            "EUR 100.01",
+            "Discount (12.50%)",
+            "−EUR 12.50",
+            "Tax (21.00%)",
+            "EUR 18.38",
+            "Local <tax> (1.50%)",
+            "EUR 1.31",
+            "EUR 107.20",
+            "Payment terms: 21 days",
+            "Purchase order: PO <123>",
+        ] {
+            assert!(text.contains(expected), "missing {expected}: {text}");
+        }
+        inv.subtotal_cents = i64::MAX;
+        inv.total_cents = i64::MAX;
+        inv.discount_bps = 0;
+        inv.discount_cents = 0;
+        inv.tax1_bps = 0;
+        inv.tax1_cents = 0;
+        inv.tax2_name = None;
+        inv.tax2_bps = None;
+        inv.tax2_cents = 0;
+        document.lines[0].amount_cents = i64::MAX;
+        document.lines[0].rate_cents = Some(i64::MAX);
+        let workbook = super::super::invoice_xlsx(inv, &document.lines).unwrap();
+        for cell in ["C2", "D2", "D3", "D4"] {
+            assert_text_cell(&workbook, cell, "92233720368547758.07");
+        }
+        let text = crate::render::invoice_text(inv, &document.lines, &document.branding);
+        assert!(text.contains("92233720368547758.07"), "{text}");
+    }
+
     fn params() -> ExportParams {
         ExportParams {
             from: "2026-09-07".to_owned(),
@@ -273,6 +371,7 @@ mod tests {
             client_id: None,
             project_id: None,
             user_id: None,
+            tag_id: None,
         }
     }
 
@@ -304,6 +403,73 @@ mod tests {
 
     #[sqlx::test(migrations = "./migrations")]
     #[serial_test::serial]
+    async fn tag_filter_applies_before_xlsx_size_checks_and_rendering(pool: PgPool) {
+        let ids = seed(&pool, OrgRole::Manager).await;
+        let other = SeedIds {
+            project_id: Uuid::now_v7(),
+            org_id: ids.org_id,
+            user_id: ids.user_id,
+            client_id: ids.client_id,
+            task_id: ids.task_id,
+        };
+        sqlx::query!("INSERT INTO projects (id,org_id,client_id,name,currency) VALUES ($1,$2,$3,'Untagged','EUR')", other.project_id, other.org_id, other.client_id).execute(&pool).await.unwrap();
+        add_entries(&pool, &ids, 1).await;
+        let excluded = add_entries(&pool, &other, 1).await[0];
+        sqlx::query!(
+            "UPDATE time_entries SET notes = repeat('x', 40000) WHERE id = $1",
+            excluded
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let tag = Uuid::now_v7();
+        sqlx::query!(
+            "INSERT INTO project_tags (id,org_id,name) VALUES ($1,$2,'Launch')",
+            tag,
+            ids.org_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            "INSERT INTO project_tag_links (id,org_id,project_id,tag_id) VALUES ($1,$2,$3,$4)",
+            Uuid::now_v7(),
+            ids.org_id,
+            ids.project_id,
+            tag
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        assert!(matches!(
+            entries(&pool, ids.org_id, &params()).await,
+            Err(StatusCode::PAYLOAD_TOO_LARGE)
+        ));
+        let rows = entries(
+            &pool,
+            ids.org_id,
+            &ExportParams {
+                tag_id: Some(tag),
+                ..params()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].project_name, "Widget");
+        let bytes = super::super::entries_xlsx(&rows).unwrap();
+        assert_eq!(
+            xlsx_part(&bytes, "xl/worksheets/sheet1.xml")
+                .matches("<row ")
+                .count(),
+            2
+        );
+        let strings = xlsx_part(&bytes, "xl/sharedStrings.xml");
+        assert!(strings.contains("Widget") && !strings.contains("Untagged"));
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    #[serial_test::serial]
     async fn bounded_entries_enforce_the_row_limit_after_all_filters(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Manager).await;
         let other = seed(&pool, OrgRole::Manager).await;
@@ -329,6 +495,10 @@ mod tests {
             },
             ExportParams {
                 user_id: Some(other.user_id),
+                ..params()
+            },
+            ExportParams {
+                tag_id: Some(Uuid::now_v7()),
                 ..params()
             },
             ExportParams {
@@ -399,18 +569,20 @@ mod tests {
         let keys: Vec<_> = (0..=XLSX.rows).map(|_| Uuid::now_v7()).collect();
         sqlx::query!("INSERT INTO projects (id, org_id, client_id, name, currency, active) SELECT id, $2, $3, 'Archived', 'EUR', false FROM unnest($1::uuid[]) id", &keys, ids.org_id, ids.client_id).execute(&pool).await.unwrap();
         for scope in ["active", "unknown"] {
-            let rows = projects(&pool, ids.org_id, scope).await.unwrap();
+            let rows = projects(&pool, ids.org_id, ids.user_id, scope)
+                .await
+                .unwrap();
             assert_eq!(rows.len(), 1);
             assert_eq!(rows[0].name, "Widget");
         }
         assert!(
-            projects(&pool, ids.org_id, "budgeted")
+            projects(&pool, ids.org_id, ids.user_id, "budgeted")
                 .await
                 .unwrap()
                 .is_empty()
         );
         assert!(matches!(
-            projects(&pool, ids.org_id, "archived").await,
+            projects(&pool, ids.org_id, ids.user_id, "archived").await,
             Err(StatusCode::PAYLOAD_TOO_LARGE)
         ));
         sqlx::query!(
@@ -421,7 +593,10 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(
-            projects(&pool, ids.org_id, "budgeted").await.unwrap().len(),
+            projects(&pool, ids.org_id, ids.user_id, "budgeted")
+                .await
+                .unwrap()
+                .len(),
             1
         );
         sqlx::query!(
@@ -432,7 +607,7 @@ mod tests {
         .await
         .unwrap();
         assert!(matches!(
-            projects(&pool, ids.org_id, "active").await,
+            projects(&pool, ids.org_id, ids.user_id, "active").await,
             Err(StatusCode::PAYLOAD_TOO_LARGE)
         ));
     }
@@ -531,6 +706,47 @@ mod tests {
 
     #[sqlx::test(migrations = "./migrations")]
     #[serial_test::serial]
+    async fn fee_exports_preserve_absent_quantities_and_render_a_real_pdf(pool: PgPool) {
+        let ids = seed(&pool, OrgRole::Manager).await;
+        let (id, _) = add_invoice(&pool, &ids, 0).await;
+        let fee_id = uuid::Uuid::now_v7();
+        sqlx::query!("UPDATE invoices SET total_cents = 12500 WHERE id = $1", id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query!("INSERT INTO project_fee_occurrences (id,org_id,project_id,period_key,due_on,description,amount_cents,currency) VALUES ($1,$2,$3,'single','2026-09-01','Fixed fee',12500,'EUR')", fee_id, ids.org_id, ids.project_id).execute(&pool).await.unwrap();
+        sqlx::query!("INSERT INTO invoice_line_items (id,invoice_id,fee_occurrence_id,description,amount_cents) VALUES ($1,$2,$3,'Fixed fee',12500)", uuid::Uuid::now_v7(), id, fee_id).execute(&pool).await.unwrap();
+        let (invoice, lines) = invoice(&pool, ids.org_id, id).await.unwrap();
+        let workbook = super::super::invoice_xlsx(&invoice, &lines).unwrap();
+        let xml = xlsx_part(&workbook, "xl/worksheets/sheet1.xml");
+        assert!(!xml.contains("r=\"B2\""));
+        assert!(!xml.contains("r=\"C2\""));
+        assert_cell(&xml, "D2", "125");
+        assert_cell(&xml, "D3", "125");
+        assert_cell(&xml, "D4", "125");
+        let document = pdf(&pool, ids.org_id, id).await.unwrap();
+        tokio::task::spawn_blocking(move || {
+            let render = || {
+                crate::render::render_invoice_pdf(
+                    &document.invoice,
+                    &document.lines,
+                    &document.client_name,
+                    document.client_address.as_deref(),
+                    document.client_tax_id.as_deref(),
+                    &document.branding,
+                )
+                .unwrap()
+            };
+            let first = render();
+            assert!(first.starts_with(b"%PDF-"));
+            assert_eq!(first, render());
+        })
+        .await
+        .unwrap();
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    #[serial_test::serial]
     async fn bounded_exports_preserve_real_workbooks_and_deterministic_pdf(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Manager).await;
         let (id, _) = add_invoice(&pool, &ids, 1).await;
@@ -547,7 +763,9 @@ mod tests {
         assert_cell(&xml, "E2", "1");
         assert_cell(&xml, "F2", "0");
         assert!(xlsx_part(&sheet, "xl/sharedStrings.xml").contains("Café &lt;&amp;&gt;"));
-        let rows = projects(&pool, ids.org_id, "active").await.unwrap();
+        let rows = projects(&pool, ids.org_id, ids.user_id, "active")
+            .await
+            .unwrap();
         let sheet = super::super::projects_xlsx(&rows).unwrap();
         assert!(xlsx_part(&sheet, "xl/sharedStrings.xml").contains("Widget"));
         let (invoice, lines) = invoice(&pool, ids.org_id, id).await.unwrap();
@@ -556,6 +774,7 @@ mod tests {
         assert_cell(&xml, "C2", "12.34");
         assert_cell(&xml, "D2", "12.34");
         assert_cell(&xml, "D3", "12.34");
+        assert_cell(&xml, "D4", "12.34");
         let document = pdf(&pool, ids.org_id, id).await.unwrap();
         tokio::task::spawn_blocking(move || {
             let render = || {

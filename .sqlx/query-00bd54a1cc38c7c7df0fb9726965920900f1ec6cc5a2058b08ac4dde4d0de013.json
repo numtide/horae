@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE horae_outbox SET delivered_at = now(), last_error = NULL, claim_token = NULL\n            WHERE id = $1 AND org_id = $2 AND claim_token = $3\n              AND delivered_at IS NULL AND failed_at IS NULL AND available_at > now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "00bd54a1cc38c7c7df0fb9726965920900f1ec6cc5a2058b08ac4dde4d0de013"
+}

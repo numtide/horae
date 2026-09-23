@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Browser fixtures must never inherit a developer's real outbound mail transport.
+unset HORAE_SENDMAIL_PATH HORAE_MAIL_FROM
+
 # CI supplies a built server with its public/ directory beside it. Everything
 # else is created here: this runner never connects to an existing database.
 : "${HORAE_TEST_SERVER:?Set the absolute path to the built server}"
 : "${PLAYWRIGHT_MODULE:?Set the path to playwright/test}"
 browser_tests=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-test_dir=$(mktemp -d)
+# Keep the socket under the test-only prefix also when Nix sets TMPDIR=/build.
+test_dir=$(mktemp -d /tmp/horae-browser.XXXXXX)
 export PGDATA="$test_dir/postgres"
 export DATABASE_URL="postgres://postgres@localhost/horae?host=$test_dir"
 export HORAE_TEST_URL=http://127.0.0.1:8093
@@ -51,10 +55,22 @@ done
 kill -0 "$app_pid"
 curl -fsS "$HORAE_TEST_URL/health" >/dev/null
 
+if [[ -n ${HORAE_STYLE_RECORD:-} ]]; then
+  node "$browser_tests/shared-style-audit.cjs" record "$HORAE_STYLE_RECORD"
+fi
 if [[ -n ${HORAE_STYLE_BASELINE:-} ]]; then
   node "$browser_tests/shared-style-audit.cjs" compare "$HORAE_STYLE_BASELINE"
 fi
 
-for suite in projects-design responsive-layout menu-popovers mobile-navigation project-bulk-actions project-bulk-recovery; do
+# Explicit filenames allow focused iteration without bypassing database isolation.
+suites=("$@")
+if [[ ${#suites[@]} == 0 ]]; then
+  suites=(projects-design responsive-layout menu-popovers mobile-navigation project-bulk-actions project-bulk-recovery action-errors new-project invoice-preparation project-task-rates new-project-permissions new-project-task-errors new-project-keyboard new-project-transport project-edit new-project-navigation)
+fi
+for suite in "${suites[@]}"; do
+  if [[ ! $suite =~ ^[a-z][a-z-]*$ || ! -f "$browser_tests/$suite.cjs" ]]; then
+    echo "Unknown browser suite: $suite" >&2
+    exit 1
+  fi
   node "$browser_tests/$suite.cjs"
 done

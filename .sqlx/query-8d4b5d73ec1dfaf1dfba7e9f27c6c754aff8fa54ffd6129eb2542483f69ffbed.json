@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT can_view_progress, can_view_rates FROM project_read_access WHERE user_id = $1 AND project_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "can_view_progress",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "can_view_rates",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "8d4b5d73ec1dfaf1dfba7e9f27c6c754aff8fa54ffd6129eb2542483f69ffbed"
+}

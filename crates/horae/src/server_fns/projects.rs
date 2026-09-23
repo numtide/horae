@@ -1,9 +1,17 @@
 //! Project, task, and assignment server functions.
 
 use super::*;
+use crate::models::project::ProjectFeeBalance;
+use crate::models::{ProjectDetails, ProjectTagLink, ProjectTaskRate};
 
 #[cfg(all(test, feature = "server"))]
 mod tests;
+
+#[cfg(all(test, feature = "server"))]
+mod privacy_tests;
+
+#[cfg(all(test, feature = "server"))]
+mod details_tests;
 
 #[cfg(all(test, feature = "server"))]
 mod mutation_tests;
@@ -12,6 +20,163 @@ mod mutation_tests;
 mod bulk_tests;
 
 // ── Projects ─────────────────────────────────────────────────────────────────
+
+#[server]
+pub async fn get_project_fee_balances(
+    project_id: String,
+    period_from: String,
+    period_to: String,
+) -> Result<Vec<ProjectFeeBalance>, ServerFnError> {
+    let viewer = require_manager().await?;
+    let state = crate::state::global_state().await;
+    fetch_project_fee_balances(
+        &state.db,
+        viewer.org_id,
+        viewer.id,
+        parse_uuid(&project_id, "project_id")?,
+        (
+            parse_date(&period_from, "period_from")?,
+            parse_date(&period_to, "period_to")?,
+        ),
+    )
+    .await
+}
+
+#[cfg(feature = "server")]
+pub(super) async fn fetch_project_fee_balances(
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    viewer_id: uuid::Uuid,
+    project_id: uuid::Uuid,
+    (from, to): (chrono::NaiveDate, chrono::NaiveDate),
+) -> Result<Vec<ProjectFeeBalance>, ServerFnError> {
+    if from > to {
+        return Err(err(BAD_REQUEST, "Fee period ends before it starts"));
+    }
+    let mut tx = pool.begin().await.map_err(server_err)?;
+    sqlx::query!("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+        .execute(&mut *tx)
+        .await
+        .map_err(server_err)?;
+    let client_id = sqlx::query_scalar!(
+        "SELECT p.client_id FROM projects p
+         JOIN project_read_access a ON a.project_id = p.id AND a.org_id = p.org_id
+         WHERE p.org_id = $1 AND p.id = $2 AND a.user_id = $3
+           AND a.can_view_rates AND a.can_view_progress",
+        org_id,
+        project_id,
+        viewer_id,
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(server_err)?
+    .ok_or_else(|| not_found("Project not found"))?;
+    let lines = super::invoices::fees::preview_fees(
+        &mut tx,
+        org_id,
+        client_id,
+        from,
+        to,
+        Some(&[project_id]),
+    )
+    .await?;
+    let balances = lines
+        .into_iter()
+        .map(|line| {
+            let crate::models::invoice::InvoiceSource::Fee { period_key, .. } = line.source else {
+                return Err(server_err("Unexpected time source in project fee balances"));
+            };
+            Ok(ProjectFeeBalance {
+                period_key,
+                description: line.description,
+                currency: line.currency,
+                balance: line
+                    .fee_balance
+                    .ok_or_else(|| server_err("Missing fee balance"))?,
+            })
+        })
+        .collect::<Result<Vec<_>, ServerFnError>>()?;
+    tx.commit().await.map_err(server_err)?;
+    Ok(balances)
+}
+
+#[server]
+pub async fn get_project_details(project_id: String) -> Result<ProjectDetails, ServerFnError> {
+    let viewer = require_user().await?;
+    let project_id = parse_uuid(&project_id, "project_id")?;
+    let state = crate::state::global_state().await;
+    fetch_project_details(&state.db, viewer.org_id, viewer.id, project_id)
+        .await
+        .map_err(server_err)?
+        .ok_or_else(|| not_found("Project not found"))
+}
+
+#[cfg(feature = "server")]
+async fn fetch_project_details(
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    viewer_id: uuid::Uuid,
+    project_id: uuid::Uuid,
+) -> Result<Option<ProjectDetails>, sqlx::Error> {
+    sqlx::query_as!(
+        ProjectDetails,
+        r#"SELECT p.id, p.name, p.code, c.name AS client_name, p.currency,
+            CASE WHEN u.org_role IN ('admin', 'manager')
+              AND p.project_type <> 'non_billable'
+              AND (settings.project_id IS NULL
+                OR (p.project_type = 'time_and_materials' AND settings.rate_mode = 'task'))
+              THEN p.currency END AS task_rate_currency,
+            p.starts_on as "starts_on: chrono::NaiveDate",
+            p.ends_on as "ends_on: chrono::NaiveDate",
+            ARRAY(SELECT t.name FROM project_tag_links l
+                JOIN project_tags t ON t.id = l.tag_id AND t.org_id = l.org_id
+                WHERE l.project_id = p.id AND l.org_id = p.org_id
+                ORDER BY lower(t.name), t.id) as "tags!",
+            CASE WHEN u.org_role = 'admin' THEN private.admin_notes END AS admin_notes
+        FROM projects p
+        JOIN clients c ON c.id = p.client_id AND c.org_id = p.org_id
+        JOIN project_read_access a ON a.project_id = p.id AND a.org_id = p.org_id
+        JOIN users u ON u.id = a.user_id AND u.org_id = a.org_id
+        LEFT JOIN project_private_settings private ON private.project_id = p.id AND private.org_id = p.org_id
+        LEFT JOIN project_settings settings ON settings.project_id = p.id AND settings.org_id = p.org_id
+        WHERE p.org_id = $1 AND a.user_id = $2 AND p.id = $3 AND a.can_view_progress"#,
+        org_id,
+        viewer_id,
+        project_id,
+    )
+    .fetch_optional(pool)
+    .await
+}
+
+#[server]
+pub async fn list_project_tags() -> Result<Vec<ProjectTagLink>, ServerFnError> {
+    let viewer = require_user().await?;
+    let state = crate::state::global_state().await;
+    fetch_project_tags(&state.db, viewer.org_id, viewer.id)
+        .await
+        .map_err(server_err)
+}
+
+#[cfg(feature = "server")]
+async fn fetch_project_tags(
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    viewer_id: uuid::Uuid,
+) -> Result<Vec<ProjectTagLink>, sqlx::Error> {
+    sqlx::query_as!(
+        ProjectTagLink,
+        r#"SELECT l.project_id, l.tag_id, t.name
+        FROM project_tag_links l
+        JOIN project_tags t ON t.id = l.tag_id AND t.org_id = l.org_id
+        JOIN project_read_access a ON a.project_id = l.project_id AND a.org_id = l.org_id
+        WHERE l.org_id = $1 AND a.user_id = $2 AND a.can_view_progress
+        ORDER BY lower(t.name), t.id, l.project_id"#,
+        org_id,
+        viewer_id,
+    )
+    .fetch_all(pool)
+    .await
+}
 
 #[cfg(feature = "server")]
 fn parse_project_rate(value: &str) -> Result<Option<i64>, ServerFnError> {
@@ -27,37 +192,6 @@ fn parse_project_rate(value: &str) -> Result<Option<i64>, ServerFnError> {
     Ok(Some(cents))
 }
 
-/// Read a typed budget into the column its kind belongs in: money budgets store
-/// minor units, hours budgets store minutes, and the other column stays NULL so
-/// the two can never disagree. A blank value clears the budget, which is how a
-/// project keeps its kind while its figure is still unknown.
-#[cfg(feature = "server")]
-fn parse_budget(
-    kind: BudgetKind,
-    value: &str,
-) -> Result<(Option<i64>, Option<i64>), ServerFnError> {
-    let value = value.trim();
-    if matches!(kind, BudgetKind::None) || value.is_empty() {
-        return Ok((None, None));
-    }
-    match kind {
-        BudgetKind::Amount => {
-            let cents = horae_core::money::parse_cents(value)
-                .map_err(|_| server_err("Budget must be an amount, e.g. 12000 or 12,000.50"))?;
-            if cents < 0 {
-                return Err(server_err("Budget cannot be negative"));
-            }
-            Ok((Some(cents), None))
-        }
-        BudgetKind::Hours => {
-            let minutes = horae_core::duration::parse(value)
-                .map_err(|_| server_err("Budget must be hours, e.g. 120 or 7:30"))?;
-            Ok((None, Some(i64::from(minutes))))
-        }
-        BudgetKind::None => unreachable!("handled above"),
-    }
-}
-
 #[server]
 pub async fn list_projects(
     client_id: Option<String>,
@@ -65,24 +199,64 @@ pub async fn list_projects(
 ) -> Result<Vec<Project>, ServerFnError> {
     let user = require_user().await?;
     let state = crate::state::global_state().await;
-    let _ = client_id;
+    let client_id = parse_opt_uuid(client_id, "client_id")?;
+    projects_for_viewer(
+        &state.db,
+        &user,
+        client_id,
+        include_inactive,
+        ProjectRead::Overview,
+    )
+    .await
+}
+
+/// Minimal project identities for starting time and resolving an own history.
+/// Reporting visibility must not prevent a teammate from using their timesheet.
+#[server]
+pub async fn list_tracking_projects() -> Result<Vec<Project>, ServerFnError> {
+    let user = require_user().await?;
+    let state = crate::state::global_state().await;
+    projects_for_viewer(&state.db, &user, None, true, ProjectRead::Tracking).await
+}
+
+#[cfg(feature = "server")]
+enum ProjectRead {
+    Overview,
+    Tracking,
+}
+
+#[cfg(feature = "server")]
+async fn projects_for_viewer(
+    pool: &sqlx::PgPool,
+    viewer: &User,
+    client_id: Option<uuid::Uuid>,
+    include_inactive: bool,
+    purpose: ProjectRead,
+) -> Result<Vec<Project>, ServerFnError> {
+    let overview = matches!(purpose, ProjectRead::Overview);
 
     let projects = sqlx::query_as!(
         Project,
-        r#"SELECT id, org_id, client_id, code, name,
-                project_type as "project_type: ProjectType", currency, rate_cents,
-                starts_on as "starts_on: chrono::NaiveDate",
-                ends_on as "ends_on: chrono::NaiveDate",
-                budget_kind as "budget_kind: BudgetKind",
-                budget_amount_cents, budget_minutes, active,
-                created_at as "created_at: chrono::DateTime<chrono::Utc>"
-         FROM projects
-         WHERE org_id = $2 AND ($1::bool OR active = true)
-         ORDER BY name ASC"#,
+        r#"SELECT p.id, p.org_id, p.client_id, p.code, p.name,
+                p.project_type as "project_type: ProjectType", p.currency,
+                CASE WHEN $4 AND a.can_view_rates THEN p.rate_cents END AS rate_cents,
+                p.starts_on as "starts_on: chrono::NaiveDate",
+                p.ends_on as "ends_on: chrono::NaiveDate",
+                CASE WHEN $4 AND a.can_view_progress THEN p.budget_kind ELSE 'none'::budget_kind END as "budget_kind!: BudgetKind",
+                CASE WHEN $4 AND a.can_view_progress THEN p.budget_amount_cents END AS budget_amount_cents,
+                CASE WHEN $4 AND a.can_view_progress THEN p.budget_minutes END AS budget_minutes,
+                p.active, p.created_at as "created_at: chrono::DateTime<chrono::Utc>"
+         FROM projects p JOIN project_read_access a ON a.project_id = p.id AND a.org_id = p.org_id
+         WHERE p.org_id = $2 AND ($1::bool OR p.active) AND a.user_id = $3
+           AND (NOT $4 OR a.can_view_progress) AND ($5::uuid IS NULL OR p.client_id = $5)
+         ORDER BY p.name, p.id"#,
         include_inactive,
-        user.org_id,
+        viewer.org_id,
+        viewer.id,
+        overview,
+        client_id,
     )
-    .fetch_all(&state.db)
+    .fetch_all(pool)
     .await
     .map_err(server_err)?;
 
@@ -92,29 +266,46 @@ pub async fn list_projects(
 /// Per-project tracked totals for the overview's Spent column: every project's
 /// total logged minutes plus its billable amount, with each entry's rate resolved
 /// through the FR-024 cascade (task → assignment → project → user default) and summed.
-/// Session-gated only: the Projects overview shows Budget/Spent to every signed-in
-/// user, and these are per-project aggregates, not per-user time or rates.
+/// Only projects whose progress the viewer may read; never per-user time or rates.
 #[server]
 pub async fn list_project_spend() -> Result<Vec<ProjectSpend>, ServerFnError> {
     let user = require_user().await?;
     let state = crate::state::global_state().await;
 
-    fetch_project_spend(&state.db, user.org_id)
+    fetch_project_spend(&state.db, user.org_id, user.id)
         .await
         .map_err(server_err)
+}
+
+/// Configured budgets use their own period and scope; tracked totals remain
+/// available separately through `list_project_spend`.
+#[server]
+pub async fn list_project_budget_progress()
+-> Result<Vec<crate::models::ProjectBudgetProgress>, ServerFnError> {
+    let user = require_user().await?;
+    let state = crate::state::global_state().await;
+    let mut connection = state.db.acquire().await.map_err(server_err)?;
+    super::budgets::progress_for_viewer(
+        &mut connection,
+        user.org_id,
+        user.id,
+        chrono::Utc::now().date_naive(),
+    )
+    .await
+    .map_err(server_err)
 }
 
 #[cfg(feature = "server")]
 pub(super) async fn fetch_project_spend(
     pool: &sqlx::PgPool,
     org_id: uuid::Uuid,
+    viewer_id: uuid::Uuid,
 ) -> Result<Vec<ProjectSpend>, sqlx::Error> {
     // Grouped in Postgres, not folded here: the overview needs one number per
     // project, and folding in Rust meant fetching one row per time entry to get
-    // there. `COALESCE(pt, a, p, u)` is the FR-024 cascade — exactly what
-    // `horae_core::invoice::resolve_rate` does — and `line_amount_cents` is the
-    // SQL twin of the Rust function invoicing uses. Attached invoice amounts
-    // take priority over live rates. The joins cannot multiply rows: project
+    // there. SQL rate resolution preserves legacy precedence for projects
+    // without settings. Attached invoice amounts take priority over live rates.
+    // The joins cannot multiply rows: project
     // tasks, assignments, and invoice lines each have a unique pair key.
     let spend = sqlx::query_as!(
         ProjectSpend,
@@ -122,178 +313,35 @@ pub(super) async fn fetch_project_spend(
              te.project_id as "project_id!",
              SUM(te.minutes)::bigint as "spent_minutes!",
              COALESCE(SUM(COALESCE(line.amount_cents, line_amount_cents(
-                 COALESCE(pt.rate_cents, a.rate_cents, p.rate_cents, u.billable_rate_cents, 0),
+                 COALESCE(CASE WHEN ps.project_id IS NULL OR p.project_type = 'time_and_materials'
+                   THEN resolve_project_rate(ps.rate_mode, pt.rate_cents, a.rate_cents, p.rate_cents,
+                   CASE WHEN ps.project_id IS NULL OR p.currency = o.default_currency THEN u.billable_rate_cents END,
+                   CASE WHEN p.currency = c.currency THEN c.default_rate_cents END
+                 ) END, 0),
                  effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir)
                ))) FILTER (WHERE (te.billable AND (te.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable, t.billable_default))))), 0)::bigint as "spent_cents!"
            FROM time_entries te
            JOIN projects p ON p.id = te.project_id
+           JOIN clients c ON c.id = p.client_id
+           LEFT JOIN project_settings ps ON ps.project_id = p.id
            JOIN tasks t ON t.id = te.task_id
            LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
            LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id
            LEFT JOIN invoice_line_items line ON line.invoice_id = te.invoice_id AND line.time_entry_id = te.id
            JOIN users u ON u.id = te.user_id
            JOIN organizations o ON o.id = te.org_id
-           WHERE te.org_id = $1
+           WHERE te.org_id = $1 AND EXISTS (
+             SELECT 1 FROM project_read_access access
+             WHERE access.org_id = $1 AND access.project_id = te.project_id
+               AND access.user_id = $2 AND access.can_view_progress)
            GROUP BY te.project_id"#,
         org_id,
+        viewer_id,
     )
     .fetch_all(pool)
     .await?;
 
     Ok(spend)
-}
-
-#[server]
-pub async fn create_project(
-    client_id: String,
-    name: String,
-    project_type: String,
-    currency: String,
-    budget_kind: String,
-    budget_value: String,
-    rate_value: String,
-) -> Result<Project, ServerFnError> {
-    let manager = require_manager().await?;
-    let state = crate::state::global_state().await;
-    let id = uuid::Uuid::now_v7();
-    let client_id = parse_uuid(&client_id, "client_id")?;
-    let pt: ProjectType = parse_enum(&project_type, "project_type")?;
-    let bk: BudgetKind = parse_enum(&budget_kind, "budget_kind")?;
-    let (budget_amount_cents, budget_minutes) = parse_budget(bk, &budget_value)?;
-    let rate_cents = parse_project_rate(&rate_value)?;
-    let project = sqlx::query_as!(
-        Project,
-        r#"INSERT INTO projects
-             (id, org_id, client_id, name, project_type, currency,
-              budget_kind, budget_amount_cents, budget_minutes, rate_cents)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-         RETURNING id, org_id, client_id, code, name,
-                   project_type as "project_type: ProjectType", currency, rate_cents,
-                   starts_on as "starts_on: chrono::NaiveDate",
-                   ends_on as "ends_on: chrono::NaiveDate",
-                   budget_kind as "budget_kind: BudgetKind",
-                   budget_amount_cents, budget_minutes, active,
-                   created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
-        id,
-        manager.org_id,
-        client_id,
-        name,
-        pt as ProjectType,
-        currency,
-        bk as BudgetKind,
-        budget_amount_cents,
-        budget_minutes,
-        rate_cents,
-    )
-    .fetch_one(&state.db)
-    .await
-    .map_err(server_err)?;
-
-    state
-        .plugins
-        .dispatch(crate::plugin::AppEvent::ProjectCreated {
-            occurred_at: chrono::Utc::now(),
-            org_id: manager.org_id,
-            project: project_payload(&project),
-        });
-    Ok(project)
-}
-
-#[server]
-pub async fn update_project(
-    project_id: String,
-    name: String,
-    project_type: String,
-    currency: String,
-    budget_kind: String,
-    budget_value: String,
-    rate_value: String,
-) -> Result<Project, ServerFnError> {
-    let manager = require_manager().await?;
-    let state = crate::state::global_state().await;
-    let project_id = parse_uuid(&project_id, "project_id")?;
-    let (project, changed) = update_project_record(
-        &state.db,
-        manager.org_id,
-        project_id,
-        &ProjectEdit {
-            name: &name,
-            project_type: &project_type,
-            currency: &currency,
-            budget_kind: &budget_kind,
-            budget_value: &budget_value,
-            rate_value: &rate_value,
-        },
-    )
-    .await?;
-    if changed {
-        state
-            .plugins
-            .dispatch(crate::plugin::AppEvent::ProjectUpdated {
-                occurred_at: chrono::Utc::now(),
-                org_id: manager.org_id,
-                project: project_payload(&project),
-            });
-    }
-    Ok(project)
-}
-
-#[cfg(feature = "server")]
-struct ProjectEdit<'a> {
-    name: &'a str,
-    project_type: &'a str,
-    currency: &'a str,
-    budget_kind: &'a str,
-    budget_value: &'a str,
-    rate_value: &'a str,
-}
-
-#[cfg(feature = "server")]
-async fn update_project_record(
-    db: &sqlx::PgPool,
-    org_id: uuid::Uuid,
-    project_id: uuid::Uuid,
-    edit: &ProjectEdit<'_>,
-) -> Result<(Project, bool), ServerFnError> {
-    let pt: ProjectType = parse_enum(edit.project_type, "project_type")?;
-    let bk: BudgetKind = parse_enum(edit.budget_kind, "budget_kind")?;
-    let (budget_amount_cents, budget_minutes) = parse_budget(bk, edit.budget_value)?;
-    let rate_cents = parse_project_rate(edit.rate_value)?;
-    let mut tx = db.begin().await.map_err(server_err)?;
-    let before = lock_project(&mut tx, org_id, project_id).await?;
-
-    let project = sqlx::query_as!(
-        Project,
-        r#"UPDATE projects
-            SET name = $3, project_type = $4, currency = $5, budget_kind = $6,
-                budget_amount_cents = $7, budget_minutes = $8, rate_cents = $9
-          WHERE id = $1 AND org_id = $2
-            AND (name, project_type, currency, budget_kind, budget_amount_cents, budget_minutes, rate_cents)
-              IS DISTINCT FROM ($3, $4, $5, $6, $7, $8, $9)
-         RETURNING id, org_id, client_id, code, name,
-                   project_type as "project_type: ProjectType", currency, rate_cents,
-                   starts_on as "starts_on: chrono::NaiveDate",
-                   ends_on as "ends_on: chrono::NaiveDate",
-                   budget_kind as "budget_kind: BudgetKind",
-                   budget_amount_cents, budget_minutes, active,
-                   created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
-        project_id,
-        org_id,
-        edit.name,
-        pt as ProjectType,
-        edit.currency,
-        bk as BudgetKind,
-        budget_amount_cents,
-        budget_minutes,
-        rate_cents,
-    )
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(server_err)?;
-
-    let changed = project.is_some();
-    tx.commit().await.map_err(server_err)?;
-    Ok((project.unwrap_or(before), changed))
 }
 
 /// Activate or deactivate a project. Deactivated projects are hidden from
@@ -476,19 +524,15 @@ pub async fn list_tasks() -> Result<Vec<Task>, ServerFnError> {
     let user = require_user().await?;
     let state = crate::state::global_state().await;
 
-    let tasks = sqlx::query_as!(
-        Task,
-        "SELECT id, org_id, name, billable_default, default_rate_cents, active
-         FROM tasks
-         WHERE active = true AND org_id = $1
-         ORDER BY name ASC",
-        user.org_id,
-    )
-    .fetch_all(&state.db)
-    .await
-    .map_err(server_err)?;
+    tasks_for_viewer(&state.db, &user, None, TaskRead::Catalog).await
+}
 
-    Ok(tasks)
+/// Rate-free task identities, including archived tasks in the viewer's history.
+#[server]
+pub async fn list_tracking_tasks() -> Result<Vec<Task>, ServerFnError> {
+    let user = require_user().await?;
+    let state = crate::state::global_state().await;
+    tasks_for_viewer(&state.db, &user, None, TaskRead::Tracking).await
 }
 
 /// Lists tasks linked to a specific project via the `project_tasks` join table.
@@ -497,19 +541,40 @@ pub async fn list_project_tasks(project_id: String) -> Result<Vec<Task>, ServerF
     let user = require_user().await?;
     let state = crate::state::global_state().await;
     let project_id = parse_uuid(&project_id, "project_id")?;
+    tasks_for_viewer(&state.db, &user, Some(project_id), TaskRead::Catalog).await
+}
 
+#[cfg(feature = "server")]
+enum TaskRead {
+    Catalog,
+    Tracking,
+}
+
+#[cfg(feature = "server")]
+async fn tasks_for_viewer(
+    pool: &sqlx::PgPool,
+    viewer: &User,
+    project_id: Option<uuid::Uuid>,
+    purpose: TaskRead,
+) -> Result<Vec<Task>, ServerFnError> {
+    let tracking = matches!(purpose, TaskRead::Tracking);
     sqlx::query_as!(
         Task,
-        "SELECT t.id, t.org_id, t.name, t.billable_default, t.default_rate_cents, t.active
-         FROM tasks t
-         JOIN project_tasks pt ON t.id = pt.task_id
-         JOIN projects p ON p.id = pt.project_id
-         WHERE pt.project_id = $1 AND t.active = true AND t.org_id = $2 AND p.org_id = $2
-         ORDER BY t.name",
+        "SELECT t.id, t.org_id, t.name, t.billable_default, t.active,
+                CASE WHEN NOT $4 AND access.can_view_rates THEN t.default_rate_cents END AS default_rate_cents
+         FROM tasks t JOIN task_read_access access ON access.task_id = t.id AND access.org_id = t.org_id
+         WHERE t.org_id = $2 AND access.user_id = $1
+           AND (t.active OR ($4 AND access.has_own_history))
+           AND ($3::uuid IS NULL OR EXISTS (
+             SELECT 1 FROM project_tasks pt JOIN project_read_access a ON a.project_id = pt.project_id
+             WHERE pt.task_id = t.id AND pt.project_id = $3 AND a.org_id = $2 AND a.user_id = $1 AND a.can_view_team))
+         ORDER BY t.name, t.id",
+        viewer.id,
+        viewer.org_id,
         project_id,
-        user.org_id,
+        tracking,
     )
-    .fetch_all(&state.db)
+    .fetch_all(pool)
     .await
     .map_err(server_err)
 }
@@ -571,7 +636,7 @@ async fn create_task_for_project(
     .map_err(server_err)?;
 
     if let Some(project_id) = project_id {
-        enable_project_task(&mut tx, org_id, project_id, task.id).await?;
+        enable_project_task(&mut tx, org_id, project_id, task.id, None).await?;
     }
     tx.commit().await.map_err(server_err)?;
     Ok(task)
@@ -623,7 +688,11 @@ async fn update_task_record(
     let task = sqlx::query_as!(
         Task,
         "UPDATE tasks
-            SET name = $3, billable_default = $4, default_rate_cents = $5
+            SET name = $3, billable_default = $4, default_rate_cents = $5,
+                default_rate_currency = CASE
+                  WHEN default_rate_cents IS NOT DISTINCT FROM $5 THEN default_rate_currency
+                  WHEN $5::bigint IS NULL THEN NULL
+                  ELSE (SELECT upper(btrim(default_currency)) FROM organizations WHERE id = $2) END
           WHERE id = $1 AND org_id = $2
             AND (name, billable_default, default_rate_cents) IS DISTINCT FROM ($3, $4, $5)
          RETURNING id, org_id, name, billable_default, default_rate_cents, active",
@@ -729,14 +798,18 @@ async fn lock_task(
 /// project-task link inherits the task's default billable flag; idempotent.
 /// Both the project and the task must belong to the manager's organization.
 #[server]
-pub async fn link_project_task(project_id: String, task_id: String) -> Result<(), ServerFnError> {
+pub async fn link_project_task(
+    project_id: String,
+    task_id: String,
+    rate: Option<ProjectTaskRate>,
+) -> Result<(), ServerFnError> {
     let manager = require_manager().await?;
     let state = crate::state::global_state().await;
     let project_id = parse_uuid(&project_id, "project_id")?;
     let task_id = parse_uuid(&task_id, "task_id")?;
 
     let mut tx = state.db.begin().await.map_err(server_err)?;
-    enable_project_task(&mut tx, manager.org_id, project_id, task_id).await?;
+    enable_project_task(&mut tx, manager.org_id, project_id, task_id, rate.as_ref()).await?;
     tx.commit().await.map_err(server_err)?;
     Ok(())
 }
@@ -747,16 +820,29 @@ async fn enable_project_task(
     org_id: uuid::Uuid,
     project_id: uuid::Uuid,
     task_id: uuid::Uuid,
+    explicit_rate: Option<&ProjectTaskRate>,
 ) -> Result<(), ServerFnError> {
     // Validate before the idempotent insert, including already-linked pairs.
     // Hold these rows until commit so archiving cannot race task enablement.
+    // Preserve legacy catalog inheritance, including non-billable projects,
+    // while accepting explicit overrides only where billing uses them.
     let task = sqlx::query!(
-        "SELECT t.billable_default, t.default_rate_cents
+        r#"SELECT t.billable_default, p.currency, t.default_rate_currency,
+                (ps.project_id IS NOT NULL) AS "configured!",
+                (p.project_type <> 'non_billable' AND (ps.project_id IS NULL
+                  OR (p.project_type = 'time_and_materials' AND ps.rate_mode = 'task'))) AS "uses_task_rates!",
+                EXISTS(SELECT 1 FROM project_tasks pt
+                       WHERE pt.project_id = p.id AND pt.task_id = t.id) AS "linked!",
+                CASE WHEN ps.project_id IS NULL
+                       OR (p.project_type = 'time_and_materials' AND ps.rate_mode = 'task')
+                     THEN t.default_rate_cents ELSE NULL END AS default_rate_cents
          FROM projects p JOIN clients c ON c.id = p.client_id AND c.org_id = p.org_id
          JOIN tasks t ON t.org_id = p.org_id
+         JOIN organizations o ON o.id = p.org_id
+         LEFT JOIN project_settings ps ON ps.project_id = p.id AND ps.org_id = p.org_id
          WHERE p.id = $1 AND t.id = $2 AND p.org_id = $3
            AND p.active AND c.active AND t.active
-         FOR SHARE OF p, c, t",
+         FOR SHARE OF p, c, t, o"#,
         project_id,
         task_id,
         org_id,
@@ -765,13 +851,49 @@ async fn enable_project_task(
     .await
     .map_err(server_err)?
     .ok_or_else(|| not_found("Active project and task not found in this organization"))?;
+    if task.linked {
+        return Ok(());
+    }
+    let rate_cents = if let Some(rate) = explicit_rate {
+        if !task.uses_task_rates {
+            return Err(conflict(
+                "This project's billing mode does not use task rates",
+            ));
+        }
+        if !rate
+            .currency
+            .trim()
+            .eq_ignore_ascii_case(task.currency.trim())
+        {
+            return Err(conflict(
+                "Project currency changed. Reload the project and enter its task rate again",
+            ));
+        }
+        Some(
+            parse_project_rate(&rate.amount)?
+                .ok_or_else(|| conflict("Enter an explicit rate in the project currency"))?,
+        )
+    } else {
+        if task.configured
+            && task.default_rate_cents.is_some()
+            && !task
+                .default_rate_currency
+                .as_deref()
+                .is_some_and(|source| source.eq_ignore_ascii_case(task.currency.trim()))
+        {
+            return Err(conflict(
+                "Task rate: currency is unknown or incompatible; enter an explicit rate in the project currency",
+            ));
+        }
+        task.default_rate_cents
+    };
     sqlx::query!(
         "INSERT INTO project_tasks (project_id, task_id, billable, rate_cents)
          VALUES ($1, $2, $3, $4) ON CONFLICT (project_id, task_id) DO NOTHING",
         project_id,
         task_id,
         task.billable_default,
-        task.default_rate_cents,
+        rate_cents,
     )
     .execute(db)
     .await
@@ -798,14 +920,15 @@ async fn assignments_for_viewer(
     sqlx::query_as!(
         Assignment,
         r#"SELECT a.id, a.project_id, a.user_id, a.role as "role: ProjectRole",
-                CASE WHEN $3 THEN a.rate_cents ELSE NULL END AS rate_cents,
+                CASE WHEN access.can_view_rates THEN a.rate_cents ELSE NULL END AS rate_cents,
                 a.created_at as "created_at: chrono::DateTime<chrono::Utc>"
          FROM assignments a JOIN projects p ON p.id = a.project_id
-         WHERE a.project_id = $1 AND p.org_id = $2
+         JOIN project_read_access access ON access.project_id = p.id AND access.org_id = p.org_id
+         WHERE a.project_id = $1 AND p.org_id = $2 AND access.user_id = $3 AND access.can_view_team
          ORDER BY a.created_at, a.id"#,
         project_id,
         viewer.org_id,
-        viewer.is_manager_or_above(),
+        viewer.id,
     )
     .fetch_all(db)
     .await

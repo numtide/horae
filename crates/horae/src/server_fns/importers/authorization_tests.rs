@@ -193,6 +193,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
             encryption_key_hex: "11".repeat(32),
         }),
         Default::default(),
+        None,
     )
     .await;
     let router = Router::new()

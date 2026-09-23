@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COUNT(*) FROM projects p\n         JOIN project_read_access access ON access.project_id = p.id AND access.org_id = p.org_id\n         WHERE p.org_id = $1 AND access.user_id = $5 AND access.can_view_progress\n           AND ($2::bool IS NULL OR p.active = $2)\n           AND ($3::uuid IS NULL OR p.client_id = $3)\n           AND ($4::timestamptz IS NULL OR p.created_at >= $4::timestamptz)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Uuid",
+        "Timestamptz",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "1f0c682793ebdb3c323b3807348a5a6456e76385af181bf347219a84c863d49b"
+}

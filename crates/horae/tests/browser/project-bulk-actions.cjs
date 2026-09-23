@@ -220,7 +220,9 @@ if (!selectionOnly && !fixturesOnly) {
     await page.unroute('**/api/**');
     const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-XAt', '-v', 'ON_ERROR_STOP=1', '-c', query], { encoding: 'utf8' }).trim();
     const history = () => ['projects', 'tasks', 'project_tasks', 'assignments', 'time_entries', 'invoices', 'invoice_line_items']
-      .map(table => sql(`SELECT coalesce(jsonb_agg(${table === 'projects' ? "to_jsonb(t) - 'active'" : 'to_jsonb(t)'} ORDER BY to_jsonb(t)), '[]') FROM ${table} t`));
+      .map(table => sql(`SELECT coalesce(jsonb_agg(${table === 'projects' ? "to_jsonb(t) - 'active' - 'edit_revision'" : 'to_jsonb(t)'} ORDER BY to_jsonb(t)), '[]') FROM ${table} t`));
+    const revisions = () => JSON.parse(sql('SELECT jsonb_object_agg(id, edit_revision) FROM projects'));
+    const originalRevisions = revisions();
     const originalHistory = history();
     let request;
     page.on('request', r => { if (r.url().includes('/api/set_projects_active')) request = r; });
@@ -232,6 +234,8 @@ if (!selectionOnly && !fixturesOnly) {
     await page.getByRole('dialog').getByRole('button', { name: 'Archive projects', exact: true }).click();
     await expect(page.getByRole('status')).toContainText('Archived 2 projects');
     assert.deepEqual(history(), originalHistory, 'Archiving changes status only, not billing/history/assignments');
+    assert.deepEqual(revisions(), Object.fromEntries(Object.entries(originalRevisions).map(([id, revision]) => [id, revision + 1])),
+      'Each archived project invalidates an open editor exactly once');
     assert.ok(request);
     const payload = request.postDataJSON();
     const url = request.url();

@@ -24,6 +24,72 @@ pub struct AppConfig {
     pub harvest: Option<HarvestConfig>,
     /// Execution limits copied into newly enqueued jobs.
     pub job_policy: JobPolicy,
+    /// Optional budget email transport; no process is started when absent.
+    pub mail: Option<MailConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MailConfig {
+    pub executable: std::path::PathBuf,
+    pub sender: String,
+}
+
+impl MailConfig {
+    /// Both values must be supplied together. Validate without executing the
+    /// program: configuration loading must never send mail.
+    pub fn parse(executable: Option<&str>, sender: Option<&str>) -> anyhow::Result<Option<Self>> {
+        use std::os::unix::fs::PermissionsExt;
+        let (executable, sender) = match (executable, sender) {
+            (None, None) => return Ok(None),
+            (Some(executable), Some(sender)) => (executable, sender),
+            _ => anyhow::bail!("Set both HORAE_SENDMAIL_PATH and HORAE_MAIL_FROM, or neither"),
+        };
+        let executable = std::path::PathBuf::from(executable);
+        anyhow::ensure!(
+            executable.is_absolute(),
+            "HORAE_SENDMAIL_PATH must be an absolute executable path"
+        );
+        let metadata = std::fs::metadata(&executable).context("Cannot read HORAE_SENDMAIL_PATH")?;
+        anyhow::ensure!(
+            metadata.is_file() && metadata.permissions().mode() & 0o111 != 0,
+            "HORAE_SENDMAIL_PATH must name an executable file"
+        );
+        anyhow::ensure!(
+            valid_mailbox(sender),
+            "HORAE_MAIL_FROM must be a plain ASCII mailbox address"
+        );
+        Ok(Some(Self {
+            executable,
+            sender: sender.to_owned(),
+        }))
+    }
+}
+
+/// Supported envelope addresses are unquoted ASCII mailboxes with DNS-style
+/// domains. Display names, multiple recipients and command/file forms are not accepted.
+pub(crate) fn valid_mailbox(address: &str) -> bool {
+    let Some((local, domain)) = address.split_once('@') else {
+        return false;
+    };
+    address.len() <= 254
+        && (1..=64).contains(&local.len())
+        && !local.starts_with(['-', '.'])
+        && !local.ends_with('.')
+        && !local.contains("..")
+        && local
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"._+-".contains(&b))
+        && !domain.is_empty()
+        && domain.len() <= 253
+        && domain.split('.').all(|label| {
+            !label.is_empty()
+                && label.len() <= 63
+                && !label.starts_with('-')
+                && !label.ends_with('-')
+                && label
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'-')
+        })
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -115,6 +181,10 @@ impl AppConfig {
                 .unwrap_or(false),
             harvest: HarvestConfig::from_env(),
             job_policy: JobPolicy::from_env()?,
+            mail: MailConfig::parse(
+                non_empty("HORAE_SENDMAIL_PATH").as_deref(),
+                non_empty("HORAE_MAIL_FROM").as_deref(),
+            )?,
         })
     }
 }

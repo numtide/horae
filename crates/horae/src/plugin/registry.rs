@@ -232,6 +232,41 @@ impl PluginRegistry {
         }
     }
 
+    /// Wait for subscribed plugins before acknowledging a durable event.
+    /// A retry may repeat successful calls if a later subscriber fails.
+    pub async fn dispatch_confirmed(&self, event: &AppEvent) -> anyhow::Result<()> {
+        let hook = event.hook_name();
+        let Some(indices) = self.hook_index.get(hook) else {
+            return Ok(());
+        };
+        let payload = serde_json::to_vec(event)?;
+        anyhow::ensure!(
+            payload.len() <= MAX_CALL_BYTES,
+            "plugin event exceeds the payload size limit"
+        );
+        let mut all_delivered = true;
+        for &idx in indices {
+            let Ok(pending) = Arc::clone(&self.pending).try_acquire_owned() else {
+                all_delivered = false;
+                continue;
+            };
+            if invoke(
+                Arc::clone(&self.plugins[idx]),
+                hook,
+                payload.clone(),
+                pending,
+                Arc::clone(&self.workers),
+            )
+            .await
+            .is_err()
+            {
+                all_delivered = false;
+            }
+        }
+        anyhow::ensure!(all_delivered, "one or more plugin deliveries failed");
+        Ok(())
+    }
+
     /// Collect dashboard widgets from all plugins that export a
     /// `dashboard_widget` function. Returns structured widget data.
     pub async fn collect_widgets(&self) -> Vec<PluginWidget> {

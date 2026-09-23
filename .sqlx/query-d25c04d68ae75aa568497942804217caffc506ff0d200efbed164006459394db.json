@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM project_member_budgets WHERE project_id=$1 AND org_id=$2 AND user_id=$3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d25c04d68ae75aa568497942804217caffc506ff0d200efbed164006459394db"
+}

@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, name, billable_default as billable, default_rate_cents, default_rate_currency FROM tasks\n         WHERE org_id = $1 AND active AND strpos(lower(name), lower($2)) > 0\n         ORDER BY lower(name), id LIMIT 51 OFFSET $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "billable",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "default_rate_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "default_rate_currency",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "96e095bf66362db86c7babd63ccb1c7da565127ec88f9a3c3d75bb72aea3d3fc"
+}

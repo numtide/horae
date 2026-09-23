@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE project_settings SET fee_amount_cents = 99999 WHERE project_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b7d9b42b45a728182198b3dd5ec25ee6ed3de54f74886b7925bcd5d99568161e"
+}

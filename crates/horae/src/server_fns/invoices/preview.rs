@@ -1,0 +1,356 @@
+use super::*;
+use crate::models::invoice::{
+    InvoiceFeeSelection, InvoicePreviewLine, InvoiceProjectDefaults, InvoiceSourceExcess,
+};
+use std::collections::BTreeSet;
+
+#[cfg(test)]
+pub(super) async fn prepare(
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    client_id: uuid::Uuid,
+    (from, to): (chrono::NaiveDate, chrono::NaiveDate),
+    selected: Option<&[uuid::Uuid]>,
+    overrides: Option<&InvoiceDefaults>,
+) -> Result<InvoicePreparation, ServerFnError> {
+    prepare_with_edits(
+        pool,
+        org_id,
+        client_id,
+        (from, to),
+        selected,
+        overrides,
+        None,
+    )
+    .await
+}
+
+pub(super) async fn prepare_with_edits(
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    client_id: uuid::Uuid,
+    (from, to): (chrono::NaiveDate, chrono::NaiveDate),
+    selected: Option<&[uuid::Uuid]>,
+    overrides: Option<&InvoiceDefaults>,
+    edits: Option<&[InvoiceFeeSelection]>,
+) -> Result<InvoicePreparation, ServerFnError> {
+    if from > to {
+        return Err(err(BAD_REQUEST, "Invoice period ends before it starts"));
+    }
+    if selected.is_some_and(|ids| ids.is_empty() || ids.len() > 1000) {
+        return Err(err(BAD_REQUEST, "Select between 1 and 1000 projects"));
+    }
+    if let Some(overrides) = overrides {
+        defaults::amounts(overrides, 0)?;
+    }
+    let selected = selected.map(|ids| {
+        ids.iter()
+            .copied()
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>()
+    });
+    let mut tx = pool.begin().await.map_err(server_err)?;
+    sqlx::query!("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+        .execute(&mut *tx)
+        .await
+        .map_err(server_err)?;
+    sqlx::query_scalar!(
+        "SELECT id FROM clients WHERE id = $1 AND org_id = $2",
+        client_id,
+        org_id
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(server_err)?
+    .ok_or_else(|| not_found("Client not found"))?;
+
+    let entries = entries::read(
+        &mut tx,
+        org_id,
+        client_id,
+        (from, to),
+        selected.as_deref(),
+        SourceRead::Preview,
+    )
+    .await?;
+    let mut lines = Vec::with_capacity(entries.len());
+    for entry in entries {
+        lines.push(entry.preview()?);
+    }
+    lines.extend(
+        fees::preview_fees(&mut tx, org_id, client_id, from, to, selected.as_deref()).await?,
+    );
+    if let Some(edits) = edits {
+        apply_fee_selection(&mut lines, edits)?;
+    }
+    let contributing: Vec<_> = lines
+        .iter()
+        .filter(|line| line.selected)
+        .map(|line| line.project_id)
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    let project_ids = selected.as_deref().unwrap_or(&contributing);
+    if project_ids.len() > 1000 {
+        return Err(conflict(
+            "Too many projects for one preview; select fewer projects.",
+        ));
+    }
+    let rows = sqlx::query!(
+        "SELECT p.id, p.name, COALESCE(s.terms_days, 30)::smallint as \"terms_days!\",
+                COALESCE(s.po_number, '') as \"po_number!\",
+                COALESCE(s.discount_bps, 0)::smallint as \"discount_bps!\",
+                COALESCE(s.tax1_bps, 0)::smallint as \"tax1_bps!\", s.tax2_name, s.tax2_bps
+         FROM projects p LEFT JOIN project_settings s ON s.project_id = p.id
+         WHERE p.org_id = $1 AND p.client_id = $2 AND p.id = ANY($3) ORDER BY p.id",
+        org_id,
+        client_id,
+        project_ids,
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(server_err)?;
+    if rows.len() != project_ids.len() {
+        return Err(not_found(
+            "Some selected projects are unavailable for this client",
+        ));
+    }
+    let projects: Vec<_> = rows
+        .into_iter()
+        .map(|row| InvoiceProjectDefaults {
+            project_id: row.id,
+            name: row.name,
+            defaults: InvoiceDefaults {
+                terms_days: row.terms_days,
+                po_number: row.po_number,
+                discount_bps: row.discount_bps,
+                tax1_bps: row.tax1_bps,
+                tax2_name: row.tax2_name,
+                tax2_bps: row.tax2_bps,
+            },
+        })
+        .collect();
+    let currency = currency(&lines)?;
+    let subtotal_cents = subtotal(&lines)?;
+    let inherited = projects
+        .first()
+        .map(|project| &project.defaults)
+        .filter(|first| projects.iter().all(|project| &project.defaults == *first));
+    let defaults = overrides
+        .or(inherited)
+        .cloned()
+        .or_else(|| projects.is_empty().then(InvoiceDefaults::default));
+    let issued_on = chrono::Utc::now().date_naive();
+    let amounts = defaults
+        .as_ref()
+        .map(|defaults| defaults::amounts(defaults, subtotal_cents))
+        .transpose()?;
+    if let Some(defaults) = &defaults {
+        allocate_lines(&mut lines, defaults.discount_bps)?;
+    }
+    let excess = if defaults.is_some() {
+        excess(&lines)?
+    } else {
+        Vec::new()
+    };
+    let due_on = defaults
+        .as_ref()
+        .map(|defaults| {
+            horae_core::project::payment_due_date(issued_on, defaults.terms_days as u16)
+                .map_err(|error| err(BAD_REQUEST, error.to_string()))
+        })
+        .transpose()?;
+    tx.commit().await.map_err(server_err)?;
+    Ok(InvoicePreparation {
+        issued_on,
+        due_on,
+        currency,
+        projects,
+        defaults,
+        lines,
+        subtotal_cents,
+        amounts,
+        excess,
+    })
+}
+
+pub(super) fn currency(lines: &[InvoicePreviewLine]) -> Result<String, ServerFnError> {
+    let currency = lines
+        .iter()
+        .find(|line| line.selected)
+        .or_else(|| lines.first())
+        .map(|line| line.currency.trim().to_owned())
+        .ok_or_else(|| not_found("No billable time or fees found for this client and period."))?;
+    if lines
+        .iter()
+        .filter(|line| line.selected)
+        .any(|line| line.currency.trim() != currency)
+    {
+        return Err(conflict(
+            "Projects with different billing currencies cannot share an invoice.",
+        ));
+    }
+    Ok(currency)
+}
+
+pub(super) fn apply_fee_selection(
+    lines: &mut [InvoicePreviewLine],
+    edits: &[InvoiceFeeSelection],
+) -> Result<(), ServerFnError> {
+    let by_source: std::collections::BTreeMap<_, _> =
+        edits.iter().map(|edit| (&edit.source, edit)).collect();
+    if edits.len() > 10000
+        || by_source.len() != edits.len()
+        || edits.len()
+            != lines
+                .iter()
+                .filter(|line| line.fee_balance.is_some())
+                .count()
+    {
+        return Err(err(
+            BAD_REQUEST,
+            "Supply each available fee source exactly once",
+        ));
+    }
+    for line in lines.iter_mut().filter(|line| line.fee_balance.is_some()) {
+        let edit = by_source
+            .get(&line.source)
+            .ok_or_else(|| conflict("Fee sources changed. Review the invoice again."))?;
+        if edit.description.trim().is_empty()
+            || edit.description.chars().count() > 1000
+            || edit.description.contains('\0')
+        {
+            return Err(err(
+                BAD_REQUEST,
+                "Fee descriptions must contain 1–1000 characters without NUL",
+            ));
+        }
+        if edit.amount_cents < 0
+            || (edit.selected
+                && edit.amount_cents == 0
+                && line
+                    .fee_balance
+                    .is_some_and(|balance| balance.agreed_cents != 0))
+        {
+            return Err(err(BAD_REQUEST, "Selected fee amounts must be positive"));
+        }
+        line.description = edit.description.trim().to_owned();
+        line.amount_cents = edit.amount_cents;
+        line.selected = edit.selected;
+    }
+    Ok(())
+}
+
+pub(super) fn subtotal(lines: &[InvoicePreviewLine]) -> Result<i64, ServerFnError> {
+    lines
+        .iter()
+        .filter(|line| line.selected)
+        .try_fold(0_i64, |subtotal, line| {
+            subtotal.checked_add(line.amount_cents).ok_or_else(|| {
+                conflict("Invoice total exceeds the supported range; select a shorter period.")
+            })
+        })
+}
+
+pub(super) fn allocate_lines(
+    lines: &mut [InvoicePreviewLine],
+    discount_bps: i16,
+) -> Result<(), ServerFnError> {
+    // Display dates must not change discount tie-breaking from persisted sources.
+    let mut order: Vec<_> = (0..lines.len()).collect();
+    order.sort_by(|&a, &b| lines[a].source.cmp(&lines[b].source));
+    let gross: Vec<_> = order
+        .iter()
+        .map(|&i| {
+            if lines[i].selected {
+                lines[i].amount_cents
+            } else {
+                0
+            }
+        })
+        .collect();
+    let net = balances::allocate(&gross, discount_bps)?;
+    for (i, net) in order.into_iter().zip(net) {
+        lines[i].net_before_tax_cents = Some(net);
+    }
+    Ok(())
+}
+
+pub(super) fn excess(
+    lines: &[InvoicePreviewLine],
+) -> Result<Vec<InvoiceSourceExcess>, ServerFnError> {
+    let mut excess = Vec::new();
+    for line in lines.iter().filter(|line| line.selected) {
+        if let Some(balance) = line.fee_balance {
+            let net = line
+                .net_before_tax_cents
+                .ok_or_else(|| conflict("Resolve invoice defaults before generating"))?;
+            let remaining = balance
+                .invoiced_cents
+                .checked_add(net)
+                .and_then(|invoiced| balance.agreed_cents.checked_sub(invoiced))
+                .ok_or_else(|| conflict("Fee balance exceeds the supported range"))?;
+            if remaining < 0 {
+                excess.push(InvoiceSourceExcess {
+                    source: line.source.clone(),
+                    excess_cents: remaining
+                        .checked_neg()
+                        .ok_or_else(|| conflict("Fee excess exceeds the supported range"))?,
+                });
+            }
+        }
+    }
+    excess.sort_by(|a, b| a.source.cmp(&b.source));
+    Ok(excess)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::invoice::InvoiceFeeBalance;
+
+    fn fee() -> InvoicePreviewLine {
+        let project_id = uuid::Uuid::now_v7();
+        InvoicePreviewLine {
+            source: InvoiceSource::Fee {
+                project_id,
+                period_key: "single".into(),
+            },
+            selected: true,
+            project_id,
+            currency: "EUR".into(),
+            description: "Fee".into(),
+            minutes: None,
+            rate_cents: None,
+            amount_cents: 1,
+            fee_balance: Some(InvoiceFeeBalance {
+                agreed_cents: i64::MAX,
+                invoiced_cents: i64::MAX,
+                remaining_cents: 0,
+            }),
+            net_before_tax_cents: Some(1),
+        }
+    }
+
+    #[test]
+    fn excess_rejects_an_unrepresentable_total_even_when_the_remainder_fits() {
+        assert!(
+            excess(&[fee()])
+                .unwrap_err()
+                .to_string()
+                .contains("supported range")
+        );
+    }
+
+    #[test]
+    fn unselected_fee_currencies_do_not_relabel_or_block_selected_charges() {
+        let mut settled = fee();
+        settled.currency = "USD".into();
+        settled.selected = false;
+        let mut lines = [settled, fee()];
+        assert_eq!(currency(&lines).unwrap(), "EUR");
+        lines[0].selected = true;
+        assert!(currency(&lines).is_err());
+    }
+}

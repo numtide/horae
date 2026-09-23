@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO project_budget_notifications (id,org_id,project_id,recipient_id,period_key,threshold)\n         VALUES ($1,$2,$3,$4,'lifetime',80)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4a224c6d989921b82db2bade633109cab57e416d9c32ab9d1e341aff84449ad3"
+}

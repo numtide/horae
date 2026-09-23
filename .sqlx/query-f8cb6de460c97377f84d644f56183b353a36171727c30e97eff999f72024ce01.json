@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE project_settings SET fee_mode = 'monthly', monthly_day = $2 WHERE project_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f8cb6de460c97377f84d644f56183b353a36171727c30e97eff999f72024ce01"
+}

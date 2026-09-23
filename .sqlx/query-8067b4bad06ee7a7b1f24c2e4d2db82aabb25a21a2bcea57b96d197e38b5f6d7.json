@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT due_on as \"due_on: chrono::NaiveDate\" FROM project_fee_occurrences WHERE project_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "due_on: chrono::NaiveDate",
+        "type_info": "Date"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "8067b4bad06ee7a7b1f24c2e4d2db82aabb25a21a2bcea57b96d197e38b5f6d7"
+}

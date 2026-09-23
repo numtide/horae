@@ -321,8 +321,8 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
             .await
         }
     });
-    let projects = use_resource(|| async move { server_fns::list_projects(None, true).await });
-    let tasks = use_resource(|| async move { server_fns::list_tasks().await });
+    let projects = use_resource(|| async move { server_fns::list_tracking_projects().await });
+    let tasks = use_resource(|| async move { server_fns::list_tracking_tasks().await });
     let clients = use_resource(|| async move { server_fns::list_clients(true).await });
 
     // Lookups and grid data are memoized so they rebuild only when their

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users SET org_role = 'admin', billable_rate_cents = 9500 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "983cd1ee297948b21528763001931cf541ad2ecf1ee1ab25645565c5d199af63"
+}

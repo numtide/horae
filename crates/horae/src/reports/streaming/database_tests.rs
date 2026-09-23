@@ -11,6 +11,7 @@ fn params() -> ExportParams {
         client_id: None,
         project_id: None,
         user_id: None,
+        tag_id: None,
     }
 }
 
@@ -30,6 +31,83 @@ async fn add_entries(pool: &PgPool, ids: &SeedIds, count: usize) {
          SELECT id, $2, $3, $4, $5, '2026-09-07', 60, true FROM unnest($1::uuid[]) id",
         &keys, ids.org_id, ids.user_id, ids.project_id, ids.task_id,
     ).execute(pool).await.unwrap();
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn streamed_tag_filter_excludes_other_projects_without_duplicating_rows(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    let other = SeedIds {
+        project_id: Uuid::now_v7(),
+        org_id: ids.org_id,
+        user_id: ids.user_id,
+        client_id: ids.client_id,
+        task_id: ids.task_id,
+    };
+    sqlx::query!("INSERT INTO projects (id,org_id,client_id,name,currency) VALUES ($1,$2,$3,'Untagged','EUR')", other.project_id, other.org_id, other.client_id).execute(&pool).await.unwrap();
+    add_entries(&pool, &ids, 2).await;
+    add_entries(&pool, &other, 3).await;
+    let selected = Uuid::now_v7();
+    for (tag, name) in [(selected, "Launch"), (Uuid::now_v7(), "Other label")] {
+        sqlx::query!(
+            "INSERT INTO project_tags (id,org_id,name) VALUES ($1,$2,$3)",
+            tag,
+            ids.org_id,
+            name
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            "INSERT INTO project_tag_links (id,org_id,project_id,tag_id) VALUES ($1,$2,$3,$4)",
+            Uuid::now_v7(),
+            ids.org_id,
+            ids.project_id,
+            tag
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    let csv = body(
+        entries(
+            pool.clone(),
+            ids.org_id,
+            ExportParams {
+                tag_id: Some(selected),
+                ..params()
+            },
+        )
+        .await
+        .unwrap(),
+    )
+    .await;
+    let rows: Vec<_> = csv::Reader::from_reader(csv.as_slice())
+        .records()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(rows.len(), 2);
+    assert!(
+        rows.iter()
+            .all(|row| &row[1] == "Widget" && &row[4] == "1.00")
+    );
+    let csv = body(
+        entries(
+            pool,
+            ids.org_id,
+            ExportParams {
+                tag_id: Some(Uuid::now_v7()),
+                ..params()
+            },
+        )
+        .await
+        .unwrap(),
+    )
+    .await;
+    assert_eq!(
+        csv::Reader::from_reader(csv.as_slice()).records().count(),
+        0
+    );
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -124,6 +202,15 @@ async fn streamed_timesheet_exceeds_xlsx_row_limit_without_one_large_body_chunk(
 #[serial_test::serial]
 async fn streamed_projects_preserve_scope_budget_and_tenant_isolation(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
+    sqlx::query!(
+        "INSERT INTO assignments (id,project_id,user_id) VALUES ($1,$2,$3)",
+        Uuid::now_v7(),
+        ids.project_id,
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     let _other = seed(&pool, OrgRole::Member).await;
     sqlx::query!("UPDATE projects SET code = 'A,B', budget_kind = 'hours', budget_minutes = 90 WHERE id = $1",
         ids.project_id).execute(&pool).await.unwrap();
@@ -131,6 +218,7 @@ async fn streamed_projects_preserve_scope_budget_and_tenant_isolation(pool: PgPo
         let result = projects(
             pool.clone(),
             ids.org_id,
+            ids.user_id,
             ProjectsExportParams {
                 scope: scope.map(str::to_owned),
             },
@@ -152,15 +240,17 @@ async fn streamed_projects_preserve_scope_budget_and_tenant_isolation(pool: PgPo
         assert_eq!(&rows[0][2], "Widget");
         assert_eq!(&rows[0][4], "EUR");
         assert_eq!(&rows[0][6], "Active");
-        let expected = super::super::fetch_projects_export(&pool, ids.org_id, "active")
-            .await
-            .unwrap();
+        let expected =
+            super::super::fetch_projects_export(&pool, ids.org_id, ids.user_id, "active")
+                .await
+                .unwrap();
         assert_eq!(&rows[0][5], &super::super::budget_cell(&expected[0]));
     }
     let bytes = body(
         projects(
             pool,
             ids.org_id,
+            ids.user_id,
             ProjectsExportParams {
                 scope: Some("archived".to_owned()),
             },
@@ -201,7 +291,7 @@ async fn streamed_invoice_uses_stored_exact_cents_and_tenant_scoped_metadata(poo
     let bytes = body(result).await;
     assert_eq!(
         String::from_utf8(bytes).unwrap(),
-        "Description,Hours,Rate,Amount\n\"Quoted \"\"界\"\",\nline\",0.00,92233720368547758.07,92233720368547758.07\nTotal,,,92233720368547758.07\n"
+        "Description,Hours,Rate,Amount,Currency,Issued on,Due on,Payment terms (days),Purchase order\n\"Quoted \"\"界\"\",\nline\",0.00,92233720368547758.07,92233720368547758.07,EUR,2026-09-07,2026-10-07,30,\nSubtotal,,,92233720368547758.07,EUR,2026-09-07,2026-10-07,30,\nTotal,,,92233720368547758.07,EUR,2026-09-07,2026-10-07,30,\n"
     );
     assert_eq!(
         invoice(pool.clone(), other.org_id, invoice_id)
@@ -226,6 +316,48 @@ async fn export_connection(pool: &PgPool) -> (PgPool, i32) {
         .await
         .unwrap();
     (export_pool, pid)
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn streamed_fee_invoice_has_no_fabricated_hours_or_hourly_rate(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    let invoice_id = Uuid::now_v7();
+    let fee_id = Uuid::now_v7();
+    sqlx::query!("INSERT INTO invoices (id,org_id,client_id,number,issued_on,due_on,currency,total_cents,po_number,discount_bps,discount_cents,tax1_bps,tax1_cents,tax2_name,tax2_bps,tax2_cents) VALUES ($1,$2,$3,'FEE-1','2026-09-01','2026-09-22','EUR',13782,$4,1000,1250,2100,2363,$5,150,169)", invoice_id, ids.org_id, ids.client_id, "PO \"界\",\n123", "Local \"tax\"").execute(&pool).await.unwrap();
+    sqlx::query!("INSERT INTO project_fee_occurrences (id,org_id,project_id,period_key,due_on,description,amount_cents,currency) VALUES ($1,$2,$3,'single','2026-09-01','Fixed fee',12500,'EUR')", fee_id, ids.org_id, ids.project_id).execute(&pool).await.unwrap();
+    sqlx::query!("INSERT INTO invoice_line_items (id,invoice_id,fee_occurrence_id,description,amount_cents) VALUES ($1,$2,$3,'Fixed fee',12500)", Uuid::now_v7(), invoice_id, fee_id).execute(&pool).await.unwrap();
+    let bytes = body(invoice(pool, ids.org_id, invoice_id).await.unwrap()).await;
+    let mut reader = csv::Reader::from_reader(bytes.as_slice());
+    assert_eq!(
+        reader.headers().unwrap().iter().collect::<Vec<_>>(),
+        super::super::INVOICE_HEADERS
+    );
+    let rows = reader.records().collect::<Result<Vec<_>, _>>().unwrap();
+    assert_eq!(rows.len(), 6);
+    for (row, (label, amount)) in rows.iter().zip([
+        ("Fixed fee", "125.00"),
+        ("Subtotal", "125.00"),
+        ("Discount (10.00%)", "-12.50"),
+        ("Tax (21.00%)", "23.63"),
+        ("Local \"tax\" (1.50%)", "1.69"),
+        ("Total", "137.82"),
+    ]) {
+        assert_eq!(
+            row.iter().collect::<Vec<_>>(),
+            [
+                label,
+                "",
+                "",
+                amount,
+                "EUR",
+                "2026-09-01",
+                "2026-09-22",
+                "21",
+                "PO \"界\",\n123"
+            ]
+        );
+    }
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -325,7 +457,7 @@ async fn streamed_invoice_metadata_and_lines_share_one_snapshot(pool: PgPool) {
     let bytes = body(task.await.unwrap().unwrap()).await;
     assert_eq!(
         String::from_utf8(bytes).unwrap(),
-        "Description,Hours,Rate,Amount\nOriginal,1.00,1.00,1.00\nTotal,,,1.00\n"
+        "Description,Hours,Rate,Amount,Currency,Issued on,Due on,Payment terms (days),Purchase order\nOriginal,1.00,1.00,1.00,EUR,2026-09-07,2026-10-07,30,\nSubtotal,,,1.00,EUR,2026-09-07,2026-10-07,30,\nTotal,,,1.00,EUR,2026-09-07,2026-10-07,30,\n"
     );
     export_pool.close().await;
 }

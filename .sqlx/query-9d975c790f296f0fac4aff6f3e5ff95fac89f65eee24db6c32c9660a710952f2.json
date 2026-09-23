@@ -1,0 +1,168 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE invoices SET status = $3\n           WHERE id = $1 AND org_id = $2\n           RETURNING id, org_id, client_id, number,\n                     status as \"status: InvoiceStatus\",\n                     issued_on as \"issued_on: chrono::NaiveDate\",\n                     due_on as \"due_on: chrono::NaiveDate\",\n                     currency, total_cents, notes, terms_days, po_number,\n                     discount_bps, tax1_bps, tax2_name, tax2_bps,\n                     subtotal_cents, discount_cents, tax1_cents, tax2_cents,\n                     created_at as \"created_at: chrono::DateTime<chrono::Utc>\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "client_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "number",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "status: InvoiceStatus",
+        "type_info": {
+          "Custom": {
+            "name": "invoice_status",
+            "kind": {
+              "Enum": [
+                "draft",
+                "sent",
+                "paid",
+                "void"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "issued_on: chrono::NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 6,
+        "name": "due_on: chrono::NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 7,
+        "name": "currency",
+        "type_info": "Bpchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "total_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "terms_days",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 11,
+        "name": "po_number",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "discount_bps",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 13,
+        "name": "tax1_bps",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 14,
+        "name": "tax2_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "tax2_bps",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 16,
+        "name": "subtotal_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 17,
+        "name": "discount_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 18,
+        "name": "tax1_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 19,
+        "name": "tax2_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 20,
+        "name": "created_at: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        {
+          "Custom": {
+            "name": "invoice_status",
+            "kind": {
+              "Enum": [
+                "draft",
+                "sent",
+                "paid",
+                "void"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "9d975c790f296f0fac4aff6f3e5ff95fac89f65eee24db6c32c9660a710952f2"
+}

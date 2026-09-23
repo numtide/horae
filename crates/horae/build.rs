@@ -144,11 +144,40 @@ fn families() -> Vec<Family> {
         ),
         spacing_family(),
         fixed(
+            "Half-step spacing",
+            &[
+                ("px-2\\.5", "padding-inline: var(--space-2-5)"),
+                ("py-1\\.5", "padding-block: var(--space-1-5)"),
+                ("-ml-2\\.5", "margin-left: calc(-1 * var(--space-2-5))"),
+                ("py-2\\.5", "padding-block: var(--space-2-5)"),
+            ],
+        ),
+        fixed(
             "Sizing",
             &[
                 ("w-full", "width: 100%"),
+                ("w-16", "width: var(--space-16)"),
+                ("w-24", "width: var(--space-24)"),
+                ("w-30", "width: var(--space-30)"),
+                ("w-40", "width: var(--space-40)"),
+                ("w-50", "width: var(--space-50)"),
+                ("w-60", "width: var(--space-60)"),
+                ("w-form-select", "width: var(--width-form-select)"),
+                ("basis-form-select", "flex-basis: var(--width-form-select)"),
+                (
+                    "basis-assignment-picker",
+                    "flex-basis: var(--width-assignment-picker)",
+                ),
+                ("max-w-full", "max-width: 100%"),
                 ("h-full", "height: 100%"),
+                ("h-10", "height: var(--space-10)"),
+                ("size-10", "width: var(--space-10); height: var(--space-10)"),
+                ("size-8", "width: var(--space-8); height: var(--space-8)"),
+                ("size-4", "width: var(--space-4); height: var(--space-4)"),
+                ("size-em", "width: 1em; height: 1em"),
                 ("min-w-0", "min-width: 0"),
+                ("min-h-0", "min-height: 0"),
+                ("max-w-project-form", "max-width: var(--width-project-form)"),
                 ("max-w-sm", "max-width: 24rem"),
                 ("max-w-md", "max-width: 28rem"),
                 ("max-w-lg", "max-width: 32rem"),
@@ -166,6 +195,7 @@ fn families() -> Vec<Family> {
                 ("text-faint", "color: var(--color-text-muted)"),
                 ("text-label", "color: var(--color-label)"),
                 ("text-primary", "color: var(--color-primary)"),
+                ("text-on-pine", "color: var(--color-on-pine)"),
                 ("text-accent", "color: var(--color-accent)"),
                 ("text-success", "color: var(--color-success)"),
                 ("text-danger", "color: var(--color-danger)"),
@@ -176,12 +206,19 @@ fn families() -> Vec<Family> {
             "Background",
             &[
                 ("bg-base", "background: var(--color-bg)"),
+                ("bg-cell-empty", "background: var(--color-cell-empty-bg)"),
                 ("bg-secondary", "background: var(--color-bg-secondary)"),
                 ("bg-tertiary", "background: var(--color-bg-tertiary)"),
                 ("bg-overlay", "background: var(--color-bg-overlay)"),
                 ("bg-menu", "background: var(--color-menu)"),
                 ("bg-primary", "background: var(--color-primary)"),
                 ("bg-primary-soft", "background: var(--color-primary-bg)"),
+                ("bg-primary-wash", "background: var(--color-primary-wash)"),
+                ("bg-pine", "background: var(--color-pine)"),
+                (
+                    "bg-choice-selected",
+                    "background: var(--color-choice-selected-bg)",
+                ),
             ],
         ),
         fixed(
@@ -189,10 +226,12 @@ fn families() -> Vec<Family> {
             &[
                 ("border", "border: 1px solid var(--color-border)"),
                 ("border-0", "border: none"),
+                ("border-input", "border-color: var(--color-border-input)"),
                 ("border-t", "border-top: 1px solid var(--color-border)"),
                 ("border-b", "border-bottom: 1px solid var(--color-border)"),
                 ("border-l", "border-left: 1px solid var(--color-border)"),
                 ("border-r", "border-right: 1px solid var(--color-border)"),
+                ("border-light", "border-color: var(--color-border-light)"),
                 ("rounded-sm", "border-radius: var(--radius-sm)"),
                 ("rounded", "border-radius: var(--radius)"),
                 ("rounded-lg", "border-radius: var(--radius-lg)"),
@@ -212,10 +251,14 @@ fn families() -> Vec<Family> {
                 ("shadow-modal", "box-shadow: var(--shadow-modal)"),
                 ("relative", "position: relative"),
                 ("absolute", "position: absolute"),
+                ("inset-0", "inset: 0"),
                 ("overflow-hidden", "overflow: hidden"),
                 ("overflow-x-auto", "overflow-x: auto"),
+                ("overflow-y-auto", "overflow-y: auto"),
                 ("cursor-pointer", "cursor: pointer"),
+                ("cursor-text", "cursor: text"),
                 ("opacity-60", "opacity: 0.6"),
+                ("opacity-0", "opacity: 0"),
             ],
         ),
     ]
@@ -223,6 +266,11 @@ fn families() -> Vec<Family> {
 
 fn spacing_family() -> Family {
     let mut rules = Vec::new();
+    rules.push((
+        "px-project-form".into(),
+        "padding-inline: var(--project-form-gutter)".into(),
+    ));
+    rules.push(("pb-30".into(), "padding-bottom: var(--space-30)".into()));
     for (n, v) in space() {
         rules.push((format!("p-{n}"), format!("padding: {v}")));
         rules.push((
@@ -277,6 +325,7 @@ fn type_family() -> Family {
         ("tracking-wide", "letter-spacing: 0.06em"),
         ("tracking-tight", "letter-spacing: -0.015em"),
         ("tracking-wider", "letter-spacing: 0.14em"),
+        ("tracking-eyebrow", "letter-spacing: 0.12em"),
         ("leading-tight", "line-height: 1.2"),
         ("font-sans", "font-family: var(--font-family)"),
         ("font-mono", "font-family: var(--font-family-mono)"),
@@ -287,6 +336,7 @@ fn type_family() -> Family {
             "overflow: hidden; text-overflow: ellipsis; white-space: nowrap",
         ),
         ("whitespace-nowrap", "white-space: nowrap"),
+        ("wrap-anywhere", "overflow-wrap: anywhere"),
     ];
     for (c, d) in fixed {
         rules.push((c.to_string(), d.to_string()));

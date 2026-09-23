@@ -38,6 +38,7 @@ async fn large_report_streams_over_http_without_buffering_the_archive(pool: PgPo
         None,
         None,
         Default::default(),
+        None,
     )
     .await;
     let router = Router::new()

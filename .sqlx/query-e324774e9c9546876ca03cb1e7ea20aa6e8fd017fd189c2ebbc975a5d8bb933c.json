@@ -1,0 +1,66 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT p.id, p.name, p.currency,\n                  COALESCE(p.starts_on, (p.created_at AT TIME ZONE 'UTC')::date) as \"starts_on!: NaiveDate\",\n                  p.ends_on as \"ends_on: NaiveDate\", s.fee_mode as \"fee_mode!\",\n                  s.fee_amount_cents, s.monthly_day\n           FROM projects p JOIN project_settings s ON s.project_id = p.id\n           WHERE p.org_id = $1 AND p.client_id = $2 AND p.project_type = 'fixed_fee'\n             AND s.fee_mode IS NOT NULL\n             AND ($3::uuid[] IS NULL OR p.id = ANY($3))\n           ORDER BY p.id LIMIT 1001 FOR SHARE OF p, s",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "currency",
+        "type_info": "Bpchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "starts_on!: NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 4,
+        "name": "ends_on: NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 5,
+        "name": "fee_mode!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "fee_amount_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "monthly_day",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "e324774e9c9546876ca03cb1e7ea20aa6e8fd017fd189c2ebbc975a5d8bb933c"
+}

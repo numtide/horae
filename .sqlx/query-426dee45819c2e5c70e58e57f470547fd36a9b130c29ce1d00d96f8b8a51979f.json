@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (\n           SELECT 1 FROM pg_proc p,\n             LATERAL aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) acl\n           WHERE p.oid = 'public.resolve_project_rate(text,bigint,bigint,bigint,bigint,bigint)'::regprocedure\n             AND acl.grantee = 0 AND acl.privilege_type = 'EXECUTE'\n         ) AS \"public_execute!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "public_execute!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "426dee45819c2e5c70e58e57f470547fd36a9b130c29ce1d00d96f8b8a51979f"
+}

@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, name, billable_rate_cents, CASE WHEN $3 THEN cost_rate_cents END as cost_rate_cents FROM users\n         WHERE org_id = $1 AND active AND id = ANY($2) ORDER BY lower(name), id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "billable_rate_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "cost_rate_cents",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "27cd59a0db48e53a41cca2e9bc37fbc78e18dda7a038ef734999bae022404c37"
+}

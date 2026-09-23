@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT to_jsonb(u) AS profile, to_jsonb(a) AS assignment, to_jsonb(t) AS task\n         FROM users u JOIN assignments a ON a.user_id = u.id\n         CROSS JOIN tasks t WHERE u.id = $1 AND a.project_id = $2 AND t.id = $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "profile",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "assignment",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 2,
+        "name": "task",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "3afcbbbc175373364f9e5a638861dd95af7fe3682114ca8c1927520a0c83e7fb"
+}

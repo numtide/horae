@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT l.net_before_tax_cents FROM invoice_line_items l JOIN project_fee_occurrences f ON f.id=l.fee_occurrence_id WHERE l.id = ANY($1) ORDER BY f.period_key COLLATE \"C\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "net_before_tax_cents",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "5d656f16c0e876280a3d666abfaf7a42a6190073bef10bc0bd2d3fc42ff59a16"
+}

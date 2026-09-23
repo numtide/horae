@@ -19,6 +19,10 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
   let spendFails = false;
   let holdSpend = false;
   let releaseSpend;
+  let budgetRows = [];
+  let budgetFails = false;
+  let holdBudget = false;
+  let releaseBudget;
   let fixtureProject;
   page.on('pageerror', error => errors.push(error.message));
   try {
@@ -27,7 +31,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
     await page.waitForURL(`${base}/`);
     await page.route('**/api/**', async route => {
       const path = new URL(route.request().url()).pathname;
-      if (/\/(create|update|set|delete|start|stop|import|submit|approve|reopen|cancel|retry)/.test(path)) {
+      if (/\/(create|update|set|delete|start|stop|import|submit|approve|reopen|cancel|retry|save|finalize|discard)/.test(path)) {
         mutations.push(path);
         return route.abort();
       }
@@ -35,6 +39,11 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
         if (holdSpend) await new Promise(resolve => { releaseSpend = resolve; });
         if (spendFails) return route.abort();
         return route.fulfill({ json: [{ project_id: '01950000-0000-7000-8000-000000000005', spent_minutes: 60, spent_cents: 5000 }] });
+      }
+      if (path.startsWith('/api/list_project_budget_progress')) {
+        if (holdBudget) await new Promise(resolve => { releaseBudget = resolve; });
+        if (budgetFails) return route.abort();
+        return route.fulfill({ json: budgetRows });
       }
       if (path.startsWith('/api/list_clients')) {
         const response = await route.fetch();
@@ -59,12 +68,14 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
       return route.continue();
     });
     async function visit() {
+      // Finish body decoding before replacing the document (Dioxus 0.7).
+      await page.waitForLoadState('networkidle');
       const ready = page.waitForResponse(r => r.url().includes('/api/list_projects') && r.status() === 200);
       const [response] = await Promise.all([ready, page.goto(`${base}/projects`)]);
       await response.finished();
     }
     await visit();
-    await expect(page.getByRole('button', { name: 'New project', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'New project', exact: true })).toHaveAttribute('href', '/projects/new');
     await expect(page.locator('.page-header').getByRole('link', { name: 'Import', exact: true })).toHaveAttribute('href', '/admin/importers');
     await expect(page.locator('.proj-head')).not.toContainText('Scheduled');
     await expect(page.locator('.proj-head')).not.toContainText('Delta');
@@ -153,8 +164,9 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
     await actions.focus();
     await page.keyboard.press('Enter');
     await page.getByRole('menuitem', { name: 'Edit', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Edit Project', exact: true })).toBeVisible();
-    await page.locator('.page-header').getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(page).toHaveURL(/\/projects\/[0-9a-f-]{36}\/edit$/);
+    await expect(page.locator('.np-page').getByRole('heading', { name: 'Edit project', exact: true })).toBeVisible();
+    await page.locator('.np-footer').getByRole('button', { name: 'Cancel', exact: true }).click();
     await page.getByRole('button', { name: 'Export', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Export projects' });
     await expect(dialog.getByRole('link', { name: 'Export projects' })).toHaveAttribute('href', '/api/projects/export/csv?scope=active');
@@ -167,7 +179,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
 
     holdSpend = true;
     await visit();
-    await expect(page.getByRole('status')).toHaveText('Loading project spend…');
+    await expect(page.getByRole('status')).toHaveText('Loading project progress…');
     await expect(page.locator('.proj-row [aria-label="Spent unavailable"]')).toHaveText('—');
     await expect(page.getByRole('progressbar')).toHaveCount(0);
     holdSpend = false;
@@ -177,7 +189,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
 
     spendFails = true;
     await visit();
-    await expect(page.getByRole('alert')).toContainText('Could not load project spend');
+    await expect(page.getByRole('alert')).toContainText('Could not load project progress');
     await expect(page.locator('.proj-row [aria-label="Spent unavailable"]')).toHaveText('—');
     await expect(page.locator('.proj-row [aria-label="Remaining unavailable"]')).toHaveText('—');
     await expect(page.getByRole('progressbar')).toHaveCount(0);
@@ -186,6 +198,59 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
     await expect(progress).toHaveAttribute('value', '50');
     await expect(page.getByRole('alert')).toHaveCount(0);
     console.log('PASS: failed spend is unavailable; retry restores real amounts');
+
+    const configuredBudget = {
+      project_id: '01950000-0000-7000-8000-000000000005', task_id: null, user_id: null,
+      scope: 'project', label: null, kind: 'amount', currency: 'EUR',
+      period_key: '2026-09', budget: 10000, consumed: 2500,
+    };
+    budgetRows = [configuredBudget];
+    holdBudget = true;
+    await visit();
+    await expect(page.getByRole('status')).toHaveText('Loading project progress…');
+    await expect(page.locator('.proj-row [aria-label="Budget unavailable"]')).toHaveText('—');
+    await expect(page.getByRole('progressbar')).toHaveCount(0);
+    await expect.poll(() => typeof releaseBudget).toBe('function');
+    holdBudget = false;
+    releaseBudget();
+    await expect(progress).toHaveAttribute('value', '25');
+    await expect(page.locator('.proj-row')).toContainText('Budget period: 2026-09');
+    await expect(page.locator('.proj-row')).toContainText('Total tracked: 1h');
+    await expect(page.locator('.proj-row')).toContainText('EUR 75.00');
+    await expect(page.locator('[aria-label="Recurring budget"]')).toHaveCount(1);
+    console.log('PASS: configured monthly consumption replaces lifetime spend only after loading');
+
+    budgetRows = [
+      { ...configuredBudget, scope: 'task', task_id: '01950000-0000-7000-8000-000000000010', label: 'Development', budget: 6000, consumed: 8000 },
+      { ...configuredBudget, scope: 'task', task_id: '01950000-0000-7000-8000-000000000011', label: 'Review', budget: 4000, consumed: 0 },
+    ];
+    await visit();
+    await expect(progress).toHaveAttribute('value', '80');
+    const breakdown = page.locator('.proj-row details');
+    await breakdown.locator('summary').focus();
+    await page.keyboard.press('Enter');
+    await expect(breakdown).toHaveAttribute('open', '');
+    await expect(breakdown.locator('li').first()).toHaveText('Development: Budget EUR 60.00 · Spent EUR 80.00 · Remaining EUR -20.00');
+    await expect(breakdown.locator('li').nth(1)).toHaveText('Review: Budget EUR 40.00 · Spent EUR 0.00 · Remaining EUR 40.00');
+    for (const width of [390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
+      if (process.env.HORAE_TEST_SCREENSHOT_DIR)
+        await page.screenshot({ path: `${process.env.HORAE_TEST_SCREENSHOT_DIR}/projects-budget-${width}.png` });
+    }
+    await expect(page.locator('.proj-row [style]')).toHaveCount(0);
+    console.log('PASS: keyboard-accessible scope breakdown exposes overruns without layout overflow');
+
+    budgetFails = true;
+    await visit();
+    await expect(page.getByRole('alert')).toContainText('Could not load project progress');
+    await expect(page.locator('.proj-row [aria-label="Budget unavailable"]')).toHaveText('—');
+    await expect(page.getByRole('progressbar')).toHaveCount(0);
+    budgetFails = false;
+    await page.getByRole('button', { name: 'Retry', exact: true }).click();
+    await expect(progress).toHaveAttribute('value', '80');
+    console.log('PASS: failed configured budget never falls back to lifetime figures');
+    budgetRows = [];
 
     empty = true;
     for (const [orgRole, canCreate, canImport] of [['admin', true, true], ['manager', true, false], ['member', false, false]]) {
@@ -206,16 +271,18 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
       await expect(state.locator('.empty-state-text')).toHaveCSS('line-height', '21.7px');
       await expect(state.locator('.empty-state-text')).toHaveCSS('margin', '0px');
       await expect(state.locator('.empty-state-title')).toHaveCSS('margin', '0px');
-      await expect(state.getByRole('button', { name: 'New project', exact: true })).toHaveCount(canCreate ? 1 : 0);
+      await expect(state.getByRole('link', { name: 'New project', exact: true })).toHaveCount(canCreate ? 1 : 0);
       await expect(state.getByRole('link', { name: /Import from Harvest/ })).toHaveCount(canImport ? 1 : 0);
       if (canImport) await expect(state.getByRole('link', { name: /Import from Harvest/ })).toHaveCSS('font-size', '14px');
       if (canImport && process.env.HORAE_TEST_SCREENSHOT_DIR)
         await page.screenshot({ path: `${process.env.HORAE_TEST_SCREENSHOT_DIR}/projects-empty.png` });
       if (canCreate) {
-        await expect(state.getByRole('button', { name: 'New project', exact: true })).toHaveCSS('padding', '12px 20px');
-        await state.getByRole('button', { name: 'New project', exact: true }).click();
-        await expect(page.getByRole('heading', { name: 'New Project', exact: true })).toBeVisible();
-        await page.locator('.page-header').getByRole('button', { name: 'Cancel', exact: true }).click();
+        await expect(state.getByRole('link', { name: 'New project', exact: true })).toHaveCSS('padding', '12px 20px');
+        await state.getByRole('link', { name: 'New project', exact: true }).click();
+        await expect(page).toHaveURL(`${base}/projects/new`);
+        await expect(page.getByRole('heading', { name: 'New project', exact: true })).toBeVisible();
+        await page.getByRole('button', { name: /Back to Projects/ }).click();
+        await expect(page).toHaveURL(`${base}/projects`);
       }
       console.log(`PASS: empty-state guidance and action visibility for ${orgRole}`);
     }
@@ -231,6 +298,8 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
       await expect(trigger).toHaveCSS('padding-left', '12px');
     }
     // Exercise the unmodified semantic defaults without depending on gallery copy.
+    await expect(page.locator('.chip-input .chip').first()).toHaveCSS('background-color', 'rgb(31, 92, 77)');
+    await expect(page.locator('.chip-input-field').first()).toHaveCSS('min-width', '80px');
     await page.locator('main').evaluate(main => {
       const state = document.createElement('div');
       state.id = 'default-empty-state';
@@ -248,5 +317,8 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
     console.log('PASS: shared Menu, Combobox, empty-state and navigation-icon defaults are unchanged');
     assert.deepEqual(mutations, []);
     assert.deepEqual(errors, []);
+  } catch (error) {
+    console.error({ url: page.url(), errors, mutations, page: await page.locator('body').ariaSnapshot() });
+    throw error;
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -59,6 +59,74 @@ fn login_event() -> AppEvent {
 }
 
 #[tokio::test]
+async fn confirmed_dispatch_waits_for_the_plugin_to_finish() {
+    let (release, blocked) = std::sync::mpsc::channel();
+    let (registry, entered) = observing_registry(Some(blocked));
+    let event = login_event();
+    let delivery = registry.dispatch_confirmed(&event);
+    tokio::pin!(delivery);
+    tokio::select! {
+        result = &mut delivery => panic!("Delivery acknowledged before plugin completion: {result:?}"),
+        result = entered => result.unwrap(),
+    };
+    assert!(futures_util::poll!(&mut delivery).is_pending());
+    release.send(()).unwrap();
+    delivery.await.unwrap();
+    assert_eq!(registry.pending.available_permits(), MAX_PENDING_CALLS);
+}
+
+#[tokio::test]
+async fn confirmed_dispatch_returns_overload_for_retry() {
+    let (registry, mut entered) = observing_registry(None);
+    let capacity = Arc::clone(&registry.pending)
+        .try_acquire_many_owned(MAX_PENDING_CALLS as u32)
+        .unwrap();
+    assert!(registry.dispatch_confirmed(&login_event()).await.is_err());
+    assert!(matches!(
+        entered.try_recv(),
+        Err(tokio::sync::oneshot::error::TryRecvError::Empty)
+    ));
+    drop(capacity);
+    registry.dispatch_confirmed(&login_event()).await.unwrap();
+    entered.await.unwrap();
+}
+
+#[tokio::test]
+async fn confirmed_dispatch_returns_plugin_failure_for_retry() {
+    let (registry, _) = observing_registry(None);
+    *registry.plugins[0].plugin.lock().await = extism::Plugin::new(
+        r#"(module (func (export "user_logged_in") (result i32) unreachable))"#,
+        [],
+        false,
+    )
+    .unwrap();
+    assert!(registry.dispatch_confirmed(&login_event()).await.is_err());
+    assert_eq!(registry.pending.available_permits(), MAX_PENDING_CALLS);
+    assert_eq!(registry.workers.available_permits(), MAX_RUNNING_CALLS);
+}
+
+#[tokio::test]
+async fn confirmed_dispatch_attempts_other_plugins_after_one_fails() {
+    let (mut registry, _) = observing_registry(None);
+    *registry.plugins[0].plugin.lock().await = extism::Plugin::new(
+        r#"(module (func (export "user_logged_in") (result i32) unreachable))"#,
+        [],
+        false,
+    )
+    .unwrap();
+    let (healthy, mut entered) = observing_registry(None);
+    registry.plugins.push(Arc::clone(&healthy.plugins[0]));
+    registry
+        .hook_index
+        .insert("user_logged_in".into(), vec![0, 1]);
+    assert!(registry.dispatch_confirmed(&login_event()).await.is_err());
+    assert!(
+        entered.try_recv().is_ok(),
+        "A failing plugin must not prevent healthy subscribers from receiving the event"
+    );
+}
+
+#[tokio::test]
 async fn events_execute_outside_the_async_worker() {
     let (registry, observed) = observing_registry(None);
     let caller = std::thread::current().id();

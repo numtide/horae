@@ -157,6 +157,8 @@ async fn resolve_parent(
                 task_billable_default: task.billable_by_default,
                 task_active: task.is_active,
                 billable_rate: rate.as_deref(),
+                // The task catalog response does not identify its currency.
+                rate_currency: None,
                 harvest_updated_at: task.updated_at,
             };
             Ok(vec![(

@@ -199,12 +199,37 @@ read-only rows and other shared controls retain their existing layout.
 | `/clients` | `ClientList` | Table of clients |
 | `/clients/:id` | `ClientDetail` | Projects under client |
 | `/projects` | `ProjectList` | All projects |
+| `/projects/new` | `NewProject` | Project creation with a private draft (manager/admin) |
 | `/projects/:id` | `ProjectDetail` | Project tasks + time entries |
 | `/time` | `TimeList` | Time entry list with filters |
 | `/invoices` | `InvoiceList` | Invoice table |
 | `/invoices/:id` | `InvoiceDetail` | Invoice line items |
 | `/admin/users` | `AdminUsers` | User management |
 | `/settings` | `Settings` | App + plugin settings |
+
+### New Project
+
+`crates/horae/src/pages/new_project.rs` composes basic details, visibility, billing/budgets,
+tasks, team and invoice defaults from sibling section modules. The static creation route
+precedes the project-ID route and keeps Projects active in the existing shell; it does not
+add a sidebar item or reproduce the handoff's developer controls.
+
+The form has an independently scrolling main panel and persistent actions. Its 1,180px
+maximum width, 220px label column, compact numeric fields and responsive gutters use
+tokens and generated utilities. Structural `np-*` rules and the shell's `.np-page` opt-in
+are local to this surface. Existing controls retain their defaults; form selectors, date
+fields, compact checkboxes and validation links opt into shared capabilities.
+
+Draft status reflects server acknowledgements. Cancel and the form's Back action preserve
+the draft; Discard requires confirmation. Conditional billing fields retain raw values when hidden, and
+server validation applies the selected type/mode. Recognized field errors link to their
+controls and restore focus; task/person/milestone identities use UUIDs rather than row
+positions. Email availability reflects the deployment configuration, not a simulated toggle.
+
+The [New Project contract](specs/011-new-project-screen/contracts/new-project.md) maps all
+handoff panels to components/tokens and records the persistence, authorization and recovery
+requirements. The [task checklist](specs/011-new-project-screen/tasks.md) tracks remaining
+acceptance work; this page is not evidence that every final gate has passed.
 
 ## Accessibility
 

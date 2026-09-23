@@ -96,11 +96,39 @@ fn invalid_job_attempt_limits_reject_startup() {
 }
 
 #[test]
+fn mail_environment_requires_a_complete_valid_configuration() {
+    probe(
+        "invalid-mail",
+        &[("HORAE_SENDMAIL_PATH", "/no/such/sendmail")],
+    );
+    probe("invalid-mail", &[("HORAE_MAIL_FROM", "a@example.test")]);
+    probe(
+        "invalid-mail",
+        &[
+            ("HORAE_SENDMAIL_PATH", "sendmail"),
+            ("HORAE_MAIL_FROM", "a@example.test"),
+        ],
+    );
+    let executable = std::env::current_exe().unwrap();
+    probe(
+        "mail",
+        &[
+            ("HORAE_SENDMAIL_PATH", executable.to_str().unwrap()),
+            ("HORAE_MAIL_FROM", "alerts@example.test"),
+        ],
+    );
+}
+
+#[test]
 fn environment_probe() {
     let Ok(mode) = std::env::var("HORAE_CONFIG_TEST") else {
         return;
     };
     let result = AppConfig::from_env();
+    if mode == "invalid-mail" {
+        assert!(result.unwrap_err().to_string().contains("HORAE_"));
+        return;
+    }
     if mode == "invalid-job-policy" {
         assert!(
             result
@@ -122,6 +150,7 @@ fn environment_probe() {
             assert!(config.oidc.is_none());
             assert!(config.harvest.is_none());
             assert!(config.plugin_database_url.is_none());
+            assert!(config.mail.is_none());
         }
         "example" => {
             assert!(config.dev_login);
@@ -157,6 +186,11 @@ fn environment_probe() {
                 .parse()
                 .unwrap();
             assert_eq!(config.job_policy.max_attempts, requested);
+        }
+        "mail" => {
+            let mail = config.mail.as_ref().unwrap();
+            assert_eq!(mail.sender, "alerts@example.test");
+            assert!(mail.executable.is_absolute());
         }
         _ => panic!("unknown configuration test mode"),
     }

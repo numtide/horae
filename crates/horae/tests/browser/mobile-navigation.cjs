@@ -9,7 +9,9 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, headless: true });
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true });
   const errors = [];
-  page.on('pageerror', error => errors.push(error.message));
+  const consoleErrors = [];
+  page.on('pageerror', error => errors.push({ message: error.message, stack: error.stack, url: page.url() }));
+  page.on('console', message => { if (message.type() === 'error' && consoleErrors.length < 20) consoleErrors.push(message.text()); });
   try {
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin' }).click();
@@ -93,5 +95,8 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     }
     console.log('PASS: desktop drag width survives mobile and breakpoint transitions');
     assert.deepEqual(errors, []);
+  } catch (error) {
+    console.error({ url: page.url(), errors, consoleErrors });
+    throw error;
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

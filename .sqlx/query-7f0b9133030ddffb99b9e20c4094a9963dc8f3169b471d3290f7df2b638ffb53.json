@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT pt.task_id, pt.billable, pt.rate_cents, s.restricted as \"restricted?\", s.budget_minutes, s.budget_cents\n         FROM project_tasks pt JOIN tasks t ON t.id = pt.task_id AND t.org_id = $2\n         LEFT JOIN project_task_settings s ON s.project_id = pt.project_id AND s.task_id = pt.task_id AND s.org_id = $2\n         WHERE pt.project_id = $1 ORDER BY pt.task_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "task_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "billable",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "rate_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "restricted?",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "budget_minutes",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "budget_cents",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "7f0b9133030ddffb99b9e20c4094a9963dc8f3169b471d3290f7df2b638ffb53"
+}

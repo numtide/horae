@@ -1,0 +1,66 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT p.id, p.name, COALESCE(s.terms_days, 30)::smallint as \"terms_days!\",\n                COALESCE(s.po_number, '') as \"po_number!\",\n                COALESCE(s.discount_bps, 0)::smallint as \"discount_bps!\",\n                COALESCE(s.tax1_bps, 0)::smallint as \"tax1_bps!\", s.tax2_name, s.tax2_bps\n         FROM projects p LEFT JOIN project_settings s ON s.project_id = p.id\n         WHERE p.org_id = $1 AND p.client_id = $2 AND p.id = ANY($3) ORDER BY p.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "terms_days!",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 3,
+        "name": "po_number!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "discount_bps!",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 5,
+        "name": "tax1_bps!",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 6,
+        "name": "tax2_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "tax2_bps",
+        "type_info": "Int2"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      null,
+      null,
+      null,
+      true,
+      true
+    ]
+  },
+  "hash": "dc5349bdbf44ab4ea88b452dbcd3f14ea4ddf5f9355f195519aefea74338ea79"
+}

@@ -131,15 +131,7 @@ pub(super) async fn entries(
             let _ = filename.send("timesheet.csv".to_owned());
             write_rows(
                 &sender,
-                super::stream_entries(
-                    &mut *tx,
-                    org_id,
-                    from,
-                    to,
-                    params.client_id,
-                    params.project_id,
-                    params.user_id,
-                ),
+                super::stream_entries(&mut *tx, org_id, (from, to), params.filters()),
                 &super::ENTRY_EXPORT_HEADERS,
                 |writer, row| super::write_entry_csv(writer, &row),
             )
@@ -153,6 +145,7 @@ pub(super) async fn entries(
 pub(super) async fn projects(
     pool: PgPool,
     org_id: Uuid,
+    viewer_id: Uuid,
     params: ProjectsExportParams,
 ) -> Result<Response, StatusCode> {
     response(
@@ -169,6 +162,7 @@ pub(super) async fn projects(
                 super::stream_projects_export(
                     &mut *tx,
                     org_id,
+                    viewer_id,
                     params.scope.as_deref().unwrap_or("active"),
                 ),
                 &super::PROJECT_EXPORT_HEADERS,
@@ -209,29 +203,41 @@ pub(super) async fn invoice(
                 .map_err(database_error)?
                 .ok_or(StatusCode::NOT_FOUND)?;
             let _ = filename.send(format!("invoice-{}.csv", invoice.number));
+            let metadata = super::invoice_export_metadata(&invoice);
             write_rows(
                 &sender,
                 super::stream_invoice_lines(&mut *tx, invoice_id),
-                &["Description", "Hours", "Rate", "Amount"],
+                &super::INVOICE_HEADERS,
                 |writer, line| {
-                    writer.write_record([
-                        line.description.as_str(),
-                        &super::format_hours2(line.minutes.into()),
-                        &super::format_cents_plain(line.rate_cents),
-                        &super::format_cents_plain(line.amount_cents),
-                    ])
+                    writer.write_record(
+                        [
+                            line.description.as_str(),
+                            &line
+                                .minutes
+                                .map(|minutes| super::format_hours2(minutes.into()))
+                                .unwrap_or_default(),
+                            &line
+                                .rate_cents
+                                .map(super::format_cents_plain)
+                                .unwrap_or_default(),
+                            &super::format_cents_plain(line.amount_cents),
+                        ]
+                        .into_iter()
+                        .chain(metadata.iter().map(String::as_str)),
+                    )
                 },
             )
             .await?;
             let mut total = csv::Writer::from_writer(Vec::new());
-            total
-                .write_record([
-                    "Total",
-                    "",
-                    "",
-                    &super::format_cents_plain(invoice.total_cents),
-                ])
-                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            for (label, cents) in invoice.breakdown() {
+                total
+                    .write_record(
+                        [label.as_str(), "", "", &super::format_cents_plain(cents)]
+                            .into_iter()
+                            .chain(metadata.iter().map(String::as_str)),
+                    )
+                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            }
             flush(&sender, total).await?;
             tx.commit().await.map_err(database_error)
         },

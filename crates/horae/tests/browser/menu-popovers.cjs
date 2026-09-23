@@ -8,16 +8,43 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
   const page = await browser.newPage({ viewport: { width: 320, height: 1000 }, hasTouch: true });
-  const errors = [], failures = [];
-  page.on('pageerror', error => errors.push(error.message));
+  page.setDefaultTimeout(30_000);
+  page.setDefaultNavigationTimeout(30_000);
+  const errors = [], pending = new Set();
+  let navigationRead;
+  page.on('request', request => pending.add(request));
+  page.on('requestfinished', request => pending.delete(request));
+  page.on('requestfailed', request => pending.delete(request));
+  page.on('pageerror', error => errors.push({ url: page.url(), stack: error.stack || error.message }));
+  page.on('console', message => {
+    if (message.type() === 'error' && message.text().includes('panicked at')) console.error(message.text());
+  });
   async function visit(path, resource) {
+    // Cancel may have just started this same read on the outgoing document.
+    // Drain it before subscribing, or the next navigation can abort our match.
+    await expect.poll(() => [...pending].filter(request => new URL(request.url()).pathname.startsWith('/api/')).length).toBe(0);
     const ready = page.waitForResponse(r => r.url().includes(`/api/${resource}`) && r.status() === 200);
     await page.goto(`${base}${path}`);
-    await (await ready).finished();
+    navigationRead = await ready;
+    await navigationRead.finished();
   }
   async function check(name, run) {
-    try { await run(); console.log(`PASS: ${name}`); }
-    catch (error) { failures.push(name); console.error(`FAIL: ${name}: ${error.message}`); }
+    console.log(`CHECK: ${name}`);
+    let deadline;
+    try {
+      // Response completion and page evaluations have no Playwright action timeout.
+      await Promise.race([run(), new Promise((_, reject) => {
+        deadline = setTimeout(() => reject(new Error('Menu scenario exceeded 60 seconds')), 60_000);
+      })]);
+      console.log(`PASS: ${name}`);
+    } catch (error) {
+      console.error(`FAIL: ${name}: ${error.message}`, {
+        url: page.url(), pending: [...pending].map(request => request.url()), errors,
+        navigationRead: navigationRead && { url: navigationRead.url(), failure: navigationRead.request().failure() },
+      });
+      // Close the browser in finally rather than overlap a timed-out scenario.
+      throw error;
+    } finally { clearTimeout(deadline); }
   }
   async function visibleItems(menu) {
     // Inspect before locator.click/focus can auto-scroll and conceal a clipped menu.
@@ -35,6 +62,71 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin' }).click();
     await page.waitForURL(`${base}/`);
+    await check('late popover initialization restores missing focus without overriding deliberate focus', async () => {
+      await visit('/projects', 'list_projects');
+      const script = await page.locator('script[src]').evaluateAll(scripts => scripts.find(script => /\/menu[^/]*\.js$/.test(script.src)).src);
+      for (const [kind, content] of [
+        ['calendar', '<button id="first" class="dp-day picked">Selected day</button><button id="inside" class="dp-day">Other day</button>'],
+        ['select', '<input id="first" aria-label="Search"><button id="inside" role="option">Choice</button>'],
+        ['menu', '<button id="first" role="menuitem">Edit</button><button id="inside" role="menuitem">Archive</button>'],
+      ]) {
+        for (const destination of ['trigger', 'body', 'inside', 'outside']) {
+          const probe = await browser.newPage();
+          try {
+            await probe.setContent(`<button id="panel-trigger" popovertarget="panel" aria-expanded="false">Open</button><div id="panel" class="menu-popover" popover="auto" data-${kind}="true">${content}</div><button id="outside">Next field</button>`);
+            await probe.locator('#panel-trigger').click();
+            if (destination === 'body') await probe.locator('#panel-trigger').evaluate(button => button.blur());
+            else if (destination !== 'trigger') await probe.locator(`#${destination}`).focus();
+            await probe.addScriptTag({ url: script });
+            await expect(probe.locator(`#${['trigger', 'body'].includes(destination) ? 'first' : destination}`)).toBeFocused();
+            await expect(probe.locator('#panel-trigger')).toHaveAttribute('aria-expanded', String(destination !== 'outside'));
+            if (destination === 'outside') await expect(probe.locator('#panel')).toBeHidden();
+            else await expect(probe.locator('#panel')).toBeVisible();
+          } finally { await probe.close(); }
+        }
+      }
+    });
+    await check('content reflow preserves an open menu while deliberate scrolling still dismisses it', async () => {
+      await visit('/projects', 'list_projects');
+      await page.evaluate(() => document.fonts.ready);
+      const row = page.locator('.proj-row').first();
+      const trigger = row.getByRole('button', { name: 'Actions' });
+      const menu = row.getByRole('menu');
+      const scroller = page.locator('.proj-scroll');
+      // Simulate the shrinking scroll range observed during a late font swap,
+      // independently of external font downloads and their timing.
+      await page.locator('.proj-grid').evaluate(el => { el.style.paddingRight = '64px'; });
+      await scroller.evaluate(el => { el.scrollLeft = el.scrollWidth; });
+      await trigger.click();
+      await expect(menu.getByRole('menuitem', { name: 'Edit', exact: true })).toBeFocused();
+      const before = await scroller.evaluate(el => ({ width: el.scrollWidth, left: el.scrollLeft }));
+      await page.locator('.proj-grid').evaluate(el => { el.style.paddingRight = '0px'; });
+      await expect.poll(() => scroller.evaluate(el => el.scrollWidth)).toBeLessThan(before.width);
+      await expect.poll(() => scroller.evaluate(el => el.scrollLeft)).toBeLessThan(before.left);
+      await expect(menu).toBeVisible();
+      await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+      const geometry = await visibleItems(menu);
+      assert.ok(geometry.inside && geometry.items.every(item => item.hit), JSON.stringify(geometry));
+      await expect.poll(() => menu.evaluate(el => {
+        const anchor = document.getElementById(el.getAttribute('aria-labelledby')).getBoundingClientRect();
+        return Math.abs(anchor.right - el.getBoundingClientRect().right);
+      })).toBeLessThan(1);
+      await expect(menu.getByRole('menuitem', { name: 'Edit', exact: true })).toBeFocused();
+      await scroller.evaluate(el => { el.scrollLeft -= 40; });
+      await expect(menu).toBeHidden();
+      await expect(trigger).toBeFocused();
+      await page.locator('.proj-grid').evaluate(el => { el.style.paddingRight = '64px'; });
+      await scroller.evaluate(el => { el.scrollLeft = el.scrollWidth; });
+      await trigger.click();
+      await expect(menu.getByRole('menuitem', { name: 'Edit', exact: true })).toBeFocused();
+      // A genuine scroll in the same frame as reflow must still dismiss.
+      await scroller.evaluate(el => {
+        el.querySelector('.proj-grid').style.paddingRight = '0px';
+        el.scrollLeft -= 40;
+      });
+      await expect(menu).toBeHidden();
+      await expect(trigger).toBeFocused();
+    });
     await check('first and last project-row actions are initially visible and clickable', async () => {
       for (const [width, height] of [[320, 1000], [390, 320], [1440, 800]]) {
         await page.setViewportSize({ width, height });
@@ -49,9 +141,9 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
             await page.screenshot({ path: process.env.HORAE_TEST_SCREENSHOT });
           const edit = geometry.items.find(item => item.text === 'Edit');
           await page.mouse.click(edit.x, edit.y);
-          await expect(page.getByRole('heading', { name: 'Edit Project', exact: true })).toBeVisible();
+          await expect(page.locator('.np-page').getByRole('heading', { name: 'Edit project', exact: true })).toBeVisible();
           await expect(menu).toBeHidden();
-          await page.locator('.page-header').getByRole('button', { name: 'Cancel', exact: true }).click();
+          await page.locator('.np-footer').getByRole('button', { name: 'Cancel', exact: true }).click();
         }
       }
     });
@@ -183,7 +275,21 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
       await expect(page.getByRole('menu')).toBeHidden();
       assert.equal(await page.locator('script[src]').evaluateAll(scripts => scripts.filter(s => /\/menu[^/]*\.js$/.test(s.src)).length), 1);
     });
+    await check('Timesheet keeps the shared calendar and week selection behavior', async () => {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await visit('/timesheet/week/2027-10-04', 'list_time_entries');
+      await page.locator('.ts-pager-label').click();
+      const calendar = page.locator('.dp-pop .dp');
+      await expect(calendar).toBeVisible();
+      await expect(calendar.locator('.dp-day')).toHaveCount(42);
+      await expect(calendar.locator('.dp-day.picked, .dp-day.band')).toHaveCount(7);
+      await calendar.getByRole('button', { name: 'Previous month' }).click();
+      await expect(calendar.locator('.font-display')).toHaveText('September 2027');
+      await calendar.getByRole('button', { name: 'Next month' }).click();
+      await calendar.getByRole('button', { name: '11 October 2027', exact: true }).click();
+      await expect(page).toHaveURL(/\/week\/2027-10-11/);
+      await expect(calendar).toHaveCount(0);
+    });
     assert.deepEqual(errors, []);
-    assert.deepEqual(failures, []);
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

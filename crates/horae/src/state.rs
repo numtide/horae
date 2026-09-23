@@ -15,6 +15,7 @@ pub struct AppState {
     /// configured.
     pub harvest: Option<crate::config::HarvestConfig>,
     pub job_policy: crate::config::JobPolicy,
+    pub mail: Option<crate::config::MailConfig>,
 }
 
 impl AppState {
@@ -25,6 +26,7 @@ impl AppState {
             oidc: None,
             harvest: None,
             job_policy: crate::config::JobPolicy::default(),
+            mail: None,
         }
     }
 
@@ -42,6 +44,11 @@ impl AppState {
         self.job_policy = policy;
         self
     }
+
+    pub fn with_mail(mut self, mail: Option<crate::config::MailConfig>) -> Self {
+        self.mail = mail;
+        self
+    }
 }
 
 // Async-aware singleton: initialised exactly once, inside dioxus's tokio runtime.
@@ -56,6 +63,7 @@ pub async fn init_state(
     oidc: Option<crate::config::OidcConfig>,
     harvest: Option<crate::config::HarvestConfig>,
     job_policy: crate::config::JobPolicy,
+    mail: Option<crate::config::MailConfig>,
 ) {
     GLOBAL_STATE
         .get_or_init(|| async {
@@ -63,6 +71,7 @@ pub async fn init_state(
                 .with_oidc(oidc)
                 .with_harvest(harvest)
                 .with_job_policy(job_policy)
+                .with_mail(mail)
         })
         .await;
 }
@@ -96,7 +105,9 @@ pub async fn global_state() -> &'static AppState {
                 std::process::exit(1);
             }
 
-            AppState::new(pool, Arc::new(PluginRegistry::empty())).with_job_policy(cfg.job_policy)
+            AppState::new(pool, Arc::new(PluginRegistry::empty()))
+                .with_job_policy(cfg.job_policy)
+                .with_mail(cfg.mail)
         })
         .await
 }

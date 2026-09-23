@@ -5,6 +5,7 @@ pub mod invoice;
 mod jobs;
 pub mod organization;
 pub mod project;
+pub mod project_creation;
 pub mod task;
 pub mod time_entry;
 pub mod user;
@@ -17,7 +18,9 @@ pub use invoice::InvoiceLine;
 pub use invoice::{Invoice, InvoiceWithLines};
 pub use jobs::{JobStatus, RetryAvailability};
 pub use organization::OrgBranding;
-pub use project::Project;
+pub use project::{
+    Project, ProjectBudgetProgress, ProjectDetails, ProjectTagLink, ProjectTaskRate,
+};
 pub use task::Task;
 pub use time_entry::TimeEntry;
 pub use user::User;
@@ -42,12 +45,13 @@ pub struct ReportRow {
     pub total_minutes: i64,
     pub rounded_minutes: i64,
     pub billable_minutes: i64,
-    /// Billable amount in cents (rates resolved via FR-024) and cost in cents
-    /// (`users.cost_rate_cents`). Each row contains only one currency; an entity
-    /// with time for clients in different currencies appears in separate rows.
+    /// Billing is partitioned by currency; cost has its own organization currency.
     pub billable_cents: i64,
-    pub cost_cents: i64,
+    /// Absent if any entry in the group has an administrator-only cost override.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cost_cents: Option<i64>,
     pub currency: String,
+    pub cost_currency: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

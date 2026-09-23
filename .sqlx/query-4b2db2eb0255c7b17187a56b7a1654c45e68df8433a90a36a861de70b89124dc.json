@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE projects SET code = 'READ-1', starts_on = '2026-09-01', ends_on = '2026-10-31' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4b2db2eb0255c7b17187a56b7a1654c45e68df8433a90a36a861de70b89124dc"
+}

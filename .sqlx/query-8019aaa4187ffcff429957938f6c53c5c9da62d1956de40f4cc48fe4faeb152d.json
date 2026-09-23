@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE project_member_costs SET cost_rate_cents = 0 WHERE project_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8019aaa4187ffcff429957938f6c53c5c9da62d1956de40f4cc48fe4faeb152d"
+}

@@ -16,6 +16,7 @@ const LEASE: Duration = Duration::from_secs(300);
 const POLL: Duration = Duration::from_secs(2);
 
 mod lease;
+pub(crate) mod outbox;
 pub(crate) mod report;
 pub(crate) use lease::JobLease;
 
@@ -62,7 +63,6 @@ fn decode_payload(value: serde_json::Value) -> anyhow::Result<JobPayload> {
 
 /// Insert an event in the same transaction as the state change that produced
 /// it. Consumers can claim undelivered rows independently of the job worker.
-#[allow(dead_code)]
 pub async fn enqueue_outbox(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     org_id: Uuid,
@@ -84,7 +84,6 @@ pub async fn enqueue_outbox(
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct OutboxEvent {
     pub id: Uuid,
     pub org_id: Uuid,
@@ -94,15 +93,18 @@ pub struct OutboxEvent {
     pub claim_token: Uuid,
 }
 
-/// Claim one event for delivery. Moving `available_at` acts as a short lease,
-/// so a crashed consumer can safely retry it later.
-#[allow(dead_code)]
-pub async fn claim_outbox(pool: &sqlx::PgPool) -> anyhow::Result<Option<OutboxEvent>> {
+/// Claim one event of the consumer's kind. Moving `available_at` acts as a short
+/// lease, so a crashed consumer can safely retry it later without taking events
+/// intended for another consumer.
+pub async fn claim_outbox(
+    pool: &sqlx::PgPool,
+    event_kind: &str,
+) -> anyhow::Result<Option<OutboxEvent>> {
     let claim_token = Uuid::now_v7();
     let row = sqlx::query!(
         r#"WITH candidate AS (
              SELECT id FROM horae_outbox
-              WHERE delivered_at IS NULL AND available_at <= now()
+              WHERE delivered_at IS NULL AND failed_at IS NULL AND available_at <= now() AND event_kind = $2
               ORDER BY available_at, created_at
               FOR UPDATE SKIP LOCKED LIMIT 1
            )
@@ -115,6 +117,7 @@ pub async fn claim_outbox(pool: &sqlx::PgPool) -> anyhow::Result<Option<OutboxEv
         RETURNING o.id, o.org_id, o.event_kind, o.payload, o.attempts,
                   o.claim_token as "claim_token!""#,
         claim_token,
+        event_kind,
     )
     .fetch_optional(pool)
     .await?;
@@ -128,7 +131,6 @@ pub async fn claim_outbox(pool: &sqlx::PgPool) -> anyhow::Result<Option<OutboxEv
     }))
 }
 
-#[allow(dead_code)]
 pub async fn mark_outbox_delivered(
     pool: &sqlx::PgPool,
     event: &OutboxEvent,
@@ -136,7 +138,7 @@ pub async fn mark_outbox_delivered(
     let result = sqlx::query!(
         r#"UPDATE horae_outbox SET delivered_at = now(), last_error = NULL, claim_token = NULL
             WHERE id = $1 AND org_id = $2 AND claim_token = $3
-              AND delivered_at IS NULL AND available_at > now()"#,
+              AND delivered_at IS NULL AND failed_at IS NULL AND available_at > now()"#,
         event.id,
         event.org_id,
         event.claim_token,
@@ -146,7 +148,6 @@ pub async fn mark_outbox_delivered(
     Ok(result.rows_affected() == 1)
 }
 
-#[allow(dead_code)]
 pub async fn mark_outbox_failed(
     pool: &sqlx::PgPool,
     event: &OutboxEvent,
@@ -157,7 +158,27 @@ pub async fn mark_outbox_failed(
               SET available_at = now() + LEAST(power(2::double precision, LEAST(attempts, 9)), 300)::int * interval '1 second',
                   last_error = $4, claim_token = NULL
             WHERE id = $1 AND org_id = $2 AND claim_token = $3
-              AND delivered_at IS NULL AND available_at > now()"#,
+              AND delivered_at IS NULL AND failed_at IS NULL AND available_at > now()"#,
+        event.id,
+        event.org_id,
+        event.claim_token,
+        error,
+    )
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected() == 1)
+}
+
+/// Retain a terminal failure without acknowledging delivery or permitting another claim.
+pub(crate) async fn stop_outbox_delivery(
+    pool: &sqlx::PgPool,
+    event: &OutboxEvent,
+    error: &str,
+) -> anyhow::Result<bool> {
+    let result = sqlx::query!(
+        "UPDATE horae_outbox SET failed_at = now(), last_error = $4, claim_token = NULL
+         WHERE id = $1 AND org_id = $2 AND claim_token = $3
+           AND delivered_at IS NULL AND failed_at IS NULL AND available_at > now()",
         event.id,
         event.org_id,
         event.claim_token,
@@ -527,6 +548,13 @@ pub struct Worker {
 }
 
 impl Worker {
+    pub(crate) fn new(
+        stop: tokio::sync::watch::Sender<bool>,
+        task: tokio::task::JoinHandle<()>,
+    ) -> Self {
+        Self { stop, task }
+    }
+
     pub fn stop_sender(&self) -> tokio::sync::watch::Sender<bool> {
         self.stop.clone()
     }
@@ -1764,7 +1792,7 @@ mod tests {
         assert_eq!(decoded.kind(), "synthetic_test_job");
     }
 
-    async fn org(pool: &sqlx::PgPool) -> Uuid {
+    pub(super) async fn org(pool: &sqlx::PgPool) -> Uuid {
         let id = Uuid::now_v7();
         sqlx::query!(
             "INSERT INTO organizations (id, name) VALUES ($1, 'Jobs test')",
@@ -2130,6 +2158,71 @@ mod tests {
     }
 
     #[sqlx::test]
+    #[serial_test::serial]
+    async fn outbox_claims_only_the_requested_event_kind(pool: sqlx::PgPool) {
+        let org_id = org(&pool).await;
+        let mut tx = pool.begin().await.unwrap();
+        let mail_id = enqueue_outbox(&mut tx, org_id, "budget_email", serde_json::json!({}))
+            .await
+            .unwrap();
+        let project_id = enqueue_outbox(&mut tx, org_id, "project_created", serde_json::json!({}))
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+
+        assert!(claim_outbox(&pool, "unknown").await.unwrap().is_none());
+        let project = claim_outbox(&pool, "project_created")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(project.id, project_id);
+        assert_eq!(project.event_kind, "project_created");
+        assert_eq!(project.attempts, 1);
+        assert!(
+            claim_outbox(&pool, "project_created")
+                .await
+                .unwrap()
+                .is_none()
+        );
+        let mail = claim_outbox(&pool, "budget_email").await.unwrap().unwrap();
+        assert_eq!(mail.id, mail_id);
+        assert_eq!(
+            mail.attempts, 1,
+            "Other consumers must not touch this event's lease"
+        );
+        assert!(mark_outbox_delivered(&pool, &project).await.unwrap());
+        assert!(mark_outbox_delivered(&pool, &mail).await.unwrap());
+        assert!(
+            claim_outbox(&pool, "project_created")
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[sqlx::test]
+    #[serial_test::serial]
+    async fn outbox_same_kind_consumers_cannot_claim_the_same_lease(pool: sqlx::PgPool) {
+        let org_id = org(&pool).await;
+        let mut tx = pool.begin().await.unwrap();
+        let id = enqueue_outbox(&mut tx, org_id, "project_created", serde_json::json!({}))
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+        let (first, second) = tokio::join!(
+            claim_outbox(&pool, "project_created"),
+            claim_outbox(&pool, "project_created"),
+        );
+        let claimed: Vec<_> = [first.unwrap(), second.unwrap()]
+            .into_iter()
+            .flatten()
+            .collect();
+        assert_eq!(claimed.len(), 1);
+        assert_eq!(claimed[0].id, id);
+        assert_eq!(claimed[0].attempts, 1);
+    }
+
+    #[sqlx::test]
     async fn outbox_delivery_is_idempotent(pool: sqlx::PgPool) {
         let org_id = org(&pool).await;
         let mut tx = pool.begin().await.unwrap();
@@ -2142,7 +2235,7 @@ mod tests {
         .await
         .unwrap();
         tx.commit().await.unwrap();
-        let event = claim_outbox(&pool).await.unwrap().unwrap();
+        let event = claim_outbox(&pool, "jobs.test").await.unwrap().unwrap();
         assert_eq!(event.id, id);
         assert!(mark_outbox_delivered(&pool, &event).await.unwrap());
         assert!(!mark_outbox_delivered(&pool, &event).await.unwrap());
@@ -2156,9 +2249,9 @@ mod tests {
         enqueue_outbox(&mut tx, org_id, "rollback", serde_json::json!({}))
             .await
             .unwrap();
-        assert!(claim_outbox(&pool).await.unwrap().is_none());
+        assert!(claim_outbox(&pool, "rollback").await.unwrap().is_none());
         tx.rollback().await.unwrap();
-        assert!(claim_outbox(&pool).await.unwrap().is_none());
+        assert!(claim_outbox(&pool, "rollback").await.unwrap().is_none());
     }
 
     #[sqlx::test]
@@ -2170,8 +2263,8 @@ mod tests {
             .await
             .unwrap();
         tx.commit().await.unwrap();
-        let original = claim_outbox(&pool).await.unwrap().unwrap();
-        assert!(claim_outbox(&pool).await.unwrap().is_none());
+        let original = claim_outbox(&pool, "delivery").await.unwrap().unwrap();
+        assert!(claim_outbox(&pool, "delivery").await.unwrap().is_none());
         sqlx::query!(
             "UPDATE horae_outbox SET available_at = now() - interval '1 second' WHERE id = $1",
             id
@@ -2180,7 +2273,7 @@ mod tests {
         .await
         .unwrap();
         assert!(!mark_outbox_delivered(&pool, &original).await.unwrap());
-        let replacement = claim_outbox(&pool).await.unwrap().unwrap();
+        let replacement = claim_outbox(&pool, "delivery").await.unwrap().unwrap();
         assert_ne!(original.claim_token, replacement.claim_token);
         assert_eq!(replacement.attempts, 2);
         assert!(!mark_outbox_delivered(&pool, &original).await.unwrap());
@@ -2209,7 +2302,7 @@ mod tests {
                 .unwrap()
         );
         assert!(
-            claim_outbox(&pool).await.unwrap().is_none(),
+            claim_outbox(&pool, "delivery").await.unwrap().is_none(),
             "failure must back off"
         );
         let failure = sqlx::query!(

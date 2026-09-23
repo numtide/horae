@@ -53,7 +53,11 @@
     #text(size: 11pt, weight: "semibold", inputs.invoice_number) \
     #v(8pt)
     #text(size: 9pt, fill: luma(100), "Issued: " + inputs.issued_on) \
-    #text(size: 9pt, fill: luma(100), "Due: " + inputs.due_on)
+    #text(size: 9pt, fill: luma(100), "Due: " + inputs.due_on) \
+    #text(size: 9pt, fill: luma(100), "Payment terms: " + str(inputs.terms_days) + " days") \
+    #if inputs.po_number != "" [
+      #text(size: 9pt, "Purchase order: " + inputs.po_number)
+    ]
   ],
 )
 
@@ -101,16 +105,21 @@
   ..for line in inputs.lines {
     (
       text(size: 9pt, line.description),
-      text(size: 9pt, fmt-hours(line.minutes)),
-      text(size: 9pt, fmt-money(line.rate_cents, currency) + "/hr"),
+      text(size: 9pt, if line.minutes == none { "—" } else { fmt-hours(line.minutes) }),
+      text(size: 9pt, if line.rate_cents == none { "—" } else { fmt-money(line.rate_cents, currency) + "/hr" }),
       align(right, text(size: 9pt, fmt-money(line.amount_cents, currency))),
     )
   },
 
-  // Total
+  // Stored invoice components
   table.hline(stroke: 0.8pt + luma(180)),
-  table.cell(colspan: 3, align(right, text(weight: "bold", "Total"))),
-  align(right, text(weight: "bold", fmt-money(inputs.total_cents, currency))),
+  ..for row in inputs.breakdown {
+    let weight = if row.label == "Total" { "bold" } else { "regular" }
+    (
+      table.cell(colspan: 3, align(right, text(weight: weight, row.label))),
+      align(right, text(weight: weight, fmt-money(row.cents, currency))),
+    )
+  },
 )
 
 #v(32pt)

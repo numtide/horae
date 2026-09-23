@@ -38,10 +38,14 @@ pub fn FormGroup(
 }
 
 /// A text input. `kind` maps to the HTML `type` (e.g. `text`, `number`, `email`).
+/// `error_id` marks invalid input and links to an existing visible error message.
 #[component]
 pub fn Input(
     #[props(default = "text".to_string())] kind: String,
+    #[props(default)] class: String,
     #[props(default)] id: String,
+    #[props(default)] label: String,
+    #[props(default)] error_id: Option<String>,
     #[props(default)] value: String,
     #[props(default)] placeholder: String,
     #[props(default)] disabled: bool,
@@ -50,8 +54,11 @@ pub fn Input(
 ) -> Element {
     rsx! {
         input {
-            class: "form-input",
+            class: if class.is_empty() { "form-input".into() } else { format!("form-input {class}") },
             id: if !id.is_empty() { "{id}" },
+            aria_label: if !label.is_empty() { "{label}" },
+            aria_invalid: error_id.as_ref().map(|_| "true"),
+            aria_describedby: error_id,
             r#type: "{kind}",
             value: "{value}",
             placeholder: "{placeholder}",
@@ -63,9 +70,11 @@ pub fn Input(
 }
 
 /// A multi-line text input.
+/// `error_id` links invalid input to its existing visible error message.
 #[component]
 pub fn Textarea(
     #[props(default)] id: String,
+    #[props(default)] error_id: Option<String>,
     #[props(default)] value: String,
     #[props(default)] placeholder: String,
     #[props(default = 3)] rows: i64,
@@ -76,6 +85,8 @@ pub fn Textarea(
         textarea {
             class: "form-textarea",
             id: if !id.is_empty() { "{id}" },
+            aria_invalid: error_id.as_ref().map(|_| "true"),
+            aria_describedby: error_id,
             rows: "{rows}",
             placeholder: "{placeholder}",
             disabled,

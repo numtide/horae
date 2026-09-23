@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT f.project_id, f.period_key FROM project_fee_occurrences f\n         JOIN unnest($2::uuid[], $3::text[]) AS wanted(project_id, period_key)\n           ON f.project_id = wanted.project_id AND f.period_key = wanted.period_key\n         WHERE f.org_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "project_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "period_key",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "1f02fca0d73d9faab7429c8ef331b31c0b211c6f286f0f44901ccae426005e3a"
+}

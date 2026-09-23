@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO project_drafts (id, org_id, creator_id, payload) VALUES ($1, $2, $3, '{}')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "47043b02cc89757fe8c3185f0d04e16426d88bddcd2bc604d57b4d310e19c30a"
+}

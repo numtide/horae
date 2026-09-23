@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, default_rate_cents, default_rate_currency FROM tasks WHERE id = $1 AND org_id = $2 AND active FOR SHARE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "default_rate_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "default_rate_currency",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "bb651ff76a446a8b1a82de110221acd13ab42f34b18ba49a4488050795c12a87"
+}

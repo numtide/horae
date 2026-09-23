@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM horae_outbox\n         WHERE id = $1 AND org_id = $2 AND claim_token = $3\n           AND delivered_at IS NULL AND available_at > now())",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "3a5de9c3f54013a9ab58a1f87b0afe0dae4ad2bf2e36df6a798189968faf17ac"
+}

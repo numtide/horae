@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT payload FROM horae_outbox WHERE org_id = $1 AND event_kind = 'project_created'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "payload",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "4bedf02cb178b9e70a2dd4d9e8622a4182f2f45ffcf2883c24afec4a4982ebbd"
+}

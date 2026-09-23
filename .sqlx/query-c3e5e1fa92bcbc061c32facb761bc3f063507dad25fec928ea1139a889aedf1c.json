@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM project_fee_milestones WHERE project_id=$1 AND org_id=$2 AND NOT(id=ANY($3))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c3e5e1fa92bcbc061c32facb761bc3f063507dad25fec928ea1139a889aedf1c"
+}

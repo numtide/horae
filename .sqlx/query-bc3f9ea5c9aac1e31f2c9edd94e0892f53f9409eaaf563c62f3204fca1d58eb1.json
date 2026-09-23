@@ -1,0 +1,133 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT p.id, p.org_id, p.client_id, p.code, p.name,\n                p.project_type as \"project_type: ProjectType\", p.currency,\n                CASE WHEN $4 AND a.can_view_rates THEN p.rate_cents END AS rate_cents,\n                p.starts_on as \"starts_on: chrono::NaiveDate\",\n                p.ends_on as \"ends_on: chrono::NaiveDate\",\n                CASE WHEN $4 AND a.can_view_progress THEN p.budget_kind ELSE 'none'::budget_kind END as \"budget_kind!: BudgetKind\",\n                CASE WHEN $4 AND a.can_view_progress THEN p.budget_amount_cents END AS budget_amount_cents,\n                CASE WHEN $4 AND a.can_view_progress THEN p.budget_minutes END AS budget_minutes,\n                p.active, p.created_at as \"created_at: chrono::DateTime<chrono::Utc>\"\n         FROM projects p JOIN project_read_access a ON a.project_id = p.id AND a.org_id = p.org_id\n         WHERE p.org_id = $2 AND ($1::bool OR p.active) AND a.user_id = $3\n           AND (NOT $4 OR a.can_view_progress) AND ($5::uuid IS NULL OR p.client_id = $5)\n         ORDER BY p.name, p.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "client_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "project_type: ProjectType",
+        "type_info": {
+          "Custom": {
+            "name": "project_type",
+            "kind": {
+              "Enum": [
+                "time_and_materials",
+                "fixed_fee",
+                "non_billable",
+                "retainer"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "currency",
+        "type_info": "Bpchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "rate_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "starts_on: chrono::NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 9,
+        "name": "ends_on: chrono::NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 10,
+        "name": "budget_kind!: BudgetKind",
+        "type_info": {
+          "Custom": {
+            "name": "budget_kind",
+            "kind": {
+              "Enum": [
+                "none",
+                "amount",
+                "hours"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "budget_amount_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 12,
+        "name": "budget_minutes",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 13,
+        "name": "active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 14,
+        "name": "created_at: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bool",
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      null,
+      true,
+      true,
+      null,
+      null,
+      null,
+      false,
+      false
+    ]
+  },
+  "hash": "bc3f9ea5c9aac1e31f2c9edd94e0892f53f9409eaaf563c62f3204fca1d58eb1"
+}

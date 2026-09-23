@@ -38,6 +38,121 @@ async fn unchanged_edit_preserves_the_row(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
+async fn client_default_rate_prevents_currency_relabelling(pool: PgPool) {
+    let client = client(&pool).await;
+    for rate in [0_i64, 8000] {
+        sqlx::query!(
+            "UPDATE clients SET default_rate_cents = $2 WHERE id = $1",
+            client.id,
+            rate,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let before = row_version(&pool, client.id).await;
+        let error = update_client_record(
+            &pool,
+            client.org_id,
+            client.id,
+            "Renamed",
+            "USD",
+            Some("Street"),
+            Some("123"),
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            ServerFnError::ServerError { code: CONFLICT, .. }
+        ));
+        assert_eq!(row_version(&pool, client.id).await, before);
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn client_default_rate_allows_detail_edits_and_equivalent_currency(pool: PgPool) {
+    let client = client(&pool).await;
+    sqlx::query!(
+        "UPDATE clients SET default_rate_cents = $2 WHERE id = $1",
+        client.id,
+        8000_i64,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    for (name, expected_change) in [("Renamed", true), ("Renamed", false)] {
+        let (updated, changed) = update_client_record(
+            &pool,
+            client.org_id,
+            client.id,
+            name,
+            " eur ",
+            Some("Street"),
+            Some("123"),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            (changed, updated.currency.as_str()),
+            (expected_change, "EUR")
+        );
+        assert_eq!(
+            (
+                updated.name.as_str(),
+                updated.address.as_deref(),
+                updated.tax_id.as_deref()
+            ),
+            (name, Some("Street"), Some("123"))
+        );
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn currency_edit_rechecks_a_concurrently_added_client_default_rate(pool: PgPool) {
+    let client = client(&pool).await;
+    let mut first = pool.begin().await.unwrap();
+    let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
+        .fetch_one(&mut *first)
+        .await
+        .unwrap()
+        .unwrap();
+    sqlx::query!(
+        "UPDATE clients SET default_rate_cents = $2 WHERE id = $1",
+        client.id,
+        0_i64,
+    )
+    .execute(&mut *first)
+    .await
+    .unwrap();
+    let run_pool = pool.clone();
+    let mut run = tokio::task::JoinSet::new();
+    run.spawn(async move {
+        update_client_record(
+            &run_pool,
+            client.org_id,
+            client.id,
+            "Acme",
+            "USD",
+            None,
+            None,
+        )
+        .await
+    });
+    wait_for_blocked(&pool, blocker).await;
+    first.commit().await.unwrap();
+    let error = tokio::time::timeout(Duration::from_secs(5), run.join_next())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap()
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        ServerFnError::ServerError { code: CONFLICT, .. }
+    ));
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn unchanged_activation_preserves_the_row(pool: PgPool) {
     let client = client(&pool).await;
     let before = row_version(&pool, client.id).await;

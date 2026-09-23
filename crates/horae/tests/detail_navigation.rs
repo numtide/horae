@@ -37,11 +37,13 @@ mod assignment;
 #[path = "../src/models/client.rs"]
 mod client;
 #[path = "../src/models/invoice.rs"]
-mod invoice;
+pub mod invoice;
 #[path = "../src/pages/invoices.rs"]
 mod invoices;
 #[path = "../src/models/project.rs"]
 mod project;
+#[path = "../src/models/project_creation.rs"]
+pub mod project_creation;
 #[path = "../src/pages/projects.rs"]
 mod projects;
 #[path = "../src/models/task.rs"]
@@ -49,22 +51,31 @@ mod task;
 #[path = "../src/models/user.rs"]
 mod user;
 mod models {
-    pub use super::{client::Client, project::Project};
+    pub use super::{
+        client::Client,
+        project::{
+            Project, ProjectBudgetProgress, ProjectDetails, ProjectTagLink, ProjectTaskRate,
+        },
+    };
+    pub use super::{invoice, project_creation};
 }
 
 type InvoiceResponse = Result<invoice::InvoiceWithLines, ServerFnError>;
 type AssignmentResponse = Result<Vec<assignment::Assignment>, ServerFnError>;
+type ProjectDetailsResponse = Result<project::ProjectDetails, ServerFnError>;
 
 #[derive(Clone, Default)]
 struct Probe {
     initial_path: Option<String>,
     requests: Rc<RefCell<Vec<Uuid>>>,
     assignment_requests: Rc<RefCell<Vec<Uuid>>>,
+    detail_requests: Rc<RefCell<Vec<Uuid>>>,
     task_requests: Rc<RefCell<Vec<Uuid>>>,
     navigator: Rc<RefCell<Option<Navigator>>>,
     scope: Rc<RefCell<Option<ScopeId>>>,
     response: Rc<RefCell<Option<oneshot::Receiver<InvoiceResponse>>>>,
     assignment_response: Rc<RefCell<Option<oneshot::Receiver<AssignmentResponse>>>>,
+    detail_response: Rc<RefCell<Option<oneshot::Receiver<ProjectDetailsResponse>>>>,
 }
 
 fn app(probe: Probe) -> Element {
@@ -95,10 +106,24 @@ mod route {
         InvoiceDetail { id: Uuid },
         #[route("/projects")]
         ProjectList {},
+        #[route("/projects/new")]
+        NewProject {},
+        #[route("/projects/:id/edit")]
+        EditProject { id: Uuid },
         #[route("/projects/:id")]
         ProjectDetail { id: Uuid },
         #[route("/admin/importers")]
         HarvestImport {},
+    }
+
+    #[component]
+    fn NewProject() -> Element {
+        rsx! { h1 { "New project" } }
+    }
+
+    #[component]
+    fn EditProject(id: Uuid) -> Element {
+        rsx! { h1 { "Edit project {id}" } }
     }
 
     #[component]
@@ -123,6 +148,34 @@ fn settle(dom: &mut VirtualDom) {
         dom.render_immediate_to_vec();
     }
     panic!("detail navigation did not settle");
+}
+
+#[tokio::test]
+async fn project_creation_links_use_the_static_new_project_route() {
+    let probe = Probe {
+        initial_path: Some("/projects".into()),
+        ..Probe::default()
+    };
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    assert_eq!(
+        dioxus::ssr::render(&dom)
+            .matches("href=\"/projects/new\"")
+            .count(),
+        2
+    );
+
+    let navigator = probe.navigator.borrow().unwrap();
+    dom.in_scope(probe.scope.borrow().unwrap(), || {
+        navigator.push(route::Route::NewProject {})
+    });
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains("New project"));
+    assert!(probe.assignment_requests.borrow().is_empty());
+    dom.in_scope(probe.scope.borrow().unwrap(), || navigator.go_back());
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains("No projects yet"));
 }
 
 #[tokio::test]
@@ -151,6 +204,52 @@ async fn empty_project_list_links_to_the_importer_route() {
 }
 
 #[tokio::test]
+async fn invoice_detail_shows_saved_adjustments_and_payment_metadata() {
+    let probe = Probe::default();
+    let (send, receive) = oneshot::channel();
+    *probe.response.borrow_mut() = Some(receive);
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    let mut response = dom.in_scope(probe.scope.borrow().unwrap(), || {
+        server_fns::get_invoice(Uuid::from_u128(1).to_string())
+            .now_or_never()
+            .unwrap()
+            .unwrap()
+    });
+    let inv = &mut response.invoice;
+    inv.subtotal_cents = 10001;
+    inv.discount_bps = 1250;
+    inv.discount_cents = 1250;
+    inv.tax1_bps = 2100;
+    inv.tax1_cents = 1838;
+    inv.tax2_name = Some("Local <tax>".into());
+    inv.tax2_bps = Some(150);
+    inv.tax2_cents = 131;
+    inv.total_cents = 10720;
+    inv.terms_days = 21;
+    inv.po_number = "PO <123>".into();
+    send.send(Ok(response)).unwrap();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    for expected in [
+        "Subtotal",
+        "100.01",
+        "Discount (12.50%)",
+        "-12.50",
+        "Tax (21.00%)",
+        "18.38",
+        "Local &#60;tax&#62; (1.50%)",
+        "1.31",
+        "107.20",
+        "21 days",
+        "PO &#60;123&#62;",
+    ] {
+        assert!(html.contains(expected), "missing {expected}: {html}");
+    }
+}
+
+#[tokio::test]
 async fn navigating_between_invoice_ids_loads_the_current_invoice() {
     let probe = Probe::default();
     let mut dom = VirtualDom::new_with_props(app, probe.clone());
@@ -160,6 +259,12 @@ async fn navigating_between_invoice_ids_loads_the_current_invoice() {
     let second = Uuid::from_u128(2);
     assert_eq!(*probe.requests.borrow(), [first]);
     assert!(dioxus::ssr::render(&dom).contains("Invoice INV-1"));
+    let html = dioxus::ssr::render(&dom);
+    assert!(
+        !html.contains("Mark Sent"),
+        "SSR must wait for browser recovery before exposing mutations"
+    );
+    assert!(!html.contains("Edit invoice values"));
 
     let navigator = probe.navigator.borrow().unwrap();
     dom.in_scope(probe.scope.borrow().unwrap(), || {
@@ -237,6 +342,11 @@ async fn navigating_between_project_ids_loads_current_assignments_and_tasks() {
     let html = dioxus::ssr::render(&dom);
     assert!(html.contains("User-101"), "rendered: {html}");
     assert!(html.contains("Task-1"), "rendered: {html}");
+    assert!(html.contains("Fee-1"), "rendered: {html}");
+    assert!(
+        html.contains("Over-invoiced: EUR -0.10"),
+        "rendered: {html}"
+    );
     assert_eq!(*probe.assignment_requests.borrow(), [first]);
     assert_eq!(*probe.task_requests.borrow(), [first]);
 
@@ -252,7 +362,7 @@ async fn navigating_between_project_ids_loads_current_assignments_and_tasks() {
     settle(&mut dom);
     let html = dioxus::ssr::render(&dom);
     assert!(
-        html.contains(&format!("Project detail for {second}")),
+        html.contains("Project-2") && html.contains("CODE-2") && html.contains("Tag-2"),
         "rendered: {html}"
     );
     assert_eq!(
@@ -267,13 +377,62 @@ async fn navigating_between_project_ids_loads_current_assignments_and_tasks() {
     );
     assert!(html.contains("User-102"), "rendered: {html}");
     assert!(html.contains("Task-2"), "rendered: {html}");
+    assert!(html.contains("Fee-2"), "rendered: {html}");
+    assert!(!html.contains("Fee-1"), "rendered: {html}");
     assert!(!html.contains("User-101"), "rendered: {html}");
     assert!(!html.contains("Task-1"), "rendered: {html}");
+    assert!(!html.contains("CODE-1"), "rendered: {html}");
+    assert!(!html.contains("Tag-1"), "rendered: {html}");
+    assert_eq!(*probe.detail_requests.borrow(), [first, second]);
 
     dom.in_scope(probe.scope.borrow().unwrap(), || navigator.go_back());
     settle(&mut dom);
     assert_eq!(*probe.assignment_requests.borrow(), [first, second, first]);
     assert_eq!(*probe.task_requests.borrow(), [first, second, first]);
+}
+
+#[tokio::test]
+async fn pending_or_failed_project_details_never_show_previous_metadata() {
+    let first = Uuid::from_u128(1);
+    let second = Uuid::from_u128(2);
+    let probe = Probe {
+        initial_path: Some(format!("/projects/{first}")),
+        ..Probe::default()
+    };
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains("CODE-1"));
+    assert!(dioxus::ssr::render(&dom).contains("Task hourly rate (EUR)"));
+    let (send, receive) = oneshot::channel();
+    *probe.detail_response.borrow_mut() = Some(receive);
+    let navigator = probe.navigator.borrow().unwrap();
+    dom.in_scope(probe.scope.borrow().unwrap(), || {
+        navigator.push(route::Route::ProjectDetail { id: second })
+    });
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains("Loading project details"), "{html}");
+    assert!(!html.contains("project-task-rate"), "{html}");
+    assert!(!html.contains("Enable task"), "{html}");
+    assert!(
+        !html.contains("CODE-1") && !html.contains("Tag-1"),
+        "{html}"
+    );
+    send.send(Err(ServerFnError::new("Metadata unavailable")))
+        .unwrap();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(
+        html.contains("Metadata unavailable") && html.contains("Retry details"),
+        "{html}"
+    );
+    assert!(!html.contains("project-task-rate"), "{html}");
+    assert!(!html.contains("Enable task"), "{html}");
+    assert!(
+        !html.contains("CODE-1") && !html.contains("Tag-1"),
+        "{html}"
+    );
 }
 
 #[tokio::test]
@@ -428,30 +587,53 @@ mod server_fns {
     ) -> Result<Vec<Project>, ServerFnError> {
         Ok(Vec::new())
     }
+    pub async fn list_project_tags() -> Result<Vec<project::ProjectTagLink>, ServerFnError> {
+        Ok(Vec::new())
+    }
+    pub async fn get_project_fee_balances(
+        id: String,
+        _from: String,
+        _to: String,
+    ) -> Result<Vec<project::ProjectFeeBalance>, ServerFnError> {
+        let id = Uuid::parse_str(&id).unwrap();
+        Ok(vec![project::ProjectFeeBalance {
+            period_key: "single".into(),
+            description: format!("Fee-{}", id.as_u128()),
+            currency: "EUR".into(),
+            balance: invoice::InvoiceFeeBalance {
+                agreed_cents: 100,
+                invoiced_cents: 110,
+                remaining_cents: -10,
+            },
+        }])
+    }
+    pub async fn get_project_details(id: String) -> ProjectDetailsResponse {
+        let id = Uuid::parse_str(&id).unwrap();
+        let probe = consume_context::<Probe>();
+        probe.detail_requests.borrow_mut().push(id);
+        let response = probe.detail_response.borrow_mut().take();
+        if let Some(response) = response {
+            return response.await.unwrap();
+        }
+        Ok(project::ProjectDetails {
+            id,
+            name: format!("Project-{}", id.as_u128()),
+            code: Some(format!("CODE-{}", id.as_u128())),
+            client_name: "Client".into(),
+            currency: "EUR".into(),
+            task_rate_currency: Some("EUR".into()),
+            starts_on: None,
+            ends_on: None,
+            tags: vec![format!("Tag-{}", id.as_u128())],
+            admin_notes: None,
+        })
+    }
     pub async fn list_project_spend() -> Result<Vec<ProjectSpend>, ServerFnError> {
         Ok(Vec::new())
     }
-    pub async fn create_project(
-        _client: String,
-        _name: String,
-        _kind: String,
-        _currency: String,
-        _budget: String,
-        _value: String,
-        _rate: String,
-    ) -> Result<Project, ServerFnError> {
-        panic!("unexpected mutation");
-    }
-    pub async fn update_project(
-        _id: String,
-        _name: String,
-        _kind: String,
-        _currency: String,
-        _budget: String,
-        _value: String,
-        _rate: String,
-    ) -> Result<Project, ServerFnError> {
-        panic!("unexpected mutation");
+    pub async fn list_project_budget_progress()
+    -> Result<Vec<crate::models::ProjectBudgetProgress>, ServerFnError> {
+        Ok(Vec::new())
     }
     pub async fn set_project_active(_id: String, _active: bool) -> Result<(), ServerFnError> {
         panic!("unexpected mutation");
@@ -472,7 +654,11 @@ mod server_fns {
     pub async fn delete_assignment(_id: String) -> Result<(), ServerFnError> {
         panic!("unexpected mutation");
     }
-    pub async fn link_project_task(_project: String, _task: String) -> Result<(), ServerFnError> {
+    pub async fn link_project_task(
+        _project: String,
+        _task: String,
+        _rate: Option<crate::project::ProjectTaskRate>,
+    ) -> Result<(), ServerFnError> {
         panic!("unexpected mutation");
     }
     pub async fn create_task(
@@ -502,6 +688,16 @@ mod server_fns {
                 due_on: chrono::NaiveDate::from_ymd_opt(2026, 9, 30).unwrap(),
                 currency: "EUR".into(),
                 total_cents: 0,
+                terms_days: 29,
+                po_number: String::new(),
+                discount_bps: 0,
+                tax1_bps: 0,
+                tax2_name: None,
+                tax2_bps: None,
+                subtotal_cents: 0,
+                discount_cents: 0,
+                tax1_cents: 0,
+                tax2_cents: 0,
                 notes: None,
                 created_at: chrono::DateTime::UNIX_EPOCH,
             },
@@ -521,8 +717,40 @@ mod server_fns {
         _client: String,
         _from: String,
         _to: String,
-    ) -> Result<Invoice, ServerFnError> {
+        _projects: Option<Vec<String>>,
+        _overrides: Option<crate::invoice::InvoiceDefaults>,
+        _request: crate::invoice::InvoiceGenerationRequest,
+    ) -> Result<InvoiceWithLines, ServerFnError> {
         panic!("navigation must not generate invoices");
+    }
+
+    pub async fn prepare_invoice(
+        _client: String,
+        _from: String,
+        _to: String,
+        _projects: Option<Vec<String>>,
+        _overrides: Option<crate::invoice::InvoiceDefaults>,
+        _fees: Option<Vec<crate::invoice::InvoiceFeeSelection>>,
+    ) -> Result<crate::invoice::InvoicePreparation, ServerFnError> {
+        panic!("navigation must not prepare invoices");
+    }
+
+    pub async fn get_invoice_editor(
+        _id: String,
+    ) -> Result<crate::invoice::InvoiceEditor, ServerFnError> {
+        panic!("navigation must not load the invoice editor");
+    }
+    pub async fn review_invoice_edit(
+        _id: String,
+        _edit: crate::invoice::InvoiceDraftEdit,
+    ) -> Result<crate::invoice::InvoiceEditReview, ServerFnError> {
+        panic!("navigation must not review invoice edits");
+    }
+    pub async fn save_invoice_draft(
+        _id: String,
+        _request: crate::invoice::InvoiceDraftSave,
+    ) -> Result<InvoiceWithLines, ServerFnError> {
+        panic!("navigation must not save invoice edits");
     }
 
     pub async fn update_invoice_status(

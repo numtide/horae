@@ -1,7 +1,15 @@
 [workspace]
 members = ["crates/horae", "crates/core"]
-exclude = ["crates/test-plugins/echo-plugin", "crates/test-plugins/fail-plugin"]
+exclude = [
+  "crates/test-plugins/echo-plugin",
+  "crates/test-plugins/fail-plugin",
+  "vendor/dioxus-fullstack-0.7.9",
+]
 resolver = "2"
+
+[patch.crates-io]
+# Temporary response-body error backport; provenance and removal in vendor/PATCHES.md.
+dioxus-fullstack = { path = "vendor/dioxus-fullstack-0.7.9" }
 
 [profile.release]
 opt-level = 3

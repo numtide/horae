@@ -10,14 +10,29 @@ use crate::components::icons::NavIcon;
 use crate::components::menu::{Menu, MenuDivider, MenuItem};
 use crate::components::modal::Modal;
 use crate::components::table::DataTable;
-use crate::models::{Client, Project};
+use crate::models::{
+    Client, Project, ProjectBudgetProgress, ProjectDetails, ProjectTagLink, ProjectTaskRate,
+};
 use crate::route::Route;
 use crate::server_fns;
-use horae_core::money::{format_cents, format_cents_plain};
+use horae_core::money::format_cents;
 use horae_core::types::{BudgetKind, ProjectType};
 
+#[path = "projects/fee_balances.rs"]
+mod fee_balances;
+
 fn hours(minutes: i64) -> String {
-    format!("{}h", horae_core::duration::format_decimal(minutes))
+    // Remaining budgets can be negative. Keep the sign and round integer
+    // minutes to hundredths without the tracking formatter's zero clamp.
+    let hundredths = (u128::from(minutes.unsigned_abs()) * 100 + 30) / 60;
+    let fraction = format!("{:02}", hundredths % 100);
+    let fraction = fraction.trim_end_matches('0');
+    let sign = if minutes < 0 { "-" } else { "" };
+    if fraction.is_empty() {
+        format!("{sign}{}h", hundredths / 100)
+    } else {
+        format!("{sign}{}.{fraction}h", hundredths / 100)
+    }
 }
 
 /// Budget / Spent / Budget-remaining for one row, expressed in the project's own
@@ -34,55 +49,192 @@ struct RowSpend {
 }
 
 fn row_spend(p: &Project, spent_minutes: i64, spent_cents: i64) -> RowSpend {
-    let cur = p.currency.trim();
-    let recurring = matches!(p.project_type, ProjectType::Retainer);
-    // The bar fills with what has been consumed; the label beside "Budget
-    // remaining" states what is left, so the two read as complements.
-    let pct_of = |spent: i64, budget: i64| -> (Option<u8>, Option<String>) {
-        if budget > 0 {
-            let consumed = (spent as f64 / budget as f64 * 100.0).round() as i64;
-            let left = ((budget - spent) as f64 / budget as f64 * 100.0).round() as i64;
-            (
-                Some(consumed.clamp(0, 100) as u8),
-                Some(format!("({}%)", left.max(0))),
-            )
-        } else {
-            (None, None)
-        }
+    let (budget, spent) = match p.budget_kind {
+        BudgetKind::Amount => (p.budget_amount_cents, spent_cents),
+        BudgetKind::Hours => (p.budget_minutes, spent_minutes),
+        BudgetKind::None => (None, spent_cents),
     };
-    match p.budget_kind {
-        BudgetKind::Amount => {
-            let budget = p.budget_amount_cents.unwrap_or(0);
-            let (pct, pct_label) = pct_of(spent_cents, budget);
-            RowSpend {
-                budget: format_cents(budget, cur),
-                recurring,
-                spent: format_cents(spent_cents, cur),
-                remaining: format_cents(budget - spent_cents, cur),
-                pct,
-                pct_label,
-            }
+    budget_display(
+        p.budget_kind,
+        &p.currency,
+        budget,
+        Some(spent),
+        p.project_type == ProjectType::Retainer,
+    )
+}
+
+fn budget_display(
+    kind: BudgetKind,
+    currency: &str,
+    budget: Option<i64>,
+    spent: Option<i64>,
+    recurring: bool,
+) -> RowSpend {
+    let format = |amount| match kind {
+        BudgetKind::Hours => hours(amount),
+        _ => format_cents(amount, currency.trim()),
+    };
+    let pct = budget
+        .zip(spent)
+        .and_then(|(b, s)| horae_core::budget::used_percent(s, b));
+    RowSpend {
+        budget: budget.map(format).unwrap_or_else(|| "—".to_string()),
+        recurring,
+        spent: spent
+            .map(format)
+            .unwrap_or_else(|| "Unavailable".to_string()),
+        remaining: budget
+            .zip(spent)
+            .and_then(|(b, s)| b.checked_sub(s))
+            .map(format)
+            .unwrap_or_else(|| "—".to_string()),
+        pct,
+        pct_label: pct.map(|used| format!("({}%)", 100 - used)),
+    }
+}
+
+fn configured_row_spend(rows: &[ProjectBudgetProgress]) -> Option<RowSpend> {
+    let first = rows.first().filter(|row| row.kind != BudgetKind::None)?;
+    // A partially allocated budget is not a project-wide allowance. Overflow
+    // also stays unavailable rather than wrapping into a plausible total.
+    let budget = rows
+        .iter()
+        .try_fold(0_i64, |total, row| total.checked_add(row.budget?));
+    let spent = rows
+        .iter()
+        .try_fold(0_i64, |total, row| total.checked_add(row.consumed));
+    Some(budget_display(
+        first.kind,
+        &first.currency,
+        budget,
+        spent,
+        first.period_key != "lifetime",
+    ))
+}
+
+#[cfg(test)]
+mod budget_display_tests {
+    use super::*;
+
+    #[test]
+    fn tag_filter_matches_identity_without_duplicates_or_name_collisions() {
+        let tag_id = Uuid::from_u128(1);
+        let project_id = Uuid::from_u128(2);
+        let link = ProjectTagLink {
+            project_id,
+            tag_id,
+            name: "Launch".into(),
+        };
+        let links = [
+            link.clone(),
+            link,
+            ProjectTagLink {
+                project_id: Uuid::from_u128(3),
+                tag_id: Uuid::from_u128(4),
+                name: "Launch".into(),
+            },
+        ];
+        assert_eq!(
+            matching_tag_projects(&links, Some(tag_id)),
+            BTreeSet::from([project_id])
+        );
+        assert!(matching_tag_projects(&links, Some(Uuid::nil())).is_empty());
+        assert!(matching_tag_projects(&[], Some(tag_id)).is_empty());
+    }
+
+    fn scope(budget: Option<i64>, consumed: i64) -> ProjectBudgetProgress {
+        ProjectBudgetProgress {
+            project_id: Uuid::nil(),
+            task_id: Some(Uuid::nil()),
+            user_id: None,
+            scope: "task".to_string(),
+            label: Some("Development".to_string()),
+            kind: BudgetKind::Hours,
+            currency: "EUR".to_string(),
+            period_key: "2026-09".to_string(),
+            budget,
+            consumed,
         }
-        BudgetKind::Hours => {
-            let budget = p.budget_minutes.unwrap_or(0);
-            let (pct, pct_label) = pct_of(spent_minutes, budget);
-            RowSpend {
-                budget: hours(budget),
-                recurring,
-                spent: hours(spent_minutes),
-                remaining: hours(budget - spent_minutes),
-                pct,
-                pct_label,
-            }
-        }
-        BudgetKind::None => RowSpend {
-            budget: "—".to_string(),
-            recurring,
-            spent: format_cents(spent_cents, cur),
-            remaining: "—".to_string(),
-            pct: None,
-            pct_label: None,
-        },
+    }
+
+    #[test]
+    fn configured_scopes_sum_without_hiding_an_individual_overrun() {
+        let rows = [scope(Some(60), 120), scope(Some(180), 0)];
+        let total = configured_row_spend(&rows).unwrap();
+        assert_eq!(
+            (
+                total.budget.as_str(),
+                total.spent.as_str(),
+                total.remaining.as_str()
+            ),
+            ("4h", "2h", "2h")
+        );
+        assert_eq!(
+            (total.pct, total.pct_label.as_deref(), total.recurring),
+            (Some(50), Some("(50%)"), true)
+        );
+        let first = budget_display(
+            rows[0].kind,
+            &rows[0].currency,
+            rows[0].budget,
+            Some(rows[0].consumed),
+            false,
+        );
+        assert_eq!(first.remaining, "-1h");
+        assert_eq!(
+            (first.pct, first.pct_label.as_deref()),
+            (Some(100), Some("(0%)"))
+        );
+    }
+
+    #[test]
+    fn unallocated_zero_and_overflow_budgets_are_not_conflated() {
+        let unallocated = configured_row_spend(&[scope(Some(60), 30), scope(None, 60)]).unwrap();
+        assert_eq!(
+            (
+                unallocated.budget.as_str(),
+                unallocated.spent.as_str(),
+                unallocated.remaining.as_str()
+            ),
+            ("—", "1.5h", "—")
+        );
+        assert_eq!(unallocated.pct, None);
+        let zero = configured_row_spend(&[scope(Some(0), 60)]).unwrap();
+        assert_eq!(
+            (zero.budget.as_str(), zero.remaining.as_str(), zero.pct),
+            ("0h", "-1h", None)
+        );
+        let overflow =
+            configured_row_spend(&[scope(Some(i64::MAX), i64::MAX), scope(Some(1), 1)]).unwrap();
+        assert_eq!(
+            (
+                overflow.budget.as_str(),
+                overflow.spent.as_str(),
+                overflow.remaining.as_str()
+            ),
+            ("—", "Unavailable", "—")
+        );
+        assert!(configured_row_spend(&[]).is_none());
+        let mut no_budget = scope(None, 0);
+        no_budget.kind = BudgetKind::None;
+        assert!(configured_row_spend(&[no_budget]).is_none());
+    }
+
+    #[test]
+    fn display_preserves_units_sign_and_large_integer_values() {
+        assert_eq!(hours(-1), "-0.02h");
+        assert_eq!(hours(59), "0.98h");
+        assert_eq!(hours(60), "1h");
+        assert_eq!(hours(i64::MIN), "-153722867280912930.13h");
+        let amount = budget_display(BudgetKind::Amount, " EUR ", Some(100), Some(150), false);
+        assert_eq!(
+            (
+                amount.budget.as_str(),
+                amount.spent.as_str(),
+                amount.remaining.as_str()
+            ),
+            ("EUR 1.00", "EUR 1.50", "EUR -0.50")
+        );
     }
 }
 
@@ -118,24 +270,15 @@ pub fn ProjectList() -> Element {
     // Management view: `include_inactive = true` also lists deactivated projects
     // so managers can reactivate them; new-entry pickers pass `false`.
     let mut projects = use_resource(|| async move { server_fns::list_projects(None, true).await });
-    // All clients (including inactive) so a project under a deactivated client
-    // still resolves to its real name; the create form filters to active ones.
+    // All clients so projects under deactivated clients still resolve their names.
     let clients_res = use_resource(|| async move { server_fns::list_clients(true).await });
+    let mut tags_res = use_resource(|| async move { server_fns::list_project_tags().await });
     let me = use_resource(|| async move { server_fns::get_me().await });
     let mut spend_res = use_resource(|| async move { server_fns::list_project_spend().await });
+    let mut budget_res =
+        use_resource(|| async move { server_fns::list_project_budget_progress().await });
 
-    let mut show_form = use_signal(|| false);
-    // `Some(id)` while editing an existing project, `None` while creating.
-    let mut editing_id = use_signal(|| None::<Uuid>);
-    let mut client_id = use_signal(String::new);
-    let mut name = use_signal(String::new);
-    let mut project_type = use_signal(|| "time_and_materials".to_string());
-    let mut currency = use_signal(|| "USD".to_string());
-    let mut rate_value = use_signal(String::new);
-    let mut budget_kind = use_signal(|| "none".to_string());
-    // The figure that goes with the kind — an amount or a number of hours.
-    let mut budget_value = use_signal(String::new);
-    let mut error = use_signal(|| None::<String>);
+    let navigator = use_navigator();
     let action_error = use_signal(|| None::<String>);
 
     // Filters over the loaded list (client-side; the design's status/client
@@ -144,6 +287,7 @@ pub fn ProjectList() -> Element {
     // Status scope: "active" | "budgeted" (has a budget) | "archived" (inactive).
     let mut scope = use_signal(|| "active".to_string());
     let mut client_filter = use_signal(String::new);
+    let mut tag_filter = use_signal(|| None::<Uuid>);
     let mut selected = use_signal(BTreeSet::<Uuid>::new);
     let mut bulk_action = use_signal(|| None::<BulkProjectAction>);
     let mut bulk_busy = use_signal(|| false);
@@ -156,7 +300,10 @@ pub fn ProjectList() -> Element {
 
     let can_import = is_admin(&me);
     let is_manager = is_manager(&me);
-    let spend_ready = matches!(&*spend_res.read(), Some(Ok(_)));
+    let spend_ready = spend_res.state()() == UseResourceState::Ready
+        && budget_res.state()() == UseResourceState::Ready
+        && matches!(&*spend_res.read(), Some(Ok(_)))
+        && matches!(&*budget_res.read(), Some(Ok(_)));
 
     let client_names: HashMap<Uuid, String> = match &*clients_res.read() {
         Some(Ok(cs)) => cs.iter().map(|c| (c.id, c.name.clone())).collect(),
@@ -165,6 +312,29 @@ pub fn ProjectList() -> Element {
     let query_lower = query().to_lowercase();
     // Resources retain their previous value while a restart is pending.
     let projects_loading = projects.state()() != UseResourceState::Ready;
+    let tags_ready =
+        tags_res.state()() == UseResourceState::Ready && matches!(&*tags_res.read(), Some(Ok(_)));
+    let tags = tags_res.read();
+    let tag_links = tags.as_ref().and_then(|result| result.as_ref().ok());
+    let tag_projects = matching_tag_projects(
+        tag_links.map(Vec::as_slice).unwrap_or_default(),
+        tag_filter(),
+    );
+    let mut tag_options = Vec::new();
+    let mut seen_tags = BTreeSet::new();
+    for tag in tag_links.into_iter().flatten() {
+        if seen_tags.insert(tag.tag_id) {
+            tag_options.push((tag.tag_id, tag.name.clone()));
+        }
+    }
+    let tag_label = match tag_filter() {
+        Some(id) => tag_options
+            .iter()
+            .find(|(tag, _)| *tag == id)
+            .map(|(_, name)| format!("Tag: {name}"))
+            .unwrap_or_else(|| "Selected tag unavailable".into()),
+        None => "All tags".into(),
+    };
     let visible: Vec<Project> = projects
         .read()
         .as_ref()
@@ -174,6 +344,7 @@ pub fn ProjectList() -> Element {
         .flatten()
         .filter(|p| {
             matches_project_filters(p, &query_lower, &scope(), &client_filter(), &client_names)
+                && (tag_filter().is_none() || (tags_ready && tag_projects.contains(&p.id)))
         })
         .cloned()
         .collect();
@@ -223,6 +394,15 @@ pub fn ProjectList() -> Element {
             .collect(),
         _ => HashMap::new(),
     };
+    let mut budget_map: HashMap<Uuid, Vec<ProjectBudgetProgress>> = HashMap::new();
+    if spend_ready && let Some(Ok(rows)) = &*budget_res.read() {
+        for row in rows {
+            budget_map
+                .entry(row.project_id)
+                .or_default()
+                .push(row.clone());
+        }
+    }
     let (active_count, budgeted_count, archived_count) = match &*projects.read() {
         Some(Ok(list)) => (
             list.iter().filter(|p| p.active).count(),
@@ -258,84 +438,13 @@ pub fn ProjectList() -> Element {
         _ => Vec::new(),
     };
 
-    let mut reset_form = move || {
-        editing_id.set(None);
-        client_id.set(String::new());
-        name.set(String::new());
-        project_type.set("time_and_materials".to_string());
-        currency.set("USD".to_string());
-        rate_value.set(String::new());
-        budget_kind.set("none".to_string());
-        budget_value.set(String::new());
-        error.set(None);
-        show_form.set(false);
-    };
-
-    let form_title = if editing_id().is_some() {
-        "Edit Project"
-    } else {
-        "New Project"
-    };
-    // The create form only offers active clients; the placeholder keeps the
-    // picker unset until one is chosen.
-    let form_client_opts: Vec<(String, String)> =
-        std::iter::once((String::new(), "Select a client...".to_string()))
-            .chain(
-                clients_res
-                    .read()
-                    .as_ref()
-                    .and_then(|r| r.as_ref().ok())
-                    .into_iter()
-                    .flatten()
-                    .filter(|c| c.active)
-                    .map(|c| (c.id.to_string(), c.name.clone())),
-            )
-            .collect();
-    // Value is the enum's snake_case `Display`; label via ProjectType::label,
-    // so the pill and this picker share one source of truth.
-    let type_opts: Vec<(String, String)> = [
-        ProjectType::TimeAndMaterials,
-        ProjectType::FixedFee,
-        ProjectType::NonBillable,
-        ProjectType::Retainer,
-    ]
-    .iter()
-    .map(|t| (t.to_string(), t.label().to_string()))
-    .collect();
-    let budget_is_hours = budget_kind() == "hours";
-    let budget_label = if budget_is_hours {
-        "Budget hours"
-    } else {
-        "Budget amount"
-    };
-    let budget_placeholder = if budget_is_hours {
-        "120 or 7:30"
-    } else {
-        "12000 or 12,000.50"
-    };
-    // The figure only means something once a kind is chosen, and what it means
-    // differs, so the field follows the kind.
-    let budget_hint = if budget_is_hours {
-        "Total hours for this project. Leave blank to set it later."
-    } else {
-        "Total fees in the project's currency. Leave blank to set it later."
-    };
-
     rsx! {
         div {
             div { class: "page-header mb-5",
                 h1 { class: "page-title text-4xl font-semibold text-strong tracking-tight", "Projects" }
                 div { class: "page-actions items-center gap-4",
                     if is_manager {
-                        button {
-                            class: "btn btn-primary py-2 px-4",
-                            onclick: move |_| {
-                                let open = !show_form();
-                                reset_form();
-                                show_form.set(open);
-                            },
-                            if show_form() { "Cancel" } else { "New project" }
-                        }
+                        Link { to: Route::NewProject {}, class: "btn btn-primary py-2 px-4", "New project" }
                         Menu {
                             id: "project-bulk-menu", label: "⚡ Actions", align_right: true,
                             trigger_class: "text-sm py-2 px-4",
@@ -400,6 +509,16 @@ pub fn ProjectList() -> Element {
                     }
                 }
                 div { class: "flex-1" }
+                if !tag_options.is_empty() || tag_filter().is_some() {
+                    Menu { id: "project-tag-menu", label: tag_label, trigger_class: "text-sm px-4",
+                        MenuItem { selected: tag_filter().is_none(), onclick: move |_| { selected.write().clear(); tag_filter.set(None); }, "All tags" }
+                        for (tag_id, tag_name) in tag_options {
+                            MenuItem { key: "{tag_id}", selected: tag_filter() == Some(tag_id), disabled: !tags_ready,
+                                onclick: move |_| { selected.write().clear(); tag_filter.set(Some(tag_id)); }, "{tag_name}"
+                            }
+                        }
+                    }
+                }
                 Combobox {
                     trigger_class: "text-sm px-4",
                     options: client_options,
@@ -410,105 +529,6 @@ pub fn ProjectList() -> Element {
                 }
             }
 
-            if show_form() && is_manager {
-                FormCard { title: "{form_title}", error,
-                    // The client is fixed at creation; only shown when creating.
-                    if editing_id().is_none() {
-                        FormGroup { label: "Client", id: "proj-client",
-                            Select {
-                                id: "proj-client",
-                                options: form_client_opts,
-                                selected: client_id(),
-                                onchange: move |e: FormEvent| client_id.set(e.value()),
-                            }
-                        }
-                    }
-                    FormGroup { label: "Name", id: "proj-name",
-                        Input {
-                            id: "proj-name",
-                            placeholder: "Project name",
-                            value: "{name}",
-                            oninput: move |e: FormEvent| name.set(e.value()),
-                        }
-                    }
-                    FormGroup { label: "Type", id: "proj-type",
-                        Select {
-                            id: "proj-type",
-                            options: type_opts,
-                            selected: project_type(),
-                            onchange: move |e: FormEvent| project_type.set(e.value()),
-                        }
-                    }
-                    FormGroup { label: "Currency", id: "proj-currency",
-                        Input {
-                            id: "proj-currency",
-                            placeholder: "USD",
-                            value: "{currency}",
-                            oninput: move |e: FormEvent| currency.set(e.value()),
-                        }
-                    }
-                    FormGroup { label: "Hourly rate", id: "proj-rate", hint: "Leave blank to use the user's default. Task and assignment overrides take priority. Zero is a free rate.",
-                        Input {
-                            id: "proj-rate",
-                            placeholder: "120.00",
-                            value: "{rate_value}",
-                            oninput: move |e: FormEvent| rate_value.set(e.value()),
-                        }
-                    }
-                    FormGroup { label: "Budget", id: "proj-budget",
-                        Select {
-                            id: "proj-budget",
-                            options: vec![
-                                ("none".to_string(), "None".to_string()),
-                                ("amount".to_string(), "Amount".to_string()),
-                                ("hours".to_string(), "Hours".to_string()),
-                            ],
-                            selected: budget_kind(),
-                            onchange: move |e: FormEvent| budget_kind.set(e.value()),
-                        }
-                    }
-                    if budget_kind() != "none" {
-                        FormGroup { label: "{budget_label}", id: "proj-budget-value", hint: "{budget_hint}",
-                            Input {
-                                id: "proj-budget-value",
-                                placeholder: "{budget_placeholder}",
-                                value: "{budget_value}",
-                                oninput: move |e: FormEvent| budget_value.set(e.value()),
-                            }
-                        }
-                    }
-                    button {
-                        class: "btn btn-primary",
-                        onclick: move |_| {
-                            let editing = editing_id();
-                            let cid = client_id();
-                            let n = name();
-                            let pt = project_type();
-                            let c = currency();
-                            let bk = budget_kind();
-                            let bv = budget_value();
-                            let rv = rate_value();
-                            run_action(
-                                async move {
-                                    match editing {
-                                        Some(id) => {
-                                            server_fns::update_project(id.to_string(), n, pt, c, bk, bv, rv).await
-                                        }
-                                        None => server_fns::create_project(cid, n, pt, c, bk, bv, rv).await,
-                                    }
-                                },
-                                projects,
-                                error,
-                                move || {
-                                    spend_res.restart();
-                                    reset_form();
-                                },
-                            );
-                        },
-                        if editing_id().is_some() { "Save Changes" } else { "Create Project" }
-                    }
-                }
-            }
 
             if let Some(message) = action_error() {
                 div { class: "alert alert-danger", role: "alert", "Could not change project status: {message}" }
@@ -516,18 +536,27 @@ pub fn ProjectList() -> Element {
             if let Some(message) = bulk_success() {
                 div { class: "alert alert-success", role: "status", "{message}" }
             }
-            match &*spend_res.read() {
-                None => rsx! { p { class: "text-sm text-secondary mb-4", role: "status", "Loading project spend…" } },
-                Some(Err(_)) => rsx! {
+            if matches!(&*spend_res.read(), Some(Err(_))) || matches!(&*budget_res.read(), Some(Err(_))) {
                     div { class: "alert alert-danger", role: "alert",
-                        "Could not load project spend. Spent and remaining amounts are unavailable. "
-                        button { class: "btn btn-secondary btn-sm", onclick: move |_| spend_res.restart(), "Retry" }
+                        "Could not load project progress. Budget, spent and remaining amounts are unavailable. "
+                        button { class: "btn btn-secondary btn-sm", onclick: move |_| {
+                            spend_res.restart();
+                            budget_res.restart();
+                        }, "Retry" }
                     }
-                },
-                Some(Ok(_)) => rsx! {},
+            } else if !spend_ready {
+                p { class: "text-sm text-secondary mb-4", role: "status", "Loading project progress…" }
             }
 
-            if projects_loading {
+            if matches!(&*tags_res.read(), Some(Err(_))) {
+                div { class: "alert alert-danger", role: "alert",
+                    "Could not load project tags. "
+                    button { r#type: "button", class: "btn btn-secondary btn-sm", onclick: move |_| { selected.write().clear(); tags_res.restart(); }, "Retry tags" }
+                }
+            }
+            if tag_filter().is_some() && !tags_ready {
+                p { class: "text-sm text-secondary", role: "status", "Tagged projects are unavailable until tags finish loading." }
+            } else if projects_loading {
                 p { class: "text-sm text-secondary", aria_busy: "true", "Loading projects…" }
             } else if matches!(&*projects.read(), Some(Err(_))) {
                 div { class: "alert alert-danger", role: "alert",
@@ -579,10 +608,10 @@ pub fn ProjectList() -> Element {
                                         }
                                     }
                                     div { class: "flex flex-wrap items-center justify-center gap-3 mt-1",
-                                        if is_manager && !show_form() {
-                                            button {
+                                        if is_manager {
+                                            Link {
+                                                to: Route::NewProject {},
                                                 class: "btn btn-primary py-3 px-5",
-                                                onclick: move |_| { reset_form(); show_form.set(true); },
                                                 "New project"
                                             }
                                         }
@@ -592,13 +621,14 @@ pub fn ProjectList() -> Element {
                                     }
                                 } else {
                                     h2 { class: "empty-state-title text-xl m-0", "No projects match your filters" }
-                                    p { class: "empty-state-text empty-state-copy text-subtle m-0", "Try another search, client or project status." }
+                                    p { class: "empty-state-text empty-state-copy text-subtle m-0", "Try another search, client, tag or project status." }
                                     button {
                                         class: "btn btn-secondary",
                                         onclick: move |_| {
                                             selected.write().clear();
                                             query.set(String::new());
                                             client_filter.set(String::new());
+                                            tag_filter.set(None);
                                             scope.set("active".to_string());
                                         },
                                         "Reset filters"
@@ -634,7 +664,8 @@ pub fn ProjectList() -> Element {
                                     for p in group {
                                         {
                                             let (sm, sc) = spend_map.get(&p.id).copied().unwrap_or((0, 0));
-                                            let rs = row_spend(&p, sm, sc);
+                                            let budget_rows = budget_map.get(&p.id).map(Vec::as_slice).unwrap_or_default();
+                                            let rs = configured_row_spend(budget_rows).unwrap_or_else(|| row_spend(&p, sm, sc));
                                             let pname = match &p.code {
                                                 Some(c) => format!("[{c}] {}", p.name),
                                                 None => p.name.clone(),
@@ -653,7 +684,8 @@ pub fn ProjectList() -> Element {
                                                     }
                                                 }
                                             }
-                                            div { class: "flex items-center gap-3 min-w-0",
+                                            div { class: "min-w-0",
+                                              div { class: "flex items-center gap-3 min-w-0",
                                                 Link {
                                                     to: Route::ProjectDetail { id: p.id },
                                                     class: "font-semibold text-strong min-w-0 proj-namelink",
@@ -663,11 +695,40 @@ pub fn ProjectList() -> Element {
                                                 if !p.active {
                                                     span { class: "badge badge-neutral", "Inactive" }
                                                 }
+                                              }
+                                              if let Some(config) = budget_rows.first().filter(|row| row.kind != BudgetKind::None) {
+                                                p { class: "text-xs text-muted mt-2",
+                                                    if config.period_key != "lifetime" { "Budget period: {config.period_key} · " }
+                                                    "Total tracked: {hours(sm)}"
+                                                }
+                                                if config.scope != "project" {
+                                                  details { class: "mt-2 text-xs",
+                                                    summary { class: "cursor-pointer text-primary", "Budget by {config.scope}" }
+                                                    ul { class: "mt-2",
+                                                      for row in budget_rows {
+                                                        {
+                                                            let values = budget_display(row.kind, &row.currency, row.budget, Some(row.consumed), false);
+                                                            let label = row.label.as_deref().unwrap_or("No allocated budget");
+                                                            rsx! { li { class: "py-2",
+                                                                span { class: "font-semibold", "{label}: " }
+                                                                if row.budget.is_some() { "Budget {values.budget} · " } else { "No budget set · " }
+                                                                "Spent {values.spent} · Remaining {values.remaining}"
+                                                            } }
+                                                        }
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              }
                                             }
                                             div { class: "flex items-center justify-end gap-2 font-mono",
-                                                span { class: "whitespace-nowrap", "{rs.budget}" }
-                                                if rs.recurring {
-                                                    span { class: "text-faint", "⟳" }
+                                                if spend_ready {
+                                                    span { class: "whitespace-nowrap", "{rs.budget}" }
+                                                    if rs.recurring {
+                                                        span { class: "text-faint", aria_label: "Recurring budget", "⟳" }
+                                                    }
+                                                } else {
+                                                    span { class: "text-muted", aria_label: "Budget unavailable", "—" }
                                                 }
                                             }
                                             div { class: "flex items-center justify-end gap-3 font-mono",
@@ -699,31 +760,8 @@ pub fn ProjectList() -> Element {
                                                     Menu { id: "project-actions-{p.id}", label: "Actions", align_right: true,
                                                         MenuItem {
                                                             onclick: {
-                                                                let p = p.clone();
-                                                                move |_| {
-                                                                    editing_id.set(Some(p.id));
-                                                                    name.set(p.name.clone());
-                                                                    project_type.set(p.project_type.to_string());
-                                                                    currency.set(p.currency.clone());
-                                                                    rate_value.set(p.rate_cents.map(format_cents_plain).unwrap_or_default());
-                                                                    budget_kind.set(p.budget_kind.to_string());
-                                                                    // Seed the figure so saving an untouched
-                                                                    // form doesn't clear the budget.
-                                                                    budget_value
-                                                                        .set(match p.budget_kind {
-                                                                            BudgetKind::Amount => p
-                                                                                .budget_amount_cents
-                                                                                .map(format_cents_plain)
-                                                                                .unwrap_or_default(),
-                                                                            BudgetKind::Hours => p
-                                                                                .budget_minutes
-                                                                                .map(horae_core::duration::format_hhmm)
-                                                                                .unwrap_or_default(),
-                                                                            BudgetKind::None => String::new(),
-                                                                        });
-                                                                    error.set(None);
-                                                                    show_form.set(true);
-                                                                }
+                                                                let id = p.id;
+                                                                move |_| { navigator.push(Route::EditProject { id }); }
                                                             },
                                                             "Edit"
                                                         }
@@ -878,6 +916,8 @@ pub fn ProjectDetail(id: Uuid) -> Element {
 
 #[component]
 fn ProjectDetailContent(id: Uuid) -> Element {
+    let mut details =
+        use_resource(move || async move { server_fns::get_project_details(id.to_string()).await });
     let me = use_resource(|| async move { server_fns::get_me().await });
     let assignments = use_resource(move || {
         let pid = id.to_string();
@@ -917,11 +957,33 @@ fn ProjectDetailContent(id: Uuid) -> Element {
             div { class: "page-header",
                 h1 { class: "page-title", "Project" }
             }
-            div { class: "card",
-                p { class: "text-muted p-5", "Project detail for {id}" }
+            section { class: "card p-5 wrap-anywhere", aria_label: "Project details",
+                if details.state()() != UseResourceState::Ready {
+                    p { role: "status", "Loading project details…" }
+                } else {
+                    match &*details.read() {
+                        Some(Ok(project)) => rsx! { SavedProjectDetails { project: project.clone() } },
+                        Some(Err(error)) => rsx! {
+                            p { class: "text-danger", role: "alert", "Could not load project details: {error}" }
+                            button { r#type: "button", class: "btn btn-secondary btn-sm", onclick: move |_| details.restart(), "Retry details" }
+                        },
+                        None => rsx! {},
+                    }
+                }
             }
 
-            ProjectTasks { project_id: id, can_manage: is_manager(&me) }
+            ProjectTasks {
+                project_id: id,
+                can_manage: is_manager(&me) && details.state()() == UseResourceState::Ready
+                    && matches!(&*details.read(), Some(Ok(_))),
+                task_rate_currency: details.read().as_ref().and_then(|result| result.as_ref().ok())
+                    .and_then(|project| project.task_rate_currency.clone()),
+            }
+
+            if is_manager(&me) && details.state()() == UseResourceState::Ready
+                && matches!(&*details.read(), Some(Ok(_))) {
+                fee_balances::ProjectFeeBalances { project_id: id }
+            }
 
             // ── Assignments section ─────────────────────────────────────
             div { class: "mt-6",
@@ -1043,17 +1105,63 @@ fn ProjectDetailContent(id: Uuid) -> Element {
     }
 }
 
+fn matching_tag_projects(links: &[ProjectTagLink], selected: Option<Uuid>) -> BTreeSet<Uuid> {
+    links
+        .iter()
+        .filter(|link| Some(link.tag_id) == selected)
+        .map(|link| link.project_id)
+        .collect()
+}
+
 #[component]
-fn ProjectTasks(project_id: Uuid, can_manage: bool) -> Element {
+fn SavedProjectDetails(project: ProjectDetails) -> Element {
+    rsx! {
+        h2 { class: "text-xl m-0 mb-4", "{project.name}" }
+        dl { class: "grid sm:grid-cols-2 gap-4 m-0",
+            div { dt { class: "text-sm text-subtle", "Client" } dd { class: "m-0", "{project.client_name}" } }
+            div { dt { class: "text-sm text-subtle", "Code" } dd { class: "m-0 font-mono", "{project.code.as_deref().unwrap_or(\"—\")}" } }
+            div { dt { class: "text-sm text-subtle", "Currency" } dd { class: "m-0", "{project.currency}" } }
+            div { dt { class: "text-sm text-subtle", "Planning dates" }
+                dd { class: "m-0",
+                    "{project.starts_on.map(|date| date.format(\"%d %b %Y\").to_string()).unwrap_or_else(|| \"No start date\".into())} — "
+                    "{project.ends_on.map(|date| date.format(\"%d %b %Y\").to_string()).unwrap_or_else(|| \"No end date\".into())}"
+                }
+            }
+        }
+        div { class: "mt-4",
+            h3 { class: "text-sm text-subtle m-0 mb-2", "Tags" }
+            if project.tags.is_empty() { p { class: "text-sm m-0", "No tags" } }
+            else { div { class: "flex flex-wrap gap-2", for tag in project.tags { span { class: "chip", "{tag}" } } } }
+        }
+        if let Some(notes) = project.admin_notes.filter(|notes| !notes.is_empty()) {
+            div { class: "mt-4",
+                h3 { class: "text-sm text-subtle m-0 mb-2", "Administrator notes" }
+                for line in notes.lines() { p { class: "text-sm m-0", "{line}" } }
+            }
+        }
+    }
+}
+
+#[component]
+fn ProjectTasks(project_id: Uuid, can_manage: bool, task_rate_currency: Option<String>) -> Element {
     let mut enabled = use_resource(move || async move {
         server_fns::list_project_tasks(project_id.to_string()).await
     });
     let mut catalog = use_resource(|| async move { server_fns::list_tasks().await });
     let mut selected = use_signal(String::new);
+    let mut rate = use_signal(String::new);
     let mut name = use_signal(String::new);
     let mut billable = use_signal(|| true);
     let mut error = use_signal(|| None::<String>);
     let mut saving = use_signal(|| false);
+    let enabled_ids: BTreeSet<_> = enabled
+        .read()
+        .as_ref()
+        .and_then(|result| result.as_ref().ok())
+        .into_iter()
+        .flatten()
+        .map(|task| task.id)
+        .collect();
 
     rsx! {
         div { class: "card mt-6 p-5",
@@ -1070,20 +1178,32 @@ fn ProjectTasks(project_id: Uuid, can_manage: bool) -> Element {
                     {loaded(&*catalog.read(), |tasks| rsx! {
                         select {
                             id: "project-task", class: "form-select", value: "{selected}",
-                            disabled: saving(), onchange: move |e| selected.set(e.value()),
+                            disabled: saving(), onchange: move |e| {
+                                selected.set(e.value()); rate.set(String::new()); error.set(None);
+                            },
                             option { value: "", "Select task…" }
-                            for task in tasks { option { value: "{task.id}", "{task.name}" } }
+                            for task in tasks { option { value: "{task.id}", disabled: enabled_ids.contains(&task.id), "{task.name}" } }
                         }
                     })}
+                }
+                if let Some(currency) = task_rate_currency.as_deref() {
+                    FormGroup { label: "Task hourly rate ({currency})", id: "project-task-rate",
+                        hint: "For newly enabled tasks. Leave blank to inherit a compatible catalog rate; enter 0 for a zero rate.",
+                        Input { id: "project-task-rate", class: "w-30 max-w-full font-mono text-right",
+                            value: "{rate}", disabled: saving(), oninput: move |event: FormEvent| rate.set(event.value()) }
+                    }
                 }
                 button {
                     class: "btn btn-secondary", disabled: saving() || selected().is_empty(),
                     onclick: move |_| {
                         let task_id = selected();
+                        let explicit_rate = task_rate_currency.as_ref().filter(|_| !rate().trim().is_empty())
+                            .map(|currency| ProjectTaskRate { amount: rate(), currency: currency.clone() });
+                        error.set(None);
                         saving.set(true);
                         spawn(async move {
-                            match server_fns::link_project_task(project_id.to_string(), task_id).await {
-                                Ok(()) => { error.set(None); selected.set(String::new()); enabled.restart(); }
+                            match server_fns::link_project_task(project_id.to_string(), task_id, explicit_rate).await {
+                                Ok(()) => { error.set(None); selected.set(String::new()); rate.set(String::new()); enabled.restart(); }
                                 Err(e) => error.set(Some(e.to_string())),
                             }
                             saving.set(false);

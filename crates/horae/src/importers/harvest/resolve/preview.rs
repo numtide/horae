@@ -45,7 +45,7 @@ impl ParentSnapshot {
             ).fetch_one(&mut *conn).await?,
             tasks: sqlx::query_scalar!(
                 r#"SELECT COALESCE(jsonb_agg(to_jsonb(r)), '[]'::jsonb) AS "rows!"
-                   FROM (SELECT id, org_id, name, billable_default, default_rate_cents, active
+                   FROM (SELECT id, org_id, name, billable_default, default_rate_cents, default_rate_currency, active
                          FROM tasks WHERE org_id = $1 AND id = ANY($2)) r"#,
                 org_id, &tasks,
             ).fetch_one(&mut *conn).await?,
@@ -104,8 +104,8 @@ impl ParentSnapshot {
             &self.projects, org_id,
         ).execute(&mut *conn).await?;
         sqlx::query!(
-            "INSERT INTO tasks (id, org_id, name, billable_default, default_rate_cents, active)
-             SELECT id, org_id, name, billable_default, default_rate_cents, active
+            "INSERT INTO tasks (id, org_id, name, billable_default, default_rate_cents, default_rate_currency, active)
+             SELECT id, org_id, name, billable_default, default_rate_cents, default_rate_currency, active
              FROM jsonb_populate_recordset(NULL::tasks, $1) WHERE org_id = $2
              ON CONFLICT (id) DO NOTHING",
             &self.tasks,
@@ -132,6 +132,48 @@ impl ParentSnapshot {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[sqlx::test]
+    async fn checkpoint_restores_known_task_currency_and_keeps_old_currency_unknown(
+        pool: sqlx::PgPool,
+    ) {
+        let ids =
+            crate::server_fns::test_seed::seed(&pool, horae_core::types::OrgRole::Admin).await;
+        let task_id = Uuid::now_v7();
+        let mut tx = pool.begin().await.unwrap();
+        sqlx::query!(
+            "INSERT INTO tasks (id,org_id,name,default_rate_cents,default_rate_currency) VALUES ($1,$2,'Snapshot task',8000,'USD')",
+            task_id, ids.org_id,
+        ).execute(&mut *tx).await.unwrap();
+        let mut cache = RunCache::default();
+        cache.tasks.insert("Snapshot task".into(), task_id);
+        let mut snapshot = ParentSnapshot::capture(&mut tx, ids.org_id, &cache)
+            .await
+            .unwrap();
+        tx.rollback().await.unwrap();
+        for currency in [Some("USD"), None] {
+            if currency.is_none() {
+                snapshot.tasks[0]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("default_rate_currency");
+            }
+            let mut tx = pool.begin().await.unwrap();
+            snapshot.restore(&mut tx, ids.org_id).await.unwrap();
+            let row = sqlx::query!(
+                "SELECT default_rate_cents, default_rate_currency FROM tasks WHERE id = $1",
+                task_id
+            )
+            .fetch_one(&mut *tx)
+            .await
+            .unwrap();
+            assert_eq!(
+                (row.default_rate_cents, row.default_rate_currency.as_deref()),
+                (Some(8000), currency)
+            );
+            tx.rollback().await.unwrap();
+        }
+    }
 
     #[sqlx::test]
     async fn rejects_foreign_parent_snapshots_before_restoring_any_rows(pool: sqlx::PgPool) {

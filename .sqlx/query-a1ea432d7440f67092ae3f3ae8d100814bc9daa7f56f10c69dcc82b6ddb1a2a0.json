@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE project_settings SET rate_mode=$3, budget_scope=$4, monthly_reset=$5, include_nonbillable=$6,\n         alert_enabled=$7, alert_threshold=$8, report_visibility=$9, fee_mode=$10, fee_amount_cents=$11,\n         monthly_day=$12, terms_days=$13, po_number=$14, discount_bps=$15, tax1_bps=$16, tax2_name=$17, tax2_bps=$18\n         WHERE project_id=$1 AND org_id=$2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Int2",
+        "Text",
+        "Text",
+        "Int8",
+        "Text",
+        "Int2",
+        "Text",
+        "Int2",
+        "Int2",
+        "Text",
+        "Int2"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a1ea432d7440f67092ae3f3ae8d100814bc9daa7f56f10c69dcc82b6ddb1a2a0"
+}

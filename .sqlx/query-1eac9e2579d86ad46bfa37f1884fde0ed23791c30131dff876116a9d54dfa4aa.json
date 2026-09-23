@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT terms_days,tax1_bps,po_number FROM project_settings WHERE project_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "terms_days",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 1,
+        "name": "tax1_bps",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 2,
+        "name": "po_number",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "1eac9e2579d86ad46bfa37f1884fde0ed23791c30131dff876116a9d54dfa4aa"
+}

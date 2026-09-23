@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) FROM horae_outbox WHERE org_id = $1 AND event_kind = 'project_created' AND delivered_at IS NOT NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "e2cc0cc1d47e932cae66967281eaa6d409c3bd88ee9e7ca108b5cc28bbca8b0a"
+}

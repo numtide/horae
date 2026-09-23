@@ -1,3 +1,126 @@
+use crate::project::{Percentage, RateMode};
+
+/// Resolve an explicitly selected billing mode without changing legacy precedence.
+pub fn resolve_project_rate(
+    mode: RateMode,
+    task_rate_cents: Option<i64>,
+    assignment_rate_cents: Option<i64>,
+    project_rate_cents: Option<i64>,
+    user_rate_cents: Option<i64>,
+    client_rate_cents: Option<i64>,
+) -> Option<i64> {
+    match mode {
+        RateMode::Legacy => resolve_rate(
+            task_rate_cents,
+            assignment_rate_cents,
+            project_rate_cents,
+            user_rate_cents,
+        ),
+        RateMode::Person => assignment_rate_cents
+            .or(user_rate_cents)
+            .or(client_rate_cents),
+        RateMode::Task => task_rate_cents.or(client_rate_cents),
+        RateMode::Project => project_rate_cents,
+    }
+}
+
+/// Invoice-owned components after discount and non-compounding taxes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct InvoiceAmounts {
+    pub subtotal_cents: i64,
+    pub discount_cents: i64,
+    pub tax1_cents: i64,
+    pub tax2_cents: i64,
+    pub total_cents: i64,
+}
+
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+pub enum InvoiceAmountError {
+    #[error("Invoice subtotal must not be negative")]
+    NegativeSubtotal,
+    #[error("Invoice line amounts must not be negative")]
+    NegativeLine,
+    #[error("Invoice total exceeds the supported range")]
+    Overflow,
+}
+
+/// Return each line's contribution after discount and before taxes.
+///
+/// Allocates the rounded invoice discount proportionally using largest
+/// remainders. Equal remainders favor earlier input lines; callers must use
+/// stable source order so preview, save and draft edits allocate identically.
+/// Zero-subtotal invoices return zero contributions.
+///
+/// # Errors
+/// Rejects negative lines or a subtotal exceeding `i64::MAX`.
+pub fn allocate_invoice_discount(
+    gross_lines: &[i64],
+    discount: Percentage,
+) -> Result<Vec<i64>, InvoiceAmountError> {
+    let subtotal = gross_lines.iter().try_fold(0_i64, |sum, &amount| {
+        if amount < 0 {
+            return Err(InvoiceAmountError::NegativeLine);
+        }
+        sum.checked_add(amount).ok_or(InvoiceAmountError::Overflow)
+    })?;
+    if subtotal == 0 {
+        return Ok(vec![0; gross_lines.len()]);
+    }
+    let discount_cents =
+        invoice_amounts(subtotal, discount, Percentage::ZERO, Percentage::ZERO)?.discount_cents;
+    let mut remaining = discount_cents;
+    let mut contributions = Vec::with_capacity(gross_lines.len());
+    let mut remainders = Vec::with_capacity(gross_lines.len());
+    for (index, &gross) in gross_lines.iter().enumerate() {
+        let numerator = i128::from(gross) * i128::from(discount_cents);
+        let share = i64::try_from(numerator / i128::from(subtotal))
+            .map_err(|_| InvoiceAmountError::Overflow)?;
+        contributions.push(gross - share);
+        remaining -= share;
+        remainders.push((index, numerator % i128::from(subtotal)));
+    }
+    remainders.sort_unstable_by_key(|&(index, remainder)| (std::cmp::Reverse(remainder), index));
+    for (index, _) in remainders {
+        if remaining == 0 {
+            break;
+        }
+        contributions[index] -= 1;
+        remaining -= 1;
+    }
+    Ok(contributions)
+}
+
+/// Apply the discount before independently rounded taxes, using exact minor units.
+pub fn invoice_amounts(
+    subtotal_cents: i64,
+    discount: Percentage,
+    tax1: Percentage,
+    tax2: Percentage,
+) -> Result<InvoiceAmounts, InvoiceAmountError> {
+    if subtotal_cents < 0 {
+        return Err(InvoiceAmountError::NegativeSubtotal);
+    }
+    let portion = |amount: i64, percentage: Percentage| {
+        i64::try_from((i128::from(amount) * i128::from(percentage.basis_points()) + 5_000) / 10_000)
+            .map_err(|_| InvoiceAmountError::Overflow)
+    };
+    let discount_cents = portion(subtotal_cents, discount)?;
+    let taxable_cents = subtotal_cents - discount_cents;
+    let tax1_cents = portion(taxable_cents, tax1)?;
+    let tax2_cents = portion(taxable_cents, tax2)?;
+    let total_cents = taxable_cents
+        .checked_add(tax1_cents)
+        .and_then(|total| total.checked_add(tax2_cents))
+        .ok_or(InvoiceAmountError::Overflow)?;
+    Ok(InvoiceAmounts {
+        subtotal_cents,
+        discount_cents,
+        tax1_cents,
+        tax2_cents,
+        total_cents,
+    })
+}
+
 /// FR-024 rate resolution cascade.
 ///
 /// Returns the first non-None rate in priority order:
@@ -33,6 +156,192 @@ pub fn line_amount_cents(rate_cents: i64, minutes: i32) -> Result<i64, std::num:
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn discounted_fee_contribution_leaves_discount_available() {
+        let net = allocate_invoice_discount(&[100_000], "10".parse().unwrap()).unwrap();
+        assert_eq!(net, [90_000]);
+        assert_eq!(100_000 - net[0], 10_000);
+    }
+
+    #[test]
+    fn discount_allocation_uses_largest_remainder_then_stable_source_order() {
+        assert_eq!(
+            allocate_invoice_discount(&[1, 3, 1], "20".parse().unwrap()).unwrap(),
+            [1, 2, 1]
+        );
+        assert_eq!(
+            allocate_invoice_discount(&[1, 1, 1], "50".parse().unwrap()).unwrap(),
+            [0, 0, 1]
+        );
+    }
+
+    #[test]
+    fn discount_allocation_handles_empty_zero_and_full_discounts() {
+        let full = "100".parse().unwrap();
+        assert!(allocate_invoice_discount(&[], full).unwrap().is_empty());
+        assert_eq!(allocate_invoice_discount(&[0, 0], full).unwrap(), [0, 0]);
+        assert_eq!(
+            allocate_invoice_discount(&[1, 99, 0], Percentage::ZERO).unwrap(),
+            [1, 99, 0]
+        );
+        assert_eq!(
+            allocate_invoice_discount(&[1, 99, 0], full).unwrap(),
+            [0, 0, 0]
+        );
+    }
+
+    #[test]
+    fn discount_allocation_rejects_negative_lines_and_subtotal_overflow() {
+        assert!(allocate_invoice_discount(&[100, -1], Percentage::ZERO).is_err());
+        assert_eq!(
+            allocate_invoice_discount(&[i64::MAX, 1], Percentage::ZERO),
+            Err(InvoiceAmountError::Overflow)
+        );
+    }
+
+    #[test]
+    fn discount_allocation_supports_maximum_representable_subtotal() {
+        let half = "50".parse().unwrap();
+        assert_eq!(
+            allocate_invoice_discount(&[i64::MAX - 1, 1], half).unwrap(),
+            [i64::MAX / 2, 0]
+        );
+    }
+
+    #[test]
+    fn discount_allocation_conserves_header_amount_and_bounds_each_line() {
+        for a in 0..=6 {
+            for b in 0..=6 {
+                for c in 0..=6 {
+                    let gross = [a, b, c];
+                    for bps in [0, 1, 2500, 3333, 5000, 9999, 10_000] {
+                        let discount = Percentage::try_from(bps).unwrap();
+                        let net = allocate_invoice_discount(&gross, discount).unwrap();
+                        let amounts = invoice_amounts(
+                            a + b + c,
+                            discount,
+                            Percentage::ZERO,
+                            Percentage::ZERO,
+                        )
+                        .unwrap();
+                        assert_eq!(net.iter().sum::<i64>(), amounts.total_cents);
+                        assert!(
+                            net.iter()
+                                .zip(gross)
+                                .all(|(&net, gross)| (0..=gross).contains(&net))
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn selected_rate_mode_ignores_unselected_rate_sources() {
+        let rates = |mode| {
+            resolve_project_rate(
+                mode,
+                Some(5000),
+                Some(4000),
+                Some(3500),
+                Some(3000),
+                Some(2000),
+            )
+        };
+        assert_eq!(rates(RateMode::Legacy), Some(5000));
+        assert_eq!(rates(RateMode::Person), Some(4000));
+        assert_eq!(rates(RateMode::Task), Some(5000));
+        assert_eq!(rates(RateMode::Project), Some(3500));
+    }
+
+    #[test]
+    fn selected_rate_keeps_zero_and_explicit_missing_project_rate() {
+        assert_eq!(
+            resolve_project_rate(
+                RateMode::Person,
+                Some(9),
+                Some(0),
+                Some(9),
+                Some(8),
+                Some(7)
+            ),
+            Some(0)
+        );
+        assert_eq!(
+            resolve_project_rate(RateMode::Project, Some(9), Some(9), None, Some(8), Some(7)),
+            None
+        );
+        assert_eq!(
+            resolve_project_rate(RateMode::Task, None, Some(9), Some(9), Some(8), Some(7)),
+            Some(7)
+        );
+        assert_eq!(
+            resolve_project_rate(RateMode::Person, None, None, None, Some(8), Some(7)),
+            Some(8)
+        );
+        assert_eq!(
+            resolve_project_rate(RateMode::Legacy, None, None, None, None, Some(7)),
+            None
+        );
+    }
+
+    #[test]
+    fn invoice_adjustments_apply_discount_before_non_compounding_taxes() {
+        let amounts = invoice_amounts(
+            10_000,
+            "10".parse().unwrap(),
+            "21".parse().unwrap(),
+            "5".parse().unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            amounts,
+            InvoiceAmounts {
+                subtotal_cents: 10_000,
+                discount_cents: 1_000,
+                tax1_cents: 1_890,
+                tax2_cents: 450,
+                total_cents: 11_340,
+            }
+        );
+    }
+
+    #[test]
+    fn invoice_adjustments_round_components_half_up() {
+        let half = "50".parse().unwrap();
+        let amounts = invoice_amounts(1, Percentage::ZERO, half, half).unwrap();
+        assert_eq!(
+            (amounts.tax1_cents, amounts.tax2_cents, amounts.total_cents),
+            (1, 1, 3)
+        );
+        assert_eq!(invoice_amounts(1, half, half, half).unwrap().total_cents, 0);
+    }
+
+    #[test]
+    fn invoice_adjustments_reject_negative_subtotal_and_overflow() {
+        let zero = Percentage::ZERO;
+        assert_eq!(
+            invoice_amounts(-1, zero, zero, zero),
+            Err(InvoiceAmountError::NegativeSubtotal)
+        );
+        assert_eq!(
+            invoice_amounts(i64::MAX, zero, "1".parse().unwrap(), zero),
+            Err(InvoiceAmountError::Overflow)
+        );
+        assert_eq!(
+            invoice_amounts(i64::MAX, zero, zero, zero)
+                .unwrap()
+                .total_cents,
+            i64::MAX
+        );
+        assert_eq!(
+            invoice_amounts(i64::MAX, "100".parse().unwrap(), zero, zero)
+                .unwrap()
+                .total_cents,
+            0
+        );
+    }
 
     #[test]
     fn line_amount_accepts_large_representable_amounts() {

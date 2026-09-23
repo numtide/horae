@@ -5,11 +5,20 @@ use horae_core::money::format_cents_plain;
 use horae_core::types::InvoiceStatus;
 use uuid::Uuid;
 
-use super::{loaded, run_action};
-use crate::components::form::{FormCard, FormGroup, Input, Select};
+use super::loaded;
 use crate::components::table::DataTable;
 use crate::route::Route;
 use crate::server_fns;
+
+#[path = "invoices/defaults_form.rs"]
+mod defaults_form;
+#[path = "invoices/preparation.rs"]
+mod preparation;
+
+#[path = "invoices/editing.rs"]
+mod editing;
+#[path = "invoices/recovery.rs"]
+mod recovery;
 
 /// The badge class for an invoice status — one convention for list and detail.
 fn invoice_badge_class(status: InvoiceStatus) -> &'static str {
@@ -23,6 +32,12 @@ fn invoice_badge_class(status: InvoiceStatus) -> &'static str {
 
 #[component]
 pub fn InvoiceList() -> Element {
+    rsx! { recovery::RecoveryGate { InvoiceListContent {} } }
+}
+
+#[component]
+fn InvoiceListContent() -> Element {
+    let storage = use_context::<recovery::RecoveryStorage>();
     let invoices = use_resource(|| async move { server_fns::list_invoices(None).await });
     let clients = use_resource(|| async move { server_fns::list_clients(false).await });
 
@@ -48,80 +63,43 @@ pub fn InvoiceList() -> Element {
             .collect();
 
     let mut show_form = use_signal(|| false);
-    let mut selected_client = use_signal(String::new);
-    let mut period_from = use_signal(String::new);
-    let mut period_to = use_signal(String::new);
-    let mut error = use_signal(|| None::<String>);
+    let busy = use_signal(|| false);
+    let navigator = use_navigator();
 
     rsx! {
         div {
             div { class: "page-header",
                 h1 { class: "page-title", "Invoices" }
                 div { class: "page-actions",
+                    if storage.ready() {
                     button {
                         class: "btn btn-primary",
+                        disabled: busy(),
                         onclick: move |_| {
-                            if show_form() {
-                                show_form.set(false);
-                                error.set(None);
-                            } else {
-                                show_form.set(true);
-                            }
+                            if !busy() && storage.ready() { show_form.toggle(); }
                         },
                         if show_form() { "Cancel" } else { "New Invoice" }
+                    }
                     }
                 }
             }
 
             if show_form() {
-                FormCard { title: "Generate Invoice", error,
-                    FormGroup { label: "Client", id: "inv-client",
-                        Select {
-                            id: "inv-client",
-                            options: client_opts,
-                            selected: selected_client(),
-                            onchange: move |e: FormEvent| selected_client.set(e.value()),
+                {loaded(&*clients.read(), |_| rsx! {
+                    preparation::PrepareInvoice { client_opts: client_opts.clone(), busy,
+                        oncreated: move |id| {
+                            show_form.set(false);
+                            navigator.push(Route::InvoiceDetail { id });
                         }
                     }
-                    FormGroup { label: "Period from", id: "inv-from",
-                        Input {
-                            id: "inv-from",
-                            kind: "date",
-                            value: "{period_from}",
-                            oninput: move |e: FormEvent| period_from.set(e.value()),
-                        }
-                    }
-                    FormGroup { label: "Period to", id: "inv-to",
-                        Input {
-                            id: "inv-to",
-                            kind: "date",
-                            value: "{period_to}",
-                            oninput: move |e: FormEvent| period_to.set(e.value()),
-                        }
-                    }
-                    button {
-                        class: "btn btn-primary",
-                        onclick: move |_| {
-                            let client = selected_client();
-                            let from = period_from();
-                            let to = period_to();
-                            run_action(
-                                server_fns::generate_invoice(client, from, to),
-                                invoices,
-                                error,
-                                move || show_form.set(false),
-                            );
-                        },
-                        "Generate Invoice"
-                    }
-                }
+                })}
             }
 
             div { class: "card",
                 {loaded(&*invoices.read(), |list| rsx! {
                     if list.is_empty() {
                         div { class: "text-muted text-sm p-5",
-                            "No invoices yet. Generate one from billable time."
+                            "No invoices yet. Generate one from billable time or project fees."
                         }
                     } else {
                         DataTable {
@@ -182,15 +160,18 @@ pub fn InvoiceList() -> Element {
 pub fn InvoiceDetail(id: Uuid) -> Element {
     // A keyed fragment resets invoice-local resources and actions when the
     // router reuses this page for another ID.
-    rsx! { for id in [id] { InvoiceDetailContent { key: "{id}", id } } }
+    rsx! { for id in [id] { recovery::RecoveryGate { key: "{id}", InvoiceDetailContent { id } } } }
 }
 
 #[component]
 fn InvoiceDetailContent(id: Uuid) -> Element {
-    let invoice_data =
+    let storage = use_context::<recovery::RecoveryStorage>();
+    let mut invoice_data =
         use_resource(move || async move { server_fns::get_invoice(id.to_string()).await });
     let clients = use_resource(|| async move { server_fns::list_clients(false).await });
-    let error = use_signal(|| None::<String>);
+    let mut error = use_signal(|| None::<String>);
+    let editing = use_signal(|| false);
+    let mut busy = use_signal(|| false);
 
     let client_name = |cid: Uuid| -> String {
         clients
@@ -205,16 +186,26 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
     // One button per status transition; the four share everything but the
     // target status, label, and emphasis.
     let status_btn = move |to: &'static str, label: &'static str, primary: bool| {
+        if !storage.ready() {
+            return rsx! {};
+        }
         rsx! {
             button {
                 class: if primary { "btn btn-primary" } else { "btn btn-secondary" },
                 style: if !primary { "margin-left: 0.5rem;" },
-                onclick: move |_| run_action(
-                    server_fns::update_invoice_status(id.to_string(), to.to_string()),
-                    invoice_data,
-                    error,
-                    || (),
-                ),
+                disabled: busy() || editing(),
+                onclick: move |_| {
+                    if busy() || editing() || !storage.ready() { return; }
+                    error.set(None);
+                    busy.set(true);
+                    spawn(async move {
+                        match server_fns::update_invoice_status(id.to_string(), to.to_string()).await {
+                            Ok(_) => invoice_data.restart(),
+                            Err(err) => error.set(Some(err.to_string())),
+                        }
+                        busy.set(false);
+                    });
+                },
                 {label}
             }
         }
@@ -276,6 +267,16 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
                                     div { class: "text-mono", "{inv.due_on}" }
                                 }
                                 div {
+                                    div { class: "text-sm text-muted", "Payment terms" }
+                                    div { "{inv.terms_days} days" }
+                                }
+                                if !inv.po_number.is_empty() {
+                                    div {
+                                        div { class: "text-sm text-muted", "Purchase order" }
+                                        div { class: "wrap-anywhere", "{inv.po_number}" }
+                                    }
+                                }
+                                div {
                                     div { class: "text-sm text-muted", "Total" }
                                     div { class: "text-mono",
                                         { format!("{} {}", inv.currency.trim(), format_cents_plain(inv.total_cents)) }
@@ -283,6 +284,10 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
                                 }
                             }
                         }
+                    }
+
+                    if inv.status == InvoiceStatus::Draft {
+                        defaults_form::DraftDefaults { invoice: inv.clone(), editing, busy, onsaved: move |_| invoice_data.restart() }
                     }
 
                     div { class: "card",
@@ -301,10 +306,10 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
                                         tr { key: "{line.id}",
                                             td { "{line.description}" }
                                             td { class: "text-mono text-right",
-                                                { horae_core::duration::format_hhmm(line.minutes.into()) }
+                                                { line.minutes.map(|minutes| horae_core::duration::format_hhmm(minutes.into())).unwrap_or_else(|| "—".into()) }
                                             }
                                             td { class: "text-mono text-right",
-                                                { format!("{}/hr", format_cents_plain(line.rate_cents)) }
+                                                { line.rate_cents.map(|rate| format!("{}/hr", format_cents_plain(rate))).unwrap_or_else(|| "—".into()) }
                                             }
                                             td { class: "text-mono text-right",
                                                 { format_cents_plain(line.amount_cents) }
@@ -313,10 +318,12 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
                                     }
                                 }
                                 tfoot {
-                                    tr {
-                                        td { colspan: "3", class: "text-right font-semibold", "Total" }
-                                        td { class: "text-mono text-right font-semibold",
-                                            { format!("{} {}", inv.currency.trim(), format_cents_plain(inv.total_cents)) }
+                                    for (label, cents) in inv.breakdown() {
+                                        tr {
+                                            th { scope: "row", colspan: "3", class: "text-right wrap-anywhere", "{label}" }
+                                            td { class: if label == "Total" { "text-mono text-right font-semibold" } else { "text-mono text-right" },
+                                                { format!("{} {}", inv.currency.trim(), format_cents_plain(cents)) }
+                                            }
                                         }
                                     }
                                 }

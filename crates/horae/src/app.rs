@@ -16,6 +16,7 @@ pub fn App() -> Element {
             href: asset!("/assets/css/horae-utils.css"),
         }
         ThemeInit {}
+        document::Script { src: asset!("/assets/js/project-edit-navigation.js") }
         Router::<Route> {}
     }
 }

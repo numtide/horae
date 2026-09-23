@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT has_function_privilege(current_user,\n                'public.resolve_project_rate(text,bigint,bigint,bigint,bigint,bigint)', 'EXECUTE') AS \"executable!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "executable!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "bf785d0d34e7ee8f7e37042df79975811676b89482865083952ea5ffd2076bbf"
+}

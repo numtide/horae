@@ -1,0 +1,50 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT t.id, t.name, t.active, t.billable_default,\n                CASE WHEN access.can_view_rates THEN t.default_rate_cents END AS default_rate_cents\n         FROM tasks t JOIN task_read_access access ON access.task_id = t.id AND access.org_id = t.org_id\n         WHERE t.org_id = $1 AND access.user_id = $5\n           AND ($2::bool IS NULL OR t.active = $2)\n         ORDER BY t.name, t.id\n         LIMIT $3 OFFSET $4",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "billable_default",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "default_rate_cents",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Int8",
+        "Int8",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "3702ee7cf5a0ddf13a8ba74e5bcb2ddf66b0f8004ccc26b69089af011dd380aa"
+}

@@ -8,7 +8,7 @@ mod tests;
 // ── Reports (M8) ────────────────────────────────────────────────────────────
 
 /// Grouped time report. Groups by "project", "task", "client", or "person", with
-/// optional client/project/teammate filters. Each group carries billable and cost
+/// optional client/project/teammate/tag filters. Each group carries billable and cost
 /// amounts (rates via FR-024), partitioned by entity identity and currency.
 /// Manager-only: reports span every user's time and money (SPEC §6).
 #[server]
@@ -19,6 +19,7 @@ pub async fn report_time(
     client_id: Option<String>,
     project_id: Option<String>,
     user_id: Option<String>,
+    tag_id: Option<String>,
 ) -> Result<Vec<ReportRow>, ServerFnError> {
     let manager = require_manager().await?;
     let state = crate::state::global_state().await;
@@ -28,15 +29,19 @@ pub async fn report_time(
     let client_filter = parse_opt_uuid(client_id, "client_id")?;
     let project_filter = parse_opt_uuid(project_id, "project_id")?;
     let user_filter = parse_opt_uuid(user_id, "user_id")?;
+    let tag_filter = parse_opt_uuid(tag_id, "tag_id")?;
 
     fetch_report(
         &state.db,
-        manager.org_id,
+        manager.id,
         (from_date, to_date),
         &group_by,
-        client_filter,
-        project_filter,
-        user_filter,
+        crate::reports::ReportFilters {
+            client_id: client_filter,
+            project_id: project_filter,
+            user_id: user_filter,
+            tag_id: tag_filter,
+        },
     )
     .await
     .map_err(server_err)
@@ -45,12 +50,10 @@ pub async fn report_time(
 #[cfg(feature = "server")]
 pub(super) async fn fetch_report(
     pool: &sqlx::PgPool,
-    org_id: uuid::Uuid,
+    viewer_id: uuid::Uuid,
     period: (chrono::NaiveDate, chrono::NaiveDate),
     group_by: &str,
-    client_filter: Option<uuid::Uuid>,
-    project_filter: Option<uuid::Uuid>,
-    user_filter: Option<uuid::Uuid>,
+    filters: crate::reports::ReportFilters,
 ) -> Result<Vec<ReportRow>, sqlx::Error> {
     // Grouped in Postgres: a year of entries is a six-figure row count folded
     // down to a few hundred report lines, and none of the per-entry detail
@@ -61,7 +64,7 @@ pub(super) async fn fetch_report(
     //
     // The CTE names each entry's derived values once so the aggregates below
     // read as the sums they are; Postgres inlines a CTE referenced once.
-    // `COALESCE(pt, a, p, u)` is `horae_core::invoice::resolve_rate` written out,
+    // `resolve_project_rate` is the SQL twin of the pure core rate selection,
     // and `line_amount_cents` is the SQL twin of the Rust function invoicing
     // uses (migration 0016). The rounding term inside it is per row, so these
     // sums cannot be taken over pre-aggregated minutes.
@@ -81,19 +84,29 @@ pub(super) async fn fetch_report(
                  WHEN 'person' THEN u.name
                  ELSE p.name
                END AS label,
-               c.currency AS currency,
+               COALESCE(invoice.currency,
+                 CASE WHEN ps.project_id IS NULL THEN c.currency ELSE p.currency END) AS currency,
+               o.default_currency AS cost_currency,
                te.minutes AS minutes,
                -- Billable hours and amount use the rounded minutes that get
                -- invoiced; cost is what the worked time costs, so it stays on
                -- the actual ones.
                effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir) AS rounded_minutes,
                (te.billable AND (te.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable, t.billable_default)))) AS billable,
-               COALESCE(pt.rate_cents, a.rate_cents, p.rate_cents, u.billable_rate_cents, 0)
+               COALESCE(CASE WHEN ps.project_id IS NULL OR p.project_type = 'time_and_materials'
+                 THEN resolve_project_rate(ps.rate_mode, pt.rate_cents, a.rate_cents, p.rate_cents,
+                 CASE WHEN ps.project_id IS NULL OR p.currency = o.default_currency THEN u.billable_rate_cents END,
+                 CASE WHEN p.currency = c.currency THEN c.default_rate_cents END
+               ) END, 0)
                  AS billable_rate_cents,
                line.amount_cents AS frozen_amount_cents,
-               COALESCE(u.cost_rate_cents, 0) AS cost_rate_cents
+               CASE WHEN viewer.org_role = 'admin' OR mc.id IS NULL
+                 THEN COALESCE(mc.cost_rate_cents, u.cost_rate_cents, 0) END AS cost_rate_cents
              FROM time_entries te
+             JOIN users viewer ON viewer.id = $6 AND viewer.org_id = te.org_id
+               AND viewer.active AND viewer.org_role IN ('admin', 'manager')
              JOIN projects p ON te.project_id = p.id
+             LEFT JOIN project_settings ps ON ps.project_id = p.id
              JOIN clients c ON p.client_id = c.id
              JOIN tasks t ON te.task_id = t.id
              JOIN users u ON te.user_id = u.id
@@ -101,11 +114,16 @@ pub(super) async fn fetch_report(
              LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
              LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id
              LEFT JOIN invoice_line_items line ON line.invoice_id = te.invoice_id AND line.time_entry_id = te.id
-             WHERE te.org_id = $6
-               AND te.spent_date BETWEEN $1 AND $2
+             LEFT JOIN invoices invoice ON invoice.id = te.invoice_id
+             LEFT JOIN project_member_costs mc ON mc.project_id = te.project_id AND mc.user_id = te.user_id
+             WHERE te.spent_date BETWEEN $1 AND $2
                AND ($3::uuid IS NULL OR p.client_id = $3)
                AND ($4::uuid IS NULL OR te.project_id = $4)
                AND ($5::uuid IS NULL OR te.user_id = $5)
+               AND ($8::uuid IS NULL OR EXISTS (
+                 SELECT 1 FROM project_tag_links l
+                 WHERE l.org_id = te.org_id AND l.project_id = te.project_id AND l.tag_id = $8
+               ))
            )
            SELECT
              group_id as "group_id!",
@@ -118,20 +136,24 @@ pub(super) async fn fetch_report(
                SUM(COALESCE(frozen_amount_cents, line_amount_cents(billable_rate_cents, rounded_minutes)))
                  FILTER (WHERE billable),
                0)::bigint as "billable_cents!",
-             SUM(line_amount_cents(cost_rate_cents, minutes))::bigint as "cost_cents!",
-             currency as "currency!"
+             -- A partial sum would invent a cost for a group containing private work.
+             CASE WHEN bool_and(cost_rate_cents IS NOT NULL)
+               THEN SUM(line_amount_cents(cost_rate_cents, minutes))::bigint END as "cost_cents?",
+             currency as "currency!",
+             cost_currency as "cost_currency!"
            FROM entry
-           GROUP BY group_id, label, currency
+           GROUP BY group_id, label, currency, cost_currency
            -- Stable ties for duplicate labels and multi-currency entities.
            ORDER BY label COLLATE "C", group_id, currency COLLATE "C"
         "#,
         period.0 as chrono::NaiveDate,
         period.1 as chrono::NaiveDate,
-        client_filter,
-        project_filter,
-        user_filter,
-        org_id,
+        filters.client_id,
+        filters.project_id,
+        filters.user_id,
+        viewer_id,
         group_by,
+        filters.tag_id,
     )
     .fetch_all(pool)
     .await?;
@@ -148,6 +170,7 @@ pub async fn report_detailed(
     client_id: Option<String>,
     project_id: Option<String>,
     user_id: Option<String>,
+    tag_id: Option<String>,
 ) -> Result<Vec<DetailedReportRow>, ServerFnError> {
     let manager = require_manager().await?;
 
@@ -156,6 +179,7 @@ pub async fn report_detailed(
     let client_filter = parse_opt_uuid(client_id, "client_id")?;
     let project_filter = parse_opt_uuid(project_id, "project_id")?;
     let user_filter = parse_opt_uuid(user_id, "user_id")?;
+    let tag_filter = parse_opt_uuid(tag_id, "tag_id")?;
 
     // The CSV/XLSX exports must return exactly these rows, so the query lives
     // once in `crate::reports` and both surfaces call it.
@@ -163,11 +187,13 @@ pub async fn report_detailed(
     crate::reports::fetch_entries(
         &state.db,
         manager.org_id,
-        from_date,
-        to_date,
-        client_filter,
-        project_filter,
-        user_filter,
+        (from_date, to_date),
+        crate::reports::ReportFilters {
+            client_id: client_filter,
+            project_id: project_filter,
+            user_id: user_filter,
+            tag_id: tag_filter,
+        },
     )
     .await
     .map_err(server_err)

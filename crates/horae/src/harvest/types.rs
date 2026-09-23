@@ -133,8 +133,11 @@ pub struct HarvestTimeEntry {
     pub is_running: bool,
     pub timer_started_at: Option<String>,
     pub billable: bool,
-    pub budgeted: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub budgeted: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub billable_rate: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub cost_rate: Option<f64>,
     pub created_at: String,
     pub updated_at: String,
@@ -185,6 +188,7 @@ pub struct HarvestTask {
     pub name: String,
     pub is_active: bool,
     pub billable_by_default: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub default_hourly_rate: Option<f64>,
     pub created_at: String,
     pub updated_at: String,

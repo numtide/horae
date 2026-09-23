@@ -79,7 +79,10 @@ async fn bulk_preserves_invoiced_history_assignments_and_spend(pool: PgPool) {
             .unwrap();
         assert_eq!(billing_snapshot(&pool).await, history);
         assert_eq!(
-            fetch_project_spend(&pool, ids.org_id).await.unwrap()[0].spent_cents,
+            fetch_project_spend(&pool, ids.org_id, ids.user_id)
+                .await
+                .unwrap()[0]
+                .spent_cents,
             6000
         );
     }
@@ -169,7 +172,13 @@ async fn bulk_status_preserves_details_history_and_noop_versions(pool: PgPool) {
             versions
         );
     }
-    assert_eq!(snapshot(&pool, ids.org_id).await, before);
+    let mut expected = before;
+    for project in expected.as_array_mut().unwrap() {
+        // Each real status transition invalidates an editor, but the repeated
+        // no-op calls above must still leave the entire row version untouched.
+        project["edit_revision"] = (project["edit_revision"].as_i64().unwrap() + 2).into();
+    }
+    assert_eq!(snapshot(&pool, ids.org_id).await, expected);
     assert_eq!(
         sqlx::query_scalar!("SELECT jsonb_agg(to_jsonb(t)) FROM time_entries t")
             .fetch_one(&pool)

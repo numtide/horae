@@ -331,11 +331,7 @@ pub(crate) fn user_payload(u: &crate::models::User) -> crate::plugin::event::Use
     }
 }
 
-/// Recompute an hours-budget project's consumption and, if it crossed a new
-/// configured threshold band, dispatch the budget event once, then advance or
-/// reset the stored band. Spawned fire-and-forget so it never blocks the write;
-/// errors are logged, not propagated. Amount budgets are not evaluated yet —
-/// they need FR-024 rate resolution.
+/// Compare-and-swap the last announced legacy plugin band.
 #[cfg(feature = "server")]
 async fn claim_budget_band(
     pool: &sqlx::PgPool,
@@ -363,6 +359,33 @@ pub(crate) async fn check_project_budget(
     state: &'static crate::state::AppState,
     project_id: uuid::Uuid,
 ) {
+    let settings_org = sqlx::query_scalar!(
+        "SELECT org_id FROM project_settings WHERE project_id = $1",
+        project_id,
+    )
+    .fetch_optional(&state.db)
+    .await;
+    match settings_org {
+        Ok(Some(org_id)) => {
+            if budgets::enqueue_alerts(
+                &state.db,
+                org_id,
+                project_id,
+                chrono::Utc::now().date_naive(),
+            )
+            .await
+            .is_err()
+            {
+                tracing::warn!(%project_id, "configured budget alert check failed");
+            }
+            return;
+        }
+        Ok(None) => {}
+        Err(_) => {
+            tracing::warn!(%project_id, "budget settings lookup failed");
+            return;
+        }
+    }
     let row = match sqlx::query!(
         r#"SELECT p.org_id, p.client_id, p.name, p.active, p.last_budget_alert_pct,
                   p.project_type as "project_type: horae_core::types::ProjectType",
@@ -385,7 +408,7 @@ pub(crate) async fn check_project_budget(
         }
     };
 
-    // Only hours budgets are evaluated for now (amount needs rate resolution).
+    // Preserve the legacy hours-only plugin contract for unconfigured projects.
     let budget = match (row.budget_kind, row.budget_minutes) {
         (horae_core::types::BudgetKind::Hours, Some(b)) if b > 0 => b,
         _ => return,
@@ -468,6 +491,8 @@ pub(crate) async fn check_project_budget(
 // using `server_fns::<fn>` regardless of which submodule a function lives in.
 #[cfg(all(test, feature = "server"))]
 mod budget_tests;
+#[cfg(feature = "server")]
+pub(crate) mod budgets;
 #[cfg(all(test, feature = "server"))]
 pub(crate) mod test_seed;
 
@@ -478,6 +503,7 @@ mod importers;
 mod invoices;
 mod organization;
 mod plugins;
+mod project_creation;
 mod projects;
 mod reports;
 mod time_entries;
@@ -492,6 +518,7 @@ pub use invoices::*;
 #[allow(unused_imports)]
 pub use organization::*;
 pub use plugins::*;
+pub use project_creation::*;
 pub use projects::*;
 pub use reports::*;
 pub use time_entries::*;

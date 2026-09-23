@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT p.rate_cents, s.restricted, s.budget_minutes FROM project_tasks p JOIN project_task_settings s USING(project_id,task_id) WHERE p.project_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "rate_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "restricted",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "budget_minutes",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "7fe30805e478943ed25ebc4c4140ee2a9b03014a588bc3ad70126d4caae70ecc"
+}

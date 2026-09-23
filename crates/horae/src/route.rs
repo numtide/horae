@@ -10,6 +10,7 @@ use crate::pages::{
     gallery::Gallery,
     importers::HarvestImport,
     invoices::{InvoiceDetail, InvoiceList},
+    new_project::{EditProject, NewProject},
     projects::{ProjectDetail, ProjectList},
     reports::Reports,
     settings::Settings,
@@ -57,6 +58,10 @@ pub enum Route {
     ClientDetail { id: Uuid },
     #[route("/projects")]
     ProjectList {},
+    #[route("/projects/new")]
+    NewProject {},
+    #[route("/projects/:id/edit")]
+    EditProject { id: Uuid },
     #[route("/projects/:id")]
     ProjectDetail { id: Uuid },
     #[route("/approvals")]
@@ -87,5 +92,43 @@ pub enum Route {
 /// all its parameter values. Call from a component to highlight the current nav
 /// link. Runs on both the server and web targets.
 pub fn route_is_active(to: &Route) -> bool {
-    std::mem::discriminant(&use_route::<Route>()) == std::mem::discriminant(to)
+    matches_navigation(to, &use_route::<Route>())
+}
+
+fn matches_navigation(to: &Route, current: &Route) -> bool {
+    matches!(
+        (to, current),
+        (
+            Route::ProjectList {},
+            Route::NewProject {} | Route::EditProject { .. }
+        )
+    ) || std::mem::discriminant(current) == std::mem::discriminant(to)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_project_is_static_and_highlights_only_projects() {
+        let route: Route = "/projects/new".parse().unwrap();
+        assert!(matches!(route, Route::NewProject {}));
+        assert!(matches_navigation(&Route::ProjectList {}, &route));
+        assert!(!matches_navigation(&Route::ClientList {}, &route));
+        assert!(!matches_navigation(&Route::InvoiceList {}, &route));
+    }
+
+    #[test]
+    fn edit_project_preserves_identity_and_highlights_only_projects() {
+        let id = Uuid::now_v7();
+        let path = format!("/projects/{id}/edit");
+        let route: Route = path.parse().unwrap();
+        assert!(matches!(route, Route::EditProject { id: parsed } if parsed == id));
+        assert_eq!(route.to_string(), path);
+        assert!(matches_navigation(&Route::ProjectList {}, &route));
+        assert!(!matches_navigation(&Route::ClientList {}, &route));
+        assert!(
+            matches!(format!("/projects/{id}").parse::<Route>().unwrap(), Route::ProjectDetail { id: parsed } if parsed == id)
+        );
+    }
 }

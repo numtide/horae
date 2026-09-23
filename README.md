@@ -35,6 +35,7 @@ The authenticated SPA is organized by route:
 | `/timesheet/:view` | Day / Week / Calendar timesheet with weekly totals (`/` redirects here) |
 | `/clients`, `/clients/:id` | Client list and detail |
 | `/projects`, `/projects/:id` | Project list and detail with assignments |
+| `/projects/new` | Create a project with a private resumable draft (manager and admin) |
 | `/approvals` | Submit / approve / reject time (manager and admin) |
 | `/reports` | Grouped time reports with CSV / XLSX export |
 | `/invoices`, `/invoices/:id` | Invoice list and detail with CSV / XLSX / PDF export |
@@ -124,6 +125,8 @@ address for hot-reload proxying.
 | `DEV_LOGIN` | `0` | `1` enables the one-click admin login and bypasses OIDC (dev only) |
 | `HORAE_PLUGINS_DIR` | `plugins` | Directory scanned for plugins at startup |
 | `HORAE_PLUGIN_DATABASE_URL` | unset | Separate unprivileged login for [plugin SQL](specs/001-time-tracking-invoicing/contracts/plugin-interface.md); unset or empty disables it |
+| `HORAE_SENDMAIL_PATH` | unset | Absolute path to the optional budget-alert mail executable; no command arguments |
+| `HORAE_MAIL_FROM` | unset | Sender mailbox for budget alerts; required together with `HORAE_SENDMAIL_PATH` |
 
 Sessions are stored in PostgreSQL; the cookie contains an opaque session identifier,
 not signed user data. `SESSION_SECRET` is not used and can be removed from existing
@@ -152,6 +155,50 @@ Harvest import has a separate set of optional credentials:
 `HORAE_HARVEST_REDIRECT_URL`, and `HORAE_HARVEST_ENC_KEY`. See the
 [importer setup](specs/004-harvest-importer/quickstart.md) for its callback and
 token-encryption requirements; OIDC settings do not configure Harvest access.
+
+### Budget alert email (optional)
+
+Budget alerts use a sendmail-compatible program that you configure separately. Leave both
+mail variables unset or empty to disable delivery; New Project then disables its email
+checkbox and explains why. Setting only one variable, an invalid mailbox, or a path that
+is not an absolute executable file rejects startup.
+
+Set both values in the service environment and restart Horae after configuring the transport:
+
+```dotenv
+HORAE_SENDMAIL_PATH=/absolute/path/to/sendmail
+HORAE_MAIL_FROM=alerts@example.com
+```
+
+Replace the example path with your executable. Horae invokes it directly with
+`-i -f FROM -- TO` and writes the message to stdin; it does not run a shell or configure
+SMTP credentials. Sender and recipient addresses must be plain ASCII mailboxes, without
+display names or multiple recipients. The supported local-part characters are letters,
+digits, `.`, `_`, `+` and `-`; leading `-`/`.`, trailing `.` and consecutive dots are rejected.
+Domains use nonempty DNS-style labels. See [.env.example](.env.example) for the environment
+template.
+
+On NixOS, use `services.horae.secretKeyFile` or `systemd.services.horae.environment`.
+The executable and its configuration must work as the service's dynamic user under
+`NoNewPrivileges`, `ProtectSystem=strict` and `ProtectHome=true`. A transport that needs
+privilege elevation or configuration in a home directory is not compatible with this
+sandbox; configure an unprivileged transport instead of weakening the service protections.
+
+Each attempt has a 20-second deadline. Budget mail allows at most five attempts, independently
+of `HORAE_JOB_MAX_ATTEMPTS`; permanent failures and revoked recipient/project eligibility
+stop delivery earlier. Transport output is discarded, and stored errors are sanitized.
+An exit-zero acknowledgement means transport acceptance, **not final receipt**. A crash or
+lost acknowledgement can cause duplicate delivery with the same Message-ID. Acknowledged
+events are not retried; failed events remain available for inspection.
+
+An operator can inspect delivery state with a read-only query in the administrative database:
+
+```sql
+SELECT id, attempts, delivered_at, failed_at, last_error
+FROM horae_outbox
+WHERE event_kind = 'budget_email'
+ORDER BY created_at DESC;
+```
 
 ## Self-hosting
 

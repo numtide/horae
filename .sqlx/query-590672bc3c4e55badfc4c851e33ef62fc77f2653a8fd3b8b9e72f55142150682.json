@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO project_fee_occurrences (id,org_id,project_id,milestone_id,period_key,due_on,description,amount_cents,currency)\n         SELECT id,$2,project_id,milestone_id,period_key,due_on,description,amount_cents,currency\n         FROM unnest($1::uuid[],$3::uuid[],$4::uuid[],$5::text[],$6::date[],$7::text[],$8::bigint[],$9::text[])\n           AS fees(id,project_id,milestone_id,period_key,due_on,description,amount_cents,currency)\n         ON CONFLICT (project_id,period_key) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Uuid",
+        "UuidArray",
+        "UuidArray",
+        "TextArray",
+        "DateArray",
+        "TextArray",
+        "Int8Array",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "590672bc3c4e55badfc4c851e33ef62fc77f2653a8fd3b8b9e72f55142150682"
+}

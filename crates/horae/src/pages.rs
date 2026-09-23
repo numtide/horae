@@ -9,6 +9,7 @@ pub mod clients;
 pub mod gallery;
 pub mod importers;
 pub mod invoices;
+pub mod new_project;
 pub mod projects;
 pub mod reports;
 pub mod settings;

@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT t.id, t.name, p.billable, s.restricted,\n                (SELECT count(*) FROM project_task_members m WHERE m.project_id = p.project_id AND m.task_id = t.id) AS grants\n         FROM project_tasks p JOIN tasks t ON t.id = p.task_id\n         JOIN project_task_settings s USING (project_id, task_id)\n         WHERE p.project_id = $1 ORDER BY t.name",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "billable",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "restricted",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "grants",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "640b730b8611a630bc5e4602d498c68c04b70e5cf07582ccb928237acee448a7"
+}

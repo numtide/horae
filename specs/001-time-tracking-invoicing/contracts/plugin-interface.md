@@ -263,6 +263,12 @@ Session tables, Harvest credentials, audit logs, import provenance, and other
 non-business relations are not readable. Publicly updatable `pg_settings` is a
 session-configuration exception, not an application-data write capability.
 
+New-project drafts, configuration (including administrator notes and member costs),
+fee occurrences, budget notifications and the project/task read-access views remain
+outside these grants. The private `resolve_project_rate` function is also excluded.
+Project-created and membership events retain their existing minimal payloads;
+private configuration is not included.
+
 Executable SECURITY DEFINER functions are rejected. Outside PostgreSQL's system
 schemas, only Horae's `harvest_norm(text)`, `line_amount_cents(bigint,integer)`, and
 `set_updated_at()` functions are accepted. Additional functions/extensions may

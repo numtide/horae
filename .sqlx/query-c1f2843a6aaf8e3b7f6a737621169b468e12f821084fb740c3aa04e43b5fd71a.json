@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.id, a.project_id, a.user_id, a.role as \"role: ProjectRole\",\n                CASE WHEN access.can_view_rates THEN a.rate_cents ELSE NULL END AS rate_cents,\n                a.created_at as \"created_at: chrono::DateTime<chrono::Utc>\"\n         FROM assignments a JOIN projects p ON p.id = a.project_id\n         JOIN project_read_access access ON access.project_id = p.id AND access.org_id = p.org_id\n         WHERE a.project_id = $1 AND p.org_id = $2 AND access.user_id = $3 AND access.can_view_team\n         ORDER BY a.created_at, a.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "project_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "role: ProjectRole",
+        "type_info": {
+          "Custom": {
+            "name": "project_role",
+            "kind": {
+              "Enum": [
+                "lead",
+                "freelancer",
+                "admin"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "rate_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null,
+      false
+    ]
+  },
+  "hash": "c1f2843a6aaf8e3b7f6a737621169b468e12f821084fb740c3aa04e43b5fd71a"
+}

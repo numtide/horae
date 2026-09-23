@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT l.project_id, l.tag_id, t.name\n        FROM project_tag_links l\n        JOIN project_tags t ON t.id = l.tag_id AND t.org_id = l.org_id\n        JOIN project_read_access a ON a.project_id = l.project_id AND a.org_id = l.org_id\n        WHERE l.org_id = $1 AND a.user_id = $2 AND a.can_view_progress\n        ORDER BY lower(t.name), t.id, l.project_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "project_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "tag_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "e25b27423bd4850a83fe0baefc8f49706aee902d230a796addf9d6a3f13a71b6"
+}

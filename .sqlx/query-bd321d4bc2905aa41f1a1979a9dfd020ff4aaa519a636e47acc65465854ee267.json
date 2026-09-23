@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT jsonb_build_object(\n          'projects', (SELECT jsonb_agg(to_jsonb(p) ORDER BY p.id) FROM projects p WHERE p.org_id = $1),\n          'clients', (SELECT jsonb_agg(to_jsonb(c) ORDER BY c.id) FROM clients c WHERE c.org_id = $1),\n          'tasks', (SELECT jsonb_agg(to_jsonb(t) ORDER BY t.id) FROM tasks t WHERE t.org_id = $1),\n          'users', (SELECT jsonb_agg(to_jsonb(u) ORDER BY u.id) FROM users u WHERE u.org_id = $1),\n          'drafts', (SELECT jsonb_agg(to_jsonb(d) ORDER BY d.id) FROM project_drafts d WHERE d.org_id = $1),\n          'settings', (SELECT jsonb_agg(to_jsonb(s) ORDER BY s.id) FROM project_settings s WHERE s.org_id = $1),\n          'private', (SELECT jsonb_agg(to_jsonb(s) ORDER BY s.id) FROM project_private_settings s WHERE s.org_id = $1),\n          'assignments', (SELECT jsonb_agg(to_jsonb(a) ORDER BY a.id) FROM assignments a JOIN projects p ON p.id = a.project_id WHERE p.org_id = $1),\n          'costs', (SELECT jsonb_agg(to_jsonb(c) ORDER BY c.id) FROM project_member_costs c WHERE c.org_id = $1),\n          'member_budgets', (SELECT jsonb_agg(to_jsonb(b) ORDER BY b.id) FROM project_member_budgets b WHERE b.org_id = $1),\n          'project_tasks', (SELECT jsonb_agg(to_jsonb(t) ORDER BY t.project_id, t.task_id) FROM project_tasks t JOIN projects p ON p.id = t.project_id WHERE p.org_id = $1),\n          'task_settings', (SELECT jsonb_agg(to_jsonb(s) ORDER BY s.id) FROM project_task_settings s WHERE s.org_id = $1),\n          'task_members', (SELECT jsonb_agg(to_jsonb(m) ORDER BY m.id) FROM project_task_members m WHERE m.org_id = $1),\n          'tags', (SELECT jsonb_agg(to_jsonb(t) ORDER BY t.id) FROM project_tags t WHERE t.org_id = $1),\n          'tag_links', (SELECT jsonb_agg(to_jsonb(l) ORDER BY l.id) FROM project_tag_links l WHERE l.org_id = $1),\n          'milestones', (SELECT jsonb_agg(to_jsonb(m) ORDER BY m.id) FROM project_fee_milestones m WHERE m.org_id = $1)\n        ) AS \"snapshot!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "snapshot!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "bd321d4bc2905aa41f1a1979a9dfd020ff4aaa519a636e47acc65465854ee267"
+}

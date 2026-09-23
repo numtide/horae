@@ -14,6 +14,7 @@ pub mod menu;
 pub mod modal;
 pub mod nav;
 pub mod project_task_picker;
+pub mod select_field;
 pub mod sidebar;
 pub mod table;
 pub mod theme;
