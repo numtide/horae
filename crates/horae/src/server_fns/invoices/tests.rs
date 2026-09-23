@@ -453,17 +453,29 @@ async fn invoice_defaults_are_invoice_owned_and_only_drafts_are_editable(pool: P
             ..
         })
     ));
-    transition_invoice(&pool, ids.org_id, stored.id, InvoiceStatus::Sent)
-        .await
-        .unwrap();
+    transition_invoice(
+        &pool,
+        ids.org_id,
+        stored.id,
+        InvoiceStatus::Sent,
+        ids.user_id,
+    )
+    .await
+    .unwrap();
     assert!(matches!(
         update_invoice_defaults_in_db(&pool, ids.org_id, stored.id, &InvoiceDefaults::default())
             .await,
         Err(ServerFnError::ServerError { code: CONFLICT, .. })
     ));
-    transition_invoice(&pool, ids.org_id, stored.id, InvoiceStatus::Void)
-        .await
-        .unwrap();
+    transition_invoice(
+        &pool,
+        ids.org_id,
+        stored.id,
+        InvoiceStatus::Void,
+        ids.user_id,
+    )
+    .await
+    .unwrap();
     let voided = crate::reports::fetch_invoice_metadata(&pool, stored.id, ids.org_id)
         .await
         .unwrap()
@@ -1140,9 +1152,15 @@ async fn invoiced_amounts_survive_rate_changes_and_void_uses_current_rates(pool:
         .await
         .unwrap();
     assert_eq!(spend[0].spent_cents, invoice.invoice.total_cents);
-    transition_invoice(&pool, ids.org_id, invoice.invoice.id, InvoiceStatus::Void)
-        .await
-        .unwrap();
+    transition_invoice(
+        &pool,
+        ids.org_id,
+        invoice.invoice.id,
+        InvoiceStatus::Void,
+        ids.user_id,
+    )
+    .await
+    .unwrap();
     let replacement = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, day, day)
         .await
         .unwrap();
@@ -1712,9 +1730,15 @@ async fn void_waits_for_a_concurrent_payment_and_then_refuses(pool: PgPool) {
         .await
         .unwrap()
         .invoice;
-    transition_invoice(&pool, ids.org_id, invoice.id, InvoiceStatus::Sent)
-        .await
-        .unwrap();
+    transition_invoice(
+        &pool,
+        ids.org_id,
+        invoice.id,
+        InvoiceStatus::Sent,
+        ids.user_id,
+    )
+    .await
+    .unwrap();
 
     // Hold an uncommitted payment so the competing request must wait. A plain
     // SELECT still sees 'sent', which is precisely the stale-read window.
@@ -1734,7 +1758,14 @@ async fn void_waits_for_a_concurrent_payment_and_then_refuses(pool: PgPool) {
     let mut tasks = tokio::task::JoinSet::new();
     let competing_pool = pool.clone();
     tasks.spawn(async move {
-        transition_invoice(&competing_pool, ids.org_id, invoice.id, InvoiceStatus::Void).await
+        transition_invoice(
+            &competing_pool,
+            ids.org_id,
+            invoice.id,
+            InvoiceStatus::Void,
+            ids.user_id,
+        )
+        .await
     });
     tokio::time::timeout(std::time::Duration::from_secs(10), async {
         loop {
@@ -1793,9 +1824,15 @@ async fn void_reopens_time_without_stale_rounding(pool: PgPool) {
         .unwrap()
         .invoice;
 
-    let result = transition_invoice(&pool, ids.org_id, invoice.id, InvoiceStatus::Void)
-        .await
-        .unwrap();
+    let result = transition_invoice(
+        &pool,
+        ids.org_id,
+        invoice.id,
+        InvoiceStatus::Void,
+        ids.user_id,
+    )
+    .await
+    .unwrap();
 
     assert_eq!(result.status, InvoiceStatus::Void);
     let row = sqlx::query!(
@@ -1815,6 +1852,7 @@ async fn void_reopens_time_without_stale_rounding(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn invoice_transitions_reject_invalid_states_and_foreign_organizations(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
+    let foreign = seed(&pool, OrgRole::Manager).await;
     time_entry(&pool, &ids, EntryState::Open).await;
     let day = "2026-09-07".parse().unwrap();
     let invoice = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, day, day)
@@ -1823,24 +1861,71 @@ async fn invoice_transitions_reject_invalid_states_and_foreign_organizations(poo
         .invoice;
 
     assert!(matches!(
-        transition_invoice(&pool, ids.org_id, invoice.id, InvoiceStatus::Paid).await,
+        transition_invoice(
+            &pool,
+            ids.org_id,
+            invoice.id,
+            InvoiceStatus::Paid,
+            ids.user_id
+        )
+        .await,
         Err(ServerFnError::ServerError { code: CONFLICT, .. })
     ));
     assert!(matches!(
-        transition_invoice(&pool, uuid::Uuid::now_v7(), invoice.id, InvoiceStatus::Sent).await,
+        transition_invoice(
+            &pool,
+            foreign.org_id,
+            invoice.id,
+            InvoiceStatus::Sent,
+            foreign.user_id
+        )
+        .await,
         Err(ServerFnError::ServerError {
             code: NOT_FOUND,
             ..
         })
     ));
-    transition_invoice(&pool, ids.org_id, invoice.id, InvoiceStatus::Sent)
-        .await
-        .unwrap();
-    transition_invoice(&pool, ids.org_id, invoice.id, InvoiceStatus::Paid)
-        .await
-        .unwrap();
     assert!(matches!(
-        transition_invoice(&pool, ids.org_id, invoice.id, InvoiceStatus::Void).await,
+        transition_invoice(
+            &pool,
+            ids.org_id,
+            invoice.id,
+            InvoiceStatus::Sent,
+            foreign.user_id
+        )
+        .await,
+        Err(ServerFnError::ServerError {
+            code: FORBIDDEN,
+            ..
+        })
+    ));
+    transition_invoice(
+        &pool,
+        ids.org_id,
+        invoice.id,
+        InvoiceStatus::Sent,
+        ids.user_id,
+    )
+    .await
+    .unwrap();
+    transition_invoice(
+        &pool,
+        ids.org_id,
+        invoice.id,
+        InvoiceStatus::Paid,
+        ids.user_id,
+    )
+    .await
+    .unwrap();
+    assert!(matches!(
+        transition_invoice(
+            &pool,
+            ids.org_id,
+            invoice.id,
+            InvoiceStatus::Void,
+            ids.user_id
+        )
+        .await,
         Err(ServerFnError::ServerError { code: CONFLICT, .. })
     ));
 }

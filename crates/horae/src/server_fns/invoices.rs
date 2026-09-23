@@ -694,7 +694,7 @@ pub async fn update_invoice_status(
     let id = parse_uuid(&invoice_id, "invoice_id")?;
     let target: InvoiceStatus = parse_enum(&new_status, "status")?;
 
-    let invoice = transition_invoice(&state.db, manager.org_id, id, target).await?;
+    let invoice = transition_invoice(&state.db, manager.org_id, id, target, manager.id).await?;
 
     // Dispatch invoice_sent event when transitioning to Sent (FR-019).
     if target == InvoiceStatus::Sent {
@@ -734,9 +734,11 @@ async fn transition_invoice(
     org_id: uuid::Uuid,
     id: uuid::Uuid,
     target: InvoiceStatus,
+    actor_id: uuid::Uuid,
 ) -> Result<Invoice, ServerFnError> {
     let mut tx = pool.begin().await.map_err(server_err)?;
     balances::lock_invoices(&mut tx, org_id).await?;
+    editing::lock_actor(&mut tx, org_id, actor_id).await?;
 
     // Validate under the same row lock as the transition: payment and void
     // must not both accept a previously observed 'sent' state.

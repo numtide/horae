@@ -76,9 +76,15 @@ async fn project_fee_context_matches_invoice_balances_and_current_authority(pool
         .await
         .unwrap();
     assert_eq!(Some(over[0].balance), preview.lines[0].fee_balance);
-    transition_invoice(&pool, ids.org_id, invoice.invoice.id, InvoiceStatus::Void)
-        .await
-        .unwrap();
+    transition_invoice(
+        &pool,
+        ids.org_id,
+        invoice.invoice.id,
+        InvoiceStatus::Void,
+        ids.user_id,
+    )
+    .await
+    .unwrap();
     let restored =
         fetch_project_fee_balances(&pool, ids.org_id, ids.user_id, ids.project_id, period)
             .await
@@ -196,6 +202,83 @@ async fn project_fee_context_keeps_monthly_balances_separate(pool: PgPool) {
         .await
         .is_err()
     );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn invoice_status_rechecks_authority_after_waiting_for_the_invoice_lock(pool: PgPool) {
+    for deactivate in [false, true] {
+        let ids = single_fee(&pool).await;
+        let invoice = generate_invoice_for_period(
+            &pool,
+            ids.org_id,
+            ids.client_id,
+            "2026-09-01".parse().unwrap(),
+            "2026-09-30".parse().unwrap(),
+        )
+        .await
+        .unwrap();
+        let mut blocker = pool.begin().await.unwrap();
+        balances::lock_invoices(&mut blocker, ids.org_id)
+            .await
+            .unwrap();
+        let pid = sqlx::query_scalar!("SELECT pg_backend_pid() as \"pid!\"")
+            .fetch_one(&mut *blocker)
+            .await
+            .unwrap();
+        let task_pool = pool.clone();
+        let id = invoice.invoice.id;
+        let transition = tokio::spawn(async move {
+            transition_invoice(&task_pool, ids.org_id, id, InvoiceStatus::Void, ids.user_id).await
+        });
+        crate::server_fns::test_seed::wait_for_blocked(&pool, pid).await;
+        if deactivate {
+            sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
+                .execute(&pool)
+                .await
+                .unwrap();
+        } else {
+            sqlx::query!(
+                "UPDATE users SET org_role = 'member' WHERE id = $1",
+                ids.user_id
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        blocker.commit().await.unwrap();
+        let error = transition
+            .await
+            .unwrap()
+            .expect_err("a revoked actor must not release reserved fee balances");
+        assert!(
+            matches!(
+                error,
+                ServerFnError::ServerError {
+                    code: FORBIDDEN,
+                    ..
+                }
+            ),
+            "{error}"
+        );
+        let stored = crate::reports::fetch_invoice_metadata(&pool, id, ids.org_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(stored.status, InvoiceStatus::Draft);
+        assert_eq!(stored.total_cents, invoice.invoice.total_cents);
+        let preview = preview::prepare(
+            &pool,
+            ids.org_id,
+            ids.client_id,
+            ("2026-09-01".parse().unwrap(), "2026-09-30".parse().unwrap()),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        assert_eq!(preview.lines[0].fee_balance.unwrap().remaining_cents, 0);
+    }
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -813,9 +896,15 @@ async fn fee_preview_keeps_source_identity_and_reports_discounted_draft_balances
             remaining_cents: 1250,
         })
     );
-    transition_invoice(&pool, ids.org_id, invoice.invoice.id, InvoiceStatus::Void)
-        .await
-        .unwrap();
+    transition_invoice(
+        &pool,
+        ids.org_id,
+        invoice.invoice.id,
+        InvoiceStatus::Void,
+        ids.user_id,
+    )
+    .await
+    .unwrap();
     let restored = preview::prepare(
         &pool,
         ids.org_id,
@@ -1011,9 +1100,15 @@ async fn discounted_fee_leaves_a_balance_and_void_releases_only_its_contribution
     .await
     .expect_err("removing the discount would overbill the fee");
     assert!(error.to_string().contains("balance"), "{error}");
-    transition_invoice(&pool, ids.org_id, second.invoice.id, InvoiceStatus::Void)
-        .await
-        .unwrap();
+    transition_invoice(
+        &pool,
+        ids.org_id,
+        second.invoice.id,
+        InvoiceStatus::Void,
+        ids.user_id,
+    )
+    .await
+    .unwrap();
     update_invoice_defaults_in_db(
         &pool,
         ids.org_id,
@@ -1027,9 +1122,15 @@ async fn discounted_fee_leaves_a_balance_and_void_releases_only_its_contribution
         .unwrap();
     assert!(settled.lines.iter().all(|line| !line.selected));
     assert_eq!(settled.subtotal_cents, 0);
-    transition_invoice(&pool, ids.org_id, first.invoice.id, InvoiceStatus::Void)
-        .await
-        .unwrap();
+    transition_invoice(
+        &pool,
+        ids.org_id,
+        first.invoice.id,
+        InvoiceStatus::Void,
+        ids.user_id,
+    )
+    .await
+    .unwrap();
     let restored = preview::prepare(&pool, ids.org_id, ids.client_id, period, None, None)
         .await
         .unwrap();
@@ -1127,9 +1228,15 @@ async fn draft_fee_edit_requires_current_balance_and_exact_excess_confirmation(p
             .remaining_cents,
         -1000
     );
-    transition_invoice(&pool, ids.org_id, first_id, InvoiceStatus::Void)
-        .await
-        .unwrap();
+    transition_invoice(
+        &pool,
+        ids.org_id,
+        first_id,
+        InvoiceStatus::Void,
+        ids.user_id,
+    )
+    .await
+    .unwrap();
     assert_eq!(
         preview::prepare(&pool, ids.org_id, ids.client_id, (from, to), None, None)
             .await
@@ -1190,7 +1297,7 @@ async fn draft_fee_edit_serializes_retries_and_rejects_stale_revisions(pool: PgP
             .amount_cents,
         7000
     );
-    transition_invoice(&pool, ids.org_id, id, InvoiceStatus::Sent)
+    transition_invoice(&pool, ids.org_id, id, InvoiceStatus::Sent, ids.user_id)
         .await
         .unwrap();
     assert!(
@@ -1364,9 +1471,15 @@ async fn concurrent_discounted_invoice_retries_return_one_invoice(pool: PgPool) 
         changed,
         Err(ServerFnError::ServerError { code: CONFLICT, .. })
     ));
-    transition_invoice(&pool, ids.org_id, a.invoice.id, InvoiceStatus::Void)
-        .await
-        .unwrap();
+    transition_invoice(
+        &pool,
+        ids.org_id,
+        a.invoice.id,
+        InvoiceStatus::Void,
+        ids.user_id,
+    )
+    .await
+    .unwrap();
     let (replayed, created) = generate_invoice_with_request(
         &pool,
         ids.org_id,
@@ -1535,9 +1648,15 @@ async fn zero_fee_is_invoiced_once_until_voided(pool: PgPool) {
         .unwrap();
     assert!(settled.lines.iter().all(|line| !line.selected));
     assert_eq!(settled.subtotal_cents, 0);
-    transition_invoice(&pool, ids.org_id, invoice.invoice.id, InvoiceStatus::Void)
-        .await
-        .unwrap();
+    transition_invoice(
+        &pool,
+        ids.org_id,
+        invoice.invoice.id,
+        InvoiceStatus::Void,
+        ids.user_id,
+    )
+    .await
+    .unwrap();
     assert_eq!(
         preview::prepare(&pool, ids.org_id, ids.client_id, period, None, None)
             .await
@@ -1631,9 +1750,15 @@ async fn invoice_preview_does_not_materialize_fees_and_preserves_released_snapsh
         .unwrap();
     assert!(settled.lines.iter().all(|line| !line.selected));
     assert_eq!(settled.subtotal_cents, 0);
-    transition_invoice(&pool, ids.org_id, generated.invoice.id, InvoiceStatus::Void)
-        .await
-        .unwrap();
+    transition_invoice(
+        &pool,
+        ids.org_id,
+        generated.invoice.id,
+        InvoiceStatus::Void,
+        ids.user_id,
+    )
+    .await
+    .unwrap();
     sqlx::query!(
         "UPDATE project_settings SET fee_amount_cents = 99999 WHERE project_id = $1",
         ids.project_id
@@ -1713,9 +1838,15 @@ async fn invoice_defaults_apply_to_selected_fees_without_claiming_other_projects
         .unwrap(),
         Some(0)
     );
-    transition_invoice(&pool, ids.org_id, result.invoice.id, InvoiceStatus::Void)
-        .await
-        .unwrap();
+    transition_invoice(
+        &pool,
+        ids.org_id,
+        result.invoice.id,
+        InvoiceStatus::Void,
+        ids.user_id,
+    )
+    .await
+    .unwrap();
     let stored = crate::reports::fetch_invoice_metadata(&pool, result.invoice.id, ids.org_id)
         .await
         .unwrap()
@@ -1794,9 +1925,15 @@ async fn void_releases_fee_identity_without_rewriting_the_original_line(pool: Pg
     let first = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, from, to)
         .await
         .unwrap();
-    transition_invoice(&pool, ids.org_id, first.invoice.id, InvoiceStatus::Void)
-        .await
-        .unwrap();
+    transition_invoice(
+        &pool,
+        ids.org_id,
+        first.invoice.id,
+        InvoiceStatus::Void,
+        ids.user_id,
+    )
+    .await
+    .unwrap();
     sqlx::query!(
         "UPDATE project_settings SET fee_amount_cents = 99999 WHERE project_id = $1",
         ids.project_id
