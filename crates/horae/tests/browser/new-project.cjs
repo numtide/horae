@@ -1353,11 +1353,12 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     console.log('PASS: stale tabs cannot overwrite saved input; explicit discard removes only the draft');
     assert.deepEqual(errors, []);
   } catch (error) {
+    console.error(error);
     console.error({ url: page.url(), errors, pending: [...requests.get(page)].map(request => new URL(request.url()).pathname),
       resources: [...resources.get(page)].map(request => {
         const url = new URL(request.url());
         return { type: request.resourceType(), host: url.host, path: url.pathname };
-      }), page: await page.locator('body').ariaSnapshot() });
+      }), page: await page.locator('body').ariaSnapshot({ timeout: 5000 }).catch(snapshotError => String(snapshotError)) });
     throw error;
   } finally {
     await browser.close();

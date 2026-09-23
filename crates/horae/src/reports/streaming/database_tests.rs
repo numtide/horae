@@ -325,7 +325,7 @@ async fn streamed_fee_invoice_has_no_fabricated_hours_or_hourly_rate(pool: PgPoo
     let invoice_id = Uuid::now_v7();
     let fee_id = Uuid::now_v7();
     sqlx::query!("INSERT INTO invoices (id,org_id,client_id,number,issued_on,due_on,currency,total_cents,po_number,discount_bps,discount_cents,tax1_bps,tax1_cents,tax2_name,tax2_bps,tax2_cents) VALUES ($1,$2,$3,'FEE-1','2026-09-01','2026-09-22','EUR',13782,$4,1000,1250,2100,2363,$5,150,169)", invoice_id, ids.org_id, ids.client_id, "PO \"界\",\n123", "Local \"tax\"").execute(&pool).await.unwrap();
-    sqlx::query!("INSERT INTO project_fee_occurrences (id,org_id,project_id,period_key,due_on,description,amount_cents,currency,invoice_id) VALUES ($1,$2,$3,'single','2026-09-01','Fixed fee',12500,'EUR',$4)", fee_id, ids.org_id, ids.project_id, invoice_id).execute(&pool).await.unwrap();
+    sqlx::query!("INSERT INTO project_fee_occurrences (id,org_id,project_id,period_key,due_on,description,amount_cents,currency) VALUES ($1,$2,$3,'single','2026-09-01','Fixed fee',12500,'EUR')", fee_id, ids.org_id, ids.project_id).execute(&pool).await.unwrap();
     sqlx::query!("INSERT INTO invoice_line_items (id,invoice_id,fee_occurrence_id,description,amount_cents) VALUES ($1,$2,$3,'Fixed fee',12500)", Uuid::now_v7(), invoice_id, fee_id).execute(&pool).await.unwrap();
     let bytes = body(invoice(pool, ids.org_id, invoice_id).await.unwrap()).await;
     let mut reader = csv::Reader::from_reader(bytes.as_slice());

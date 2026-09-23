@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO invoice_line_items (id,invoice_id,fee_occurrence_id,description,amount_cents) VALUES ($1,$2,$3,'Fee',1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3c8751843533d3bbd44a9705deaabb57b8e9f096fa9130d776e8864eabbb0270"
+}

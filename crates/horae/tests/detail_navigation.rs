@@ -689,6 +689,7 @@ mod server_fns {
         _to: String,
         _projects: Option<Vec<String>>,
         _overrides: Option<crate::invoice::InvoiceDefaults>,
+        _request_id: String,
     ) -> Result<InvoiceWithLines, ServerFnError> {
         panic!("navigation must not generate invoices");
     }

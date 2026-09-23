@@ -714,7 +714,7 @@ mod tests {
             .execute(&pool)
             .await
             .unwrap();
-        sqlx::query!("INSERT INTO project_fee_occurrences (id,org_id,project_id,period_key,due_on,description,amount_cents,currency,invoice_id) VALUES ($1,$2,$3,'single','2026-09-01','Fixed fee',12500,'EUR',$4)", fee_id, ids.org_id, ids.project_id, id).execute(&pool).await.unwrap();
+        sqlx::query!("INSERT INTO project_fee_occurrences (id,org_id,project_id,period_key,due_on,description,amount_cents,currency) VALUES ($1,$2,$3,'single','2026-09-01','Fixed fee',12500,'EUR')", fee_id, ids.org_id, ids.project_id).execute(&pool).await.unwrap();
         sqlx::query!("INSERT INTO invoice_line_items (id,invoice_id,fee_occurrence_id,description,amount_cents) VALUES ($1,$2,$3,'Fixed fee',12500)", uuid::Uuid::now_v7(), id, fee_id).execute(&pool).await.unwrap();
         let (invoice, lines) = invoice(&pool, ids.org_id, id).await.unwrap();
         let workbook = super::super::invoice_xlsx(&invoice, &lines).unwrap();

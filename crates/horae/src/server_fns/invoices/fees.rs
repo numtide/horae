@@ -45,8 +45,8 @@ pub(super) async fn preview_fees(
     .await?;
     let projects: Vec<_> = planned.iter().map(|fee| fee.project_id).collect();
     let keys: Vec<_> = planned.iter().map(|fee| fee.period_key.as_str()).collect();
-    // Existing identities win even when claimed or outside this period. A changed
-    // schedule must not replace the stored charge or offer an already-billed fee.
+    // Existing identities win even outside this period. A changed schedule
+    // must not replace a stored charge; only its remaining balance is offered.
     let existing = sqlx::query!(
         "SELECT f.project_id, f.period_key FROM project_fee_occurrences f
          JOIN unnest($2::uuid[], $3::text[]) AS wanted(project_id, period_key)
@@ -108,7 +108,7 @@ pub(super) async fn preview_fees(
 
 /// Prepare stable occurrences inside the invoice transaction. Only monthly
 /// fees use the range's lower bound; overdue single fees and milestones remain
-/// available until claimed. No schedule sends or issues an invoice itself.
+/// available while they have a balance. No schedule sends an invoice itself.
 pub(super) async fn prepare_fees(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     org_id: Uuid,
@@ -340,10 +340,18 @@ async fn available_fees(
         ($suffix:literal) => {
             sqlx::query_as!(
                 FeeLine,
-                r#"SELECT f.id,f.project_id,f.description,f.amount_cents,f.currency,f.period_key,f.due_on as "due_on: NaiveDate"
+                r#"SELECT f.id,f.project_id,f.description,
+                   (f.amount_cents::numeric - billed.amount)::bigint AS "amount_cents!",
+                   f.currency,f.period_key,f.due_on as "due_on: NaiveDate"
          FROM project_fee_occurrences f JOIN projects p ON p.id = f.project_id
+         CROSS JOIN LATERAL (
+           SELECT COALESCE(sum(l.net_before_tax_cents::numeric), 0) AS amount, count(*) AS lines
+           FROM invoice_line_items l JOIN invoices i ON i.id = l.invoice_id
+           WHERE l.fee_occurrence_id = f.id AND i.org_id = f.org_id AND i.status <> 'void'
+         ) billed
          WHERE f.org_id = $1 AND p.client_id = $2 AND p.project_type = 'fixed_fee'
-           AND f.invoice_id IS NULL AND f.due_on <= $4
+           AND (f.amount_cents > billed.amount OR (f.amount_cents = 0 AND billed.lines = 0))
+           AND f.due_on <= $4
            AND (f.period_key NOT LIKE 'month:%' OR f.due_on >= $3)
            AND ($5::uuid[] IS NULL OR f.project_id = ANY($5))
          ORDER BY f.due_on,f.project_id,f.period_key LIMIT 10001 "# + $suffix,

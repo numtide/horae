@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT time_entry_id, amount_cents, net_before_tax_cents FROM invoice_line_items WHERE invoice_id=$1 ORDER BY time_entry_id NULLS LAST",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "time_entry_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "amount_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "net_before_tax_cents",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "2df39f3a4be4595b3c78d2e4aeb15ed895020f6bd3bdecbb5e9b4d776e6c8f21"
+}

@@ -16,6 +16,9 @@ mod entries;
 mod preview;
 
 #[cfg(feature = "server")]
+mod balances;
+
+#[cfg(feature = "server")]
 #[derive(Clone, Copy)]
 enum SourceRead {
     Preview,
@@ -121,6 +124,7 @@ pub async fn generate_invoice(
     period_to: String,
     project_ids: Option<Vec<String>>,
     overrides: Option<InvoiceDefaults>,
+    request_id: String,
 ) -> Result<InvoiceWithLines, ServerFnError> {
     let manager = require_manager().await?;
     let state = crate::state::global_state().await;
@@ -141,22 +145,29 @@ pub async fn generate_invoice(
                 .collect::<Result<Vec<_>, _>>()
         })
         .transpose()?;
-    let result = generate_invoice_with_options(
+    let request_id = parse_uuid(&request_id, "request_id")?;
+    if request_id.get_version_num() != 7 {
+        return Err(err(BAD_REQUEST, "Request identity must be a UUID v7"));
+    }
+    let (result, created) = generate_invoice_with_request(
         &state.db,
         manager.org_id,
         client_id,
         (from, to),
         project_ids.as_deref(),
         overrides.as_ref(),
+        Some((request_id, manager.id)),
     )
     .await?;
-    state
-        .plugins
-        .dispatch(crate::plugin::AppEvent::InvoiceCreated {
-            occurred_at: chrono::Utc::now(),
-            org_id: manager.org_id,
-            invoice: invoice_payload(&result.invoice),
-        });
+    if created {
+        state
+            .plugins
+            .dispatch(crate::plugin::AppEvent::InvoiceCreated {
+                occurred_at: chrono::Utc::now(),
+                org_id: manager.org_id,
+                invoice: invoice_payload(&result.invoice),
+            });
+    }
     Ok(result)
 }
 
@@ -171,7 +182,7 @@ pub(super) async fn generate_invoice_for_period(
     generate_invoice_with_options(pool, org_id, client_id, (from, to), None, None).await
 }
 
-#[cfg(feature = "server")]
+#[cfg(all(test, feature = "server"))]
 async fn generate_invoice_with_options(
     pool: &sqlx::PgPool,
     org_id: uuid::Uuid,
@@ -180,6 +191,29 @@ async fn generate_invoice_with_options(
     project_ids: Option<&[uuid::Uuid]>,
     overrides: Option<&InvoiceDefaults>,
 ) -> Result<InvoiceWithLines, ServerFnError> {
+    generate_invoice_with_request(
+        pool,
+        org_id,
+        client_id,
+        (from, to),
+        project_ids,
+        overrides,
+        None,
+    )
+    .await
+    .map(|(invoice, _)| invoice)
+}
+
+#[cfg(feature = "server")]
+async fn generate_invoice_with_request(
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    client_id: uuid::Uuid,
+    (from, to): (chrono::NaiveDate, chrono::NaiveDate),
+    project_ids: Option<&[uuid::Uuid]>,
+    overrides: Option<&InvoiceDefaults>,
+    request: Option<(uuid::Uuid, uuid::Uuid)>,
+) -> Result<(InvoiceWithLines, bool), ServerFnError> {
     if from > to {
         return Err(err(BAD_REQUEST, "Invoice period ends before it starts"));
     }
@@ -209,18 +243,24 @@ async fn generate_invoice_with_options(
     // same time twice or mint the same invoice number.
     let mut tx = pool.begin().await.map_err(server_err)?;
 
-    // Serialize invoice creation per org while this transaction runs. The
-    // invoice number is derived from a COUNT over existing invoices, which two
-    // concurrent transactions would otherwise compute identically and then
-    // trip the UNIQUE (org_id, number) constraint. The lock is released
-    // automatically at commit or rollback.
-    sqlx::query_scalar!(
-        r#"SELECT pg_advisory_xact_lock(hashtextextended($1, 0)) as "lock!: ()""#,
-        org_id.to_string(),
-    )
-    .fetch_one(&mut *tx)
-    .await
-    .map_err(server_err)?;
+    balances::lock_invoices(&mut tx, org_id).await?;
+    let payload = serde_json::json!({
+        "client_id": client_id, "from": from, "to": to,
+        "projects": selected, "overrides": overrides,
+    });
+    if let Some((request_id, actor_id)) = request
+        && let Some(previous) = sqlx::query!(
+            "SELECT actor_id, invoice_id, payload FROM invoice_generation_requests WHERE id = $1 AND org_id = $2",
+            request_id, org_id,
+        ).fetch_optional(&mut *tx).await.map_err(server_err)? {
+            if previous.actor_id != actor_id || previous.payload != payload {
+                return Err(conflict("This request identity was already used with different invoice values"));
+            }
+            let (invoice, lines) = crate::reports::fetch_invoice_from(&mut tx, previous.invoice_id, org_id)
+                .await.map_err(server_err)?.ok_or_else(|| not_found("Invoice not found"))?;
+            tx.commit().await.map_err(server_err)?;
+            return Ok((InvoiceWithLines { invoice, lines }, false));
+    }
 
     if let Some(ids) = &selected {
         let allowed = sqlx::query_scalar!("SELECT id FROM projects WHERE org_id = $1 AND client_id = $2 AND id = ANY($3) ORDER BY id FOR SHARE", org_id, client_id, ids)
@@ -438,15 +478,12 @@ async fn generate_invoice_with_options(
         ));
     }
 
-    let fee_ids: Vec<uuid::Uuid> = fees.iter().map(|fee| fee.id).collect();
-    let claimed = sqlx::query!(
-        "UPDATE project_fee_occurrences SET invoice_id = $1 WHERE org_id = $2 AND id = ANY($3) AND invoice_id IS NULL",
-        invoice_id, org_id, &fee_ids,
-    ).execute(&mut *tx).await.map_err(server_err)?.rows_affected();
-    if claimed != fee_ids.len() as u64 {
-        return Err(conflict(
-            "Some fees were already invoiced; no invoice was created. Please retry.",
-        ));
+    balances::replace_contributions(&mut tx, org_id, invoice_id, settings.discount_bps).await?;
+    if let Some((request_id, actor_id)) = request {
+        sqlx::query!(
+            "INSERT INTO invoice_generation_requests (id,org_id,actor_id,invoice_id,payload) VALUES ($1,$2,$3,$4,$5)",
+            request_id, org_id, actor_id, invoice_id, payload,
+        ).execute(&mut *tx).await.map_err(server_err)?;
     }
 
     tx.commit().await.map_err(server_err)?;
@@ -475,7 +512,7 @@ async fn generate_invoice_with_options(
         created_at: now,
     };
 
-    Ok(InvoiceWithLines { invoice, lines })
+    Ok((InvoiceWithLines { invoice, lines }, true))
 }
 
 /// Override only an editable invoice; project defaults and source lines stay intact.
@@ -498,6 +535,7 @@ async fn update_invoice_defaults_in_db(
     overrides: &InvoiceDefaults,
 ) -> Result<Invoice, ServerFnError> {
     let mut tx = pool.begin().await.map_err(server_err)?;
+    balances::lock_invoices(&mut tx, org_id).await?;
     let current = sqlx::query!(
         r#"SELECT status as "status: InvoiceStatus", subtotal_cents,
                   issued_on as "issued_on: chrono::NaiveDate"
@@ -513,6 +551,7 @@ async fn update_invoice_defaults_in_db(
         return Err(conflict("Only draft invoices can be edited"));
     }
     let amounts = defaults::amounts(overrides, current.subtotal_cents)?;
+    balances::replace_contributions(&mut tx, org_id, id, overrides.discount_bps).await?;
     let due_on =
         horae_core::project::payment_due_date(current.issued_on, overrides.terms_days as u16)
             .map_err(|error| err(BAD_REQUEST, error.to_string()))?;
@@ -596,6 +635,7 @@ async fn transition_invoice(
     target: InvoiceStatus,
 ) -> Result<Invoice, ServerFnError> {
     let mut tx = pool.begin().await.map_err(server_err)?;
+    balances::lock_invoices(&mut tx, org_id).await?;
 
     // Validate under the same row lock as the transition: payment and void
     // must not both accept a previously observed 'sent' state.
@@ -628,8 +668,6 @@ async fn transition_invoice(
     // Reopened time is editable again, so its previously frozen rounding no
     // longer represents a locked duration. Invoice lines remain unchanged.
     if target == InvoiceStatus::Void {
-        sqlx::query!("UPDATE project_fee_occurrences SET invoice_id = NULL WHERE invoice_id = $1 AND org_id = $2", id, org_id)
-            .execute(&mut *tx).await.map_err(server_err)?;
         sqlx::query!(
             r#"UPDATE time_entries
                SET invoice_id = NULL, state = 'open', rounded_minutes = NULL

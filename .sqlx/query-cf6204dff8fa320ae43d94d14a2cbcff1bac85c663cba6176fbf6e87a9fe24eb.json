@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT l.id, l.amount_cents, f.id AS \"fee_id?\",\n          (f.amount_cents::numeric - COALESCE((\n            SELECT sum(other.net_before_tax_cents::numeric)\n            FROM invoice_line_items other JOIN invoices i ON i.id = other.invoice_id\n            WHERE other.fee_occurrence_id = f.id AND i.org_id = $1\n              AND i.status <> 'void' AND i.id <> $2\n          ), 0))::bigint AS remaining\n        FROM invoice_line_items l JOIN invoices own ON own.id = l.invoice_id\n        LEFT JOIN project_fee_occurrences f ON f.id = l.fee_occurrence_id AND f.org_id = $1\n        WHERE own.org_id = $1 AND l.invoice_id = $2\n        ORDER BY l.time_entry_id NULLS LAST, f.project_id, f.period_key COLLATE \"C\", l.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "amount_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "fee_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "remaining",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "cf6204dff8fa320ae43d94d14a2cbcff1bac85c663cba6176fbf6e87a9fe24eb"
+}

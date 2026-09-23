@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) FROM invoice_line_items WHERE invoice_id=$1 AND amount_cents=1 AND description='Fee'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "43f77b7826fb631438293e45c91bb0c09d2595b8155f20cd5839228d6d9e2ff2"
+}

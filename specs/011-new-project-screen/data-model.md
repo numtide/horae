@@ -56,7 +56,7 @@ Migration 0034 replaces the existing new-time context view with the task restric
 
 ## Fee schedule and invoice occurrences
 
-The target below replaces exclusive whole-fee claims for FR-024/025. Implementation is tracked by T061–T068; the existing schema still has the invoice pointer until the forward migration lands.
+The target below replaces exclusive whole-fee claims for FR-024/025. Migration 0040 removes the invoice pointer and stores `allocated_discount_cents` with checked bounds; `net_before_tax_cents` is a stored generated difference from the gross amount. Generation and draft-default edits replace these allocations using the core helper. Availability sums non-void contributions, including drafts. Invoice-owned amount/description editing and explicitly confirmed overbilling remain tracked by T063–T068.
 
 `project_fee_milestones`: project_id, label, due_on, amount_cents, position. At most 100; required nonempty label, date and nonnegative amount. Single/monthly modes use project settings; monthly day is first/fifteenth/last, computed as a calendar date with leap-year tests.
 
@@ -69,6 +69,8 @@ Invoice lines allow exactly one of time_entry_id or fee_occurrence_id, enforced 
 Allocate the header discount proportionally across all gross lines using integer floors, then assign remaining cents by descending fractional remainder and stable source order. Preparation and persistence use the same ordering: time-entry UUID, then fee `(project_id, period_key)`. Zero subtotal means all contributions are zero. A forward migration computes contributions for existing lines without changing their gross values, headers or source identities, then removes the obsolete invoice pointer. No parallel legacy balance path is needed.
 
 Invoice mutation requests retain UUID v7 identity, organization/actor, canonical bounded request, invoice identity and completed revision. Identical requests cannot create a second invoice or apply an edit twice; stale draft revisions conflict. Keep this private table outside plugin grants. All invoice writers share the organization advisory lock before invoice/occurrence row locks. Draft replacement validates balances excluding its own previous contribution, then atomically replaces lines, contributions, header and revision. Confirmed overbilling is bound to the reviewed balance and proposed net excess, never a blanket bypass flag.
+
+Current generation requests use private `invoice_generation_requests` (id, org_id, actor_id, invoice_id, bounded JSON payload, creation time). A replay returns the same invoice in its current state without another creation event; changing actor or request values conflicts. The UI retains that identity and offers an explicit retry after an uncertain acknowledgement, disabling Cancel and input changes until recovery. This does not yet implement draft-edit revision/request handling. Excess from lowering a discount is currently rejected without writes; the later confirmation flow must not bypass that guard implicitly. Zero agreed fees retain their previous one-active-invoice behavior; a positive fee with a 100% discount retains its full balance.
 
 ## Invoice-owned defaults and calculations
 

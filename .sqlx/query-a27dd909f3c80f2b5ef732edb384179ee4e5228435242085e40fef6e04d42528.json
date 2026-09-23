@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) FROM information_schema.role_table_grants WHERE table_name='invoice_generation_requests' AND grantee='PUBLIC'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a27dd909f3c80f2b5ef732edb384179ee4e5228435242085e40fef6e04d42528"
+}

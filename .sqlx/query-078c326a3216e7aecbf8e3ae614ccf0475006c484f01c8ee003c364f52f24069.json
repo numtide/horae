@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT sum(l.net_before_tax_cents)::bigint FROM invoice_line_items l JOIN invoices i ON i.id=l.invoice_id WHERE i.org_id=$1 AND i.status <> 'void'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sum",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "078c326a3216e7aecbf8e3ae614ccf0475006c484f01c8ee003c364f52f24069"
+}

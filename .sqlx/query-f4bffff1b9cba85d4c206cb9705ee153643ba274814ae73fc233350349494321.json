@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO project_fee_occurrences (id,org_id,project_id,period_key,due_on,description,amount_cents,currency) VALUES ($1,$2,$3,$4,'2026-09-01','Fee',1,'EUR')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f4bffff1b9cba85d4c206cb9705ee153643ba274814ae73fc233350349494321"
+}

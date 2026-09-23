@@ -44,6 +44,8 @@ pub(super) fn PrepareInvoice(
     let mut started = use_signal(|| false);
     let mut preview = use_signal(|| None::<InvoicePreparation>);
     let mut reviewed = use_signal(|| None::<InvoiceRequest>);
+    let mut generation = use_signal(|| None::<(InvoiceRequest, Uuid)>);
+    let mut uncertain = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
 
     let current = if started() {
@@ -179,24 +181,38 @@ pub(super) fn PrepareInvoice(
                     },
                     if busy() { "Working…" } else { "Review invoice" }
                 }
-                button { r#type: "button", class: "btn btn-primary", disabled: busy() || !ready,
+                button { r#type: "button", class: "btn btn-primary", disabled: (busy() && !uncertain()) || !ready,
                     onclick: move |_| {
-                        if busy() || !is_reviewed(current.as_ref().ok(), reviewed.peek().as_ref()) { return; }
+                        if (busy() && !uncertain()) || !is_reviewed(current.as_ref().ok(), reviewed.peek().as_ref()) { return; }
                         let Ok(request) = current.clone() else { return; };
+                        // An uncertain response must retry the same mutation, even after
+                        // reviewing again. Changed inputs represent a different request.
+                        let request_id = generation.peek().as_ref()
+                            .filter(|(previous, _)| previous == &request)
+                            .map(|(_, id)| *id)
+                            .unwrap_or_else(Uuid::now_v7);
+                        generation.set(Some((request.clone(), request_id)));
+                        uncertain.set(false);
                         busy.set(true);
                         error.set(None);
                         spawn(async move {
-                            let result = server_fns::generate_invoice(request.client, request.from, request.to, request.projects, request.overrides).await;
+                            let result = server_fns::generate_invoice(request.client, request.from, request.to, request.projects, request.overrides, request_id.to_string()).await;
                             busy.set(false);
                             match result {
                                 Ok(data) => oncreated.call(data.invoice.id),
                                 Err(err) => {
-                                    error.set(Some(err.to_string()));
-                                    reviewed.set(None);
+                                    if matches!(&err, ServerFnError::ServerError { code, .. } if (400..500).contains(code)) {
+                                        error.set(Some(err.to_string()));
+                                        reviewed.set(None);
+                                    } else {
+                                        error.set(Some("The invoice may have been saved. Retry the same request to recover it without creating another draft.".into()));
+                                        uncertain.set(true);
+                                        busy.set(true);
+                                    }
                                 }
                             }
                         });
-                    }, "Generate draft"
+                    }, if uncertain() { "Retry generation" } else { "Generate draft" }
                 }
             }
             if started() && !ready && !busy() {

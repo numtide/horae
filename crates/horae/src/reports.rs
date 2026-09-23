@@ -433,7 +433,7 @@ pub(crate) async fn fetch_invoice_with_lines(
     fetch_invoice_from(&mut connection, invoice_id, org_id).await
 }
 
-async fn fetch_invoice_from(
+pub(crate) async fn fetch_invoice_from(
     connection: &mut sqlx::PgConnection,
     invoice_id: uuid::Uuid,
     org_id: uuid::Uuid,

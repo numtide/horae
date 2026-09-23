@@ -208,6 +208,7 @@ pub(super) mod tests {
         for relation in [
             "project_drafts",
             "project_edit_requests",
+            "invoice_generation_requests",
             "project_settings",
             "project_private_settings",
             "project_member_costs",

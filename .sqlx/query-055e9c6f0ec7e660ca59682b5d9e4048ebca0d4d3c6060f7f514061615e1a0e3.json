@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT invoice_id FROM project_fee_occurrences WHERE id = $1",
+  "query": "SELECT invoice_id FROM time_entries WHERE id=$1",
   "describe": {
     "columns": [
       {
@@ -18,5 +18,5 @@
       true
     ]
   },
-  "hash": "512dbe000f9b3eba086f23bbedacd41dbef0fde4b2c385fdb1f277dda350087c"
+  "hash": "055e9c6f0ec7e660ca59682b5d9e4048ebca0d4d3c6060f7f514061615e1a0e3"
 }

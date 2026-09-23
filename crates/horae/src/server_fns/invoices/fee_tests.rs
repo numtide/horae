@@ -19,6 +19,332 @@ async fn single_fee(pool: &PgPool) -> SeedIds {
 
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]
+async fn discounted_fee_leaves_a_balance_and_void_releases_only_its_contribution(pool: PgPool) {
+    let ids = single_fee(&pool).await;
+    let period = ("2026-09-01".parse().unwrap(), "2026-09-30".parse().unwrap());
+    let discounted = InvoiceDefaults {
+        discount_bps: 1000,
+        ..Default::default()
+    };
+    let first = generate_invoice_with_options(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        Some(&discounted),
+    )
+    .await
+    .unwrap();
+    let remaining = preview::prepare(&pool, ids.org_id, ids.client_id, period, None, None)
+        .await
+        .expect("the discounted portion must remain invoiceable");
+    assert_eq!(remaining.subtotal_cents, 1250);
+    let second = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, period.0, period.1)
+        .await
+        .unwrap();
+    assert_eq!(second.invoice.total_cents, 1250);
+    assert_eq!(
+        first.lines[0].fee_occurrence_id,
+        second.lines[0].fee_occurrence_id
+    );
+    let error = update_invoice_defaults_in_db(
+        &pool,
+        ids.org_id,
+        first.invoice.id,
+        &InvoiceDefaults::default(),
+    )
+    .await
+    .expect_err("removing the discount would overbill the fee");
+    assert!(error.to_string().contains("balance"), "{error}");
+    transition_invoice(&pool, ids.org_id, second.invoice.id, InvoiceStatus::Void)
+        .await
+        .unwrap();
+    update_invoice_defaults_in_db(
+        &pool,
+        ids.org_id,
+        first.invoice.id,
+        &InvoiceDefaults::default(),
+    )
+    .await
+    .unwrap();
+    assert!(
+        preview::prepare(&pool, ids.org_id, ids.client_id, period, None, None)
+            .await
+            .is_err()
+    );
+    transition_invoice(&pool, ids.org_id, first.invoice.id, InvoiceStatus::Void)
+        .await
+        .unwrap();
+    let restored = preview::prepare(&pool, ids.org_id, ids.client_id, period, None, None)
+        .await
+        .unwrap();
+    assert_eq!(restored.subtotal_cents, 12500);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn concurrent_discounted_invoice_retries_return_one_invoice(pool: PgPool) {
+    let ids = single_fee(&pool).await;
+    let period = ("2026-09-01".parse().unwrap(), "2026-09-30".parse().unwrap());
+    let defaults = InvoiceDefaults {
+        discount_bps: 1000,
+        ..Default::default()
+    };
+    let request = Some((Uuid::now_v7(), ids.user_id));
+    let (a, b) = tokio::join!(
+        generate_invoice_with_request(
+            &pool,
+            ids.org_id,
+            ids.client_id,
+            period,
+            None,
+            Some(&defaults),
+            request
+        ),
+        generate_invoice_with_request(
+            &pool,
+            ids.org_id,
+            ids.client_id,
+            period,
+            None,
+            Some(&defaults),
+            request
+        ),
+    );
+    let (a, created_a) = a.unwrap();
+    let (b, created_b) = b.unwrap();
+    assert_eq!(a.invoice.id, b.invoice.id);
+    assert_ne!(created_a, created_b, "only one call may dispatch creation");
+    assert_eq!(a.lines, b.lines);
+    let remaining = preview::prepare(&pool, ids.org_id, ids.client_id, period, None, None)
+        .await
+        .unwrap();
+    assert_eq!(remaining.subtotal_cents, 1250);
+    let changed = generate_invoice_with_request(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        None,
+        request,
+    )
+    .await;
+    assert!(matches!(
+        changed,
+        Err(ServerFnError::ServerError { code: CONFLICT, .. })
+    ));
+    transition_invoice(&pool, ids.org_id, a.invoice.id, InvoiceStatus::Void)
+        .await
+        .unwrap();
+    let (replayed, created) = generate_invoice_with_request(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        Some(&defaults),
+        request,
+    )
+    .await
+    .unwrap();
+    assert_eq!(replayed.invoice.status, InvoiceStatus::Void);
+    assert!(
+        !created,
+        "retrying a void invoice must not create another draft"
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn mixed_time_and_fee_discount_conserves_cents_without_reopening_time(pool: PgPool) {
+    let ids = single_fee(&pool).await;
+    sqlx::query!(
+        "UPDATE project_settings SET fee_amount_cents=2 WHERE project_id=$1",
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let time_project = Uuid::now_v7();
+    sqlx::query!("INSERT INTO projects (id,org_id,client_id,name,currency,rate_cents) VALUES ($1,$2,$3,'Hourly','EUR',60)", time_project, ids.org_id, ids.client_id).execute(&pool).await.unwrap();
+    let entry = crate::server_fns::test_seed::time_entry(&pool, &ids, EntryState::Open).await;
+    sqlx::query!(
+        "UPDATE time_entries SET project_id=$2,minutes=1 WHERE id=$1",
+        entry,
+        time_project
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let period = ("2026-09-01".parse().unwrap(), "2026-09-30".parse().unwrap());
+    let mut defaults = InvoiceDefaults {
+        discount_bps: 5000,
+        ..Default::default()
+    };
+    let invoice = generate_invoice_with_options(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        Some(&defaults),
+    )
+    .await
+    .unwrap();
+    let rows = sqlx::query!("SELECT time_entry_id, amount_cents, net_before_tax_cents FROM invoice_line_items WHERE invoice_id=$1 ORDER BY time_entry_id NULLS LAST", invoice.invoice.id).fetch_all(&pool).await.unwrap();
+    assert_eq!(
+        rows.iter()
+            .map(|row| (row.amount_cents, row.net_before_tax_cents))
+            .collect::<Vec<_>>(),
+        vec![(1, Some(0)), (2, Some(1))]
+    );
+    defaults.tax1_bps = 10000;
+    let taxed = update_invoice_defaults_in_db(&pool, ids.org_id, invoice.invoice.id, &defaults)
+        .await
+        .unwrap();
+    assert_eq!(
+        (
+            taxed.subtotal_cents,
+            taxed.discount_cents,
+            taxed.tax1_cents,
+            taxed.total_cents
+        ),
+        (3, 2, 1, 2)
+    );
+    let remaining = preview::prepare(&pool, ids.org_id, ids.client_id, period, None, None)
+        .await
+        .unwrap();
+    assert_eq!(remaining.lines.len(), 1);
+    assert_eq!(remaining.subtotal_cents, 1);
+    assert!(remaining.lines[0].minutes.is_none());
+    assert_eq!(
+        sqlx::query_scalar!("SELECT invoice_id FROM time_entries WHERE id=$1", entry)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        Some(invoice.invoice.id)
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn removing_discount_and_billing_the_remainder_cannot_both_succeed(pool: PgPool) {
+    let ids = single_fee(&pool).await;
+    let period = ("2026-09-01".parse().unwrap(), "2026-09-30".parse().unwrap());
+    let discounted = InvoiceDefaults {
+        discount_bps: 1000,
+        ..Default::default()
+    };
+    let original = generate_invoice_with_options(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        Some(&discounted),
+    )
+    .await
+    .unwrap();
+    let defaults = InvoiceDefaults::default();
+    let (edit, generation) = tokio::join!(
+        update_invoice_defaults_in_db(&pool, ids.org_id, original.invoice.id, &defaults),
+        generate_invoice_for_period(&pool, ids.org_id, ids.client_id, period.0, period.1),
+    );
+    assert_eq!(
+        usize::from(edit.is_ok()) + usize::from(generation.is_ok()),
+        1
+    );
+    assert_eq!(sqlx::query_scalar!(
+        "SELECT sum(l.net_before_tax_cents)::bigint FROM invoice_line_items l JOIN invoices i ON i.id=l.invoice_id WHERE i.org_id=$1 AND i.status <> 'void'",
+        ids.org_id,
+    ).fetch_one(&pool).await.unwrap(), Some(12500));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn zero_fee_is_invoiced_once_until_voided(pool: PgPool) {
+    let ids = single_fee(&pool).await;
+    sqlx::query!(
+        "UPDATE project_settings SET fee_amount_cents=0 WHERE project_id=$1",
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let period = ("2026-09-01".parse().unwrap(), "2026-09-30".parse().unwrap());
+    let invoice = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, period.0, period.1)
+        .await
+        .unwrap();
+    assert_eq!(invoice.invoice.total_cents, 0);
+    assert!(
+        preview::prepare(&pool, ids.org_id, ids.client_id, period, None, None)
+            .await
+            .is_err()
+    );
+    transition_invoice(&pool, ids.org_id, invoice.invoice.id, InvoiceStatus::Void)
+        .await
+        .unwrap();
+    assert_eq!(
+        preview::prepare(&pool, ids.org_id, ids.client_id, period, None, None)
+            .await
+            .unwrap()
+            .subtotal_cents,
+        0
+    );
+}
+
+#[sqlx::test(migrations = false)]
+#[serial_test::serial]
+async fn fee_balance_migration_allocates_discount_without_rewriting_invoice_snapshots(
+    pool: PgPool,
+) {
+    let mut previous = sqlx::migrate!("./migrations");
+    previous.migrations = std::borrow::Cow::Owned(
+        previous
+            .iter()
+            .filter(|m| m.version < 40)
+            .cloned()
+            .collect(),
+    );
+    previous.run(&pool).await.unwrap();
+    let ids = single_fee(&pool).await;
+    let invoice = Uuid::now_v7();
+    sqlx::query!("INSERT INTO invoices (id,org_id,client_id,number,status,issued_on,due_on,currency,total_cents,discount_bps,discount_cents) VALUES ($1,$2,$3,'BEFORE-BALANCES','draft','2026-09-01','2026-10-01','EUR',1,5000,2)", invoice, ids.org_id, ids.client_id).execute(&pool).await.unwrap();
+    let line_ids = [Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7()];
+    for (key, line) in ["a", "b", "c"].into_iter().zip(line_ids.iter().rev()) {
+        let fee = Uuid::now_v7();
+        sqlx::query!("INSERT INTO project_fee_occurrences (id,org_id,project_id,period_key,due_on,description,amount_cents,currency) VALUES ($1,$2,$3,$4,'2026-09-01','Fee',1,'EUR')", fee, ids.org_id, ids.project_id, key).execute(&pool).await.unwrap();
+        sqlx::query!("INSERT INTO invoice_line_items (id,invoice_id,fee_occurrence_id,description,amount_cents) VALUES ($1,$2,$3,'Fee',1)", line, invoice, fee).execute(&pool).await.unwrap();
+    }
+    sqlx::migrate!("./migrations").run(&pool).await.unwrap();
+    let net = sqlx::query_scalar!(
+        "SELECT l.net_before_tax_cents FROM invoice_line_items l JOIN project_fee_occurrences f ON f.id=l.fee_occurrence_id WHERE l.id = ANY($1) ORDER BY f.period_key COLLATE \"C\"",
+        &line_ids
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(net, vec![Some(0), Some(0), Some(1)]);
+    let header = crate::reports::fetch_invoice_metadata(&pool, invoice, ids.org_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        (
+            header.subtotal_cents,
+            header.discount_cents,
+            header.total_cents
+        ),
+        (3, 2, 1)
+    );
+    assert_eq!(sqlx::query_scalar!("SELECT count(*) FROM invoice_line_items WHERE invoice_id=$1 AND amount_cents=1 AND description='Fee'", invoice).fetch_one(&pool).await.unwrap(), Some(3));
+    assert_eq!(sqlx::query_scalar!("SELECT count(*) FROM information_schema.role_table_grants WHERE table_name='invoice_generation_requests' AND grantee='PUBLIC'").fetch_one(&pool).await.unwrap(), Some(0));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
 async fn invoice_preview_does_not_materialize_fees_and_preserves_released_snapshots(pool: PgPool) {
     let ids = single_fee(&pool).await;
     let period = ("2026-09-01".parse().unwrap(), "2026-09-30".parse().unwrap());
@@ -127,13 +453,13 @@ async fn invoice_defaults_apply_to_selected_fees_without_claiming_other_projects
     );
     assert_eq!(
         sqlx::query_scalar!(
-            "SELECT invoice_id FROM project_fee_occurrences WHERE id = $1",
+            "SELECT count(*) FROM invoice_line_items WHERE fee_occurrence_id = $1",
             other_fee
         )
         .fetch_one(&pool)
         .await
         .unwrap(),
-        None
+        Some(0)
     );
     transition_invoice(&pool, ids.org_id, result.invoice.id, InvoiceStatus::Void)
         .await
