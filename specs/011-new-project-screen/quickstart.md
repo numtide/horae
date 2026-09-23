@@ -71,7 +71,7 @@ Use the isolated database and Nix commands above; no production deployment exist
 
 The whole-feature adversarial review covers current transactional authority, organization boundaries, exact amounts/overflow, canonical retry identities, revisions, preserved raw input, source/history immutability, privacy across every consumer, bounded transport/recovery and shared CSS/control defaults. Reproduced findings and their failing-then-passing regressions are recorded in the checkpoints below. Technical tasks T043/T050–T052/T068 are complete.
 
-T054 remains open: the implementation is pushed to PR #207, but publishing its final updated description awaits authorization. The PR remains draft on #206's branch; no merge or retarget has been performed. An absent CI rollup on this stacked base is not a hosted-CI pass. Invoice recovery remains per-tab; closing the tab or clearing storage is outside its guarantee, and ordinary unsaved invoice fields are protected by confirmation rather than autosaved.
+T054 is complete: the implementation is pushed to PR #207, its final description is published, and it is ready for review following explicit authorization. The PR remains based on #206's branch; no merge or retarget has been performed. An absent CI rollup on this stacked base is not a hosted-CI pass. Invoice recovery remains per-tab; closing the tab or clearing storage is outside its guarantee, and ordinary unsaved invoice fields are protected by confirmation rather than autosaved.
 
 ### Browser navigation read ownership (2026-09-23)
 

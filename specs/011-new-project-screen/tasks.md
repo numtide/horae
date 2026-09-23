@@ -4,7 +4,7 @@
 
 **Tests**: Required by the constitution and specification. Write/run a failing check before its implementation; mark complete only after passing verification.
 
-**Current status (2026-09-23)**: Technical acceptance is complete through `ae0f580`; only T054 remains for publishing the final PR summary and review readiness. Progress bullets preserve earlier checkpoints; their historical pending notes are superseded by the final acceptance record in `quickstart.md`.
+**Current status (2026-09-23)**: All 68 tasks are complete. Technical acceptance is complete through `ae0f580`; PR #207 has its final summary and is ready for review, without merging or retargeting. Progress bullets preserve earlier checkpoints; their historical pending notes are superseded by the final acceptance record in `quickstart.md`.
 
 ## Phase 1: Setup
 
@@ -143,8 +143,8 @@
   - At `60abb5d`, local-system flake evaluation, the complete Nix treefmt check and a byte-for-byte temporary regeneration of CSS utilities pass. Evaluation alone is not full flake acceptance.
 - [x] T053 Document deployment mail configuration/limits and feature route in `DESIGN.md` and existing appropriate configuration docs; ensure `design/project/` remains unchanged.
   - README documents the creation route, paired optional mail variables, executable/address requirements, NixOS service constraints, 20-second/five-attempt limits, transport acknowledgement semantics and read-only diagnostics. DESIGN records the route, shared-shell opt-in, token/utility mapping and links to the remaining acceptance checklist. Checked against configuration/delivery code and the NixOS module; the documented SQL ran successfully on the isolated schema. No deployment configuration or handoff source was changed.
-- [ ] T054 Commit scoped changes on `feat/new-project-screen`, open a human-readable PR with test evidence and explicit limitations from `specs/011-new-project-screen/quickstart.md`; do not merge.
-  - Implementation and verified fixes are pushed through `ae0f580`. PR #207 remains draft; publishing the final updated description awaits explicit authorization. No automatic merge or retarget is performed.
+- [x] T054 Commit scoped changes on `feat/new-project-screen`, open a human-readable PR with test evidence and explicit limitations from `specs/011-new-project-screen/quickstart.md`; do not merge.
+  - Implementation and verified fixes are pushed through `ae0f580`, with final technical acceptance recorded in `d5fc3c6`. With explicit authorization, PR #207's final description was published and the PR marked ready for review. No merge or retarget was performed.
   - Base audit finds design refresh #206 still open. The feature starts at its `554e140` commit and leaves `design/project/` unchanged relative to it. Use that dependency branch as the PR base unless its merge is verified first; do not compare this feature against the stale local master or silently merge the prerequisite.
 
 ## Phase 10: US7 — Unified existing-project editing (approved 2026-09-22)
