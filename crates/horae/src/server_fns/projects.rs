@@ -1,6 +1,7 @@
 //! Project, task, and assignment server functions.
 
 use super::*;
+use crate::models::project::ProjectFeeBalance;
 use crate::models::{ProjectDetails, ProjectTagLink, ProjectTaskRate};
 
 #[cfg(all(test, feature = "server"))]
@@ -19,6 +20,85 @@ mod mutation_tests;
 mod bulk_tests;
 
 // ── Projects ─────────────────────────────────────────────────────────────────
+
+#[server]
+pub async fn get_project_fee_balances(
+    project_id: String,
+    period_from: String,
+    period_to: String,
+) -> Result<Vec<ProjectFeeBalance>, ServerFnError> {
+    let viewer = require_manager().await?;
+    let state = crate::state::global_state().await;
+    fetch_project_fee_balances(
+        &state.db,
+        viewer.org_id,
+        viewer.id,
+        parse_uuid(&project_id, "project_id")?,
+        (
+            parse_date(&period_from, "period_from")?,
+            parse_date(&period_to, "period_to")?,
+        ),
+    )
+    .await
+}
+
+#[cfg(feature = "server")]
+pub(super) async fn fetch_project_fee_balances(
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    viewer_id: uuid::Uuid,
+    project_id: uuid::Uuid,
+    (from, to): (chrono::NaiveDate, chrono::NaiveDate),
+) -> Result<Vec<ProjectFeeBalance>, ServerFnError> {
+    if from > to {
+        return Err(err(BAD_REQUEST, "Fee period ends before it starts"));
+    }
+    let mut tx = pool.begin().await.map_err(server_err)?;
+    sqlx::query!("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+        .execute(&mut *tx)
+        .await
+        .map_err(server_err)?;
+    let client_id = sqlx::query_scalar!(
+        "SELECT p.client_id FROM projects p
+         JOIN project_read_access a ON a.project_id = p.id AND a.org_id = p.org_id
+         WHERE p.org_id = $1 AND p.id = $2 AND a.user_id = $3
+           AND a.can_view_rates AND a.can_view_progress",
+        org_id,
+        project_id,
+        viewer_id,
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(server_err)?
+    .ok_or_else(|| not_found("Project not found"))?;
+    let lines = super::invoices::fees::preview_fees(
+        &mut tx,
+        org_id,
+        client_id,
+        from,
+        to,
+        Some(&[project_id]),
+    )
+    .await?;
+    let balances = lines
+        .into_iter()
+        .map(|line| {
+            let crate::models::invoice::InvoiceSource::Fee { period_key, .. } = line.source else {
+                return Err(server_err("Unexpected time source in project fee balances"));
+            };
+            Ok(ProjectFeeBalance {
+                period_key,
+                description: line.description,
+                currency: line.currency,
+                balance: line
+                    .fee_balance
+                    .ok_or_else(|| server_err("Missing fee balance"))?,
+            })
+        })
+        .collect::<Result<Vec<_>, ServerFnError>>()?;
+    tx.commit().await.map_err(server_err)?;
+    Ok(balances)
+}
 
 #[server]
 pub async fn get_project_details(project_id: String) -> Result<ProjectDetails, ServerFnError> {

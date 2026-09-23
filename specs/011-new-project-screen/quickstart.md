@@ -50,6 +50,13 @@ Use the isolated database and Nix commands above; no production deployment exist
 
 ## Completion evidence
 
+### Authorized project fee context checkpoint (2026-09-23)
+
+- T067 exposes agreed, invoiced and signed remaining fee amounts in Project Detail. It reuses invoice preparation's occurrence calculation and includes discounted non-void draft contributions before tax. Each monthly occurrence remains separate; reading never creates/reserves it.
+- The new backend checks first failed at the missing loader; Chromium first failed at the missing region. Both database cases now pass, covering partial discounts/taxes, draft replacement, exact excess, void restoration, foreign projects/actors, demoted project leads, inactive users, inverted dates and monthly isolation. The loader checks current billing access in the same read-only repeatable-read snapshot as the balances.
+- Native/WASM builds and focused `invoice-preparation`, `project-edit` and `new-project-permissions` suites pass. Browser assertions cover negative values, monthly ranges, no read-side materialization, failed-read suppression/retry, 390/768/1440 layouts and HTTP 403 without financial data after demotion. Eight other screens retain computed styles at three widths. SSR navigation tests also assert project-specific fee identities rather than stale previous-project rows.
+- The initial all-target check caught module path resolution in the standalone navigation harness; an explicit sibling path fixes it without disabling tests. SQLx metadata was regenerated against the isolated migrated database: three new query records, no removed/replaced records. The final offline server run passes 778 server-bin and 157 external-suite tests (11 existing manual tests ignored); the unchanged core passed 115 tests in the preceding checkpoint. Strict offline all-target Clippy and the full Nix format gate pass. The offline formatter initially lacked a dependency; the normal cached download restored the gate without configuration changes. No migration, dependency, shared CSS or handoff source changed. Unfiltered-browser and whole-feature gates remain tracked separately until their runs complete.
+
 ### Fee source refresh checkpoint (2026-09-23)
 
 - T066 now includes explicit source refresh without parsing or discarding unfinished invoice values. Identity includes currency: a changed denomination cannot reinterpret an existing amount. Missing rows require explicit removal and new sources are unselected.

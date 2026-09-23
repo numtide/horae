@@ -342,6 +342,11 @@ async fn navigating_between_project_ids_loads_current_assignments_and_tasks() {
     let html = dioxus::ssr::render(&dom);
     assert!(html.contains("User-101"), "rendered: {html}");
     assert!(html.contains("Task-1"), "rendered: {html}");
+    assert!(html.contains("Fee-1"), "rendered: {html}");
+    assert!(
+        html.contains("Over-invoiced: EUR -0.10"),
+        "rendered: {html}"
+    );
     assert_eq!(*probe.assignment_requests.borrow(), [first]);
     assert_eq!(*probe.task_requests.borrow(), [first]);
 
@@ -372,6 +377,8 @@ async fn navigating_between_project_ids_loads_current_assignments_and_tasks() {
     );
     assert!(html.contains("User-102"), "rendered: {html}");
     assert!(html.contains("Task-2"), "rendered: {html}");
+    assert!(html.contains("Fee-2"), "rendered: {html}");
+    assert!(!html.contains("Fee-1"), "rendered: {html}");
     assert!(!html.contains("User-101"), "rendered: {html}");
     assert!(!html.contains("Task-1"), "rendered: {html}");
     assert!(!html.contains("CODE-1"), "rendered: {html}");
@@ -582,6 +589,23 @@ mod server_fns {
     }
     pub async fn list_project_tags() -> Result<Vec<project::ProjectTagLink>, ServerFnError> {
         Ok(Vec::new())
+    }
+    pub async fn get_project_fee_balances(
+        id: String,
+        _from: String,
+        _to: String,
+    ) -> Result<Vec<project::ProjectFeeBalance>, ServerFnError> {
+        let id = Uuid::parse_str(&id).unwrap();
+        Ok(vec![project::ProjectFeeBalance {
+            period_key: "single".into(),
+            description: format!("Fee-{}", id.as_u128()),
+            currency: "EUR".into(),
+            balance: invoice::InvoiceFeeBalance {
+                agreed_cents: 100,
+                invoiced_cents: 110,
+                remaining_cents: -10,
+            },
+        }])
     }
     pub async fn get_project_details(id: String) -> ProjectDetailsResponse {
         let id = Uuid::parse_str(&id).unwrap();

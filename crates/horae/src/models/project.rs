@@ -10,6 +10,15 @@ pub struct ProjectTaskRate {
     pub currency: String,
 }
 
+/// Read-only fee context for authorized billing managers, one row per occurrence.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProjectFeeBalance {
+    pub period_key: String,
+    pub description: String,
+    pub currency: String,
+    pub balance: super::invoice::InvoiceFeeBalance,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "server", derive(sqlx::FromRow))]
 pub struct Project {

@@ -18,6 +18,9 @@ use crate::server_fns;
 use horae_core::money::format_cents;
 use horae_core::types::{BudgetKind, ProjectType};
 
+#[path = "projects/fee_balances.rs"]
+mod fee_balances;
+
 fn hours(minutes: i64) -> String {
     // Remaining budgets can be negative. Keep the sign and round integer
     // minutes to hundredths without the tracking formatter's zero clamp.
@@ -975,6 +978,11 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                     && matches!(&*details.read(), Some(Ok(_))),
                 task_rate_currency: details.read().as_ref().and_then(|result| result.as_ref().ok())
                     .and_then(|project| project.task_rate_currency.clone()),
+            }
+
+            if is_manager(&me) && details.state()() == UseResourceState::Ready
+                && matches!(&*details.read(), Some(Ok(_))) {
+                fee_balances::ProjectFeeBalances { project_id: id }
             }
 
             // ── Assignments section ─────────────────────────────────────

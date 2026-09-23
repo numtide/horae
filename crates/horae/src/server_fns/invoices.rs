@@ -12,7 +12,7 @@ use crate::models::invoice::{
 mod defaults;
 
 #[cfg(feature = "server")]
-mod fees;
+pub(super) mod fees;
 
 #[cfg(feature = "server")]
 mod entries;

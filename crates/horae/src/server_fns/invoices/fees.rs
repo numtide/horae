@@ -28,7 +28,7 @@ struct Occurrence {
     currency: String,
 }
 
-pub(super) async fn preview_fees(
+pub(in crate::server_fns) async fn preview_fees(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     org_id: Uuid,
     client_id: Uuid,

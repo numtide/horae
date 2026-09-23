@@ -478,8 +478,55 @@ const feesBefore = Number(sql('SELECT count(*) FROM project_fee_occurrences'));
     await page.evaluate(() => { Storage.prototype.getItem = window.originalInvoiceGetItem; delete window.originalInvoiceGetItem; });
     await page.getByRole('button', { name: 'Retry loading invoices', exact: true }).click();
     await expect(page.getByRole('button', { name: 'New Invoice', exact: true })).toBeVisible();
+    await page.goto(`${base}/projects/${project.id}`);
+    const balances = page.getByRole('region', { name: 'Project fee balances', exact: true });
+    await expect(balances).toBeVisible();
+    await balances.getByLabel('Fee period from', { exact: true }).fill('2026-09-01');
+    await balances.getByLabel('Fee period to', { exact: true }).fill('2026-09-30');
+    await expect(balances).toContainText('Invoiced (including drafts): EUR 127.00');
+    await expect(balances).toContainText('Over-invoiced: EUR -2.00');
+    let feeEndpoint;
+    page.on('request', request => { if (request.url().includes('/api/get_project_fee_balances')) feeEndpoint = request; });
+    for (const width of [390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect(balances.getByRole('button', { name: 'Refresh balances', exact: true })).toBeVisible();
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    }
+    await page.route('**/api/get_project_fee_balances*', route => route.abort(), { times: 1 });
+    await balances.getByRole('button', { name: 'Refresh balances', exact: true }).click();
+    await expect(balances.getByRole('alert')).toContainText('Could not load fee balances');
+    await expect(balances).not.toContainText('127.00');
+    await balances.getByRole('button', { name: 'Refresh balances', exact: true }).click();
+    await expect(balances).toContainText('Over-invoiced: EUR -2.00');
+    assert.ok(feeEndpoint);
+    const actor = sql("SELECT id FROM users WHERE email = 'admin@example.com'");
+    try {
+      sql(`UPDATE users SET org_role='member' WHERE id='${actor}'`);
+      const response = await context.request.post(feeEndpoint.url(), {
+        headers: { 'content-type': feeEndpoint.headers()['content-type'] }, data: feeEndpoint.postData(),
+      });
+      assert.equal(response.status(), 403);
+      assert.ok(!(await response.text()).includes('12700'));
+      await page.reload();
+      await expect(page.getByRole('heading', { name: 'Project', exact: true })).toBeVisible();
+      await readsFinished();
+      await expect(balances).toHaveCount(0);
+    } finally {
+      sql(`UPDATE users SET org_role='admin' WHERE id='${actor}'`);
+    }
+    const monthlyProject = sql("SELECT id FROM projects WHERE code='TECH-01'");
+    sql(`UPDATE project_settings SET fee_mode='monthly', monthly_day='last' WHERE project_id='${monthlyProject}'`);
+    await page.goto(`${base}/projects/${monthlyProject}`);
+    await expect(balances).toBeVisible();
+    await balances.getByLabel('Fee period from', { exact: true }).fill('2026-09-01');
+    await balances.getByLabel('Fee period to', { exact: true }).fill('2026-10-31');
+    await expect(balances.getByRole('group')).toHaveCount(2);
+    await expect(balances.getByRole('group').nth(0)).toContainText('Occurrence: month:2026-09');
+    await expect(balances.getByRole('group').nth(1)).toContainText('Occurrence: month:2026-10');
+    await expect(balances.getByRole('group').nth(1)).toContainText('Remaining: EUR 900.00');
+    assert.equal(Number(sql(`SELECT count(*) FROM project_fee_occurrences WHERE project_id='${monthlyProject}'`)), 0);
     assert.deepEqual(errors, []);
-    console.log('PASS: invoice selection, partial balances, exact excess, dirty/pending navigation, reload recovery, account-scoped request replay and storage failure safety');
+    console.log('PASS: invoice selection, partial balances, exact excess, dirty/pending navigation, reload recovery, account-scoped replay, storage failure safety and authorized per-occurrence project balances');
   } catch (error) {
     console.error(error);
     console.error({ url: page.url(), errors, page: await page.locator('body').ariaSnapshot({ timeout: 3000 }).catch(failure => failure.message) });

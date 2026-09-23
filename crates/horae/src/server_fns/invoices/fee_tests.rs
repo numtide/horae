@@ -19,6 +19,187 @@ async fn single_fee(pool: &PgPool) -> SeedIds {
 
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]
+async fn project_fee_context_matches_invoice_balances_and_current_authority(pool: PgPool) {
+    use crate::server_fns::projects::fetch_project_fee_balances;
+    let ids = single_fee(&pool).await;
+    let period = ("2026-09-01".parse().unwrap(), "2026-09-30".parse().unwrap());
+    let initial =
+        fetch_project_fee_balances(&pool, ids.org_id, ids.user_id, ids.project_id, period)
+            .await
+            .unwrap();
+    assert_eq!(initial.len(), 1);
+    assert_eq!(initial[0].period_key, "single");
+    assert_eq!(initial[0].balance.remaining_cents, 12500);
+    assert_eq!(
+        sqlx::query_scalar!("SELECT count(*) FROM project_fee_occurrences")
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        Some(0)
+    );
+    let defaults = InvoiceDefaults {
+        discount_bps: 1000,
+        tax1_bps: 2100,
+        ..Default::default()
+    };
+    let invoice = generate_invoice_with_options(
+        &pool,
+        ids.org_id,
+        ids.client_id,
+        period,
+        None,
+        Some(&defaults),
+    )
+    .await
+    .unwrap();
+    let partial =
+        fetch_project_fee_balances(&pool, ids.org_id, ids.user_id, ids.project_id, period)
+            .await
+            .unwrap();
+    assert_eq!(partial[0].balance.agreed_cents, 12500);
+    assert_eq!(partial[0].balance.invoiced_cents, 11250);
+    assert_eq!(partial[0].balance.remaining_cents, 1250);
+    let mut edit = edit_request(&pool, &ids, invoice.invoice.id, 15000).await;
+    edit.confirmed_excess = vec![crate::models::invoice::InvoiceExcessConfirmation {
+        line_id: edit.edit.fees[0].line_id,
+        excess_cents: 1000,
+    }];
+    editing::save(&pool, ids.org_id, ids.user_id, invoice.invoice.id, &edit)
+        .await
+        .unwrap();
+    let over = fetch_project_fee_balances(&pool, ids.org_id, ids.user_id, ids.project_id, period)
+        .await
+        .unwrap();
+    assert_eq!(over[0].balance.invoiced_cents, 13500);
+    assert_eq!(over[0].balance.remaining_cents, -1000);
+    let preview = preview::prepare(&pool, ids.org_id, ids.client_id, period, None, None)
+        .await
+        .unwrap();
+    assert_eq!(Some(over[0].balance), preview.lines[0].fee_balance);
+    transition_invoice(&pool, ids.org_id, invoice.invoice.id, InvoiceStatus::Void)
+        .await
+        .unwrap();
+    let restored =
+        fetch_project_fee_balances(&pool, ids.org_id, ids.user_id, ids.project_id, period)
+            .await
+            .unwrap();
+    assert_eq!(restored[0].balance.remaining_cents, 12500);
+    let foreign = single_fee(&pool).await;
+    assert!(
+        fetch_project_fee_balances(&pool, ids.org_id, ids.user_id, foreign.project_id, period)
+            .await
+            .is_err()
+    );
+    assert!(
+        fetch_project_fee_balances(
+            &pool,
+            foreign.org_id,
+            ids.user_id,
+            foreign.project_id,
+            period
+        )
+        .await
+        .is_err()
+    );
+    sqlx::query!(
+        "INSERT INTO assignments (id,project_id,user_id,role) VALUES ($1,$2,$3,'lead')",
+        Uuid::now_v7(),
+        ids.project_id,
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE users SET org_role = 'member' WHERE id = $1",
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(
+        fetch_project_fee_balances(&pool, ids.org_id, ids.user_id, ids.project_id, period)
+            .await
+            .is_err(),
+        "even a project lead cannot read billing amounts after demotion"
+    );
+    sqlx::query!(
+        "UPDATE users SET org_role = 'admin', active = false WHERE id = $1",
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(
+        fetch_project_fee_balances(&pool, ids.org_id, ids.user_id, ids.project_id, period)
+            .await
+            .is_err()
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn project_fee_context_keeps_monthly_balances_separate(pool: PgPool) {
+    use crate::server_fns::projects::fetch_project_fee_balances;
+    let ids = single_fee(&pool).await;
+    sqlx::query!("UPDATE project_settings SET fee_mode = 'monthly', monthly_day = 'last' WHERE project_id = $1", ids.project_id).execute(&pool).await.unwrap();
+    let september = ("2026-09-01".parse().unwrap(), "2026-09-30".parse().unwrap());
+    generate_invoice_for_period(&pool, ids.org_id, ids.client_id, september.0, september.1)
+        .await
+        .unwrap();
+    let both = fetch_project_fee_balances(
+        &pool,
+        ids.org_id,
+        ids.user_id,
+        ids.project_id,
+        (september.0, "2026-10-31".parse().unwrap()),
+    )
+    .await
+    .unwrap();
+    assert_eq!(both.len(), 2);
+    assert_eq!(
+        (&*both[0].period_key, both[0].balance.remaining_cents),
+        ("month:2026-09", 0)
+    );
+    assert_eq!(
+        (&*both[1].period_key, both[1].balance.remaining_cents),
+        ("month:2026-10", 12500)
+    );
+    let october = fetch_project_fee_balances(
+        &pool,
+        ids.org_id,
+        ids.user_id,
+        ids.project_id,
+        ("2026-10-01".parse().unwrap(), "2026-10-31".parse().unwrap()),
+    )
+    .await
+    .unwrap();
+    assert_eq!(october, both[1..]);
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM project_fee_occurrences WHERE project_id = $1",
+            ids.project_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(1)
+    );
+    assert!(
+        fetch_project_fee_balances(
+            &pool,
+            ids.org_id,
+            ids.user_id,
+            ids.project_id,
+            (september.1, september.0)
+        )
+        .await
+        .is_err()
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
 async fn settled_fee_sources_remain_reviewable_without_automatic_charges(pool: PgPool) {
     let ids = single_fee(&pool).await;
     let period = ("2026-09-01".parse().unwrap(), "2026-09-30".parse().unwrap());

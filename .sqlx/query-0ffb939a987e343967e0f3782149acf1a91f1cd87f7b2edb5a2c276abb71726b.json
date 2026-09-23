@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT p.client_id FROM projects p\n         JOIN project_read_access a ON a.project_id = p.id AND a.org_id = p.org_id\n         WHERE p.org_id = $1 AND p.id = $2 AND a.user_id = $3\n           AND a.can_view_rates AND a.can_view_progress",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "client_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "0ffb939a987e343967e0f3782149acf1a91f1cd87f7b2edb5a2c276abb71726b"
+}
