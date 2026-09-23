@@ -50,6 +50,29 @@ Use the isolated database and Nix commands above; no production deployment exist
 
 ## Completion evidence
 
+### Final technical acceptance — `ae0f580` (2026-09-23)
+
+`nix flake check --keep-going --max-jobs 2 -L` exits **0** with **all checks passed** on **x86_64-linux**. Complete output: `/tmp/horae-navigation-drain-final-flake.log`. The checked implementation is `ae0f580`; subsequent changes only record acceptance. Other architectures were not executed and are not claimed.
+
+- **Native/domain:** 1,051 tests pass: 115 core, 779 server-bin and 157 external-suite tests. Eleven pre-existing manual server checks remain ignored; nested subprocess repetitions are not counted again. Clippy, SQLx verification against isolated migrated PostgreSQL and the Nix formatting gate pass. Earlier strict all-target lint and temporary byte-for-byte CSS utility regeneration remain applicable; no Rust/query/generator changed in the final browser-only fix.
+- **Packaged application:** native server and WASM release build pass. Artifact: `/nix/store/31cmlfk6bi71hzh61dj2gk3w1zq0pi2v-horae-0.1.0/bin/horae`. Both NixOS startup and OIDC VM suites pass and clean up their guests.
+- **Browser:** all 16 suites pass in their unmodified default order inside Nix against that release package. The separate complete debug-bundle run also exits 0 and preserves computed styles of eight existing screens at 320/768/1440px. Late script loading, keyed calendar remounts and outgoing-read navigation regressions remain enabled, as do all previous UI/focus/geometry assertions.
+- **Safety:** every automated mutation used disposable data. The imported development database, real outbound mail configuration and existing previews were not changed. `design/project/` remains unchanged relative to the dependency branch. No errors or failing scenarios were suppressed to obtain the passing result.
+
+| Requirement coverage | Acceptance evidence |
+|---|---|
+| FR-001–005; SC-001–002 — real basic fields, clients, currency and tags | Creation/validation database tests and full `new-project` browser workflow, including saved details, report filters and CSV/XLSX exports; the control-to-consumer inventory below maps each input. All nine keyboard-only creations across three project types/widths persist correctly and take 0.768–2.441 seconds under automation. This is not a human usability-study measurement. |
+| FR-006/014–015; SC-004 — tasks, team, private data and access | Assignment/time-entry restriction race tests, current-authority/tenant checks, Harvest/report/export privacy fixtures and the full real-session browser permission matrix. |
+| FR-007–008; SC-003 — draft ownership, atomicity and retries | Creation transactions, concurrent tabs, lost save/finalization responses, exact replay, discard and interrupted-body/navigation suites; no duplicate project/event or silent overwrite. |
+| FR-009–013; SC-005 — billing modes, budgets, fee schedules and optional mail | Independent rate/currency/budget/fee fixtures, legacy/import preservation, configured progress and per-period notification/outbox/transport-stub checks. No real email is sent; acknowledgement does not promise exactly-once receipt. |
+| FR-016–017/024–025 — invoice defaults and partial fee balances | Pure integer allocation/conservation checks, generation/edit/void concurrency and authority tests, exact CSV/XLSX/PDF snapshots, full invoice-preparation browser suite and authorized per-occurrence Project Detail balances. Discounts leave the reduced contribution available; taxes do not consume fee balances. |
+| FR-018–020; SC-006–007 — design, accessibility and shared regressions | Reference-component/control mapping, 56 conditional keyboard layouts including desktop 200% text, field/modal/error/recovery checks, nine real creations, the shared-screen style comparison and complete menu/navigation/bulk/Clients/Timesheet/Invoices suites. Deliberate design differences remain documented below. |
+| FR-021–023; SC-008 — one complete editor with preserved history | Legacy/configured projection and atomic-save tests, current permissions/private fields, identity/history preservation, actual shared-editor browser flows, conflict/retry/navigation checks and removal of the old form and unused mutations. |
+
+The whole-feature adversarial review covers current transactional authority, organization boundaries, exact amounts/overflow, canonical retry identities, revisions, preserved raw input, source/history immutability, privacy across every consumer, bounded transport/recovery and shared CSS/control defaults. Reproduced findings and their failing-then-passing regressions are recorded in the checkpoints below. Technical tasks T043/T050–T052/T068 are complete.
+
+T054 remains open: the implementation is pushed to PR #207, but publishing its final updated description awaits authorization. The PR remains draft on #206's branch; no merge or retarget has been performed. An absent CI rollup on this stacked base is not a hosted-CI pass. Invoice recovery remains per-tab; closing the tab or clearing storage is outside its guarantee, and ordinary unsaved invoice fields are protected by confirmation rather than autosaved.
+
 ### Browser navigation read ownership (2026-09-23)
 
 - The full release flake run after `b6ca792` passes Rust tests, Clippy, SQLx, formatting, package compilation and both NixOS VM suites, but fails the bounded menu scenario (`/tmp/horae-late-menu-final-flake.log`). The shared startup regression passes; the remaining failure is an unrelated test-navigation wait, not a calendar assertion.
@@ -172,7 +195,7 @@ Record commands/results and outstanding limitations in the PR. Check off tasks o
 
 ### Control-to-consumer audit (T050)
 
-The inventory follows `ProjectForm` and its nested inputs, plus the client dialog and draft actions. All form edits first enter the versioned `project_drafts.payload`; `finalize_draft_record`, `save_tasks` and `save_members` write the operational records atomically. A retained hidden draft value is not evidence that it should affect billing. This table separates the actual persistence/consumer path from its checks; the execution log records which checks have run. Navigation protection and editable fee rows are verified below; final feature-wide acceptance remains open.
+The inventory follows `ProjectForm` and its nested inputs, plus the client dialog and draft actions. All form edits first enter the versioned `project_drafts.payload`; `finalize_draft_record`, `save_tasks` and `save_members` write the operational records atomically. A retained hidden draft value is not evidence that it should affect billing. This table separates the actual persistence/consumer path from its checks; final feature-wide technical acceptance is recorded above, including navigation protection and editable fee rows.
 
 Paths below are relative to `crates/horae/`; browser suites live in `tests/browser/` and server test modules in `src/server_fns/`.
 
