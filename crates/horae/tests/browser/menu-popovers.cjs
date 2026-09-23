@@ -11,6 +11,7 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
   page.setDefaultTimeout(30_000);
   page.setDefaultNavigationTimeout(30_000);
   const errors = [], pending = new Set();
+  let navigationRead;
   page.on('request', request => pending.add(request));
   page.on('requestfinished', request => pending.delete(request));
   page.on('requestfailed', request => pending.delete(request));
@@ -19,9 +20,13 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     if (message.type() === 'error' && message.text().includes('panicked at')) console.error(message.text());
   });
   async function visit(path, resource) {
+    // Cancel may have just started this same read on the outgoing document.
+    // Drain it before subscribing, or the next navigation can abort our match.
+    await expect.poll(() => [...pending].filter(request => new URL(request.url()).pathname.startsWith('/api/')).length).toBe(0);
     const ready = page.waitForResponse(r => r.url().includes(`/api/${resource}`) && r.status() === 200);
     await page.goto(`${base}${path}`);
-    await (await ready).finished();
+    navigationRead = await ready;
+    await navigationRead.finished();
   }
   async function check(name, run) {
     console.log(`CHECK: ${name}`);
@@ -35,6 +40,7 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     } catch (error) {
       console.error(`FAIL: ${name}: ${error.message}`, {
         url: page.url(), pending: [...pending].map(request => request.url()), errors,
+        navigationRead: navigationRead && { url: navigationRead.url(), failure: navigationRead.request().failure() },
       });
       // Close the browser in finally rather than overlap a timed-out scenario.
       throw error;
