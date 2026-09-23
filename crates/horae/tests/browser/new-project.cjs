@@ -10,6 +10,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, headless: true });
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  let releaseMenuScript;
   const errors = [];
   const requests = new Map();
   const resources = new Map();
@@ -551,7 +552,11 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
       return route.fulfill({ response, json: { ...options, tasks: [], people: [], more_tasks: true, more_people: true } });
     });
     const selectedReady = page.waitForResponse(response => response.url().includes('/api/project_creation_selection') && response.status() === 200);
-    await page.reload();
+    // The form can become interactive before its shared popover script loads.
+    // Hold that asset through native opening to reproduce the missed toggle.
+    const menuScriptHeld = new Promise(resolve => { releaseMenuScript = resolve; });
+    await page.route('**/assets/menu-*.js', async route => { await menuScriptHeld; await route.continue(); });
+    await page.reload({ waitUntil: 'domcontentloaded' });
     const resolved = await (await selectedReady).json();
     assert.deepEqual(resolved.tasks.map(task => task.name), ['Development']);
     assert.deepEqual(resolved.people.map(person => person.name), ['Admin User']);
@@ -563,7 +568,12 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     const startCalendar = page.getByRole('dialog', { name: 'Choose Start date', exact: true });
     await startDate.focus();
     await startDate.press('Enter');
+    await expect(startCalendar).toBeVisible();
+    await expect(startDate).toHaveAttribute('aria-expanded', 'false');
+    releaseMenuScript();
     await expect(startCalendar.getByRole('button', { name: '1 September 2026', exact: true })).toBeFocused();
+    await expect(startDate).toHaveAttribute('aria-expanded', 'true');
+    await page.unroute('**/assets/menu-*.js');
     // Native opening can focus the old calendar before Dioxus commits its keyed
     // remount. Run that click handler after opening, suppressing only its native
     // toggle, to exercise the same ordering without scheduler-dependent sleeps.
@@ -1390,6 +1400,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
       }), page: await page.locator('body').ariaSnapshot({ timeout: 5000 }).catch(snapshotError => String(snapshotError)) });
     throw error;
   } finally {
+    releaseMenuScript?.();
     await browser.close();
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

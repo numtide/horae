@@ -8,7 +8,12 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
   const page = await browser.newPage({ viewport: { width: 320, height: 1000 }, hasTouch: true });
-  const errors = [], failures = [];
+  page.setDefaultTimeout(30_000);
+  page.setDefaultNavigationTimeout(30_000);
+  const errors = [], pending = new Set();
+  page.on('request', request => pending.add(request));
+  page.on('requestfinished', request => pending.delete(request));
+  page.on('requestfailed', request => pending.delete(request));
   page.on('pageerror', error => errors.push({ url: page.url(), stack: error.stack || error.message }));
   page.on('console', message => {
     if (message.type() === 'error' && message.text().includes('panicked at')) console.error(message.text());
@@ -19,8 +24,21 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     await (await ready).finished();
   }
   async function check(name, run) {
-    try { await run(); console.log(`PASS: ${name}`); }
-    catch (error) { failures.push(name); console.error(`FAIL: ${name}: ${error.message}`); }
+    console.log(`CHECK: ${name}`);
+    let deadline;
+    try {
+      // Response completion and page evaluations have no Playwright action timeout.
+      await Promise.race([run(), new Promise((_, reject) => {
+        deadline = setTimeout(() => reject(new Error('Menu scenario exceeded 60 seconds')), 60_000);
+      })]);
+      console.log(`PASS: ${name}`);
+    } catch (error) {
+      console.error(`FAIL: ${name}: ${error.message}`, {
+        url: page.url(), pending: [...pending].map(request => request.url()), errors,
+      });
+      // Close the browser in finally rather than overlap a timed-out scenario.
+      throw error;
+    } finally { clearTimeout(deadline); }
   }
   async function visibleItems(menu) {
     // Inspect before locator.click/focus can auto-scroll and conceal a clipped menu.
@@ -38,6 +56,30 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin' }).click();
     await page.waitForURL(`${base}/`);
+    await check('late popover initialization restores missing focus without overriding deliberate focus', async () => {
+      await visit('/projects', 'list_projects');
+      const script = await page.locator('script[src]').evaluateAll(scripts => scripts.find(script => /\/menu[^/]*\.js$/.test(script.src)).src);
+      for (const [kind, content] of [
+        ['calendar', '<button id="first" class="dp-day picked">Selected day</button><button id="inside" class="dp-day">Other day</button>'],
+        ['select', '<input id="first" aria-label="Search"><button id="inside" role="option">Choice</button>'],
+        ['menu', '<button id="first" role="menuitem">Edit</button><button id="inside" role="menuitem">Archive</button>'],
+      ]) {
+        for (const destination of ['trigger', 'body', 'inside', 'outside']) {
+          const probe = await browser.newPage();
+          try {
+            await probe.setContent(`<button id="panel-trigger" popovertarget="panel" aria-expanded="false">Open</button><div id="panel" class="menu-popover" popover="auto" data-${kind}="true">${content}</div><button id="outside">Next field</button>`);
+            await probe.locator('#panel-trigger').click();
+            if (destination === 'body') await probe.locator('#panel-trigger').evaluate(button => button.blur());
+            else if (destination !== 'trigger') await probe.locator(`#${destination}`).focus();
+            await probe.addScriptTag({ url: script });
+            await expect(probe.locator(`#${['trigger', 'body'].includes(destination) ? 'first' : destination}`)).toBeFocused();
+            await expect(probe.locator('#panel-trigger')).toHaveAttribute('aria-expanded', String(destination !== 'outside'));
+            if (destination === 'outside') await expect(probe.locator('#panel')).toBeHidden();
+            else await expect(probe.locator('#panel')).toBeVisible();
+          } finally { await probe.close(); }
+        }
+      }
+    });
     await check('content reflow preserves an open menu while deliberate scrolling still dismisses it', async () => {
       await visit('/projects', 'list_projects');
       await page.evaluate(() => document.fonts.ready);
@@ -243,6 +285,5 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
       await expect(calendar).toHaveCount(0);
     });
     assert.deepEqual(errors, []);
-    assert.deepEqual(failures, []);
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -62,19 +62,7 @@
     }
   });
 
-  document.addEventListener('beforetoggle', event => {
-    const menu = event.target;
-    if (!menu.matches(selector)) return;
-    triggerFor(menu).setAttribute('aria-expanded', String(event.newState === 'open'));
-    if (event.newState !== 'open') {
-      resize.unobserve(menu);
-      calendarMounts.get(menu)?.disconnect();
-      calendarMounts.delete(menu);
-      if (isCalendar(menu) || isSelect(menu)) {
-        for (const property of ['left', 'top', 'max-height', 'width']) menu.style.removeProperty(property);
-      }
-      return;
-    }
+  function prepareOpen(menu) {
     position(menu);
     if (isCalendar(menu)) {
       // A keyed calendar can mount after native opening has focused its old
@@ -86,11 +74,9 @@
       mount.observe(menu, { childList: true });
       calendarMounts.set(menu, mount);
     }
-  }, true);
+  }
 
-  document.addEventListener('toggle', event => {
-    const menu = event.target;
-    if (!menu.matches(selector) || !menu.matches(':popover-open')) return;
+  function focusOpen(menu) {
     if (isCalendar(menu)) {
       focusItem(menu, menu.querySelector('.dp-day.picked') || menu.querySelector('.dp-day'));
       return;
@@ -103,6 +89,27 @@
     }
     focusItem(menu, menu.dataset.last === 'true' ? items.at(-1) : items[0]);
     delete menu.dataset.last;
+  }
+
+  document.addEventListener('beforetoggle', event => {
+    const menu = event.target;
+    if (!menu.matches(selector)) return;
+    triggerFor(menu).setAttribute('aria-expanded', String(event.newState === 'open'));
+    if (event.newState === 'open') {
+      prepareOpen(menu);
+    } else {
+      resize.unobserve(menu);
+      calendarMounts.get(menu)?.disconnect();
+      calendarMounts.delete(menu);
+      if (isCalendar(menu) || isSelect(menu)) {
+        for (const property of ['left', 'top', 'max-height', 'width']) menu.style.removeProperty(property);
+      }
+    }
+  }, true);
+
+  document.addEventListener('toggle', event => {
+    const menu = event.target;
+    if (menu.matches(selector) && menu.matches(':popover-open')) focusOpen(menu);
   }, true);
 
   document.addEventListener('keydown', event => {
@@ -198,4 +205,15 @@
     for (const menu of document.querySelectorAll(`${selector}:popover-open`))
       close(menu, menu.contains(document.activeElement));
   });
+
+  // Native controls can open before this asynchronously loaded asset executes.
+  // Adopt their state without taking focus back from a deliberate navigation.
+  for (const menu of document.querySelectorAll(`${selector}:popover-open`)) {
+    triggerFor(menu).setAttribute('aria-expanded', 'true');
+    prepareOpen(menu);
+    if (isSelect(menu)) resize.observe(menu);
+    if (document.activeElement === triggerFor(menu) || document.activeElement === document.body)
+      focusOpen(menu);
+    else if (!menu.contains(document.activeElement)) close(menu);
+  }
 })();
