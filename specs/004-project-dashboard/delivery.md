@@ -97,3 +97,54 @@ Evidence:
 This is not UI or full application acceptance: dashboard integration and all
 remaining delivery slices are still required. Full `nix flake check` remains
 pending; the PR must stay in draft.
+
+## Activity panel integration — 2026-09-29
+
+Project Detail now consumes the authorized activity projection. The panel has
+cumulative and weekly SVG charts, all-time/month/quarter/year presets, explicitly
+applied custom dates, and an expandable semantic table of exact weekly minutes.
+Mode changes reuse the same response. Pending requests compare their interval
+identity before rendering; project navigation resets the keyed page. Invalid
+custom dates preserve the currently applied report and show an associated error.
+
+Framework review: new chart-prefixed rules only for grid geometry and SVG paint;
+spacing, typography and controls reuse utilities. The additive `min-h-control`
+utility uses the existing form-control-height token and is used only by this
+panel. No existing CSS selector, shared component behavior, SQL query, migration,
+dependency, billing rule or imported record changed.
+
+Evidence:
+
+- Seven initial period/geometry tests failed before implementation, then passed.
+  Two additional tests verify the rendered accessible table and empty states.
+- `cargo test -p horae --features server --test detail_navigation`: 35 passed,
+  including all nine panel tests and a new pending/failed project-navigation test.
+- Offline server Clippy, including all targets and performance warnings: passed.
+- App WASM check: passed without the previous unused-activity-DTO warnings.
+- Formatting and whitespace checks passed.
+- Windows Chrome through Playwright MCP: real sign-in and project navigation,
+  normal clicks between chart modes and calendar presets, unchanged activity
+  request count on mode switch, and September filtering verified against SQL.
+  Seeded all-time minutes were 780 (13h); September minutes were 420 (7h).
+- Custom form checks used DOM input/click events in the real browser: reversed
+  dates show validation and retain the previous applied report; 2026-09-29 alone
+  returns 210 minutes (3.5h), matching SQL. These do not constitute a full native
+  date-picker or keyboard audit.
+- The weekly table opens with a real Enter key. At 390px its wider columns scroll
+  inside the table container; at both 390px and 320px the page does not overflow.
+  Desktop and mobile screenshots remain in the root checkout's ignored
+  `.scratch/playwright-windows/project-activity-{desktop,mobile}.png`.
+- Browser response-order check: temporarily delayed one activity fetch in the
+  test tab, observed loading with no stale chart, selected This year, then
+  released the old Last month response. The current year's 13h remained intact.
+  The original fetch function was restored after the check.
+- After the accessibility adjustment, Chrome measured the chart-view buttons and
+  period trigger at 44px tall; the final 320px page still did not overflow.
+- Normal flows reported no application console errors. The log also contains
+  expected development-WebSocket failures during the intentional preview restart
+  and warnings from an unrelated browser extension. These were not hidden.
+
+The full detail layout is not accepted: weekly chart navigation, applicable
+hour-budget overlays, the five summary tiles, Tasks/Team/Invoices breakdowns,
+actions, exports and full cross-screen/Nix acceptance remain outstanding.
+Clients and Settings/Workspace remain required and unimplemented delivery slices.

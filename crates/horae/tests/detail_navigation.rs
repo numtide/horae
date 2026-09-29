@@ -51,6 +51,7 @@ mod task;
 #[path = "../src/models/user.rs"]
 mod user;
 mod models {
+    pub(crate) use super::project;
     pub use super::{
         client::Client,
         project::{
@@ -63,6 +64,7 @@ mod models {
 type InvoiceResponse = Result<invoice::InvoiceWithLines, ServerFnError>;
 type AssignmentResponse = Result<Vec<assignment::Assignment>, ServerFnError>;
 type ProjectDetailsResponse = Result<project::ProjectDetails, ServerFnError>;
+type ActivityResponse = Result<project::ProjectActivity, ServerFnError>;
 
 #[derive(Clone, Default)]
 struct Probe {
@@ -71,11 +73,13 @@ struct Probe {
     assignment_requests: Rc<RefCell<Vec<Uuid>>>,
     detail_requests: Rc<RefCell<Vec<Uuid>>>,
     task_requests: Rc<RefCell<Vec<Uuid>>>,
+    activity_requests: Rc<RefCell<Vec<Uuid>>>,
     navigator: Rc<RefCell<Option<Navigator>>>,
     scope: Rc<RefCell<Option<ScopeId>>>,
     response: Rc<RefCell<Option<oneshot::Receiver<InvoiceResponse>>>>,
     assignment_response: Rc<RefCell<Option<oneshot::Receiver<AssignmentResponse>>>>,
     detail_response: Rc<RefCell<Option<oneshot::Receiver<ProjectDetailsResponse>>>>,
+    activity_response: Rc<RefCell<Option<oneshot::Receiver<ActivityResponse>>>>,
 }
 
 fn app(probe: Probe) -> Element {
@@ -392,6 +396,48 @@ async fn navigating_between_project_ids_loads_current_assignments_and_tasks() {
 }
 
 #[tokio::test]
+async fn pending_or_failed_activity_never_keeps_the_previous_projects_chart() {
+    let first = Uuid::from_u128(1);
+    let second = Uuid::from_u128(2);
+    let probe = Probe {
+        initial_path: Some(format!("/projects/{first}")),
+        ..Probe::default()
+    };
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains("Selected period total: 1h"), "{html}");
+
+    let (send, receive) = oneshot::channel();
+    *probe.activity_response.borrow_mut() = Some(receive);
+    let navigator = probe.navigator.borrow().unwrap();
+    dom.in_scope(probe.scope.borrow().unwrap(), || {
+        navigator.push(route::Route::ProjectDetail { id: second })
+    });
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains("Loading project activity…"), "{html}");
+    assert!(!html.contains("Selected period total:"), "{html}");
+    assert!(!html.contains("Weekly activity —"), "{html}");
+    assert_eq!(*probe.activity_requests.borrow(), [first, second]);
+
+    send.send(Err(ServerFnError::new("Progress permission revoked")))
+        .unwrap();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains("Progress permission revoked"), "{html}");
+    assert!(html.contains("Retry activity"), "{html}");
+    assert!(!html.contains("Selected period total:"), "{html}");
+
+    dom.in_scope(probe.scope.borrow().unwrap(), || navigator.go_back());
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains("Selected period total: 1h"), "{html}");
+    assert!(!html.contains("Progress permission revoked"), "{html}");
+}
+
+#[tokio::test]
 async fn pending_or_failed_project_details_never_show_previous_metadata() {
     let first = Uuid::from_u128(1);
     let second = Uuid::from_u128(2);
@@ -627,6 +673,39 @@ mod server_fns {
             tags: vec![format!("Tag-{}", id.as_u128())],
             admin_notes: None,
         })
+    }
+    pub mod activity {
+        use super::*;
+
+        pub async fn get_project_activity(
+            id: String,
+            interval: Option<project::ProjectActivityInterval>,
+        ) -> Result<project::ProjectActivity, ServerFnError> {
+            let id = Uuid::parse_str(&id).unwrap();
+            let probe = consume_context::<Probe>();
+            probe.activity_requests.borrow_mut().push(id);
+            let response = probe.activity_response.borrow_mut().take();
+            if let Some(response) = response {
+                return response.await.unwrap();
+            }
+            let date = chrono::NaiveDate::from_ymd_opt(2026, 9, 21).unwrap();
+            let interval = interval.unwrap_or(project::ProjectActivityInterval {
+                from: date,
+                to: date,
+            });
+            let minutes = id.as_u128() as i64 * 60;
+            Ok(project::ProjectActivity {
+                interval: Some(interval),
+                week_start: chrono::Weekday::Mon,
+                weeks: vec![project::ProjectActivityWeek {
+                    from: interval.from,
+                    to: interval.to,
+                    billable_minutes: minutes,
+                    non_billable_minutes: 0,
+                    cumulative_minutes: minutes,
+                }],
+            })
+        }
     }
     pub async fn list_project_spend() -> Result<Vec<ProjectSpend>, ServerFnError> {
         Ok(Vec::new())

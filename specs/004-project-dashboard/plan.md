@@ -43,6 +43,22 @@ pure `horae-core`; PostgreSQL-only, macro-checked, org-authorized reads; no new
 mutation surface or dependencies; verification through Nix. No exception
 required. Full-feature gates stay open.
 
+### Activity UI integration
+
+Connect the authorized projection to a scoped Project Detail panel. Use the
+existing menu, input and table components and segmented-control styles. Reporting
+presets and an explicitly applied custom interval feed the same response to the
+chart and its accessible table. Pending/error responses must not reuse previous
+project or period data. Chart mode changes are local and must not refetch data.
+SVG geometry uses integer scaling with widened intermediates; no chart dependency
+or money-to-hours conversion is required. Selected-period cumulative totals must
+be labelled separately from lifetime metrics. Verify date boundaries, zero/large
+values, route/request races, both build targets and the real browser.
+
+This does not waive the separate chart week navigation, applicable hour-budget
+overlay, complete dashboard layout, summaries, breakdowns, exports or remaining
+delivery slices. Those remain required for acceptance.
+
 **Branch**: `feat/project-dashboard` | **Date**: 2026-09-01 | **Spec**: [spec.md](./spec.md)
 
 **Input**: Feature specification from `specs/004-project-dashboard/spec.md`

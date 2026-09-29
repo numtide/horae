@@ -18,6 +18,8 @@ use crate::server_fns;
 use horae_core::money::format_cents;
 use horae_core::types::{BudgetKind, ProjectType};
 
+#[path = "projects/activity.rs"]
+mod activity;
 #[path = "projects/fee_balances.rs"]
 mod fee_balances;
 
@@ -971,6 +973,8 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                     }
                 }
             }
+
+            activity::ProjectActivityPanel { project_id: id }
 
             ProjectTasks {
                 project_id: id,

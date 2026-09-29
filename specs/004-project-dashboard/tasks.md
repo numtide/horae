@@ -23,6 +23,10 @@ F001–F003 does not complete Project Detail or the four-surface delivery.
   progress-permission boundary in `crates/horae/src/server_fns/projects/activity/tests.rs`.
 - [x] F006 [US2] Regenerate `.sqlx/` with server/all-targets against the disposable
   migrated database; check server/WASM builds and update `delivery.md` evidence.
+- [x] F007 [US2] Connect real activity charts, reporting presets/custom dates and
+  an accessible weekly table using shared controls and scoped SVG styling.
+- [x] F008 [US2] Test period/geometry boundaries and request/route transitions;
+  verify server/WASM, framework consistency and Chrome behavior.
 
 **Input**: Design documents from `specs/004-project-dashboard/`
 
