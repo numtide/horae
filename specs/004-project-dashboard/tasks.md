@@ -27,6 +27,11 @@ F001–F003 does not complete Project Detail or the four-surface delivery.
   an accessible weekly table using shared controls and scoped SVG styling.
 - [x] F008 [US2] Test period/geometry boundaries and request/route transitions;
   verify server/WASM, framework consistency and Chrome behavior.
+- [x] F009 [US1] Extend the authorized identity projection and implement the
+  design header with real client/type/status, permission-gated edit navigation
+  and confirmed archive/reactivate using the existing server action.
+- [ ] F010 [US1] Verify identity/role/archive/route behavior, SQLx metadata,
+  server/WASM and responsive browser layout; record evidence in `delivery.md`.
 
 **Input**: Design documents from `specs/004-project-dashboard/`
 

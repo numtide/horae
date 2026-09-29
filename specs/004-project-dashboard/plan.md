@@ -61,6 +61,21 @@ delivery slices. Those remain required for acceptance.
 
 **Branch**: `feat/project-dashboard` | **Date**: 2026-09-01 | **Spec**: [spec.md](./spec.md)
 
+### Project identity integration
+
+Replace the generic detail title and metadata card with the handoff header:
+back navigation, client link, code/name, type, status and manager-only edit link.
+Keep saved dates, currency, tags and administrator-only notes. Extend the existing
+authorized details projection with client ID, project type and active status;
+do not widen progress access or expose additional private fields. Reuse the edit
+route and utility CSS. Wire existing archive/reactivate through the shared menu
+and native confirmation dialog, with duplicate-submit protection, visible errors,
+safe retry and explicit success. No additional lifecycle policy or mutation API.
+Test header identity, role gating, archived projects,
+failed/pending route transitions and navigation highlighting; regenerate SQLx
+metadata and verify both targets and the browser. Pin/duplicate/delete actions, financial
+summaries and all other dashboard/delivery requirements remain open.
+
 **Input**: Feature specification from `specs/004-project-dashboard/spec.md`
 
 ## Summary

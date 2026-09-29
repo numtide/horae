@@ -1,0 +1,108 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT p.id, p.name, p.code, p.client_id, c.name AS client_name, p.currency,\n            p.project_type as \"project_type: ProjectType\", p.active,\n            CASE WHEN u.org_role IN ('admin', 'manager')\n              AND p.project_type <> 'non_billable'\n              AND (settings.project_id IS NULL\n                OR (p.project_type = 'time_and_materials' AND settings.rate_mode = 'task'))\n              THEN p.currency END AS task_rate_currency,\n            p.starts_on as \"starts_on: chrono::NaiveDate\",\n            p.ends_on as \"ends_on: chrono::NaiveDate\",\n            ARRAY(SELECT t.name FROM project_tag_links l\n                JOIN project_tags t ON t.id = l.tag_id AND t.org_id = l.org_id\n                WHERE l.project_id = p.id AND l.org_id = p.org_id\n                ORDER BY lower(t.name), t.id) as \"tags!\",\n            CASE WHEN u.org_role = 'admin' THEN private.admin_notes END AS admin_notes\n        FROM projects p\n        JOIN clients c ON c.id = p.client_id AND c.org_id = p.org_id\n        JOIN project_read_access a ON a.project_id = p.id AND a.org_id = p.org_id\n        JOIN users u ON u.id = a.user_id AND u.org_id = a.org_id\n        LEFT JOIN project_private_settings private ON private.project_id = p.id AND private.org_id = p.org_id\n        LEFT JOIN project_settings settings ON settings.project_id = p.id AND settings.org_id = p.org_id\n        WHERE p.org_id = $1 AND a.user_id = $2 AND p.id = $3 AND a.can_view_progress",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "client_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "client_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "currency",
+        "type_info": "Bpchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "project_type: ProjectType",
+        "type_info": {
+          "Custom": {
+            "name": "project_type",
+            "kind": {
+              "Enum": [
+                "time_and_materials",
+                "fixed_fee",
+                "non_billable",
+                "retainer"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "task_rate_currency",
+        "type_info": "Bpchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "starts_on: chrono::NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 10,
+        "name": "ends_on: chrono::NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 11,
+        "name": "tags!",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 12,
+        "name": "admin_notes",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      true,
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "e18c1816605d08ea99e9e69a2d252d2a2827b04d820e094deb7b967ef5fd09eb"
+}

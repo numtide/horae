@@ -48,6 +48,13 @@ async fn project_details_only_offer_task_rate_currency_to_current_managers(pool:
                     .await
                     .unwrap()
                     .unwrap();
+                let identity = serde_json::to_value(&details).unwrap();
+                assert_eq!(
+                    identity["project_type"],
+                    serde_json::to_value(project_type).unwrap()
+                );
+                assert_eq!(identity["client_id"], ids.client_id.to_string());
+                assert_eq!(identity["active"], true);
                 let json = serde_json::to_value(details).unwrap();
                 let expected = if role != OrgRole::Member
                     && project_type != ProjectType::NonBillable
@@ -109,6 +116,20 @@ async fn project_details_and_tags_follow_current_progress_and_private_permission
     assert_eq!(details.client_name, "Acme");
     assert_eq!(details.tags, ["Launch"]);
     assert_eq!(details.admin_notes.as_deref(), Some("Private launch plan"));
+    sqlx::query!(
+        "UPDATE projects SET active = false WHERE id = $1",
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let archived = fetch_project_details(&pool, ids.org_id, ids.user_id, ids.project_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(!archived.active);
+    assert_eq!(archived.client_id, ids.client_id);
+    assert_eq!(archived.project_type, ProjectType::TimeAndMaterials);
     let tags = fetch_project_tags(&pool, ids.org_id, ids.user_id)
         .await
         .unwrap();

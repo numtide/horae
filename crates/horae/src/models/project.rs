@@ -92,7 +92,10 @@ pub struct ProjectDetails {
     pub id: Uuid,
     pub name: String,
     pub code: Option<String>,
+    pub client_id: Uuid,
     pub client_name: String,
+    pub project_type: ProjectType,
+    pub active: bool,
     pub currency: String,
     /// Present only when this manager can supply rates for new task links.
     #[serde(skip_serializing_if = "Option::is_none")]

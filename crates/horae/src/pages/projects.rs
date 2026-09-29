@@ -934,6 +934,15 @@ fn ProjectDetailContent(id: Uuid) -> Element {
     let action_error = use_signal(|| None::<String>);
 
     let is_admin = is_admin(&me);
+    let mut status_action = use_signal(|| None::<bool>);
+    let mut status_busy = use_signal(|| false);
+    let mut status_error = use_signal(|| None::<String>);
+    let mut status_success = use_signal(|| None::<String>);
+    let status_verb = if status_action() == Some(true) {
+        "Reactivate"
+    } else {
+        "Archive"
+    };
 
     // Build a lookup from user_id -> user name
     let users_map: std::collections::HashMap<uuid::Uuid, String> = match &*users_res.read() {
@@ -956,20 +965,85 @@ fn ProjectDetailContent(id: Uuid) -> Element {
 
     rsx! {
         div {
-            div { class: "page-header",
-                h1 { class: "page-title", "Project" }
+            Link {
+                id: "project-detail-back",
+                to: Route::ProjectList {},
+                class: "btn btn-ghost text-sm text-muted font-normal border-0 px-2.5 py-1.5 -ml-2.5 min-h-control",
+                span { class: "inline-flex", aria_hidden: "true", NavIcon { name: "arrow-left", class: "size-4" } }
+                "Back to Projects"
             }
-            section { class: "card p-5 wrap-anywhere", aria_label: "Project details",
+            section { class: "mt-5 pb-6 border-b border-light wrap-anywhere", aria_label: "Project details",
                 if details.state()() != UseResourceState::Ready {
                     p { role: "status", "Loading project details…" }
                 } else {
                     match &*details.read() {
-                        Some(Ok(project)) => rsx! { SavedProjectDetails { project: project.clone() } },
+                        Some(Ok(project)) => rsx! {
+                            SavedProjectDetails {
+                                project: project.clone(), can_manage: is_manager(&me), busy: status_busy(),
+                                on_status_change: move |active| {
+                                    if status_busy() { return; }
+                                    status_error.set(None);
+                                    status_success.set(None);
+                                    status_action.set(Some(active));
+                                },
+                            }
+                        },
                         Some(Err(error)) => rsx! {
                             p { class: "text-danger", role: "alert", "Could not load project details: {error}" }
                             button { r#type: "button", class: "btn btn-secondary btn-sm", onclick: move |_| details.restart(), "Retry details" }
                         },
                         None => rsx! {},
+                    }
+                }
+            }
+
+            if let Some(message) = status_success() {
+                p { class: "text-sm text-primary mt-4", role: "status", "{message}" }
+            }
+            Modal {
+                id: "project-status-dialog", labelledby: "project-status-title",
+                focus_fallback: "project-detail-back",
+                open: status_action().is_some(), busy: status_busy(),
+                on_dismiss: move |_| status_action.set(None),
+                h2 { id: "project-status-title", class: "modal-title m-0", "{status_verb} project?" }
+                div { class: "modal-body",
+                    if let Some(Ok(project)) = details.read().as_ref() {
+                        p { class: "text-sm font-semibold wrap-anywhere", "{project.name}" }
+                    }
+                    p { class: "text-sm text-secondary", "Only project status changes. Existing time entries, invoices and budgets are kept." }
+                    if let Some(message) = status_error() {
+                        p { class: "alert alert-danger", role: "alert", "Could not confirm project status: {message}. You can retry safely or cancel and refresh." }
+                    }
+                    div { class: "modal-actions",
+                        button {
+                            id: "project-status-confirm", r#type: "button", class: "btn btn-primary min-h-control",
+                            disabled: status_busy() || !is_manager(&me),
+                            onclick: move |_| {
+                                if status_busy() || !is_manager(&me) { return; }
+                                let Some(active) = status_action() else { return; };
+                                status_busy.set(true);
+                                status_error.set(None);
+                                spawn(async move {
+                                    match server_fns::set_project_active(id.to_string(), active).await {
+                                        Ok(project) => {
+                                            // Keep the menu mounted so the dialog can restore focus.
+                                            if let Some(Ok(current)) = details.write().as_mut() {
+                                                current.active = project.active;
+                                            }
+                                            status_action.set(None);
+                                            status_success.set(Some(if active { "Project reactivated." } else { "Project archived." }.into()));
+                                        }
+                                        Err(error) => status_error.set(Some(error.to_string())),
+                                    }
+                                    status_busy.set(false);
+                                });
+                            },
+                            if status_busy() { "Updating project…" } else { "{status_verb} project" }
+                        }
+                        button {
+                            r#type: "button", class: "btn btn-secondary min-h-control", disabled: status_busy(),
+                            onclick: move |_| status_action.set(None), "Cancel"
+                        }
                     }
                 }
             }
@@ -1118,29 +1192,66 @@ fn matching_tag_projects(links: &[ProjectTagLink], selected: Option<Uuid>) -> BT
 }
 
 #[component]
-fn SavedProjectDetails(project: ProjectDetails) -> Element {
+fn SavedProjectDetails(
+    project: ProjectDetails,
+    can_manage: bool,
+    busy: bool,
+    on_status_change: EventHandler<bool>,
+) -> Element {
+    let title = match project.code.as_deref().filter(|code| !code.is_empty()) {
+        Some(code) => format!("[{code}] {}", project.name),
+        None => project.name.clone(),
+    };
     rsx! {
-        h2 { class: "text-xl m-0 mb-4", "{project.name}" }
-        dl { class: "grid sm:grid-cols-2 gap-4 m-0",
-            div { dt { class: "text-sm text-subtle", "Client" } dd { class: "m-0", "{project.client_name}" } }
-            div { dt { class: "text-sm text-subtle", "Code" } dd { class: "m-0 font-mono", "{project.code.as_deref().unwrap_or(\"—\")}" } }
-            div { dt { class: "text-sm text-subtle", "Currency" } dd { class: "m-0", "{project.currency}" } }
-            div { dt { class: "text-sm text-subtle", "Planning dates" }
-                dd { class: "m-0",
-                    "{project.starts_on.map(|date| date.format(\"%d %b %Y\").to_string()).unwrap_or_else(|| \"No start date\".into())} — "
-                    "{project.ends_on.map(|date| date.format(\"%d %b %Y\").to_string()).unwrap_or_else(|| \"No end date\".into())}"
+        header { class: "flex flex-col lg:flex-row items-end gap-4",
+            div { class: "flex-1 min-w-0 w-full",
+                if can_manage {
+                    Link { to: Route::ClientDetail { id: project.client_id }, class: "text-sm font-semibold", "{project.client_name}" }
+                } else {
+                    span { class: "text-sm font-semibold text-muted", "{project.client_name}" }
+                }
+                div { class: "flex flex-wrap items-center gap-3 mt-2",
+                    h1 { class: "font-display text-4xl font-semibold text-strong tracking-tight m-0", "{title}" }
+                    span { class: "chip chip-plain whitespace-nowrap", "{project.project_type.label()}" }
+                }
+                p { class: "text-sm text-muted m-0 mt-2",
+                    if project.active { "Active" } else { "Archived" }
+                    " · {project.currency}"
+                }
+            }
+            if can_manage {
+                div { class: "flex flex-wrap items-center gap-3",
+                    Link { to: Route::EditProject { id: project.id }, class: "btn btn-secondary min-h-control", "Edit project" }
+                    Menu { id: "project-detail-actions", label: "Actions", align_right: true,
+                        trigger_class: "min-h-control", disabled: busy,
+                        MenuItem { disabled: busy, onclick: move |_| on_status_change.call(!project.active),
+                            if project.active { "Archive" } else { "Reactivate" }
+                        }
+                    }
                 }
             }
         }
-        div { class: "mt-4",
-            h3 { class: "text-sm text-subtle m-0 mb-2", "Tags" }
-            if project.tags.is_empty() { p { class: "text-sm m-0", "No tags" } }
-            else { div { class: "flex flex-wrap gap-2", for tag in project.tags { span { class: "chip", "{tag}" } } } }
-        }
-        if let Some(notes) = project.admin_notes.filter(|notes| !notes.is_empty()) {
+        details { class: "mt-4 text-sm",
+            summary { class: "cursor-pointer text-muted", "Project information" }
+            dl { class: "grid sm:grid-cols-2 gap-4 m-0 mt-4",
+                div { dt { class: "text-sm text-subtle", "Currency" } dd { class: "m-0", "{project.currency}" } }
+                div { dt { class: "text-sm text-subtle", "Planning dates" }
+                    dd { class: "m-0",
+                        "{project.starts_on.map(|date| date.format(\"%d %b %Y\").to_string()).unwrap_or_else(|| \"No start date\".into())} — "
+                        "{project.ends_on.map(|date| date.format(\"%d %b %Y\").to_string()).unwrap_or_else(|| \"No end date\".into())}"
+                    }
+                }
+            }
             div { class: "mt-4",
-                h3 { class: "text-sm text-subtle m-0 mb-2", "Administrator notes" }
-                for line in notes.lines() { p { class: "text-sm m-0", "{line}" } }
+                h3 { class: "text-sm text-subtle m-0 mb-2", "Tags" }
+                if project.tags.is_empty() { p { class: "text-sm m-0", "No tags" } }
+                else { div { class: "flex flex-wrap gap-2", for tag in project.tags { span { class: "chip", "{tag}" } } } }
+            }
+            if let Some(notes) = project.admin_notes.filter(|notes| !notes.is_empty()) {
+                div { class: "mt-4",
+                    h3 { class: "text-sm text-subtle m-0 mb-2", "Administrator notes" }
+                    for line in notes.lines() { p { class: "text-sm m-0", "{line}" } }
+                }
             }
         }
     }

@@ -122,7 +122,8 @@ async fn fetch_project_details(
 ) -> Result<Option<ProjectDetails>, sqlx::Error> {
     sqlx::query_as!(
         ProjectDetails,
-        r#"SELECT p.id, p.name, p.code, c.name AS client_name, p.currency,
+        r#"SELECT p.id, p.name, p.code, p.client_id, c.name AS client_name, p.currency,
+            p.project_type as "project_type: ProjectType", p.active,
             CASE WHEN u.org_role IN ('admin', 'manager')
               AND p.project_type <> 'non_billable'
               AND (settings.project_id IS NULL

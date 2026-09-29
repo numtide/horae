@@ -148,3 +148,52 @@ The full detail layout is not accepted: weekly chart navigation, applicable
 hour-budget overlays, the five summary tiles, Tasks/Team/Invoices breakdowns,
 actions, exports and full cross-screen/Nix acceptance remain outstanding.
 Clients and Settings/Workspace remain required and unimplemented delivery slices.
+
+## Project identity and lifecycle — 2026-09-29
+
+Replace the generic detail title/card with the handoff's client link, code/name,
+type and manager-only Edit/Actions controls. Show actual active/archived status
+and currency; retain planning dates, tags and authorized administrator notes in
+an expandable information section. Keep Projects highlighted on detail routes.
+The existing scoped details query supplies client ID, project type and status;
+its access predicate and private-field policy are unchanged.
+
+Archive/reactivate reuses the existing server action with native confirmation,
+pending protection, visible error/retry and success feedback. Update status from
+the successful server response without unmounting the header: unmounting it for
+a refetch removed the dialog's focus-return target. No additional action policy,
+schema, dependency or shared CSS behavior was introduced. Responsive layout uses
+only existing utilities; a 320px check caught and corrected title compression.
+
+Evidence:
+
+- Identity UI and SQL tests failed before implementation. Final detail navigation
+  suite: 37 passed, including administrator/manager/member links, archived/no-code
+  identity and pending/failed routes without stale edit links.
+- Two PostgreSQL details tests passed, covering type/rate combinations, current
+  roles, private notes, archived records, foreign organizations and inactive users.
+- The complete Projects server regression passed again on the final code:
+  66 tests, including activity, privacy, assignment, mutation and bulk operations.
+- Three navigation-highlighting tests passed.
+- SQLx cache regenerated with server/all-targets: replace the details-query cache;
+  no migration or other query changed.
+- Final all-target server Clippy (warnings/performance), app WASM check and
+  formatting passed.
+- Chrome MCP on the disposable demo verified confirmation/cancel, a deliberately
+  failed transport, visible retry, a held retry with duplicate-submit suppression,
+  disabled controls and cancellation prevention while pending, and successful
+  archive/reactivate. Restore the original fetch function after fault injection.
+- SQL before/after the lifecycle cycle retained five entries, 780 actual minutes,
+  three enabled tasks and one assignment, and returned the project to active.
+- Keeping the header mounted restored focus to the Actions trigger after both
+  archive and reactivation. The edit link opened the shared editor with the
+  saved project name and code, without saving any edit.
+- Computed Chrome layout checks at 320/390/768/1440px showed no horizontal page
+  overflow, a usable title width and a 44px Actions trigger. These measurements
+  are not a substitute for foreground screenshots or 200%/keyboard acceptance.
+
+Browser checks in this increment used DOM events: Chrome reported the page
+hidden and stopped delivering animation frames; normal Playwright clicks and
+screenshots timed out. This is not full visual/keyboard acceptance. The broader
+dashboard, Clients and Settings/Workspace delivery remains incomplete, and the
+PR stays in draft.

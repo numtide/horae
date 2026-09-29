@@ -68,6 +68,7 @@ type ActivityResponse = Result<project::ProjectActivity, ServerFnError>;
 
 #[derive(Clone, Default)]
 struct Probe {
+    viewer_role: Option<OrgRole>,
     initial_path: Option<String>,
     requests: Rc<RefCell<Vec<Uuid>>>,
     assignment_requests: Rc<RefCell<Vec<Uuid>>>,
@@ -116,8 +117,15 @@ mod route {
         EditProject { id: Uuid },
         #[route("/projects/:id")]
         ProjectDetail { id: Uuid },
+        #[route("/clients/:id")]
+        ClientDetail { id: Uuid },
         #[route("/admin/importers")]
         HarvestImport {},
+    }
+
+    #[component]
+    fn ClientDetail(id: Uuid) -> Element {
+        rsx! { h1 { "Client {id}" } }
     }
 
     #[component]
@@ -438,6 +446,71 @@ async fn pending_or_failed_activity_never_keeps_the_previous_projects_chart() {
 }
 
 #[tokio::test]
+async fn project_header_has_identity_and_manager_only_edit_navigation() {
+    let id = Uuid::from_u128(1);
+    for role in [OrgRole::Admin, OrgRole::Manager, OrgRole::Member] {
+        let probe = Probe {
+            initial_path: Some(format!("/projects/{id}")),
+            viewer_role: Some(role),
+            ..Probe::default()
+        };
+        let mut dom = VirtualDom::new_with_props(app, probe);
+        dom.rebuild_in_place();
+        settle(&mut dom);
+        let html = dioxus::ssr::render(&dom);
+        assert!(html.contains("Back to Projects"), "{html}");
+        assert!(html.contains("[CODE-1] Project-1"), "{html}");
+        assert!(html.contains("Time &#38; Materials"), "{html}");
+        assert!(html.contains("Active"), "{html}");
+        assert_eq!(
+            html.contains("project-detail-actions-trigger"),
+            role != OrgRole::Member,
+            "{html}"
+        );
+        assert_eq!(
+            html.contains(&format!("href=\"/clients/{}\"", Uuid::from_u128(400))),
+            role != OrgRole::Member,
+            "{html}",
+        );
+        assert_eq!(
+            html.contains(&format!("href=\"/projects/{id}/edit\"")),
+            role != OrgRole::Member,
+            "{html}",
+        );
+    }
+}
+
+#[tokio::test]
+async fn archived_project_header_without_code_preserves_edit_and_reactivation() {
+    let id = Uuid::from_u128(2);
+    let probe = Probe {
+        initial_path: Some(format!("/projects/{id}")),
+        ..Probe::default()
+    };
+    let mut project = server_fns::project_details(id);
+    project.code = None;
+    project.active = false;
+    project.project_type = horae_core::types::ProjectType::FixedFee;
+    let (send, receive) = oneshot::channel();
+    *probe.detail_response.borrow_mut() = Some(receive);
+    send.send(Ok(project)).unwrap();
+    let mut dom = VirtualDom::new_with_props(app, probe);
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains(">Project-2</h1>"), "{html}");
+    assert!(
+        html.contains("Fixed Fee") && html.contains("Archived"),
+        "{html}"
+    );
+    assert!(
+        html.contains("Reactivate") && html.contains("Edit project"),
+        "{html}"
+    );
+    assert!(!html.contains("CODE-2") && !html.contains("[]"), "{html}");
+}
+
+#[tokio::test]
 async fn pending_or_failed_project_details_never_show_previous_metadata() {
     let first = Uuid::from_u128(1);
     let second = Uuid::from_u128(2);
@@ -461,6 +534,7 @@ async fn pending_or_failed_project_details_never_show_previous_metadata() {
     assert!(html.contains("Loading project details"), "{html}");
     assert!(!html.contains("project-task-rate"), "{html}");
     assert!(!html.contains("Enable task"), "{html}");
+    assert!(!html.contains("Edit project"), "{html}");
     assert!(
         !html.contains("CODE-1") && !html.contains("Tag-1"),
         "{html}"
@@ -475,6 +549,7 @@ async fn pending_or_failed_project_details_never_show_previous_metadata() {
     );
     assert!(!html.contains("project-task-rate"), "{html}");
     assert!(!html.contains("Enable task"), "{html}");
+    assert!(!html.contains("Edit project"), "{html}");
     assert!(
         !html.contains("CODE-1") && !html.contains("Tag-1"),
         "{html}"
@@ -583,7 +658,12 @@ mod server_fns {
     }
 
     pub async fn get_me() -> Result<User, ServerFnError> {
-        Ok(user(300, OrgRole::Admin))
+        Ok(user(
+            300,
+            consume_context::<Probe>()
+                .viewer_role
+                .unwrap_or(OrgRole::Admin),
+        ))
     }
 
     pub async fn list_users(_archived: bool) -> Result<Vec<User>, ServerFnError> {
@@ -661,18 +741,25 @@ mod server_fns {
         if let Some(response) = response {
             return response.await.unwrap();
         }
-        Ok(project::ProjectDetails {
+        Ok(project_details(id))
+    }
+
+    pub(super) fn project_details(id: Uuid) -> project::ProjectDetails {
+        project::ProjectDetails {
             id,
             name: format!("Project-{}", id.as_u128()),
             code: Some(format!("CODE-{}", id.as_u128())),
+            client_id: Uuid::from_u128(400),
             client_name: "Client".into(),
+            project_type: horae_core::types::ProjectType::TimeAndMaterials,
+            active: true,
             currency: "EUR".into(),
             task_rate_currency: Some("EUR".into()),
             starts_on: None,
             ends_on: None,
             tags: vec![format!("Tag-{}", id.as_u128())],
             admin_notes: None,
-        })
+        }
     }
     pub mod activity {
         use super::*;
@@ -714,7 +801,7 @@ mod server_fns {
     -> Result<Vec<crate::models::ProjectBudgetProgress>, ServerFnError> {
         Ok(Vec::new())
     }
-    pub async fn set_project_active(_id: String, _active: bool) -> Result<(), ServerFnError> {
+    pub async fn set_project_active(_id: String, _active: bool) -> Result<Project, ServerFnError> {
         panic!("unexpected mutation");
     }
     pub async fn set_projects_active(

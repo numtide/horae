@@ -100,7 +100,7 @@ fn matches_navigation(to: &Route, current: &Route) -> bool {
         (to, current),
         (
             Route::ProjectList {},
-            Route::NewProject {} | Route::EditProject { .. }
+            Route::NewProject {} | Route::EditProject { .. } | Route::ProjectDetail { .. }
         )
     ) || std::mem::discriminant(current) == std::mem::discriminant(to)
 }
@@ -108,6 +108,14 @@ fn matches_navigation(to: &Route, current: &Route) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn project_detail_highlights_only_projects() {
+        let route = Route::ProjectDetail { id: Uuid::now_v7() };
+        assert!(matches_navigation(&Route::ProjectList {}, &route));
+        assert!(!matches_navigation(&Route::ClientList {}, &route));
+        assert!(!matches_navigation(&Route::InvoiceList {}, &route));
+    }
 
     #[test]
     fn new_project_is_static_and_highlights_only_projects() {
