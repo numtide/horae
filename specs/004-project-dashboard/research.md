@@ -1,83 +1,149 @@
 # Phase 0 Research: Project Detail Dashboard
 
-All spec ambiguities were resolved in the `## Clarifications` session; no `NEEDS CLARIFICATION` remain. This file records the technical decisions and, crucially, the **data-source map** that proves every figure is computable from the current schema (data-honesty), plus what is deferred and why.
+Reconciled 2026-09-29 against `9301112`, the expanded specification and
+[Harvest MCP observations and official references](harvest-reference.md).
+This replaces the obsolete no-chart/no-period research. Phase 0 is not complete:
+PD-001 and the imported-billing conflict below still need resolution before the
+full plan passes its gate. No application changes are claimed.
 
-## References
+## D1 — Reuse valuation; preserve separate accounting bases
 
-- **Harvest gap report** — `.scratch/harvest-gap-analysis.md`, *Projects / budgets / rates* section and top recommendation #1: "Ship the project detail dashboard — progress + per-task billable/non-billable breakdown + invoiced/uninvoiced. Data already exists (spend, tasks, invoices); the page is a stub. Biggest value for least new backend." Harvest's project detail shows: progress vs budget, hours-per-week bar chart, per-task and per-person billable/non-billable breakdown (hours + amount), invoiced/uninvoiced, and rates. This feature adopts the **computable** subset and defers the charting/forecasting subset.
-- **Design** — `design/project/app/Horae Projects.dc.html` is the Projects **list** screen (table with Budget / Spent / Budget-remaining columns, progress bar `proj-bar`/`proj-bar-fill`, Actions menu, export modal). There is **no dedicated detail mockup**; the dashboard reuses the list's visual language (cards, `proj-bar`, mono figures, badges) at implementation time per the repo's design-implement rule.
-- **Existing code** — `crates/horae/src/pages/projects.rs` (`ProjectDetail` stub + `ProjectList` with `row_spend`), `crates/horae/src/server_fns/projects.rs` (`list_project_spend`), `crates/core/src/invoice.rs` (`resolve_rate`, `line_amount_cents`), `crates/horae/migrations/0001_init.sql` + `0002_invoices.sql`.
+**Decision:** Preserve `server_fns/projects.rs::fetch_project_spend` semantics:
+actual tracked minutes, attached gross invoice-line amount where applicable,
+otherwise per-entry `effective_minutes`, `resolve_project_rate` and checked
+`line_amount_cents`. Keep the batched SQL list aggregate; do not fetch all raw
+entries merely to share a dashboard DTO.
 
-## D1 — Data-source map (the data-honesty core)
+**Rationale:** Configured billing modes and currency-safe inherited rates supersede
+the historical three-level cascade. `crates/core/src/invoice.rs` contains pure
+rules; migrations `0017`, `0018` and `0031` provide SQL counterparts. Billing
+rounds each entry, not the summed total. Budgets retain their own scope and reset
+period through `server_fns/budgets.rs`.
 
-**Decision**: Every dashboard figure maps to an existing column. Nothing is invented.
+**Alternative rejected:** Equating live tracked value, budget consumption and net
+invoice revenue. Discounts, fixed fees, rate changes and voids separate them.
 
-| Dashboard figure | Source (existing columns) | Derivation |
-|---|---|---|
-| Name, code, type, currency, active, start/end | `projects.name/code/project_type/currency/active/starts_on/ends_on` | direct |
-| Client | `clients.name` via `projects.client_id` | direct join |
-| Budget kind + budget | `projects.budget_kind`, `budget_minutes` (hours), `budget_amount_cents` (amount) | direct |
-| Total / billable / non-billable hours | `time_entries.minutes`, `time_entries.billable` (for the project) | sum minutes; split by `billable` |
-| Billable amount (spent) | per entry: `project_tasks.rate_cents` → `assignments.rate_cents` → `users.billable_rate_cents`, then `line_amount_cents(rate, minutes)` | FR-024 cascade, summed over billable entries |
-| Progress % | spent ÷ budget (hours-spent ÷ `budget_minutes`, or amount-spent ÷ `budget_amount_cents`) | clamp bar to 100% |
-| Invoiced amount | `invoice_line_items.amount_cents` for lines whose `time_entry` belongs to the project | sum (authoritative — what was billed) |
-| Uninvoiced amount | resolved billable value of billable entries with `invoice_id IS NULL` | cascade + `line_amount_cents` |
-| By-task breakdown | group the same per-entry rows by `time_entries.task_id` | sum minutes/billable-split/amount per task |
-| By-person breakdown | group by `time_entries.user_id` | sum minutes/billable-split/amount per person |
-| Team | `assignments` (already shown today) + `users.name`, role | direct |
-| Enabled tasks | `project_tasks` (`billable`, `rate_cents`) + `tasks.name` | direct |
-| Recent entries | latest `time_entries` for the project | order by `spent_date desc` (then `created_at desc`), limit N |
+## D2 — Stored contributions and fee balances are authoritative
 
-**Rationale**: This table is the contract that keeps the feature honest — a reviewer can check each row against `0001_init.sql`/`0002_invoices.sql`. Anything not on this table is deferred (D6), not faked.
+**Decision:** Attribute lines through their time-entry or fee-occurrence source.
+Sum `invoice_line_items.net_before_tax_cents`, distinguishing draft reservations,
+other non-void contributions and void history. Label amounts after discount and
+before tax; whole mixed-project invoice totals are not project revenue.
 
-## D2 — Spend basis reuses the Projects-list rollup
+**Rationale:** Migration `0040_invoice_fee_balances.sql` stores allocated discounts
+and net contributions. Invoice-level taxes have no per-project allocation rule.
+Reuse `server_fns/invoices/fees.rs::preview_fees` and the read-only transaction in
+`projects.rs::fetch_project_fee_balances`. Reads must not materialize occurrences.
+Preserve negative remaining balances and the special zero-fee availability case.
 
-**Decision**: Hours and billable amount use **precise `minutes`** and the **same FR-024 cascade** already implemented in `list_project_spend` (`resolve_rate` then `line_amount_cents`, summed in Rust). Extract that fold into a pure `horae-core` helper (`project_rollup`) and have both `list_project_spend` and the dashboard call it.
+Monthly fees honor both interval boundaries; single/milestone balances may include
+overdue occurrences through the upper boundary. Label this separately from time
+charts. Preview's 10,000-entry/occurrence bounds cannot silently truncate analytics.
 
-**Rationale**: SC-002 requires the dashboard "Spent" to equal the list "Spent" exactly. Sharing one tested implementation makes drift impossible. `list_project_spend` already resolves rates in Rust after a single flat `LEFT JOIN` query (project_tasks / assignments / users) — the dashboard needs the identical per-entry row plus `task_id`/`user_id`/`billable`/`spent_date`/`invoice_id` to also produce the groupings, so it is the same query shape with a few more selected columns.
+**Alternatives rejected:** Gross amounts for net invoiced totals, current rates for
+historical invoices, or subtracting tracked value from agreed fees.
 
-**Alternatives considered**: rounded/locked `rounded_minutes` — rejected; the list uses precise `minutes`, and mixing bases would make the two screens disagree. Aggregating money in SQL (`SUM`) — rejected; rate resolution is a first-non-null cascade across three nullable sources plus banker's-rounding `line_amount_cents`, which is exactly the pure logic the constitution (II) wants in `horae-core`, not duplicated in SQL.
+## D3 — Imported billing conflicts with the expanded specification
 
-## D3 — Invoiced is authoritative from line items; uninvoiced is derived
+**Evidence:** `specs/004-harvest-importer/spec.md` FR-016 explicitly imports entries
+as locally open, without a local invoice. `importers/harvest/api_source.rs` parses
+`SourceRow.invoiced`, but `apply.rs::upsert_time_entry` does not persist it.
+`harvest_import_map` is provenance, not an external-billing ledger.
 
-**Decision**: Invoiced = `SUM(invoice_line_items.amount_cents)` for lines linking the project's entries. Uninvoiced = resolved billable value (cascade) of the project's billable entries with `time_entries.invoice_id IS NULL`.
+The expanded dashboard's US3 scenario 3 / FR-011 cannot promise exclusion of
+externally billed entries with current data. This follows the approved importer
+contract and is not evidence of an importer implementation bug.
 
-**Rationale**: `invoice_line_items.amount_cents` is what was actually billed and must not be re-derived (rates may change after invoicing). Uninvoiced work has no line item yet, so it must be estimated at current resolvable rates — the same basis as "spent". Invoiced + uninvoiced then reconciles to total billable amount for entries at stable rates (SC-004). The link is unambiguous: `time_entries.invoice_id` is set when an entry is invoiced (0002 adds the FK), and `invoice_line_items.time_entry_id` references the entry.
+**Recommendation pending reconciliation:** Preserve local eligibility and label it
+“not invoiced in Horae”; identify imported history whose external status is
+unknown. Do not silently change generation through a dashboard feature.
+If external-billing exclusion is chosen, amend the importer contract, persist
+true/false/unknown provenance and update generation and display together. Never
+invent a historical billed status for earlier imports.
 
-**Edge**: an entry could in principle be billable, invoiced, yet its current resolved rate differs from the stored line amount. Invoiced always uses the stored amount; only uninvoiced uses live rates — so the number a manager acts on ("still to bill") is a current estimate while "already billed" is historical fact.
+Local eligibility lives in `server_fns/invoices/entries.rs::read`: billable
+entry/task, not running, no local invoice, open or approved (not submitted),
+compatible project billing type and inclusive work-date interval. Missing rates
+must remain incomplete, not a confident zero.
 
-## D4 — Unresolvable rates and money visibility read as "—"
+## D4 — Permissions are not one financial-access flag
 
-**Decision**: An entry whose rate is `None` at every cascade level contributes 0 to amount but still counts its hours; the section flags that money may be incomplete. Where the viewer is not entitled to see money (reusing Horae's existing money-visibility policy), all amounts render as "—" while hours/identity stay visible.
+**Decision:** Use active-user checks and `project_read_access`
+(`0035_project_read_access.sql`) before loading dashboard/export data.
 
-**Rationale**: FR-014 — showing a confident `0` for missing rates would mislead. "—" plus a flag is honest. This mirrors how the Projects list already tolerates missing rates (`resolve_rate(...).unwrap_or(0)` sums 0) but the dashboard additionally surfaces the gap so a manager knows to set rates rather than trust an understated total.
+| Viewer | Progress | Rates/invoices | Recent notes |
+|---|---|---|---|
+| Organization admin | Same-org projects | Yes | Authorized team entries |
+| Organization manager | Same-org projects | Yes | Authorized team entries |
+| Assigned member with project lead/admin role | Yes | No | Own entries only |
+| Ordinary assigned member | Only project-members visibility | No | Own entries only |
+| Unassigned member with own historic time | Identity only, no dashboard | No | Own timesheet outside dashboard |
+| Inactive or foreign-org actor | No | No | No |
 
-## D5 — Project-to-date totals; recent list is the only bounded section
+Budget amounts intentionally follow progress access; this does not grant rates,
+invoices or costs. Administrator notes stay administrator-only. Private fields
+and peers' notes must be absent from unauthorized payloads.
 
-**Decision**: All totals/breakdowns/money cover the project's entire history (no date filter), matching `list_project_spend`. "Recent entries" shows the latest N (small fixed count, e.g. 10) ordered newest-first.
+**Alternatives rejected:** Treating project leads as organization managers, adding
+a nonexistent show-rates setting, or fetching private data then hiding cells.
 
-**Rationale**: Simplicity and consistency with the list's lifetime spend. Date-range filtering (D6) is deferred.
+## D5 — Costs retain workspace currency and completeness
 
-## D6 — Deferrals (data-honesty: not computable now or out of v1 scope)
+**Decision:** Reuse precedence from `server_fns/reports.rs::fetch_report`:
+project-member override, then user cost rate, valued on actual tracked minutes.
+Cost currency is the organization default, not project billing currency.
+Do not calculate a margin across unlike currencies.
 
-| Deferred | Spec ID | Why deferred |
-|---|---|---|
-| Burn-down / hours-per-week bar chart | D-001 | Needs a per-period time series + charting; the headline progress bar covers "how far into budget". |
-| Forecasting / projected completion/overspend | D-002 | Modelling not backed by stored data. |
-| Cost-based margin / profit | D-003 | `users.cost_rate_cents` exists, but per-entry cost accounting + profit is a separate concern; v1 reports billable value only. |
-| Rate-editing UI | D-004 | Viewing resolved rates is in scope; editing is a separate feature (gap report rec #2). |
-| Date-range filter / per-day timeline | D-005 | v1 is project-to-date + a recent-entries feed. |
-| Retainer per-period accounting, fixed-fee milestones | D-006 | No per-period budget reset or milestone schedule in the schema. |
-| Dashboard-specific export | D-007 | List export already exists; not part of v1. |
+Administrators may see private overrides. Managers may see user costs only where
+no private override participates; an aggregate containing one must be unavailable,
+not partially summed. A private zero remains private. Keep missing rates distinct
+from explicit zero.
 
-## D7 — No migration; read-only server functions
+**Rationale:** Existing reports establish privacy and precedence but coalesce
+missing defaults to zero. Reuse their policy, not that coercion. Regression anchor:
+`manager_report_omits_groups_containing_private_project_costs`.
 
-**Decision**: Add read-only `#[server]` functions only (see `contracts/server-fns.md`); no schema change; regenerate `.sqlx/` for the new queries.
+## D6 — Reuse lifecycle APIs; extra actions need contracts
 
-**Rationale**: FR-016 / SC-007. Every figure is derivable from existing tables (D1). This keeps the change additive and inside the constitution's single-mutation-path rule (IV — the feature adds no mutations at all) and single-datastore rule (III — no migration).
+**Decision:** Reuse `set_project_active` / `set_projects_active`, row locks,
+idempotency, revision triggers and post-commit events. Use feature 011's editor
+for editing and any approved duplicate flow.
 
-## D8 — Rendering with existing design language
+Pin, duplicate, permanent delete and manual invoice linking have no existing
+mutation APIs. PD-001 remains open. Source-linked lines, fee occurrences,
+completed drafts and import references make deletion more than a cascade.
+Manual attribution cannot consume a fee occurrence without an allocation
+contract. Preserve original time/fee sources when changing presentation.
 
-**Decision**: Build the page from existing tokens/utilities — cards, the `proj-bar`/`proj-bar-fill` progress bar already used by the list, mono monetary figures, `badge` pills, and standard tables — since no detail mockup exists.
+**Alternative rejected:** Treating prototype action handlers as purely visual
+changes. No fake success or destructive tests against imported data.
 
-**Rationale**: The repo's design-implement rule recreates visuals in the existing CSS at implementation time. The list screen (`Horae Projects.dc.html`) is the visual reference; the detail layout groups the same primitives into a header + budget/hours/money summary + breakdown tables + team/tasks + recent feed.
+## D7 — Existing export infrastructure, new authorized projection
+
+**Decision:** Reuse `reports/limits.rs::configure_transaction` and
+`reports/bounded.rs::ExportPermit`: repeatable-read/read-only, SQL timeouts,
+bounded concurrency, render/output limits and cancellation handling.
+CSV/XLSX/PDF share the authorized dashboard projection and selected period.
+Reject bounds explicitly rather than truncating.
+
+The existing `render.rs::render_invoice_pdf` already uses Typst/embedded fonts.
+Add a dashboard-specific template; do not relabel an invoice PDF or add another
+renderer dependency.
+
+**Alternatives rejected:** Browser-print-only exports, unbounded rendering or
+exporting everything before suppressing forbidden columns in the browser.
+
+## Validation implications
+
+- Exact per-entry rounding, discounts, mixed invoices, voids and fee periods.
+- Full permission matrix, demotion/deactivation, private zero costs, missing rates
+  and actual serialized/exported omissions.
+- Imported provenance without asserting unavailable external facts.
+- Enabled zero-time rows and disabled historical contributors.
+- Chart/breakdown reconciliation, invalid intervals and stale route results.
+- Archive idempotency, stale-editor rejection and preserved history.
+- Full detail handoff/imported components read before UI implementation, followed
+  by utility/token compliance and shared-screen regression checks.
+
+Plan, data model, contracts and tasks remain historical until reconciled.
+Their old assumptions are not implementation authority.

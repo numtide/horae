@@ -1,7 +1,7 @@
 # Specification Quality Checklist: Project Detail Dashboard
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
-**Created**: 2026-09-01
+**Created**: 2026-09-01 | **Revalidated**: 2026-09-29
 **Feature**: [spec.md](../spec.md)
 
 ## Content Quality
@@ -13,32 +13,32 @@
 
 ## Requirement Completeness
 
-- [x] No [NEEDS CLARIFICATION] markers remain
+- [ ] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
 - [x] All acceptance scenarios are defined
 - [x] Edge cases are identified
-- [x] Scope is clearly bounded
+- [ ] Scope is clearly bounded
 - [x] Dependencies and assumptions identified
 
 ## Feature Readiness
 
-- [x] All functional requirements have clear acceptance criteria
+- [ ] All functional requirements have clear acceptance criteria
 - [x] User scenarios cover primary flows
 - [x] Feature meets measurable outcomes defined in Success Criteria
 - [x] No implementation details leak into specification
 
 ## Notes
 
-- Data-honesty is the governing constraint: every figure is traced to an existing
-  table/column in the Clarifications and Assumptions, and anything not computable
-  from the current schema is listed under Deferred (D-001..D-007) rather than
-  specified as if the backend could produce it.
-- No database migration is required (FR-016, SC-007); the feature adds at most
-  new read-only aggregation queries.
-- A few figures name concrete schema fields (e.g. `budget_minutes`,
-  `invoice_line_items.amount_cents`, the rate cascade) — this is deliberate
-  data-honesty evidence for reviewers, not an implementation prescription; the
-  requirements themselves stay behavior-focused.
-- Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`.
+- The expanded specification supersedes the September 1 no-chart MVP and its
+  obsolete rate and invoice assumptions. Charts, costs, periods and exports are
+  now explicit requirements; they are not deferred solely to shorten delivery.
+- PD-001 remains open for the five additional prototype actions. Their scope
+  and acceptance rules must be resolved before the final action contract and
+  implementation plan can be accepted. Other user journeys have acceptance
+  scenarios and measurable exactness, privacy and UI criteria.
+- Checklist changed from 16/16 to 13/16 passing; this is specification readiness,
+  not proof that the implementation or its acceptance checks have passed.
+- Existing plan/data-model/contracts/tasks/quickstart are historical until
+  reconciled with this revision. Do not execute their obsolete instructions.

@@ -5,6 +5,7 @@ pub mod importers;
 pub mod invoice;
 pub mod money;
 pub mod project;
+pub mod project_activity;
 pub mod rounding;
 pub mod state;
 pub mod time_of_day;

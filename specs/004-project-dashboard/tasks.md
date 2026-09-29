@@ -1,5 +1,23 @@
 # Tasks: Project Detail Dashboard
 
+> Historical tasks, pending regeneration from the expanded 2026-09-29 spec and
+> reconciled plan. Do not execute these tasks as the current implementation
+> contract. None is newly marked complete by the specification revision.
+
+## Current independent foundation (2026-09-29)
+
+These tasks replace the historical fold work for this increment only. The full
+dashboard/action task set below is not executable until reconciled; completing
+F001–F003 does not complete Project Detail or the four-surface delivery.
+
+- [x] F001 [US2] Add failing domain tests in `crates/core/src/project_activity.rs`
+  for calendar ranges, clipped configurable weeks, empty buckets, cumulative
+  reconciliation, invalid input and explicit bucket/overflow errors.
+- [x] F002 [US2] Implement the tested reporting ranges and activity series in
+  `crates/core/src/project_activity.rs`; register in `crates/core/src/lib.rs`.
+- [x] F003 [US2] Run core tests, Clippy and formatting in the Nix dev shell;
+  record results and remaining integration in `specs/004-project-dashboard/delivery.md`.
+
 **Input**: Design documents from `specs/004-project-dashboard/`
 
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/server-fns.md, quickstart.md

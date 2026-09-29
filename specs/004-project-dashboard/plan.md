@@ -1,5 +1,39 @@
 # Implementation Plan: Project Detail Dashboard
 
+> Historical plan, pending reconciliation with the expanded 2026-09-29 spec.
+> Do not execute its old rate, permission, no-chart or no-migration assumptions.
+> Planning resumes after PD-001 is clarified; this document is not acceptance.
+
+## Independent implementation increment — reporting periods and activity
+
+The complete dashboard plan below remains historical. The ongoing delivery may
+implement this independent foundation while destructive/manual-link policies
+remain open; this is not acceptance of those actions or completion of Spec Kit's
+full planning gate.
+
+- Scope: FR-005, FR-006 and FR-021. Add `crates/core/src/project_activity.rs`
+  for inclusive work-date intervals and exact weekly/cumulative tracked minutes.
+- Reuse `week::week_start`, `chrono` and checked integer arithmetic. No new
+  dependency, schema, rate rule, import rule, financial mutation or CSS change.
+- Month/quarter/year bounds use calendar dates, including leap years. Reversed
+  or unrepresentable ranges return explicit errors.
+- Weekly buckets follow the supplied workspace week start, include empty weeks
+  and clip the first/last buckets to the chosen interval. Cumulative values start
+  at zero at the selected interval, not at project inception.
+- The caller supplies an explicit bucket bound; exceeding it fails before
+  allocation. Never silently truncate, saturate minutes or shift dates via UTC.
+- Test first: calendar boundaries, configured weeks, inclusive filtering,
+  empty weeks, deterministic input order, exact split/cumulative reconciliation,
+  negative data, overflow and bucket limits. Run the whole core suite and Clippy
+  in the pinned Nix dev shell.
+- Follow-up integration remains required: authorized daily SQL projection,
+  dashboard DTOs, design-matched charts and accessible table, exports and browser
+  verification. A passing pure-domain suite does not prove those requirements.
+
+Constitution pre/post-design check for this increment: integer minutes only;
+pure `horae-core`; no database or mutation surface; no dependency changes;
+verification through Nix. No exception required. Full-feature gates stay open.
+
 **Branch**: `feat/project-dashboard` | **Date**: 2026-09-01 | **Spec**: [spec.md](./spec.md)
 
 **Input**: Feature specification from `specs/004-project-dashboard/spec.md`

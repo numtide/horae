@@ -1,5 +1,9 @@
 # Contract: Dashboard Server Functions (read-only)
 
+> Historical contract, pending reconciliation with the 2026-09-29 specification.
+> Its visibility and accounting assumptions predate feature 011; it is not the
+> current implementation contract.
+
 All new surfaces are Dioxus `#[server]` **read** functions in `crates/horae/src/server_fns/projects.rs`. They are session-authenticated like the rest of `server_fns` (`session_user_id().await?`), org-scoped, and issue **no mutations** (Constitution IV — the feature adds zero write paths). No Axum route, no Harvest v2 change. Money-visibility follows Horae's existing policy; where money is hidden the cents fields are returned as `None`.
 
 Types below are the view models from `models/dashboard.rs` (see `data-model.md`). `ServerFnError` codes use the repo's named constants (e.g. `NOT_FOUND`), not integer literals.

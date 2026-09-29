@@ -1,5 +1,9 @@
 # Quickstart & Validation: Project Detail Dashboard
 
+> Historical guide, pending replacement for the 2026-09-29 specification.
+> Do not run its seed/migration commands against an existing development
+> database or reuse occupied preview ports. Acceptance must use disposable data.
+
 End-to-end validation that the dashboard is correct and **data-honest** (every figure traces to real data and reconciles). No schema migration is involved.
 
 ## Prerequisites
