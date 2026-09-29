@@ -15,6 +15,11 @@ pub async fn get_week_start() -> Result<chrono::Weekday, ServerFnError> {
     .fetch_one(&state.db)
     .await
     .map_err(server_err)?;
+    configured_weekday(day)
+}
+
+#[cfg(feature = "server")]
+pub(super) fn configured_weekday(day: i16) -> Result<chrono::Weekday, ServerFnError> {
     match day {
         1 => Ok(chrono::Weekday::Mon),
         2 => Ok(chrono::Weekday::Tue),

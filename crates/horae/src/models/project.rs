@@ -3,6 +3,33 @@ use horae_core::types::{BudgetKind, ProjectType};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+/// Inclusive reporting dates; an absent interval requests all recorded work.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProjectActivityInterval {
+    pub from: NaiveDate,
+    pub to: NaiveDate,
+}
+
+/// Authorized tracked-time series, without people, notes, rates or costs.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProjectActivity {
+    /// Absent only for an all-time request with no recorded entries.
+    pub interval: Option<ProjectActivityInterval>,
+    pub week_start: chrono::Weekday,
+    pub weeks: Vec<ProjectActivityWeek>,
+}
+
+/// A week clipped to the selected reporting interval.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProjectActivityWeek {
+    pub from: NaiveDate,
+    pub to: NaiveDate,
+    pub billable_minutes: i64,
+    pub non_billable_minutes: i64,
+    /// Cumulative tracked minutes since the selected interval began.
+    pub cumulative_minutes: i64,
+}
+
 /// An explicit task rate in the currency shown to the project manager.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ProjectTaskRate {
@@ -83,4 +110,47 @@ pub struct ProjectTagLink {
     pub project_id: Uuid,
     pub tag_id: Uuid,
     pub name: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn activity_wire_format_preserves_dates_weekday_and_exact_minutes() {
+        let date = NaiveDate::from_ymd_opt(2026, 9, 29).unwrap();
+        let activity = ProjectActivity {
+            interval: Some(ProjectActivityInterval {
+                from: date,
+                to: date,
+            }),
+            week_start: chrono::Weekday::Sun,
+            weeks: vec![ProjectActivityWeek {
+                from: date,
+                to: date,
+                billable_minutes: i64::MAX - 1,
+                non_billable_minutes: 1,
+                cumulative_minutes: i64::MAX,
+            }],
+        };
+        let json = serde_json::to_string(&activity).unwrap();
+        assert_eq!(
+            serde_json::from_str::<ProjectActivity>(&json).unwrap(),
+            activity
+        );
+    }
+
+    #[test]
+    fn activity_wire_format_preserves_empty_all_time() {
+        let activity = ProjectActivity {
+            interval: None,
+            week_start: chrono::Weekday::Mon,
+            weeks: Vec::new(),
+        };
+        let json = serde_json::to_string(&activity).unwrap();
+        assert_eq!(
+            serde_json::from_str::<ProjectActivity>(&json).unwrap(),
+            activity
+        );
+    }
 }

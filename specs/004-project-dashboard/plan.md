@@ -26,13 +26,22 @@ full planning gate.
   empty weeks, deterministic input order, exact split/cumulative reconciliation,
   negative data, overflow and bucket limits. Run the whole core suite and Clippy
   in the pinned Nix dev shell.
-- Follow-up integration remains required: authorized daily SQL projection,
-  dashboard DTOs, design-matched charts and accessible table, exports and browser
-  verification. A passing pure-domain suite does not prove those requirements.
+- The server projection in `server_fns/projects/activity.rs` authorizes through
+  `project_read_access`, derives all-time bounds or accepts inclusive dates, then
+  feeds daily SQL aggregates into the domain series. It reads actual minutes,
+  caps intervals at 5,200 weeks before fetching daily values, and uses a
+  repeatable-read/read-only transaction with a five-second statement timeout.
+- Shared DTOs in `models/project.rs` contain only interval, configured week start
+  and minute buckets. Reuse the timesheet's weekday conversion. No schema or
+  business mutation is needed for this increment.
+- Follow-up integration remains required: design-matched charts and accessible
+  table, exports and browser verification. Passing domain/database suites do not
+  prove those requirements.
 
 Constitution pre/post-design check for this increment: integer minutes only;
-pure `horae-core`; no database or mutation surface; no dependency changes;
-verification through Nix. No exception required. Full-feature gates stay open.
+pure `horae-core`; PostgreSQL-only, macro-checked, org-authorized reads; no new
+mutation surface or dependencies; verification through Nix. No exception
+required. Full-feature gates stay open.
 
 **Branch**: `feat/project-dashboard` | **Date**: 2026-09-01 | **Spec**: [spec.md](./spec.md)
 

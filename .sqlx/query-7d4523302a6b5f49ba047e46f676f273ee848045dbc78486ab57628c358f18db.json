@@ -1,0 +1,37 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT spent_date AS \"date: chrono::NaiveDate\",\n                  SUM(CASE WHEN billable THEN minutes::bigint ELSE 0 END)::bigint\n                    AS \"billable_minutes!\",\n                  SUM(CASE WHEN NOT billable THEN minutes::bigint ELSE 0 END)::bigint\n                    AS \"non_billable_minutes!\"\n           FROM time_entries\n           WHERE org_id = $1 AND project_id = $2 AND spent_date BETWEEN $3 AND $4\n           GROUP BY spent_date ORDER BY spent_date",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "date: chrono::NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 1,
+        "name": "billable_minutes!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "non_billable_minutes!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Date",
+        "Date"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "7d4523302a6b5f49ba047e46f676f273ee848045dbc78486ab57628c358f18db"
+}

@@ -4,6 +4,8 @@ use super::*;
 use crate::models::project::ProjectFeeBalance;
 use crate::models::{ProjectDetails, ProjectTagLink, ProjectTaskRate};
 
+pub mod activity;
+
 #[cfg(all(test, feature = "server"))]
 mod tests;
 

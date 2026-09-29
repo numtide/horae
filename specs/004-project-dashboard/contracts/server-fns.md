@@ -1,5 +1,31 @@
 # Contract: Dashboard Server Functions (read-only)
 
+## Current activity contract
+
+`get_project_activity(project_id: String, interval: Option<ProjectActivityInterval>)`
+returns `ProjectActivity` from `server_fns/projects/activity.rs`. This increment
+implements the time-series part only; the historical financial contracts below
+remain pending reconciliation.
+
+- Require an active session and current `project_read_access.can_view_progress`.
+  An inaccessible or foreign project returns non-disclosing `NOT_FOUND`, before
+  date-range/bucket validation. No progress access follows merely from own history.
+- `Some({from,to})` uses inclusive work dates; `None` derives both bounds from
+  actual recorded dates. Empty all-time has no invented interval or buckets.
+- Use a repeatable-read/read-only transaction for authorization, interval and
+  daily aggregate. Set a five-second statement timeout.
+- Week boundaries follow the stored organization setting; reject invalid settings.
+- Aggregate actual tracked minutes by original billable flag, without invoice
+  rounding or entry notes. Include inactive historical projects/tasks/contributors.
+- Return interval, week start and weekly billable/non-billable/cumulative minutes;
+  no people, financial fields or private notes are part of this payload.
+- Bound to 5,200 weekly buckets and reject excessive ranges before fetching daily
+  values. The UI must explain the limit and request a shorter interval on error;
+  it must not silently change the selected interval or truncate the series.
+- Invalid/reversed ranges are `BAD_REQUEST`; invalid stored configuration and
+  unexpected arithmetic/database failures are errors, not zero totals.
+- No schema or mutation change. Tests use disposable PostgreSQL databases.
+
 > Historical contract, pending reconciliation with the 2026-09-29 specification.
 > Its visibility and accounting assumptions predate feature 011; it is not the
 > current implementation contract.

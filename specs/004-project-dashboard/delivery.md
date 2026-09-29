@@ -53,3 +53,47 @@ This is a tested domain foundation, not a delivered dashboard. Authorized SQL,
 screen integration, exports, browser acceptance and full application/Nix checks
 remain required, as do all Clients and Settings/Workspace deliverables. The full
 Spec Kit planning/acceptance gates remain open for the documented policy decisions.
+
+## Authorized activity projection — 2026-09-29
+
+`server_fns/projects/activity.rs` now exposes actual weekly tracked minutes through
+a session-authenticated server function. It checks current progress authority in
+the same repeatable-read, read-only transaction as the date bounds and aggregate.
+The payload has no entry notes, identities, rates or financial values. All-time
+empty projects return no invented dates; selected intervals retain empty weeks.
+The existing organization weekday conversion is shared with the timesheet.
+
+Evidence:
+
+- The initial six PostgreSQL tests failed at the unimplemented projection, then
+  all passed after implementation.
+
+- Two additional tests cover invalid stored weekdays and inactive contributors /
+  tasks with same-organization project isolation. Permission tests also cover
+  configured member visibility and both project-management assignment roles.
+
+- `cargo test -p horae --features server --bin horae server_fns::projects`:
+  **66 passed, zero failures**, including all eight activity tests and existing
+  detail, privacy, bulk-action and mutation tests.
+
+- Tests ran with Nix on an isolated, migrated PostgreSQL cluster; no imported
+  development or Harvest data was used or changed.
+
+- `cargo test -p horae --features server --bin horae models::project::tests`:
+  both wire-format tests passed, including exact `i64::MAX` round-trip and an
+  empty all-time response.
+
+- `cargo sqlx prepare --workspace -- --features server --all-targets`: passed;
+  ten added query-cache records and no removed/modified existing cache records.
+
+- `SQLX_OFFLINE=true cargo clippy -p horae --features server --all-targets -- -D warnings -W clippy::perf`: passed, including integration-test targets.
+
+- `cargo check -p horae --features web --target wasm32-unknown-unknown`: passed.
+  The three activity DTOs still produce dead-code warnings on the web target
+  until their dashboard consumer is connected; no lint suppression was added.
+
+- `nix fmt -- --ci` and `git diff --check`: passed.
+
+This is not UI or full application acceptance: dashboard integration and all
+remaining delivery slices are still required. Full `nix flake check` remains
+pending; the PR must stay in draft.

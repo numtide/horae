@@ -17,6 +17,12 @@ F001–F003 does not complete Project Detail or the four-surface delivery.
   `crates/core/src/project_activity.rs`; register in `crates/core/src/lib.rs`.
 - [x] F003 [US2] Run core tests, Clippy and formatting in the Nix dev shell;
   record results and remaining integration in `specs/004-project-dashboard/delivery.md`.
+- [x] F004 [US2] Add authorized activity DTOs and server projection in
+  `crates/horae/src/models/project.rs` and `crates/horae/src/server_fns/projects/activity.rs`.
+- [x] F005 [US2] Verify real database interval/split/week behavior and the full
+  progress-permission boundary in `crates/horae/src/server_fns/projects/activity/tests.rs`.
+- [x] F006 [US2] Regenerate `.sqlx/` with server/all-targets against the disposable
+  migrated database; check server/WASM builds and update `delivery.md` evidence.
 
 **Input**: Design documents from `specs/004-project-dashboard/`
 
