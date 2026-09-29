@@ -65,6 +65,7 @@ type InvoiceResponse = Result<invoice::InvoiceWithLines, ServerFnError>;
 type AssignmentResponse = Result<Vec<assignment::Assignment>, ServerFnError>;
 type ProjectDetailsResponse = Result<project::ProjectDetails, ServerFnError>;
 type ActivityResponse = Result<project::ProjectActivity, ServerFnError>;
+type SummaryResponse = Result<project::ProjectSummary, ServerFnError>;
 
 #[derive(Clone, Default)]
 struct Probe {
@@ -81,6 +82,7 @@ struct Probe {
     assignment_response: Rc<RefCell<Option<oneshot::Receiver<AssignmentResponse>>>>,
     detail_response: Rc<RefCell<Option<oneshot::Receiver<ProjectDetailsResponse>>>>,
     activity_response: Rc<RefCell<Option<oneshot::Receiver<ActivityResponse>>>>,
+    summary_response: Rc<RefCell<Option<oneshot::Receiver<SummaryResponse>>>>,
 }
 
 fn app(probe: Probe) -> Element {
@@ -401,6 +403,42 @@ async fn navigating_between_project_ids_loads_current_assignments_and_tasks() {
     settle(&mut dom);
     assert_eq!(*probe.assignment_requests.borrow(), [first, second, first]);
     assert_eq!(*probe.task_requests.borrow(), [first, second, first]);
+}
+
+#[tokio::test]
+async fn pending_or_failed_summary_never_shows_previous_project_totals() {
+    let first = Uuid::from_u128(1);
+    let second = Uuid::from_u128(2);
+    let probe = Probe {
+        initial_path: Some(format!("/projects/{first}")),
+        ..Probe::default()
+    };
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains("Lifetime total: 1h"));
+    let (send, receive) = oneshot::channel();
+    *probe.summary_response.borrow_mut() = Some(receive);
+    let navigator = probe.navigator.borrow().unwrap();
+    dom.in_scope(probe.scope.borrow().unwrap(), || {
+        navigator.push(route::Route::ProjectDetail { id: second })
+    });
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains("Loading project summary…"), "{html}");
+    assert!(!html.contains("Lifetime total:"), "{html}");
+    send.send(Err(ServerFnError::new("Summary permission revoked")))
+        .unwrap();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(
+        html.contains("Summary permission revoked") && html.contains("Retry summary"),
+        "{html}"
+    );
+    assert!(!html.contains("Lifetime total:"), "{html}");
+    dom.in_scope(probe.scope.borrow().unwrap(), || navigator.go_back());
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains("Lifetime total: 1h"));
 }
 
 #[tokio::test]
@@ -761,6 +799,28 @@ mod server_fns {
             admin_notes: None,
         }
     }
+    pub mod summary {
+        use super::*;
+
+        pub async fn get_project_summary(id: String) -> SummaryResponse {
+            let probe = consume_context::<Probe>();
+            let response = probe.summary_response.borrow_mut().take();
+            if let Some(response) = response {
+                return response.await.unwrap();
+            }
+            let id = Uuid::parse_str(&id).unwrap();
+            Ok(project::ProjectSummary {
+                total_minutes: id.as_u128() as i64 * 60,
+                billable_minutes: id.as_u128() as i64 * 60,
+                non_billable_minutes: 0,
+                configured_budget: false,
+                budgets: Vec::new(),
+                budget_totals: horae_core::budget::summarize_scopes([]).unwrap(),
+                internal_costs: None,
+            })
+        }
+    }
+
     pub mod activity {
         use super::*;
 

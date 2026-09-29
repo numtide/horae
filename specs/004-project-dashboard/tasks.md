@@ -32,6 +32,11 @@ F001–F003 does not complete Project Detail or the four-surface delivery.
   and confirmed archive/reactivate using the existing server action.
 - [ ] F010 [US1] Verify identity/role/archive/route behavior, SQLx metadata,
   server/WASM and responsive browser layout; record evidence in `delivery.md`.
+- [x] F011 [US1] Test and implement checked scope-budget aggregation in core.
+- [x] F012 [US1] Add and test the scoped lifetime-hours/current-budget/internal-cost
+  summary projection, preserving current permissions and existing spending rules.
+- [x] F013 [US1] Connect the three summary tiles and verify loading/error/route
+  behavior, both build targets, cache metadata and browser layout.
 
 **Input**: Design documents from `specs/004-project-dashboard/`
 

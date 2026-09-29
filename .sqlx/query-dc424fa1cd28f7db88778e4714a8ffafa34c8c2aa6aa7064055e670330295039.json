@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH costs AS (\n                 SELECT te.minutes, COALESCE(mc.cost_rate_cents, u.cost_rate_cents) AS rate\n                 FROM time_entries te\n                 JOIN users u ON u.id = te.user_id AND u.org_id = te.org_id\n                 LEFT JOIN project_member_costs mc ON mc.project_id = te.project_id\n                   AND mc.user_id = te.user_id AND mc.org_id = te.org_id\n                 WHERE te.org_id = $1 AND te.project_id = $2\n               )\n               SELECT CASE WHEN COUNT(*) FILTER (WHERE rate IS NULL) > 0 THEN NULL\n                      ELSE COALESCE(SUM(line_amount_cents(rate, minutes)), 0)::bigint END as \"total_cents?\",\n                      COALESCE(SUM(minutes) FILTER (WHERE rate IS NULL), 0)::bigint as \"missing_rate_minutes!\"\n               FROM costs",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "total_cents?",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "missing_rate_minutes!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "dc424fa1cd28f7db88778e4714a8ffafa34c8c2aa6aa7064055e670330295039"
+}

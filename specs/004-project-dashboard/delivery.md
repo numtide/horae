@@ -197,3 +197,55 @@ hidden and stopped delivering animation frames; normal Playwright clicks and
 screenshots timed out. This is not full visual/keyboard acceptance. The broader
 dashboard, Clients and Settings/Workspace delivery remains incomplete, and the
 PR stays in draft.
+
+## Hours, budget and internal-cost tiles — 2026-09-29
+
+Add three real summary tiles beneath activity, using the handoff's auto-fitting
+240px columns and existing card, typography, spacing and progress utilities.
+The only new CSS is a project-prefixed grid template; shared defaults, migrations
+and dependencies are unchanged. Tile headings explicitly use the existing
+sans-serif utility rather than inheriting the global heading face.
+
+The summary reads one authorized, repeatable-read, read-only database snapshot.
+Lifetime hours use actual stored minutes. Current configured budgets reuse the
+overview's scope/period/rounding query; legacy amount budgets reuse its spend
+query, now optionally restricted to one project. Core aggregation preserves
+missing allocations, zero budgets, negative remaining balances and individual
+scope overruns even when their combined allowance is positive.
+
+Internal costs use actual minutes, per-entry rounding and current cost rates in
+workspace currency. A missing rate makes the complete total unknown rather than
+showing a partial sum. Members receive no cost payload; managers receive none
+when any contribution uses an administrator-only project cost override. These
+restrictions are enforced before the cost query, not only in markup.
+
+Evidence:
+
+- Core: 140 passing tests, including checked scope aggregation and overflow.
+- Project server regression: 73 passing PostgreSQL tests, including seven
+  summary tests. Coverage includes empty/archived/foreign projects, current and
+  revoked permissions, monthly rounded budgets versus lifetime actual hours,
+  overview parity, task allocations and missing/zero/private/mixed cost rates.
+- Detail rendering/navigation: 40 passing tests, including loading/error and
+  route changes without previous-project totals, period/currency labels and
+  missing/private costs without a fabricated zero.
+- SQLx metadata regenerated with server/all-targets and incremental compilation
+  disabled: incremental preparation omitted unchanged integration-test queries.
+  The complete cache retains those queries and replaces only the changed spend
+  query, alongside the new summary/test queries.
+- Final all-target offline server Clippy and app WASM checks passed.
+- Chrome MCP and read-only SQL agree on the isolated demo's five entries:
+  780 actual minutes, 720 billable and 60 non-billable; its 200-hour budget leaves
+  187 hours. Missing cost rates show N/A rather than zero.
+- Computed Chrome layouts at 320/390/768/1440px have no page or tile overflow.
+  A desktop screenshot exposed the heading-font mismatch corrected above.
+  Post-correction desktop and 390px screenshots were captured and inspected;
+  all three titles use Instrument Sans and the tiles remain within the viewport.
+  Evidence lives in the root checkout's ignored `.scratch/playwright-windows/`
+  as `project-summary-{desktop,mobile}-verified.png`. This is a tile-level check,
+  not full-page, keyboard, zoom or cross-screen acceptance.
+
+This is not completion of the dashboard. Invoiced/uninvoiced tiles, breakdown
+tabs, remaining chart controls/actions/exports, full keyboard/zoom/cross-screen
+acceptance and Nix checks remain open. Clients and Settings/Workspace remain
+required subsequent delivery slices. PR 208 remains draft.

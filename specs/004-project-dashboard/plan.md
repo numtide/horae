@@ -76,6 +76,24 @@ failed/pending route transitions and navigation highlighting; regenerate SQLx
 metadata and verify both targets and the browser. Pin/duplicate/delete actions, financial
 summaries and all other dashboard/delivery requirements remain open.
 
+### Hours, budgets and internal costs
+
+Implement the corresponding three handoff tiles while invoice attribution and
+external-billing policy are reconciled separately. A single authorized,
+repeatable-read, read-only projection returns lifetime actual minute splits,
+current configured budget scopes (or the legacy lifetime budget) and permitted
+internal costs. Reuse configured budget SQL and parameterize the existing spend
+query for a single project; do not fork financial rules or fetch every project.
+Pure checked budget aggregation belongs in `horae-core` and must preserve
+unallocated scopes, zero allowances and individual overruns. Costs use actual
+minutes and workspace currency, distinguish absent from explicit zero rates,
+and omit the complete cost payload for members or managers whose total would
+include private project overrides. Test current permissions, empty/archived and
+foreign projects, configured monthly rounding versus actual hours, list/detail
+parity, missing/zero/private costs and route loading/error identity. No schema,
+dependency or shared CSS default changes. Invoice tiles, tabs, exports, full
+visual verification and all remaining delivery slices remain required.
+
 **Input**: Feature specification from `specs/004-project-dashboard/spec.md`
 
 ## Summary

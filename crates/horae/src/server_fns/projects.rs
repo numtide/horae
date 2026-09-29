@@ -5,6 +5,7 @@ use crate::models::project::ProjectFeeBalance;
 use crate::models::{ProjectDetails, ProjectTagLink, ProjectTaskRate};
 
 pub mod activity;
+pub mod summary;
 
 #[cfg(all(test, feature = "server"))]
 mod tests;
@@ -304,6 +305,17 @@ pub(super) async fn fetch_project_spend(
     org_id: uuid::Uuid,
     viewer_id: uuid::Uuid,
 ) -> Result<Vec<ProjectSpend>, sqlx::Error> {
+    let mut connection = pool.acquire().await?;
+    project_spend_for_viewer(&mut connection, org_id, viewer_id, None).await
+}
+
+#[cfg(feature = "server")]
+async fn project_spend_for_viewer(
+    connection: &mut sqlx::PgConnection,
+    org_id: uuid::Uuid,
+    viewer_id: uuid::Uuid,
+    project_id: Option<uuid::Uuid>,
+) -> Result<Vec<ProjectSpend>, sqlx::Error> {
     // Grouped in Postgres, not folded here: the overview needs one number per
     // project, and folding in Rust meant fetching one row per time entry to get
     // there. SQL rate resolution preserves legacy precedence for projects
@@ -333,15 +345,16 @@ pub(super) async fn fetch_project_spend(
            LEFT JOIN invoice_line_items line ON line.invoice_id = te.invoice_id AND line.time_entry_id = te.id
            JOIN users u ON u.id = te.user_id
            JOIN organizations o ON o.id = te.org_id
-           WHERE te.org_id = $1 AND EXISTS (
+           WHERE te.org_id = $1 AND ($3::uuid IS NULL OR te.project_id = $3) AND EXISTS (
              SELECT 1 FROM project_read_access access
              WHERE access.org_id = $1 AND access.project_id = te.project_id
                AND access.user_id = $2 AND access.can_view_progress)
            GROUP BY te.project_id"#,
         org_id,
         viewer_id,
+        project_id,
     )
-    .fetch_all(pool)
+    .fetch_all(connection)
     .await?;
 
     Ok(spend)

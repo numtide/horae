@@ -168,6 +168,17 @@ pub(super) async fn progress_for_viewer(
     fetch_progress(connection, org_id, None, Some(viewer_id), date).await
 }
 
+/// The same budget calculation scoped to one authorized dashboard project.
+pub(super) async fn project_progress_for_viewer(
+    connection: &mut PgConnection,
+    org_id: Uuid,
+    viewer_id: Uuid,
+    project_id: Uuid,
+    date: NaiveDate,
+) -> Result<Vec<crate::models::ProjectBudgetProgress>, sqlx::Error> {
+    fetch_progress(connection, org_id, Some(project_id), Some(viewer_id), date).await
+}
+
 async fn fetch_progress(
     connection: &mut PgConnection,
     org_id: Uuid,

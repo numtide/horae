@@ -22,6 +22,8 @@ use horae_core::types::{BudgetKind, ProjectType};
 mod activity;
 #[path = "projects/fee_balances.rs"]
 mod fee_balances;
+#[path = "projects/summary.rs"]
+mod summary;
 
 fn hours(minutes: i64) -> String {
     // Remaining budgets can be negative. Keep the sign and round integer
@@ -1049,6 +1051,7 @@ fn ProjectDetailContent(id: Uuid) -> Element {
             }
 
             activity::ProjectActivityPanel { project_id: id }
+            summary::ProjectSummaryPanel { project_id: id, can_manage: is_manager(&me) }
 
             ProjectTasks {
                 project_id: id,

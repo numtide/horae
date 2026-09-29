@@ -30,6 +30,29 @@ pub struct ProjectActivityWeek {
     pub cumulative_minutes: i64,
 }
 
+/// Lifetime tracked work and independently scoped budget/cost summaries.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProjectSummary {
+    pub total_minutes: i64,
+    pub billable_minutes: i64,
+    pub non_billable_minutes: i64,
+    pub configured_budget: bool,
+    pub budgets: Vec<ProjectBudgetProgress>,
+    pub budget_totals: horae_core::budget::BudgetTotals,
+    /// Entirely absent when the viewer cannot read every contributing cost.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub internal_costs: Option<ProjectCostSummary>,
+}
+
+/// Current cost rates applied per entry to actual minutes, in workspace currency.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProjectCostSummary {
+    pub currency: String,
+    /// Missing rates make the total unknown, not zero or a partial sum.
+    pub total_cents: Option<i64>,
+    pub missing_rate_minutes: i64,
+}
+
 /// An explicit task rate in the currency shown to the project manager.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ProjectTaskRate {

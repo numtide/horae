@@ -1109,6 +1109,9 @@ tbody tr:hover { background: var(--color-row-hover); }
   opacity: 0.6; cursor: not-allowed; background: var(--color-bg-secondary);
 }
 
+/* Project summaries follow the handoff's auto-fitting 240px tile columns. */
+.project-summary-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--space-60)), 1fr)); }
+
 /* Project activity: chart geometry and SVG paint cannot use layout utilities. */
 .project-activity-plot {
   grid-template-columns: max-content minmax(0, 1fr);
