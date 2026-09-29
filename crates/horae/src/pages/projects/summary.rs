@@ -2,9 +2,14 @@ use super::*;
 use crate::models::project::ProjectSummary;
 
 #[component]
-pub(super) fn ProjectSummaryPanel(project_id: Uuid, can_manage: bool) -> Element {
-    let mut summary = use_resource(move || async move {
-        server_fns::summary::get_project_summary(project_id.to_string()).await
+pub(super) fn ProjectSummaryPanel(
+    project_id: Uuid,
+    can_manage: bool,
+    revision: ReadSignal<u64>,
+) -> Element {
+    let mut summary = use_resource(move || {
+        let _ = revision();
+        async move { server_fns::summary::get_project_summary(project_id.to_string()).await }
     });
     rsx! {
         section { class: "mt-4", aria_label: "Project summary",

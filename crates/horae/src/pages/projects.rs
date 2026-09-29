@@ -20,6 +20,8 @@ use horae_core::types::{BudgetKind, ProjectType};
 
 #[path = "projects/activity.rs"]
 mod activity;
+#[path = "projects/breakdown.rs"]
+mod breakdown;
 #[path = "projects/fee_balances.rs"]
 mod fee_balances;
 #[path = "projects/summary.rs"]
@@ -920,6 +922,8 @@ pub fn ProjectDetail(id: Uuid) -> Element {
 
 #[component]
 fn ProjectDetailContent(id: Uuid) -> Element {
+    let interval = use_signal(|| None::<crate::models::project::ProjectActivityInterval>);
+    let mut breakdown_revision = use_signal(|| 0_u64);
     let mut details =
         use_resource(move || async move { server_fns::get_project_details(id.to_string()).await });
     let me = use_resource(|| async move { server_fns::get_me().await });
@@ -1050,15 +1054,20 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                 }
             }
 
-            activity::ProjectActivityPanel { project_id: id }
-            summary::ProjectSummaryPanel { project_id: id, can_manage: is_manager(&me) }
+            activity::ProjectActivityPanel { project_id: id, interval }
+            summary::ProjectSummaryPanel { project_id: id, can_manage: is_manager(&me), revision: breakdown_revision }
+            breakdown::ProjectBreakdownPanel { project_id: id, interval, revision: breakdown_revision }
 
-            ProjectTasks {
-                project_id: id,
-                can_manage: is_manager(&me) && details.state()() == UseResourceState::Ready
-                    && matches!(&*details.read(), Some(Ok(_))),
-                task_rate_currency: details.read().as_ref().and_then(|result| result.as_ref().ok())
-                    .and_then(|project| project.task_rate_currency.clone()),
+            details { class: "mt-6",
+                summary { class: "text-sm text-primary cursor-pointer py-3", "Manage project tasks" }
+                ProjectTasks {
+                    project_id: id,
+                    on_change: move |_| breakdown_revision += 1,
+                    can_manage: is_manager(&me) && details.state()() == UseResourceState::Ready
+                        && matches!(&*details.read(), Some(Ok(_))),
+                    task_rate_currency: details.read().as_ref().and_then(|result| result.as_ref().ok())
+                        .and_then(|project| project.task_rate_currency.clone()),
+                }
             }
 
             if is_manager(&me) && details.state()() == UseResourceState::Ready
@@ -1067,7 +1076,8 @@ fn ProjectDetailContent(id: Uuid) -> Element {
             }
 
             // ── Assignments section ─────────────────────────────────────
-            div { class: "mt-6",
+            details { class: "mt-6",
+                summary { class: "text-sm text-primary cursor-pointer py-3", "Manage project team" }
                 div { class: "page-header",
                     h2 { class: "page-title text-xl", "Assignments" }
                     div { class: "page-actions",
@@ -1117,6 +1127,7 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                                         assign_user_id.set(String::new());
                                         assign_role.set("freelancer".to_string());
                                         show_assign_form.set(false);
+                                        breakdown_revision += 1;
                                     },
                                 );
                             },
@@ -1165,7 +1176,7 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                                                                         server_fns::delete_assignment(aid.clone()),
                                                                         assignments,
                                                                         action_error,
-                                                                        || (),
+                                                                        move || breakdown_revision += 1,
                                                                     ),
                                                                     "Remove"
                                                                 }
@@ -1261,7 +1272,12 @@ fn SavedProjectDetails(
 }
 
 #[component]
-fn ProjectTasks(project_id: Uuid, can_manage: bool, task_rate_currency: Option<String>) -> Element {
+fn ProjectTasks(
+    project_id: Uuid,
+    can_manage: bool,
+    task_rate_currency: Option<String>,
+    on_change: EventHandler<()>,
+) -> Element {
     let mut enabled = use_resource(move || async move {
         server_fns::list_project_tasks(project_id.to_string()).await
     });
@@ -1321,7 +1337,7 @@ fn ProjectTasks(project_id: Uuid, can_manage: bool, task_rate_currency: Option<S
                         saving.set(true);
                         spawn(async move {
                             match server_fns::link_project_task(project_id.to_string(), task_id, explicit_rate).await {
-                                Ok(()) => { error.set(None); selected.set(String::new()); rate.set(String::new()); enabled.restart(); }
+                                Ok(()) => { error.set(None); selected.set(String::new()); rate.set(String::new()); enabled.restart(); on_change.call(()); }
                                 Err(e) => error.set(Some(e.to_string())),
                             }
                             saving.set(false);
@@ -1344,7 +1360,7 @@ fn ProjectTasks(project_id: Uuid, can_manage: bool, task_rate_currency: Option<S
                         saving.set(true);
                         spawn(async move {
                             match server_fns::create_task(task_name, task_billable, Some(project_id.to_string())).await {
-                                Ok(_) => { error.set(None); name.set(String::new()); enabled.restart(); catalog.restart(); }
+                                Ok(_) => { error.set(None); name.set(String::new()); enabled.restart(); catalog.restart(); on_change.call(()); }
                                 Err(e) => error.set(Some(e.to_string())),
                             }
                             saving.set(false);

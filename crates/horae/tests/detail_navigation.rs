@@ -30,10 +30,12 @@ pub mod modal;
 #[path = "../src/components/table.rs"]
 pub mod table;
 mod components {
-    pub use super::{combobox, controls, form, icons, menu, modal, table};
+    pub use super::{avatar, combobox, controls, form, icons, menu, modal, table};
 }
 #[path = "../src/models/assignment.rs"]
 mod assignment;
+#[path = "../src/components/avatar.rs"]
+pub mod avatar;
 #[path = "../src/models/client.rs"]
 mod client;
 #[path = "../src/models/invoice.rs"]
@@ -66,6 +68,7 @@ type AssignmentResponse = Result<Vec<assignment::Assignment>, ServerFnError>;
 type ProjectDetailsResponse = Result<project::ProjectDetails, ServerFnError>;
 type ActivityResponse = Result<project::ProjectActivity, ServerFnError>;
 type SummaryResponse = Result<project::ProjectSummary, ServerFnError>;
+type BreakdownResponse = Result<project::ProjectBreakdown, ServerFnError>;
 
 #[derive(Clone, Default)]
 struct Probe {
@@ -83,6 +86,7 @@ struct Probe {
     detail_response: Rc<RefCell<Option<oneshot::Receiver<ProjectDetailsResponse>>>>,
     activity_response: Rc<RefCell<Option<oneshot::Receiver<ActivityResponse>>>>,
     summary_response: Rc<RefCell<Option<oneshot::Receiver<SummaryResponse>>>>,
+    breakdown_response: Rc<RefCell<Option<oneshot::Receiver<BreakdownResponse>>>>,
 }
 
 fn app(probe: Probe) -> Element {
@@ -403,6 +407,45 @@ async fn navigating_between_project_ids_loads_current_assignments_and_tasks() {
     settle(&mut dom);
     assert_eq!(*probe.assignment_requests.borrow(), [first, second, first]);
     assert_eq!(*probe.task_requests.borrow(), [first, second, first]);
+}
+
+#[tokio::test]
+async fn pending_or_failed_breakdown_never_shows_previous_project_rows() {
+    let first = Uuid::from_u128(1);
+    let second = Uuid::from_u128(2);
+    let probe = Probe {
+        initial_path: Some(format!("/projects/{first}")),
+        ..Probe::default()
+    };
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains("Breakdown-task-1"));
+    let (send, receive) = oneshot::channel();
+    *probe.breakdown_response.borrow_mut() = Some(receive);
+    let navigator = probe.navigator.borrow().unwrap();
+    dom.in_scope(probe.scope.borrow().unwrap(), || {
+        navigator.push(route::Route::ProjectDetail { id: second })
+    });
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(
+        html.contains("Loading project breakdown…") && !html.contains("Breakdown-task-1"),
+        "{html}"
+    );
+    send.send(Err(ServerFnError::new("Breakdown permission revoked")))
+        .unwrap();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(
+        html.contains("Breakdown permission revoked")
+            && html.contains("Retry breakdown")
+            && !html.contains("Breakdown-task-1"),
+        "{html}"
+    );
+    dom.in_scope(probe.scope.borrow().unwrap(), || navigator.go_back());
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains("Breakdown-task-1"));
 }
 
 #[tokio::test]
@@ -797,6 +840,37 @@ mod server_fns {
             ends_on: None,
             tags: vec![format!("Tag-{}", id.as_u128())],
             admin_notes: None,
+        }
+    }
+    pub mod breakdown {
+        use super::*;
+        pub async fn get_project_breakdown(
+            id: String,
+            interval: Option<project::ProjectActivityInterval>,
+        ) -> BreakdownResponse {
+            let response = consume_context::<Probe>()
+                .breakdown_response
+                .borrow_mut()
+                .take();
+            if let Some(response) = response {
+                return response.await.unwrap();
+            }
+            let id = Uuid::parse_str(&id).unwrap();
+            let tasks = vec![project::ProjectWorkEntity {
+                id,
+                name: format!("Breakdown-task-{}", id.as_u128()),
+                active: true,
+                current: true,
+                manager: false,
+            }];
+            Ok(project::ProjectBreakdown {
+                interval,
+                cost_currency: None,
+                tasks,
+                people: Vec::new(),
+                cells: Vec::new(),
+                totals: horae_core::project_breakdown::summarize(&[], false).unwrap(),
+            })
         }
     }
     pub mod summary {

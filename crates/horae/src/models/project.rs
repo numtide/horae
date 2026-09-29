@@ -53,6 +53,30 @@ pub struct ProjectCostSummary {
     pub missing_rate_minutes: i64,
 }
 
+/// Identity-only reporting dimension, including zero-time and historical rows.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(sqlx::FromRow))]
+pub struct ProjectWorkEntity {
+    pub id: Uuid,
+    pub name: String,
+    pub active: bool,
+    /// Currently enabled task or assigned person, independent of past work.
+    pub current: bool,
+    pub manager: bool,
+}
+
+/// One authorized reporting snapshot used by both reciprocal breakdown views.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProjectBreakdown {
+    pub interval: Option<ProjectActivityInterval>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cost_currency: Option<String>,
+    pub tasks: Vec<ProjectWorkEntity>,
+    pub people: Vec<ProjectWorkEntity>,
+    pub cells: Vec<horae_core::project_breakdown::WorkCell>,
+    pub totals: horae_core::project_breakdown::WorkSummary,
+}
+
 /// An explicit task rate in the currency shown to the project manager.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ProjectTaskRate {

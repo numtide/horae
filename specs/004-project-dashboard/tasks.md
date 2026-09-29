@@ -37,6 +37,11 @@ F001–F003 does not complete Project Detail or the four-surface delivery.
   summary projection, preserving current permissions and existing spending rules.
 - [x] F013 [US1] Connect the three summary tiles and verify loading/error/route
   behavior, both build targets, cache metadata and browser layout.
+- [x] F014 [US2] Test and implement exact reciprocal task/person totals in core.
+- [x] F015 [US2] Add the authorized interval-scoped breakdown projection, current
+  and historical identities, cost privacy, explicit bounds and PostgreSQL tests.
+- [ ] F016 [US2] Connect Tasks/Team tabs, counts, stable sorting and reciprocal
+  disclosures to the chart period; verify route/loading and real browser behavior.
 
 **Input**: Design documents from `specs/004-project-dashboard/`
 

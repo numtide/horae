@@ -121,9 +121,11 @@ fn plot(weeks: &[ProjectActivityWeek], cumulative: bool) -> Result<Plot, Activit
 }
 
 #[component]
-pub(super) fn ProjectActivityPanel(project_id: Uuid) -> Element {
+pub(super) fn ProjectActivityPanel(
+    project_id: Uuid,
+    mut interval: Signal<Option<ProjectActivityInterval>>,
+) -> Element {
     let today = use_hook(|| chrono::Utc::now().date_naive());
-    let mut interval = use_signal(|| None::<ProjectActivityInterval>);
     let mut label = use_signal(|| Period::AllTime.label());
     let mut cumulative = use_signal(|| true);
     let mut custom_open = use_signal(|| false);

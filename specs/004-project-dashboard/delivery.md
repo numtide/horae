@@ -249,3 +249,59 @@ This is not completion of the dashboard. Invoiced/uninvoiced tiles, breakdown
 tabs, remaining chart controls/actions/exports, full keyboard/zoom/cross-screen
 acceptance and Nix checks remain open. Clients and Settings/Workspace remain
 required subsequent delivery slices. PR 208 remains draft.
+
+## Reciprocal task and team breakdowns — 2026-09-29
+
+Tasks and Team use the same authorized task/person intersections and the
+activity chart's reporting interval. Both directions retain enabled zero-time
+entities and historical contributors, sort exact minutes with stable identity
+ties, expand into reciprocal child rows and reconcile their totals. Costs use
+per-entry rounding in workspace currency; missing rates remain unknown and
+private costs are absent from unauthorized payloads. Queries recheck current
+progress permissions in a read-only repeatable-read transaction. Explicit
+5,000-group/contributor limits reject excessive results rather than truncating.
+
+Existing task/team management remains available in native disclosures. Successful
+changes refresh both breakdowns and summary tiles. Loading and failed reads clear
+previous-project/period rows and provide a retry. Tabs and sorting reuse the
+loaded projection instead of making another request.
+
+Evidence collected for this increment:
+
+- Core: 143 tests passed, including three reciprocal aggregation tests covering
+  exact reconciliation, missing/private costs, invalid quantities and overflow.
+- Projects: 78 PostgreSQL tests passed, including five new breakdown tests for
+  inclusive intervals, zero-time/inactive contributors, permissions, foreign
+  organizations, multiple tasks/people, workspace currency and excessive groups.
+- Detail navigation/rendering: 44 tests passed after adding the shared Avatar,
+  including pending/failed route changes without stale breakdown rows.
+- SQLx metadata regenerated with server/all-targets and incremental compilation
+  disabled; existing tracked query metadata retained. No migration is added.
+- Chrome MCP DOM-event checks verified reciprocal expansion, ascending hours
+  sorting, tab selection and ArrowRight focus movement without another request.
+  Native Playwright click timed out waiting for stability with Chrome hidden;
+  these checks do not establish native pointer/keyboard acceptance.
+- Read-only demo SQL and Chrome agree: Development 390, Design 330 and Meetings
+  60 minutes, totaling 780 (13h). September filters to 150, 210 and 60 minutes,
+  totaling 420 (7h) in the chart and both tabs. Switching tabs preserves the
+  selected interval; the interval change makes one new breakdown request.
+- An initial mobile screenshot exposed an undefined `sr-only` class and unpadded
+  footer cells. Replace the caption with a table accessible name and use existing
+  spacing/border utilities for semantic row headers and footer cells. Shared CSS
+  defaults are unchanged.
+- The correction's rendering regression failed before the fix and passes after
+  it; all 44 detail tests pass on the final markup. Core tests, all-target offline
+  server Clippy, WASM compilation and formatting also pass.
+- A deliberately held September breakdown request removes the previous table
+  and shows loading; releasing it shows the correct 7-hour period. The original
+  browser fetch function is restored after the check.
+- Computed layouts at 320/390/768/1440px show no page overflow. At 320px the table
+  scrolls inside its existing container; controls remain at least 44px tall.
+  Post-correction desktop/mobile screenshots are saved under the root checkout's
+  ignored `.scratch/playwright-windows/project-breakdown-{desktop,mobile}-verified.png`.
+  Native pointer/keyboard, 200% zoom and cross-screen acceptance remain open.
+
+F016 remains open until the final browser acceptance is complete. The invoice
+tab, financial tiles, exports and remaining dashboard requirements are still
+required, followed by Clients and Settings/Workspace. This is not final visual
+acceptance or permission to merge PR 208.

@@ -96,6 +96,26 @@ visual verification and all remaining delivery slices remain required.
 
 **Input**: Feature specification from `specs/004-project-dashboard/spec.md`
 
+### Reciprocal task and team breakdowns
+
+Use one authorized reporting snapshot for task/person intersections, with actual
+minute splits and per-entry internal costs in workspace currency. Aggregate each
+intersection once in PostgreSQL, then use checked core arithmetic for reciprocal
+parent/grand totals. Keep all currently enabled/assigned and historical identities,
+including zero-time and inactive rows; never include unrelated organization users
+or task catalog entries. Reuse the summary's cost policy: members and managers
+with private contributing overrides receive no costs. Missing rates remain
+unknown and cannot become a partial subtotal.
+
+Share the chart's selected interval with both tabs. Tasks expand into people and
+people into tasks; use semantic tables, keyboard-operable disclosure controls,
+real counts and stable sorting by exact minutes, name and ID. Reset disclosure
+state when project or interval changes; loading/error states must not retain old
+rows. Preserve management through the existing authorized controls until the
+shared editor covers their complete behavior. Bound rows explicitly and fail
+instead of silently truncating. Invoice attribution, exports and whole-delivery
+acceptance remain required independent follow-ups.
+
 ## Summary
 
 Replace the stub `ProjectDetail` page (today: `"Project detail for {id}"` plus an assignments table) with a real, data-honest project dashboard. It shows the project's identity, budget & progress (driven by `budget_kind`), total/billable/non-billable hours, billable amount, invoiced vs uninvoiced money, per-task and per-person breakdowns, the team and enabled tasks, and a recent-entries feed.

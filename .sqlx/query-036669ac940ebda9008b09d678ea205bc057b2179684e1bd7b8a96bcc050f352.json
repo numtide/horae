@@ -1,0 +1,49 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT u.id, u.name, u.active, (a.id IS NOT NULL) AS \"current!\",\n                  COALESCE(a.role IN ('lead', 'admin'), false) AS \"manager!\"\n           FROM users u LEFT JOIN assignments a ON a.user_id = u.id AND a.project_id = $2\n           WHERE u.org_id = $1 AND (a.id IS NOT NULL OR u.id = ANY($3::uuid[]))\n           ORDER BY u.name, u.id LIMIT $4",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "current!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "manager!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "UuidArray",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "036669ac940ebda9008b09d678ea205bc057b2179684e1bd7b8a96bcc050f352"
+}
