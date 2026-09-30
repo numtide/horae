@@ -74,6 +74,22 @@ cumulative carry-in, no extra requests, loading/failure, native keyboard control
 and responsive bounds. Calendar selection and budget overlays remain separate
 acceptance requirements; this increment does not waive them.
 
+### Chart calendar selection
+
+Reuse DatePicker and the native calendar-popover behavior already used by New
+Project. The chart's week label opens a configured-week calendar and remounts
+its browsed month on each opening. Add an optional inclusive calendar bound;
+only the chart supplies the end of the current week, so future scheduling in
+Timesheet and New Project stays available. Preserve focus on selection/Escape,
+light dismissal and viewport positioning through the existing shared script.
+Selections change only the chart anchor, never report filters or reads. Verify
+inclusive bounds, default unbounded behavior, month navigation, keyboard and
+short/mobile/zoom layouts, plus the existing scheduling calendar regression.
+The shared calendar's existing nominal dimensions use scalable tokens; its
+heading/footer reflow and narrow padding prevent hidden overflow at enlarged
+text sizes. Compare the eight-screen style baseline before accepting this shared
+change, and inspect the calendar's inner surface/controls as well as its popover.
+
 **Branch**: `feat/project-dashboard` | **Date**: 2026-09-01 | **Spec**: [spec.md](./spec.md)
 
 ### Project identity integration

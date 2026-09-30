@@ -126,6 +126,9 @@
   --size-empty-icon-tile: 3.25rem;
   --size-icon-lg: 1.375rem;
   --width-empty-copy: 23.75rem;
+  --width-calendar: 19.25rem;
+  --size-calendar-nav: 1.875rem;
+  --height-calendar-day: 2.25rem;
   --width-project-form: 73.75rem;
   --width-form-label: 13.75rem;
   --width-planning-date: 11.25rem;
@@ -565,16 +568,18 @@ h1, h2, h3, h4, h5, h6 {
 /* Date picker — a month grid on the shared .menu surface (components/date_picker.rs).
    `.dp-pop` is the popover placement a caller opts into; the panel itself is a
    plain block, so the gallery can show it inline. */
-.dp { width: 308px; padding: var(--space-4); }
+.dp { width: var(--width-calendar); max-width: 100%; padding: min(var(--space-4), 5vw); }
 .dp-pop { position: absolute; top: calc(100% + var(--space-1)); left: 0; z-index: 21; }
+.calendar-popover { background: transparent; }
 .dp-nav {
-  width: 30px; height: 30px; flex: none;
+  width: var(--size-calendar-nav); height: var(--size-calendar-nav); flex: none;
   background: transparent; border: 1px solid var(--color-border); border-radius: var(--radius);
   color: var(--color-text-secondary); font: inherit; cursor: pointer;
 }
-.dp-nav:hover { background: var(--color-bg-tertiary); color: var(--color-text); }
+.dp-nav:hover:not(:disabled) { background: var(--color-bg-tertiary); color: var(--color-text); }
 .dp-day {
-  height: 36px; display: flex; align-items: center; justify-content: center;
+  height: var(--height-calendar-day); display: flex; align-items: center; justify-content: center;
+  padding: 0;
   background: none; border: none;
   font-family: var(--font-family-mono); font-size: var(--font-size-sm);
   color: var(--color-text); cursor: pointer;
@@ -588,7 +593,7 @@ h1, h2, h3, h4, h5, h6 {
 .dp-day.picked { background: var(--color-pine); color: var(--color-on-pine); font-weight: 600; }
 /* A brand tint rather than a neutral lift: --color-bg-overlay is the popover's
    own colour in the light theme, which would leave the hover invisible. */
-.dp-day:not(.picked):hover { background: var(--color-primary-bg); }
+.dp-day:not(.picked):not(:disabled):hover { background: var(--color-primary-bg); }
 
 /* Account popover — positioning only; appearance comes from .menu */
 .sidebar-menu {
@@ -822,9 +827,6 @@ h1, h2, h3, h4, h5, h6 {
 .np-tags .chip { max-width: 100%; }
 .np-tags .chip-input-field { min-width: min(100%, var(--width-tag-entry)); }
 .np-date-field.form-input { width: var(--width-planning-date); }
-/* Only the planning-date wrapper opts into top-layer calendar positioning. */
-.np-date-popover { background: transparent; }
-.np-date-popover .dp { max-width: 100%; }
 .np-row { grid-template-columns: var(--width-form-label) minmax(0, 1fr); }
 .np-assignment-row { grid-template-columns: var(--space-5) minmax(0, 1fr) auto var(--space-8); }
 .np-assignment-row .avatar-project { width: var(--size-project-avatar); height: var(--size-project-avatar); }

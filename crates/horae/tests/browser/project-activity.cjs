@@ -19,6 +19,7 @@ const shift = (date, days) => {
 const sunday = shift(today, -new Date(`${today}T00:00:00Z`).getUTCDay());
 const old = shift(sunday, -30 * 7);
 const previousWeekEnd = shift(sunday, -1);
+const dateLabel = date => new Date(`${date}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 const originalWeekStart = Number(sql("SELECT week_start FROM organizations WHERE name='Demo Org'"));
 assert.ok(Number.isInteger(originalWeekStart) && originalWeekStart >= 1 && originalWeekStart <= 7);
 
@@ -70,6 +71,35 @@ assert.ok(Number.isInteger(originalWeekStart) && originalWeekStart >= 1 && origi
     await expect(activity.locator('.project-activity-line')).toHaveAttribute('d', /^M0 1334 /);
     await expect(next).toBeDisabled();
     await expect(current).toBeDisabled();
+    const picker = activity.getByRole('button', { name: /^Choose chart week/ });
+    const calendar = page.getByRole('dialog', { name: 'Choose chart week', exact: true });
+    await picker.focus();
+    await page.keyboard.press('Enter');
+    await expect(calendar).toBeVisible();
+    await expect.poll(() => calendar.evaluate(node => node.contains(document.activeElement))).toBe(true);
+    await expect(calendar.locator('.grid-cols-7').first().locator('div').first()).toHaveText('Su');
+    await expect(calendar.getByRole('button', { name: dateLabel(shift(sunday, 7)), exact: true })).toBeDisabled();
+    await expect(calendar.getByRole('button', { name: dateLabel(shift(sunday, 6)), exact: true })).toBeEnabled();
+    const lastAllowed = shift(sunday, 6);
+    if (sunday.slice(0, 7) !== lastAllowed.slice(0, 7)) {
+      await calendar.getByRole('button', { name: 'Next month', exact: true }).click();
+    }
+    await expect(calendar.getByRole('button', { name: 'Next month', exact: true })).toBeDisabled();
+    await calendar.getByRole('button', { name: 'Previous month', exact: true }).click();
+    await page.keyboard.press('Escape');
+    await expect(calendar).toBeHidden();
+    await expect(picker).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(calendar.getByRole('button', { name: dateLabel(sunday), exact: true })).toHaveClass(/picked/);
+    const priorSunday = calendar.getByRole('button', { name: dateLabel(shift(sunday, -7)), exact: true });
+    if (!(await priorSunday.count())) await calendar.getByRole('button', { name: 'Previous month', exact: true }).click();
+    await priorSunday.focus();
+    await page.keyboard.press('Enter');
+    await expect(calendar).toBeHidden();
+    await expect(picker).toBeFocused();
+    await expect(chart).toHaveAttribute('aria-label', new RegExp(`to ${previousWeekEnd}`));
+    await current.click();
+    await expect(chart).toHaveAttribute('aria-label', new RegExp(`to ${today}`));
     await expect(page.getByRole('tab', { name: /^Tasks/ })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Invoiced', exact: true })).toContainText('No invoices');
     const initialReads = { ...reads };
@@ -103,7 +133,35 @@ assert.ok(Number.isInteger(originalWeekStart) && originalWeekStart >= 1 && origi
       for (const control of [previous, next, current]) {
         assert.ok((await control.boundingBox()).height >= 44);
       }
+      await picker.click();
+      await expect(calendar).toBeVisible();
+      const bounds = await calendar.boundingBox();
+      assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width + 1 && bounds.y >= 0 && bounds.y + bounds.height <= 601);
+      assert.equal(await calendar.evaluate(node => node.scrollWidth <= node.clientWidth + 1), true);
+      await page.keyboard.press('Escape');
+      await expect(picker).toBeFocused();
     }
+    // Text enlargement is separate from the narrow viewport/reflow checks.
+    const enlargedText = await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
+    for (const width of [1440, 320]) {
+      await page.setViewportSize({ width, height: 600 });
+      await picker.click();
+      await expect(calendar).toBeVisible();
+      assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize), '32px');
+      for (const element of await calendar.locator('.dp, .dp > div, .dp button').all()) {
+        const size = await element.evaluate(node => ({ label: node.getAttribute('aria-label') || node.className, client: node.clientWidth, scroll: node.scrollWidth }));
+        assert.ok(size.scroll <= size.client + 1, `Calendar must not clip enlarged content at ${width}px: ${JSON.stringify(size)}`);
+      }
+      await page.keyboard.press('Escape');
+      await expect(picker).toBeFocused();
+    }
+    await enlargedText.evaluate(node => node.remove());
+    await page.setViewportSize({ width: 1440, height: 600 });
+    await picker.click();
+    await activity.getByRole('button', { name: 'Hours per week', exact: true }).click();
+    await expect(calendar).toBeHidden();
+    await expect(picker).toHaveAttribute('aria-expanded', 'false');
+    assert.deepEqual(reads, initialReads, 'Opening and dismissing the calendar must not refetch');
     await activity.getByRole('button', { name: /^All time/ }).click();
     await page.getByRole('menuitem', { name: 'Custom…', exact: true }).click();
     await activity.getByLabel('Start date', { exact: true }).fill(old);
@@ -131,9 +189,17 @@ assert.ok(Number.isInteger(originalWeekStart) && originalWeekStart >= 1 && origi
     await expect(next).toBeDisabled();
     assert.equal(reads.activity, 4, 'Re-entry and retry each make one read');
     assert.deepEqual(errors, []);
-    console.log('Project activity: configured weeks, cumulative carry-in, keyboard navigation, no refetch, report isolation and responsive bounds passed');
+    console.log('Project activity: configured weeks, bounded calendar, keyboard/focus/dismissal, enlarged text, cumulative carry-in, no refetch, report isolation and responsive bounds passed');
   } finally {
-    sql(`UPDATE organizations SET week_start=${originalWeekStart} WHERE name='Demo Org'`);
-    await browser.close();
+    try {
+      sql(`BEGIN;
+        DELETE FROM time_entries WHERE project_id='${project}';
+        DELETE FROM project_tasks WHERE project_id='${project}';
+        DELETE FROM projects WHERE id='${project}';
+        UPDATE organizations SET week_start=${originalWeekStart} WHERE name='Demo Org';
+        COMMIT;`);
+    } finally {
+      await browser.close();
+    }
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

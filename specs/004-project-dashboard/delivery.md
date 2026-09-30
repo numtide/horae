@@ -31,6 +31,39 @@ This coordinates the complete outcome, not a replacement for feature specificati
 - [ ] Specify, implement and accept Workspace.
 - [ ] Verify cross-screen journeys, publish scoped PRs and reconcile the historical design inventory.
 
+## Current gap review — 2026-09-30
+
+The implementation is still on `feat/project-dashboard`, not accepted as a whole.
+The following are current source findings, not additional exclusions from scope:
+
+- **Project Detail:** the chart controls still need the handoff's grouped period
+  presentation; reporting controls belong with the Tasks/Team toolbar. Work-table
+  hours currently render as text, not contextual report links, and the toolbar
+  has no exports. Applicable hour-budget overlays, the uninvoiced tile, invoice
+  subject/payment-date persistence and recent entries remain incomplete. Additional
+  action semantics are still the open decisions recorded in `spec.md`.
+- **Clients:** `ClientList` has basic CRUD and active/inactive rows, but no designed
+  search/filter/selection toolbar. `ClientDetail` still only renders its UUID.
+  The project's client link therefore does not yet complete the intended journey.
+- **Personal Settings:** `Settings` only implements theme and plugin display;
+  profile, assigned people/projects, actual permissions and notifications are not
+  supplied by this page.
+- **Workspace:** routes currently provide People and Harvest Importers under the
+  admin shell. The requested general preferences, invitations, permission matrix,
+  backup/export and audit surfaces still require their specifications and work.
+
+Harvest's inspected Tasks links preserve project/task/report dates; copying only
+their appearance would not deliver the behavior. Horae's `Reports` route currently
+has no query-filter props, and its endpoints are manager-only. Contextual report
+navigation must preserve that boundary, not equate project-progress access with
+permission to read people's detailed entries. See `harvest-reference.md` for the
+observed behavior and limitations of the browser evidence.
+
+Next independent dashboard work: align the report toolbar and add genuinely scoped
+report navigation/exports with authorization tests. Billing policy decisions must
+be resolved before representing unknown external billing as a known amount. The
+Clients and Settings/Workspace slices remain required, not replaced by this work.
+
 ## Verified implementation increment — 2026-09-29
 
 `crates/core/src/project_activity.rs` now implements inclusive custom/calendar
@@ -447,3 +480,45 @@ Verification:
 Calendar picking, applicable budget overlays, full chart visual/zoom acceptance
 and the other dashboard requirements remain open. This increment completes F022,
 not the Project Detail slice or Clients/Settings/Workspace.
+
+## Chart calendar selection — 2026-09-30
+
+The chart week label now opens the shared DatePicker in a native calendar
+popover. It respects the configured week start, allows the whole current week
+and disables later days/months. Reopening resets the browsed month to the selected
+week. Selection changes only the chart viewport; it does not request data again
+or change the reporting interval. Existing New Project and Timesheet callers
+omit the optional upper bound and retain future-date selection.
+
+The shared calendar now uses scalable tokens for its nominal 308px width, 30px
+month buttons and 36px days. Heading/footer wrapping, constrained width and
+responsive padding avoid enlarged-text clipping. The planning-date popover class
+was renamed for shared use; its appearance and native positioning script are
+reused, not duplicated. No schema, query, dependency or financial rule changed.
+
+Verification:
+
+- 58 detail-navigation/rendering tests and 45 New Project screen tests pass.
+  Calendar tests verify inclusive day bounds, next-month bounds and unrestricted
+  defaults. Offline all-target server Clippy with warnings denied and the WASM
+  application check pass.
+- Native Chromium verifies opening and selection with Enter, Escape/focus return,
+  outside dismissal, month reset, Sunday week starts, disabled future weeks and
+  unchanged report/request counts. The calendar fits 320/390/768/1440px viewports
+  at 600px height. Its inner surface, header, footer and buttons pass horizontal
+  clipping checks at 200% text size at 320px and 1440px.
+- The stronger inner-surface zoom assertion initially failed: outer-popover
+  bounds alone had hidden clipped month controls. The shared dimensional fix
+  makes that assertion pass without reducing text size.
+- Computed layout/typography comparisons against the pre-zoom-fix build pass on
+  eight other screens at 320/768/1440px. This is a sampled shared-style regression
+  check, not complete visual acceptance of all those screens.
+- The complete New Project browser suite passes after the activity suite,
+  including calendar use, validation, recovery, finalized budgets and invoicing.
+  The activity fixture now removes only its own disposable project/entries and
+  restores the original week start; its previously retained project broke a
+  subsequent suite's expected row count. No imported or Harvest records changed.
+
+F023 is complete. The period-control presentation, report toolbar/links/exports,
+budget overlays and other gaps above remain required. The PR stays in draft;
+this is not completion of Project Detail or the full delivery.

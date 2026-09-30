@@ -3,6 +3,7 @@ use dioxus::prelude::*;
 use horae_core::project_activity::{ActivityError, ActivityRange};
 use uuid::Uuid;
 
+use crate::components::date_picker::DatePicker;
 use crate::components::form::{FormGroup, Input};
 use crate::components::menu::{Menu, MenuItem};
 use crate::components::table::DataTable;
@@ -254,11 +255,15 @@ pub(super) fn ProjectActivityPanel(
 
 #[component]
 fn ChartNavigation(mut anchor: Signal<NaiveDate>, today: NaiveDate, first_day: Weekday) -> Element {
+    let mut opening = use_signal(|| 0_u64);
     let Some(current) = horae_core::week::week_start(today, first_day) else {
         return rsx! {};
     };
     let Some(selected) = horae_core::week::week_start(anchor(), first_day) else {
         return rsx! {};
+    };
+    let Some(last_allowed_day) = current.checked_add_days(Days::new(6)) else {
+        return rsx! { p { role: "alert", class: "text-danger", "This week is outside the supported date range." } };
     };
     let previous = selected
         .checked_sub_days(Days::new(7))
@@ -267,6 +272,7 @@ fn ChartNavigation(mut anchor: Signal<NaiveDate>, today: NaiveDate, first_day: W
         .checked_add_days(Days::new(7))
         .filter(|day| *day <= current);
     rsx! {
+        document::Script { src: asset!("/assets/js/menu.js") }
         div { class: "flex flex-wrap items-center gap-2", role: "group", aria_label: "Chart week navigation",
             button { r#type: "button", class: "btn btn-secondary min-h-control", aria_label: "Previous week",
                 disabled: previous.is_none(), onclick: move |_| { if let Some(day) = previous { anchor.set(day); } }, "←" }
@@ -274,7 +280,25 @@ fn ChartNavigation(mut anchor: Signal<NaiveDate>, today: NaiveDate, first_day: W
                 onclick: move |_| anchor.set(today), "This week" }
             button { r#type: "button", class: "btn btn-secondary min-h-control", aria_label: "Next week",
                 disabled: next.is_none(), onclick: move |_| { if let Some(day) = next { anchor.set(day); } }, "→" }
-            span { class: "text-xs font-mono text-muted", aria_live: "polite", "Ending week of {selected.format(\"%d %b %Y\")}" }
+            button { id: "project-chart-week", r#type: "button", class: "btn btn-secondary min-h-control font-mono text-xs",
+                aria_label: "Choose chart week, ending week of {selected.format(\"%d %b %Y\")}",
+                popovertarget: "project-chart-calendar", aria_haspopup: "dialog", aria_expanded: "false", aria_controls: "project-chart-calendar",
+                onclick: move |_| opening += 1,
+                "Week of {selected.format(\"%d %b %Y\")}" }
+            div { id: "project-chart-calendar", class: "menu-popover calendar-popover p-0 border-0",
+                popover: "auto", role: "dialog", aria_label: "Choose chart week",
+                "data-popover-trigger": "project-chart-week", "data-calendar": "true",
+                for generation in [opening()] {
+                    DatePicker { key: "{generation}", selected, week: true, first_day, max_date: Some(last_allowed_day),
+                        onpick: move |day| {
+                            if let Some(week) = horae_core::week::week_start(day, first_day)
+                                .filter(|week| *week <= current && chart_interval(*week, first_day).is_ok()) {
+                                anchor.set(week);
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

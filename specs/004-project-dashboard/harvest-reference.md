@@ -59,6 +59,14 @@ This confirms displayed behavior, not native pointer acceptance, and no billing
 record or setting was changed. It does not establish the handling of every
 invoice status, taxes, mixed-project lines or recurring fees.
 
+A further read-only Tasks check on 2026-09-30 confirms that nonzero task hours
+link to the detailed report with the client, project, task, billable flag and
+reporting start/end dates. The total links to the same scope without the task
+filter; zero-hour task rows have no report link. The heading remains All time
+independently of the graph anchor. Native clicking again timed out while Chrome
+reported the tab hidden; the tab was opened through a DOM click and its rendered
+links inspected. No report download or business mutation was performed.
+
 - **Pin:** moves a project to the top of the list, up to 100 pinned projects.
   The article does not establish the ownership/persistence implementation.
   [Projects overview](https://support.getharvest.com/hc/en-us/articles/360048181432-Projects-overview).

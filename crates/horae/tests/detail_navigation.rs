@@ -19,6 +19,8 @@ use uuid::Uuid;
 pub mod combobox;
 #[path = "../src/components/controls.rs"]
 pub mod controls;
+#[path = "../src/components/date_picker.rs"]
+pub mod date_picker;
 #[path = "../src/components/form.rs"]
 pub mod form;
 #[path = "../src/components/icons.rs"]
@@ -30,7 +32,7 @@ pub mod modal;
 #[path = "../src/components/table.rs"]
 pub mod table;
 mod components {
-    pub use super::{avatar, combobox, controls, form, icons, menu, modal, table};
+    pub use super::{avatar, combobox, controls, date_picker, form, icons, menu, modal, table};
 }
 #[path = "../src/models/assignment.rs"]
 mod assignment;
