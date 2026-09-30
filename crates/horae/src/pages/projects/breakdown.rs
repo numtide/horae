@@ -245,7 +245,7 @@ fn WorkTable(data: ProjectBreakdown, tab: Tab) -> Element {
                     if let Some(period) = data.interval { "{period.from.format(\"%d %b %Y\")} – {period.to.format(\"%d %b %Y\")}" }
                     else { "All time" }
                 }
-                p { class: "text-xs text-muted m-0", "Period follows the chart above." }
+                p { class: "text-xs text-muted m-0", "Period follows the reporting filter above, not the chart window." }
             }
             div { class: "bg-secondary rounded-xl",
                 DataTable { table { aria_label: "{current.label()} — actual tracked hours and internal costs",

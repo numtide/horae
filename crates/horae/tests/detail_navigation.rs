@@ -1055,7 +1055,7 @@ mod server_fns {
             if let Some(response) = response {
                 return response.await.unwrap();
             }
-            let date = chrono::NaiveDate::from_ymd_opt(2026, 9, 21).unwrap();
+            let date = chrono::Utc::now().date_naive();
             let interval = interval.unwrap_or(project::ProjectActivityInterval {
                 from: date,
                 to: date,

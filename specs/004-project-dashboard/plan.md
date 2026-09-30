@@ -59,6 +59,21 @@ This does not waive the separate chart week navigation, applicable hour-budget
 overlay, complete dashboard layout, summaries, breakdowns, exports or remaining
 delivery slices. Those remain required for acceptance.
 
+### Chart window navigation
+
+Keep the reporting interval shared by charts, Tasks and Team. Add a separate
+26-week chart viewport with a configured-week anchor, previous/next week and a
+return to this week action. Do not navigate beyond the current week. This is
+display-only navigation over the already-authorized series, not a new report
+filter or a new read. Clip the viewport to the selected report dates and label
+empty intersections explicitly. Keep the complete selected-period table and
+total available; cumulative values retain their selected-period origin when
+the beginning is outside the viewport. Reset the anchor when applying another
+report period and when switching projects. Verify week/year/leap boundaries,
+cumulative carry-in, no extra requests, loading/failure, native keyboard controls
+and responsive bounds. Calendar selection and budget overlays remain separate
+acceptance requirements; this increment does not waive them.
+
 **Branch**: `feat/project-dashboard` | **Date**: 2026-09-01 | **Spec**: [spec.md](./spec.md)
 
 ### Project identity integration

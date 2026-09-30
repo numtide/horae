@@ -51,6 +51,8 @@ F001–F003 does not complete Project Detail or the four-surface delivery.
   fixed client/project context, safe cancellation and route/browser regression.
 - [x] F021 [US3] Add the Invoiced tile using the history's shared authorized
   response; separate currencies/counts and test pending/error/route behavior.
+- [x] F022 [US2] Add independent weekly chart-window navigation with configured
+  weeks, cumulative carry-in, no future navigation and browser regression.
 
 **Input**: Design documents from `specs/004-project-dashboard/`
 

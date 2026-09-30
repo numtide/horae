@@ -42,6 +42,14 @@ navigation was aborted; its own Cancel action was then invoked without saving.
 
 ## Official behavioral contracts
 
+The same session also inspected the chart controls. Moving the graph backwards
+changed its month-axis window and `graph_anchor` URL parameter, while the invoice
+table and summary amounts stayed unchanged. This week returned the anchor to the
+current week. The observed backwards step was four weeks, despite the button's
+Previous week accessible label; Horae's handoff `PeriodNav` explicitly steps one
+week. Horae follows that handoff step and keeps graph-window navigation separate
+from reporting filters. The browser check used DOM events and saved no records.
+
 Read-only MCP recheck on 2026-09-30 confirms that the inspected fixed-fee
 project's Invoiced amount matches its one draft invoice's pre-tax amount. Its
 Uninvoiced amount is negative and reconciles to total project fees minus that

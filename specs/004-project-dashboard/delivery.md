@@ -408,3 +408,42 @@ Verification:
 This completes F021 only. Uninvoiced amounts, invoice metadata, remaining chart
 and action/export requirements and full acceptance are still open. Clients and
 Settings/Workspace remain required.
+
+## Weekly chart-window navigation
+
+The chart now has previous/next week controls and a return to this week action.
+It shows up to 26 configured weeks, clipped to the selected reporting dates, and
+does not navigate past the current week. This is an independent viewport over
+the authorized response: Tasks/Team, summary values, the full weekly table and
+their reporting interval remain unchanged. Changing the reporting period resets
+the viewport to its last non-future week. The keyed project route resets it too.
+
+Cumulative geometry carries earlier selected-period hours into the visible
+window rather than restarting at zero; its filled area closes against the full
+baseline. Empty intersections and zero-activity windows are labelled separately.
+No extra query, schema, dependency or shared CSS rule is introduced.
+
+Verification:
+
+- TDD first failed the new window and cumulative-origin assertions; all 56
+  detail/rendering tests pass after implementation. Includes configured weekdays,
+  leap/year/date bounds, cropped cumulative origin and preservation of the full
+  report table. The navigation fixture now uses today's date so it cannot age
+  out of the current viewport.
+- The disposable Chromium `project-activity` suite passes with 31 weeks of real
+  authorized data and a Sunday workspace week start. Native keyboard/pointer
+  actions move the chart, enforce the current-week limit and make no extra
+  activity/breakdown/invoice reads. Custom reporting selection changes the report
+  while moving its viewport does not. Returning through Projects clears the old
+  period; an injected read failure hides the chart/controls and retry recovers.
+- Page bounds and 44px control heights pass at 320/390/768/1440px, including a
+  600px-tall viewport. The existing `project-invoice` browser suite also passes.
+- Offline all-target server Clippy with warnings denied, the application WASM
+  check and repository formatting pass.
+- The browser runner includes the new suite in its default list. All fixture
+  writes are confined to its disposable database; no Harvest or preview record
+  is changed.
+
+Calendar picking, applicable budget overlays, full chart visual/zoom acceptance
+and the other dashboard requirements remain open. This increment completes F022,
+not the Project Detail slice or Clients/Settings/Workspace.
