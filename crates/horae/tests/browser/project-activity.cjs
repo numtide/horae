@@ -26,6 +26,8 @@ assert.ok(Number.isInteger(originalWeekStart) && originalWeekStart >= 1 && origi
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  // Exercise the offline fallback-font path used by Nix CI.
+  await page.route(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, route => route.abort());
   const errors = [];
   const reads = { activity: 0, breakdown: 0, invoices: 0 };
   page.on('pageerror', error => errors.push(error.message));
@@ -194,15 +196,17 @@ assert.ok(Number.isInteger(originalWeekStart) && originalWeekStart >= 1 && origi
       assert.ok(badgeBounds.x >= plotBounds.x && badgeBounds.x + badgeBounds.width <= plotBounds.x + plotBounds.width + 1,
         `Current-week badge must fit enlarged chart at ${width}px: ${JSON.stringify({ badgeBounds, plotBounds })}`);
       assert.ok(await currentBadge.evaluate(node => node.scrollWidth <= node.clientWidth + 1), 'Enlarged current-week text must not clip');
-      assert.ok(await currentBadge.evaluate(node => {
+      const wordBounds = await currentBadge.evaluate(node => {
         const text = [...node.childNodes].find(child => child.nodeType === Node.TEXT_NODE && child.textContent.includes('This week'));
-        return [[0, 4], [5, 9]].every(([start, end]) => {
+        return [[0, 4], [5, 9]].map(([start, end]) => {
           const range = document.createRange();
           range.setStart(text, start);
           range.setEnd(text, end);
-          return range.getClientRects().length === 1;
+          return [...range.getClientRects()].map(rect => rect.toJSON());
         });
-      }), 'Current-week words must remain readable without character-by-character wrapping');
+      });
+      assert.ok(wordBounds.every(rects => rects.length === 1),
+        `Current-week words must remain readable without character-by-character wrapping at ${width}px: ${JSON.stringify({ badgeBounds, plotBounds, wordBounds })}`);
       for (const label of await months.locator('span:visible').all()) {
         const bounds = await label.boundingBox();
         assert.ok(bounds.x >= plotBounds.x && bounds.x + bounds.width <= plotBounds.x + plotBounds.width + 1,

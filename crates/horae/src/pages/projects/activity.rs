@@ -546,7 +546,7 @@ fn render_chart(
                 }
             }
             if current_band.is_some() {
-                div { class: "absolute inset-0 flex items-start justify-end p-2", aria_hidden: "true",
+                div { class: "absolute inset-0 flex items-start justify-end px-1 py-2", aria_hidden: "true",
                     span { class: "project-activity-current-label badge badge-info font-mono bg-secondary min-w-0 wrap-anywhere", "This week" }
                 }
             }

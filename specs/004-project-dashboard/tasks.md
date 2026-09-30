@@ -96,6 +96,12 @@ F001–F003 does not complete Project Detail or the four-surface delivery.
   visible weeks from the actual current-week marker; preserve zero/short series,
   year boundaries, exact totals and reads. Verify narrow/enlarged-text labels,
   both themes, browser regression and both build targets.
+- [x] F031 [US2] Reproduce the CI current-week label wrapping with only fallback
+  fonts at 200% text, correct the chart-local spacing without changing shared
+  badge defaults, and rerun browser/build checks with diagnostic word bounds.
+- [ ] F032 Investigate the full-run wait in `action-errors.cjs`, preserve its
+  assignment failure/recovery assertions, and obtain a fresh complete browser
+  regression before claiming the current revision passes all suites.
 
 **Input**: Design documents from `specs/004-project-dashboard/`
 

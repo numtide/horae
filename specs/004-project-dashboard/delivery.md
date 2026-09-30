@@ -909,3 +909,30 @@ Full Nix acceptance, remaining dashboard billing/action decisions, Clients and
 Personal Settings/Workspace are still required. The separate
 `feat/workspace-design` branch now contains a feature 013 specification draft;
 it adds no application behavior and does not resolve the open policy decisions.
+
+## Offline chart label regression — 2026-09-30
+
+PR #208's Flake Check failed in `project-activity` at 320px with 200% text.
+The previous native pass did not reproduce CI's fallback-font environment.
+Blocking Google Fonts and using only CI's DejaVu font directory reproduces the
+failure: the plot is 120px wide, the badge is 88px, and `week` spans two lines.
+The temporary Fontconfig file omits host configuration and profile font paths.
+
+The chart overlay now uses existing `px-1 py-2` utilities, retaining vertical
+spacing while giving the label more horizontal room. Shared badge CSS, font
+sizes, chart data and controls are unchanged. The browser test blocks remote
+fonts and reports each word's rectangles without weakening its readability check.
+
+The fullstack build and strict all-target server Clippy pass. With the isolated
+fallback fonts, `project-activity`, `project-chart-budget`, `project-invoice` and
+`project-lifecycle` pass together. Desktop and 320px/200%-text chart captures were
+inspected: words remain whole and inside the plot. Evidence is in the worktree's
+ignored `.scratch/ci-label/` directory. F031 is complete.
+
+The complete runner passed its first six suites, then remained in `action-errors`
+after its client/archive checks. Its live process and disposable Chromium were
+confirmed before closing only that browser after several minutes without progress.
+The runner exited unsuccessfully and shut down its disposable PostgreSQL. The
+cleanup error is not proof of the original wait's cause; F032 tracks investigation
+and a fresh complete run. This revision is not a 23-suite pass. Full Nix acceptance
+and the remaining dashboard and Clients/Settings/Workspace requirements stay open.
