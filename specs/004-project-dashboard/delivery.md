@@ -936,3 +936,30 @@ The runner exited unsuccessfully and shut down its disposable PostgreSQL. The
 cleanup error is not proof of the original wait's cause; F032 tracks investigation
 and a fresh complete run. This revision is not a 23-suite pass. Full Nix acceptance
 and the remaining dashboard and Clients/Settings/Workspace requirements stay open.
+
+## Bounded browser regression — 2026-09-30
+
+The original `action-errors` wait did not recur when running that suite alone
+or after the six preceding suites with Playwright API tracing. All three action
+failure/recovery scenarios passed without changing their assertions. A subsequent
+full attempt failed earlier, while `responsive-layout` waited for the login page's
+load event; that separate timeout does not establish the original wait's cause.
+
+The runner now prints each suite's name and limits it to 15 minutes, terminating
+the process group and escalating after ten seconds if needed. A timeout is a
+failed run, not a retry or success. This bounds waits such as Playwright's
+`response.finished()` without removing readiness or recovery checks. Coreutils
+is already an explicit browser-check input; no dependency or application code
+changes are needed.
+
+The fresh default run completed all 23 suites with exit status zero against the
+same frozen fullstack build, isolated DejaVu fallback fonts and a new disposable
+database. Assignment recovery, enlarged chart labels and all existing assertions
+remain covered. Shell syntax, Nix formatting and whitespace checks pass; a short
+timeout probe confirms exit status 124 rather than success. Standalone ShellCheck
+was unavailable in the dev shell, so no standalone ShellCheck pass is claimed.
+
+F032 is complete as investigation, bounded execution and fresh regression
+evidence, not a proven root-cause fix for the unreproduced wait. Full Nix CI and
+the remaining feature requirements are still open; no new permission policy has
+been activated, and no imported data or preview instance was changed.

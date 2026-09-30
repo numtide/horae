@@ -99,9 +99,11 @@ F001–F003 does not complete Project Detail or the four-surface delivery.
 - [x] F031 [US2] Reproduce the CI current-week label wrapping with only fallback
   fonts at 200% text, correct the chart-local spacing without changing shared
   badge defaults, and rerun browser/build checks with diagnostic word bounds.
-- [ ] F032 Investigate the full-run wait in `action-errors.cjs`, preserve its
+- [x] F032 Investigate the full-run wait in `action-errors.cjs`, preserve its
   assignment failure/recovery assertions, and obtain a fresh complete browser
   regression before claiming the current revision passes all suites.
+  The wait did not reproduce; the runner now bounds suites and all 23 pass.
+  This does not establish or claim a fix for the original wait's cause.
 
 **Input**: Design documents from `specs/004-project-dashboard/`
 

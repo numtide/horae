@@ -72,5 +72,8 @@ for suite in "${suites[@]}"; do
     echo "Unknown browser suite: $suite" >&2
     exit 1
   fi
-  node "$browser_tests/$suite.cjs"
+  echo "Running browser suite: $suite"
+  # Bound waits that Playwright does not time out, including response.finished().
+  # A timeout fails the run; do not retry away a failed assertion or stalled suite.
+  timeout --kill-after=10s 15m node "$browser_tests/$suite.cjs"
 done
