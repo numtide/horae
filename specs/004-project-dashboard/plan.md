@@ -173,6 +173,23 @@ including one shared read, stale/error/retry behavior, report-period changes,
 keyboard navigation, short/mobile layouts and enlarged text. No new SQL, DTO,
 schema, financial rule or shared styling default is needed for this increment.
 
+### Current-week chart marker
+
+Position the handoff's highlighted band with the same integer bucket boundaries
+as the chart. Match each visible bucket to the current configured week, including
+clipped first/last buckets and year crossings; never assume the last recorded
+week is current. Historical windows and empty series omit the marker. Both chart
+modes retain their exact totals and no additional read is needed.
+
+Reuse the captured date already driving chart navigation. Paint the band and its
+dashed vertical edges with primary tokens, and identify it in the chart's
+accessible description. Keep the existing badge inside the plot's trailing edge
+instead of centering it across the boundary as in the prototype, so enlarged text
+and narrow layouts cannot overflow. Omit the badge's decorative dot locally to
+keep whole words readable when enlarged; use an opaque existing surface over the
+series. Let endpoint date labels wrap within their container. No shared style
+defaults change.
+
 ### Chart calendar selection
 
 Reuse DatePicker and the native calendar-popover behavior already used by New

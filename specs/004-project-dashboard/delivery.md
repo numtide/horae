@@ -751,3 +751,43 @@ F027 is implemented. This does not complete Project Detail visual acceptance:
 the current-week highlight and broader chart fidelity still need review, alongside
 the previously recorded billing/action gaps and full application/Nix acceptance.
 Clients and Settings/Workspace remain required work; PR #208 stays draft.
+
+## Current-week chart marker — 2026-09-30
+
+The chart now highlights the current configured week in both modes using the
+same integer bucket geometry as the plotted data. Partial buckets and year
+crossings retain their real position. Historical windows, old reporting periods
+and empty series do not label the latest recorded week as current. Tracked totals,
+report scope and request counts are unchanged; the accessible chart description
+also identifies the highlight.
+
+The marker uses existing primary tokens and a local badge variation. Unlike the
+prototype's overhanging centered label, the badge stays inside the trailing plot
+edge. Its decorative dot is omitted locally and its background is opaque over
+the series. Enlarged-text inspection exposed character-by-character badge wrapping
+and overflowing endpoint dates; existing minimum-width/wrapping utilities fix
+both without changing shared defaults. The browser checks whole-word readability
+as well as bounds, and captures can be saved with `HORAE_TEST_SCREENSHOT_DIR`.
+
+Verification:
+
+- The initial geometry test failed against the missing implementation; the final
+  69 detail-navigation/rendering and 45 New Project screen tests pass. Coverage
+  includes Monday/Sunday boundaries, clipped/year-crossing buckets, historical,
+  future and empty series, zero-current-week work and unchanged totals in both modes.
+- Native Chromium verifies configured-week positioning, marker removal/restoration
+  through calendar/navigation and historical reports, unchanged request counts,
+  keyboard behavior, mobile/desktop bounds and 200% text. Local desktop/mobile
+  chart captures, including the corrected 200% mobile layout, were inspected.
+- One invoice regression run timed out waiting for the page `load` event after
+  navigation had committed; a complete rerun passed. The fault-injection reload
+  now waits for DOM readiness and the existing awaited application error/retry
+  assertions, without removing those assertions or changing billing behavior.
+- The final combined run passes project-activity, project-chart-budget,
+  project-exports and project-invoice after that readiness adjustment.
+- All-target server Clippy with warnings denied and WASM compilation pass. The
+  change adds no query, schema, dependency or shared style override.
+
+F028 is implemented. Broader chart/dashboard visual acceptance, billing and action
+decisions, full application/Nix acceptance, Clients and Settings/Workspace remain
+open. This marker is not evidence that the full requested delivery is complete.

@@ -97,6 +97,20 @@ struct Plot {
     budget_y: Option<i128>,
 }
 
+fn current_week_band(
+    weeks: &[ProjectActivityWeek],
+    first_day: Weekday,
+    today: NaiveDate,
+) -> Option<(i128, i128)> {
+    let current = horae_core::week::week_start(today, first_day)?;
+    let index = weeks
+        .iter()
+        .position(|week| horae_core::week::week_start(week.from, first_day) == Some(current))?
+        as i128;
+    let count = weeks.len() as i128;
+    Some((index * 10000 / count, (index + 1) * 10000 / count))
+}
+
 fn plot(
     weeks: &[ProjectActivityWeek],
     cumulative: bool,
@@ -220,7 +234,7 @@ pub(super) fn ProjectActivityPanel(
                     p { class: "py-12 text-muted", role: "status", "Loading project activity…" }
                 } else {
                     match &*activity.read() {
-                        Some((_, Ok(data))) => render_activity(data, cumulative(), if interval().is_none() { "All time" } else { "Selected period" }, anchor(), budget),
+                        Some((_, Ok(data))) => render_activity(data, cumulative(), if interval().is_none() { "All time" } else { "Selected period" }, anchor(), today, budget),
                         Some((_, Err(message))) => rsx! {
                             p { class: "text-danger mt-4", role: "alert", "Project activity is unavailable: {message}" }
                             button { r#type: "button", class: "btn btn-secondary min-h-control", onclick: move |_| activity.restart(), "Retry activity" }
@@ -392,6 +406,7 @@ fn render_activity(
     cumulative: bool,
     label: &str,
     anchor: NaiveDate,
+    today: NaiveDate,
     budget: Option<HourBudget>,
 ) -> Element {
     let Some(interval) = data.interval else {
@@ -400,7 +415,7 @@ fn render_activity(
     let total = data.weeks.last().map_or(0, |week| week.cumulative_minutes);
     rsx! {
         p { class: "text-sm text-muted mt-4 mb-2", "{label}: {interval.from.format(\"%d %b %Y\")} – {interval.to.format(\"%d %b %Y\")}" }
-        {render_chart(data, cumulative, anchor, budget)}
+        {render_chart(data, cumulative, anchor, today, budget)}
         p { class: "text-sm mt-4", "Selected period: " strong { class: "font-mono", "{hours(total)}" } }
         if total == 0 { p { class: "text-sm text-muted", "No time tracked in this period." } }
         details { class: "mt-4",
@@ -435,6 +450,7 @@ fn render_chart(
     data: &ProjectActivity,
     cumulative: bool,
     anchor: NaiveDate,
+    today: NaiveDate,
     budget: Option<HourBudget>,
 ) -> Element {
     let budget = budget.filter(|_| cumulative);
@@ -447,6 +463,12 @@ fn render_chart(
     let start = data.weeks.partition_point(|week| week.to < window.from());
     let end = data.weeks.partition_point(|week| week.from <= window.to());
     let visible = &data.weeks[start..end];
+    let current_band = current_week_band(visible, data.week_start, today);
+    let current_label = if current_band.is_some() {
+        " Current week is highlighted."
+    } else {
+        ""
+    };
     let chart = match plot(visible, cumulative, budget.map(|value| value.minutes)) {
         Ok(chart) => chart,
         Err(error) => {
@@ -480,8 +502,13 @@ fn render_chart(
                 span { "{hours(chart.maximum / 2)}" }
                 span { "0h" }
             }
+            div { class: "relative min-w-0 h-full",
             svg { class: "project-activity-svg w-full h-full", view_box: "0 0 10000 2000", preserve_aspect_ratio: "none",
-                role: "img", "aria-label": "{legend}. Chart window: {first.from} to {last.to}. Selected period total: {hours(total)}. Exact minutes are available in the weekly data table below.",
+                role: "img", "aria-label": "{legend}. Chart window: {first.from} to {last.to}. Selected period total: {hours(total)}.{current_label} Exact minutes are available in the weekly data table below.",
+                if let Some((left, right)) = current_band {
+                    rect { class: "project-activity-current", x: "{left}", y: "0", width: "{right - left}", height: "2000" }
+                    path { class: "project-activity-current-edges", d: "M{left} 0 V2000 M{right} 0 V2000", vector_effect: "non-scaling-stroke" }
+                }
                 path { class: "project-activity-grid", d: "M0 0 H10000 M0 1000 H10000 M0 2000 H10000", vector_effect: "non-scaling-stroke" }
                 if cumulative {
                     path { class: "project-activity-area", d: "{chart.line} L10000 2000 L0 2000 Z" }
@@ -493,8 +520,14 @@ fn render_chart(
                     path { class: "project-activity-budget", d: "M0 {y} H10000", vector_effect: "non-scaling-stroke" }
                 }
             }
+            if current_band.is_some() {
+                div { class: "absolute inset-0 flex items-start justify-end p-2", aria_hidden: "true",
+                    span { class: "project-activity-current-label badge badge-info font-mono bg-secondary min-w-0 wrap-anywhere", "This week" }
+                }
+            }
+            }
             span {}
-            div { class: "flex justify-between gap-3 text-xs text-subtle font-mono", aria_hidden: "true",
+            div { class: "flex flex-wrap justify-between gap-3 text-xs text-subtle font-mono", aria_hidden: "true",
                 span { "{first.from.format(\"%d %b %Y\")}" }
                 span { "{last.to.format(\"%d %b %Y\")}" }
             }
@@ -588,6 +621,7 @@ mod tests {
             true,
             "This year",
             range.to(),
+            range.to(),
             None,
         ));
         for expected in [
@@ -604,6 +638,7 @@ mod tests {
             true,
             "This year",
             date("2025-01-01"),
+            range.to(),
             None,
         ));
         assert!(
@@ -622,6 +657,114 @@ mod tests {
             billable_minutes: billable,
             non_billable_minutes: non_billable,
             cumulative_minutes: cumulative,
+        }
+    }
+
+    #[test]
+    fn current_week_band_uses_configured_boundaries_and_clipped_buckets() {
+        let weeks = [
+            ProjectActivityWeek {
+                from: date("2026-09-23"),
+                to: date("2026-09-27"),
+                ..week(0, 0, 0)
+            },
+            ProjectActivityWeek {
+                from: date("2026-09-28"),
+                to: date("2026-09-30"),
+                ..week(0, 0, 0)
+            },
+        ];
+        assert_eq!(
+            current_week_band(&weeks, Weekday::Mon, date("2026-09-27")),
+            Some((0, 5000))
+        );
+        assert_eq!(
+            current_week_band(&weeks, Weekday::Mon, date("2026-09-28")),
+            Some((5000, 10000))
+        );
+        let sunday = [
+            ProjectActivityWeek {
+                to: date("2026-09-26"),
+                ..weeks[0].clone()
+            },
+            ProjectActivityWeek {
+                from: date("2026-09-27"),
+                ..weeks[1].clone()
+            },
+        ];
+        assert_eq!(
+            current_week_band(&sunday, Weekday::Sun, date("2026-09-27")),
+            Some((5000, 10000))
+        );
+        let year_boundary = [ProjectActivityWeek {
+            from: date("2026-12-31"),
+            to: date("2027-01-02"),
+            ..week(0, 0, 0)
+        }];
+        assert_eq!(
+            current_week_band(&year_boundary, Weekday::Mon, date("2027-01-01")),
+            Some((0, 10000))
+        );
+    }
+
+    #[test]
+    fn current_week_band_does_not_label_old_future_or_empty_series_as_current() {
+        for today in ["2026-09-14", "2026-09-30"] {
+            assert_eq!(
+                current_week_band(&[week(60, 0, 60)], Weekday::Mon, date(today)),
+                None
+            );
+        }
+        assert_eq!(
+            current_week_band(&[], Weekday::Mon, date("2026-09-23")),
+            None
+        );
+    }
+
+    #[test]
+    fn current_week_rendering_tracks_visibility_in_both_modes_without_changing_totals() {
+        let data = ProjectActivity {
+            interval: Some(ProjectActivityInterval {
+                from: date("2026-09-21"),
+                to: date("2026-09-30"),
+            }),
+            week_start: Weekday::Mon,
+            weeks: vec![
+                week(60, 0, 60),
+                ProjectActivityWeek {
+                    from: date("2026-09-28"),
+                    to: date("2026-09-30"),
+                    ..week(0, 0, 60)
+                },
+            ],
+        };
+        for cumulative in [true, false] {
+            for (anchor, today, highlighted) in [
+                ("2026-09-30", "2026-09-30", true),
+                ("2026-09-23", "2026-09-30", false),
+                ("2026-09-30", "2026-10-07", false),
+            ] {
+                let html = dioxus::ssr::render_element(render_activity(
+                    &data,
+                    cumulative,
+                    "All time",
+                    date(anchor),
+                    date(today),
+                    None,
+                ));
+                assert_eq!(
+                    html.contains("project-activity-current-edges"),
+                    highlighted,
+                    "{html}"
+                );
+                assert_eq!(
+                    html.contains("Current week is highlighted."),
+                    highlighted,
+                    "{html}"
+                );
+                assert!(html.contains("Selected period total: 1h"), "{html}");
+                assert!(html.contains("2026-09-28 – 2026-09-30"), "{html}");
+            }
         }
     }
 
@@ -709,6 +852,7 @@ mod tests {
             true,
             "All time",
             date("2026-09-27"),
+            date("2026-09-27"),
             budget,
         ));
         for expected in [
@@ -723,6 +867,7 @@ mod tests {
             &data,
             false,
             "All time",
+            date("2026-09-27"),
             date("2026-09-27"),
             budget,
         ));
@@ -791,6 +936,7 @@ mod tests {
                 cumulative,
                 "Custom period",
                 date("2026-09-27"),
+                date("2026-09-27"),
                 None,
             ));
             for expected in [
@@ -821,6 +967,7 @@ mod tests {
             true,
             "All time",
             date("2026-09-27"),
+            date("2026-09-27"),
             None,
         ));
         assert!(empty.contains("No time has been tracked on this project."));
@@ -834,6 +981,7 @@ mod tests {
             &data,
             false,
             "Custom period",
+            date("2026-09-27"),
             date("2026-09-27"),
             None,
         ));

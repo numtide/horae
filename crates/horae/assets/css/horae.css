@@ -1121,6 +1121,9 @@ tbody tr:hover { background: var(--color-row-hover); }
 }
 .project-activity-svg { overflow: visible; }
 .project-activity-grid { fill: none; stroke: var(--color-border); stroke-width: 1; }
+.project-activity-current { fill: var(--color-primary-wash); }
+.project-activity-current-edges { fill: none; stroke: var(--color-primary-border); stroke-width: 1; stroke-dasharray: 4 4; }
+.project-activity-current-label::before { content: none; }
 .project-activity-area { fill: var(--color-primary-bg); }
 .project-activity-line { fill: none; stroke: var(--color-primary); stroke-width: 2; }
 .project-activity-bars { fill: var(--color-primary); }

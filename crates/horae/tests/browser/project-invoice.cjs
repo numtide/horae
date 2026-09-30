@@ -124,7 +124,8 @@ const invoicesBefore = Number(sql('SELECT count(*) FROM invoices'));
       assert.equal(await invoiced.evaluate(element => element.scrollWidth <= element.clientWidth + 1), true);
     }
     await page.route('**/api/get_project_invoices*', route => route.abort(), { times: 1 });
-    await page.reload();
+    // The assertions below wait for the application's error/retry state.
+    await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(invoiced.getByRole('alert')).toContainText('Could not load invoiced total');
     await expect(invoiced).not.toContainText('EUR 100.00');
     await invoiced.getByRole('button', { name: 'Retry invoiced total', exact: true }).click();

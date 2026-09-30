@@ -67,7 +67,13 @@ assert.ok(Number.isInteger(originalWeekStart) && originalWeekStart >= 1 && origi
     const next = activity.getByRole('button', { name: 'Next week', exact: true });
     const current = activity.getByRole('button', { name: 'This week', exact: true });
     const chart = activity.getByRole('img');
+    const currentBand = activity.locator('.project-activity-current');
+    const currentBadge = activity.locator('.project-activity-plot .badge');
     await expect(chart).toHaveAttribute('aria-label', new RegExp(`${shift(sunday, -25 * 7)} to ${today}`));
+    await expect(currentBand).toHaveAttribute('x', '9615');
+    await expect(currentBand).toHaveAttribute('width', '385');
+    await expect(currentBadge).toHaveText('This week');
+    await expect(chart).toHaveAttribute('aria-label', /Current week is highlighted/);
     await expect(activity.locator('.project-activity-line')).toHaveAttribute('d', /^M0 1334 /);
     await expect(next).toBeDisabled();
     await expect(current).toBeDisabled();
@@ -98,6 +104,8 @@ assert.ok(Number.isInteger(originalWeekStart) && originalWeekStart >= 1 && origi
     await expect(calendar).toBeHidden();
     await expect(picker).toBeFocused();
     await expect(chart).toHaveAttribute('aria-label', new RegExp(`to ${previousWeekEnd}`));
+    await expect(currentBand).toHaveCount(0);
+    await expect(currentBadge).toHaveCount(0);
     await current.click();
     await expect(chart).toHaveAttribute('aria-label', new RegExp(`to ${today}`));
     await expect(page.getByRole('tab', { name: /^Tasks/ })).toBeVisible();
@@ -123,6 +131,7 @@ assert.ok(Number.isInteger(originalWeekStart) && originalWeekStart >= 1 && origi
     await next.click();
     await expect(next).toBeDisabled();
     await expect(activity.locator('.project-activity-bars')).toBeVisible();
+    await expect(currentBand).toHaveAttribute('x', '9615');
     await previous.click();
     await current.click();
     await expect(chart).toHaveAttribute('aria-label', new RegExp(`to ${today}`));
@@ -130,6 +139,11 @@ assert.ok(Number.isInteger(originalWeekStart) && originalWeekStart >= 1 && origi
     for (const width of [320, 390, 768, 1440]) {
       await page.setViewportSize({ width, height: 600 });
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
+      const badgeBounds = await currentBadge.boundingBox();
+      const plotBounds = await chart.boundingBox();
+      assert.ok(badgeBounds.x >= plotBounds.x && badgeBounds.x + badgeBounds.width <= plotBounds.x + plotBounds.width + 1);
+      if (process.env.HORAE_TEST_SCREENSHOT_DIR)
+        await activity.locator('.project-activity-plot').screenshot({ path: `${process.env.HORAE_TEST_SCREENSHOT_DIR}/project-current-week-${width}.png` });
       for (const control of [previous, next, current]) {
         assert.ok((await control.boundingBox()).height >= 44);
       }
@@ -145,6 +159,27 @@ assert.ok(Number.isInteger(originalWeekStart) && originalWeekStart >= 1 && origi
     const enlargedText = await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
     for (const width of [1440, 320]) {
       await page.setViewportSize({ width, height: 600 });
+      const badgeBounds = await currentBadge.boundingBox();
+      const plotBounds = await chart.boundingBox();
+      assert.ok(badgeBounds.x >= plotBounds.x && badgeBounds.x + badgeBounds.width <= plotBounds.x + plotBounds.width + 1,
+        `Current-week badge must fit enlarged chart at ${width}px: ${JSON.stringify({ badgeBounds, plotBounds })}`);
+      assert.ok(await currentBadge.evaluate(node => node.scrollWidth <= node.clientWidth + 1), 'Enlarged current-week text must not clip');
+      assert.ok(await currentBadge.evaluate(node => {
+        const text = [...node.childNodes].find(child => child.nodeType === Node.TEXT_NODE && child.textContent.includes('This week'));
+        return [[0, 4], [5, 9]].every(([start, end]) => {
+          const range = document.createRange();
+          range.setStart(text, start);
+          range.setEnd(text, end);
+          return range.getClientRects().length === 1;
+        });
+      }), 'Current-week words must remain readable without character-by-character wrapping');
+      for (const label of await activity.locator('.project-activity-plot > div').last().locator('span').all()) {
+        const bounds = await label.boundingBox();
+        assert.ok(bounds.x >= plotBounds.x && bounds.x + bounds.width <= plotBounds.x + plotBounds.width + 1,
+          `Axis dates must stay inside the plot at ${width}px: ${JSON.stringify({ bounds, plotBounds })}`);
+      }
+      if (process.env.HORAE_TEST_SCREENSHOT_DIR)
+        await activity.locator('.project-activity-plot').screenshot({ path: `${process.env.HORAE_TEST_SCREENSHOT_DIR}/project-current-week-enlarged-${width}.png` });
       await picker.click();
       await expect(calendar).toBeVisible();
       assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize), '32px');
@@ -189,6 +224,8 @@ assert.ok(Number.isInteger(originalWeekStart) && originalWeekStart >= 1 && origi
     await expect(reporting.getByRole('button', { name: /^Custom period/ })).toBeFocused();
     await expect(chart).toHaveAttribute('aria-label', new RegExp(`${old} to ${old}`));
     await expect(chart).toHaveAttribute('aria-label', /Selected period total: 1h/);
+    await expect(currentBand).toHaveCount(0);
+    await expect(currentBadge).toHaveCount(0);
     await expect(page.getByRole('tab', { name: /^Team/ })).toHaveAttribute('aria-selected', 'true');
     await expect(breakdown.getByRole('status')).toHaveText('Loading project breakdown…');
     await expect(breakdown.getByRole('table')).toHaveCount(0);
@@ -237,7 +274,7 @@ assert.ok(Number.isInteger(originalWeekStart) && originalWeekStart >= 1 && origi
     await expect(next).toBeDisabled();
     assert.equal(reads.activity, 4, 'Re-entry and retry each make one read');
     assert.deepEqual(errors, []);
-    console.log('Project activity: configured weeks, bounded calendar, keyboard/focus/dismissal, enlarged text, cumulative carry-in, no refetch, report toolbar validation, pending/error/retry tab preservation, invoice isolation and responsive bounds passed');
+    console.log('Project activity: configured current-week band, bounded calendar, keyboard/focus/dismissal, enlarged text, cumulative carry-in, no refetch, report toolbar validation, pending/error/retry tab preservation, invoice isolation and responsive bounds passed');
   } finally {
     try {
       sql(`BEGIN;

@@ -78,6 +78,10 @@ F001–F003 does not complete Project Detail or the four-surface delivery.
   interval; distinguish current allowance from configured rounded consumption.
   Verify scale, zero/large budgets, privacy/loading/retry, one summary request,
   weekly-mode isolation and responsive/keyboard/browser regressions.
+- [x] F028 [US2] Add the handoff's current-week chart band and label, deriving
+  its position from visible configured-week buckets rather than the last entry.
+  Preserve both chart modes, exact totals and historical navigation; verify
+  clipped/year-boundary weeks, empty/old intervals, keyboard and enlarged layouts.
 
 **Input**: Design documents from `specs/004-project-dashboard/`
 
