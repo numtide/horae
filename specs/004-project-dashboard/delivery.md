@@ -342,3 +342,45 @@ a development reload and was inconclusive; the repeated single-evaluation check
 above succeeded. Populated-history browser and native pointer checks remain open.
 Offline server Clippy (all targets, warnings denied), the application WASM check,
 `nix fmt` and whitespace checks also pass on this increment.
+
+## Contextual invoice preparation
+
+The Invoices tab now opens `/projects/:id/invoices/new`, reusing the existing
+preparation form and account-scoped recovery gate. The gate completes before
+project identity is requested. Client and project are fixed to the authorized
+source; preview, source refresh and generation retain the single-project filter.
+The generic invoice client/project picker is unchanged. Dates remain explicit,
+and the initial prefilled context is clean rather than an unsaved user edit.
+Cancel returns to the project, with the existing dirty/pending navigation guard;
+successful generation opens the actual invoice. Route keys reset source state.
+
+Verification:
+
+- The new route/navigation test failed before implementation; all four route
+  tests and 48 detail/rendering tests now pass. A direct-route test verifies that
+  sources are not requested while recovery/authorization is unresolved.
+- Offline all-target server Clippy with warnings denied and the WASM check pass.
+  No SQL query, cache, schema, billing mutation API or shared CSS was changed.
+- The new `project-invoice` browser suite runs against the runner's disposable
+  database. Two projects share a client; preview and generation select only the
+  originating project, and the other project's entry remains open. It checks
+  clean and dirty cancellation without mutation, failed preview/retry, actual
+  draft creation, populated history navigation and 320/390/768/1440px form bounds.
+- The suite also verifies identity-load failure/retry and revoked billing access:
+  a member cannot load source identity, see the form or create another invoice.
+- The full existing `invoice-preparation` browser suite passes, including partial
+  fees, excess confirmation, source refresh, lost responses, reload recovery,
+  account-scoped replay, storage failures and fee-balance permissions. Its old
+  literal `Project` heading assertion was updated to the actual project identity.
+- Windows Chrome MCP opens the new route with the expected Acme client/project
+  and clean state. Financial browser mutations occur only in the disposable
+  Chromium runner, not in the live preview, imported data or Harvest.
+- The complete `new-project` browser suite also passes: responsive validation,
+  autosave/recovery, finalized budgets, reports/exports and invoice defaults.
+  Its detail assertions now use the real heading, expand Project information
+  and distinguish saved tags from the project-type badge. No assertions were
+  removed and no editor behavior was changed to satisfy obsolete selectors.
+
+This finishes F020, not dashboard acceptance. Invoiced/uninvoiced tiles, metadata,
+additional action decisions, exports and remaining visual/accessibility coverage
+are still required, followed by Clients and Settings/Workspace.

@@ -140,6 +140,18 @@ notes, issue date or an invented payment timestamp. Invoice creation with projec
 context, those metadata fields, financial tiles and remaining acceptance are
 separate required follow-ups, not satisfied by a read projection.
 
+### Contextual invoice creation
+
+Reuse `PrepareInvoice` and the current recovery gate from a project-specific
+route. Load authorized project/client identity, then fix both source IDs for this
+flow; the general Invoices screen keeps its client/project picker unchanged.
+Do not initialize dates from unrelated issue dates or lifetime invoice history.
+Preview, fee refresh, generation and recovery must retain the same single-project
+scope. Cancelling returns to Project Detail without a mutation; generation keeps
+the existing pending-navigation guard and idempotent recovery. Verify direct and
+changed routes, denied/missing identity, source payloads, cancellation and generic
+invoice preparation regression. No new billing policy, schema or mutation API.
+
 ## Summary
 
 Replace the stub `ProjectDetail` page (today: `"Project detail for {id}"` plus an assignments table) with a real, data-honest project dashboard. It shows the project's identity, budget & progress (driven by `budget_kind`), total/billable/non-billable hours, billable amount, invoiced vs uninvoiced money, per-task and per-person breakdowns, the team and enabled tasks, and a recent-entries feed.

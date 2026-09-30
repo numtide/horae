@@ -47,6 +47,8 @@ F001–F003 does not complete Project Detail or the four-surface delivery.
   discounts, current billing permissions, explicit bounds and database tests.
 - [ ] F019 [US3] Integrate the invoice tab, real counts/links, labelled history,
   empty/loading/error states and keyboard navigation without resetting chart scope.
+- [x] F020 [US3] Reuse invoice preparation and recovery from Project Detail with
+  fixed client/project context, safe cancellation and route/browser regression.
 
 **Input**: Design documents from `specs/004-project-dashboard/`
 

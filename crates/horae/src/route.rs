@@ -9,7 +9,7 @@ use crate::pages::{
     clients::{ClientDetail, ClientList},
     gallery::Gallery,
     importers::HarvestImport,
-    invoices::{InvoiceDetail, InvoiceList},
+    invoices::{InvoiceDetail, InvoiceList, NewProjectInvoice},
     new_project::{EditProject, NewProject},
     projects::{ProjectDetail, ProjectList},
     reports::Reports,
@@ -62,6 +62,8 @@ pub enum Route {
     NewProject {},
     #[route("/projects/:id/edit")]
     EditProject { id: Uuid },
+    #[route("/projects/:id/invoices/new")]
+    NewProjectInvoice { id: Uuid },
     #[route("/projects/:id")]
     ProjectDetail { id: Uuid },
     #[route("/approvals")]
@@ -100,7 +102,10 @@ fn matches_navigation(to: &Route, current: &Route) -> bool {
         (to, current),
         (
             Route::ProjectList {},
-            Route::NewProject {} | Route::EditProject { .. } | Route::ProjectDetail { .. }
+            Route::NewProject {}
+                | Route::EditProject { .. }
+                | Route::ProjectDetail { .. }
+                | Route::NewProjectInvoice { .. }
         )
     ) || std::mem::discriminant(current) == std::mem::discriminant(to)
 }
@@ -108,6 +113,16 @@ fn matches_navigation(to: &Route, current: &Route) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn project_invoice_creation_keeps_project_identity_and_navigation() {
+        let id = Uuid::now_v7();
+        let path = format!("/projects/{id}/invoices/new");
+        let route: Route = path.parse().unwrap();
+        assert_eq!(route.to_string(), path);
+        assert!(matches_navigation(&Route::ProjectList {}, &route));
+        assert!(!matches_navigation(&Route::InvoiceList {}, &route));
+    }
 
     #[test]
     fn project_detail_highlights_only_projects() {

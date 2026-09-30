@@ -78,7 +78,7 @@ pub(super) fn ProjectBreakdownPanel(
             else {
                 match &*data.read() {
                     Some((_, Ok(value))) => rsx! { for period in [interval()] {
-                        BreakdownTables { key: "{period:?}", data: value.clone(), invoice_state: invoice_state.clone(),
+                        BreakdownTables { key: "{period:?}", project_id, data: value.clone(), invoice_state: invoice_state.clone(),
                             on_invoice_retry: move |_| invoices.restart() }
                     } },
                     Some((_, Err(error))) => rsx! {
@@ -144,6 +144,7 @@ fn entity_label(entity: &ProjectWorkEntity, person: bool) -> Element {
 #[component]
 fn BreakdownTables(
     data: ProjectBreakdown,
+    #[props(default)] project_id: Option<Uuid>,
     #[props(default)] invoice_state: InvoiceHistoryState,
     #[props(default)] on_invoice_retry: Option<EventHandler<()>>,
 ) -> Element {
@@ -191,6 +192,11 @@ fn BreakdownTables(
         }
         div { id: "project-breakdown-panel", role: "tabpanel", aria_labelledby: current.id(), tabindex: "0",
             if current == Tab::Invoices {
+                if let Some(id) = project_id {
+                    div { class: "flex flex-wrap gap-3 mt-6",
+                        Link { to: Route::NewProjectInvoice { id }, class: "btn btn-primary min-h-control", "New invoice" }
+                    }
+                }
                 match &invoice_state {
                     InvoiceHistoryState::Ready(value) => rsx! { InvoiceHistory { data: value.clone() } },
                     InvoiceHistoryState::Failed(error) => rsx! {
@@ -494,6 +500,7 @@ mod tests {
             BreakdownTables,
             BreakdownTablesProps {
                 data,
+                project_id: None,
                 invoice_state: InvoiceHistoryState::Ready(
                     crate::models::project::ProjectInvoices {
                         invoices: Vec::new(),

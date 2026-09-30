@@ -1155,13 +1155,14 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await expect(screen.getByRole('button', { name: 'Back to Projects', exact: true })).toBeDisabled();
     await screen.getByRole('button', { name: 'Retry request', exact: true }).click();
     await expect(page).toHaveURL(`${base}/projects/${created}`);
-    await expect(page.getByRole('heading', { name: 'Project', exact: true })).toBeVisible();
     const basics = page.getByRole('region', { name: 'Project details', exact: true });
+    await expect(basics.getByRole('heading', { level: 1 })).toHaveText('[BROWSER-NEW] Recovered latest edit');
+    await basics.locator('summary').filter({ hasText: 'Project information' }).click();
     await expect(basics).toContainText('Recovered latest edit');
     await expect(basics).toContainText('BROWSER-NEW');
     await expect(basics).toContainText('New project browser client');
     await expect(basics).toContainText('01 Sep 2026');
-    await expect(basics.locator('.chip')).toHaveText(['browser']);
+    await expect(basics.locator('details .chip')).toHaveText(['browser']);
     await expect(basics).toContainText('W'.repeat(1000));
     for (const width of [390, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });

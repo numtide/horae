@@ -508,7 +508,7 @@ const feesBefore = Number(sql('SELECT count(*) FROM project_fee_occurrences'));
       assert.equal(response.status(), 403);
       assert.ok(!(await response.text()).includes('12700'));
       await page.reload();
-      await expect(page.getByRole('heading', { name: 'Project', exact: true })).toBeVisible();
+      await expect(page.getByRole('region', { name: 'Project details', exact: true }).getByRole('heading', { level: 1 })).toContainText(project.name);
       await readsFinished();
       await expect(balances).toHaveCount(0);
     } finally {

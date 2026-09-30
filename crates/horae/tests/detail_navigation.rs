@@ -106,7 +106,7 @@ fn app(probe: Probe) -> Element {
 
 mod route {
     use super::*;
-    use invoices::{InvoiceDetail, InvoiceList};
+    use invoices::{InvoiceDetail, InvoiceList, NewProjectInvoice};
     use projects::{ProjectDetail, ProjectList};
 
     #[derive(Clone, PartialEq, Routable)]
@@ -122,6 +122,8 @@ mod route {
         NewProject {},
         #[route("/projects/:id/edit")]
         EditProject { id: Uuid },
+        #[route("/projects/:id/invoices/new")]
+        NewProjectInvoice { id: Uuid },
         #[route("/projects/:id")]
         ProjectDetail { id: Uuid },
         #[route("/clients/:id")]
@@ -167,6 +169,23 @@ fn settle(dom: &mut VirtualDom) {
         dom.render_immediate_to_vec();
     }
     panic!("detail navigation did not settle");
+}
+
+#[tokio::test]
+async fn project_invoice_route_waits_for_recovery_before_loading_sources() {
+    for role in [OrgRole::Admin, OrgRole::Member] {
+        let probe = Probe {
+            initial_path: Some(format!("/projects/{}/invoices/new", Uuid::from_u128(1))),
+            viewer_role: Some(role),
+            ..Probe::default()
+        };
+        let mut dom = VirtualDom::new_with_props(app, probe.clone());
+        dom.rebuild_in_place();
+        settle(&mut dom);
+        let html = dioxus::ssr::render(&dom);
+        assert!(!html.contains("Prepare invoice"), "{html}");
+        assert!(probe.detail_requests.borrow().is_empty());
+    }
 }
 
 #[tokio::test]

@@ -20,6 +20,10 @@ mod editing;
 #[path = "invoices/recovery.rs"]
 mod recovery;
 
+#[path = "invoices/project.rs"]
+mod project;
+pub use project::NewProjectInvoice;
+
 /// The badge class for an invoice status — one convention for list and detail.
 pub(super) fn invoice_badge_class(status: InvoiceStatus) -> &'static str {
     match status {
