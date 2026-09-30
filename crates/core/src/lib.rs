@@ -4,6 +4,7 @@ pub mod duration;
 pub mod importers;
 pub mod invoice;
 pub mod money;
+pub mod permissions;
 pub mod project;
 pub mod rounding;
 pub mod state;

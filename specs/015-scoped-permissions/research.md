@@ -1,6 +1,6 @@
 # Permissions discovery
 
-Status: specification input, not a completed implementation plan. Baseline `9301112`; inspected 2026-09-30.
+Status: incremental planning; independent scope foundation specified, full policy research incomplete. Baseline `9301112`; inspected 2026-09-30.
 
 ## Current Horae boundaries
 
@@ -21,7 +21,28 @@ This is documentation evidence, not a fresh interactive test of the user's accou
 
 The current [approval reference](https://support.getharvest.com/hc/en-us/articles/360048181832-Submitting-and-approving-timesheets), checked 2026-09-30, explicitly describes approval limited by project/client filters, even when grouping by person. It also describes weekly locks and editing submitted work before approval. The exact interaction of filtered approval with empty days and new work needs direct verification; do not infer the entire lock scope from the selected approval rows.
 
-There is a documentation conflict to resolve: the general approval article restricts withdrawal to administrators, whereas the new permissions article includes withdrawal capabilities in other profiles. Use the current permissions experience as the target and verify the effective capability rather than copying the old three-role rule. Assignment editing/promotion and custom-template update behavior also need evidence. None of these investigations authorizes replacing parity with simpler existing Horae behavior.
+The older general approval article restricts withdrawal to administrators, whereas the new permissions article includes scoped withdrawal for People Admin and Executive Manager. Project Managers cannot withdraw approvals; that is not a prohibition on approving. Use the current permissions experience as the target rather than copying the old three-role rule. Assignment editing/promotion and custom-template update behavior still need evidence. None of these investigations authorizes replacing parity with simpler existing Horae behavior.
+
+### Flexible approval evidence
+
+The current [flexible timesheet approval reference](https://support.getharvest.com/hc/en-us/articles/39974542812429-Flexible-timesheet-approval), read 2026-09-30, refines the older weekly article:
+
+- Submissions and approvals can cover dates shorter than a week; submitted work remains editable before approval.
+- Managed-project or managed-person authority can cover work; one eligible approver suffices. Manager self-approval is disabled by default and configurable.
+- Approval locks selected dates and project coverage, including cells without entries. Whole-submission coverage is possible with sufficient authority and qualifying filters.
+- Withdrawal from Approval uses its date/filter scope. Withdrawal from Day/Week unlocks the whole week. There is no rejection transition; changes can be requested and work edited/resubmitted.
+
+Independent locks must still apply after withdrawal; see [unlocking time and expenses](https://support.getharvest.com/hc/en-us/articles/360048687491-Unlocking-time-and-expenses). These are documentation findings, not fresh browser observations. The precise arbitrary-custom-profile approval predicate, newly created projects after whole-submission approval, overlapping interval splitting and post-withdrawal submission state remain unverified.
+
+### Custom-profile evidence
+
+The new permissions reference documents administrator-managed templates, an immutable Member floor, automatically included prerequisites/dependent removal, unique names of at most 100 characters, at most 50 templates, per-person difference indicators and deletion that preserves existing permissions. Applying a profile requires saving the person. Exact prerequisite combinations, best-fit built-in classification, name case sensitivity and template update/propagation behavior require direct verification before implementing those contracts.
+
+### Independent foundation decisions
+
+- Decision: model record coverage as an explicit union of own, managed-person, managed-project and organization scopes. Rationale: FR-006 and the reference distinguish these dimensions. Rejected: inferring authority from role ordering or ordinary project membership.
+- Decision: evaluate trusted facts in the existing pure core with borrowed assignment slices. Rationale: correctness is independently testable without storage or new dependencies. Rejected: introducing a policy-engine dependency or a new crate.
+- Decision: keep the foundation disconnected from runtime authorization until the full matrix and migration are reviewed. Rationale: a scope predicate does not define capability grants, locks or transactional revocation. Rejected: swapping existing guards piecemeal and claiming parity.
 
 `design/project/app/08_Settings.dc.html` displays the six profiles. `09_Workspace.dc.html` explicitly describes three fixed roles with no per-person permissions. The new approved matrix must become authoritative for both screens; neither inconsistent mockup can silently settle the policy.
 
@@ -32,5 +53,5 @@ The constitution also names three organization roles. Record the approved extens
 - Followed the checked-in `speckit-specify` skill, local template and constitution. No extension hooks or template preset overrides were found.
 - Feature 015 follows the independent 012/013/014 design drafts. The branch/worktree starts from fetched `origin/master`, not an unmerged application branch.
 - The two scope questions are answered by the user's explicit parity instruction. The clarification is recorded in the spec and its scenarios, requirements and success criteria.
-- Next: complete reference verification and the operation-level matrix, reconcile governance and migration, then plan, generate tasks, analyze consistency, implement and verify. No claim is made that those later stages have run.
-- Checklist notes describe the initial draft; after clarification, 12/16 markers pass. The remaining gaps are detailed requirements/acceptance coverage and outcome readiness, not the two answered scope questions.
+- Incremental plan and foundation contract now exist. Full research/design remains open; complete reference verification, operation matrix, governance and migration before runtime policy implementation.
+- After clarification, 12/16 checklist markers pass. The remaining gaps are detailed requirements/acceptance coverage and outcome readiness, not the two answered scope questions.

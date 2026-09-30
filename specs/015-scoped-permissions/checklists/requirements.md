@@ -33,6 +33,6 @@
 
 ## Notes
 
-- 10/16 checks pass. FR-004 and FR-009 remain open; their answers determine custom-profile lifecycle and approval acceptance scenarios.
+- 12/16 checks pass. The user confirmed Harvest parity for FR-004 and FR-009. Detailed reference behavior, the operation matrix and full acceptance coverage remain open.
 - The proposed role table is not the complete allow/deny matrix. FR-002/003 require that matrix before implementation; no existing privilege changes are approved by the draft.
-- Migration equivalence and the constitution's three-role constraint must be reconciled before implementation. The specification is ready for clarification, not a completed plan or authorization change.
+- Migration equivalence and the constitution's three-role constraint must be reconciled before runtime policy implementation. The independent scope foundation changes neither roles nor active authorization; continuation was requested with the full-feature checklist still incomplete.
