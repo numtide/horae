@@ -4,9 +4,17 @@
 
 **Created**: 2026-09-30
 
-**Status**: Draft — profile ownership, permission presentation and notification delivery need confirmation
+**Status**: Draft — Harvest permission parity confirmed; profile ownership and notification delivery need confirmation
 
 **Input**: Implement the personal Settings portion of Project Detail + Clients list/detail + Settings/Workspace from the handoff. Preserve working theme/plugin controls, current sign-in, organization boundaries and financial privacy. Workspace administration is specified separately in feature 013.
+
+## Clarifications
+
+### Session 2026-09-30
+
+- Q: Preserve three organization roles or implement Harvest permission parity? → A: The user requested Harvest parity: six built-in profiles, reusable custom profiles, per-person adjustments, distinct managed-people/project assignments and scoped approvals. Feature 015 owns that shared contract; Settings must reflect its implemented effective permissions, not retain a three-role substitute.
+
+The dependency is `specs/015-scoped-permissions/` on `feat/scoped-permissions` ([PR #212](https://github.com/numtide/horae/pull/212)) until merged. Its detailed matrix, migration and runtime acceptance remain pending. This clarification confirms the required outcome; it does not claim that the current application already supports it.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -33,13 +41,13 @@ As a person using Horae, I can understand which work and information I can acces
 
 **Why this priority**: The handoff's role profiles and people-management claims differ from current authorization, so truthful presentation is essential.
 
-**Independent Test**: Compare the Settings display with real tracking, reporting, approval, invoice and administration access for members, managers, administrators and project-specific assignments, including revoked access.
+**Independent Test**: Compare the Settings display with real tracking, reporting, approval, invoice and administration access for all six built-in profiles, reusable custom profiles, per-person adjustments and project/person assignments, including revoked access.
 
 **Acceptance Scenarios**:
 
 1. **Given** projects I can track against, **When** I open Assigned projects, **Then** authorized destinations and the reason for access are accurate; inactive or restricted work cannot become trackable from this page.
-1. **Given** an approved people-management model under FR-007, **When** I open Assigned people, **Then** the page reflects actual scope rather than inferring management from sharing a project.
-1. **Given** my current roles, **When** I open Permissions, **Then** the page explains their actual capabilities and conditions. Changing a visual selection cannot elevate my privileges.
+1. **Given** effective people-management assignments under FR-007, **When** I open Assigned people, **Then** the page reflects actual scope rather than inferring management from sharing a project.
+1. **Given** my current permission assignment, **When** I open Permissions, **Then** the page explains the same effective capabilities, person/project scopes and template differences as Workspace. Changing a visual selection cannot elevate my privileges.
 1. **Given** rate visibility or editing is unavailable, **When** I open Rates, **Then** the page explains the restriction without leaking amounts or rendering an enabled no-op edit action.
 1. **Given** accessible rates, **When** I inspect them, **Then** zero and unset values differ, their currencies are explicit and defaults are not misrepresented as effective rates for every project.
 1. **Given** authority changes while Settings is open, **When** data is refreshed or a change is attempted, **Then** current permissions are rechecked and restricted data/actions are removed.
@@ -97,9 +105,9 @@ As a signed-in person, I can find the integrations and account-security actions 
 - **FR-004**: Approved profile edits MUST validate input, retain failed edits, survive reload and avoid stale overwrites. Imported/legacy full names MUST not be automatically split. Stored authentication bindings and existing invoice identities MUST not change through a profile edit.
 - **FR-005**: Photo handling MUST preserve the prior image on failure, reject unsafe/invalid uploads and support removal with an initials fallback. No arbitrary remote image fetch, secret URL exposure or executable upload is permitted. Profile-image persistence is new functionality, not simulated file selection.
 - **FR-006**: Personal timezone MUST use a real named timezone and govern only documented personal displays/reminders. It MUST NOT silently change organization week start, stored work dates or approval periods. Theme MUST retain its existing device-local semantics and available options.
-- **FR-007**: Permission/people presentation needs confirmation: [NEEDS CLARIFICATION: Preserve Horae's current three organization roles and project-specific authority, explaining organization-wide management honestly, or introduce the handoff's additional profiles and explicit manager-to-person assignments? The second option materially changes access control.]
+- **FR-007**: Permissions and Assigned people MUST consume feature 015's effective-access contract: Member, Project Manager, People Admin, Accounting, Executive Manager and Administrator, reusable custom profiles, per-person adjustments and distinct person/project management assignments. A profile label or project membership MUST NOT substitute for effective capabilities and scope. This read-only explanation MUST agree with Workspace; privilege administration remains governed by feature 015.
 - **FR-008**: Assigned projects, people and permission descriptions MUST agree with current authorized operations and explain conditional/project-specific scope. No prototype “profile no longer available” warning or empty assignment claim may appear without supporting data. Non-admins MUST NOT be sent to an admin-only help page as their sole permissions explanation.
-- **FR-009**: Rates MUST preserve current visibility/edit authority, exact amounts and explicit currency. Any proposed rate editor needs a confirmed authority and repricing contract; the prototype's placeholder “Set your rates” text does not authorize self-service financial changes. A restricted editor MUST have a truthful explanation or authorized working destination.
+- **FR-009**: Rates MUST enforce feature 015's implemented financial visibility/edit authority, exact amounts and explicit currency. Being the subject of a rate MUST NOT itself grant visibility or editing. Any proposed rate editor needs a confirmed repricing contract; the prototype's placeholder “Set your rates” text does not authorize self-service financial changes. A restricted editor MUST have a truthful explanation or authorized working destination. Until the shared policy cutover, existing runtime boundaries remain unchanged rather than being replaced piecemeal by this screen.
 - **FR-010**: Notification delivery needs confirmation: [NEEDS CLARIFICATION: Implement all operational email categories (daily/team reminders, weekly summary, authorized approval/project events) with configurable schedules and real delivery, or approve a smaller initial set explicitly? No notification option may count as implemented merely because a preference is saved.]
 - **FR-011**: Notifications MUST default to opt-out for existing accounts, be independently configurable where meaningful and expose their real prerequisites. Promotional emails are not an existing service; no marketing opt-in or delivery promise may be fabricated.
 - **FR-012**: Scheduled/event delivery MUST use the current preference, active identity, verified recipient and authorization at delivery time, preserve a stable occurrence identity across retries and record actual send outcomes. Weekly summaries MUST reconcile exactly with their labeled period, without exposing other people's rates or entries.
@@ -113,7 +121,7 @@ As a signed-in person, I can find the integrations and account-security actions 
 ### Key Entities *(include if feature involves data)*
 
 - **Personal profile**: Existing identity plus approved editable name fields, photo and timezone; authentication identity remains a separate concern.
-- **Effective access summary**: Real organization role, project-specific conditions, trackable projects and approved people-management scope.
+- **Effective access summary**: Feature 015's current profile, template differences, effective capabilities, trackable projects and explicit person/project management scopes; shared with Workspace.
 - **Visible rates**: Authorized amounts, currencies and provenance; displayed defaults need not equal effective project-specific rates.
 - **Notification preferences**: Per-person enabled categories, actual schedule/zone and prerequisite state.
 - **Notification occurrence**: Authorized recipient, event or reporting period, delivery state, stable retry identity and safe failure information.
@@ -125,11 +133,11 @@ As a signed-in person, I can find the integrations and account-security actions 
 
 - **SC-001**: Every Settings journey is reachable through direct navigation and the designed navigation, with no sample data, inert save controls or fictitious permission profiles.
 - **SC-002**: Approved profile edits persist through reload and sign-in; invalid, cancelled, stale or unauthorized edits cause zero unintended identity, financial or cross-user changes.
-- **SC-003**: Every displayed access/rate claim matches tested member, manager, administrator and project-specific operations; no restricted amount or person is disclosed after revocation.
+- **SC-003**: Every displayed access/rate claim matches tested operations for all six built-in profiles, custom profiles, per-person adjustments and person/project scopes; no restricted amount or person is disclosed after revocation. Settings and Workspace explanations reconcile for the same saved assignment.
 - **SC-004**: Every enabled notification category produces a verified test-mailbox outcome with correct recipient, labeled period/event and exact totals; opt-out, revocation and duplicate processing are covered.
 - **SC-005**: All supported flows pass keyboard-only, both-theme, narrow and enlarged-text checks without inaccessible actions or silent input loss.
 - **SC-006**: Existing theme/plugin, authentication, timesheet, approval, project, report, invoice and importer regression behavior remains intact.
-- **SC-007**: FR-003/007/010 and the rate/home/security/marketing deviations are explicitly resolved before whole-feature acceptance; a read-only profile or saved notification switches alone cannot satisfy the feature.
+- **SC-007**: FR-003/010 and the rate/home/security/marketing deviations are explicitly resolved, and feature 015's shared permission behavior is implemented and verified, before whole-feature acceptance; a read-only profile or saved notification switches alone cannot satisfy the feature.
 
 ## Assumptions
 
@@ -139,4 +147,4 @@ As a signed-in person, I can find the integrations and account-security actions 
 - Notification verification uses captured mail and disposable data, not unsolicited mail to real imported users. Missing transport configuration cannot be hidden behind a successful preference save.
 - The full operational notification set is required unless a smaller scope is explicitly approved. Unsupported promotional/home/security placeholders require accepted deviations, not silent deletion from the delivery.
 - New persisted profile, photo, timezone, preference and notification state requires reviewed contracts after clarification; this draft does not authorize unresolved schema or access-control choices.
-- Source: `design/project/app/08_Settings.dc.html`, existing Settings behavior and current domain/authentication rules. Harvest-like profile names in the prototype do not supersede Horae's actual permission model.
+- Source: `design/project/app/08_Settings.dc.html`, existing Settings behavior, current domain/authentication rules and the user-confirmed permission contract in feature 015. The prototype's static profile warnings are not evidence of a person's actual assignment.

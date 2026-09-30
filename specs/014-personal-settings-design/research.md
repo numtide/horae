@@ -18,7 +18,7 @@ Status: input to specification, not completed implementation planning. Baseline 
 `08_Settings.dc.html` defines Basic info, Assigned people, Permissions and Notifications. Rates, Assigned projects, Integrations and Security are explicitly rendered through a generic “Nothing to configure here yet in this mockup” section.
 
 - Basic info contains first/last name, disabled work email, a rates link, timezone, photo replacement/removal and welcome-home preference. Update info has no persistence handler.
-- Permissions mixes six Harvest-like profiles with a static warning that Manager is unavailable. This conflicts with Horae's fixed organization roles and its project-specific authority; none of those warnings/profiles should be copied as live facts.
+- Permissions mixes six Harvest-like profiles with a static warning that Manager is unavailable. The user subsequently required the six profiles and customization through feature 015; the static warning must still not be copied as a live fact. The current three-role implementation is a migration input, not the target outcome.
 - Assigned people shows a static empty state and assumes per-person management that the current schema does not represent.
 - Notifications lists daily personal reminders, automatic team reminders, weekly time reports, people/project submission emails, managed-project deletion notices and promotional mail. The Sunday 23:00 deadline is example text, not current workspace configuration.
 - Security's description mentions password, sessions and two-factor authentication but contains no defined workflow. Integrations and Rates are similarly placeholders, not permission to introduce new provider/financial products without a contract.
@@ -27,5 +27,7 @@ Status: input to specification, not completed implementation planning. Baseline 
 
 - Used the checked-in `speckit-specify` instructions, local spec template and constitution. No template preset overrides or extension hooks are configured.
 - Feature 014 follows Clients 012 and Workspace 013, each on its own branch/worktree. `.specify/feature.json` points to this feature independently of branch naming.
-- FR-003/007/010 require product decisions. Proposed treatment of placeholder home/security/marketing/rate behavior also needs acceptance; it is not a completed design deviation.
+- FR-007 is resolved by the user's Harvest-parity instruction and delegated to feature 015 ([PR #212](https://github.com/numtide/horae/pull/212), branch `feat/scoped-permissions`). Settings must share the effective capability/scope explanation with Workspace and verify all six profiles, custom templates and per-person adjustments. That dependency remains unimplemented in full; it cannot be replaced with a three-role explanation for final acceptance.
+- FR-003/010 still require product decisions. Proposed treatment of placeholder home/security/marketing/rate behavior also needs acceptance; it is not a completed design deviation.
+- Ran the checked-in `speckit-clarify` paths check and reconciled the existing user answer across the specification's scenarios, requirements, entities and acceptance criteria. No new answer was inferred for profile ownership or notification scope. Checklist markers remain 11/16; its initial notes describe the pre-clarification snapshot, while this section records the resolved FR-007 decision.
 - No application, schema, deployment, auth policy or real user data changes are part of this draft. Personal Settings remains required by the wider goal.
