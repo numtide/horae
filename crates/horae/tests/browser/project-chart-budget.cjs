@@ -90,7 +90,7 @@ const today = new Date().toISOString().slice(0, 10);
     await page.route('**/api/get_project_summary*', async route => { await gate; await route.abort(); }, { times: 1 });
     await page.reload();
     await expect(activity.getByRole('img')).toBeVisible();
-    await expect(summary.getByRole('status')).toContainText('Loading project summary');
+    await expect(summary.getByRole('status').filter({ hasText: 'Loading project summary' })).toBeVisible();
     await expect(reference).toHaveCount(0);
     rejectSummary();
     await expect(summary.getByRole('alert')).toContainText('Could not load project summary');

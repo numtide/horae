@@ -69,6 +69,17 @@ assert.ok(Number.isInteger(originalWeekStart) && originalWeekStart >= 1 && origi
     const chart = activity.getByRole('img');
     const currentBand = activity.locator('.project-activity-current');
     const currentBadge = activity.locator('.project-activity-plot .badge');
+    const months = activity.locator('.project-activity-month-labels');
+    const expectedMonths = [];
+    const month = new Date(`${data.weeks.at(-26).from.slice(0, 7)}-01T00:00:00Z`);
+    while (month.toISOString().slice(0, 10) <= today) {
+      expectedMonths.push(month.toLocaleDateString('en-GB', {
+        month: 'short', timeZone: 'UTC',
+        ...(expectedMonths.length === 0 || month.getUTCMonth() === 0 ? { year: 'numeric' } : {}),
+      }).replace('Sept', 'Sep'));
+      month.setUTCMonth(month.getUTCMonth() + 1);
+    }
+    await expect(months.locator('span')).toHaveText(expectedMonths);
     await expect(chart).toHaveAttribute('aria-label', new RegExp(`${shift(sunday, -25 * 7)} to ${today}`));
     await expect(currentBand).toHaveAttribute('x', '9615');
     await expect(currentBand).toHaveAttribute('width', '385');
@@ -121,8 +132,11 @@ assert.ok(Number.isInteger(originalWeekStart) && originalWeekStart >= 1 && origi
     await expect(current).toBeEnabled();
     await activity.getByRole('button', { name: 'Hours per week', exact: true }).click();
     await expect(chart).toBeVisible();
-    await expect(activity.locator('.project-activity-bars')).toHaveCount(1);
-    assert.ok([...((await activity.locator('.project-activity-bars').getAttribute('d')).matchAll(/v-(\d+)/g))].every(match => Number(match[1]) === 0));
+    const bars = activity.locator('.project-activity-bars');
+    await expect(bars).toHaveCount(3);
+    const paths = await bars.evaluateAll(nodes => nodes.map(node => node.getAttribute('d')));
+    assert.deepEqual(paths.map(path => [...path.matchAll(/M/g)].length), [24, 1, 1]);
+    assert.ok([...paths.join('').matchAll(/v-(\d+)/g)].every(match => Number(match[1]) === 0));
     await expect(activity).toContainText('No time tracked in this chart window');
     await activity.locator('summary').filter({ hasText: 'View weekly data' }).click();
     await expect(activity.locator('tbody tr')).toHaveCount(31);
@@ -130,11 +144,17 @@ assert.ok(Number.isInteger(originalWeekStart) && originalWeekStart >= 1 && origi
     await expect(activity.locator('tbody tr').last()).toContainText('180');
     await next.click();
     await expect(next).toBeDisabled();
-    await expect(activity.locator('.project-activity-bars')).toBeVisible();
+    await expect(activity.locator('.project-activity-bars-latest')).toBeVisible();
     await expect(currentBand).toHaveAttribute('x', '9615');
     await previous.click();
     await current.click();
     await expect(chart).toHaveAttribute('aria-label', new RegExp(`to ${today}`));
+    await expect(months.locator('span')).toHaveText(expectedMonths);
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate(value => document.documentElement.setAttribute('data-theme', value), theme);
+      const fills = await bars.evaluateAll(nodes => nodes.map(node => getComputedStyle(node).fill));
+      assert.equal(new Set(fills).size, 3, `Weekly emphasis must remain distinct in ${theme} theme`);
+    }
     assert.deepEqual(reads, initialReads, 'Chart navigation must not refetch or change the report');
     for (const width of [320, 390, 768, 1440]) {
       await page.setViewportSize({ width, height: 600 });
@@ -142,6 +162,16 @@ assert.ok(Number.isInteger(originalWeekStart) && originalWeekStart >= 1 && origi
       const badgeBounds = await currentBadge.boundingBox();
       const plotBounds = await chart.boundingBox();
       assert.ok(badgeBounds.x >= plotBounds.x && badgeBounds.x + badgeBounds.width <= plotBounds.x + plotBounds.width + 1);
+      if (width <= 390) await expect(months.locator('span:visible')).toHaveCount(2);
+      if (width === 1440) await expect(months.locator('span:visible')).toHaveCount(expectedMonths.length);
+      let previousLabel;
+      for (const label of await months.locator('span:visible').all()) {
+        const bounds = await label.boundingBox();
+        assert.ok(bounds.x >= plotBounds.x && bounds.x + bounds.width <= plotBounds.x + plotBounds.width + 1);
+        if (previousLabel && bounds.y < previousLabel.y + previousLabel.height)
+          assert.ok(bounds.x >= previousLabel.x + previousLabel.width, 'Month labels must not overlap');
+        previousLabel = bounds;
+      }
       if (process.env.HORAE_TEST_SCREENSHOT_DIR)
         await activity.locator('.project-activity-plot').screenshot({ path: `${process.env.HORAE_TEST_SCREENSHOT_DIR}/project-current-week-${width}.png` });
       for (const control of [previous, next, current]) {
@@ -173,7 +203,7 @@ assert.ok(Number.isInteger(originalWeekStart) && originalWeekStart >= 1 && origi
           return range.getClientRects().length === 1;
         });
       }), 'Current-week words must remain readable without character-by-character wrapping');
-      for (const label of await activity.locator('.project-activity-plot > div').last().locator('span').all()) {
+      for (const label of await months.locator('span:visible').all()) {
         const bounds = await label.boundingBox();
         assert.ok(bounds.x >= plotBounds.x && bounds.x + bounds.width <= plotBounds.x + plotBounds.width + 1,
           `Axis dates must stay inside the plot at ${width}px: ${JSON.stringify({ bounds, plotBounds })}`);
@@ -223,6 +253,7 @@ assert.ok(Number.isInteger(originalWeekStart) && originalWeekStart >= 1 && origi
     await reporting.getByRole('button', { name: 'Apply period', exact: true }).click();
     await expect(reporting.getByRole('button', { name: /^Custom period/ })).toBeFocused();
     await expect(chart).toHaveAttribute('aria-label', new RegExp(`${old} to ${old}`));
+    await expect(months.locator('span')).toHaveCount(1);
     await expect(chart).toHaveAttribute('aria-label', /Selected period total: 1h/);
     await expect(currentBand).toHaveCount(0);
     await expect(currentBadge).toHaveCount(0);

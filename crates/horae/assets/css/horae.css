@@ -17,6 +17,8 @@
   --color-accent: #D99A3C;
   --color-accent-bg: rgba(217, 154, 60, 0.14);
   --color-pine: #1F5C4D;
+  --color-project-bar-earlier: var(--color-pine);
+  --color-project-bar-previous: #3A8F78;
   --color-pine-fg: #bfe0d4;   /* light text/icon on deep pine (calendar events) */
 
   /* Warm dark surfaces */
@@ -177,6 +179,8 @@
   --color-primary: #1F5C4D;
   --color-primary-hover: #174a3c;   /* on paper the pine button deepens on hover */
   --color-primary-light: #3D8A73;
+  --color-project-bar-earlier: var(--color-primary-light);
+  --color-project-bar-previous: color-mix(in srgb, var(--color-primary-light), var(--color-primary));
   --color-primary-bg: rgba(31, 92, 77, 0.10);
   --color-primary-wash: rgba(31, 92, 77, 0.06);
   --color-primary-border: rgba(31, 92, 77, 0.28);
@@ -1126,7 +1130,13 @@ tbody tr:hover { background: var(--color-row-hover); }
 .project-activity-current-label::before { content: none; }
 .project-activity-area { fill: var(--color-primary-bg); }
 .project-activity-line { fill: none; stroke: var(--color-primary); stroke-width: 2; }
-.project-activity-bars { fill: var(--color-primary); }
+.project-activity-bars { fill: var(--color-project-bar-earlier); }
+.project-activity-bars-previous { fill: var(--color-project-bar-previous); }
+.project-activity-bars-latest { fill: var(--color-primary); }
+.project-activity-month-axis { container-type: inline-size; }
+@container (max-width: 32rem) {
+  .project-activity-month-labels > span:not(:first-child):not(:last-child) { display: none; }
+}
 .project-activity-budget { fill: none; stroke: var(--color-warning); stroke-width: 1.5; stroke-dasharray: 6 5; }
 .project-chart-week:focus-visible { box-shadow: var(--ring-inset); }
 

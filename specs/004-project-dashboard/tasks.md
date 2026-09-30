@@ -91,6 +91,11 @@ F001–F003 does not complete Project Detail or the four-surface delivery.
   browser runner and run the complete chained regression. Update existing tests
   for optional-query detail URLs and collapsed task/team management without dropping
   identity, persistence, permission or error-recovery assertions.
+- [x] F030 [US2] Match the chart's month labels and three weekly bar tones to the
+  handoff using real visible dates and existing geometry. Distinguish recent
+  visible weeks from the actual current-week marker; preserve zero/short series,
+  year boundaries, exact totals and reads. Verify narrow/enlarged-text labels,
+  both themes, browser regression and both build targets.
 
 **Input**: Design documents from `specs/004-project-dashboard/`
 

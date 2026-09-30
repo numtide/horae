@@ -1,4 +1,4 @@
-use chrono::{Days, Months, NaiveDate, Weekday};
+use chrono::{Datelike, Days, Months, NaiveDate, Weekday};
 use dioxus::prelude::*;
 use horae_core::project_activity::{ActivityError, ActivityRange};
 use uuid::Uuid;
@@ -93,8 +93,26 @@ fn chart_interval(anchor: NaiveDate, first_day: Weekday) -> Result<ActivityRange
 struct Plot {
     maximum: i64,
     line: String,
-    bars: String,
+    bars: [String; 3],
     budget_y: Option<i128>,
+}
+
+fn chart_months(from: NaiveDate, to: NaiveDate) -> Vec<String> {
+    let mut labels = Vec::new();
+    if from > to {
+        return labels;
+    }
+    let mut month = from.with_day(1);
+    while let Some(day) = month.filter(|day| *day <= to) {
+        let format = if labels.is_empty() || day.month() == 1 {
+            "%b %Y"
+        } else {
+            "%b"
+        };
+        labels.push(day.format(format).to_string());
+        month = day.checked_add_months(Months::new(1));
+    }
+    labels
 }
 
 fn current_week_band(
@@ -166,7 +184,7 @@ fn plot(
         "M0 {}",
         2000 - i128::from(origin) * 2000 / i128::from(maximum)
     );
-    let mut bars = String::new();
+    let mut bars = [String::new(), String::new(), String::new()];
     for (index, value) in values.into_iter().enumerate() {
         let left = index as i128 * 10000 / count;
         let right = (index as i128 + 1) * 10000 / count;
@@ -175,7 +193,12 @@ fn plot(
         line.push_str(&format!(" L{right} {y}"));
         let width = ((right - left) * 3 / 5).max(1);
         let x = left + (right - left - width) / 2;
-        bars.push_str(&format!("M{x} 2000 v-{height} h{width} v{height} Z "));
+        let recency = match count - index as i128 {
+            1 => 2,
+            2 => 1,
+            _ => 0,
+        };
+        bars[recency].push_str(&format!("M{x} 2000 v-{height} h{width} v{height} Z "));
     }
     Ok(Plot {
         maximum,
@@ -481,7 +504,7 @@ fn render_chart(
     let legend = if cumulative {
         "Cumulative hours in selected period"
     } else {
-        "Hours tracked per week"
+        "Hours tracked per week · latest visible weeks emphasized"
     };
     let total = data.weeks.last().map_or(0, |week| week.cumulative_minutes);
     rsx! {
@@ -514,7 +537,9 @@ fn render_chart(
                     path { class: "project-activity-area", d: "{chart.line} L10000 2000 L0 2000 Z" }
                     path { class: "project-activity-line", d: "{chart.line}", vector_effect: "non-scaling-stroke" }
                 } else {
-                    path { class: "project-activity-bars", d: "{chart.bars}" }
+                    for (index, variant) in ["", "project-activity-bars-previous", "project-activity-bars-latest"].into_iter().enumerate() {
+                        path { class: "project-activity-bars {variant}", d: "{chart.bars[index]}" }
+                    }
                 }
                 if let Some(y) = chart.budget_y {
                     path { class: "project-activity-budget", d: "M0 {y} H10000", vector_effect: "non-scaling-stroke" }
@@ -527,9 +552,12 @@ fn render_chart(
             }
             }
             span {}
-            div { class: "flex flex-wrap justify-between gap-3 text-xs text-subtle font-mono", aria_hidden: "true",
-                span { "{first.from.format(\"%d %b %Y\")}" }
-                span { "{last.to.format(\"%d %b %Y\")}" }
+            div { class: "project-activity-month-axis min-w-0", aria_hidden: "true",
+                div { class: "project-activity-month-labels flex flex-wrap justify-between gap-3 text-xs text-subtle font-mono",
+                    for month in chart_months(first.from, last.to) {
+                        span { "{month}" }
+                    }
+                }
             }
         }
     }
@@ -541,6 +569,98 @@ mod tests {
 
     fn date(value: &str) -> NaiveDate {
         value.parse().unwrap()
+    }
+
+    #[test]
+    fn chart_months_label_partial_months_and_year_changes() {
+        assert_eq!(
+            chart_months(date("2026-11-28"), date("2027-02-02")),
+            ["Nov 2026", "Dec", "Jan 2027", "Feb"]
+        );
+        assert_eq!(
+            chart_months(date("2024-02-29"), date("2024-02-29")),
+            ["Feb 2024"]
+        );
+        assert_eq!(
+            chart_months(date("2026-09-30"), date("2026-10-01")),
+            ["Sep 2026", "Oct"]
+        );
+    }
+
+    #[test]
+    fn chart_months_handle_date_bounds_without_panicking() {
+        assert_eq!(
+            chart_months(NaiveDate::MAX, NaiveDate::MAX),
+            [NaiveDate::MAX.format("%b %Y").to_string()]
+        );
+        assert_eq!(
+            chart_months(NaiveDate::MIN, NaiveDate::MIN),
+            [NaiveDate::MIN.format("%b %Y").to_string()]
+        );
+        assert!(chart_months(date("2026-10-01"), date("2026-09-30")).is_empty());
+    }
+
+    #[test]
+    fn weekly_chart_emphasizes_latest_visible_bars_without_claiming_current_week() {
+        let data = ProjectActivity {
+            interval: Some(ProjectActivityInterval {
+                from: date("2026-09-21"),
+                to: date("2026-09-27"),
+            }),
+            week_start: Weekday::Mon,
+            weeks: vec![week(60, 0, 60)],
+        };
+        let html = dioxus::ssr::render_element(render_activity(
+            &data,
+            false,
+            "Custom period",
+            date("2026-09-27"),
+            date("2026-10-07"),
+            None,
+        ));
+        assert!(html.contains("project-activity-bars-latest"), "{html}");
+        assert!(html.contains("Sep 2026"), "{html}");
+        assert!(!html.contains("Current week is highlighted."), "{html}");
+        assert!(html.contains("Selected period total: 1h"), "{html}");
+    }
+
+    #[test]
+    fn weekly_bar_emphasis_preserves_geometry_including_zero_recent_weeks() {
+        let chart = plot(
+            &[
+                week(60, 0, 60),
+                week(120, 0, 180),
+                week(0, 0, 180),
+                week(180, 0, 360),
+            ],
+            false,
+            None,
+        )
+        .unwrap();
+        assert_eq!(chart.maximum, 180);
+        assert_eq!(
+            chart.bars,
+            [
+                "M500 2000 v-666 h1500 v666 Z M3000 2000 v-1333 h1500 v1333 Z ",
+                "M5500 2000 v-0 h1500 v0 Z ",
+                "M8000 2000 v-2000 h1500 v2000 Z ",
+            ]
+        );
+    }
+
+    #[test]
+    fn short_series_do_not_invent_previous_or_earlier_bars() {
+        for count in 0..=3 {
+            let chart = plot(&vec![week(0, 0, 0); count], false, None).unwrap();
+            assert_eq!(
+                chart.bars.each_ref().map(|path| path.matches('M').count()),
+                [
+                    count.saturating_sub(2),
+                    usize::from(count >= 2),
+                    usize::from(count >= 1)
+                ]
+            );
+        }
     }
 
     #[test]
@@ -894,7 +1014,7 @@ mod tests {
             Plot {
                 maximum: 60,
                 line: "M0 2000".into(),
-                bars: String::new(),
+                bars: [String::new(), String::new(), String::new()],
                 budget_y: None,
             }
         );

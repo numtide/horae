@@ -842,3 +842,28 @@ cleanup fix, the chained permissions, invoice, activity, task-filter, report-lin
 export, chart-budget and lifecycle suites all pass, including the actual Cancel
 button and revoked-member mutation replay. The complete 23-suite rerun and final
 Nix acceptance remain pending at this checkpoint.
+
+## Chart month labels and weekly emphasis — 2026-09-30
+
+The chart labels the actual visible months, including the first year and January
+year changes. Narrow containers retain the first/last month; exact range dates
+remain in the chart description and weekly data table. Three weekly bar groups
+preserve the existing integer geometry and emphasize the latest visible buckets,
+not a fabricated current week. The actual current-week marker stays independent.
+Project-only color tokens preserve the handoff's dark palette and provide distinct
+light-theme shades without changing shared primary/pine colors.
+
+Verification: 74 detail and 45 New Project tests, strict all-target server Clippy,
+WASM compilation and formatting pass. Chromium passes activity/navigation,
+chart-budget, project-invoice and invoice-preparation suites. Month bounds, both
+themes, mobile/desktop, enlarged text, unchanged totals/reads and historical
+navigation are covered. Desktop and enlarged-mobile captures were inspected.
+The budget suite now selects the summary loading status explicitly: the invoiced
+tile can legitimately be loading at the same time.
+
+An earlier complete run used a live preview build while its watcher replaced
+assets, causing a WASM HTTP loading failure. Browser verification now uses a
+frozen server/public copy with a disposable database; the user preview is left
+running. The full 23-suite rerun is pending, separately tracked by F029. Broader
+dashboard acceptance, billing/action decisions, Clients and Settings/Workspace
+remain open.
