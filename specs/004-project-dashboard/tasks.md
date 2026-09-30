@@ -108,6 +108,9 @@ F001–F003 does not complete Project Detail or the four-surface delivery.
   Detail; keep reporting tabs and route management through the shared editor.
   Remove unused UI resources, preserve server authorization APIs, and migrate
   task-rate and assignment failure/retry coverage to Edit project.
+- [x] F034 Remove the extra Fee balances panel and chart diagnostic copy. Use
+  the handoff's compact legend, retain exact accessible chart data and preserve
+  per-occurrence balances, failed-read recovery and authority checks in invoicing.
 
 **Input**: Design documents from `specs/004-project-dashboard/`
 

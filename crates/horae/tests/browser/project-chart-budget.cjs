@@ -35,7 +35,16 @@ const today = new Date().toISOString().slice(0, 10);
     const activity = page.getByRole('region', { name: 'Project activity', exact: true });
     const reference = activity.locator('.project-activity-budget');
     const summary = page.getByRole('region', { name: 'Project summary', exact: true });
-    await expect(activity).toContainText('Project hours budget: 4h (240 minutes)');
+    await expect(page.getByRole('region', { name: 'Project details', exact: true })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Project fee balances', exact: true })).toHaveCount(0);
+    await expect(activity.getByText('Cumulative hours', { exact: true })).toBeVisible();
+    await expect(activity.getByText('Budget · 4h', { exact: true })).toBeVisible();
+    await expect(activity.locator('p').filter({ hasText: /All time:|Chart window:|Dashed reference|Selected period:/ })).toHaveCount(0);
+    await expect(activity.locator('summary')).toHaveCount(0);
+    await expect(activity.getByRole('table', { name: /^Weekly activity/ })).toHaveCount(1);
+    const alternative = activity.locator('.sr-only');
+    await expect.poll(() => alternative.evaluate(node => getComputedStyle(node).clipPath)).toBe('inset(50%)');
+    assert.equal((await alternative.boundingBox()).width, 1);
     await expect(reference).toHaveAttribute('d', 'M0 0 H10000');
     await expect(activity.getByRole('img')).toHaveAttribute('aria-label', /Selected period total: 1.5h/);
     await expect(summary).toContainText('Budget: 4h');
@@ -59,10 +68,22 @@ const today = new Date().toISOString().slice(0, 10);
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `Page overflow at ${width}/${size}`);
       const controls = nav.getByRole('button');
       await expect(controls).toHaveCount(4);
+      const legend = activity.getByRole('group', { name: 'Chart legend', exact: true });
+      for (const swatch of await legend.locator('svg').all()) {
+        const bounds = await swatch.boundingBox();
+        assert.equal(bounds.width, 0.75 * size, 'Legend swatches use the text-sized utility');
+      }
+      for (const label of await legend.locator(':scope > span').all()) {
+        const bounds = await label.boundingBox();
+        assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width + 1, 'Legend labels stay within the viewport');
+      }
       for (const button of await controls.all()) {
         const bounds = await button.boundingBox();
         assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width + 1 && bounds.height >= 44);
         assert.ok(await button.evaluate(node => node.scrollWidth <= node.clientWidth + 1), 'Grouped week controls must not clip enlarged labels');
+      }
+      if (process.env.HORAE_TEST_SCREENSHOT_DIR && [320, 1440].includes(width) && size === 16) {
+        await activity.screenshot({ path: `${process.env.HORAE_TEST_SCREENSHOT_DIR}/project-activity-clean-${width}.png` });
       }
     }
     await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
@@ -77,7 +98,8 @@ const today = new Date().toISOString().slice(0, 10);
       SELECT '01970000-0000-7000-8000-000000000403',org_id,id,'${admin}','project',true,true FROM projects WHERE id='${project}'`);
     await page.reload();
     await expect(reference).toHaveCount(1);
-    await expect(activity).toContainText('Current allowance, not rounded consumption');
+    await expect(activity.getByText('Budget · 4h', { exact: true })).toBeVisible();
+    await expect(activity.locator('svg desc')).toContainText('Current allowance; tracked hours are unrounded');
     await page.locator('#project-report-period-trigger').click();
     await page.getByRole('menuitem', { name: 'All time', exact: true }).click();
     await expect(reference).toHaveCount(0);

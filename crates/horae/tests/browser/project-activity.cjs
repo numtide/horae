@@ -140,7 +140,9 @@ assert.ok(Number.isInteger(originalWeekStart) && originalWeekStart >= 1 && origi
     assert.deepEqual(paths.map(path => [...path.matchAll(/M/g)].length), [24, 1, 1]);
     assert.ok([...paths.join('').matchAll(/v-(\d+)/g)].every(match => Number(match[1]) === 0));
     await expect(activity).toContainText('No time tracked in this chart window');
-    await activity.locator('summary').filter({ hasText: 'View weekly data' }).click();
+    await expect(activity.locator('summary')).toHaveCount(0);
+    await expect(activity.getByRole('table')).toHaveCount(1);
+    await expect(activity.locator('.sr-only table')).toHaveCount(1);
     await expect(activity.locator('tbody tr')).toHaveCount(31);
     await expect(activity.locator('tbody tr').first()).toContainText(old);
     await expect(activity.locator('tbody tr').last()).toContainText('180');

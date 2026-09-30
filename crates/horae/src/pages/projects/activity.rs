@@ -6,7 +6,6 @@ use uuid::Uuid;
 use crate::components::date_picker::DatePicker;
 use crate::components::form::{FormGroup, Input};
 use crate::components::menu::{Menu, MenuItem};
-use crate::components::table::DataTable;
 use crate::models::project::{ProjectActivity, ProjectActivityInterval, ProjectActivityWeek};
 use crate::server_fns;
 
@@ -435,32 +434,24 @@ fn render_activity(
     let Some(interval) = data.interval else {
         return rsx! { p { class: "py-12 text-muted", "No time has been tracked on this project." } };
     };
-    let total = data.weeks.last().map_or(0, |week| week.cumulative_minutes);
     rsx! {
-        p { class: "text-sm text-muted mt-4 mb-2", "{label}: {interval.from.format(\"%d %b %Y\")} – {interval.to.format(\"%d %b %Y\")}" }
         {render_chart(data, cumulative, anchor, today, budget)}
-        p { class: "text-sm mt-4", "Selected period: " strong { class: "font-mono", "{hours(total)}" } }
-        if total == 0 { p { class: "text-sm text-muted", "No time tracked in this period." } }
-        details { class: "mt-4",
-            summary { class: "text-sm text-primary cursor-pointer py-3", "View weekly data" }
-            p { class: "text-xs text-subtle", "Actual minutes, without invoice rounding. Weeks start on {data.week_start}; first and last weeks are clipped to the selected dates." }
-            DataTable {
-                table {
-                    caption { class: "text-left text-sm py-3", "Weekly activity — {label}" }
-                    thead { tr {
-                        th { scope: "col", "Dates (inclusive)" }
-                        th { scope: "col", class: "text-right", "Billable minutes" }
-                        th { scope: "col", class: "text-right", "Non-billable minutes" }
-                        th { scope: "col", class: "text-right", "Cumulative minutes" }
-                    } }
-                    tbody {
-                        for week in &data.weeks {
-                            tr { key: "{week.from}",
-                                th { scope: "row", "{week.from} – {week.to}" }
-                                td { class: "text-right font-mono", "{week.billable_minutes}" }
-                                td { class: "text-right font-mono", "{week.non_billable_minutes}" }
-                                td { class: "text-right font-mono", "{week.cumulative_minutes}" }
-                            }
+        div { class: "sr-only",
+            table {
+                caption { "Weekly activity — {label}: {interval.from} – {interval.to}. Actual minutes, without invoice rounding. Weeks start on {data.week_start}." }
+                thead { tr {
+                    th { scope: "col", "Dates (inclusive)" }
+                    th { scope: "col", class: "text-right", "Billable minutes" }
+                    th { scope: "col", class: "text-right", "Non-billable minutes" }
+                    th { scope: "col", class: "text-right", "Cumulative minutes" }
+                } }
+                tbody {
+                    for week in &data.weeks {
+                        tr { key: "{week.from}",
+                            th { scope: "row", "{week.from} – {week.to}" }
+                            td { class: "text-right font-mono", "{week.billable_minutes}" }
+                            td { class: "text-right font-mono", "{week.non_billable_minutes}" }
+                            td { class: "text-right font-mono", "{week.cumulative_minutes}" }
                         }
                     }
                 }
@@ -502,20 +493,28 @@ fn render_chart(
         return rsx! { p { class: "py-12 text-muted", "No selected-period dates in this chart window. Use the week controls or choose another reporting period." } };
     };
     let legend = if cumulative {
-        "Cumulative hours in selected period"
+        "Cumulative hours"
     } else {
-        "Hours tracked per week · latest visible weeks emphasized"
+        "Hours tracked per week"
     };
     let total = data.weeks.last().map_or(0, |week| week.cumulative_minutes);
     rsx! {
-        p { class: "text-xs text-subtle m-0", "{legend}" }
-        if let Some(budget) = budget {
-            p { class: "text-xs text-warning mt-2 mb-0", "Dashed reference — {budget.label}: {hours(budget.minutes)} ({budget.minutes} minutes)." }
-            if budget.configured {
-                p { class: "text-xs text-muted mt-1 mb-0", "Current allowance, not rounded consumption. The chart shows actual minutes; Budget remaining applies configured rounding and included work. Combined allowances do not rule out individual overruns." }
+        div { class: "flex flex-wrap justify-end gap-4 mt-4 text-xs text-secondary", role: "group", aria_label: "Chart legend",
+            span { class: "inline-flex items-center gap-2 min-w-0 max-w-full",
+                svg { class: "size-em flex-none text-primary", view_box: "0 0 12 2", "aria-hidden": "true",
+                    path { d: "M0 1 H12", stroke: "currentColor", stroke_width: "2" }
+                }
+                "{legend}"
+            }
+            if let Some(budget) = budget {
+                span { class: "inline-flex items-center gap-2 min-w-0 max-w-full", title: "{budget.label}",
+                    svg { class: "size-em flex-none text-warning", view_box: "0 0 12 2", "aria-hidden": "true",
+                        path { d: "M0 1 H12", stroke: "currentColor", stroke_width: "1.5", stroke_dasharray: "6 5" }
+                    }
+                    "Budget · {hours(budget.minutes)}"
+                }
             }
         }
-        p { class: "text-xs text-muted mt-2", "Chart window: {first.from} – {last.to}. Up to 26 weeks; reporting totals and the table below cover the full selected period." }
         if visible.iter().all(|week| week.billable_minutes == 0 && week.non_billable_minutes == 0) {
             p { class: "text-sm text-muted", "No time tracked in this chart window." }
         }
@@ -528,6 +527,12 @@ fn render_chart(
             div { class: "relative min-w-0 h-full",
             svg { class: "project-activity-svg w-full h-full", view_box: "0 0 10000 2000", preserve_aspect_ratio: "none",
                 role: "img", "aria-label": "{legend}. Chart window: {first.from} to {last.to}. Selected period total: {hours(total)}.{current_label} Exact minutes are available in the weekly data table below.",
+                if let Some(budget) = budget {
+                    desc {
+                        "{budget.label}: {hours(budget.minutes)}. "
+                        if budget.configured { "Current allowance; tracked hours are unrounded. Individual budgets may overrun independently." }
+                    }
+                }
                 if let Some((left, right)) = current_band {
                     rect { class: "project-activity-current", x: "{left}", y: "0", width: "{right - left}", height: "2000" }
                     path { class: "project-activity-current-edges", d: "M{left} 0 V2000 M{right} 0 V2000", vector_effect: "non-scaling-stroke" }
@@ -745,7 +750,7 @@ mod tests {
             None,
         ));
         for expected in [
-            "Chart window: 2026-04-06 – 2026-09-30",
+            "Chart window: 2026-04-06 to 2026-09-30",
             "2026-01-01 – 2026-01-04",
             "Selected period total: 3h",
             "M0 1334",
@@ -766,7 +771,7 @@ mod tests {
             "{outside}"
         );
         assert!(outside.contains("2026-01-01 – 2026-01-04"), "{outside}");
-        assert!(outside.contains("3h"), "{outside}");
+        assert!(outside.contains(">180</td>"), "{outside}");
         assert!(!outside.contains("<svg"), "{outside}");
     }
 
@@ -977,8 +982,9 @@ mod tests {
         ));
         for expected in [
             "project-activity-budget",
-            "Project hours budget: 2h (120 minutes)",
-            "Current allowance, not rounded consumption",
+            "Budget · 2h",
+            "Project hours budget: 2h",
+            "Current allowance; tracked hours are unrounded",
             "Selected period total: 1.02h",
         ] {
             assert!(html.contains(expected), "Missing {expected}: {html}");
@@ -1105,7 +1111,7 @@ mod tests {
             date("2026-09-27"),
             None,
         ));
-        assert!(zero.contains("No time tracked in this period."));
+        assert!(zero.contains("No time tracked in this chart window."));
         assert!(zero.contains("Weekly activity — Custom period"));
     }
 }

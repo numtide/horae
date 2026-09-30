@@ -112,6 +112,10 @@ pub struct ProjectTaskRate {
 
 /// Read-only fee context for authorized billing managers, one row per occurrence.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(
+    not(feature = "server"),
+    expect(dead_code, reason = "Retained for the fee-balance server-function API")
+)]
 pub struct ProjectFeeBalance {
     pub period_key: String,
     pub description: String,

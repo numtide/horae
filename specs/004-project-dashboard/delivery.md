@@ -989,3 +989,33 @@ The final stable-bundle run passed `project-edit`, `project-task-rates`,
 status zero. This includes three editor widths, enlarged-text lifecycle checks,
 exact stored rates, task/team persistence and error recovery. F033 is complete;
 this is a five-suite targeted regression, not a new full 23-suite or Nix CI pass.
+
+## Remove extra detail panels and chart diagnostics — 2026-09-30
+
+Removed the standalone Fee balances panel and its date form from Project Detail.
+Fee calculations and the authorized server API remain unchanged; the existing
+invoice-preparation flow still exposes per-occurrence agreed, invoiced and signed
+remaining amounts. Browser coverage now checks those balances there, including
+negative balances, separate monthly allowances, failed-read retry and revoked
+authority, without materializing fees during preview.
+
+The activity chart now follows the handoff's compact cumulative/weekly legend
+and applicable hours-budget reference. Removed visible diagnostic paragraphs,
+duplicated totals and the extra weekly-data disclosure. Exact full-period minutes
+remain in a semantic table available to assistive technology. The only shared CSS
+addition is the generated `sr-only` utility; existing rules and `horae.css` are
+unchanged. Legend samples use existing text-size and flex utilities. No SQL,
+migrations, billing calculations, permissions or imported data changed.
+
+The final fullstack build and all five focused Chromium suites passed together:
+`project-chart-budget`, `project-activity`, `invoice-preparation`,
+`project-invoice` and `project-report-links`. Verification used a disposable
+database and isolated fallback fonts, and covers mobile/desktop, 200% text,
+accessible exact data, chart mode/period/permission gates, error recovery and
+invoicing. Final 320px and 1440px chart captures were inspected; legend samples
+remain compact and the diagnostic text is absent. The worktree's ignored
+`.scratch/detail-cleanup/` contains the captures and final build/browser log.
+
+All 74 `detail_navigation` tests and strict all-target server Clippy also pass.
+F034 is complete. This correction is not a new full 23-suite or Nix CI pass, and
+does not complete the remaining dashboard requirements; PR #208 remains draft.

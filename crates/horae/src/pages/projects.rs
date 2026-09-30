@@ -23,8 +23,6 @@ mod billing;
 mod breakdown;
 #[path = "projects/exports.rs"]
 mod exports;
-#[path = "projects/fee_balances.rs"]
-mod fee_balances;
 #[path = "projects/summary.rs"]
 mod summary;
 
@@ -1115,10 +1113,6 @@ fn ProjectDetailContent(
                 on_interval_change: move |value| { navigator.replace(project_view_route(id, value, tab())); },
                 on_invoice_retry: move |_| invoices.restart() }
 
-            if is_manager(&me) && details.state()() == UseResourceState::Ready
-                && matches!(&*details.read(), Some(Ok(_))) {
-                fee_balances::ProjectFeeBalances { project_id: id }
-            }
         }
     }
 }

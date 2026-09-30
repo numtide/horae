@@ -564,11 +564,6 @@ async fn navigating_between_project_ids_loads_current_details_and_breakdown() {
     settle(&mut dom);
     let html = dioxus::ssr::render(&dom);
     assert!(html.contains("Breakdown-task-1"), "rendered: {html}");
-    assert!(html.contains("Fee-1"), "rendered: {html}");
-    assert!(
-        html.contains("Over-invoiced: EUR -0.10"),
-        "rendered: {html}"
-    );
     assert_eq!(*probe.breakdown_requests.borrow(), [first]);
 
     let navigator = probe.navigator.borrow().unwrap();
@@ -592,8 +587,6 @@ async fn navigating_between_project_ids_loads_current_details_and_breakdown() {
         "rendered: {html}"
     );
     assert!(html.contains("Breakdown-task-2"), "rendered: {html}");
-    assert!(html.contains("Fee-2"), "rendered: {html}");
-    assert!(!html.contains("Fee-1"), "rendered: {html}");
     assert!(!html.contains("Breakdown-task-1"), "rendered: {html}");
     assert!(!html.contains("CODE-1"), "rendered: {html}");
     assert!(!html.contains("Tag-1"), "rendered: {html}");
@@ -863,7 +856,7 @@ async fn pending_or_failed_project_details_never_show_previous_metadata() {
 }
 
 #[tokio::test]
-async fn project_detail_keeps_reporting_tabs_without_management_forms() {
+async fn project_detail_keeps_reporting_tabs_without_extra_management_or_fee_panels() {
     for role in [OrgRole::Admin, OrgRole::Manager, OrgRole::Member] {
         let id = Uuid::from_u128(1);
         let probe = Probe {
@@ -881,6 +874,10 @@ async fn project_detail_keeps_reporting_tabs_without_management_forms() {
         );
         assert!(
             !html.contains("Manage project tasks") && !html.contains("Manage project team"),
+            "{html}"
+        );
+        assert!(
+            !html.contains("Fee balances") && !html.contains("project-fee-from"),
             "{html}"
         );
         assert!(
@@ -965,23 +962,6 @@ mod server_fns {
     }
     pub async fn list_project_tags() -> Result<Vec<project::ProjectTagLink>, ServerFnError> {
         Ok(Vec::new())
-    }
-    pub async fn get_project_fee_balances(
-        id: String,
-        _from: String,
-        _to: String,
-    ) -> Result<Vec<project::ProjectFeeBalance>, ServerFnError> {
-        let id = Uuid::parse_str(&id).unwrap();
-        Ok(vec![project::ProjectFeeBalance {
-            period_key: "single".into(),
-            description: format!("Fee-{}", id.as_u128()),
-            currency: "EUR".into(),
-            balance: invoice::InvoiceFeeBalance {
-                agreed_cents: 100,
-                invoiced_cents: 110,
-                remaining_cents: -10,
-            },
-        }])
     }
     pub async fn get_project_details(id: String) -> ProjectDetailsResponse {
         let id = Uuid::parse_str(&id).unwrap();

@@ -20,7 +20,7 @@ Existing accounting and access rules take precedence over sample values and simu
 
 These are conclusions from approved feature 011 and current application code, not newly answered user questions:
 
-- Saved identity, tags, private notes, tasks, assignments and fee balances already exist and must survive the redesign.
+- Saved identity, tags, private notes, tasks, assignments and fee calculations must survive the redesign. Fee balances remain in invoice preparation, not in an extra dashboard panel.
 - Hours use tracked minutes. Monetary valuation follows current effective-minute, configured-rate and attached-invoice rules, not the obsolete three-level cascade.
 - Budget periods/scopes are independent of lifetime tracked totals. Monthly allowances cannot be compared with lifetime consumption.
 - Partial fixed-fee billing, milestones, monthly fees, discounts and voids already exist. Reuse their balances, including negative remaining amounts.
@@ -89,7 +89,7 @@ A manager uses contextual actions and the shared editor without losing history o
 - **FR-002**: Provide the handoff summary layout for tracked hours, budget remaining, internal costs, invoiced and uninvoiced context. Forbidden, unavailable and incomplete values are not zeros.
 - **FR-003**: Separate tracked minutes from billable valuation. Equivalent list/detail valuations match current configured/legacy rates, rounding and invoice snapshots.
 - **FR-004**: Show budgets by configured scope/unit/period with absent/zero allowances and signed overruns. Reuse existing semantics.
-- **FR-005**: Provide real Project progress and Hours per week charts, period navigation and accessible textual/tabular equivalents. Do not convert money to hours without a valid rule.
+- **FR-005**: Provide real Project progress and Hours per week charts, period navigation and accessible textual/tabular equivalents. Follow the handoff's compact legend; do not add technical explanatory paragraphs, duplicated totals or a visible weekly-data panel. Keep exact data available to assistive technology. Do not convert money to hours without a valid rule.
 - **FR-006**: Support all-time, month, quarter, year and custom reporting intervals, inclusive by work date. Reject invalid intervals; label selected-period, lifetime and budget-period metrics distinctly.
 - **FR-007**: Provide Tasks, Team and Invoices tabs with meaningful counts and keyboard interaction. Preserve the interval across tabs.
 - **FR-008**: Provide reciprocal expandable task/person groups, stable hours sorting, enabled zero-time rows and disabled historical contributors. Complete subtotals reconcile exactly.
