@@ -4,6 +4,8 @@ Status: incremental planning; independent scope foundation specified, full polic
 
 ## Current Horae boundaries
 
+The expanded [entry-point inventory](contracts/current-access.md) now records current checks, redaction differences, jobs/plugin trust boundaries and migration deltas. The [reference evidence register](contracts/harvest-evidence.md) separates confirmed browser observations from documentation and unverified custom behavior.
+
 - `crates/core/src/types.rs`: organization roles are Admin/Manager/Member. `OrgRole::is_manager_or_above` describes organization-wide billing and approvals. ProjectRole is a separate legacy concept.
 - `crates/core/src/state.rs`: approval and invoice transitions currently accept organization roles. The new model must preserve valid state transitions while changing authorization deliberately.
 - `crates/horae/src/server_fns.rs`: `require_user` reloads active identity; `require_admin` and `require_manager` enforce broad role gates.
@@ -36,7 +38,7 @@ Independent locks must still apply after withdrawal; see [unlocking time and exp
 
 ### Custom-profile evidence
 
-The new permissions reference documents administrator-managed templates, an immutable Member floor, automatically included prerequisites/dependent removal, unique names of at most 100 characters, at most 50 templates, per-person difference indicators and deletion that preserves existing permissions. Applying a profile requires saving the person. Exact prerequisite combinations, best-fit built-in classification, name case sensitivity and template update/propagation behavior require direct verification before implementing those contracts.
+The new permissions reference documents administrator-managed templates, an immutable Member floor, automatically included prerequisites/dependent removal, unique names of at most 100 characters, at most 50 templates, per-person difference indicators and deletion that preserves existing permissions. Applying a profile requires saving the person. Read-only inspection of the live editor has now established its profile defaults, dependency traversal and classification rules; see [reference profiles](contracts/reference-profiles.md). Saved enforcement, name case sensitivity and template update/propagation still require direct verification. The live catalog also identifies approval-specific grants and report/rate-scope differences from the article; those findings supersede guesses based on its role summaries.
 
 ### Independent foundation decisions
 

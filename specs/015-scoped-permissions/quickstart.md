@@ -27,9 +27,34 @@ The foundation contract covers FR-006 record union, identity activation and orga
 
 ## Full-feature acceptance (pending implementation)
 
+The [current access inventory](contracts/current-access.md), [Harvest evidence register](contracts/harvest-evidence.md) and [observed profiles](contracts/reference-profiles.md) now guide the remaining checks. Browser configuration/source inspection is not a substitute for saved-permission enforcement tests.
+
 1. Complete the documented/observed parity matrix and confirm custom dependencies using disposable Harvest fixtures.
 1. Exercise each profile and custom configuration through direct server calls, screens, exports, API, jobs and downloads; verify redacted payloads and cross-organization denial.
 1. Revoke authority between preview, execution and download; race revocation against mutation and concurrent administrator changes.
 1. Submit mixed-project dates, approve only A, verify B remains pending and approved empty cells reject new entries. Exercise filters, another approver, self-approval settings and scoped/whole-week withdrawal against independent locks.
 1. Verify custom-template deletion preserves grants, migration preserves records and import/identity linking never overwrites privileges.
 1. Verify Settings/Workspace themes, keyboard, narrow/short viewports and enlarged text; run database integration tests and the full flake gate before merge.
+
+## Independent approval tenant-isolation repair
+
+Run PostgreSQL with the repository development stack and migrations applied. Tests use SQLx-created throwaway databases; the database role needs `CREATEDB`.
+
+```sh
+nix develop
+process-compose up postgres migrate
+# In a second development shell, with DATABASE_URL pointing to that stack:
+cargo test -p horae --features server --bin horae server_fns::approvals:: -- --nocapture
+cargo sqlx prepare --workspace -- --features server --all-targets
+SQLX_OFFLINE=true cargo clippy -p horae --features server --all-targets -- -D warnings
+```
+
+Evidence from 2026-09-30:
+
+- Tests invoked the actual approval/reopen transactions. Before adding tenant filters, three isolation tests failed: foreign approval returned, bulk returned two tenants, and foreign reopening succeeded. The same-org invoice-lock preservation case passed.
+- After the correction, all 14 approval-module tests passed, including existing submission concurrency tests and four new isolation tests.
+- SQLx preparation completed against a separate development database on port 55415. Generated cache entries replace the obsolete query hashes; no application data or migrations changed.
+- Server/all-targets Clippy passed with `SQLX_OFFLINE=true` and warnings denied. Formatting and diff whitespace checks passed.
+- Existing same-org whole-week semantics and bulk skip/count behavior are retained. Scoped project/date approvals, atomic full-selection policy and transactional permission revocation remain pending; this repair does not claim those outcomes.
+
+The browser preview on port 8092 and the user's Harvest account were not changed by these database tests. The whole feature remains draft; no full-flake or end-to-end permission acceptance is claimed here.

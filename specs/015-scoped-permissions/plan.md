@@ -63,6 +63,10 @@ crates/horae/tests/integration.rs
 
 Steps 2–6 need detailed contracts before coding. Step 1 neither chooses role grants nor changes approval behavior. It does not satisfy any full user story by itself.
 
+### Independent tenant-isolation repair
+
+The access inventory found missing organization filters in the existing approval/reopen mutations. Correct these without introducing new roles or changing same-organization weekly semantics. Extract the existing transactions into pool-injected helpers so database tests exercise the production SQL; retain plugin dispatch after commit in the server wrappers. Test Manager and Admin callers against foreign pending/approved weeks, mixed-ID bulk requests, same-org success and invoice-lock preservation. Regenerate the SQLx cache and run approval regression tests. This closes an existing invariant violation; it does not bypass the matrix/governance gates for the new policy.
+
 ## Workflow Notes
 
 The checked-in `setup-plan.sh --json` was executed. This repository does not contain `update-agent-context.sh`; no agent-context generation is claimed. Requirements checklist remains 12/16; the user requested continuation despite the remaining full-feature gaps.

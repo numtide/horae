@@ -145,7 +145,7 @@ These are target responsibilities, not a substitute for the operation-level matr
 | --- | --- | --- |
 | Member | Own time on assigned, available work; permitted project progress | Other people's detailed work, rates/costs, invoices and administration |
 | Project Manager | Assigned projects and managed people's/project work; create projects; manage clients/tasks | Financial rates/costs, invoices, people administration and workspace settings |
-| People Admin | Manage people and organization-wide time; read projects | Project editing, rates/costs, invoices, financial reports and workspace settings |
+| People Admin | Manage people and organization-wide time; read projects; reference grants include the Contractor report | Project editing, rates/costs, invoices, profitability/invoicing reports and workspace settings |
 | Accounting | Read time/projects/rates/costs; manage clients and invoices; authorized financial reporting | Editing time, projects, people or rates; workspace settings |
 | Executive Manager | Manage organization-wide time, projects, people, clients/tasks and invoices; read rates/costs and reports | Editing rates/costs, workspace settings and permission administration |
 | Administrator | All implemented organization capabilities, including permissions and configuration | Cannot bypass organization, integrity, identity or last-administrator safeguards |
