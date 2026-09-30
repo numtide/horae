@@ -55,9 +55,11 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated, seeded test instance');
       await page.route(pattern, route => route.abort('failed'));
       await page.route(formPattern, route => route.abort('failed'));
       try {
-        const ready = page.waitForResponse(r => r.url().includes(`/api/${scenario.resource}`) && r.status() === 200);
-        await page.goto(`${base}${scenario.path}`);
-        await (await ready).finished();
+        const [ready] = await Promise.all([
+          page.waitForResponse(r => r.url().includes(`/api/${scenario.resource}`) && r.status() === 200),
+          page.goto(`${base}${scenario.path}`, { waitUntil: 'domcontentloaded' }),
+        ]);
+        await ready.finished();
         if (scenario.prepare) await scenario.prepare();
         await expect(page.getByRole('button', { name: scenario.form, exact: true }).first()).toBeVisible();
         const rejected = page.waitForEvent('requestfailed', r => r.url().includes(`/api/${scenario.endpoint}`));

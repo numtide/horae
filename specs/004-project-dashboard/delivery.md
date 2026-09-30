@@ -867,3 +867,10 @@ frozen server/public copy with a disposable database; the user preview is left
 running. The full 23-suite rerun is pending, separately tracked by F029. Broader
 dashboard acceptance, billing/action decisions, Clients and Settings/Workspace
 remain open.
+
+The frozen-build complete rerun subsequently stopped in `action-errors` with an
+unhandled response-wait timeout during navigation. The response and DOM-ready
+navigation are now awaited together, preserving the successful-response check
+and ensuring navigation failures enter the scenario's diagnostic handler. All
+three action-error scenarios pass in isolation; a new full rerun is still needed
+before F029 can be marked complete.
