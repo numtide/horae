@@ -88,13 +88,14 @@ pub(super) async fn entries(
                    AND ($3::uuid IS NULL OR p.client_id = $3)
                    AND ($4::uuid IS NULL OR te.project_id = $4)
                    AND ($5::uuid IS NULL OR te.user_id = $5)
+                   AND ($9::uuid IS NULL OR te.task_id = $9)
                    AND ($8::uuid IS NULL OR EXISTS (
                      SELECT 1 FROM project_tag_links l
                      WHERE l.org_id = te.org_id AND l.project_id = te.project_id AND l.tag_id = $8
                    ))
                  LIMIT $7) bounded"#,
         from as chrono::NaiveDate, to as chrono::NaiveDate,
-        params.client_id, params.project_id, params.user_id, org_id, XLSX.rows + 1, params.tag_id,
+        params.client_id, params.project_id, params.user_id, org_id, XLSX.rows + 1, params.tag_id, params.task_id,
     ).fetch_one(&mut *tx).await.map_err(database_error)?;
     check(size.rows, size.bytes, size.field_bytes, XLSX)?;
     let rows = super::fetch_entries(&mut *tx, org_id, (from, to), params.filters())
@@ -372,6 +373,7 @@ mod tests {
             project_id: None,
             user_id: None,
             tag_id: None,
+            task_id: None,
         }
     }
 

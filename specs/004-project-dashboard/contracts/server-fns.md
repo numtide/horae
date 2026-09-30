@@ -26,6 +26,18 @@ remain pending reconciliation.
   unexpected arithmetic/database failures are errors, not zero totals.
 - No schema or mutation change. Tests use disposable PostgreSQL databases.
 
+## Report task-filter extension
+
+The existing `report_time` and `report_detailed` server functions accept an
+additional `task_id: Option<String>`, parsed with the same strict UUID helper as
+their other entity filters. CSV/XLSX export query parameters accept the same
+optional task UUID. All five entity filters are conjunctive; a missing task means
+all tasks, not a different permission scope. Detailed rows and CSV still share
+one query; XLSX preflight applies the same task predicate before checking limits.
+Unknown/foreign tasks produce no rows, and malformed UUIDs fail explicitly.
+The current active-manager gates and organization/cost privacy stay unchanged.
+No schema or financial-rule change is part of this extension.
+
 > Historical contract, pending reconciliation with the 2026-09-29 specification.
 > Its visibility and accounting assumptions predate feature 011; it is not the
 > current implementation contract.

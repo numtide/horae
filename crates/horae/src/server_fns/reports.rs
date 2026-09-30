@@ -1,5 +1,10 @@
 //! Report and plugin-widget server functions.
 
+#![expect(
+    clippy::too_many_arguments,
+    reason = "The flat report request and its generated Dioxus adapter share eight arguments"
+)]
+
 use super::*;
 
 #[cfg(all(test, feature = "server"))]
@@ -8,7 +13,7 @@ mod tests;
 // ── Reports (M8) ────────────────────────────────────────────────────────────
 
 /// Grouped time report. Groups by "project", "task", "client", or "person", with
-/// optional client/project/teammate/tag filters. Each group carries billable and cost
+/// optional client/project/teammate/tag/task filters. Each group carries billable and cost
 /// amounts (rates via FR-024), partitioned by entity identity and currency.
 /// Manager-only: reports span every user's time and money (SPEC §6).
 #[server]
@@ -20,6 +25,7 @@ pub async fn report_time(
     project_id: Option<String>,
     user_id: Option<String>,
     tag_id: Option<String>,
+    task_id: Option<String>,
 ) -> Result<Vec<ReportRow>, ServerFnError> {
     let manager = require_manager().await?;
     let state = crate::state::global_state().await;
@@ -30,6 +36,7 @@ pub async fn report_time(
     let project_filter = parse_opt_uuid(project_id, "project_id")?;
     let user_filter = parse_opt_uuid(user_id, "user_id")?;
     let tag_filter = parse_opt_uuid(tag_id, "tag_id")?;
+    let task_filter = parse_opt_uuid(task_id, "task_id")?;
 
     fetch_report(
         &state.db,
@@ -41,6 +48,7 @@ pub async fn report_time(
             project_id: project_filter,
             user_id: user_filter,
             tag_id: tag_filter,
+            task_id: task_filter,
         },
     )
     .await
@@ -120,6 +128,7 @@ pub(super) async fn fetch_report(
                AND ($3::uuid IS NULL OR p.client_id = $3)
                AND ($4::uuid IS NULL OR te.project_id = $4)
                AND ($5::uuid IS NULL OR te.user_id = $5)
+               AND ($9::uuid IS NULL OR te.task_id = $9)
                AND ($8::uuid IS NULL OR EXISTS (
                  SELECT 1 FROM project_tag_links l
                  WHERE l.org_id = te.org_id AND l.project_id = te.project_id AND l.tag_id = $8
@@ -154,6 +163,7 @@ pub(super) async fn fetch_report(
         viewer_id,
         group_by,
         filters.tag_id,
+        filters.task_id,
     )
     .fetch_all(pool)
     .await?;
@@ -171,6 +181,7 @@ pub async fn report_detailed(
     project_id: Option<String>,
     user_id: Option<String>,
     tag_id: Option<String>,
+    task_id: Option<String>,
 ) -> Result<Vec<DetailedReportRow>, ServerFnError> {
     let manager = require_manager().await?;
 
@@ -180,6 +191,7 @@ pub async fn report_detailed(
     let project_filter = parse_opt_uuid(project_id, "project_id")?;
     let user_filter = parse_opt_uuid(user_id, "user_id")?;
     let tag_filter = parse_opt_uuid(tag_id, "tag_id")?;
+    let task_filter = parse_opt_uuid(task_id, "task_id")?;
 
     // The CSV/XLSX exports must return exactly these rows, so the query lives
     // once in `crate::reports` and both surfaces call it.
@@ -193,6 +205,7 @@ pub async fn report_detailed(
             project_id: project_filter,
             user_id: user_filter,
             tag_id: tag_filter,
+            task_id: task_filter,
         },
     )
     .await

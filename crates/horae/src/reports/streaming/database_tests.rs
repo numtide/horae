@@ -12,6 +12,7 @@ fn params() -> ExportParams {
         project_id: None,
         user_id: None,
         tag_id: None,
+        task_id: None,
     }
 }
 
@@ -22,6 +23,69 @@ async fn body(response: Response) -> Vec<u8> {
         .await
         .unwrap()
         .to_vec()
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn task_filter_matches_streamed_rows_and_spreadsheet_size_checks(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    time_entry(&pool, &ids, EntryState::Open).await;
+    let other = SeedIds {
+        task_id: Uuid::now_v7(),
+        ..ids
+    };
+    sqlx::query!(
+        "INSERT INTO tasks (id, org_id, name) VALUES ($1, $2, 'Excluded task')",
+        other.task_id,
+        other.org_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let excluded = time_entry(&pool, &other, EntryState::Open).await;
+    sqlx::query!(
+        "UPDATE time_entries SET notes = repeat('x', 40000) WHERE id = $1",
+        excluded
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let selected = ExportParams {
+        task_id: Some(ids.task_id),
+        project_id: Some(ids.project_id),
+        ..params()
+    };
+    let rows = super::super::limits::entries(&pool, ids.org_id, &selected)
+        .await
+        .unwrap();
+    assert_eq!(
+        rows.len(),
+        1,
+        "Excluded tasks must not count towards the XLSX field-size limit"
+    );
+    let csv = body(entries(pool.clone(), ids.org_id, selected).await.unwrap()).await;
+    let records = csv::Reader::from_reader(csv.as_slice())
+        .records()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    assert_eq!(records.len(), 1);
+    assert_eq!(&records[0][2], "Dev");
+    assert_eq!(&records[0][4], "1.00");
+    let missing = ExportParams {
+        task_id: Some(Uuid::now_v7()),
+        ..params()
+    };
+    assert!(
+        super::super::limits::entries(&pool, ids.org_id, &missing)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    let csv = body(entries(pool, ids.org_id, missing).await.unwrap()).await;
+    assert_eq!(
+        csv::Reader::from_reader(csv.as_slice()).records().count(),
+        0
+    );
 }
 
 async fn add_entries(pool: &PgPool, ids: &SeedIds, count: usize) {

@@ -79,6 +79,89 @@ async fn report(pool: &PgPool, viewer_id: Uuid, dimension: &str) -> Vec<ReportRo
 
 #[sqlx::test(migrations = "./migrations")]
 #[serial]
+async fn task_filters_intersect_project_person_and_date_without_widening_reports(pool: PgPool) {
+    use crate::reports::ReportFilters;
+    let (first, second) = fixtures(&pool, "EUR").await;
+    let foreign = seed(&pool, OrgRole::Manager).await;
+    entries(&pool, &first, &[(60, None, true), (30, None, false)]).await;
+    let other_task = SeedIds {
+        task_id: second.task_id,
+        ..first
+    };
+    entries(&pool, &other_task, &[(120, None, true)]).await;
+    let other_person = SeedIds {
+        user_id: second.user_id,
+        ..first
+    };
+    entries(&pool, &other_person, &[(240, None, true)]).await;
+    let other_project = SeedIds {
+        project_id: second.project_id,
+        ..first
+    };
+    entries(&pool, &other_project, &[(480, None, true)]).await;
+    entries(&pool, &foreign, &[(960, None, true)]).await;
+    let day = "2026-09-07".parse().unwrap();
+    let selected = ReportFilters {
+        task_id: Some(first.task_id),
+        project_id: Some(first.project_id),
+        user_id: Some(first.user_id),
+        ..Default::default()
+    };
+    for dimension in ["project", "client", "task", "person"] {
+        let rows = fetch_report(&pool, first.user_id, (day, day), dimension, selected)
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 1, "{dimension}");
+        assert_eq!(rows[0].total_minutes, 90, "{dimension}");
+    }
+    let details = crate::reports::fetch_entries(&pool, first.org_id, (day, day), selected)
+        .await
+        .unwrap();
+    assert_eq!(details.iter().map(|row| row.minutes).sum::<i32>(), 90);
+    for task_id in [second.task_id, foreign.task_id, Uuid::now_v7()] {
+        let filters = ReportFilters {
+            task_id: Some(task_id),
+            ..selected
+        };
+        let expected = if task_id == second.task_id { 120 } else { 0 };
+        let rows = fetch_report(&pool, first.user_id, (day, day), "task", filters)
+            .await
+            .unwrap();
+        assert_eq!(
+            rows.iter().map(|row| row.total_minutes).sum::<i64>(),
+            expected
+        );
+        let rows = crate::reports::fetch_entries(&pool, first.org_id, (day, day), filters)
+            .await
+            .unwrap();
+        assert_eq!(
+            rows.iter().map(|row| i64::from(row.minutes)).sum::<i64>(),
+            expected
+        );
+    }
+    let next = "2026-09-08".parse().unwrap();
+    assert!(
+        fetch_report(&pool, first.user_id, (next, next), "task", selected)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        fetch_report(&pool, foreign.user_id, (day, day), "task", selected)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        crate::reports::fetch_entries(&pool, foreign.org_id, (day, day), selected)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial]
 async fn tag_filters_keep_report_dimensions_and_details_in_sync(pool: PgPool) {
     use crate::reports::ReportFilters;
     let (first, second) = fixtures(&pool, "EUR").await;

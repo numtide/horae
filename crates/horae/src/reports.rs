@@ -63,7 +63,7 @@ async fn require_manager(session: &Session) -> Result<uuid::Uuid, StatusCode> {
 }
 
 /// Mirrors the Reports page filters, so a download matches what is on screen.
-/// Absent client/project/user/tag means "all", as on the page.
+/// Absent client/project/user/tag/task means "all", as on the page.
 #[derive(Deserialize)]
 pub struct ExportParams {
     pub from: String,
@@ -72,6 +72,7 @@ pub struct ExportParams {
     pub project_id: Option<uuid::Uuid>,
     pub user_id: Option<uuid::Uuid>,
     pub tag_id: Option<uuid::Uuid>,
+    pub task_id: Option<uuid::Uuid>,
 }
 
 /// Entity filters shared by grouped reports, detailed rows and downloads.
@@ -81,6 +82,7 @@ pub(crate) struct ReportFilters {
     pub project_id: Option<uuid::Uuid>,
     pub user_id: Option<uuid::Uuid>,
     pub tag_id: Option<uuid::Uuid>,
+    pub task_id: Option<uuid::Uuid>,
 }
 
 impl ExportParams {
@@ -90,6 +92,7 @@ impl ExportParams {
             project_id: self.project_id,
             user_id: self.user_id,
             tag_id: self.tag_id,
+            task_id: self.task_id,
         }
     }
 }
@@ -132,6 +135,7 @@ fn stream_entries<'e>(
            AND ($3::uuid IS NULL OR p.client_id = $3)
            AND ($4::uuid IS NULL OR te.project_id = $4)
            AND ($5::uuid IS NULL OR te.user_id = $5)
+           AND ($8::uuid IS NULL OR te.task_id = $8)
            AND ($7::uuid IS NULL OR EXISTS (
              SELECT 1 FROM project_tag_links l
              WHERE l.org_id = te.org_id AND l.project_id = te.project_id AND l.tag_id = $7
@@ -144,6 +148,7 @@ fn stream_entries<'e>(
         filters.user_id,
         org_id,
         filters.tag_id,
+        filters.task_id,
     )
     .fetch(executor)
 }

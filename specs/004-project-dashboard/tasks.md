@@ -58,6 +58,12 @@ F001–F003 does not complete Project Detail or the four-surface delivery.
 - [x] F024 [US2] Move the reporting period into the Tasks/Team toolbar; preserve
   selected tabs and independent invoice access through pending/failed reads, and
   test custom validation, cancellation, retry and chart/report isolation.
+- [x] F025 [US2] Add task filtering to grouped/detailed Reports and CSV/XLSX,
+  including the bounded-export preflight. Verify filter intersections, organization
+  isolation, unchanged permission gates, real downloads and SQLx metadata.
+- [ ] F026 [US2] Connect contextual task/person/total report links and the project
+  export menu, preserving all-time/custom scope and current report authority;
+  implement the PDF summary and verify complete journeys from Project Detail.
 
 **Input**: Design documents from `specs/004-project-dashboard/`
 

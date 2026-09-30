@@ -73,6 +73,22 @@ layout using render tests and the disposable-database browser runner. This UI
 increment changes no SQL, permissions, schema or shared CSS; scoped report links
 and working exports remain separate required work.
 
+### Contextual report navigation and downloads
+
+The existing manager-only report/export pipeline needs an optional task filter
+before task hours can link to a genuinely scoped report. Add the filter to the
+grouped query, shared detailed/CSV row stream and XLSX size preflight together;
+omitting it retains current behavior. The Reports selector must show its active
+value even if catalog loading fails, without clearing or widening the selection.
+Do not change progress permissions into permission to read entry notes or costs.
+Verify conjunction with project/person/dates, foreign/unknown identities,
+size-check parity, invalid UUIDs and revoked report authority. Regenerate the
+SQLx cache against the existing migrated schema; no migration is needed.
+
+Then wire reproducible project/task/person/all-time/custom-date route context and
+the project export menu. PDF summary rendering and bounded-download explanations
+remain required; the task-filter foundation alone does not satisfy FR-016.
+
 ### Chart window navigation
 
 Keep the reporting interval shared by charts, Tasks and Team. Add a separate

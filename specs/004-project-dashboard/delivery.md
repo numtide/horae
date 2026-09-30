@@ -550,3 +550,43 @@ Verification:
 
 F024 is complete. Scoped report links and exports are still required; this does
 not complete Project Detail, Clients or Settings/Workspace. PR #208 remains draft.
+
+## Task-scoped report foundation — 2026-09-30
+
+Reports now accepts an optional task filter across grouped rows, detailed rows,
+streamed CSV and bounded XLSX. The XLSX size preflight uses the same predicate as
+the payload query. The Reports page exposes that filter through its existing
+selector component; labels are associated with controls and unavailable selected
+values do not silently display All. Catalog failures have a visible retry.
+
+The current report/export manager gates, organization scope, rate calculations
+and private-cost rules are unchanged. Malformed UUID arguments now return
+`BAD_REQUEST` from the shared parser instead of an internal-server error.
+
+Verification:
+
+- The two new PostgreSQL tests initially failed: task filtering returned 210
+  minutes instead of 90, and XLSX counted an oversized field in an excluded task.
+  Both now pass. The full report/export module run passes 49 tests with two
+  pre-existing manual measurement tests ignored. Two UUID parser tests pass.
+- All 59 Project Detail navigation/rendering tests pass. All-target offline
+  server Clippy with warnings denied and the application WASM check pass.
+- Native Chromium verifies catalog failure/retry, project/task/date conjunction,
+  grouped/detailed minute reconciliation, filtered CSV contents, real XLSX
+  download, invalid task IDs (400), and revoked-role denial (403) for both report
+  endpoints and both exports. Layout fits 320/768/1440px. Project activity and
+  its independent chart/report/invoice state regression pass in the same runner.
+- The full New Project browser suite also passes after those suites, including
+  tagged report/export flows, validation, recovery, budgets and invoice defaults.
+  The combined disposable-database runner exits successfully.
+- SQLx metadata was regenerated with server/all-targets against the migrated
+  local database. The three changed query snapshots are replaced. Ninety-two
+  unchanged snapshots omitted by cached compilation were restored only after
+  verifying their exact SQL still exists in the source; all-target offline
+  compilation validates their continued availability. No migration was added.
+
+F025 completes the task-filter prerequisite, not the contextual Project Detail
+journey. F026 still requires reproducible report route context, dashboard links,
+the export menu, PDF summary and bounded-download explanations. The broader
+Project Detail/Clients/Settings/Workspace delivery and full Nix acceptance remain
+open; the PR remains draft.
