@@ -33,29 +33,9 @@ pub(super) fn ProjectBreakdownPanel(
     project_id: Uuid,
     interval: ReadSignal<Option<ProjectActivityInterval>>,
     revision: ReadSignal<u64>,
-    can_view_invoices: ReadSignal<bool>,
+    invoice_state: InvoiceHistoryState,
+    on_invoice_retry: EventHandler<()>,
 ) -> Element {
-    let mut invoices = use_resource(move || {
-        let allowed = can_view_invoices();
-        async move {
-            if allowed {
-                Some(server_fns::billing::get_project_invoices(project_id.to_string()).await)
-            } else {
-                None
-            }
-        }
-    });
-    let invoice_state = if !can_view_invoices() {
-        InvoiceHistoryState::Hidden
-    } else if invoices.state()() != UseResourceState::Ready {
-        InvoiceHistoryState::Loading
-    } else {
-        match &*invoices.read() {
-            Some(Some(Ok(value))) => InvoiceHistoryState::Ready(value.clone()),
-            Some(Some(Err(error))) => InvoiceHistoryState::Failed(error.to_string()),
-            _ => InvoiceHistoryState::Loading,
-        }
-    };
     let mut data = use_resource(move || {
         let requested = interval();
         let _ = revision();
@@ -79,7 +59,7 @@ pub(super) fn ProjectBreakdownPanel(
                 match &*data.read() {
                     Some((_, Ok(value))) => rsx! { for period in [interval()] {
                         BreakdownTables { key: "{period:?}", project_id, data: value.clone(), invoice_state: invoice_state.clone(),
-                            on_invoice_retry: move |_| invoices.restart() }
+                            on_invoice_retry: move |_| on_invoice_retry.call(()) }
                     } },
                     Some((_, Err(error))) => rsx! {
                         p { role: "alert", class: "text-danger", "Could not load project breakdown: {error}" }

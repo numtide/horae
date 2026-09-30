@@ -152,6 +152,17 @@ the existing pending-navigation guard and idempotent recovery. Verify direct and
 changed routes, denied/missing identity, source payloads, cancellation and generic
 invoice preparation regression. No new billing policy, schema or mutation API.
 
+### Invoiced summary
+
+Lift the existing authorized invoice resource to the keyed project page and share
+its state/retry with the summary tile and history. Reuse stored non-void totals;
+count only non-void invoices per stored currency and label draft reservations,
+discounts, tax exclusion and lifetime scope explicitly. Empty, private, pending
+and failed results are not monetary zero. Keep the tile readable independently
+of a failed work-summary request, and do not add another server query or change
+external-billing eligibility. Use the existing auto-fit tile grid and verify
+route races, permissions, one-read behavior, browser reconciliation and bounds.
+
 ## Summary
 
 Replace the stub `ProjectDetail` page (today: `"Project detail for {id}"` plus an assignments table) with a real, data-honest project dashboard. It shows the project's identity, budget & progress (driven by `budget_kind`), total/billable/non-billable hours, billable amount, invoiced vs uninvoiced money, per-task and per-person breakdowns, the team and enabled tasks, and a recent-entries feed.

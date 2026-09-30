@@ -6,6 +6,7 @@ pub(super) fn ProjectSummaryPanel(
     project_id: Uuid,
     can_manage: bool,
     revision: ReadSignal<u64>,
+    children: Element,
 ) -> Element {
     let mut summary = use_resource(move || {
         let _ = revision();
@@ -13,17 +14,22 @@ pub(super) fn ProjectSummaryPanel(
     });
     rsx! {
         section { class: "mt-4", aria_label: "Project summary",
+            div { class: "project-summary-grid grid gap-4",
             if summary.state()() != UseResourceState::Ready {
                 p { role: "status", "Loading project summary…" }
             } else {
                 match &*summary.read() {
                     Some(Ok(summary)) => render_summary(project_id, summary, can_manage),
                     Some(Err(error)) => rsx! {
+                        div { class: "card p-5",
                         p { class: "text-danger", role: "alert", "Could not load project summary: {error}" }
                         button { r#type: "button", class: "btn btn-secondary min-h-control", onclick: move |_| summary.restart(), "Retry summary" }
+                        }
                     },
                     None => rsx! {},
                 }
+            }
+                {children}
             }
         }
     }
@@ -47,7 +53,6 @@ fn render_summary(project_id: Uuid, summary: &ProjectSummary, can_manage: bool) 
             )
         });
     rsx! {
-        div { class: "project-summary-grid grid gap-4",
             section { class: "card p-5 min-w-0 wrap-anywhere", aria_labelledby: "project-hours-title",
                 h2 { id: "project-hours-title", class: "text-sm font-sans font-normal text-secondary m-0", "Total hours" }
                 p { class: "font-mono text-3xl font-semibold text-strong mt-2 mb-4",
@@ -134,7 +139,6 @@ fn render_summary(project_id: Uuid, summary: &ProjectSummary, can_manage: bool) 
                     p { class: "text-xs text-muted m-0", "Not available with your permissions." }
                 }
             }
-        }
     }
 }
 

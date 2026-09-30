@@ -42,6 +42,15 @@ navigation was aborted; its own Cancel action was then invoked without saving.
 
 ## Official behavioral contracts
 
+Read-only MCP recheck on 2026-09-30 confirms that the inspected fixed-fee
+project's Invoiced amount matches its one draft invoice's pre-tax amount. Its
+Uninvoiced amount is negative and reconciles to total project fees minus that
+invoice contribution. Switching to Invoices leaves the summary unchanged. The
+native click timed out waiting for tab stability; a DOM click opened the tab.
+This confirms displayed behavior, not native pointer acceptance, and no billing
+record or setting was changed. It does not establish the handling of every
+invoice status, taxes, mixed-project lines or recurring fees.
+
 - **Pin:** moves a project to the top of the list, up to 100 pinned projects.
   The article does not establish the ownership/persistence implementation.
   [Projects overview](https://support.getharvest.com/hc/en-us/articles/360048181432-Projects-overview).

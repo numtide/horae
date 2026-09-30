@@ -11,6 +11,51 @@ pub(super) enum InvoiceHistoryState {
 }
 
 #[component]
+pub(super) fn InvoiceSummary(
+    state: InvoiceHistoryState,
+    #[props(default)] on_retry: Option<EventHandler<()>>,
+) -> Element {
+    rsx! {
+        section { class: "card p-5 min-w-0 wrap-anywhere", aria_labelledby: "project-invoiced-title",
+            h2 { id: "project-invoiced-title", class: "text-sm font-sans font-normal text-secondary m-0", "Invoiced" }
+            match state {
+                InvoiceHistoryState::Hidden => rsx! {
+                    p { class: "font-mono text-3xl font-semibold text-faint mt-2 mb-3", "N/A" }
+                    p { class: "text-xs text-muted m-0", "Not available with your permissions." }
+                },
+                InvoiceHistoryState::Loading => rsx! { p { class: "text-sm text-muted mt-2", role: "status", "Loading invoiced total…" } },
+                InvoiceHistoryState::Failed(error) => rsx! {
+                    p { class: "text-sm text-danger mt-2", role: "alert", "Could not load invoiced total: {error}" }
+                    if let Some(retry) = on_retry {
+                        button { r#type: "button", class: "btn btn-secondary btn-sm min-h-control mt-2", onclick: move |_| retry.call(()), "Retry invoiced total" }
+                    }
+                },
+                InvoiceHistoryState::Ready(data) => {
+                    let mut counts = HashMap::<&str, usize>::new();
+                    for invoice in &data.invoices {
+                        if invoice.status != horae_core::types::InvoiceStatus::Void {
+                            *counts.entry(&invoice.currency).or_default() += 1;
+                        }
+                    }
+                    rsx! {
+                        if data.invoices.is_empty() {
+                            p { class: "text-sm text-muted mt-2 mb-3", "No invoices for this project." }
+                        }
+                        for (currency, total) in &data.totals {
+                            div { key: "{currency}",
+                                p { class: "font-mono text-3xl font-semibold text-strong mt-2 mb-3", "{format_cents(total.non_void_cents, currency)}" }
+                                p { class: "text-xs text-muted m-0", "Invoices: {counts.get(currency.as_str()).copied().unwrap_or(0)} · {currency}" }
+                            }
+                        }
+                        p { class: "text-xs text-muted m-0 mt-3", "Lifetime · after discounts, before tax. Includes drafts; excludes void invoices." }
+                    }
+                },
+            }
+        }
+    }
+}
+
+#[component]
 pub(super) fn InvoiceHistory(data: ProjectInvoices) -> Element {
     rsx! {
         div { class: "mt-6",
@@ -92,8 +137,7 @@ mod tests {
         Fixture {},
     }
 
-    #[component]
-    fn Fixture() -> Element {
+    fn fixture() -> ProjectInvoices {
         let invoices = vec![
             ProjectInvoice {
                 id: Uuid::from_u128(10),
@@ -118,7 +162,58 @@ mod tests {
                 .map(|row| (row.currency.as_str(), row.status, row.net_before_tax_cents)),
         )
         .unwrap();
-        rsx! { InvoiceHistory { data: ProjectInvoices { invoices, totals } } }
+        ProjectInvoices { invoices, totals }
+    }
+
+    #[component]
+    fn Fixture() -> Element {
+        rsx! { InvoiceHistory { data: fixture() } }
+    }
+
+    #[test]
+    fn invoice_tile_separates_currencies_and_excludes_void_amounts_and_counts() {
+        let html = dioxus::ssr::render_element(rsx! { InvoiceSummary {
+            state: InvoiceHistoryState::Ready(fixture()),
+        } });
+        for expected in [
+            "Invoiced",
+            "USD 12.34",
+            "EUR 0.00",
+            "Invoices: 1",
+            "Invoices: 0",
+            "Includes drafts",
+            "excludes void",
+            "before tax",
+        ] {
+            assert!(html.contains(expected), "missing {expected}: {html}");
+        }
+        assert!(!html.contains("EUR 56.78"), "{html}");
+    }
+
+    #[test]
+    fn invoice_tile_never_turns_pending_private_failed_or_empty_history_into_zero() {
+        for (state, expected) in [
+            (
+                InvoiceHistoryState::Hidden,
+                "Not available with your permissions",
+            ),
+            (InvoiceHistoryState::Loading, "Loading invoiced total"),
+            (
+                InvoiceHistoryState::Failed("History unavailable".into()),
+                "History unavailable",
+            ),
+            (
+                InvoiceHistoryState::Ready(ProjectInvoices {
+                    invoices: vec![],
+                    totals: Default::default(),
+                }),
+                "No invoices for this project",
+            ),
+        ] {
+            let html = dioxus::ssr::render_element(rsx! { InvoiceSummary { state } });
+            assert!(html.contains(expected), "{html}");
+            assert!(!html.contains("0.00"), "{html}");
+        }
     }
 
     #[test]

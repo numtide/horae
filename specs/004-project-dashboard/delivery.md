@@ -384,3 +384,27 @@ Verification:
 This finishes F020, not dashboard acceptance. Invoiced/uninvoiced tiles, metadata,
 additional action decisions, exports and remaining visual/accessibility coverage
 are still required, followed by Clients and Settings/Workspace.
+
+## Invoiced summary
+
+The fourth summary tile shares the keyed page's authorized invoice response with
+the history table. It shows stored project-attributed amounts after discounts and
+before tax, separate currencies and non-void invoice counts. Labels make lifetime
+scope, draft inclusion and void exclusion explicit. Missing, private, pending and
+failed results do not masquerade as zero. A work-summary failure does not hide
+the invoiced tile; switching projects clears previous amounts.
+
+Verification:
+
+- All 52 detail navigation/rendering tests pass, including pending/failed route
+  transitions, independent summary failure, currency separation and void counts.
+- Offline server Clippy (all targets, warnings denied) and WASM compilation pass.
+- The disposable Chromium `project-invoice` suite passes with native clicks:
+  generated draft amounts reconcile with the tile and history; both use one
+  request. An aborted read hides stale amounts, and a single retry restores both
+  views. Tile and page bounds pass at 320/390/768/1440px.
+- No SQL, schema, shared CSS, financial mutation API or dependency changed.
+
+This completes F021 only. Uninvoiced amounts, invoice metadata, remaining chart
+and action/export requirements and full acceptance are still open. Clients and
+Settings/Workspace remain required.

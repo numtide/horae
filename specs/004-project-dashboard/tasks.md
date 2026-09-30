@@ -49,6 +49,8 @@ F001–F003 does not complete Project Detail or the four-surface delivery.
   empty/loading/error states and keyboard navigation without resetting chart scope.
 - [x] F020 [US3] Reuse invoice preparation and recovery from Project Detail with
   fixed client/project context, safe cancellation and route/browser regression.
+- [x] F021 [US3] Add the Invoiced tile using the history's shared authorized
+  response; separate currencies/counts and test pending/error/route behavior.
 
 **Input**: Design documents from `specs/004-project-dashboard/`
 

@@ -929,6 +929,27 @@ fn ProjectDetailContent(id: Uuid) -> Element {
     let mut details =
         use_resource(move || async move { server_fns::get_project_details(id.to_string()).await });
     let me = use_resource(|| async move { server_fns::get_me().await });
+    let mut invoices = use_resource(move || {
+        let allowed = is_manager(&me);
+        async move {
+            if allowed {
+                Some(server_fns::billing::get_project_invoices(id.to_string()).await)
+            } else {
+                None
+            }
+        }
+    });
+    let invoice_state = if !is_manager(&me) {
+        billing::InvoiceHistoryState::Hidden
+    } else if invoices.state()() != UseResourceState::Ready {
+        billing::InvoiceHistoryState::Loading
+    } else {
+        match &*invoices.read() {
+            Some(Some(Ok(value))) => billing::InvoiceHistoryState::Ready(value.clone()),
+            Some(Some(Err(error))) => billing::InvoiceHistoryState::Failed(error.to_string()),
+            _ => billing::InvoiceHistoryState::Loading,
+        }
+    };
     let assignments = use_resource(move || {
         let pid = id.to_string();
         async move { server_fns::list_assignments(pid).await }
@@ -1057,8 +1078,11 @@ fn ProjectDetailContent(id: Uuid) -> Element {
             }
 
             activity::ProjectActivityPanel { project_id: id, interval }
-            summary::ProjectSummaryPanel { project_id: id, can_manage: is_manager(&me), revision: breakdown_revision }
-            breakdown::ProjectBreakdownPanel { project_id: id, interval, revision: breakdown_revision, can_view_invoices: is_manager(&me) }
+            summary::ProjectSummaryPanel { project_id: id, can_manage: is_manager(&me), revision: breakdown_revision,
+                billing::InvoiceSummary { state: invoice_state.clone(), on_retry: move |_| invoices.restart() }
+            }
+            breakdown::ProjectBreakdownPanel { project_id: id, interval, revision: breakdown_revision, invoice_state,
+                on_invoice_retry: move |_| invoices.restart() }
 
             details { class: "mt-6",
                 summary { class: "text-sm text-primary cursor-pointer py-3", "Manage project tasks" }

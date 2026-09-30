@@ -108,9 +108,30 @@ const invoicesBefore = Number(sql('SELECT count(*) FROM invoices'));
     await expect(page).toHaveURL(`${base}/invoices/${result.invoice.id}`);
     assert.equal(Number(sql('SELECT count(*) FROM invoices')), invoicesBefore + 1);
     assert.equal(sql(`SELECT count(*) FROM invoice_line_items l LEFT JOIN time_entries e ON e.id=l.time_entry_id LEFT JOIN project_fee_occurrences f ON f.id=l.fee_occurrence_id WHERE l.invoice_id='${result.invoice.id}' AND coalesce(e.project_id,f.project_id)<>'${project.id}'`), '0');
+    let historyReads = 0;
+    page.on('request', request => { if (request.url().includes('/api/get_project_invoices')) historyReads++; });
     await page.goto(`${base}/projects/${project.id}`);
+    const invoiced = page.getByRole('region', { name: 'Invoiced', exact: true });
+    await expect(invoiced).toContainText('EUR 100.00');
+    await expect(invoiced).toContainText('Invoices: 1');
+    await expect(invoiced).toContainText('Includes drafts; excludes void invoices');
     await page.getByRole('tab', { name: /^Invoices/ }).click();
     await expect(page.getByRole('table', { name: 'Project invoice history', exact: true })).toBeVisible();
+    assert.equal(historyReads, 1, 'Summary and history share one invoice read');
+    for (const width of [320, 390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
+      assert.equal(await invoiced.evaluate(element => element.scrollWidth <= element.clientWidth + 1), true);
+    }
+    await page.route('**/api/get_project_invoices*', route => route.abort(), { times: 1 });
+    await page.reload();
+    await expect(invoiced.getByRole('alert')).toContainText('Could not load invoiced total');
+    await expect(invoiced).not.toContainText('EUR 100.00');
+    await invoiced.getByRole('button', { name: 'Retry invoiced total', exact: true }).click();
+    await expect(invoiced).toContainText('EUR 100.00');
+    await page.getByRole('tab', { name: /^Invoices/ }).click();
+    await expect(page.getByRole('table', { name: 'Project invoice history', exact: true })).toContainText('EUR 100.00');
+    assert.equal(historyReads, 3, 'A failed read and one retry update both views');
     await page.getByRole('link', { name: result.invoice.number, exact: true }).click();
     await expect(page).toHaveURL(`${base}/invoices/${result.invoice.id}`);
     assert.equal(sql("SELECT state FROM time_entries WHERE id='01970000-0000-7000-8000-000000000202'"), 'open');
@@ -139,7 +160,7 @@ const invoicesBefore = Number(sql('SELECT count(*) FROM invoices'));
       sql(`UPDATE users SET org_role='admin' WHERE id='${actor}'`);
     }
     assert.deepEqual(errors, []);
-    console.log('Project invoice: scoped preview/generation, cancel, retry, responsive form and history navigation passed');
+    console.log('Project invoice: scoped generation, cancel/retry, shared invoiced tile/history, responsive bounds and permissions passed');
   } finally {
     await browser.close();
   }

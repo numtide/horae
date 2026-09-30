@@ -69,6 +69,7 @@ type ProjectDetailsResponse = Result<project::ProjectDetails, ServerFnError>;
 type ActivityResponse = Result<project::ProjectActivity, ServerFnError>;
 type SummaryResponse = Result<project::ProjectSummary, ServerFnError>;
 type BreakdownResponse = Result<project::ProjectBreakdown, ServerFnError>;
+type InvoiceHistoryResponse = Result<project::ProjectInvoices, ServerFnError>;
 
 #[derive(Clone, Default)]
 struct Probe {
@@ -88,6 +89,7 @@ struct Probe {
     activity_response: Rc<RefCell<Option<oneshot::Receiver<ActivityResponse>>>>,
     summary_response: Rc<RefCell<Option<oneshot::Receiver<SummaryResponse>>>>,
     breakdown_response: Rc<RefCell<Option<oneshot::Receiver<BreakdownResponse>>>>,
+    invoice_history_response: Rc<RefCell<Option<oneshot::Receiver<InvoiceHistoryResponse>>>>,
 }
 
 fn app(probe: Probe) -> Element {
@@ -169,6 +171,101 @@ fn settle(dom: &mut VirtualDom) {
         dom.render_immediate_to_vec();
     }
     panic!("detail navigation did not settle");
+}
+
+fn invoice_history() -> project::ProjectInvoices {
+    let invoices = vec![project::ProjectInvoice {
+        id: Uuid::from_u128(700),
+        number: "INV-HISTORY".into(),
+        status: InvoiceStatus::Paid,
+        issued_on: "2026-09-01".parse().unwrap(),
+        currency: "CHF".into(),
+        net_before_tax_cents: 97531,
+    }];
+    let totals = horae_core::invoice::invoice_ledger_totals(
+        invoices
+            .iter()
+            .map(|i| (i.currency.as_str(), i.status, i.net_before_tax_cents)),
+    )
+    .unwrap();
+    project::ProjectInvoices { invoices, totals }
+}
+
+#[tokio::test]
+async fn invoiced_tile_uses_one_read_and_remains_available_when_work_summary_fails() {
+    let probe = Probe {
+        initial_path: Some(format!("/projects/{}", Uuid::from_u128(1))),
+        ..Probe::default()
+    };
+    let (summary_send, summary_receive) = oneshot::channel();
+    *probe.summary_response.borrow_mut() = Some(summary_receive);
+    let (send, receive) = oneshot::channel();
+    *probe.invoice_history_response.borrow_mut() = Some(receive);
+    send.send(Ok(invoice_history())).unwrap();
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(
+        html.contains("Loading project summary") && html.contains("CHF 975.31"),
+        "{html}"
+    );
+    summary_send
+        .send(Err(ServerFnError::new("Work summary unavailable")))
+        .unwrap();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(
+        html.contains("Work summary unavailable") && html.contains("CHF 975.31"),
+        "{html}"
+    );
+    assert_eq!(
+        *probe.project_invoice_requests.borrow(),
+        [Uuid::from_u128(1)]
+    );
+}
+
+#[tokio::test]
+async fn pending_or_failed_invoice_history_never_shows_previous_project_amounts() {
+    let probe = Probe {
+        initial_path: Some(format!("/projects/{}", Uuid::from_u128(1))),
+        ..Probe::default()
+    };
+    let (send, receive) = oneshot::channel();
+    *probe.invoice_history_response.borrow_mut() = Some(receive);
+    send.send(Ok(invoice_history())).unwrap();
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains("CHF 975.31"));
+    let (send, receive) = oneshot::channel();
+    *probe.invoice_history_response.borrow_mut() = Some(receive);
+    let navigator = probe.navigator.borrow().unwrap();
+    dom.in_scope(probe.scope.borrow().unwrap(), || {
+        navigator.push(route::Route::ProjectDetail {
+            id: Uuid::from_u128(2),
+        });
+    });
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(
+        html.contains("Loading invoiced total") && !html.contains("975.31"),
+        "{html}"
+    );
+    send.send(Err(ServerFnError::new("Invoice authority revoked")))
+        .unwrap();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(
+        html.contains("Invoice authority revoked")
+            && html.contains("Retry invoiced total")
+            && !html.contains("975.31"),
+        "{html}"
+    );
+    assert_eq!(
+        *probe.project_invoice_requests.borrow(),
+        [Uuid::from_u128(1), Uuid::from_u128(2)]
+    );
 }
 
 #[tokio::test]
@@ -907,10 +1004,15 @@ mod server_fns {
         pub async fn get_project_invoices(
             id: String,
         ) -> Result<project::ProjectInvoices, ServerFnError> {
-            consume_context::<Probe>()
+            let probe = consume_context::<Probe>();
+            probe
                 .project_invoice_requests
                 .borrow_mut()
                 .push(id.parse().unwrap());
+            let response = probe.invoice_history_response.borrow_mut().take();
+            if let Some(response) = response {
+                return response.await.unwrap();
+            }
             Ok(project::ProjectInvoices {
                 invoices: vec![],
                 totals: Default::default(),
