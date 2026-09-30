@@ -8,6 +8,14 @@
 
 **Input**: Implement the Workspace portion of Project Detail + Clients list/detail + Settings/Workspace using the checked-in design, preserving existing authentication, permissions, financial history and Harvest imports. Personal Settings remains a separate required surface, not absorbed into or completed by this feature.
 
+## Clarifications
+
+### Session 2026-09-30
+
+- Q: Keep the handoff's three fixed roles or implement Harvest permission parity? → A: The user requested Harvest parity: six built-in profiles, reusable custom profiles, per-person adjustments, distinct managed-people/project assignments and scoped approvals. Feature 015 owns the shared authorization and migration contract. Workspace must administer and explain that model rather than preserve the handoff's three-role limitation.
+
+The dependency is `specs/015-scoped-permissions/` on `feat/scoped-permissions` ([PR #212](https://github.com/numtide/horae/pull/212)) until merged. Current runtime authorization remains in force until its reviewed cutover. This clarification does not approve automatic privilege migration or claim that the new policy is implemented.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Understand and manage workspace membership (Priority: P1)
@@ -26,7 +34,9 @@ As an administrator, I can see who belongs to the workspace, invite teammates an
 1. **Given** an invalid, expired, revoked or already used invitation, **When** someone tries to accept it, **Then** it cannot grant fresh access.
 1. **Given** an active person with time and invoices, **When** I deactivate them, **Then** subsequent access is denied while their identities and history remain intact.
 1. **Given** concurrent attempts to remove the final administrator, **When** changes are applied, **Then** at least one active administrator remains.
-1. **Given** the Roles & permissions page, **When** I compare it with actual actions, **Then** it describes current role and project-assignment conditions rather than granting new permissions through the table.
+1. **Given** the Roles & permissions page, **When** I compare it with actual actions, **Then** it describes feature 015's implemented six profiles, custom templates, per-person differences and effective person/project scopes, using the same explanations as My Settings.
+1. **Given** an authorized people manager without workspace-administration authority, **When** they open People directly, **Then** only their permitted people operations and records are reachable; General, permission administration, imports, exports/backups and audit remain separately protected.
+1. **Given** an administrator changing a profile, custom adjustment or management assignment, **When** the change is saved or cancelled, **Then** feature 015's current-authority, stale-edit, audit and last-administrator rules apply; a read-only matrix alone does not satisfy permission management.
 
 ### User Story 2 - Change workspace preferences safely (Priority: P1)
 
@@ -109,8 +119,8 @@ As the workspace administrator, I can understand the real deletion policy and, i
 ### Functional Requirements
 
 - **FR-001**: Workspace MUST provide the designed People, Roles & permissions, General, Export & backups and Audit log surfaces, retain the working Harvest importer destination and preserve the existing application shell.
-- **FR-002**: Workspace administration, complete people history, exports, backups and audit reads MUST remain administrator-only. Every operation MUST recheck current authorization and organization scope; hiding navigation alone is insufficient.
-- **FR-003**: The role matrix MUST describe existing administrator/manager/member capabilities and project-specific conditions truthfully. It MUST NOT silently change permissions to match prototype checkmarks or introduce custom roles.
+- **FR-002**: Workspace settings, permission administration, imports, exports/backups and administrative audit MUST remain administrator-only. People-directory, people-management and assignment operations MUST instead enforce the verified capability/scope rules of feature 015, including reachable authorized destinations for non-administrator profiles; the current admin shell MUST NOT silently deny required Harvest access. Every operation MUST recheck current authorization and organization scope; hiding navigation alone is insufficient.
+- **FR-003**: Roles & permissions MUST expose feature 015's implemented Member, Project Manager, People Admin, Accounting, Executive Manager and Administrator profiles, reusable custom profiles and per-person adjustments. Management assignments, prerequisite/dependent changes, template application/deletion and effective-access explanations MUST follow that shared contract. My Settings and Workspace MUST describe the same saved access. The handoff's three fixed roles are superseded, not an accepted functional simplification; runtime migration requires feature 015's reviewed cutover.
 - **FR-004**: People MUST show actual names, emails, roles and active/inactive/invitation states with reconciled counts. Last-active information MUST use a defined observed activity event, not creation or edit timestamps; unknown historical values MUST be labeled unknown. Prototype seat quotas MUST NOT be invented for a self-hosted installation.
 - **FR-005**: Role/activation changes MUST preserve historical work and existing final-administrator protection, including concurrent changes. Creation of an account MUST NOT be represented as a sent or accepted invitation.
 - **FR-006**: Invitation admission requires confirmation: [NEEDS CLARIFICATION: Restrict invitations to named recipients with individual expiring links, or also support the design's reusable workspace-wide join link? The latter needs an explicit admission/role policy.]
@@ -118,7 +128,7 @@ As the workspace administrator, I can understand the real deletion policy and, i
 - **FR-008**: General MUST load actual settings and provide explicit Save/Cancel with field validation, retained failed input, pending guards and stale-edit handling. Missing or invalid stored values MUST not silently become prototype defaults.
 - **FR-009**: Workspace timezone/week start MUST consistently govern workspace-relative reporting/calendar boundaries without rewriting historical dates, durations, finalized invoices or existing approval decisions. Changes that cannot preserve coherent pending approval periods MUST be rejected with a reason. Existing valid weekdays outside the prototype's Monday/Sunday choices MUST remain representable.
 - **FR-010**: Default currency changes MUST affect only eligible future defaults. Changes that would reinterpret stored rates/costs MUST be rejected unless a separately approved migration handles them. No automatic exchange conversion or retroactive repricing is permitted.
-- **FR-011**: Require approval MUST enforce current policy at invoice review and generation, preserving submitted/invoiced locks and fixed-fee rules. Existing workspaces MUST retain their current eligibility behavior until an administrator explicitly changes the policy; the prototype's enabled switch is not a migration default.
+- **FR-011**: Require approval MUST enforce current policy at invoice review and generation, preserving invoice locks and fixed-fee rules. Submission, scoped approval and withdrawal behavior MUST agree with feature 015; this screen MUST NOT reintroduce an unconditional submitted-work edit lock. Existing workspaces retain current invoice eligibility until an explicitly reviewed policy change; the prototype's enabled switch is not a migration default.
 - **FR-012**: The Workspace URL MUST identify the actual deployment, not an invented tenant slug. Proposed self-hosted behavior is a read-only address with operator-managed changes; this deviation needs acceptance before the General surface is accepted.
 - **FR-013**: Full export MUST document its business-entity inventory, preserve identities/relationships and exact per-currency totals, include a format/version manifest and use spreadsheet-safe text encoding. Exclusions, coverage and snapshot time MUST be explicit. A business-data archive MUST NOT be labeled a proven disaster-recovery backup.
 - **FR-014**: Automatic-backup scope requires confirmation: [NEEDS CLARIFICATION: Should weekly backups be portable business-data archives matching Export zip, operator-managed recoverable infrastructure backups, or both? Storage ownership and the meaning of Download latest depend on this choice.]
@@ -134,7 +144,7 @@ As the workspace administrator, I can understand the real deletion policy and, i
 ### Key Entities *(include if feature involves data)*
 
 - **Workspace preferences**: Display identity, actual deployment address, timezone, first weekday, default currency and approval requirement with conflict-safe edits.
-- **Membership**: Existing person identity, fixed organization role, activation state and explicitly defined last activity; historical attribution survives deactivation.
+- **Membership**: Existing person identity, feature 015's profile/custom adjustments and person/project management assignments, activation state and explicitly defined last activity; historical attribution survives deactivation.
 - **Invitation**: Workspace, recipient/admission scope, intended role, sender, expiry, delivery state, revocation and acceptance. Not interchangeable with an active account.
 - **Portable export**: Snapshot scope, versioned business-data manifest, exact entity files, requester, processing state and authorized artifact.
 - **Backup policy/run**: Approved backup kind, destination ownership, schedule, retention and truthful artifact/result metadata.
@@ -145,13 +155,13 @@ As the workspace administrator, I can understand the real deletion policy and, i
 
 ### Measurable Outcomes
 
-- **SC-001**: Every Workspace section is directly reachable by an administrator and every unauthorized direct entry, read, mutation and download is denied without exposing restricted data.
+- **SC-001**: Every Workspace section is directly reachable by an administrator, and non-administrator profiles can reach their feature 015-authorized people operations without gaining workspace administration. Every unauthorized direct entry, read, mutation and download is denied without exposing restricted data. Tests cover all six built-in profiles, custom profiles, per-person adjustments and revoked assignments.
 - **SC-002**: Membership and invitation counts match actual records, every invitation has a testable delivery/admission outcome, and concurrent access changes cannot remove the last active administrator.
 - **SC-003**: Valid preference changes survive reload and affect all documented consumers consistently; invalid, stale and cancelled changes produce zero partial writes and zero monetary/history reinterpretation.
 - **SC-004**: Exported fixture identities, relationships, minutes and per-currency amounts reconcile exactly with the declared snapshot; corrupted or failed artifacts are never presented as successful downloads.
 - **SC-005**: Each supported administrative mutation has exactly one corresponding committed audit event; paging retrieves all retained fixture events without duplicates, omissions or secrets.
 - **SC-006**: Invitation, settings, export/backup and approved deletion flows pass keyboard-only, 320-pixel and 200%-text checks with no unreachable actions or page-level horizontal overflow.
-- **SC-007**: All designed sections and policy-sensitive actions have verified implementations or explicitly accepted deviations. Pending FR-006/014/019 and the proposed URL deviation prevent whole-feature acceptance.
+- **SC-007**: All designed sections and policy-sensitive actions have verified implementations or explicitly accepted deviations. Pending FR-006/014/019, the proposed URL deviation and feature 015's shared permission/migration acceptance prevent whole-feature acceptance.
 - **SC-008**: Existing timesheet, project, invoice, report, importer and user-access regression checks continue to pass with the new administration surfaces.
 
 ## Assumptions
@@ -163,5 +173,5 @@ As the workspace administrator, I can understand the real deletion policy and, i
 - Last active means the latest successful authenticated application request; pre-feature history is unknown until a new qualifying activity occurs. Background jobs do not make a user appear active.
 - Newly introduced workspace timezone preserves the installation's documented pre-feature reporting boundary; planning must identify that boundary rather than assume browser-local time. Existing week start/currency and invoice eligibility are preserved.
 - Backup restore claims depend on FR-014; no automatic restoration or new external storage account is implied. Retention only applies to feature-owned artifacts under the approved policy.
-- Source of truth: `design/project/app/09_Workspace.dc.html`, its linked invitation surface and current authorization/domain rules. Harvest is behavioral reference, not authority to import unrelated commercial features.
+- Source of truth: `design/project/app/09_Workspace.dc.html`, its linked invitation surface, current domain/authentication rules and the user-confirmed permission contract in feature 015. Harvest is behavioral reference, not authority to import unrelated commercial features; the three-role handoff does not override the confirmed six-profile/custom-permission scope.
 - This draft proposes new persisted preferences, invitation/job/activity metadata and audit coverage. Planning/implementation may not treat unresolved policy choices as approval of those contracts.

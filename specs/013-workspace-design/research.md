@@ -6,7 +6,7 @@ Status: specification input, not completed planning research. Baseline `9301112`
 
 - `components/admin_shell.rs` is administrator-only, with real People and Harvest Importers destinations. Its source explicitly defers the other Workspace destinations.
 - `pages/admin.rs` already creates users and changes their role/activation. `server_fns/users.rs` preserves the last active administrator under concurrent role/activation changes. Creating an account is not an email invitation.
-- `list_users` has its own visibility/rate policy. The handoff's simple matrix does not capture every manager/project-assignment condition; the new matrix must describe current authority rather than rewrite it.
+- `list_users` has its own visibility/rate policy. The handoff's simple matrix does not capture every manager/project-assignment condition. These legacy checks are migration inputs; feature 015 defines the user-confirmed target rather than the prototype's three fixed roles.
 - `organizations` has name, default currency, first weekday and rounding settings, plus invoice branding added by later migrations. No persisted workspace timezone or approval-policy flag was found. Currency-less person rates currently depend on organization currency, so a default-currency edit cannot just relabel them.
 - `server_fns/invoices.rs` and `invoices/entries.rs` currently permit eligible open/approved time and reject submitted time. The handoff's enabled approval toggle is not an existing setting or a safe migration default.
 - `audit_log` exists in the initial migration, but no current administrative insertion path was found by repository search. Merely exposing the table cannot substantiate the handoff's claim to cover every administrative action.
@@ -30,7 +30,7 @@ On 2026-09-30 the existing approved Windows Chrome MCP connection navigated, rea
 
 Observed categories include timezone/week start, weekly capacity, timesheet reminders/deadlines, rounding, date/time presentation, default currency, approval-related policies and project budget rules. No settings were saved and no records deleted. This was DOM/reference inspection, not native editing or persistence acceptance. Local evidence is retained under Horae's ignored `.scratch/playwright-windows/`.
 
-These observations do not authorize Harvest commercial billing, new authentication, generalized self-join or a changed permission model. Horae's handoff and reconciled specification remain the implementation contract.
+These observations do not authorize Harvest commercial billing, new authentication or generalized self-join. The subsequent explicit Harvest-parity instruction does authorize the permission feature's scope; feature 015 owns its detailed contract and reviewed cutover, not these preference-page observations.
 
 ## Specification workflow
 
@@ -38,3 +38,5 @@ These observations do not authorize Harvest commercial billing, new authenticati
 - Reserved feature 013 after inspecting the existing specs and the separate feature 012 Clients worktree. The branch is independent of the feature-directory name.
 - The constitution governs money/time exactness, organization isolation, existing authenticated mutations and reproducible verification.
 - FR-006, FR-014 and FR-019 remain unresolved. No plan/tasks or completed-clarification claim is made. Personal Settings and the other delivery surfaces remain open.
+- Reconciled the existing Harvest-parity answer through `speckit-clarify` and its paths check. FR-002/003, people journeys and acceptance now depend on feature 015 ([PR #212](https://github.com/numtide/horae/pull/212), branch `feat/scoped-permissions`). Non-administrator people-management destinations must be reachable without granting access to administrator-only workspace controls. No runtime guard was changed by this specification update.
+- The same reconciliation removes the unconditional submitted-work edit-lock wording from FR-011; invoice eligibility still requires an explicit reviewed policy and must not be inferred from a prototype toggle. Checklist markers remain 11/16: the invitation, backup, deletion and acceptance gaps remain, with no new product answers inferred.
