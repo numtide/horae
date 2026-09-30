@@ -38,6 +38,20 @@ Unknown/foreign tasks produce no rows, and malformed UUIDs fail explicitly.
 The current active-manager gates and organization/cost privacy stay unchanged.
 No schema or financial-rule change is part of this extension.
 
+## Report period extension
+
+`report_time`, `report_detailed` and timesheet CSV/XLSX accept optional `from`
+and `to`. Both absent means all recorded work dates, including future entries;
+both present means an inclusive interval. Partial, empty, malformed or reversed
+ranges return `BAD_REQUEST`, never an unbounded fallback. Parsing shares
+`ActivityRange::parse_optional` in core. All entity predicates, current-manager
+checks, currency/privacy rules and bounded-download limits remain unchanged.
+
+Reports still defaults to the current month through today. Selecting **All time**
+explicitly omits the dates, disables date editing and preserves the custom pair
+for returning to it. Invalid custom dates hide stale rows and disable downloads.
+This enables, but does not yet implement, the contextual Project Detail links.
+
 > Historical contract, pending reconciliation with the 2026-09-29 specification.
 > Its visibility and accounting assumptions predate feature 011; it is not the
 > current implementation contract.

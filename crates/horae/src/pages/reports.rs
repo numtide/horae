@@ -78,6 +78,7 @@ pub fn Reports() -> Element {
 
     let mut from_date = use_signal(move || month_start.to_string());
     let mut to_date = use_signal(move || today.to_string());
+    let mut all_time = use_signal(|| false);
     let mut group_by = use_signal(|| "project".to_string());
     let mut client_filter = use_signal(String::new);
     let mut project_filter = use_signal(String::new);
@@ -101,8 +102,8 @@ pub fn Reports() -> Element {
     // Read the signals inside each resource so a filter change re-loads.
     let mut summary = use_resource(move || {
         let (f, t, g) = (
-            from_date.read().clone(),
-            to_date.read().clone(),
+            (!all_time()).then(|| from_date.read().clone()),
+            (!all_time()).then(|| to_date.read().clone()),
             group_by.read().clone(),
         );
         let (cl, pr, us) = (
@@ -115,7 +116,10 @@ pub fn Reports() -> Element {
         async move { server_fns::report_time(f, t, g, cl, pr, us, tag, task).await }
     });
     let mut detailed = use_resource(move || {
-        let (f, t) = (from_date.read().clone(), to_date.read().clone());
+        let (f, t) = (
+            (!all_time()).then(|| from_date.read().clone()),
+            (!all_time()).then(|| to_date.read().clone()),
+        );
         let (cl, pr, us) = (
             opt(client_filter.read().clone()),
             opt(project_filter.read().clone()),
@@ -146,7 +150,10 @@ pub fn Reports() -> Element {
     // The export must match what the tables show, so the active filters ride
     // along in the query string; unset ones are left out and mean "all".
     let export_query = {
-        let mut q = format!("from={}&to={}", from_date.read(), to_date.read());
+        let mut parts = Vec::new();
+        if !all_time() {
+            parts.push(format!("from={}&to={}", from_date(), to_date()));
+        }
         for (name, value) in [
             ("client_id", client_filter.read().clone()),
             ("project_id", project_filter.read().clone()),
@@ -155,13 +162,19 @@ pub fn Reports() -> Element {
             ("task_id", task_filter()),
         ] {
             if !value.is_empty() {
-                q.push_str(&format!("&{name}={value}"));
+                parts.push(format!("{name}={value}"));
             }
         }
-        q
+        parts.join("&")
     };
     let export_csv_url = format!("/api/reports/export/csv?{export_query}");
     let export_xlsx_url = format!("/api/reports/export/xlsx?{export_query}");
+    let period_error = horae_core::project_activity::ActivityRange::parse_optional(
+        (!all_time()).then_some(from_date.read().as_str()),
+        (!all_time()).then_some(to_date.read().as_str()),
+    )
+    .err()
+    .map(|error| error.to_string());
 
     let client_opts: Vec<(String, String)> = clients
         .read()
@@ -219,23 +232,41 @@ pub fn Reports() -> Element {
             div { class: "page-header",
                 h1 { class: "page-title", "Reports" }
                 div { class: "page-actions",
-                    a { class: "btn btn-secondary", href: "{export_csv_url}", "Export CSV" }
-                    a { class: "btn btn-secondary", href: "{export_xlsx_url}", "Export XLSX" }
+                    if period_error.is_none() {
+                        a { class: "btn btn-secondary", href: "{export_csv_url}", "Export CSV" }
+                        a { class: "btn btn-secondary", href: "{export_xlsx_url}", "Export XLSX" }
+                    } else {
+                        button { class: "btn btn-secondary", disabled: true, "Export CSV" }
+                        button { class: "btn btn-secondary", disabled: true, "Export XLSX" }
+                    }
                 }
             }
 
             div { class: "card mb-6",
                 div { class: "flex gap-4 items-end flex-wrap",
-                    FormGroup { label: "From",
+                    FormGroup { label: "Period", id: "report-period",
+                        select {
+                            id: "report-period", class: "form-select",
+                            value: if all_time() { "all" } else { "custom" },
+                            oninput: move |event| all_time.set(event.value() == "all"),
+                            option { value: "custom", "Custom dates" }
+                            option { value: "all", "All time" }
+                        }
+                    }
+                    FormGroup { label: "From", id: "report-from",
                         Input {
+                            id: "report-from",
                             kind: "date",
+                            disabled: all_time(),
                             value: "{from_date}",
                             oninput: move |e: FormEvent| from_date.set(e.value()),
                         }
                     }
-                    FormGroup { label: "To",
+                    FormGroup { label: "To", id: "report-to",
                         Input {
+                            id: "report-to",
                             kind: "date",
+                            disabled: all_time(),
                             value: "{to_date}",
                             oninput: move |e: FormEvent| to_date.set(e.value()),
                         }
@@ -323,7 +354,11 @@ pub fn Reports() -> Element {
                 }
             }
 
-            if tab == "time" {
+            if let Some(error) = &period_error {
+                div { class: "alert alert-danger", role: "alert", "{error}" }
+            }
+
+            if tab == "time" && period_error.is_none() {
                 if summary.state()() != UseResourceState::Ready {
                     p { role: "status", "Loading report…" }
                 } else if matches!(&*summary.read(), Some(Err(_))) {
@@ -386,7 +421,7 @@ pub fn Reports() -> Element {
                 }
             }
 
-            if tab == "detailed" {
+            if tab == "detailed" && period_error.is_none() {
                 if detailed.state()() != UseResourceState::Ready {
                     p { role: "status", "Loading detailed report…" }
                 } else if matches!(&*detailed.read(), Some(Err(_))) {

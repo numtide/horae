@@ -69,12 +69,83 @@ async fn report(pool: &PgPool, viewer_id: Uuid, dimension: &str) -> Vec<ReportRo
     fetch_report(
         pool,
         viewer_id,
-        (day, day),
+        Some((day, day)),
         dimension,
         crate::reports::ReportFilters::default(),
     )
     .await
     .unwrap()
+}
+
+#[test]
+fn report_period_rejects_invalid_or_incomplete_dates_as_bad_requests() {
+    for (from, to) in [
+        (Some(""), Some("")),
+        (Some("2026-09-07"), None),
+        (None, Some("2026-09-07")),
+        (Some("invalid"), Some("2026-09-07")),
+        (Some("2026-09-08"), Some("2026-09-07")),
+    ] {
+        assert!(matches!(
+            parse_report_period(from, to),
+            Err(ServerFnError::ServerError {
+                code: BAD_REQUEST,
+                ..
+            })
+        ));
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial]
+async fn all_time_reports_include_past_and_future_without_losing_entity_scope(pool: PgPool) {
+    use crate::reports::ReportFilters;
+    let (first, second) = fixtures(&pool, "EUR").await;
+    let foreign = seed(&pool, OrgRole::Manager).await;
+    for ids in [&first, &second, &foreign] {
+        for date in ["1990-01-01", "2090-12-31"] {
+            sqlx::query!("INSERT INTO time_entries (id, org_id, user_id, project_id, task_id, spent_date, minutes, billable)
+                VALUES ($1, $2, $3, $4, $5, $6, 60, true)",
+                Uuid::now_v7(), ids.org_id, ids.user_id, ids.project_id, ids.task_id,
+                date.parse::<chrono::NaiveDate>().unwrap() as chrono::NaiveDate)
+                .execute(&pool).await.unwrap();
+        }
+    }
+    let selected = ReportFilters {
+        project_id: Some(first.project_id),
+        task_id: Some(first.task_id),
+        user_id: Some(first.user_id),
+        ..Default::default()
+    };
+    for dimension in ["project", "client", "task", "person"] {
+        let rows = fetch_report(&pool, first.user_id, None, dimension, selected)
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].total_minutes, 120);
+    }
+    let details = crate::reports::fetch_entries(&pool, first.org_id, None, selected)
+        .await
+        .unwrap();
+    assert_eq!(
+        details
+            .iter()
+            .map(|row| row.spent_date.to_string())
+            .collect::<Vec<_>>(),
+        ["1990-01-01", "2090-12-31"]
+    );
+    assert!(
+        fetch_report(&pool, foreign.user_id, None, "project", selected)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        crate::reports::fetch_entries(&pool, foreign.org_id, None, selected)
+            .await
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -108,13 +179,13 @@ async fn task_filters_intersect_project_person_and_date_without_widening_reports
         ..Default::default()
     };
     for dimension in ["project", "client", "task", "person"] {
-        let rows = fetch_report(&pool, first.user_id, (day, day), dimension, selected)
+        let rows = fetch_report(&pool, first.user_id, Some((day, day)), dimension, selected)
             .await
             .unwrap();
         assert_eq!(rows.len(), 1, "{dimension}");
         assert_eq!(rows[0].total_minutes, 90, "{dimension}");
     }
-    let details = crate::reports::fetch_entries(&pool, first.org_id, (day, day), selected)
+    let details = crate::reports::fetch_entries(&pool, first.org_id, Some((day, day)), selected)
         .await
         .unwrap();
     assert_eq!(details.iter().map(|row| row.minutes).sum::<i32>(), 90);
@@ -124,14 +195,14 @@ async fn task_filters_intersect_project_person_and_date_without_widening_reports
             ..selected
         };
         let expected = if task_id == second.task_id { 120 } else { 0 };
-        let rows = fetch_report(&pool, first.user_id, (day, day), "task", filters)
+        let rows = fetch_report(&pool, first.user_id, Some((day, day)), "task", filters)
             .await
             .unwrap();
         assert_eq!(
             rows.iter().map(|row| row.total_minutes).sum::<i64>(),
             expected
         );
-        let rows = crate::reports::fetch_entries(&pool, first.org_id, (day, day), filters)
+        let rows = crate::reports::fetch_entries(&pool, first.org_id, Some((day, day)), filters)
             .await
             .unwrap();
         assert_eq!(
@@ -141,19 +212,19 @@ async fn task_filters_intersect_project_person_and_date_without_widening_reports
     }
     let next = "2026-09-08".parse().unwrap();
     assert!(
-        fetch_report(&pool, first.user_id, (next, next), "task", selected)
+        fetch_report(&pool, first.user_id, Some((next, next)), "task", selected)
             .await
             .unwrap()
             .is_empty()
     );
     assert!(
-        fetch_report(&pool, foreign.user_id, (day, day), "task", selected)
+        fetch_report(&pool, foreign.user_id, Some((day, day)), "task", selected)
             .await
             .unwrap()
             .is_empty()
     );
     assert!(
-        crate::reports::fetch_entries(&pool, foreign.org_id, (day, day), selected)
+        crate::reports::fetch_entries(&pool, foreign.org_id, Some((day, day)), selected)
             .await
             .unwrap()
             .is_empty()
@@ -208,7 +279,7 @@ async fn tag_filters_keep_report_dimensions_and_details_in_sync(pool: PgPool) {
         ..Default::default()
     };
     for dimension in ["project", "client", "task", "person"] {
-        let rows = fetch_report(&pool, first.user_id, (day, day), dimension, selected)
+        let rows = fetch_report(&pool, first.user_id, Some((day, day)), dimension, selected)
             .await
             .unwrap();
         assert_eq!(rows.len(), 1, "{dimension}");
@@ -222,7 +293,7 @@ async fn tag_filters_keep_report_dimensions_and_details_in_sync(pool: PgPool) {
             "{dimension}"
         );
     }
-    let details = crate::reports::fetch_entries(&pool, first.org_id, (day, day), selected)
+    let details = crate::reports::fetch_entries(&pool, first.org_id, Some((day, day)), selected)
         .await
         .unwrap();
     assert_eq!(details.len(), 2);
@@ -246,26 +317,32 @@ async fn tag_filters_keep_report_dimensions_and_details_in_sync(pool: PgPool) {
         },
     ] {
         assert!(
-            fetch_report(&pool, first.user_id, (day, day), "project", filters)
+            fetch_report(&pool, first.user_id, Some((day, day)), "project", filters)
                 .await
                 .unwrap()
                 .is_empty()
         );
         assert!(
-            crate::reports::fetch_entries(&pool, first.org_id, (day, day), filters)
+            crate::reports::fetch_entries(&pool, first.org_id, Some((day, day)), filters)
                 .await
                 .unwrap()
                 .is_empty()
         );
     }
     assert!(
-        fetch_report(&pool, foreign.user_id, (day, day), "project", selected)
-            .await
-            .unwrap()
-            .is_empty()
+        fetch_report(
+            &pool,
+            foreign.user_id,
+            Some((day, day)),
+            "project",
+            selected
+        )
+        .await
+        .unwrap()
+        .is_empty()
     );
     assert!(
-        crate::reports::fetch_entries(&pool, foreign.org_id, (day, day), selected)
+        crate::reports::fetch_entries(&pool, foreign.org_id, Some((day, day)), selected)
             .await
             .unwrap()
             .is_empty()
@@ -417,7 +494,7 @@ async fn report_uses_current_active_actor_and_tenant_for_every_filter(pool: PgPo
             fetch_report(
                 &pool,
                 first.user_id,
-                (day, day),
+                Some((day, day)),
                 "project",
                 crate::reports::ReportFilters {
                     client_id: client,
@@ -549,7 +626,7 @@ async fn filters_and_renames_keep_report_identity_and_totals(pool: PgPool) {
         let rows = fetch_report(
             &pool,
             first.user_id,
-            (day, day),
+            Some((day, day)),
             "project",
             crate::reports::ReportFilters {
                 client_id: client,
@@ -601,7 +678,7 @@ async fn filters_and_renames_keep_report_identity_and_totals(pool: PgPool) {
         fetch_report(
             &pool,
             first.user_id,
-            (outside, outside),
+            Some((outside, outside)),
             "project",
             crate::reports::ReportFilters::default()
         )

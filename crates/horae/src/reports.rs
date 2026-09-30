@@ -64,10 +64,11 @@ async fn require_manager(session: &Session) -> Result<uuid::Uuid, StatusCode> {
 
 /// Mirrors the Reports page filters, so a download matches what is on screen.
 /// Absent client/project/user/tag/task means "all", as on the page.
+/// Two absent dates mean all time; partial, empty and reversed ranges are invalid.
 #[derive(Deserialize)]
 pub struct ExportParams {
-    pub from: String,
-    pub to: String,
+    pub from: Option<String>,
+    pub to: Option<String>,
     pub client_id: Option<uuid::Uuid>,
     pub project_id: Option<uuid::Uuid>,
     pub user_id: Option<uuid::Uuid>,
@@ -86,6 +87,15 @@ pub(crate) struct ReportFilters {
 }
 
 impl ExportParams {
+    fn period(&self) -> Result<Option<(chrono::NaiveDate, chrono::NaiveDate)>, StatusCode> {
+        horae_core::project_activity::ActivityRange::parse_optional(
+            self.from.as_deref(),
+            self.to.as_deref(),
+        )
+        .map(|range| range.map(|range| (range.from(), range.to())))
+        .map_err(|_| StatusCode::BAD_REQUEST)
+    }
+
     fn filters(&self) -> ReportFilters {
         ReportFilters {
             client_id: self.client_id,
@@ -103,7 +113,7 @@ impl ExportParams {
 pub(crate) async fn fetch_entries<'e>(
     executor: impl sqlx::PgExecutor<'e> + 'e,
     org_id: uuid::Uuid,
-    period: (chrono::NaiveDate, chrono::NaiveDate),
+    period: Option<(chrono::NaiveDate, chrono::NaiveDate)>,
     filters: ReportFilters,
 ) -> Result<Vec<crate::models::DetailedReportRow>, sqlx::Error> {
     stream_entries(executor, org_id, period, filters)
@@ -114,7 +124,7 @@ pub(crate) async fn fetch_entries<'e>(
 fn stream_entries<'e>(
     executor: impl sqlx::PgExecutor<'e> + 'e,
     org_id: uuid::Uuid,
-    period: (chrono::NaiveDate, chrono::NaiveDate),
+    period: Option<(chrono::NaiveDate, chrono::NaiveDate)>,
     filters: ReportFilters,
 ) -> impl Stream<Item = Result<crate::models::DetailedReportRow, sqlx::Error>> + 'e {
     sqlx::query_as!(
@@ -131,7 +141,8 @@ fn stream_entries<'e>(
          JOIN users u ON te.user_id = u.id
          JOIN organizations o ON o.id = te.org_id
          WHERE te.org_id = $6
-           AND te.spent_date BETWEEN $1 AND $2
+           AND ($1::date IS NULL OR te.spent_date >= $1)
+           AND ($2::date IS NULL OR te.spent_date <= $2)
            AND ($3::uuid IS NULL OR p.client_id = $3)
            AND ($4::uuid IS NULL OR te.project_id = $4)
            AND ($5::uuid IS NULL OR te.user_id = $5)
@@ -141,8 +152,8 @@ fn stream_entries<'e>(
              WHERE l.org_id = te.org_id AND l.project_id = te.project_id AND l.tag_id = $7
            ))
          ORDER BY te.spent_date, p.name, t.name, te.id"#,
-        period.0 as chrono::NaiveDate,
-        period.1 as chrono::NaiveDate,
+        period.map(|(from, _)| from) as Option<chrono::NaiveDate>,
+        period.map(|(_, to)| to) as Option<chrono::NaiveDate>,
         filters.client_id,
         filters.project_id,
         filters.user_id,

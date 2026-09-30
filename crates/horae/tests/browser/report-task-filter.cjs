@@ -81,9 +81,44 @@ const expectedCount = Number(sql(`SELECT count(*) FROM time_entries WHERE projec
     for (const response of [summaryResponse, detailResponse]) {
       const invalid = { ...response.request().postDataJSON(), task_id: 'invalid-task' };
       assert.equal((await context.request.post(response.url(), { data: invalid })).status(), 400);
+      for (const period of [{ from: null, to }, { from, to: null }, { from: '', to: '' }, { from: '2090-01-01', to: '1990-01-01' }]) {
+        assert.equal((await context.request.post(response.url(), { data: { ...response.request().postDataJSON(), ...period } })).status(), 400);
+      }
     }
+    await page.locator('#report-from').fill('');
+    await expect(page.getByRole('alert')).toContainText('Invalid reporting date');
+    await expect(page.getByRole('button', { name: 'Export CSV', exact: true })).toBeDisabled();
+    await expect(page.locator('table')).toHaveCount(0);
+    const allSummaryRead = page.waitForResponse(r => r.url().includes('/api/report_time') && r.request().postDataJSON()?.from === null && r.request().postDataJSON()?.to === null);
+    const allDetailRead = page.waitForResponse(r => r.url().includes('/api/report_detailed') && r.request().postDataJSON()?.from === null && r.request().postDataJSON()?.to === null);
+    await page.getByRole('combobox', { name: 'Period', exact: true }).selectOption('all');
+    const allSummary = await allSummaryRead;
+    const allDetails = await allDetailRead;
+    assert.equal((await allSummary.json()).reduce((sum, row) => sum + row.total_minutes, 0), expected);
+    assert.equal((await allDetails.json()).length, expectedCount);
+    await expect(page.locator('#report-from')).toBeDisabled();
+    await expect(page.locator('#report-to')).toBeDisabled();
+    await expect(page.locator('table tbody tr')).toHaveCount(expectedCount);
+    for (const format of ['CSV', 'XLSX']) {
+      const href = await page.getByRole('link', { name: `Export ${format}`, exact: true }).getAttribute('href');
+      const query = new URL(href, base).searchParams;
+      assert.equal(query.has('from'), false);
+      assert.equal(query.has('to'), false);
+      assert.equal(query.get('task_id'), task);
+      assert.equal(query.get('project_id'), project);
+      const download = await context.request.get(`${base}${href}`);
+      assert.equal(download.status(), 200);
+      if (format === 'CSV') assert.equal((await download.text()).trim().split('\n').length - 1, expectedCount);
+      for (const invalid of ['from=2026-09-07', 'to=2026-09-07', 'from=&to=', 'from=2090-01-01&to=1990-01-01']) {
+        assert.equal((await context.request.get(`${base}${href}&${invalid}`)).status(), 400);
+      }
+    }
+    await page.getByRole('combobox', { name: 'Period', exact: true }).selectOption('custom');
+    await expect(page.getByRole('alert')).toContainText('Invalid reporting date');
+    await page.locator('#report-from').fill(from);
+    await expect(page.locator('table tbody tr')).toHaveCount(expectedCount);
     sql(`UPDATE users SET org_role='member' WHERE id='${admin}'`);
-    for (const response of [summaryResponse, detailResponse]) {
+    for (const response of [summaryResponse, detailResponse, allSummary, allDetails]) {
       const denied = await context.request.post(response.url(), { data: response.request().postDataJSON() });
       assert.equal(denied.status(), 403);
     }
@@ -92,7 +127,7 @@ const expectedCount = Number(sql(`SELECT count(*) FROM time_entries WHERE projec
       assert.equal((await context.request.get(`${base}${href}`)).status(), 403);
     }
     assert.deepEqual(errors, []);
-    console.log('Report task filter: catalog retry, project/task/date intersection, summary/detail/CSV/XLSX parity and revoked role passed');
+    console.log('Reports: task/project/date intersection, all-time and custom periods, invalid-range rejection, downloads and revoked role passed');
   } finally {
     sql(`UPDATE users SET org_role='admin' WHERE id='${admin}'`);
     await browser.close();

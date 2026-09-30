@@ -85,6 +85,13 @@ Verify conjunction with project/person/dates, foreign/unknown identities,
 size-check parity, invalid UUIDs and revoked report authority. Regenerate the
 SQLx cache against the existing migrated schema; no migration is needed.
 
+The report period must also represent all time directly: omit both date bounds,
+instead of substituting minimum/maximum dates or today's date. Reuse core range
+validation for reports and both export paths; reject half-missing, empty,
+malformed and reversed ranges. The existing Reports default remains unchanged,
+with an explicit all-time choice that preserves custom dates. Verify past/future
+entries, entity/tenant scope, download limits and error recovery in the browser.
+
 Then wire reproducible project/task/person/all-time/custom-date route context and
 the project export menu. PDF summary rendering and bounded-download explanations
 remain required; the task-filter foundation alone does not satisfy FR-016.

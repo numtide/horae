@@ -16,10 +16,11 @@ mod tests;
 /// optional client/project/teammate/tag/task filters. Each group carries billable and cost
 /// amounts (rates via FR-024), partitioned by entity identity and currency.
 /// Manager-only: reports span every user's time and money (SPEC §6).
+/// Omit both dates for all time; otherwise provide a valid inclusive date pair.
 #[server]
 pub async fn report_time(
-    from: String,
-    to: String,
+    from: Option<String>,
+    to: Option<String>,
     group_by: String,
     client_id: Option<String>,
     project_id: Option<String>,
@@ -30,8 +31,7 @@ pub async fn report_time(
     let manager = require_manager().await?;
     let state = crate::state::global_state().await;
 
-    let from_date = parse_date(&from, "from")?;
-    let to_date = parse_date(&to, "to")?;
+    let period = parse_report_period(from.as_deref(), to.as_deref())?;
     let client_filter = parse_opt_uuid(client_id, "client_id")?;
     let project_filter = parse_opt_uuid(project_id, "project_id")?;
     let user_filter = parse_opt_uuid(user_id, "user_id")?;
@@ -41,7 +41,7 @@ pub async fn report_time(
     fetch_report(
         &state.db,
         manager.id,
-        (from_date, to_date),
+        period,
         &group_by,
         crate::reports::ReportFilters {
             client_id: client_filter,
@@ -59,7 +59,7 @@ pub async fn report_time(
 pub(super) async fn fetch_report(
     pool: &sqlx::PgPool,
     viewer_id: uuid::Uuid,
-    period: (chrono::NaiveDate, chrono::NaiveDate),
+    period: Option<(chrono::NaiveDate, chrono::NaiveDate)>,
     group_by: &str,
     filters: crate::reports::ReportFilters,
 ) -> Result<Vec<ReportRow>, sqlx::Error> {
@@ -124,7 +124,8 @@ pub(super) async fn fetch_report(
              LEFT JOIN invoice_line_items line ON line.invoice_id = te.invoice_id AND line.time_entry_id = te.id
              LEFT JOIN invoices invoice ON invoice.id = te.invoice_id
              LEFT JOIN project_member_costs mc ON mc.project_id = te.project_id AND mc.user_id = te.user_id
-             WHERE te.spent_date BETWEEN $1 AND $2
+             WHERE ($1::date IS NULL OR te.spent_date >= $1)
+               AND ($2::date IS NULL OR te.spent_date <= $2)
                AND ($3::uuid IS NULL OR p.client_id = $3)
                AND ($4::uuid IS NULL OR te.project_id = $4)
                AND ($5::uuid IS NULL OR te.user_id = $5)
@@ -155,8 +156,8 @@ pub(super) async fn fetch_report(
            -- Stable ties for duplicate labels and multi-currency entities.
            ORDER BY label COLLATE "C", group_id, currency COLLATE "C"
         "#,
-        period.0 as chrono::NaiveDate,
-        period.1 as chrono::NaiveDate,
+        period.map(|(from, _)| from) as Option<chrono::NaiveDate>,
+        period.map(|(_, to)| to) as Option<chrono::NaiveDate>,
         filters.client_id,
         filters.project_id,
         filters.user_id,
@@ -175,8 +176,8 @@ pub(super) async fn fetch_report(
 /// Manager-only, like `report_time`: rows cover every user's entries and notes.
 #[server]
 pub async fn report_detailed(
-    from: String,
-    to: String,
+    from: Option<String>,
+    to: Option<String>,
     client_id: Option<String>,
     project_id: Option<String>,
     user_id: Option<String>,
@@ -185,8 +186,7 @@ pub async fn report_detailed(
 ) -> Result<Vec<DetailedReportRow>, ServerFnError> {
     let manager = require_manager().await?;
 
-    let from_date = parse_date(&from, "from")?;
-    let to_date = parse_date(&to, "to")?;
+    let period = parse_report_period(from.as_deref(), to.as_deref())?;
     let client_filter = parse_opt_uuid(client_id, "client_id")?;
     let project_filter = parse_opt_uuid(project_id, "project_id")?;
     let user_filter = parse_opt_uuid(user_id, "user_id")?;
@@ -199,7 +199,7 @@ pub async fn report_detailed(
     crate::reports::fetch_entries(
         &state.db,
         manager.org_id,
-        (from_date, to_date),
+        period,
         crate::reports::ReportFilters {
             client_id: client_filter,
             project_id: project_filter,
@@ -210,6 +210,16 @@ pub async fn report_detailed(
     )
     .await
     .map_err(server_err)
+}
+
+#[cfg(feature = "server")]
+fn parse_report_period(
+    from: Option<&str>,
+    to: Option<&str>,
+) -> Result<Option<(chrono::NaiveDate, chrono::NaiveDate)>, ServerFnError> {
+    horae_core::project_activity::ActivityRange::parse_optional(from, to)
+        .map(|range| range.map(|range| (range.from(), range.to())))
+        .map_err(|error| err(BAD_REQUEST, error))
 }
 
 // ── Plugins ────────────────────────────────────────────────────────────────

@@ -6,8 +6,8 @@ use super::*;
 
 fn params() -> ExportParams {
     ExportParams {
-        from: "2026-09-07".to_owned(),
-        to: "2026-09-07".to_owned(),
+        from: Some("2026-09-07".to_owned()),
+        to: Some("2026-09-07".to_owned()),
         client_id: None,
         project_id: None,
         user_id: None,
@@ -23,6 +23,76 @@ async fn body(response: Response) -> Vec<u8> {
         .await
         .unwrap()
         .to_vec()
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn all_time_exports_share_date_validation_and_keep_entity_scope(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    let foreign = seed(&pool, OrgRole::Manager).await;
+    for owner in [&ids, &foreign] {
+        for date in ["1990-01-01", "2090-12-31"] {
+            let entry = time_entry(&pool, owner, EntryState::Open).await;
+            sqlx::query!(
+                "UPDATE time_entries SET spent_date = $2 WHERE id = $1",
+                entry,
+                date.parse::<chrono::NaiveDate>().unwrap() as chrono::NaiveDate
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+    }
+    let all_time = ExportParams {
+        from: None,
+        to: None,
+        task_id: Some(ids.task_id),
+        project_id: Some(ids.project_id),
+        user_id: Some(ids.user_id),
+        ..params()
+    };
+    let rows = super::super::limits::entries(&pool, ids.org_id, &all_time)
+        .await
+        .unwrap();
+    assert_eq!(
+        rows.iter()
+            .map(|row| row.spent_date.to_string())
+            .collect::<Vec<_>>(),
+        ["1990-01-01", "2090-12-31"]
+    );
+    let csv = body(entries(pool.clone(), ids.org_id, all_time).await.unwrap()).await;
+    let records = csv::Reader::from_reader(csv.as_slice())
+        .records()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    assert_eq!(
+        records.iter().map(|row| &row[0]).collect::<Vec<_>>(),
+        ["1990-01-01", "2090-12-31"]
+    );
+    for (from, to) in [
+        (Some(""), Some("")),
+        (Some("2026-09-07"), None),
+        (None, Some("2026-09-07")),
+        (Some("2026-09-08"), Some("2026-09-07")),
+    ] {
+        let invalid = ExportParams {
+            from: from.map(str::to_owned),
+            to: to.map(str::to_owned),
+            ..params()
+        };
+        assert_eq!(
+            super::super::limits::entries(&pool, ids.org_id, &invalid)
+                .await
+                .unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            entries(pool.clone(), ids.org_id, invalid)
+                .await
+                .unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
+    }
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -212,8 +282,8 @@ async fn streamed_timesheet_preserves_csv_escaping_frozen_zero_and_all_filters(p
             ..params()
         },
         ExportParams {
-            from: "2026-09-08".to_owned(),
-            to: "2026-09-08".to_owned(),
+            from: Some("2026-09-08".to_owned()),
+            to: Some("2026-09-08".to_owned()),
             ..params()
         },
     ] {
@@ -228,7 +298,7 @@ async fn streamed_timesheet_preserves_csv_escaping_frozen_zero_and_all_filters(p
             pool,
             ids.org_id,
             ExportParams {
-                from: "invalid".to_owned(),
+                from: Some("invalid".to_owned()),
                 ..params()
             }
         )

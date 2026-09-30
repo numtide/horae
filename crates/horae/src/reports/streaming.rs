@@ -116,8 +116,7 @@ pub(super) async fn entries(
     org_id: Uuid,
     params: ExportParams,
 ) -> Result<Response, StatusCode> {
-    let from = params.from.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
-    let to = params.to.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
+    let period = params.period()?;
     response(
         &EXPORTS,
         DOWNLOAD_TIMEOUT,
@@ -131,7 +130,7 @@ pub(super) async fn entries(
             let _ = filename.send("timesheet.csv".to_owned());
             write_rows(
                 &sender,
-                super::stream_entries(&mut *tx, org_id, (from, to), params.filters()),
+                super::stream_entries(&mut *tx, org_id, period, params.filters()),
                 &super::ENTRY_EXPORT_HEADERS,
                 |writer, row| super::write_entry_csv(writer, &row),
             )

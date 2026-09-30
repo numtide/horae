@@ -590,3 +590,40 @@ journey. F026 still requires reproducible report route context, dashboard links,
 the export menu, PDF summary and bounded-download explanations. The broader
 Project Detail/Clients/Settings/Workspace delivery and full Nix acceptance remain
 open; the PR remains draft.
+
+## All-time report period prerequisite
+
+Reports and its CSV/XLSX downloads now support an actual unbounded work-date
+period, without fabricated date limits. Both absent bounds mean all time; an
+inclusive custom range must contain two valid, ordered dates. Core range parsing
+is shared by report server functions, CSV streaming and XLSX preflight. Invalid
+input returns 400 instead of widening the report or looking like a server error.
+
+The Reports period selector retains the current-month default and preserves
+custom dates when switching to All time. Date controls are disabled for all time;
+invalid custom dates hide old rows and disable downloads. Existing form utilities
+and controls are reused; no shared CSS, permissions, financial rules, migrations
+or dependencies changed.
+
+Evidence for this prerequisite:
+
+- 149 core tests pass, including absent, inclusive, partial, empty, malformed and
+  reversed period cases. The new parser tests first failed before implementation.
+- All 52 report/export tests pass (two pre-existing manual measurements ignored).
+  They cover 1990 and 2090 entries, project/task/person conjunction,
+  foreign organizations, matching CSV/XLSX scope and invalid-period rejection.
+- Native Chromium passes custom/all-time switching, invalid-date recovery,
+  grouped/detailed/CSV reconciliation, XLSX download, active filters, 400 errors
+  and revoked-role 403 responses. The Project Detail activity regression passes
+  alongside it, including independent reporting/chart/invoice state.
+- SQLx metadata was regenerated for server/all-targets: three changed query
+  snapshots replaced and two test-query snapshots added; unrelated cache retained.
+- Offline all-target server Clippy and the app WASM check pass. Full Nix
+  acceptance remains pending.
+- The complete New Project browser regression passes, including its tagged
+  Reports/CSV/XLSX journey, draft recovery, validation and invoice defaults.
+  Formatting and whitespace checks pass.
+
+F026 is still open: contextual routes/links, the project export menu and PDF
+summary are not supplied by the period prerequisite. Clients and
+Settings/Workspace remain required delivery slices, and PR #208 remains draft.

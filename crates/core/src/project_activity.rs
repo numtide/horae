@@ -8,6 +8,10 @@ use crate::week::week_start;
 /// Invalid reporting input or an aggregate that cannot be represented exactly.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum ActivityError {
+    #[error("Choose both reporting dates or all time")]
+    IncompleteRange,
+    #[error("Invalid reporting date (use YYYY-MM-DD)")]
+    InvalidDate,
     #[error("The reporting start date must not follow the end date")]
     ReversedRange,
     #[error("The reporting period is outside the supported date range")]
@@ -28,6 +32,23 @@ pub struct ActivityRange {
 }
 
 impl ActivityRange {
+    /// Parse an optional inclusive period. Only two absent bounds mean all time;
+    /// an empty, malformed or incomplete range must not broaden a report.
+    pub fn parse_optional(
+        from: Option<&str>,
+        to: Option<&str>,
+    ) -> Result<Option<Self>, ActivityError> {
+        match (from, to) {
+            (None, None) => Ok(None),
+            (Some(from), Some(to)) => Self::new(
+                from.parse().map_err(|_| ActivityError::InvalidDate)?,
+                to.parse().map_err(|_| ActivityError::InvalidDate)?,
+            )
+            .map(Some),
+            _ => Err(ActivityError::IncompleteRange),
+        }
+    }
+
     /// Validate inclusive bounds. Equal bounds represent one day.
     pub fn new(from: NaiveDate, to: NaiveDate) -> Result<Self, ActivityError> {
         if from > to {
@@ -517,5 +538,40 @@ mod tests {
         let entries = [day("2026-09-01", i64::MAX - 1, 0), day("2026-09-08", 0, 1)];
         let weeks = weekly_activity(selected, Weekday::Mon, &entries, 2).unwrap();
         assert_eq!(weeks.last().unwrap().cumulative_minutes, i64::MAX);
+    }
+}
+
+#[cfg(test)]
+mod report_period_tests {
+    use super::*;
+
+    #[test]
+    fn absent_dates_mean_all_time() {
+        assert_eq!(ActivityRange::parse_optional(None, None), Ok(None));
+    }
+
+    #[test]
+    fn explicit_dates_are_inclusive() {
+        let day = "2026-09-07".parse().unwrap();
+        assert_eq!(
+            ActivityRange::parse_optional(Some("2026-09-07"), Some("2026-09-07")),
+            Ok(Some(ActivityRange::new(day, day).unwrap()))
+        );
+    }
+
+    #[test]
+    fn invalid_dates_never_become_all_time() {
+        for (from, to) in [
+            (None, Some("2026-09-07")),
+            (Some("2026-09-07"), None),
+            (Some(""), Some("")),
+            (Some("2026-02-30"), Some("2026-09-07")),
+            (Some("2026-09-08"), Some("2026-09-07")),
+        ] {
+            assert!(
+                ActivityRange::parse_optional(from, to).is_err(),
+                "{from:?} / {to:?}"
+            );
+        }
     }
 }

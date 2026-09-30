@@ -70,8 +70,7 @@ pub(super) async fn entries(
     org_id: Uuid,
     params: &ExportParams,
 ) -> Result<Vec<DetailedReportRow>, StatusCode> {
-    let from: chrono::NaiveDate = params.from.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
-    let to: chrono::NaiveDate = params.to.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
+    let period = params.period()?;
     let mut tx = begin(pool).await?;
     let size = sqlx::query!(
         r#"SELECT COUNT(*) as "rows!",
@@ -84,7 +83,9 @@ pub(super) async fn entries(
                  JOIN projects p ON p.id = te.project_id
                  JOIN tasks t ON t.id = te.task_id
                  JOIN users u ON u.id = te.user_id
-                 WHERE te.org_id = $6 AND te.spent_date BETWEEN $1 AND $2
+                 WHERE te.org_id = $6
+                   AND ($1::date IS NULL OR te.spent_date >= $1)
+                   AND ($2::date IS NULL OR te.spent_date <= $2)
                    AND ($3::uuid IS NULL OR p.client_id = $3)
                    AND ($4::uuid IS NULL OR te.project_id = $4)
                    AND ($5::uuid IS NULL OR te.user_id = $5)
@@ -94,11 +95,11 @@ pub(super) async fn entries(
                      WHERE l.org_id = te.org_id AND l.project_id = te.project_id AND l.tag_id = $8
                    ))
                  LIMIT $7) bounded"#,
-        from as chrono::NaiveDate, to as chrono::NaiveDate,
+        period.map(|(from, _)| from) as Option<chrono::NaiveDate>, period.map(|(_, to)| to) as Option<chrono::NaiveDate>,
         params.client_id, params.project_id, params.user_id, org_id, XLSX.rows + 1, params.tag_id, params.task_id,
     ).fetch_one(&mut *tx).await.map_err(database_error)?;
     check(size.rows, size.bytes, size.field_bytes, XLSX)?;
-    let rows = super::fetch_entries(&mut *tx, org_id, (from, to), params.filters())
+    let rows = super::fetch_entries(&mut *tx, org_id, period, params.filters())
         .await
         .map_err(database_error)?;
     tx.commit().await.map_err(database_error)?;
@@ -367,8 +368,8 @@ mod tests {
 
     fn params() -> ExportParams {
         ExportParams {
-            from: "2026-09-07".to_owned(),
-            to: "2026-09-07".to_owned(),
+            from: Some("2026-09-07".to_owned()),
+            to: Some("2026-09-07".to_owned()),
             client_id: None,
             project_id: None,
             user_id: None,
@@ -447,6 +448,19 @@ mod tests {
             entries(&pool, ids.org_id, &params()).await,
             Err(StatusCode::PAYLOAD_TOO_LARGE)
         ));
+        assert!(matches!(
+            entries(
+                &pool,
+                ids.org_id,
+                &ExportParams {
+                    from: None,
+                    to: None,
+                    ..params()
+                }
+            )
+            .await,
+            Err(StatusCode::PAYLOAD_TOO_LARGE)
+        ));
         let rows = entries(
             &pool,
             ids.org_id,
@@ -504,8 +518,8 @@ mod tests {
                 ..params()
             },
             ExportParams {
-                from: "2026-09-08".to_owned(),
-                to: "2026-09-08".to_owned(),
+                from: Some("2026-09-08".to_owned()),
+                to: Some("2026-09-08".to_owned()),
                 ..params()
             },
         ] {
