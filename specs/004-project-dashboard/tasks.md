@@ -45,7 +45,7 @@ F001–F003 does not complete Project Detail or the four-surface delivery.
 - [x] F014 [US2] Test and implement exact reciprocal task/person totals in core.
 - [x] F015 [US2] Add the authorized interval-scoped breakdown projection, current
   and historical identities, cost privacy, explicit bounds and PostgreSQL tests.
-- [ ] F016 [US2] Connect Tasks/Team tabs, counts, stable sorting and reciprocal
+- [x] F016 [US2] Connect Tasks/Team tabs, counts, stable sorting and reciprocal
   disclosures to the chart period; verify route/loading and real browser behavior.
 - [x] F017 [US3] Test checked invoice lifecycle totals without mixing currencies.
 - [x] F018 [US3] Read project-attributable time/fee invoice history with stored

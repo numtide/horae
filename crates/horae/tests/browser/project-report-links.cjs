@@ -11,6 +11,8 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
 const project = sql("SELECT id FROM projects WHERE code='ACME-01'");
 const task = sql("SELECT id FROM tasks WHERE name='Development'");
 const admin = sql("SELECT id FROM users WHERE email='admin@example.com'");
+const sortingProject = '01970000-0000-7000-8000-000000000701';
+const sortingPerson = '01970000-0000-7000-8000-000000000705';
 const person = JSON.parse(sql(`SELECT json_build_object('id', u.id, 'name', u.name) FROM time_entries te JOIN users u ON u.id=te.user_id WHERE te.project_id='${project}' AND te.task_id='${task}' ORDER BY te.spent_date LIMIT 1`));
 const day = sql(`SELECT min(spent_date) FROM time_entries WHERE project_id='${project}' AND task_id='${task}' AND user_id='${person.id}'`);
 const count = (taskFilter, personFilter, custom) => Number(sql(`SELECT count(*) FROM time_entries WHERE project_id='${project}'${taskFilter ? ` AND task_id='${task}'` : ''}${personFilter ? ` AND user_id='${person.id}'` : ''}${custom ? ` AND spent_date='${day}'` : ''}`));
@@ -50,9 +52,72 @@ const count = (taskFilter, personFilter, custom) => Number(sql(`SELECT count(*) 
     await expect(page.getByRole('region', { name: 'Project breakdown', exact: true })).toBeVisible();
   }
   try {
+    sql(`BEGIN;
+      INSERT INTO users (id,org_id,name,email,org_role)
+        SELECT '${sortingPerson}',org_id,'Breakdown contributor','breakdown-fixture@example.com','member'
+        FROM projects WHERE id='${project}';
+      INSERT INTO projects (id,org_id,client_id,name,currency)
+        SELECT '${sortingProject}',org_id,client_id,'Breakdown sorting fixture',currency FROM projects WHERE id='${project}';
+      INSERT INTO project_tasks (project_id,task_id,billable)
+        SELECT p.id,t.id,true FROM projects p JOIN tasks t ON t.org_id=p.org_id
+        WHERE p.id='${sortingProject}' AND t.name IN ('Development','Design','Meetings');
+      INSERT INTO time_entries (id,org_id,user_id,project_id,task_id,spent_date,minutes,billable)
+        SELECT fixture.id::uuid,p.org_id,fixture.person::uuid,p.id,t.id,CURRENT_DATE,fixture.minutes,true
+        FROM projects p JOIN tasks t ON t.org_id=p.org_id
+        JOIN (VALUES
+          ('01970000-0000-7000-8000-000000000702','Development','${admin}',180),
+          ('01970000-0000-7000-8000-000000000703','Design','${sortingPerson}',90),
+          ('01970000-0000-7000-8000-000000000704','Meetings','${admin}',90)
+        ) fixture(id,task,person,minutes) ON fixture.task=t.name WHERE p.id='${sortingProject}';
+      COMMIT;`);
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
     await page.waitForURL(`${base}/`);
+    await page.goto(`${base}/projects/${sortingProject}`);
+    const totalMinutes = Number(sql(`SELECT coalesce(sum(minutes),0) FROM time_entries WHERE project_id='${sortingProject}'`));
+    assert.equal(totalMinutes, 360, 'Sorting fixture must contain all three task contributions');
+    for (const label of ['Tasks', 'Team']) {
+      const tab = page.getByRole('tab', { name: new RegExp(`^${label}`) });
+      await tab.click();
+      const table = page.getByRole('table', { name: new RegExp(`^${label} —`) });
+      const rows = async () => table.locator('tbody tr').evaluateAll(nodes => nodes.map(row => ({
+        name: row.querySelector('th').textContent.trim(),
+        minutes: Number.parseInt(row.querySelector('td').title, 10),
+      })));
+      await expect(table).toBeVisible();
+      const descending = await rows();
+      assert.equal(descending.length, label === 'Tasks' ? 3 : 2, `${label} must contain every fixture entity`);
+      assert.deepEqual(descending.map(row => row.minutes), descending.map(row => row.minutes).sort((a, b) => b - a));
+      assert.equal(descending.reduce((sum, row) => sum + row.minutes, 0), totalMinutes);
+      await expect(tab.locator('.chip')).toHaveText(String(descending.length));
+      await expect(table.locator('tfoot td[title]')).toHaveAttribute('title', `${totalMinutes} minutes`);
+      const ascendingButton = table.getByRole('button', { name: 'Sort hours ascending', exact: true });
+      await ascendingButton.focus();
+      await page.keyboard.press('Enter');
+      await expect(table.locator('th[aria-sort]')).toHaveAttribute('aria-sort', 'ascending');
+      assert.deepEqual(await rows(), [...descending].sort((a, b) => a.minutes - b.minutes), 'Equal-hour rows must retain their deterministic order');
+      await table.getByRole('button', { name: 'Sort hours descending', exact: true }).click();
+      await expect(table.locator('th[aria-sort]')).toHaveAttribute('aria-sort', 'descending');
+      assert.deepEqual(await rows(), descending);
+      const disclosure = table.locator('tbody button[aria-expanded]').first();
+      await disclosure.focus();
+      await page.keyboard.press('Enter');
+      await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
+      assert.ok(await table.locator('tbody tr').count() > descending.length);
+      const split = await disclosure.evaluate(button => {
+        const parent = button.closest('tr');
+        const minutes = row => Number.parseInt(row.querySelector('td').title, 10);
+        let children = 0;
+        for (let row = parent.nextElementSibling; row?.classList.contains('bg-tertiary'); row = row.nextElementSibling)
+          children += minutes(row);
+        return { parent: minutes(parent), children };
+      });
+      assert.equal(split.children, split.parent, 'Reciprocal child hours must reconcile to the parent');
+      await page.keyboard.press('Enter');
+      await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+      assert.deepEqual(await rows(), descending, 'Closing the disclosure must restore the same parent rows');
+    }
+    console.log('Project breakdown: task/team counts, stable hour sorting, SQL totals and keyboard reciprocal disclosures passed');
     await page.goto(`${base}${projectPath}`);
     await follow('View Development time report', true, false, false);
     await expect(page.getByRole('tab', { name: /^Tasks/ })).toHaveAttribute('aria-selected', 'true');
@@ -97,7 +162,12 @@ const count = (taskFilter, personFilter, custom) => Number(sql(`SELECT count(*) 
     assert.deepEqual(errors, []);
     console.log('Project report links: task/person/reciprocal/total scope, periods, downloads, reload/back navigation, invalid context and role gates passed');
   } finally {
-    sql(`UPDATE users SET org_role='admin' WHERE id='${admin}'`);
-    await browser.close();
+    try {
+      sql(`BEGIN; UPDATE users SET org_role='admin' WHERE id='${admin}';
+        DELETE FROM time_entries WHERE project_id='${sortingProject}';
+        DELETE FROM project_tasks WHERE project_id='${sortingProject}';
+        DELETE FROM projects WHERE id='${sortingProject}';
+        DELETE FROM users WHERE id='${sortingPerson}'; COMMIT;`);
+    } finally { await browser.close(); }
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

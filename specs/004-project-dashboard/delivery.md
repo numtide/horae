@@ -38,8 +38,8 @@ The following are current source findings, not additional exclusions from scope:
 
 - **Project Detail:** grouped chart-week controls, applicable hour-budget
   references, the current-week marker, contextual reports and selected-period
-  exports are implemented and tested below. Chart month labels and weekly bar
-  emphasis still differ from the handoff. The uninvoiced tile, invoice
+  exports, chart month labels and weekly bar emphasis are implemented and tested
+  below. The uninvoiced tile, invoice
   subject/payment-date persistence and recent entries remain incomplete. Additional
   action semantics are still the open decisions recorded in `spec.md`.
 - **Clients:** `ClientList` has basic CRUD and active/inactive rows, but no designed
@@ -62,7 +62,7 @@ manager-only boundary; project-progress access does not grant access to people's
 detailed entries. See `harvest-reference.md` for the observed behavior and
 limitations of the browser evidence.
 
-Next independent dashboard work: remaining chart fidelity and acceptance gaps.
+Next independent dashboard work: Tasks/Team/Invoices and full-run acceptance gaps.
 Billing policy decisions must
 be resolved before representing unknown external billing as a known amount. The
 Clients and Settings/Workspace slices remain required, not replaced by this work.
@@ -874,3 +874,23 @@ navigation are now awaited together, preserving the successful-response check
 and ensuring navigation failures enter the scenario's diagnostic handler. All
 three action-error scenarios pass in isolation; a new full rerun is still needed
 before F029 can be marked complete.
+
+## Tasks/Team native acceptance — 2026-09-30
+
+The report-link browser suite now creates its own three-task/two-person project,
+including equal-hour tasks. Both tabs reconcile their parent totals with SQL,
+show matching row counts, preserve deterministic ties through ascending/descending
+sorts and expand/collapse reciprocal rows through native keyboard input. Child
+minutes reconcile exactly with their parent. Existing period, reciprocal report,
+download, navigation and permission checks remain in place. F016 is verified.
+
+The first attempt depended on the seed having multiple contributors, which it
+does not; the fixture now owns its contributor and removes its time, task links,
+project and user in foreign-key order. It passes followed by project-exports,
+project-chart-budget and project-lifecycle on the frozen build and disposable DB.
+No production code or real/imported records changed.
+
+The complete run passed its first nineteen suites before the new fixture's
+precondition failed in project-report-links. The four final suites pass together
+after the fixture correction, but this is not yet one complete 23-suite pass.
+F029 and full Nix acceptance remain open.
