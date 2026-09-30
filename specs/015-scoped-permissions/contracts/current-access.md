@@ -1,6 +1,6 @@
 # Current authorization inventory
 
-Baseline: `a7727f1`, reviewed 2026-09-30. This describes current code, not the target permission policy. New scope evaluation is not yet consumed by the application.
+Baseline: `a7727f1`, reviewed 2026-09-30; approval and legacy assignment repairs are recorded below. This describes current code, not the target permission policy. New scope evaluation is not yet consumed by the application.
 
 ## Delivery paths
 
@@ -13,7 +13,7 @@ Baseline: `a7727f1`, reviewed 2026-09-30. This describes current code, not the t
 | `server_fns/projects.rs` reads | Resource-access views; private notes Admin-only; Member task/assignment rates redacted | Prevent financial values leaking through spend/progress and exports |
 | Project/task lifecycle and linking | Manager/Admin organization-wide | Capability plus project/task scope, not role rank |
 | `project_creation` create/edit/finalize | Manager can edit all org projects, billing and team; Admin-only private notes/project costs; actor locked/reloaded | Preserve working actor-lock pattern and separate rates/costs/team capabilities |
-| `projects::{create_assignment,delete_assignment}` | Legacy Admin-only APIs, without organization validation | Fix tenant isolation; reconcile with editor allowing Manager team changes; assignments lack org FK |
+| `projects::{create_assignment,delete_assignment}` | Legacy Admin-only APIs; repaired to validate both resources' organization and lock/reload the active administrator until commit | Reconcile with editor allowing Manager team changes; assignments still lack org FK |
 | `server_fns/clients.rs` | Any active org user reads catalog/address/tax data; Manager mutates and can set defaults | Separate catalog identity from contacts/financial values and client management |
 | `server_fns/users.rs` | Active directory for all; Member rates redacted; inactive directory/profile/activation/role writes Admin-only | Split people management from permission administration; preserve last-admin locking |
 | `get_me`, compatibility `/users/me` | Own full model including rates/costs | Explicit payload redaction; avoid returning identity-provider subject in directory DTOs |
@@ -37,7 +37,7 @@ Baseline: `a7727f1`, reviewed 2026-09-30. This describes current code, not the t
 ## Verified risks to address
 
 1. `approve_ids` originally updated approvals by ID/state without organization; `reject_submission` originally loaded by ID alone. Tests must invoke actual transaction helpers using two tenants, not duplicate SQL in a test body. The independent tenant repair is tracked separately from the future flexible-approval cutover.
-1. Legacy assignment endpoints accept foreign project/person IDs. Database assignment relationships lack organization provenance; the new model must validate and constrain both sides.
+1. Legacy assignment endpoints previously accepted foreign project/person IDs. The independent repair now validates both sides and current administrator authority transactionally. Database assignment relationships still lack organization provenance; schema-level constraints and treatment of pre-existing malformed links remain part of the full migration. The repair does not delete or rewrite those links.
 1. Entry-time role checks do not prevent every stale-authority commit. Project/invoice editor actor locks provide a pattern, but access changes also need compatible locking/revisions.
 1. Jobs cannot reauthorize an initiating actor they never recorded. A service/system job is a different trust boundary, not an implicit administrator.
 1. Progress and directory DTOs can expose monetary values or identity-provider metadata; hiding controls alone is insufficient.
