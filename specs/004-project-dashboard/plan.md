@@ -149,6 +149,30 @@ cumulative carry-in, no extra requests, loading/failure, native keyboard control
 and responsive bounds. Calendar selection and budget overlays remain separate
 acceptance requirements; this increment does not waive them.
 
+### Grouped chart controls and hour-budget references
+
+Reuse the existing pager styling for previous/calendar/next, retaining a separate
+return-to-current-week action. Keep native popover focus/dismissal and configured
+week boundaries; all chart navigation remains local and never changes report
+scope. Apply layout overrides only through existing utilities at this call site.
+
+Lift the existing summary resource to Project Detail so tiles and chart consume
+one authorized response and share retry/loading invalidation. The chart's dashed
+reference uses the already-checked budget total only for complete, homogeneous
+hour allocations. Lifetime budgets require all-time reporting; monthly budgets
+require the exact month returned by the current summary. Other periods, money,
+missing/incomplete budgets and unavailable reads do not produce a reference.
+Combined task/person allowances are labelled as such, not a project-level cap.
+The reference is a current allowance; configured rounded/included consumption
+remains in the budget tile and is explicitly distinguished from actual chart
+minutes. Weekly mode does not inherit a cumulative budget scale. Zero and large
+integer allowances remain representable without floats or clipping.
+
+Verify applicability and SVG geometry with tests, then native browser journeys
+including one shared read, stale/error/retry behavior, report-period changes,
+keyboard navigation, short/mobile layouts and enlarged text. No new SQL, DTO,
+schema, financial rule or shared styling default is needed for this increment.
+
 ### Chart calendar selection
 
 Reuse DatePicker and the native calendar-popover behavior already used by New

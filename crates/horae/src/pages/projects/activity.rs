@@ -12,6 +12,13 @@ use crate::server_fns;
 
 use super::hours;
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct HourBudget {
+    pub minutes: i64,
+    pub label: &'static str,
+    pub configured: bool,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Period {
     AllTime,
@@ -87,9 +94,18 @@ struct Plot {
     maximum: i64,
     line: String,
     bars: String,
+    budget_y: Option<i128>,
 }
 
-fn plot(weeks: &[ProjectActivityWeek], cumulative: bool) -> Result<Plot, ActivityError> {
+fn plot(
+    weeks: &[ProjectActivityWeek],
+    cumulative: bool,
+    budget: Option<i64>,
+) -> Result<Plot, ActivityError> {
+    let budget = budget.filter(|_| cumulative);
+    if budget.is_some_and(|value| value < 0) {
+        return Err(ActivityError::NegativeMinutes);
+    }
     let values: Vec<i64> = weeks
         .iter()
         .map(|week| {
@@ -110,7 +126,14 @@ fn plot(weeks: &[ProjectActivityWeek], cumulative: bool) -> Result<Plot, Activit
             })
         })
         .collect::<Result<_, _>>()?;
-    let maximum = values.iter().copied().max().unwrap_or(0).max(60);
+    let maximum = values
+        .iter()
+        .copied()
+        .max()
+        .unwrap_or(0)
+        .max(budget.unwrap_or(0))
+        .max(60);
+    let budget_y = budget.map(|value| 2000 - i128::from(value) * 2000 / i128::from(maximum));
     // Geometry alone is scaled: source minutes and displayed totals stay exact.
     // A wide viewBox keeps the scaled bar edges distinct without floating point.
     let count = values.len().max(1) as i128;
@@ -144,6 +167,7 @@ fn plot(weeks: &[ProjectActivityWeek], cumulative: bool) -> Result<Plot, Activit
         maximum,
         line,
         bars,
+        budget_y,
     })
 }
 
@@ -151,6 +175,7 @@ fn plot(weeks: &[ProjectActivityWeek], cumulative: bool) -> Result<Plot, Activit
 pub(super) fn ProjectActivityPanel(
     project_id: Uuid,
     interval: ReadSignal<Option<ProjectActivityInterval>>,
+    #[props(default)] budget: Option<HourBudget>,
 ) -> Element {
     let today = use_hook(|| chrono::Utc::now().date_naive());
     let mut anchor = use_signal(|| today);
@@ -195,7 +220,7 @@ pub(super) fn ProjectActivityPanel(
                     p { class: "py-12 text-muted", role: "status", "Loading project activity…" }
                 } else {
                     match &*activity.read() {
-                        Some((_, Ok(data))) => render_activity(data, cumulative(), if interval().is_none() { "All time" } else { "Selected period" }, anchor()),
+                        Some((_, Ok(data))) => render_activity(data, cumulative(), if interval().is_none() { "All time" } else { "Selected period" }, anchor(), budget),
                         Some((_, Err(message))) => rsx! {
                             p { class: "text-danger mt-4", role: "alert", "Project activity is unavailable: {message}" }
                             button { r#type: "button", class: "btn btn-secondary min-h-control", onclick: move |_| activity.restart(), "Retry activity" }
@@ -313,6 +338,9 @@ fn ChartNavigation(mut anchor: Signal<NaiveDate>, today: NaiveDate, first_day: W
     let Some(selected) = horae_core::week::week_start(anchor(), first_day) else {
         return rsx! {};
     };
+    let Some(selected_end) = selected.checked_add_days(Days::new(6)) else {
+        return rsx! { p { role: "alert", class: "text-danger", "Selected week is outside the supported date range." } };
+    };
     let Some(last_allowed_day) = current.checked_add_days(Days::new(6)) else {
         return rsx! { p { role: "alert", class: "text-danger", "This week is outside the supported date range." } };
     };
@@ -324,18 +352,23 @@ fn ChartNavigation(mut anchor: Signal<NaiveDate>, today: NaiveDate, first_day: W
         .filter(|day| *day <= current);
     rsx! {
         document::Script { src: asset!("/assets/js/menu.js") }
-        div { class: "flex flex-wrap items-center gap-2", role: "group", aria_label: "Chart week navigation",
-            button { r#type: "button", class: "btn btn-secondary min-h-control", aria_label: "Previous week",
+        div { class: "flex flex-wrap items-center gap-2 max-w-full", role: "group", aria_label: "Chart week navigation",
+            div { class: "ts-pager bg-base max-w-full",
+            button { r#type: "button", class: "ts-pager-btn prev min-h-control", aria_label: "Previous week",
                 disabled: previous.is_none(), onclick: move |_| { if let Some(day) = previous { anchor.set(day); } }, "←" }
-            button { r#type: "button", class: "btn btn-secondary min-h-control", disabled: selected == current,
-                onclick: move |_| anchor.set(today), "This week" }
-            button { r#type: "button", class: "btn btn-secondary min-h-control", aria_label: "Next week",
-                disabled: next.is_none(), onclick: move |_| { if let Some(day) = next { anchor.set(day); } }, "→" }
-            button { id: "project-chart-week", r#type: "button", class: "btn btn-secondary min-h-control font-mono text-xs",
+            button { id: "project-chart-week", r#type: "button", class: "project-chart-week btn btn-ghost min-h-control min-w-0 border-0 px-3 py-2 flex-wrap justify-center text-strong",
                 aria_label: "Choose chart week, ending week of {selected.format(\"%d %b %Y\")}",
                 popovertarget: "project-chart-calendar", aria_haspopup: "dialog", aria_expanded: "false", aria_controls: "project-chart-calendar",
                 onclick: move |_| opening += 1,
-                "Week of {selected.format(\"%d %b %Y\")}" }
+                span { class: "inline-flex text-muted", aria_hidden: "true", super::NavIcon { name: "timesheet", class: "size-4" } }
+                span { class: "text-sm font-semibold", if selected == current { "This week" } else { "Week" } }
+                span { class: "font-mono text-xs text-secondary wrap-anywhere", "{selected.format(\"%d %b\")} – {selected_end.format(\"%d %b %Y\")}" }
+            }
+            button { r#type: "button", class: "ts-pager-btn next min-h-control", aria_label: "Next week",
+                disabled: next.is_none(), onclick: move |_| { if let Some(day) = next { anchor.set(day); } }, "→" }
+            }
+            button { r#type: "button", class: "btn btn-ghost min-h-control text-muted", disabled: selected == current,
+                onclick: move |_| anchor.set(today), "This week" }
             div { id: "project-chart-calendar", class: "menu-popover calendar-popover p-0 border-0",
                 popover: "auto", role: "dialog", aria_label: "Choose chart week",
                 "data-popover-trigger": "project-chart-week", "data-calendar": "true",
@@ -359,6 +392,7 @@ fn render_activity(
     cumulative: bool,
     label: &str,
     anchor: NaiveDate,
+    budget: Option<HourBudget>,
 ) -> Element {
     let Some(interval) = data.interval else {
         return rsx! { p { class: "py-12 text-muted", "No time has been tracked on this project." } };
@@ -366,7 +400,7 @@ fn render_activity(
     let total = data.weeks.last().map_or(0, |week| week.cumulative_minutes);
     rsx! {
         p { class: "text-sm text-muted mt-4 mb-2", "{label}: {interval.from.format(\"%d %b %Y\")} – {interval.to.format(\"%d %b %Y\")}" }
-        {render_chart(data, cumulative, anchor)}
+        {render_chart(data, cumulative, anchor, budget)}
         p { class: "text-sm mt-4", "Selected period: " strong { class: "font-mono", "{hours(total)}" } }
         if total == 0 { p { class: "text-sm text-muted", "No time tracked in this period." } }
         details { class: "mt-4",
@@ -397,7 +431,13 @@ fn render_activity(
     }
 }
 
-fn render_chart(data: &ProjectActivity, cumulative: bool, anchor: NaiveDate) -> Element {
+fn render_chart(
+    data: &ProjectActivity,
+    cumulative: bool,
+    anchor: NaiveDate,
+    budget: Option<HourBudget>,
+) -> Element {
+    let budget = budget.filter(|_| cumulative);
     let window = match chart_interval(anchor, data.week_start) {
         Ok(window) => window,
         Err(error) => {
@@ -407,7 +447,7 @@ fn render_chart(data: &ProjectActivity, cumulative: bool, anchor: NaiveDate) -> 
     let start = data.weeks.partition_point(|week| week.to < window.from());
     let end = data.weeks.partition_point(|week| week.from <= window.to());
     let visible = &data.weeks[start..end];
-    let chart = match plot(visible, cumulative) {
+    let chart = match plot(visible, cumulative, budget.map(|value| value.minutes)) {
         Ok(chart) => chart,
         Err(error) => {
             return rsx! { p { role: "alert", class: "text-danger", "Cannot display activity: {error}" } };
@@ -424,6 +464,12 @@ fn render_chart(data: &ProjectActivity, cumulative: bool, anchor: NaiveDate) -> 
     let total = data.weeks.last().map_or(0, |week| week.cumulative_minutes);
     rsx! {
         p { class: "text-xs text-subtle m-0", "{legend}" }
+        if let Some(budget) = budget {
+            p { class: "text-xs text-warning mt-2 mb-0", "Dashed reference — {budget.label}: {hours(budget.minutes)} ({budget.minutes} minutes)." }
+            if budget.configured {
+                p { class: "text-xs text-muted mt-1 mb-0", "Current allowance, not rounded consumption. The chart shows actual minutes; Budget remaining applies configured rounding and included work. Combined allowances do not rule out individual overruns." }
+            }
+        }
         p { class: "text-xs text-muted mt-2", "Chart window: {first.from} – {last.to}. Up to 26 weeks; reporting totals and the table below cover the full selected period." }
         if visible.iter().all(|week| week.billable_minutes == 0 && week.non_billable_minutes == 0) {
             p { class: "text-sm text-muted", "No time tracked in this chart window." }
@@ -442,6 +488,9 @@ fn render_chart(data: &ProjectActivity, cumulative: bool, anchor: NaiveDate) -> 
                     path { class: "project-activity-line", d: "{chart.line}", vector_effect: "non-scaling-stroke" }
                 } else {
                     path { class: "project-activity-bars", d: "{chart.bars}" }
+                }
+                if let Some(y) = chart.budget_y {
+                    path { class: "project-activity-budget", d: "M0 {y} H10000", vector_effect: "non-scaling-stroke" }
                 }
             }
             span {}
@@ -487,11 +536,11 @@ mod tests {
     #[test]
     fn cropped_cumulative_plot_preserves_hours_before_the_visible_window() {
         assert_eq!(
-            plot(&[week(60, 0, 120)], true).unwrap().line,
+            plot(&[week(60, 0, 120)], true, None).unwrap().line,
             "M0 1000 L10000 0"
         );
         assert_eq!(
-            plot(&[week(60, 0, 120)], false).unwrap().line,
+            plot(&[week(60, 0, 120)], false, None).unwrap().line,
             "M0 2000 L10000 0"
         );
     }
@@ -534,8 +583,13 @@ mod tests {
             week_start: Weekday::Mon,
             weeks,
         };
-        let html =
-            dioxus::ssr::render_element(render_activity(&data, true, "This year", range.to()));
+        let html = dioxus::ssr::render_element(render_activity(
+            &data,
+            true,
+            "This year",
+            range.to(),
+            None,
+        ));
         for expected in [
             "Chart window: 2026-04-06 – 2026-09-30",
             "2026-01-01 – 2026-01-04",
@@ -550,6 +604,7 @@ mod tests {
             true,
             "This year",
             date("2025-01-01"),
+            None,
         ));
         assert!(
             outside.contains("No selected-period dates in this chart window"),
@@ -614,12 +669,75 @@ mod tests {
     }
 
     #[test]
+    fn budget_reference_scales_cumulative_geometry_but_not_weekly_bars() {
+        let weeks = [week(60, 0, 60)];
+        let chart = plot(&weeks, true, Some(120)).unwrap();
+        assert_eq!(chart.maximum, 120);
+        assert_eq!(chart.line, "M0 2000 L10000 1000");
+        assert_eq!(chart.budget_y, Some(0));
+        assert_eq!(plot(&weeks, true, Some(0)).unwrap().budget_y, Some(2000));
+        assert_eq!(plot(&weeks, true, Some(30)).unwrap().budget_y, Some(1000));
+        let weekly = plot(&weeks, false, Some(i64::MAX)).unwrap();
+        assert_eq!(weekly.maximum, 60);
+        assert_eq!(weekly.budget_y, None);
+        let large = plot(&weeks, true, Some(i64::MAX)).unwrap();
+        assert_eq!(large.maximum, i64::MAX);
+        assert_eq!(large.budget_y, Some(0));
+        assert_eq!(
+            plot(&weeks, true, Some(-1)),
+            Err(ActivityError::NegativeMinutes)
+        );
+    }
+
+    #[test]
+    fn budget_reference_has_exact_text_and_does_not_change_tracked_totals() {
+        let data = ProjectActivity {
+            interval: Some(ProjectActivityInterval {
+                from: date("2026-09-21"),
+                to: date("2026-09-27"),
+            }),
+            week_start: Weekday::Mon,
+            weeks: vec![week(59, 2, 61)],
+        };
+        let budget = Some(HourBudget {
+            minutes: 120,
+            label: "Project hours budget",
+            configured: true,
+        });
+        let html = dioxus::ssr::render_element(render_activity(
+            &data,
+            true,
+            "All time",
+            date("2026-09-27"),
+            budget,
+        ));
+        for expected in [
+            "project-activity-budget",
+            "Project hours budget: 2h (120 minutes)",
+            "Current allowance, not rounded consumption",
+            "Selected period total: 1.02h",
+        ] {
+            assert!(html.contains(expected), "Missing {expected}: {html}");
+        }
+        let weekly = dioxus::ssr::render_element(render_activity(
+            &data,
+            false,
+            "All time",
+            date("2026-09-27"),
+            budget,
+        ));
+        assert!(!weekly.contains("project-activity-budget"));
+        assert!(!weekly.contains("Dashed reference"));
+        assert!(weekly.contains("Selected period total: 1.02h"));
+    }
+
+    #[test]
     fn plot_scales_weekly_and_cumulative_minutes_independently() {
         let weeks = [week(60, 60, 120), week(30, 30, 180)];
-        assert_eq!(plot(&weeks, true).unwrap().maximum, 180);
-        assert_eq!(plot(&weeks, false).unwrap().maximum, 120);
+        assert_eq!(plot(&weeks, true, None).unwrap().maximum, 180);
+        assert_eq!(plot(&weeks, false, None).unwrap().maximum, 120);
         assert_eq!(
-            plot(&weeks, true).unwrap().line,
+            plot(&weeks, true, None).unwrap().line,
             "M0 2000 L5000 667 L10000 0"
         );
     }
@@ -627,19 +745,20 @@ mod tests {
     #[test]
     fn empty_and_zero_series_have_a_nonzero_axis_without_invented_hours() {
         assert_eq!(
-            plot(&[], true).unwrap(),
+            plot(&[], true, None).unwrap(),
             Plot {
                 maximum: 60,
                 line: "M0 2000".into(),
-                bars: String::new()
+                bars: String::new(),
+                budget_y: None,
             }
         );
-        assert_eq!(plot(&[week(0, 0, 0)], false).unwrap().maximum, 60);
+        assert_eq!(plot(&[week(0, 0, 0)], false, None).unwrap().maximum, 60);
     }
 
     #[test]
     fn plot_handles_maximum_integer_minutes_without_float_conversion_or_overflow() {
-        let chart = plot(&[week(i64::MAX, 0, i64::MAX)], true).unwrap();
+        let chart = plot(&[week(i64::MAX, 0, i64::MAX)], true, None).unwrap();
         assert_eq!(chart.maximum, i64::MAX);
         assert_eq!(chart.line, "M0 2000 L10000 0");
     }
@@ -647,11 +766,11 @@ mod tests {
     #[test]
     fn plot_rejects_negative_or_overflowing_values() {
         assert_eq!(
-            plot(&[week(-1, 0, 0)], false),
+            plot(&[week(-1, 0, 0)], false, None),
             Err(ActivityError::NegativeMinutes)
         );
         assert_eq!(
-            plot(&[week(i64::MAX, 1, i64::MAX)], false),
+            plot(&[week(i64::MAX, 1, i64::MAX)], false, None),
             Err(ActivityError::Overflow)
         );
     }
@@ -672,6 +791,7 @@ mod tests {
                 cumulative,
                 "Custom period",
                 date("2026-09-27"),
+                None,
             ));
             for expected in [
                 "59",
@@ -701,6 +821,7 @@ mod tests {
             true,
             "All time",
             date("2026-09-27"),
+            None,
         ));
         assert!(empty.contains("No time has been tracked on this project."));
         assert!(!empty.contains("<svg"));
@@ -714,6 +835,7 @@ mod tests {
             false,
             "Custom period",
             date("2026-09-27"),
+            None,
         ));
         assert!(zero.contains("No time tracked in this period."));
         assert!(zero.contains("Weekly activity — Custom period"));

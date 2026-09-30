@@ -714,3 +714,40 @@ Verification:
 F026 is implemented and its focused journeys are verified. This is not full
 Project Detail acceptance: the remaining dashboard gaps and all Clients and
 Settings/Workspace delivery slices remain open; PR #208 stays draft.
+
+## Grouped chart navigation and hour-budget reference — 2026-09-30
+
+Previous/calendar/next now share the existing pager frame, with a readable week
+range and a separate return-to-current-week action. The shared calendar and its
+configured-week/future bounds are unchanged. The central control uses the system's
+inset focus token locally so the frame cannot crop its keyboard indicator.
+
+The cumulative chart shares the summary tiles' existing authorized resource.
+Complete hour allocations supply a labelled dashed reference and scale; money,
+missing allocations, loading/errors and incompatible periods do not. Lifetime
+requires all-time reporting, and monthly requires the exact month returned by the
+current summary. Combined task/person allowances are labelled explicitly. The
+reference is a current allowance, not configured rounded consumption; actual
+tracked minutes and the budget tile's accounting remain unchanged. Weekly charts
+do not inherit the reference or cumulative scale.
+
+Verification:
+
+- Native Chromium passes one shared summary request, exact budget/actual totals,
+  cumulative/weekly switching, matching monthly/lifetime scope, loading/error/retry,
+  money/permission gates, keyboard focus, 320/390/768/1440px widths and 200% text.
+- The same final disposable-database run passes project-activity, project-exports
+  and project-invoice, including calendar focus/dismissal, report independence,
+  actual downloads and invoice preparation. The new budget suite runs by default.
+- A focused keyboard assertion first reproduced the central control's outward
+  focus ring; after the local inset correction, the full combined run passes.
+- Final detail-navigation/rendering (66) and New Project screen (45) tests pass,
+  as do all-target server Clippy with warnings denied, WASM and formatting checks.
+- Framework review adds only project-scoped SVG paint and focus rules using
+  existing tokens. No shared selector/default, dependency, SQL, wire type,
+  migration or imported record changes.
+
+F027 is implemented. This does not complete Project Detail visual acceptance:
+the current-week highlight and broader chart fidelity still need review, alongside
+the previously recorded billing/action gaps and full application/Nix acceptance.
+Clients and Settings/Workspace remain required work; PR #208 stays draft.

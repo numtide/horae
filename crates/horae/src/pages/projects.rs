@@ -981,6 +981,19 @@ fn ProjectDetailContent(
     let mut details =
         use_resource(move || async move { server_fns::get_project_details(id.to_string()).await });
     let me = use_resource(|| async move { server_fns::get_me().await });
+    let summary_data = use_resource(move || {
+        let _ = breakdown_revision();
+        async move { server_fns::summary::get_project_summary(id.to_string()).await }
+    });
+    let chart_budget = if summary_data.state()() == UseResourceState::Ready {
+        summary_data
+            .read()
+            .as_ref()
+            .and_then(|result| result.as_ref().ok())
+            .and_then(|value| summary::chart_budget(value, interval()))
+    } else {
+        None
+    };
     let mut invoices = use_resource(move || {
         let allowed = is_manager(&me);
         async move {
@@ -1129,8 +1142,8 @@ fn ProjectDetailContent(
                 }
             }
 
-            activity::ProjectActivityPanel { project_id: id, interval }
-            summary::ProjectSummaryPanel { project_id: id, can_manage: is_manager(&me), revision: breakdown_revision,
+            activity::ProjectActivityPanel { project_id: id, interval, budget: chart_budget }
+            summary::ProjectSummaryPanel { project_id: id, can_manage: is_manager(&me), summary: summary_data,
                 billing::InvoiceSummary { state: invoice_state.clone(), on_retry: move |_| invoices.restart() }
             }
             breakdown::ProjectBreakdownPanel { project_id: id, interval, revision: breakdown_revision, invoice_state,

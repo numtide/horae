@@ -1124,6 +1124,8 @@ tbody tr:hover { background: var(--color-row-hover); }
 .project-activity-area { fill: var(--color-primary-bg); }
 .project-activity-line { fill: none; stroke: var(--color-primary); stroke-width: 2; }
 .project-activity-bars { fill: var(--color-primary); }
+.project-activity-budget { fill: none; stroke: var(--color-warning); stroke-width: 1.5; stroke-dasharray: 6 5; }
+.project-chart-week:focus-visible { box-shadow: var(--ring-inset); }
 
 /* Segmented control */
 .segmented {

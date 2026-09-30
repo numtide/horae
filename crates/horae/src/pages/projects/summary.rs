@@ -1,17 +1,60 @@
 use super::*;
 use crate::models::project::ProjectSummary;
 
+pub(super) fn chart_budget(
+    summary: &ProjectSummary,
+    interval: Option<crate::models::project::ProjectActivityInterval>,
+) -> Option<activity::HourBudget> {
+    let row = summary.budgets.first()?;
+    let minutes = summary.budget_totals.budget.filter(|value| *value >= 0)?;
+    if summary.budget_totals.unallocated_scopes != 0
+        || summary.budgets.iter().any(|other| {
+            other.kind != BudgetKind::Hours
+                || other.budget.is_none()
+                || other.period_key != row.period_key
+                || other.scope != row.scope
+        })
+    {
+        return None;
+    }
+    if row.period_key == "lifetime" {
+        if interval.is_some() {
+            return None;
+        }
+    } else {
+        let start = format!("{}-01", row.period_key)
+            .parse::<chrono::NaiveDate>()
+            .ok()?;
+        let month = horae_core::project_activity::ActivityRange::month(start).ok()?;
+        if interval
+            != Some(crate::models::project::ProjectActivityInterval {
+                from: month.from(),
+                to: month.to(),
+            })
+        {
+            return None;
+        }
+    }
+    let label = match row.scope.as_str() {
+        "project" => "Project hours budget",
+        "task" => "Combined task hour allowances",
+        "person" => "Combined person hour allowances",
+        _ => return None,
+    };
+    Some(activity::HourBudget {
+        minutes,
+        label,
+        configured: summary.configured_budget,
+    })
+}
+
 #[component]
 pub(super) fn ProjectSummaryPanel(
     project_id: Uuid,
     can_manage: bool,
-    revision: ReadSignal<u64>,
+    mut summary: Resource<Result<ProjectSummary, ServerFnError>>,
     children: Element,
 ) -> Element {
-    let mut summary = use_resource(move || {
-        let _ = revision();
-        async move { server_fns::summary::get_project_summary(project_id.to_string()).await }
-    });
     rsx! {
         section { class: "mt-4", aria_label: "Project summary",
             div { class: "project-summary-grid grid gap-4",
@@ -176,6 +219,61 @@ mod tests {
                 missing_rate_minutes: 0,
             }),
         }
+    }
+
+    #[test]
+    fn chart_budget_requires_matching_units_period_and_complete_scopes() {
+        let mut value = summary();
+        let month = crate::models::project::ProjectActivityInterval {
+            from: "2026-09-01".parse().unwrap(),
+            to: "2026-09-30".parse().unwrap(),
+        };
+        assert_eq!(chart_budget(&value, Some(month)).unwrap().minutes, 60);
+        assert!(chart_budget(&value, None).is_none());
+        assert!(
+            chart_budget(
+                &value,
+                Some(crate::models::project::ProjectActivityInterval {
+                    to: "2026-09-29".parse().unwrap(),
+                    ..month
+                })
+            )
+            .is_none()
+        );
+        value.budgets[0].period_key = "lifetime".into();
+        assert_eq!(chart_budget(&value, None).unwrap().minutes, 60);
+        assert!(chart_budget(&value, Some(month)).is_none());
+        value.budgets[0].kind = BudgetKind::Amount;
+        assert!(chart_budget(&value, None).is_none());
+        value.budgets[0].kind = BudgetKind::None;
+        assert!(chart_budget(&value, None).is_none());
+        value.budgets[0].kind = BudgetKind::Hours;
+        value.budget_totals.budget = None;
+        assert!(chart_budget(&value, None).is_none());
+        value.budget_totals.budget = Some(0);
+        assert_eq!(chart_budget(&value, None).unwrap().minutes, 0);
+        value.budget_totals.budget = Some(-1);
+        assert!(chart_budget(&value, None).is_none());
+    }
+
+    #[test]
+    fn chart_budget_labels_combined_scopes_and_rejects_mixed_references() {
+        let mut value = summary();
+        value.budgets[0].scope = "task".into();
+        value.budgets[0].period_key = "lifetime".into();
+        let budget = chart_budget(&value, None).unwrap();
+        assert_eq!(budget.label, "Combined task hour allowances");
+        assert!(budget.configured);
+        value.budgets[0].scope = "person".into();
+        assert_eq!(
+            chart_budget(&value, None).unwrap().label,
+            "Combined person hour allowances"
+        );
+        value.budgets.push(value.budgets[0].clone());
+        value.budgets[1].period_key = "2026-09".into();
+        assert!(chart_budget(&value, None).is_none());
+        value.budgets.clear();
+        assert!(chart_budget(&value, None).is_none());
     }
 
     #[test]

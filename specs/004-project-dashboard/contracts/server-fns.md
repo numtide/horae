@@ -26,6 +26,26 @@ remain pending reconciliation.
   unexpected arithmetic/database failures are errors, not zero totals.
 - No schema or mutation change. Tests use disposable PostgreSQL databases.
 
+## Shared chart budget reference
+
+Project Detail shares one existing `get_project_summary` resource between the
+summary tiles and cumulative chart. This is a presentation change, not a new
+endpoint or authorization rule. Loading, failure and retry hide the reference
+until that same resource is ready; chart modes and reporting-period changes do
+not fetch another summary.
+
+Use the checked total only for complete hour allocations with one scope and
+period. Lifetime references require all-time reporting. Monthly references require
+the exact month returned by the current summary, not a partial or historical
+month. Money, absent budgets, unallocated scopes and unavailable reads never
+produce a line. Zero is a valid allowance. Combined task/person allocations are
+labelled as allowances, not a project cap or proof against individual overruns.
+
+The chart remains actual tracked minutes; the reference is the current allowance,
+not configured rounded consumption. The budget tile retains those consumption
+rules. Weekly mode does not use the cumulative reference or its scale. No SQL,
+schema, wire type or stored accounting value changes.
+
 ## Report task-filter extension
 
 The existing `report_time` and `report_detailed` server functions accept an

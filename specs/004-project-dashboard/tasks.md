@@ -70,6 +70,14 @@ F001–F003 does not complete Project Detail or the four-surface delivery.
   and responsive controls, invalid filters, foreign scope, size rejection and
   revoked report authority pass the isolated browser suite. Full dashboard
   acceptance remains separate.
+- [x] F027 [US2] Group chart week controls to match PeriodNav, preserving the
+  configured week, calendar, no-future bound and return-to-current-week action.
+  Reuse the summary read for a labelled hours-budget reference only when its
+  period matches cumulative reporting and allocations are complete. Never turn
+  money into hours or show a monthly/lifetime allowance against a different
+  interval; distinguish current allowance from configured rounded consumption.
+  Verify scale, zero/large budgets, privacy/loading/retry, one summary request,
+  weekly-mode isolation and responsive/keyboard/browser regressions.
 
 **Input**: Design documents from `specs/004-project-dashboard/`
 
