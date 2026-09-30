@@ -96,6 +96,21 @@ Then wire reproducible project/task/person/all-time/custom-date route context an
 the project export menu. PDF summary rendering and bounded-download explanations
 remain required; the task-filter foundation alone does not satisfy FR-016.
 
+Contextual hours links reuse Reports and its existing authorization, not a second
+report page. Preserve optional raw query arguments until validation so invalid or
+empty UUID/date values cannot disappear into an unfiltered request. Generated
+links always carry project and explicit custom/all-time scope, plus the selected
+task/person intersection; totals omit only those entity dimensions. Zero hours
+and viewers without current report authority retain plain text. Key Reports by
+validated incoming context to discard previous-route state.
+
+Project reporting dates and the Tasks/Team/Invoices tab are URL state. Replace
+the current history entry on selection, preserving the selected period and tab
+when returning from Reports without adding a history entry per control change.
+Synchronize same-project query navigation without remounting unrelated forms or
+keeping an old period label. Verify direct/reloaded URLs, Back, reciprocal rows,
+invalid context, revoked access and existing editor/invoice navigation.
+
 ### Chart window navigation
 
 Keep the reporting interval shared by charts, Tasks and Team. Add a separate

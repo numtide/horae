@@ -125,6 +125,11 @@ mod route {
         #[route("/projects/:id")]
         ProjectDetail { id: Uuid },
     }
+    impl Route {
+        pub fn project_detail(id: Uuid) -> Self {
+            Self::ProjectDetail { id }
+        }
+    }
     #[component]
     fn ProjectList() -> Element {
         rsx! { h1 { "Projects" } }

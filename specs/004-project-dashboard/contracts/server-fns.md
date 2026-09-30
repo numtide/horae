@@ -50,7 +50,24 @@ checks, currency/privacy rules and bounded-download limits remain unchanged.
 Reports still defaults to the current month through today. Selecting **All time**
 explicitly omits the dates, disables date editing and preserves the custom pair
 for returning to it. Invalid custom dates hide stale rows and disable downloads.
-This enables, but does not yet implement, the contextual Project Detail links.
+Project Detail links reuse these report and download endpoints without changing
+their authorization or query predicates.
+
+## Contextual report URLs
+
+- `/reports` accepts optional `project_id`, `task_id`, `user_id`, `from`, `to`
+  and `period` query parameters. Entity UUIDs and date pairs are validated before
+  mounting report resources. Empty or malformed supplied values are errors, not
+  missing filters. `period=all` requires absent dates; `period=custom` requires
+  both dates. Bare Reports retains its current-month default.
+- Project hours links explicitly select all/custom, always restrict the project
+  and open Detailed time. Parent rows restrict task or person; reciprocal rows
+  restrict both; the total restricts neither. Zero hours and viewers without
+  report authority have no report link. Reports still enforces its own gate.
+- `/projects/:id` accepts inclusive `from`/`to` and `tab=tasks|team|invoices`.
+  Absent dates mean all time, and an absent tab means Tasks. Invalid query state
+  is shown as an error without loading project reporting data. Period/tab changes
+  replace the current history entry so browser Back restores the original view.
 
 > Historical contract, pending reconciliation with the 2026-09-29 specification.
 > Its visibility and accounting assumptions predate feature 011; it is not the

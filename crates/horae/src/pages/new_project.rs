@@ -251,7 +251,7 @@ fn ProjectEditor(
                                 }
                             })?;
                         intent.set(None);
-                        leave_project_editor(navigator, Route::ProjectDetail { id }).await;
+                        leave_project_editor(navigator, Route::project_detail(id)).await;
                     }
                     Some(Intent::Leave) => {
                         intent.set(None);
@@ -300,7 +300,7 @@ fn ProjectEditor(
                 Ok(id) => {
                     pending_edit.set(None);
                     intent.set(None);
-                    leave_project_editor(navigator, Route::ProjectDetail { id }).await;
+                    leave_project_editor(navigator, Route::project_detail(id)).await;
                 }
                 Err(rejection) => {
                     if is_definite_rejection(&rejection) {

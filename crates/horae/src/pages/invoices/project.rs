@@ -26,7 +26,7 @@ fn ProjectInvoiceContent(id: Uuid) -> Element {
             div { class: "page-header",
                 h1 { class: "page-title", "New invoice" }
                 button { r#type: "button", class: "btn btn-secondary min-h-control", disabled: busy(),
-                    onclick: move |_| { if !busy() { navigator.push(Route::ProjectDetail { id }); } },
+                    onclick: move |_| { if !busy() { navigator.push(Route::project_detail(id)); } },
                     "Cancel"
                 }
             }

@@ -65,7 +65,8 @@ F001–F003 does not complete Project Detail or the four-surface delivery.
   export menu, preserving all-time/custom scope and current report authority;
   implement the PDF summary and verify complete journeys from Project Detail.
   The shared all-time report/export period and explicit Reports selector are
-  implemented; route context, links, export menu and PDF acceptance remain open.
+  implemented. Contextual route/link integration passes route, screen and native
+  browser regressions; export menu and PDF acceptance remain open.
 
 **Input**: Design documents from `specs/004-project-dashboard/`
 

@@ -5,14 +5,14 @@ use crate::models::project::{ProjectActivityInterval, ProjectBreakdown, ProjectW
 use horae_core::project_breakdown::WorkTotals;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Tab {
+pub(super) enum Tab {
     Tasks,
     Team,
     Invoices,
 }
 
 impl Tab {
-    fn label(self) -> &'static str {
+    pub(super) fn label(self) -> &'static str {
         match self {
             Self::Tasks => "Tasks",
             Self::Team => "Team",
@@ -35,6 +35,10 @@ pub(super) fn ProjectBreakdownPanel(
     revision: ReadSignal<u64>,
     invoice_state: InvoiceHistoryState,
     on_invoice_retry: EventHandler<()>,
+    can_report: bool,
+    initial_tab: Tab,
+    on_tab_change: EventHandler<Tab>,
+    on_interval_change: EventHandler<Option<ProjectActivityInterval>>,
 ) -> Element {
     let mut data = use_resource(move || {
         let requested = interval();
@@ -61,10 +65,10 @@ pub(super) fn ProjectBreakdownPanel(
     };
     rsx! {
         section { class: "mt-8 min-w-0", aria_label: "Project breakdown",
-            BreakdownTables { project_id, data: result, invoice_state,
+            BreakdownTables { project_id, data: result, invoice_state, can_report, initial_tab, on_tab_change,
                 on_retry: move |_| data.restart(),
                 on_invoice_retry: move |_| on_invoice_retry.call(()),
-                activity::ProjectReportingPeriod { interval }
+                activity::ProjectReportingPeriod { interval, onchange: on_interval_change }
             }
         }
     }
@@ -127,8 +131,16 @@ fn BreakdownTables(
     #[props(default)] invoice_state: InvoiceHistoryState,
     #[props(default)] on_invoice_retry: Option<EventHandler<()>>,
     #[props(default)] on_retry: Option<EventHandler<()>>,
+    #[props(default)] can_report: bool,
+    #[props(default = Tab::Tasks)] initial_tab: Tab,
+    #[props(default)] on_tab_change: EventHandler<Tab>,
 ) -> Element {
-    let mut tab = use_signal(|| Tab::Tasks);
+    let mut tab = use_signal(move || initial_tab);
+    use_effect(use_reactive!(|initial_tab| {
+        if *tab.peek() != initial_tab {
+            tab.set(initial_tab);
+        }
+    }));
     let with_invoices = invoice_state != InvoiceHistoryState::Hidden;
     let current = if tab() == Tab::Invoices && !with_invoices {
         Tab::Tasks
@@ -148,10 +160,10 @@ fn BreakdownTables(
                     class: if current == target { "report-tab active min-h-control" } else { "report-tab min-h-control" },
                     aria_selected: current == target, aria_controls: "project-breakdown-panel",
                     tabindex: if current == target { "0" } else { "-1" },
-                    onclick: move |_| tab.set(target),
+                    onclick: move |_| { tab.set(target); on_tab_change.call(target); },
                     onkeydown: move |event| {
                         if let Some(next) = keyboard_tab(target, &event.key(), with_invoices) {
-                            event.prevent_default(); tab.set(next);
+                            event.prevent_default(); tab.set(next); on_tab_change.call(next);
                             spawn(async move { let _ = document::eval(&format!("document.getElementById('{}')?.focus()", next.id())).await; });
                         }
                     },
@@ -197,7 +209,7 @@ fn BreakdownTables(
                 }
             } else {
                 match data {
-                    Some(Ok(value)) => rsx! { WorkTable { key: "{current.id()}:{value.interval:?}", data: value, tab: current } },
+                    Some(Ok(value)) => rsx! { WorkTable { key: "{current.id()}:{value.interval:?}", data: value, tab: current, report_project: project_id.filter(|_| can_report) } },
                     Some(Err(error)) => rsx! {
                         p { role: "alert", class: "text-danger", "Could not load project breakdown: {error}" }
                         if let Some(retry) = on_retry {
@@ -212,7 +224,7 @@ fn BreakdownTables(
 }
 
 #[component]
-fn WorkTable(data: ProjectBreakdown, tab: Tab) -> Element {
+fn WorkTable(data: ProjectBreakdown, tab: Tab, report_project: Option<Uuid>) -> Element {
     let mut descending = use_signal(|| true);
     let mut expanded = use_signal(BTreeSet::<Uuid>::new);
     let current = tab;
@@ -292,7 +304,9 @@ fn WorkTable(data: ProjectBreakdown, tab: Tab) -> Element {
                                         }
                                         td { class: "text-right font-mono whitespace-nowrap",
                                             title: "{row.minutes} minutes; {row.billable_minutes} billable; {row.minutes - row.billable_minutes} non-billable",
-                                            "{hours(row.minutes)}"
+                                            ReportHours { minutes: row.minutes, project: report_project, interval: data.interval,
+                                                task: (current == Tab::Tasks).then_some(id), person: (current == Tab::Team).then_some(id),
+                                                label: format!("View {} time report", entity.name) }
                                         }
                                         td { class: "text-right font-mono whitespace-nowrap text-secondary", "{cost_label(row, currency)}" }
                                     }
@@ -302,7 +316,11 @@ fn WorkTable(data: ProjectBreakdown, tab: Tab) -> Element {
                                                 th { scope: "row", class: "text-left font-normal pl-10 pr-5 py-3 border-b border-light wrap-anywhere", {entity_label(child, current == Tab::Tasks)}
                                                     if !child.active || !child.current { span { class: "text-xs text-muted ml-2", "Historical" } }
                                                 }
-                                                td { class: "text-right font-mono whitespace-nowrap", title: "{value.minutes} minutes; {value.billable_minutes} billable; {value.minutes - value.billable_minutes} non-billable", "{hours(value.minutes)}" }
+                                                td { class: "text-right font-mono whitespace-nowrap", title: "{value.minutes} minutes; {value.billable_minutes} billable; {value.minutes - value.billable_minutes} non-billable",
+                                                    ReportHours { minutes: value.minutes, project: report_project, interval: data.interval,
+                                                        task: Some(if current == Tab::Tasks { id } else { child.id }), person: Some(if current == Tab::Team { id } else { child.id }),
+                                                        label: format!("View {} / {} time report", entity.name, child.name) }
+                                                }
                                                 td { class: "text-right font-mono whitespace-nowrap text-secondary", "{cost_label(*value, currency)}" }
                                             }
                                         }
@@ -316,7 +334,9 @@ fn WorkTable(data: ProjectBreakdown, tab: Tab) -> Element {
                     }
                     tfoot { tr { class: "report-total-row bg-tertiary",
                         td { class: "px-5 py-4", "Total" }
-                        td { class: "px-5 py-4 text-right font-mono", title: "{data.totals.total.minutes} minutes", "{hours(data.totals.total.minutes)}" }
+                        td { class: "px-5 py-4 text-right font-mono", title: "{data.totals.total.minutes} minutes",
+                            ReportHours { minutes: data.totals.total.minutes, project: report_project, interval: data.interval, task: None, person: None, label: "View total project time report" }
+                        }
                         td { class: "px-5 py-4 text-right font-mono whitespace-nowrap", "{cost_label(data.totals.total, currency)}" }
                     } }
                 } }
@@ -330,10 +350,40 @@ fn WorkTable(data: ProjectBreakdown, tab: Tab) -> Element {
     }
 }
 
+#[component]
+fn ReportHours(
+    minutes: i64,
+    project: Option<Uuid>,
+    task: Option<Uuid>,
+    person: Option<Uuid>,
+    interval: Option<ProjectActivityInterval>,
+    label: String,
+) -> Element {
+    match project.filter(|_| minutes > 0) {
+        Some(id) => {
+            rsx! { Link { to: Route::project_report(id, task, person, interval), class: "text-primary", aria_label: "{label}: {hours(minutes)}", "{hours(minutes)}" } }
+        }
+        None => rsx! { "{hours(minutes)}" },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use horae_core::project_breakdown::{WorkCell, summarize};
+
+    #[test]
+    fn zero_hours_and_unavailable_report_authority_render_plain_text() {
+        for (minutes, project) in [(0, Some(Uuid::now_v7())), (60, None)] {
+            let html = dioxus::ssr::render_element(
+                rsx! { ReportHours { minutes, project, task: None, person: None, interval: None, label: "View time report" } },
+            );
+            assert!(
+                html.contains(&hours(minutes)) && !html.contains("href="),
+                "{html}"
+            );
+        }
+    }
 
     fn fixture() -> ProjectBreakdown {
         let tasks: Vec<_> = [(1, "Zulu"), (2, "Alpha"), (3, "Alpha")]

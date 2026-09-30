@@ -226,7 +226,7 @@ assert.ok(Number.isInteger(originalWeekStart) && originalWeekStart >= 1 && origi
     assert.equal(reads.invoices, 1);
     await page.getByRole('link', { name: 'Back to Projects', exact: true }).click();
     await page.route('**/api/get_project_activity*', route => route.abort(), { times: 1 });
-    await page.locator(`a[href="/projects/${project}"]`).first().click();
+    await page.locator(`a[href="/projects/${project}?"], a[href="/projects/${project}"]`).first().click();
     await expect(activity.getByRole('alert')).toContainText('Project activity is unavailable');
     await expect(chart).toHaveCount(0);
     await expect(previous).toHaveCount(0);

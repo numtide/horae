@@ -45,7 +45,7 @@ pub fn Sidebar(collapsed: Signal<bool>, on_navigate: EventHandler<()>) -> Elemen
             div { class: "sidebar-section", "Review" }
             div { class: "sidebar-group",
                 SideLink { to: Route::Approvals {}, icon: "approvals", label: "Approvals", on_navigate }
-                SideLink { to: Route::Reports {}, icon: "reports", label: "Reports", on_navigate }
+                SideLink { to: Route::reports(), icon: "reports", label: "Reports", on_navigate }
             }
 
             div { class: "sidebar-spacer" }

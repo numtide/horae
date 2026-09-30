@@ -99,6 +99,8 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await page.getByRole('button', { name: 'Sign in as Admin' }).click();
     await page.waitForURL(`${base}/`);
     await page.getByRole('link', { name: 'Projects', exact: true }).click();
+    await expect(page.locator('.proj-row').first()).toBeVisible();
+    const initialProjectCount = await page.locator('.proj-row').count();
     for (const endpoint of ['project_creation_options', 'load_project_draft']) {
       const pattern = `**/api/${endpoint}*`;
       let release;
@@ -1154,7 +1156,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await expect(screen.getByRole('button', { name: 'Cancel', exact: true })).toBeDisabled();
     await expect(screen.getByRole('button', { name: 'Back to Projects', exact: true })).toBeDisabled();
     await screen.getByRole('button', { name: 'Retry request', exact: true }).click();
-    await expect(page).toHaveURL(`${base}/projects/${created}`);
+    await expect(page).toHaveURL(url => url.origin === base && url.pathname === `/projects/${created}` && url.search === '');
     const basics = page.getByRole('region', { name: 'Project details', exact: true });
     await expect(basics.getByRole('heading', { level: 1 })).toHaveText('[BROWSER-NEW] Recovered latest edit');
     await basics.locator('summary').filter({ hasText: 'Project information' }).click();
@@ -1190,7 +1192,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await page.getByRole('textbox', { name: 'Search by project or client' }).fill('no matching project');
     await expect(page.getByRole('heading', { name: 'No projects match your filters', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Reset filters', exact: true }).click();
-    await expect(page.locator('.proj-row')).toHaveCount(3);
+    await expect(page.locator('.proj-row')).toHaveCount(initialProjectCount + 1);
     await expect(page.getByRole('button', { name: /^All tags/ })).toBeVisible();
     await readsFinished(page);
     console.log('PASS: real finalized budget reaches the authorized Projects endpoint and display');

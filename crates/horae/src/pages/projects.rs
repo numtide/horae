@@ -695,7 +695,7 @@ pub fn ProjectList() -> Element {
                                             div { class: "min-w-0",
                                               div { class: "flex items-center gap-3 min-w-0",
                                                 Link {
-                                                    to: Route::ProjectDetail { id: p.id },
+                                                    to: Route::project_detail(p.id),
                                                     class: "font-semibold text-strong min-w-0 proj-namelink",
                                                     "{pname}"
                                                 }
@@ -790,7 +790,7 @@ pub fn ProjectList() -> Element {
                                                     }
                                                 } else {
                                                     Link {
-                                                        to: Route::ProjectDetail { id: p.id },
+                                                        to: Route::project_detail(p.id),
                                                         class: "btn btn-secondary btn-sm",
                                                         "View"
                                                     }
@@ -916,15 +916,65 @@ pub fn ProjectList() -> Element {
 }
 
 #[component]
-pub fn ProjectDetail(id: Uuid) -> Element {
+pub fn ProjectDetail(
+    id: Uuid,
+    from: Option<String>,
+    to: Option<String>,
+    tab: Option<String>,
+) -> Element {
+    let initial_interval = match horae_core::project_activity::ActivityRange::parse_optional(
+        from.as_deref(),
+        to.as_deref(),
+    ) {
+        Ok(range) => range.map(|range| crate::models::project::ProjectActivityInterval {
+            from: range.from(),
+            to: range.to(),
+        }),
+        Err(error) => return rsx! { p { role: "alert", class: "alert alert-danger", "{error}" } },
+    };
+    let initial_tab = match tab.as_deref() {
+        None | Some("tasks") => breakdown::Tab::Tasks,
+        Some("team") => breakdown::Tab::Team,
+        Some("invoices") => breakdown::Tab::Invoices,
+        _ => {
+            return rsx! { p { role: "alert", class: "alert alert-danger", "Invalid project view" } };
+        }
+    };
     // Reset assignments, tasks and form state together when the router reuses
     // this page for another project. Keys take effect in a dynamic fragment.
-    rsx! { for id in [id] { ProjectDetailContent { key: "{id}", id } } }
+    rsx! { for id in [id] { ProjectDetailContent { key: "{id}", id, initial_interval, initial_tab } } }
+}
+
+fn project_view_route(
+    id: Uuid,
+    interval: Option<crate::models::project::ProjectActivityInterval>,
+    tab: breakdown::Tab,
+) -> Route {
+    Route::ProjectDetail {
+        id,
+        from: interval.map(|range| range.from.to_string()),
+        to: interval.map(|range| range.to.to_string()),
+        tab: Some(tab.label().to_lowercase()),
+    }
 }
 
 #[component]
-fn ProjectDetailContent(id: Uuid) -> Element {
-    let interval = use_signal(|| None::<crate::models::project::ProjectActivityInterval>);
+fn ProjectDetailContent(
+    id: Uuid,
+    initial_interval: Option<crate::models::project::ProjectActivityInterval>,
+    initial_tab: breakdown::Tab,
+) -> Element {
+    let mut interval = use_signal(move || initial_interval);
+    let mut tab = use_signal(move || initial_tab);
+    let navigator = use_navigator();
+    use_effect(use_reactive!(|(initial_interval, initial_tab)| {
+        if *interval.peek() != initial_interval {
+            interval.set(initial_interval);
+        }
+        if *tab.peek() != initial_tab {
+            tab.set(initial_tab);
+        }
+    }));
     let mut breakdown_revision = use_signal(|| 0_u64);
     let mut details =
         use_resource(move || async move { server_fns::get_project_details(id.to_string()).await });
@@ -1082,6 +1132,9 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                 billing::InvoiceSummary { state: invoice_state.clone(), on_retry: move |_| invoices.restart() }
             }
             breakdown::ProjectBreakdownPanel { project_id: id, interval, revision: breakdown_revision, invoice_state,
+                can_report: is_manager(&me), initial_tab: tab(),
+                on_tab_change: move |value| { tab.set(value); navigator.replace(project_view_route(id, interval(), value)); },
+                on_interval_change: move |value| { navigator.replace(project_view_route(id, value, tab())); },
                 on_invoice_retry: move |_| invoices.restart() }
 
             details { class: "mt-6",

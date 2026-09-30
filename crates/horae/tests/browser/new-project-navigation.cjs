@@ -140,7 +140,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
       return route.continue();
     });
     await editor.getByRole('button', { name: 'Retry request', exact: true }).click();
-    await expect(page).toHaveURL(/\/projects\/[0-9a-f-]{36}$/);
+    await expect(page).toHaveURL(url => url.origin === base && /^\/projects\/[0-9a-f-]{36}$/.test(url.pathname) && url.search === '');
     assert.equal(finalizations.length, 2);
     assert.equal(finalizations[0], finalizations[1]);
     assert.equal(Number(sql('SELECT count(*) FROM projects')), Number(count) + 1);

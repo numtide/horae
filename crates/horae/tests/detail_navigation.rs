@@ -128,12 +128,65 @@ mod route {
         EditProject { id: Uuid },
         #[route("/projects/:id/invoices/new")]
         NewProjectInvoice { id: Uuid },
-        #[route("/projects/:id")]
-        ProjectDetail { id: Uuid },
+        #[route("/projects/:id?:from&:to&:tab")]
+        ProjectDetail {
+            id: Uuid,
+            from: Option<String>,
+            to: Option<String>,
+            tab: Option<String>,
+        },
+        #[route("/reports?:project_id&:task_id&:user_id&:from&:to&:period")]
+        Reports {
+            project_id: Option<String>,
+            task_id: Option<String>,
+            user_id: Option<String>,
+            from: Option<String>,
+            to: Option<String>,
+            period: Option<String>,
+        },
         #[route("/clients/:id")]
         ClientDetail { id: Uuid },
         #[route("/admin/importers")]
         HarvestImport {},
+    }
+
+    impl Route {
+        pub fn project_detail(id: Uuid) -> Self {
+            Self::ProjectDetail {
+                id,
+                from: None,
+                to: None,
+                tab: None,
+            }
+        }
+
+        pub fn project_report(
+            id: Uuid,
+            task: Option<Uuid>,
+            person: Option<Uuid>,
+            interval: Option<project::ProjectActivityInterval>,
+        ) -> Self {
+            Self::Reports {
+                project_id: Some(id.to_string()),
+                task_id: task.map(|id| id.to_string()),
+                user_id: person.map(|id| id.to_string()),
+                from: interval.map(|range| range.from.to_string()),
+                to: interval.map(|range| range.to.to_string()),
+                period: Some(if interval.is_some() { "custom" } else { "all" }.into()),
+            }
+        }
+    }
+
+    #[component]
+    fn Reports(
+        project_id: Option<String>,
+        task_id: Option<String>,
+        user_id: Option<String>,
+        from: Option<String>,
+        to: Option<String>,
+        period: Option<String>,
+    ) -> Element {
+        rsx! { h1 { "Reports {project_id:?} {task_id:?} {user_id:?} {from:?} {to:?} {period:?}" } }
     }
 
     #[component]
@@ -173,6 +226,50 @@ fn settle(dom: &mut VirtualDom) {
         dom.render_immediate_to_vec();
     }
     panic!("detail navigation did not settle");
+}
+
+#[tokio::test]
+async fn same_project_query_navigation_updates_period_and_tab_without_stale_labels() {
+    let id = Uuid::from_u128(1);
+    let probe = Probe {
+        initial_path: Some(format!("/projects/{id}")),
+        ..Probe::default()
+    };
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    let navigator = probe.navigator.borrow().unwrap();
+    dom.in_scope(probe.scope.borrow().unwrap(), || {
+        navigator.replace(route::Route::ProjectDetail {
+            id,
+            from: Some("2026-09-01".into()),
+            to: Some("2026-09-30".into()),
+            tab: Some("team".into()),
+        })
+    });
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(
+        html.contains("Custom period") && html.contains("01 Sep 2026 – 30 Sep 2026"),
+        "{html}"
+    );
+    assert!(
+        html.contains("aria-labelledby=\"project-tab-team\""),
+        "{html}"
+    );
+    dom.in_scope(probe.scope.borrow().unwrap(), || {
+        navigator.replace(route::Route::project_detail(id))
+    });
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(
+        html.contains("All time") && !html.contains("01 Sep 2026 – 30 Sep 2026"),
+        "{html}"
+    );
+    assert!(
+        html.contains("aria-labelledby=\"project-tab-tasks\""),
+        "{html}"
+    );
 }
 
 fn invoice_history() -> project::ProjectInvoices {
@@ -244,9 +341,7 @@ async fn pending_or_failed_invoice_history_never_shows_previous_project_amounts(
     *probe.invoice_history_response.borrow_mut() = Some(receive);
     let navigator = probe.navigator.borrow().unwrap();
     dom.in_scope(probe.scope.borrow().unwrap(), || {
-        navigator.push(route::Route::ProjectDetail {
-            id: Uuid::from_u128(2),
-        });
+        navigator.push(route::Route::project_detail(Uuid::from_u128(2)));
     });
     settle(&mut dom);
     let html = dioxus::ssr::render(&dom);
@@ -489,12 +584,12 @@ async fn navigating_between_project_ids_loads_current_assignments_and_tasks() {
 
     let navigator = probe.navigator.borrow().unwrap();
     dom.in_scope(probe.scope.borrow().unwrap(), || {
-        navigator.push(route::Route::ProjectDetail { id: second })
+        navigator.push(route::Route::project_detail(second))
     });
     assert_eq!(
         dom.in_scope(probe.scope.borrow().unwrap(), || dioxus::history::history()
             .current_route()),
-        format!("/projects/{second}")
+        route::Route::project_detail(second).to_string()
     );
     settle(&mut dom);
     let html = dioxus::ssr::render(&dom);
@@ -544,7 +639,7 @@ async fn pending_or_failed_breakdown_never_shows_previous_project_rows() {
     *probe.breakdown_response.borrow_mut() = Some(receive);
     let navigator = probe.navigator.borrow().unwrap();
     dom.in_scope(probe.scope.borrow().unwrap(), || {
-        navigator.push(route::Route::ProjectDetail { id: second })
+        navigator.push(route::Route::project_detail(second))
     });
     settle(&mut dom);
     let html = dioxus::ssr::render(&dom);
@@ -583,7 +678,7 @@ async fn pending_or_failed_summary_never_shows_previous_project_totals() {
     *probe.summary_response.borrow_mut() = Some(receive);
     let navigator = probe.navigator.borrow().unwrap();
     dom.in_scope(probe.scope.borrow().unwrap(), || {
-        navigator.push(route::Route::ProjectDetail { id: second })
+        navigator.push(route::Route::project_detail(second))
     });
     settle(&mut dom);
     let html = dioxus::ssr::render(&dom);
@@ -642,7 +737,7 @@ async fn pending_or_failed_activity_never_keeps_the_previous_projects_chart() {
     *probe.activity_response.borrow_mut() = Some(receive);
     let navigator = probe.navigator.borrow().unwrap();
     dom.in_scope(probe.scope.borrow().unwrap(), || {
-        navigator.push(route::Route::ProjectDetail { id: second })
+        navigator.push(route::Route::project_detail(second))
     });
     settle(&mut dom);
     let html = dioxus::ssr::render(&dom);
@@ -757,7 +852,7 @@ async fn pending_or_failed_project_details_never_show_previous_metadata() {
     *probe.detail_response.borrow_mut() = Some(receive);
     let navigator = probe.navigator.borrow().unwrap();
     dom.in_scope(probe.scope.borrow().unwrap(), || {
-        navigator.push(route::Route::ProjectDetail { id: second })
+        navigator.push(route::Route::project_detail(second))
     });
     settle(&mut dom);
     let html = dioxus::ssr::render(&dom);
@@ -803,7 +898,7 @@ async fn pending_or_failed_project_assignments_never_show_previous_assignments()
     *probe.assignment_response.borrow_mut() = Some(receive);
     let navigator = probe.navigator.borrow().unwrap();
     dom.in_scope(probe.scope.borrow().unwrap(), || {
-        navigator.push(route::Route::ProjectDetail { id: second })
+        navigator.push(route::Route::project_detail(second))
     });
     settle(&mut dom);
     let html = dioxus::ssr::render(&dom);

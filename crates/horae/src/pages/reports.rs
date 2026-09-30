@@ -71,21 +71,103 @@ fn FilterSelect(
     }
 }
 
-#[component]
-pub fn Reports() -> Element {
-    let today = chrono::Utc::now().date_naive();
-    let month_start = today.with_day(1).unwrap_or(today);
+#[derive(Clone, Debug, PartialEq)]
+struct ReportContext {
+    from: String,
+    to: String,
+    all_time: bool,
+    project: String,
+    task: String,
+    person: String,
+}
 
-    let mut from_date = use_signal(move || month_start.to_string());
-    let mut to_date = use_signal(move || today.to_string());
-    let mut all_time = use_signal(|| false);
+impl ReportContext {
+    fn parse(
+        project: Option<String>,
+        task: Option<String>,
+        person: Option<String>,
+        from: Option<String>,
+        to: Option<String>,
+        period: Option<String>,
+    ) -> Result<Self, String> {
+        let filter = |value: Option<String>, name| -> Result<String, String> {
+            value
+                .map(|value| {
+                    value
+                        .parse::<uuid::Uuid>()
+                        .map(|id| id.to_string())
+                        .map_err(|_| format!("Invalid {name} filter"))
+                })
+                .transpose()
+                .map(Option::unwrap_or_default)
+        };
+        let today = chrono::Utc::now().date_naive();
+        let range = match period.as_deref() {
+            Some("all") if from.is_none() && to.is_none() => None,
+            None if from.is_none() && to.is_none() => Some(
+                horae_core::project_activity::ActivityRange::new(
+                    today.with_day(1).unwrap_or(today),
+                    today,
+                )
+                .map_err(|error| error.to_string())?,
+            ),
+            None | Some("custom") => Some(
+                horae_core::project_activity::ActivityRange::parse_optional(
+                    from.as_deref(),
+                    to.as_deref(),
+                )
+                .map_err(|error| error.to_string())?
+                .ok_or("Choose both reporting dates")?,
+            ),
+            _ => return Err("Invalid report period".into()),
+        };
+        Ok(Self {
+            from: range
+                .map_or(today.with_day(1).unwrap_or(today), |range| range.from())
+                .to_string(),
+            to: range.map_or(today, |range| range.to()).to_string(),
+            all_time: range.is_none(),
+            project: filter(project, "project")?,
+            task: filter(task, "task")?,
+            person: filter(person, "teammate")?,
+        })
+    }
+}
+
+#[component]
+pub fn Reports(
+    project_id: Option<String>,
+    task_id: Option<String>,
+    user_id: Option<String>,
+    from: Option<String>,
+    to: Option<String>,
+    period: Option<String>,
+) -> Element {
+    match ReportContext::parse(project_id, task_id, user_id, from, to, period) {
+        Ok(context) => {
+            rsx! { for initial in [context] { ReportsContent { key: "{initial:?}", initial } } }
+        }
+        Err(error) => {
+            rsx! { h1 { class: "page-title", "Reports" } p { class: "alert alert-danger", role: "alert", "{error}" } }
+        }
+    }
+}
+
+#[component]
+fn ReportsContent(initial: ReportContext) -> Element {
+    let detailed_context =
+        !initial.project.is_empty() || !initial.task.is_empty() || !initial.person.is_empty();
+    let mut from_date = use_signal(move || initial.from);
+    let mut to_date = use_signal(move || initial.to);
+    let mut all_time = use_signal(move || initial.all_time);
     let mut group_by = use_signal(|| "project".to_string());
     let mut client_filter = use_signal(String::new);
-    let mut project_filter = use_signal(String::new);
-    let mut user_filter = use_signal(String::new);
+    let mut project_filter = use_signal(move || initial.project);
+    let mut user_filter = use_signal(move || initial.person);
     let mut tag_filter = use_signal(String::new);
-    let mut task_filter = use_signal(String::new);
-    let mut active_tab = use_signal(|| "time".to_string());
+    let mut task_filter = use_signal(move || initial.task);
+    let mut active_tab =
+        use_signal(move || if detailed_context { "detailed" } else { "time" }.to_string());
 
     let me = use_resource(|| async move { server_fns::get_me().await });
 
@@ -488,6 +570,76 @@ pub fn Reports() -> Element {
 mod tests {
     use super::*;
     use crate::models::ReportRow;
+
+    #[test]
+    fn contextual_reports_keep_all_time_and_every_entity_filter() {
+        let project = uuid::Uuid::now_v7().to_string();
+        let task = uuid::Uuid::now_v7().to_string();
+        let person = uuid::Uuid::now_v7().to_string();
+        let context = ReportContext::parse(
+            Some(project.clone()),
+            Some(task.clone()),
+            Some(person.clone()),
+            None,
+            None,
+            Some("all".into()),
+        )
+        .unwrap();
+        assert!(context.all_time);
+        assert_eq!(
+            (context.project, context.task, context.person),
+            (project, task, person)
+        );
+    }
+
+    #[test]
+    fn contextual_reports_preserve_custom_dates_and_reject_ambiguous_scope() {
+        let context = ReportContext::parse(
+            None,
+            None,
+            None,
+            Some("2026-09-01".into()),
+            Some("2026-09-30".into()),
+            Some("custom".into()),
+        )
+        .unwrap();
+        assert!(!context.all_time);
+        assert_eq!(
+            (context.from.as_str(), context.to.as_str()),
+            ("2026-09-01", "2026-09-30")
+        );
+        for (from, to, period) in [
+            (None, None, Some("custom")),
+            (None, None, Some("invalid")),
+            (Some(""), Some(""), None),
+            (Some("2026-09-01"), None, None),
+            (Some("2026-09-30"), Some("2026-09-01"), None),
+            (Some("2026-09-01"), Some("2026-09-30"), Some("all")),
+        ] {
+            assert!(
+                ReportContext::parse(
+                    None,
+                    None,
+                    None,
+                    from.map(str::to_owned),
+                    to.map(str::to_owned),
+                    period.map(str::to_owned)
+                )
+                .is_err()
+            );
+        }
+        for value in ["", "invalid", "id&task_id=other"] {
+            assert!(
+                ReportContext::parse(Some(value.into()), None, None, None, None, None).is_err()
+            );
+            assert!(
+                ReportContext::parse(None, Some(value.into()), None, None, None, None).is_err()
+            );
+            assert!(
+                ReportContext::parse(None, None, Some(value.into()), None, None, None).is_err()
+            );
+        }
+    }
 
     fn row(currency: &str, cents: i64) -> ReportRow {
         ReportRow {

@@ -627,3 +627,45 @@ Evidence for this prerequisite:
 F026 is still open: contextual routes/links, the project export menu and PDF
 summary are not supplied by the period prerequisite. Clients and
 Settings/Workspace remain required delivery slices, and PR #208 remains draft.
+
+## Contextual project report navigation — 2026-09-30
+
+Task, teammate, reciprocal breakdown and total hours now open Detailed time with
+the project, applicable task/person and all-time/custom period preselected. The
+links reuse Reports and its current manager gate; zero hours and readers without
+report authority retain plain text. No new CSS, dependencies, schema or report
+endpoint is introduced.
+
+Project URLs retain the reporting dates and selected tab, so reload and Back
+restore the same view. Same-project query navigation updates the period heading
+as well as the rows. Invalid or explicitly empty filter/date query values show an
+error before mounting report resources instead of silently widening the scope.
+
+Verification:
+
+- All 61 detail navigation/rendering tests and 45 New Project screen tests pass.
+- Native Chromium passes contextual task/person/reciprocal/total links, scoped
+  CSV contents, reload/Back, invalid-context rejection and role gates. The
+  activity, report-task-filter and project-invoice suites pass in the same
+  disposable-database run, followed by the complete new-project, project-edit
+  and new-project-navigation suites. The combined runner exits successfully.
+- The combined run exposed a fixed three-project assumption in New Project's
+  filter-reset test after invoice fixtures added two projects. It now asserts
+  exactly one more project than the initial rendered list, retaining its
+  specific created-project identity checks. The full combined rerun passes.
+- The final WASM, all-target Clippy with warnings denied, formatting and
+  whitespace checks pass after removing a redundant signal-init closure.
+  Eight route tests and seven Reports UI tests pass, including malformed and
+  empty context rejection. No shared CSS, SQLx cache or migration changed.
+- Windows Chrome MCP confirms Harvest's nonzero task/person/total report links,
+  plain zero-hour rows and tab query state. Its project Export menu exposes Excel
+  and CSV, whereas Horae's handoff also requires PDF summary. Chrome reports a
+  hidden document, so menu/tab inspection uses DOM events; this is not native
+  click acceptance. No Harvest records were modified.
+- Windows Chrome also renders Horae's project/task/all-time links after reloading
+  the preview following its development rebuild. Native interaction acceptance
+  comes from the isolated Chromium run above, not from hidden-window DOM clicks.
+
+F026 remains incomplete: the project export menu and PDF summary are still
+required. The whole Project Detail, Clients and Settings/Workspace objective is
+not complete, and PR #208 remains draft.

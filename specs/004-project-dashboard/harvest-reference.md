@@ -67,6 +67,16 @@ independently of the graph anchor. Native clicking again timed out while Chrome
 reported the tab hidden; the tab was opened through a DOM click and its rendered
 links inspected. No report download or business mutation was performed.
 
+The contextual-link recheck on 2026-09-30 also follows a Team row to Detailed time:
+the URL retains the client, project, person and observed reporting bounds, and
+the destination renders the detailed report. Team selection updates `tab=team`
+on the project URL. The Export menu again exposes Excel and CSV, not PDF summary.
+These checks use DOM events while Chrome reports the document hidden. Local
+evidence is in `.scratch/playwright-windows/harvest-project-team-report-links.json`
+and `harvest-contextual-person-report.json`; real identifiers and time-entry
+notes are kept out of the repository. The original project tab is restored and
+no Harvest records or settings are changed.
+
 - **Pin:** moves a project to the top of the list, up to 100 pinned projects.
   The article does not establish the ownership/persistence implementation.
   [Projects overview](https://support.getharvest.com/hc/en-us/articles/360048181432-Projects-overview).

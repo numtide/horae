@@ -211,6 +211,7 @@ pub(super) fn ProjectActivityPanel(
 #[component]
 pub(super) fn ProjectReportingPeriod(
     mut interval: Signal<Option<ProjectActivityInterval>>,
+    #[props(default)] onchange: EventHandler<Option<ProjectActivityInterval>>,
 ) -> Element {
     let today = use_hook(|| chrono::Utc::now().date_naive());
     let mut label = use_signal(|| {
@@ -224,6 +225,22 @@ pub(super) fn ProjectReportingPeriod(
     let mut custom_from = use_signal(|| interval().map_or(today, |range| range.from).to_string());
     let mut custom_to = use_signal(|| interval().map_or(today, |range| range.to).to_string());
     let mut error = use_signal(|| None::<String>);
+    let mut labelled_interval = use_signal(&*interval);
+    use_effect(move || {
+        let current = interval();
+        if *labelled_interval.peek() != current {
+            labelled_interval.set(current);
+            label.set(if current.is_none() {
+                "All time"
+            } else {
+                "Custom period"
+            });
+            custom_from.set(current.map_or(today, |range| range.from).to_string());
+            custom_to.set(current.map_or(today, |range| range.to).to_string());
+            custom_open.set(false);
+            error.set(None);
+        }
+    });
     let close_custom = use_callback(move |()| {
         custom_open.set(false);
         error.set(None);
@@ -241,7 +258,7 @@ pub(super) fn ProjectReportingPeriod(
                     for preset in Period::ALL {
                         MenuItem { selected: label() == preset.label(), onclick: move |_| {
                             match preset.interval(today) {
-                                Ok(value) => { interval.set(value); label.set(preset.label()); custom_open.set(false); error.set(None); }
+                                Ok(value) => { interval.set(value); labelled_interval.set(value); onchange.call(value); label.set(preset.label()); custom_open.set(false); error.set(None); }
                                 Err(message) => error.set(Some(message.to_string())),
                             }
                         }, "{preset.label()}" }
@@ -256,7 +273,7 @@ pub(super) fn ProjectReportingPeriod(
                 form { class: "mt-4", onsubmit: move |event| {
                     event.prevent_default();
                     match custom_interval(&custom_from(), &custom_to()) {
-                        Ok(value) => { interval.set(Some(value)); label.set("Custom period"); close_custom.call(()); }
+                        Ok(value) => { interval.set(Some(value)); labelled_interval.set(Some(value)); onchange.call(Some(value)); label.set("Custom period"); close_custom.call(()); }
                         Err(message) => error.set(Some(message)),
                     }
                 },

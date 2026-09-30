@@ -59,7 +59,7 @@ const invoicesBefore = Number(sql('SELECT count(*) FROM invoices'));
     await expect(page.getByRole('checkbox', { name: 'All projects for this client', exact: true })).toHaveCount(0);
     await expect(page.locator('[data-editor-state]')).toHaveAttribute('data-editor-state', 'clean');
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await expect(page).toHaveURL(`${base}/projects/${project.id}`);
+    await expect(page).toHaveURL(url => url.origin === base && url.pathname === `/projects/${project.id}` && url.search === '');
     assert.equal(Number(sql('SELECT count(*) FROM invoices')), invoicesBefore);
 
     await page.goto(`${base}/projects/${project.id}/invoices/new`);
@@ -88,7 +88,7 @@ const invoicesBefore = Number(sql('SELECT count(*) FROM invoices'));
     const cancel = page.getByRole('button', { name: 'Cancel', exact: true }).click();
     await (await dialog).accept();
     await cancel;
-    await expect(page).toHaveURL(`${base}/projects/${project.id}`);
+    await expect(page).toHaveURL(url => url.origin === base && url.pathname === `/projects/${project.id}` && url.search === '');
     assert.equal(Number(sql('SELECT count(*) FROM invoices')), invoicesBefore);
 
     await page.goto(`${base}/projects/${project.id}/invoices/new`);
@@ -143,7 +143,7 @@ const invoicesBefore = Number(sql('SELECT count(*) FROM invoices'));
     await page.getByRole('button', { name: 'Retry project', exact: true }).click();
     await expect(review).toBeVisible();
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await expect(page).toHaveURL(`${base}/projects/${project.id}`);
+    await expect(page).toHaveURL(url => url.origin === base && url.pathname === `/projects/${project.id}` && url.search === '');
 
     const actor = sql("SELECT id FROM users WHERE email='admin@example.com'");
     try {

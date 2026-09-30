@@ -64,12 +64,24 @@ pub enum Route {
     EditProject { id: Uuid },
     #[route("/projects/:id/invoices/new")]
     NewProjectInvoice { id: Uuid },
-    #[route("/projects/:id")]
-    ProjectDetail { id: Uuid },
+    #[route("/projects/:id?:from&:to&:tab")]
+    ProjectDetail {
+        id: Uuid,
+        from: Option<String>,
+        to: Option<String>,
+        tab: Option<String>,
+    },
     #[route("/approvals")]
     Approvals {},
-    #[route("/reports")]
-    Reports {},
+    #[route("/reports?:project_id&:task_id&:user_id&:from&:to&:period")]
+    Reports {
+        project_id: Option<String>,
+        task_id: Option<String>,
+        user_id: Option<String>,
+        from: Option<String>,
+        to: Option<String>,
+        period: Option<String>,
+    },
     #[route("/invoices")]
     InvoiceList {},
     #[route("/invoices/:id")]
@@ -87,6 +99,44 @@ pub enum Route {
     #[end_layout]
     #[route("/:..route")]
     NotFound { route: Vec<String> },
+}
+
+impl Route {
+    pub fn project_detail(id: Uuid) -> Self {
+        Self::ProjectDetail {
+            id,
+            from: None,
+            to: None,
+            tab: None,
+        }
+    }
+
+    pub fn reports() -> Self {
+        Self::Reports {
+            project_id: None,
+            task_id: None,
+            user_id: None,
+            from: None,
+            to: None,
+            period: None,
+        }
+    }
+
+    pub fn project_report(
+        id: Uuid,
+        task: Option<Uuid>,
+        person: Option<Uuid>,
+        interval: Option<crate::models::project::ProjectActivityInterval>,
+    ) -> Self {
+        Self::Reports {
+            project_id: Some(id.to_string()),
+            task_id: task.map(|id| id.to_string()),
+            user_id: person.map(|id| id.to_string()),
+            from: interval.map(|range| range.from.to_string()),
+            to: interval.map(|range| range.to.to_string()),
+            period: Some(if interval.is_some() { "custom" } else { "all" }.into()),
+        }
+    }
 }
 
 /// Whether `to` names the route the user is currently on, compared by variant
@@ -115,6 +165,62 @@ mod tests {
     use super::*;
 
     #[test]
+    fn report_routes_preserve_entity_and_period_context_including_invalid_values() {
+        let route: Route = "/reports?project_id=invalid&task_id=also-invalid&user_id=person&from=2026-09-01&to=2026-09-30&period=custom".parse().unwrap();
+        let path = route.to_string();
+        for value in [
+            "project_id=invalid",
+            "task_id=also-invalid",
+            "user_id=person",
+            "from=2026-09-01",
+            "to=2026-09-30",
+            "period=custom",
+        ] {
+            assert!(path.contains(value), "{value} disappeared from {path}");
+        }
+    }
+
+    #[test]
+    fn project_routes_preserve_reporting_period_and_tab() {
+        let id = Uuid::now_v7();
+        let route: Route = format!("/projects/{id}?from=2026-09-01&to=2026-09-30&tab=team")
+            .parse()
+            .unwrap();
+        let path = route.to_string();
+        for value in ["from=2026-09-01", "to=2026-09-30", "tab=team"] {
+            assert!(path.contains(value), "{value} disappeared from {path}");
+        }
+    }
+
+    #[test]
+    fn empty_date_arguments_are_not_dropped_as_absent_bounds() {
+        let route: Route = "/reports?from=&to=&period=custom".parse().unwrap();
+        assert!(
+            matches!(route, Route::Reports { from: Some(from), to: Some(to), .. } if from.is_empty() && to.is_empty())
+        );
+    }
+
+    #[test]
+    fn project_report_links_round_trip_parent_child_and_total_scopes() {
+        let project = Uuid::now_v7();
+        let task = Uuid::now_v7();
+        let person = Uuid::now_v7();
+        for (task, person) in [
+            (None, None),
+            (Some(task), None),
+            (None, Some(person)),
+            (Some(task), Some(person)),
+        ] {
+            let route = Route::project_report(project, task, person, None);
+            let parsed: Route = route.to_string().parse().unwrap();
+            assert!(route == parsed);
+            assert!(
+                matches!(parsed, Route::Reports { project_id: Some(id), task_id, user_id, from: None, to: None, period: Some(period) } if id == project.to_string() && task_id == task.map(|id| id.to_string()) && user_id == person.map(|id| id.to_string()) && period == "all")
+            );
+        }
+    }
+
+    #[test]
     fn project_invoice_creation_keeps_project_identity_and_navigation() {
         let id = Uuid::now_v7();
         let path = format!("/projects/{id}/invoices/new");
@@ -126,7 +232,7 @@ mod tests {
 
     #[test]
     fn project_detail_highlights_only_projects() {
-        let route = Route::ProjectDetail { id: Uuid::now_v7() };
+        let route = Route::project_detail(Uuid::now_v7());
         assert!(matches_navigation(&Route::ProjectList {}, &route));
         assert!(!matches_navigation(&Route::ClientList {}, &route));
         assert!(!matches_navigation(&Route::InvoiceList {}, &route));
@@ -151,7 +257,7 @@ mod tests {
         assert!(matches_navigation(&Route::ProjectList {}, &route));
         assert!(!matches_navigation(&Route::ClientList {}, &route));
         assert!(
-            matches!(format!("/projects/{id}").parse::<Route>().unwrap(), Route::ProjectDetail { id: parsed } if parsed == id)
+            matches!(format!("/projects/{id}").parse::<Route>().unwrap(), Route::ProjectDetail { id: parsed, .. } if parsed == id)
         );
     }
 }
