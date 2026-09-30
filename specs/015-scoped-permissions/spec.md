@@ -4,9 +4,18 @@
 
 **Created**: 2026-09-30
 
-**Status**: Draft — customization and approval granularity need clarification
+**Status**: Draft — Harvest parity confirmed; detailed parity matrix and verification pending
 
 **Input**: Focus on permissions as a separate SpecKit feature before continuing the Settings/Workspace redesign, using Harvest's current permission model as a reference.
+
+## Clarifications
+
+### Session 2026-09-30
+
+- Q: Six fixed profiles or custom profiles and per-person adjustments? → A: The user requested parity with Harvest: all six built-in profiles, reusable custom profiles and per-person permission adjustments are required.
+- Q: Whole-person approval only or separately actionable project portions? → A: The user requested parity with Harvest: approvals must be scoped to managed projects/people and the selected filters, including partial project approval within a person's week. Retaining only the existing whole-person approval is not an accepted simplification.
+
+Parity is the acceptance target for this permissions and approvals feature, not merely visual resemblance. Existing Horae authorization or approval behavior is not a reason to omit a required Harvest behavior. Differences must be identified and resolved explicitly; unknown reference behavior requires investigation rather than another request to approve a smaller scope.
 
 ## User Scenarios & Testing
 
@@ -40,6 +49,10 @@ A responsible person manages the projects and people explicitly assigned to them
 1. **Given** a Member assigned to a project, **When** they track time or view permitted progress, **Then** they do not automatically gain management, rates, cost or invoice access.
 1. **Given** overlapping project/person scopes, **When** a list or total is displayed, **Then** each authorized record appears once and no excluded record contributes to its count or total.
 1. **Given** mixed-scope work, **When** a bulk action, approval or invoice operation is attempted, **Then** its entire affected set is authorized under FR-009; no hidden partial mutation is allowed.
+1. **Given** a person has submitted time in projects A and B during the same week and the approver manages only A, **When** A is approved, **Then** A's selected time becomes approved while B's approval state is unchanged. The person must not be labelled wholly approved while B remains pending.
+1. **Given** grouping by person and filtering by client A, **When** an authorized approver approves a displayed submission, **Then** only the authorized work belonging to that client is approved; grouping must not widen the selection.
+1. **Given** an approver also manages a person, **When** they select that person's work across projects, **Then** approval follows that person scope and the displayed filters without including another person's unrelated work.
+1. **Given** a partially approved week, **When** another authorized approver completes the remaining portion or withdraws an authorized approval, **Then** the aggregate state and history match the actual portions without resetting unrelated approvals or invoice locks.
 
 ### User Story 3 - Enforce the same access everywhere (Priority: P1)
 
@@ -68,7 +81,10 @@ People understand their effective access in My Settings; administrators manage p
 
 1. **Given** a signed-in person, **When** they open their permissions, **Then** they see their own effective capabilities and scope, with no editable privilege controls unless authorized.
 1. **Given** an administrator, **When** access changes are saved, **Then** a durable record identifies actor, subject, old/new grants and scopes, time and outcome without recording secrets.
-1. **Given** customization is selected under FR-004, **When** an administrator creates or applies a custom profile, **Then** dependencies, per-person differences and effects on existing assignees are explicit before save.
+1. **Given** an administrator, **When** they create or apply a custom profile, **Then** dependencies, per-person differences and effects on existing assignees are explicit before save.
+1. **Given** a permission depends on another permission, **When** the administrator adds it, **Then** required permissions are included visibly; removing a prerequisite removes its dependants before the complete change is saved.
+1. **Given** a person assigned a custom profile, **When** an administrator adjusts that person's permissions, **Then** the differences are visible and can remain person-specific or be saved as a reusable profile.
+1. **Given** a reusable custom profile is deleted, **When** existing assignees next use Horae, **Then** their effective permissions are unchanged; the deleted template is unavailable for new applications.
 1. **Given** a narrow viewport, enlarged text or keyboard navigation, **When** inspecting or editing permissions, **Then** labels, scope descriptions, focus, errors and save/cancel controls remain usable.
 
 ### User Story 5 - Transition existing accounts without hidden privilege changes (Priority: P1)
@@ -89,7 +105,8 @@ An administrator can review how existing roles and project assignments translate
 
 - Multiple administrators changing access concurrently, self-demotion and deactivation of an assigned manager.
 - A person or project shared by several managers; revoked, inactive and cross-organization assignments.
-- Mixed-project timesheets/invoices, historical entries and financial totals containing out-of-scope records.
+- Mixed-project timesheets/invoices, partial approval and withdrawal, historical entries and financial totals containing out-of-scope records.
+- Filtered approval across week boundaries, empty days, new entries after partial approval and concurrent approve/withdraw/edit operations.
 - Custom permission dependencies, unknown grants, renamed/deleted templates and stale edit forms.
 - Existing sessions, background work, retained exports, compatibility reads and plugin capabilities after revocation.
 - Project-only financial overrides, private administrator notes, absent/zero rates and missing cost currencies.
@@ -102,21 +119,23 @@ An administrator can review how existing roles and project assignments translate
 - **FR-001**: Provide six distinct built-in profiles: Member, Project Manager, People Admin, Accounting, Executive Manager and Administrator. Profile names MUST correspond to implemented capabilities and scope.
 - **FR-002**: Define a complete allowed/denied matrix for Horae's existing time, project, task, client, people, rate, cost, invoice, approval, report, workspace, import/export and integration operations before implementation. Distinguish read, create, edit and lifecycle actions; financial visibility MUST NOT be implied by ordinary project or people management.
 - **FR-003**: The proposed built-in boundaries are listed below. Their exact operation-level matrix MUST resolve differences from existing Horae rules and the Harvest reference, including FR-009. Unsupported Harvest products MUST NOT appear as working grants.
-- **FR-004**: Customization scope needs confirmation: [NEEDS CLARIFICATION: Implement six built-in profiles plus reusable custom profiles and per-person permission adjustments, as in the new Harvest model, or only six fixed profiles without custom grants?]
-- **FR-005**: Project membership, project management and person-management assignments MUST be distinct relationships. Assignments MUST be organization-scoped and modifiable only by an administrator initially. Assigning work or importing membership MUST NOT promote an organization role.
+- **FR-004**: Provide all six built-in profiles, reusable custom profiles derived from them and per-person permission adjustments. Administrators MUST be able to create, apply and delete custom profiles and see differences between an applied template and a person's effective permissions. Fixed profiles alone do not satisfy this requirement.
+- **FR-005**: Project membership, project management and person-management assignments MUST be distinct, organization-scoped relationships. Who may change each assignment and any associated profile transition MUST follow the verified Harvest parity matrix; do not impose an unverified administrator-only restriction on every assignment. Ordinary tracking membership or identity matching MUST NOT silently promote a person.
 - **FR-006**: Within the same organization, a capability's authorized self/project/person scopes combine without duplicates. No capability or matching scope means denial. Inactive identity, organization boundaries, task restrictions and business-state locks remain mandatory constraints, not overridable grants.
 - **FR-007**: All delivery paths MUST enforce current effective permissions, including direct operations, lists and aggregates, downloads, compatibility interfaces, remote administration and user-initiated background work. Trusted system jobs and plugins MUST retain explicitly documented service capabilities rather than acquiring unrestricted end-user authority.
 - **FR-008**: Separate permission to view/edit billable rates, view/edit costs, view invoices, manage invoices and view private notes. Restricted fields and derived amounts MUST be absent from unauthorized responses and exports. Aggregate project progress MUST NOT grant detailed personal-note access.
-- **FR-009**: Approval granularity needs confirmation: [NEEDS CLARIFICATION: Preserve whole-person weekly approvals and require authority over that person's complete submission, or introduce separately actionable project portions within a submitted week? A project-only assignment must never authorize an unrelated portion of the week.]
+- **FR-009**: Support separately actionable project portions of a person's submission. The effective approval selection MUST be limited by current project/person authority and the displayed person/project/client/date filters; grouping MUST NOT widen it. Approving one project MUST leave other projects' approval state unchanged. Show partial versus complete approval truthfully and retain the actual actor, affected scope and history. Whole-person approval remains possible when its full selected scope is authorized, but MUST NOT be the only supported operation.
 - **FR-010**: Permission changes MUST apply on the next authorization check, including still-live sessions, queued execution and result download. Mutations racing a completed revocation MUST not commit using stale authority. Already downloaded data cannot be recalled; no such promise may be displayed.
-- **FR-011**: Only administrators may assign profiles, customize privileges or edit management scopes. Last-active-administrator protection MUST hold under concurrent changes. Changes MUST be atomic, reject stale edits and leave existing privileges intact on failure.
+- **FR-011**: Only administrators may assign profiles or customize privileges. Assignment management MUST follow FR-005's verified capability/scope rules and MUST NOT become an indirect privilege-escalation path. Last-active-administrator protection MUST hold under concurrent changes. Changes MUST be atomic, reject stale edits and leave existing privileges intact on failure.
 - **FR-012**: My Settings and Workspace MUST share the same effective permission descriptions. Read-only viewers MUST have a reachable explanation; administrator-only destinations cannot be their sole help path. Loading, empty, forbidden, error and pending states MUST be distinct.
 - **FR-013**: Access changes MUST produce durable, organization-scoped audit records of actor, subject, time and actual change. Audit visibility is administrator-only; rejected unauthorized attempts MUST NOT disclose another person's permission configuration.
 - **FR-014**: Existing access MUST be inventoried and migration differences approved before cutover. Preserve imported/development records; no account reset is authorized. Do not silently map old Manager to a narrower Project Manager or broader Executive Manager. The migration procedure MUST state any temporarily retained legacy profile and how it is retired.
-- **FR-015**: If customization is selected, define permission prerequisites, template application/update/deletion effects and per-person differences before planning. Administrator status and last-administrator safeguards MUST not be bypassed through an equivalent-looking custom profile. Unknown permissions MUST be rejected.
+- **FR-015**: Customization MUST include permission prerequisites and visible dependent-permission changes. Deleting a reusable profile MUST preserve existing assignees' effective permissions while preventing new applications. Applying a profile and saving person-specific adjustments MUST be explicit operations. Template update/reapplication effects MUST be verified against Harvest before the contract is finalized; no silent propagation rule may be invented. Administrator status and last-administrator safeguards MUST not be bypassed through an equivalent-looking custom profile. Unknown permissions MUST be rejected.
 - **FR-016**: Adapt the permission portions of Settings and Workspace to the selected model using existing controls and styling. Verify both themes, 320/390/768/1440px, short viewports, enlarged text and keyboard operation. Do not redesign unrelated pages as part of this feature.
 - **FR-017**: Role and assignment changes MUST NOT recalculate historical money, alter invoice/time state, send unrelated notifications or rebind sign-in identity. Existing exactness, organization isolation and state-transition safeguards remain intact.
 - **FR-018**: Permission verification MUST cover every identified entry point and each allow/deny/scope boundary, including negative payload and download checks. A passing role-selector screen alone is not acceptance.
+- **FR-019**: Approval, withdrawal, submission editing and week-lock behavior MUST match the verified Harvest contract, including mixed-project weeks, empty days, date filters and concurrent operations. Approval state and lock scope are distinct facts: evidence that one project can be approved does not by itself prove which new entries the weekly lock forbids. Do not keep Horae's current submitted-entry lock merely because it already exists. Independent invoice and administrative locks MUST remain effective after withdrawal.
+- **FR-020**: Maintain a reference-to-requirement parity matrix for all in-scope permissions and approval behavior, including role defaults, custom-profile limits/lifecycle, assignment authority, approval and withdrawal, and scoped reads/writes. Mark each behavior documented, observed, conflicting or unverified; resolve conflicts using the current Harvest experience before acceptance. No deliberate functional deviation may be accepted without the user's explicit decision.
 
 ### Proposed Built-in Boundaries
 
@@ -134,11 +153,12 @@ These are target responsibilities, not a substitute for the operation-level matr
 ### Key Entities
 
 - **Capability**: A specific action on an existing product area, with prerequisites and an explicitly defined scope.
-- **Built-in/custom profile**: A named permission set; custom-profile behavior depends on FR-004.
+- **Built-in/custom profile**: A named permission set, with reusable templates and explicit per-person adjustments.
 - **Effective permissions**: The person's resolved capabilities and authorized scopes, not merely their profile label.
 - **Management assignment**: Explicit responsibility for a project or person within the same organization.
 - **Access change record**: Attributed history of actual privilege/scope changes.
 - **Migration mapping**: Reviewed translation from existing access to the new model, including explicit differences.
+- **Scoped approval**: An attributed decision over selected work, with aggregate partial/completed state independent of other projects' decisions and the applicable locks.
 
 ## Success Criteria
 
@@ -150,12 +170,14 @@ These are target responsibilities, not a substitute for the operation-level matr
 - **SC-004**: Every approved migration fixture preserves business records and matches its reviewed access changes; retry introduces no duplicate assignments or privilege drift.
 - **SC-005**: Settings and Workspace show the same effective access and pass keyboard, theme and viewport acceptance with no fake controls or unsupported grants.
 - **SC-006**: Regression checks cover time entry, approvals, project creation/editing, reports/exports, invoices, importing, authentication and background/integration access. Unaffected business results remain exact and unchanged.
-- **SC-007**: FR-004/009, the complete permission matrix, migration mapping and governance updates are resolved before implementation acceptance. The broader design delivery is not completed by this feature.
+- **SC-007**: The complete permission/parity matrix, migration mapping and governance updates are resolved before implementation acceptance. Every in-scope reference behavior has a passing acceptance check or an explicitly approved deviation; neither fixed-only profiles nor whole-person-only approvals can satisfy this feature. The broader design delivery is not completed by this feature.
+- **SC-008**: Two-project/two-approver scenarios pass approval, partial-state display, filtered selection, withdrawal, concurrent mutation and weekly-lock checks; approving A never changes B's approval state or exposes B's private records.
+- **SC-009**: Custom-profile creation/application, prerequisite changes, person-specific adjustments and template deletion pass persistence and effective-access checks without unintended changes to other assignees.
 
 ## Assumptions
 
 - Existing authentication and the single-organization deployment remain; new identity providers, login mechanisms and multi-organization administration are outside scope.
-- The six-profile direction follows the preceding Harvest comparison. This specification does not treat the still-open customization or approval choice as approved.
+- The user explicitly selected Harvest parity for both custom permissions and scoped approvals. These scope decisions are settled; remaining uncertainty concerns reference evidence and the detailed contract, not permission to simplify the feature.
 - Permissions for expenses, estimates and SaaS subscription billing do not require implementing those absent products. Existing Horae functions, including imports and plugin/service access, still require explicit coverage.
 - Current data is preserved even though the application is not in production. Verification uses disposable fixtures, not destructive changes to the user's account or Harvest.
 - The constitution currently names three roles. Its governance process and older feature permission statements must be reconciled with an approved matrix before implementation, not silently overridden by this draft.

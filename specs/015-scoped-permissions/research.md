@@ -17,7 +17,11 @@ Status: specification input, not a completed implementation plan. Baseline `9301
 
 The official [Harvest permissions reference](https://support.getharvest.com/hc/en-us/articles/44171549176077-Permissions), checked 2026-09-30, documents a progressively deployed six-profile model and optional custom profiles/per-person adjustments. Only administrators administer role assignments. Its permission categories distinguish self, managed work and account-wide access; profile names alone are insufficient to copy those semantics.
 
-This is documentation evidence, not a fresh interactive test of the user's account. Accounts may still have the outgoing model. The current reference describes withdrawal of approvals separately; it does not establish how Horae should split its whole-person weekly submission. FR-009 therefore remains a Horae product decision.
+This is documentation evidence, not a fresh interactive test of the user's account. Accounts may still have the outgoing model. The user's 2026-09-30 parity instruction resolves FR-004 and FR-009 in favor of custom permissions and project-scoped approval. They are no longer unanswered product choices.
+
+The current [approval reference](https://support.getharvest.com/hc/en-us/articles/360048181832-Submitting-and-approving-timesheets), checked 2026-09-30, explicitly describes approval limited by project/client filters, even when grouping by person. It also describes weekly locks and editing submitted work before approval. The exact interaction of filtered approval with empty days and new work needs direct verification; do not infer the entire lock scope from the selected approval rows.
+
+There is a documentation conflict to resolve: the general approval article restricts withdrawal to administrators, whereas the new permissions article includes withdrawal capabilities in other profiles. Use the current permissions experience as the target and verify the effective capability rather than copying the old three-role rule. Assignment editing/promotion and custom-template update behavior also need evidence. None of these investigations authorizes replacing parity with simpler existing Horae behavior.
 
 `design/project/app/08_Settings.dc.html` displays the six profiles. `09_Workspace.dc.html` explicitly describes three fixed roles with no per-person permissions. The new approved matrix must become authoritative for both screens; neither inconsistent mockup can silently settle the policy.
 
@@ -27,5 +31,6 @@ The constitution also names three organization roles. Record the approved extens
 
 - Followed the checked-in `speckit-specify` skill, local template and constitution. No extension hooks or template preset overrides were found.
 - Feature 015 follows the independent 012/013/014 design drafts. The branch/worktree starts from fetched `origin/master`, not an unmerged application branch.
-- Two clarification gates remain: custom roles/per-person adjustments and whole-week versus project-partial approval.
-- After answers: finalize the operation-level matrix and migration contract through clarify/plan, generate tasks, analyze consistency, then implement and verify. No claim is made that those later stages have run.
+- The two scope questions are answered by the user's explicit parity instruction. The clarification is recorded in the spec and its scenarios, requirements and success criteria.
+- Next: complete reference verification and the operation-level matrix, reconcile governance and migration, then plan, generate tasks, analyze consistency, implement and verify. No claim is made that those later stages have run.
+- Checklist notes describe the initial draft; after clarification, 12/16 markers pass. The remaining gaps are detailed requirements/acceptance coverage and outcome readiness, not the two answered scope questions.
