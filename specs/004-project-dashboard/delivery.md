@@ -37,7 +37,7 @@ The implementation is still on `feat/project-dashboard`, not accepted as a whole
 The following are current source findings, not additional exclusions from scope:
 
 - **Project Detail:** the chart controls still need the handoff's grouped period
-  presentation; reporting controls belong with the Tasks/Team toolbar. Work-table
+  presentation; reporting controls now sit in the Tasks/Team toolbar. Work-table
   hours currently render as text, not contextual report links, and the toolbar
   has no exports. Applicable hour-budget overlays, the uninvoiced tile, invoice
   subject/payment-date persistence and recent entries remain incomplete. Additional
@@ -522,3 +522,31 @@ Verification:
 F023 is complete. The period-control presentation, report toolbar/links/exports,
 budget overlays and other gaps above remain required. The PR stays in draft;
 this is not completion of Project Detail or the full delivery.
+
+## Tasks/Team reporting toolbar — 2026-09-30
+
+The reporting menu now sits below the breakdown tabs with its period heading,
+matching the handoff's placement. Tabs and controls stay mounted during reads;
+pending/failed requests clear old rows/counts without resetting Team to Tasks.
+Invoices remain independently accessible and hide the reporting toolbar without
+resetting its period. The chart still uses that interval, but week navigation
+remains local and performs no additional reads.
+
+Verification:
+
+- The placement assertion first failed because the toolbar was missing; all 59
+  detail-navigation/rendering tests now pass, including the four breakdown tests.
+- Native Chromium initially caught lost focus after cancelling custom dates.
+  Apply and Cancel now return focus to the existing menu trigger. The final
+  `project-activity` and `project-invoice` runner exits successfully.
+- The activity suite verifies invalid dates do not dispatch requests, cancellation
+  leaves All time selected, and delayed/failed reads preserve Team and the chosen
+  period. Invoice history opens while the breakdown read is pending; retry
+  restores the correctly filtered one-hour table. Invoice reads remain unchanged.
+- Toolbar heading/menu reflow and internal clipping checks pass at 200% text
+  size at 320/768/1440px, alongside the existing chart/calendar checks.
+- Offline server Clippy on all targets with warnings denied, the application
+  WASM check and `nix fmt` pass. No SQL, schema, dependencies or shared CSS changed.
+
+F024 is complete. Scoped report links and exports are still required; this does
+not complete Project Detail, Clients or Settings/Workspace. PR #208 remains draft.

@@ -55,6 +55,9 @@ F001–F003 does not complete Project Detail or the four-surface delivery.
   weeks, cumulative carry-in, no future navigation and browser regression.
 - [x] F023 [US2] Reuse the shared calendar for chart-week selection with a local
   no-future bound; verify focus, dismissal, responsiveness and scheduling regression.
+- [x] F024 [US2] Move the reporting period into the Tasks/Team toolbar; preserve
+  selected tabs and independent invoice access through pending/failed reads, and
+  test custom validation, cancellation, retry and chart/report isolation.
 
 **Input**: Design documents from `specs/004-project-dashboard/`
 

@@ -59,6 +59,20 @@ This does not waive the separate chart week navigation, applicable hour-budget
 overlay, complete dashboard layout, summaries, breakdowns, exports or remaining
 delivery slices. Those remain required for acceptance.
 
+### Tasks/Team reporting toolbar
+
+Place the existing reporting menu below the breakdown tabs, beside its period
+heading, as in the handoff. Keep the toolbar and selected tab mounted when a
+breakdown read is pending or fails; remove stale rows/counts and permit retry
+without resetting the selected period. Invoice history remains independently
+accessible. Hide, rather than reset, the report toolbar on the Invoices tab.
+Custom validation/cancellation must not dispatch reads. Chart-window navigation
+remains local; applying a reporting interval refreshes both authorized views.
+Verify placement, keyboard focus, tab continuity, error recovery and responsive
+layout using render tests and the disposable-database browser runner. This UI
+increment changes no SQL, permissions, schema or shared CSS; scoped report links
+and working exports remain separate required work.
+
 ### Chart window navigation
 
 Keep the reporting interval shared by charts, Tasks and Team. Add a separate

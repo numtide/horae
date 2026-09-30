@@ -162,13 +162,61 @@ assert.ok(Number.isInteger(originalWeekStart) && originalWeekStart >= 1 && origi
     await expect(calendar).toBeHidden();
     await expect(picker).toHaveAttribute('aria-expanded', 'false');
     assert.deepEqual(reads, initialReads, 'Opening and dismissing the calendar must not refetch');
-    await activity.getByRole('button', { name: /^All time/ }).click();
+    const breakdown = page.getByRole('region', { name: 'Project breakdown', exact: true });
+    const reporting = breakdown.getByRole('region', { name: 'Project reporting period', exact: true });
+    await page.getByRole('tab', { name: /^Team/ }).click();
+    await reporting.getByRole('button', { name: /^All time/ }).click();
     await page.getByRole('menuitem', { name: 'Custom…', exact: true }).click();
-    await activity.getByLabel('Start date', { exact: true }).fill(old);
-    await activity.getByLabel('End date', { exact: true }).fill(old);
-    await activity.getByRole('button', { name: 'Apply period', exact: true }).click();
+    await reporting.getByLabel('Start date', { exact: true }).fill(today);
+    await reporting.getByLabel('End date', { exact: true }).fill(old);
+    await reporting.getByRole('button', { name: 'Apply period', exact: true }).click();
+    await expect(reporting.getByRole('alert')).toBeVisible();
+    assert.deepEqual(reads, initialReads, 'Invalid dates must not change the report');
+    await reporting.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(reporting.getByRole('heading')).toHaveText('All time');
+    await expect(reporting.getByRole('button', { name: /^All time/ })).toBeFocused();
+    await reporting.getByRole('button', { name: /^All time/ }).click();
+    await page.getByRole('menuitem', { name: 'Custom…', exact: true }).click();
+    await reporting.getByLabel('Start date', { exact: true }).fill(old);
+    await reporting.getByLabel('End date', { exact: true }).fill(old);
+    let rejectBreakdown;
+    const breakdownGate = new Promise(resolve => { rejectBreakdown = resolve; });
+    await page.route('**/api/get_project_breakdown*', async route => {
+      await breakdownGate;
+      await route.abort();
+    }, { times: 1 });
+    await reporting.getByRole('button', { name: 'Apply period', exact: true }).click();
+    await expect(reporting.getByRole('button', { name: /^Custom period/ })).toBeFocused();
     await expect(chart).toHaveAttribute('aria-label', new RegExp(`${old} to ${old}`));
     await expect(chart).toHaveAttribute('aria-label', /Selected period total: 1h/);
+    await expect(page.getByRole('tab', { name: /^Team/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(breakdown.getByRole('status')).toHaveText('Loading project breakdown…');
+    await expect(breakdown.getByRole('table')).toHaveCount(0);
+    await expect(reporting.getByRole('heading')).toHaveText('Custom period');
+    await page.getByRole('tab', { name: /^Invoices/ }).click();
+    await expect(reporting).toBeHidden();
+    await expect(breakdown).toContainText('No invoices for this project');
+    await page.getByRole('tab', { name: /^Team/ }).click();
+    await expect(reporting.getByRole('heading')).toHaveText('Custom period');
+    rejectBreakdown();
+    await expect(breakdown.getByRole('alert')).toContainText('Could not load project breakdown');
+    await expect(reporting.getByRole('button', { name: /^Custom period/ })).toBeEnabled();
+    await breakdown.getByRole('button', { name: 'Retry breakdown', exact: true }).click();
+    await expect(page.getByRole('tab', { name: /^Team/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(breakdown.getByRole('table')).toHaveAttribute('aria-label', /^Team/);
+    await expect(breakdown.getByRole('table').locator('tfoot')).toContainText('1h');
+    assert.equal(reads.breakdown, 3, 'Period change and retry each make one breakdown read');
+    const largeReportText = await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
+    for (const width of [320, 768, 1440]) {
+      await page.setViewportSize({ width, height: 600 });
+      for (const control of [reporting.getByRole('heading'), reporting.getByRole('button', { name: /^Custom period/ })]) {
+        const bounds = await control.boundingBox();
+        assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width + 1, `Report toolbar must reflow at ${width}px`);
+        assert.equal(await control.evaluate(node => node.scrollWidth <= node.clientWidth + 1), true);
+      }
+    }
+    await largeReportText.evaluate(node => node.remove());
+    await page.setViewportSize({ width: 1440, height: 600 });
     await expect(activity.locator('tbody tr')).toHaveCount(1);
     await current.click();
     await expect(chart).toHaveCount(0);
@@ -189,7 +237,7 @@ assert.ok(Number.isInteger(originalWeekStart) && originalWeekStart >= 1 && origi
     await expect(next).toBeDisabled();
     assert.equal(reads.activity, 4, 'Re-entry and retry each make one read');
     assert.deepEqual(errors, []);
-    console.log('Project activity: configured weeks, bounded calendar, keyboard/focus/dismissal, enlarged text, cumulative carry-in, no refetch, report isolation and responsive bounds passed');
+    console.log('Project activity: configured weeks, bounded calendar, keyboard/focus/dismissal, enlarged text, cumulative carry-in, no refetch, report toolbar validation, pending/error/retry tab preservation, invoice isolation and responsive bounds passed');
   } finally {
     try {
       sql(`BEGIN;

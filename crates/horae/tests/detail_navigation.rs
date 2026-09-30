@@ -604,6 +604,27 @@ async fn pending_or_failed_summary_never_shows_previous_project_totals() {
 }
 
 #[tokio::test]
+async fn reporting_controls_follow_the_breakdown_tabs_not_the_chart() {
+    let probe = Probe {
+        initial_path: Some(format!("/projects/{}", Uuid::from_u128(1))),
+        ..Probe::default()
+    };
+    let mut dom = VirtualDom::new_with_props(app, probe);
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    let tabs = html.find("Project breakdown views").unwrap();
+    let toolbar = html
+        .find("Project reporting period")
+        .expect("report toolbar missing");
+    let table = html
+        .find("Tasks — actual tracked hours and internal costs")
+        .unwrap();
+    assert!(tabs < toolbar && toolbar < table);
+    assert!(!html[..tabs].contains("Apply period"));
+}
+
+#[tokio::test]
 async fn pending_or_failed_activity_never_keeps_the_previous_projects_chart() {
     let first = Uuid::from_u128(1);
     let second = Uuid::from_u128(2);

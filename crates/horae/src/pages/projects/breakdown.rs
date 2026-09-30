@@ -31,7 +31,7 @@ impl Tab {
 #[component]
 pub(super) fn ProjectBreakdownPanel(
     project_id: Uuid,
-    interval: ReadSignal<Option<ProjectActivityInterval>>,
+    interval: Signal<Option<ProjectActivityInterval>>,
     revision: ReadSignal<u64>,
     invoice_state: InvoiceHistoryState,
     on_invoice_retry: EventHandler<()>,
@@ -52,21 +52,19 @@ pub(super) fn ProjectBreakdownPanel(
             .read()
             .as_ref()
             .is_none_or(|(requested, _)| *requested != interval());
+    let result = if loading {
+        None
+    } else {
+        data.read()
+            .as_ref()
+            .map(|(_, value)| value.as_ref().cloned().map_err(ToString::to_string))
+    };
     rsx! {
-        section { class: "mt-8 min-w-0", aria_label: "Project breakdown", aria_busy: loading,
-            if loading { p { role: "status", "Loading project breakdown…" } }
-            else {
-                match &*data.read() {
-                    Some((_, Ok(value))) => rsx! { for period in [interval()] {
-                        BreakdownTables { key: "{period:?}", project_id, data: value.clone(), invoice_state: invoice_state.clone(),
-                            on_invoice_retry: move |_| on_invoice_retry.call(()) }
-                    } },
-                    Some((_, Err(error))) => rsx! {
-                        p { role: "alert", class: "text-danger", "Could not load project breakdown: {error}" }
-                        button { r#type: "button", class: "btn btn-secondary min-h-control", onclick: move |_| data.restart(), "Retry breakdown" }
-                    },
-                    None => rsx! {},
-                }
+        section { class: "mt-8 min-w-0", aria_label: "Project breakdown",
+            BreakdownTables { project_id, data: result, invoice_state,
+                on_retry: move |_| data.restart(),
+                on_invoice_retry: move |_| on_invoice_retry.call(()),
+                activity::ProjectReportingPeriod { interval }
             }
         }
     }
@@ -123,10 +121,12 @@ fn entity_label(entity: &ProjectWorkEntity, person: bool) -> Element {
 
 #[component]
 fn BreakdownTables(
-    data: ProjectBreakdown,
+    data: Option<Result<ProjectBreakdown, String>>,
+    children: Element,
     #[props(default)] project_id: Option<Uuid>,
     #[props(default)] invoice_state: InvoiceHistoryState,
     #[props(default)] on_invoice_retry: Option<EventHandler<()>>,
+    #[props(default)] on_retry: Option<EventHandler<()>>,
 ) -> Element {
     let mut tab = use_signal(|| Tab::Tasks);
     let with_invoices = invoice_state != InvoiceHistoryState::Hidden;
@@ -158,8 +158,14 @@ fn BreakdownTables(
                     "{target.label()}"
                     span { class: "chip chip-plain font-mono text-xs ml-2",
                         match target {
-                            Tab::Tasks => rsx! { "{data.tasks.len()}" },
-                            Tab::Team => rsx! { "{data.people.len()}" },
+                            Tab::Tasks | Tab::Team => match &data {
+                                Some(Ok(value)) => {
+                                    let count = if target == Tab::Tasks { value.tasks.len() } else { value.people.len() };
+                                    rsx! { "{count}" }
+                                },
+                                Some(Err(_)) => rsx! { span { aria_label: "Unavailable", "!" } },
+                                None => rsx! { span { aria_label: "Loading", "…" } },
+                            },
                             Tab::Invoices => match &invoice_state {
                                 InvoiceHistoryState::Ready(value) => rsx! { "{value.invoices.len()}" },
                                 InvoiceHistoryState::Failed(_) => rsx! { span { aria_label: "Unavailable", "!" } },
@@ -171,6 +177,7 @@ fn BreakdownTables(
             }
         }
         div { id: "project-breakdown-panel", role: "tabpanel", aria_labelledby: current.id(), tabindex: "0",
+            div { hidden: current == Tab::Invoices, {children} }
             if current == Tab::Invoices {
                 if let Some(id) = project_id {
                     div { class: "flex flex-wrap gap-3 mt-6",
@@ -189,7 +196,16 @@ fn BreakdownTables(
                     InvoiceHistoryState::Hidden => rsx! {},
                 }
             } else {
-                WorkTable { key: "{current.id()}", data, tab: current }
+                match data {
+                    Some(Ok(value)) => rsx! { WorkTable { key: "{current.id()}:{value.interval:?}", data: value, tab: current } },
+                    Some(Err(error)) => rsx! {
+                        p { role: "alert", class: "text-danger", "Could not load project breakdown: {error}" }
+                        if let Some(retry) = on_retry {
+                            button { r#type: "button", class: "btn btn-secondary min-h-control", onclick: move |_| retry.call(()), "Retry breakdown" }
+                        }
+                    },
+                    None => rsx! { p { role: "status", "Loading project breakdown…" } },
+                }
             }
         }
     }
@@ -240,13 +256,6 @@ fn WorkTable(data: ProjectBreakdown, tab: Tab) -> Element {
     }
     rsx! {
         div {
-            div { class: "flex flex-wrap items-center justify-between gap-3 mt-6 mb-4",
-                h2 { class: "text-2xl font-semibold text-strong m-0",
-                    if let Some(period) = data.interval { "{period.from.format(\"%d %b %Y\")} – {period.to.format(\"%d %b %Y\")}" }
-                    else { "All time" }
-                }
-                p { class: "text-xs text-muted m-0", "Period follows the reporting filter above, not the chart window." }
-            }
             div { class: "bg-secondary rounded-xl",
                 DataTable { table { aria_label: "{current.label()} — actual tracked hours and internal costs",
                     thead { tr {
@@ -441,7 +450,9 @@ mod tests {
 
     #[test]
     fn breakdown_renders_real_counts_zero_rows_and_labeled_period_costs() {
-        let html = dioxus::ssr::render_element(rsx! { BreakdownTables { data: fixture() } });
+        let mut dom = VirtualDom::new_with_props(tables_fixture, fixture());
+        dom.rebuild_in_place();
+        let html = dioxus::ssr::render(&dom);
         for expected in [
             "Tasks",
             "Team",
@@ -476,20 +487,7 @@ mod tests {
             from: "2026-09-01".parse().unwrap(),
             to: "2026-09-30".parse().unwrap(),
         });
-        let mut dom = VirtualDom::new_with_props(
-            BreakdownTables,
-            BreakdownTablesProps {
-                data,
-                project_id: None,
-                invoice_state: InvoiceHistoryState::Ready(
-                    crate::models::project::ProjectInvoices {
-                        invoices: Vec::new(),
-                        totals: Default::default(),
-                    },
-                ),
-                on_invoice_retry: None,
-            },
-        );
+        let mut dom = VirtualDom::new_with_props(tables_fixture, data);
         let mutations = dom.rebuild_to_vec();
         let tabs: Vec<_> = mutations
             .edits
@@ -521,5 +519,19 @@ mod tests {
         let html = dioxus::ssr::render(&dom);
         assert!(html.contains("01 Sep 2026 – 30 Sep 2026"), "{html}");
         assert!(!html.contains("No invoices for this project"), "{html}");
+    }
+
+    fn tables_fixture(data: ProjectBreakdown) -> Element {
+        let interval = use_signal(|| data.interval);
+        rsx! {
+            BreakdownTables {
+                data: Some(Ok(data)),
+                invoice_state: InvoiceHistoryState::Ready(crate::models::project::ProjectInvoices {
+                    invoices: Vec::new(),
+                    totals: Default::default(),
+                }),
+                activity::ProjectReportingPeriod { interval }
+            }
+        }
     }
 }

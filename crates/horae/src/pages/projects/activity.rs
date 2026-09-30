@@ -150,16 +150,12 @@ fn plot(weeks: &[ProjectActivityWeek], cumulative: bool) -> Result<Plot, Activit
 #[component]
 pub(super) fn ProjectActivityPanel(
     project_id: Uuid,
-    mut interval: Signal<Option<ProjectActivityInterval>>,
+    interval: ReadSignal<Option<ProjectActivityInterval>>,
 ) -> Element {
     let today = use_hook(|| chrono::Utc::now().date_naive());
     let mut anchor = use_signal(|| today);
-    let mut label = use_signal(|| Period::AllTime.label());
     let mut cumulative = use_signal(|| true);
-    let mut custom_open = use_signal(|| false);
-    let mut custom_from = use_signal(|| today.to_string());
-    let mut custom_to = use_signal(|| today.to_string());
-    let mut error = use_signal(|| None::<String>);
+    use_effect(move || anchor.set(interval().map_or(today, |range| range.to.min(today))));
     let mut activity = use_resource(move || {
         let requested = interval();
         async move {
@@ -194,53 +190,12 @@ pub(super) fn ProjectActivityPanel(
                     }
                 }
             }
-            div { class: "flex flex-wrap items-center gap-3 mt-4",
-                span { class: "text-sm text-muted", "Reporting period" }
-                Menu { id: "project-activity-period", label: label(), trigger_class: "py-3 min-h-control",
-                    for preset in Period::ALL {
-                        MenuItem { selected: label() == preset.label(), onclick: move |_| {
-                            match preset.interval(today) {
-                                Ok(value) => { interval.set(value); anchor.set(value.map_or(today, |range| range.to.min(today))); label.set(preset.label()); custom_open.set(false); error.set(None); }
-                                Err(message) => error.set(Some(message.to_string())),
-                            }
-                        }, "{preset.label()}" }
-                    }
-                    MenuItem { selected: label() == "Custom period", onclick: move |_| { custom_open.set(true); error.set(None); }, "Custom…" }
-                }
-            }
-            if custom_open() {
-                form { class: "mt-4", onsubmit: move |event| {
-                    event.prevent_default();
-                    match custom_interval(&custom_from(), &custom_to()) {
-                        Ok(value) => { interval.set(Some(value)); anchor.set(value.to.min(today)); label.set("Custom period"); custom_open.set(false); error.set(None); }
-                        Err(message) => error.set(Some(message)),
-                    }
-                },
-                    div { class: "grid sm:grid-cols-2 gap-3",
-                        FormGroup { label: "Start date", id: "activity-from",
-                            Input { id: "activity-from", kind: "date", value: custom_from(), error_id: error().map(|_| "activity-period-error".into()),
-                                oninput: move |event: FormEvent| custom_from.set(event.value()) }
-                        }
-                        FormGroup { label: "End date", id: "activity-to",
-                            Input { id: "activity-to", kind: "date", value: custom_to(), error_id: error().map(|_| "activity-period-error".into()),
-                                oninput: move |event: FormEvent| custom_to.set(event.value()) }
-                        }
-                    }
-                    div { class: "flex flex-wrap gap-3",
-                        button { r#type: "submit", class: "btn btn-primary min-h-control", "Apply period" }
-                        button { r#type: "button", class: "btn btn-secondary min-h-control", onclick: move |_| { custom_open.set(false); error.set(None); }, "Cancel" }
-                    }
-                }
-            }
-            if let Some(message) = error() {
-                p { id: "activity-period-error", class: "text-danger", role: "alert", "{message}" }
-            }
             div { aria_busy: loading,
                 if loading {
                     p { class: "py-12 text-muted", role: "status", "Loading project activity…" }
                 } else {
                     match &*activity.read() {
-                        Some((_, Ok(data))) => render_activity(data, cumulative(), label(), anchor()),
+                        Some((_, Ok(data))) => render_activity(data, cumulative(), if interval().is_none() { "All time" } else { "Selected period" }, anchor()),
                         Some((_, Err(message))) => rsx! {
                             p { class: "text-danger mt-4", role: "alert", "Project activity is unavailable: {message}" }
                             button { r#type: "button", class: "btn btn-secondary min-h-control", onclick: move |_| activity.restart(), "Retry activity" }
@@ -248,6 +203,81 @@ pub(super) fn ProjectActivityPanel(
                         None => rsx! {},
                     }
                 }
+            }
+        }
+    }
+}
+
+#[component]
+pub(super) fn ProjectReportingPeriod(
+    mut interval: Signal<Option<ProjectActivityInterval>>,
+) -> Element {
+    let today = use_hook(|| chrono::Utc::now().date_naive());
+    let mut label = use_signal(|| {
+        if interval().is_none() {
+            "All time"
+        } else {
+            "Custom period"
+        }
+    });
+    let mut custom_open = use_signal(|| false);
+    let mut custom_from = use_signal(|| interval().map_or(today, |range| range.from).to_string());
+    let mut custom_to = use_signal(|| interval().map_or(today, |range| range.to).to_string());
+    let mut error = use_signal(|| None::<String>);
+    let close_custom = use_callback(move |()| {
+        custom_open.set(false);
+        error.set(None);
+        spawn(async move {
+            let _ =
+                document::eval("document.getElementById('project-report-period-trigger')?.focus()")
+                    .await;
+        });
+    });
+    rsx! {
+        section { aria_label: "Project reporting period", class: "mt-6 mb-4",
+            div { class: "flex flex-wrap items-center justify-between gap-3",
+                h2 { class: "text-2xl font-semibold text-strong m-0", "{label}" }
+                Menu { id: "project-report-period", label: label(), trigger_class: "py-3 min-h-control",
+                    for preset in Period::ALL {
+                        MenuItem { selected: label() == preset.label(), onclick: move |_| {
+                            match preset.interval(today) {
+                                Ok(value) => { interval.set(value); label.set(preset.label()); custom_open.set(false); error.set(None); }
+                                Err(message) => error.set(Some(message.to_string())),
+                            }
+                        }, "{preset.label()}" }
+                    }
+                    MenuItem { selected: label() == "Custom period", onclick: move |_| { custom_open.set(true); error.set(None); }, "Custom…" }
+                }
+            }
+            if let Some(range) = interval() {
+                p { class: "text-xs text-muted mt-2 mb-0", "{range.from.format(\"%d %b %Y\")} – {range.to.format(\"%d %b %Y\")}" }
+            }
+            if custom_open() {
+                form { class: "mt-4", onsubmit: move |event| {
+                    event.prevent_default();
+                    match custom_interval(&custom_from(), &custom_to()) {
+                        Ok(value) => { interval.set(Some(value)); label.set("Custom period"); close_custom.call(()); }
+                        Err(message) => error.set(Some(message)),
+                    }
+                },
+                    div { class: "grid sm:grid-cols-2 gap-3",
+                        FormGroup { label: "Start date", id: "project-report-from",
+                            Input { id: "project-report-from", kind: "date", value: custom_from(), error_id: error().map(|_| "project-period-error".into()),
+                                oninput: move |event: FormEvent| custom_from.set(event.value()) }
+                        }
+                        FormGroup { label: "End date", id: "project-report-to",
+                            Input { id: "project-report-to", kind: "date", value: custom_to(), error_id: error().map(|_| "project-period-error".into()),
+                                oninput: move |event: FormEvent| custom_to.set(event.value()) }
+                        }
+                    }
+                    div { class: "flex flex-wrap gap-3",
+                        button { r#type: "submit", class: "btn btn-primary min-h-control", "Apply period" }
+                        button { r#type: "button", class: "btn btn-secondary min-h-control", onclick: move |_| close_custom.call(()), "Cancel" }
+                    }
+                }
+            }
+            if let Some(message) = error() {
+                p { id: "project-period-error", class: "text-danger", role: "alert", "{message}" }
             }
         }
     }
