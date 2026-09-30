@@ -894,3 +894,18 @@ The complete run passed its first nineteen suites before the new fixture's
 precondition failed in project-report-links. The four final suites pass together
 after the fixture correction, but this is not yet one complete 23-suite pass.
 F029 and full Nix acceptance remain open.
+
+## Complete browser regression — 2026-09-30
+
+The default runner completed all 23 suites successfully against the frozen
+server/public build and a fresh disposable database, including the corrected
+Tasks/Team fixture. The run covers shared styles/layout/menu/navigation, bulk
+actions/recovery, action failures, the full New Project/edit/permission/transport
+flows, invoice preparation, project invoice/activity, report filters/links,
+exports, chart budgets and project lifecycle. F029 is complete.
+
+This supersedes the earlier partial-run checkpoints, not the wider feature gates.
+Full Nix acceptance, remaining dashboard billing/action decisions, Clients and
+Personal Settings/Workspace are still required. The separate
+`feat/workspace-design` branch now contains a feature 013 specification draft;
+it adds no application behavior and does not resolve the open policy decisions.

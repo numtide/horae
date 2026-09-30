@@ -87,7 +87,7 @@ F001–F003 does not complete Project Detail or the four-surface delivery.
   its position from visible configured-week buckets rather than the last entry.
   Preserve both chart modes, exact totals and historical navigation; verify
   clipped/year-boundary weeks, empty/old intervals, keyboard and enlarged layouts.
-- [ ] F029 [US1] Integrate the native project lifecycle suite into the default
+- [x] F029 [US1] Integrate the native project lifecycle suite into the default
   browser runner and run the complete chained regression. Update existing tests
   for optional-query detail URLs and collapsed task/team management without dropping
   identity, persistence, permission or error-recovery assertions.
