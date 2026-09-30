@@ -58,6 +58,18 @@ The page loaded this [public permission-editor asset](https://cache.harvestapp.c
 
 The delivered source role order is Administrator, Executive Manager, Project Manager, Accounting, People Admin, Member. This is evidence for resolving ties, not authorization precedence.
 
+## API application evidence
+
+The [Users API](https://help.getharvest.com/api-v2/users-api/users/users/#custom-profiles), checked 2026-09-30, documents:
+
+- Repeating `permissions_profile` preserves individual grants; switching profiles replaces them.
+- Returned `access_roles` omits custom identity; writing it back can remove custom grants.
+- Profile lookup ignores case/surrounding whitespace. Unknown or ambiguous names fail with 422. Sending both fields is rejected.
+- Losing project access removes project-manager designations.
+- Descriptive `roles` do not grant permissions.
+
+These are documented API semantics, not observed UI persistence. Lookup normalization does not prove template-creation uniqueness rules. Browser acceptance must distinguish an unchanged save from explicit profile replacement. Horae's read-only compatibility API does not acquire write endpoints through this research.
+
 ## Remaining acceptance gaps
 
 The full Horae operation matrix still needs lifecycle mapping, managed-rate conflict resolution, custom save/delete persistence checks, assignment-authority checks, exact approval/withdrawal enforcement and migration review. UI configuration/source evidence alone does not pass those tests. Keep the full-feature gate open while using these findings to replace earlier guesses.

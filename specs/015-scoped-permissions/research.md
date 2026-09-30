@@ -40,6 +40,29 @@ Independent locks must still apply after withdrawal; see [unlocking time and exp
 
 The new permissions reference documents administrator-managed templates, an immutable Member floor, automatically included prerequisites/dependent removal, unique names of at most 100 characters, at most 50 templates, per-person difference indicators and deletion that preserves existing permissions. Applying a profile requires saving the person. Read-only inspection of the live editor has now established its profile defaults, dependency traversal and classification rules; see [reference profiles](contracts/reference-profiles.md). Saved enforcement, name case sensitivity and template update/propagation still require direct verification. The live catalog also identifies approval-specific grants and report/rate-scope differences from the article; those findings supersede guesses based on its role summaries.
 
+### Import and profile-write boundaries
+
+The [API application evidence](contracts/reference-profiles.md#api-application-evidence)
+adds documented reapplication and assignment-removal cases to T006/T007. It does
+not establish template-update propagation or resolve the UI persistence gate.
+
+Current code inspection on `757f43d` confirms separate integration boundaries:
+
+- `importers::harvest::api_source::ApiUser` consumes only identity fields.
+- `importers::harvest::resolve::resolve_user` matches existing same-organization
+  users; it does not provision users or write their permissions. Missing and
+  ambiguous identities fail instead of selecting an arbitrary account.
+- `harvest::router` exposes only GET routes; `HarvestUser` currently serializes
+  `is_admin`, not a six-profile/custom-grant representation.
+
+FR-014/017 require preserving that import boundary through migration. External
+metadata must not become a local grant merely because the importer can parse it.
+The compatibility serializer needs an explicit reviewed projection when the new
+model is implemented; adding write endpoints is not required to enforce reads.
+T019 must exercise repeat imports and identity linking against existing custom
+grants without changing them. This is a required future regression, not a test
+already run or permission-policy activation.
+
 ### Independent foundation decisions
 
 - Decision: model record coverage as an explicit union of own, managed-person, managed-project and organization scopes. Rationale: FR-006 and the reference distinguish these dimensions. Rejected: inferring authority from role ordering or ordinary project membership.

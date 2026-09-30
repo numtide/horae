@@ -29,6 +29,8 @@ Both files are under the primary checkout, not this worktree. DOM inspection was
 | Prerequisite closure/dependent removal | Documented; client-side rule traversal observed, persistence unverified | FR-015; verify every customizable grant dependency |
 | Built-in classification | Client-side selection rule observed; saved classification unverified | FR-015; classification must not grant additional access |
 | Template rename/update/propagation | Unverified; observed editor supports save-as-new | FR-015; do not invent propagation |
+| Profile reapplication and replacement | API-documented; UI persistence unverified | FR-015; [application evidence](reference-profiles.md#api-application-evidence) |
+| Profile lookup and lossy role projection | API-documented | FR-014/017; keep import identity resolution separate from local authorization |
 | Management assignment authority and promotion | Partially documented; current-profile interaction unverified | FR-005; no unintended privilege escalation |
 | Person/project approval and date-filtered coverage | Documented | FR-009/019; mixed-project and date-range tests |
 | Empty-cell locks and submitted-work editing | Documented | FR-019; entry creation/edit tests before/after approval |
