@@ -32,11 +32,15 @@ pub(super) fn ProjectFeeBalances(project_id: Uuid) -> Element {
                 "Before tax, after invoice discounts. Invoiced amounts include drafts and exclude void invoices. Each month has its own balance; single fees and milestones due by the end date are also shown. This view reserves nothing."
             }
             div { class: "grid md:grid-cols-2 gap-3",
+                div { class: "min-w-0",
                 FormGroup { label: "Fee period from", id: "project-fee-from",
-                    Input { id: "project-fee-from", kind: "date", value: from(), oninput: move |event: FormEvent| from.set(event.value()) }
+                    Input { id: "project-fee-from", class: "min-w-0", kind: "date", value: from(), oninput: move |event: FormEvent| from.set(event.value()) }
                 }
+                }
+                div { class: "min-w-0",
                 FormGroup { label: "Fee period to", id: "project-fee-to",
-                    Input { id: "project-fee-to", kind: "date", value: to(), oninput: move |event: FormEvent| to.set(event.value()) }
+                    Input { id: "project-fee-to", class: "min-w-0", kind: "date", value: to(), oninput: move |event: FormEvent| to.set(event.value()) }
+                }
                 }
             }
             button { r#type: "button", class: "btn btn-secondary btn-sm mb-4", disabled: loading,

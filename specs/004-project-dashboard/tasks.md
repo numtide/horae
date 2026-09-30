@@ -61,12 +61,15 @@ F001–F003 does not complete Project Detail or the four-surface delivery.
 - [x] F025 [US2] Add task filtering to grouped/detailed Reports and CSV/XLSX,
   including the bounded-export preflight. Verify filter intersections, organization
   isolation, unchanged permission gates, real downloads and SQLx metadata.
-- [ ] F026 [US2] Connect contextual task/person/total report links and the project
+- [x] F026 [US2] Connect contextual task/person/total report links and the project
   export menu, preserving all-time/custom scope and current report authority;
   implement the PDF summary and verify complete journeys from Project Detail.
   The shared all-time report/export period and explicit Reports selector are
   implemented. Contextual route/link integration passes route, screen and native
-  browser regressions; export menu and PDF acceptance remain open.
+  browser regressions. CSV/Excel/PDF downloads, inclusive/all-time scope, keyboard
+  and responsive controls, invalid filters, foreign scope, size rejection and
+  revoked report authority pass the isolated browser suite. Full dashboard
+  acceptance remains separate.
 
 **Input**: Design documents from `specs/004-project-dashboard/`
 

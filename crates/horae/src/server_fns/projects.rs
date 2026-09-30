@@ -117,7 +117,7 @@ pub async fn get_project_details(project_id: String) -> Result<ProjectDetails, S
 }
 
 #[cfg(feature = "server")]
-async fn fetch_project_details(
+pub(crate) async fn fetch_project_details(
     pool: &sqlx::PgPool,
     org_id: uuid::Uuid,
     viewer_id: uuid::Uuid,

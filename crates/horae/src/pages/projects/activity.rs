@@ -212,6 +212,7 @@ pub(super) fn ProjectActivityPanel(
 pub(super) fn ProjectReportingPeriod(
     mut interval: Signal<Option<ProjectActivityInterval>>,
     #[props(default)] onchange: EventHandler<Option<ProjectActivityInterval>>,
+    #[props(default)] children: Element,
 ) -> Element {
     let today = use_hook(|| chrono::Utc::now().date_naive());
     let mut label = use_signal(|| {
@@ -254,6 +255,7 @@ pub(super) fn ProjectReportingPeriod(
         section { aria_label: "Project reporting period", class: "mt-6 mb-4",
             div { class: "flex flex-wrap items-center justify-between gap-3",
                 h2 { class: "text-2xl font-semibold text-strong m-0", "{label}" }
+                div { class: "flex flex-wrap items-center gap-3",
                 Menu { id: "project-report-period", label: label(), trigger_class: "py-3 min-h-control",
                     for preset in Period::ALL {
                         MenuItem { selected: label() == preset.label(), onclick: move |_| {
@@ -264,6 +266,8 @@ pub(super) fn ProjectReportingPeriod(
                         }, "{preset.label()}" }
                     }
                     MenuItem { selected: label() == "Custom period", onclick: move |_| { custom_open.set(true); error.set(None); }, "Custom…" }
+                }
+                {children}
                 }
             }
             if let Some(range) = interval() {

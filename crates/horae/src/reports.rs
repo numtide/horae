@@ -14,6 +14,7 @@ use tower_sessions::Session;
 
 mod bounded;
 mod limits;
+pub(crate) mod project;
 mod streaming;
 
 #[cfg(test)]

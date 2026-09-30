@@ -69,6 +69,32 @@ their authorization or query predicates.
   is shown as an error without loading project reporting data. Period/tab changes
   replace the current history entry so browser Back restores the original view.
 
+## Project PDF download
+
+`GET /api/projects/{id}/export/pdf` accepts only optional `from` and `to`.
+Both absent means all time; both present are inclusive work dates. Empty,
+malformed, partial, reversed or unknown query fields return 400. Existing session,
+manager-report and project-progress gates apply; foreign projects return 404.
+
+The PDF includes selected-period task/person rows, exact minutes, formatted hours
+and current permitted internal costs. It reuses the dashboard breakdown's
+repeatable-read projection, including zero-time and historical contributors.
+Project/client labels are read separately; the whole document is not one shared
+metadata/work snapshot. Restricted costs, missing rates and zero remain distinct.
+No entry notes, rate values, invoices or lifetime budgets are serialized.
+
+The existing export permit bounds concurrent work, rendering time and generated
+bytes. Before Typst rendering, reject over 1,000 task/person rows, 1 MiB of input
+labels or 32,767 bytes per field with 413, without partial output. Text bounds
+are checked after fetching the bounded dashboard projection. Capacity/timeout
+responses offer retry or a shorter period; successful responses are PDF
+attachments with `Cache-Control: private, no-store` and UUID-based filenames.
+
+The toolbar also reuses detailed CSV/XLSX exports with the selected project/date
+scope. A pre-download dialog explains format limits and summary contents. Native
+downloads preserve the project page; this additional dialog is an intentional
+handoff deviation to satisfy FR-016's limit explanation.
+
 > Historical contract, pending reconciliation with the 2026-09-29 specification.
 > Its visibility and accounting assumptions predate feature 011; it is not the
 > current implementation contract.

@@ -17,7 +17,7 @@ pub async fn get_project_breakdown(
 }
 
 #[cfg(feature = "server")]
-async fn fetch_project_breakdown(
+pub(crate) async fn fetch_project_breakdown(
     pool: &sqlx::PgPool,
     org_id: uuid::Uuid,
     viewer_id: uuid::Uuid,

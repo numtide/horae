@@ -24,6 +24,8 @@ mod activity;
 mod billing;
 #[path = "projects/breakdown.rs"]
 mod breakdown;
+#[path = "projects/exports.rs"]
+mod exports;
 #[path = "projects/fee_balances.rs"]
 mod fee_balances;
 #[path = "projects/summary.rs"]

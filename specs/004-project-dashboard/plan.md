@@ -111,6 +111,29 @@ Synchronize same-project query navigation without remounting unrelated forms or
 keeping an old period label. Verify direct/reloaded URLs, Back, reciprocal rows,
 invalid context, revoked access and existing editor/invoice navigation.
 
+### Project exports
+
+Reuse Menu and Modal in the Tasks/Team toolbar, without changing shared CSS.
+Only current report-authorized viewers receive export controls; disable them
+while the selected breakdown is pending or failed. CSV and Excel retain the
+existing detailed report endpoints and exact project/date filters. Explain each
+format's bounds before navigating to a native download in a separate browsing
+context, preserving the dashboard for retry.
+
+The PDF is a selected-period Tasks/Team work summary, not a screenshot of lifetime
+budget tiles or invoice history. Reuse the authorized breakdown and existing
+Typst engine/fonts, passing user labels as literal values. Include exact integer
+minutes alongside formatted hours, permitted current internal costs, missing-rate
+and restricted states, and historical contributors. Do not include entry notes
+or rate values. Reuse the bounded export permit and rendering deadline/output
+cap. After the dashboard projection's existing group bound, reject more than
+1,000 task/team rows, 1 MiB of labels or 32,767 bytes per field before rendering;
+never truncate. These text bounds are post-fetch, not SQL preflight bounds.
+
+Verify native downloads, scope, role revocation, foreign identities, invalid
+queries, field-limit rejection, focus and responsive layout in disposable data.
+Keep the full dashboard, Clients and Settings/Workspace acceptance open.
+
 ### Chart window navigation
 
 Keep the reporting interval shared by charts, Tasks and Team. Add a separate

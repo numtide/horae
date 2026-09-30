@@ -37,9 +37,9 @@ The implementation is still on `feat/project-dashboard`, not accepted as a whole
 The following are current source findings, not additional exclusions from scope:
 
 - **Project Detail:** the chart controls still need the handoff's grouped period
-  presentation; reporting controls now sit in the Tasks/Team toolbar. Work-table
-  hours currently render as text, not contextual report links, and the toolbar
-  has no exports. Applicable hour-budget overlays, the uninvoiced tile, invoice
+  presentation; reporting controls now sit in the Tasks/Team toolbar. Contextual
+  report links and selected-period exports are implemented and tested below.
+  Applicable hour-budget overlays, the uninvoiced tile, invoice
   subject/payment-date persistence and recent entries remain incomplete. Additional
   action semantics are still the open decisions recorded in `spec.md`.
 - **Clients:** `ClientList` has basic CRUD and active/inactive rows, but no designed
@@ -52,15 +52,14 @@ The following are current source findings, not additional exclusions from scope:
   admin shell. The requested general preferences, invitations, permission matrix,
   backup/export and audit surfaces still require their specifications and work.
 
-Harvest's inspected Tasks links preserve project/task/report dates; copying only
-their appearance would not deliver the behavior. Horae's `Reports` route currently
-has no query-filter props, and its endpoints are manager-only. Contextual report
-navigation must preserve that boundary, not equate project-progress access with
-permission to read people's detailed entries. See `harvest-reference.md` for the
-observed behavior and limitations of the browser evidence.
+Harvest's inspected Tasks links preserve project/task/report dates. Horae's
+contextual Reports navigation now preserves those dimensions and its existing
+manager-only boundary; project-progress access does not grant access to people's
+detailed entries. See `harvest-reference.md` for the observed behavior and
+limitations of the browser evidence.
 
-Next independent dashboard work: align the report toolbar and add genuinely scoped
-report navigation/exports with authorization tests. Billing policy decisions must
+Next independent dashboard work: grouped chart controls and applicable hour-budget
+overlays, followed by the remaining acceptance gaps. Billing policy decisions must
 be resolved before representing unknown external billing as a known amount. The
 Clients and Settings/Workspace slices remain required, not replaced by this work.
 
@@ -669,3 +668,49 @@ Verification:
 F026 remains incomplete: the project export menu and PDF summary are still
 required. The whole Project Detail, Clients and Settings/Workspace objective is
 not complete, and PR #208 remains draft.
+
+## Project export menu and PDF work summary — 2026-09-30
+
+The Tasks/Team toolbar now offers CSV, Excel and PDF summary for the selected
+project and all-time/inclusive custom period. The existing report gate controls
+visibility; pending/failed breakdowns disable export. A shared native dialog
+explains each format's bounds before downloading without replacing the dashboard.
+This dialog is an intentional handoff deviation to make FR-016's limits explicit.
+
+CSV/Excel reuse the detailed report endpoints. The read-only PDF route reuses
+current report/progress authorization, organization scope and the dashboard's
+cost-safe breakdown. It includes task/team rows, historical/zero contributors,
+exact minutes and formatted hours, and distinguishes restricted/missing costs.
+Lifetime budgets, invoices, notes and rate values are not part of this summary.
+Labels are literal Typst inputs. Existing fonts, render admission, deadline and
+output cap are reused; label/row limits reject the complete document before
+rendering rather than truncating it. Text limits are post-fetch checks, not SQL
+preflight checks; metadata and work totals are separate reads.
+
+Framework review: Menu, Modal and existing spacing/reflow utilities are reused;
+no shared CSS/defaults, dependencies, migrations or SQL macro text changed.
+Enlarged-text browser checks exposed overflowing modal actions and intrinsic
+date-field widths in the existing fee panel. Local wrapping, padding and minimum
+width utilities address both without changing shared form components. The browser
+test excludes only Dioxus's injected development toast from layout measurement.
+
+Verification:
+
+- Three PDF renderer tests pass: deterministic output with literal user labels,
+  row/text bounds without truncation, exact minutes, period and restricted costs.
+- The query-validation unit test rejects partial/empty/reversed periods and
+  unsupported filters while accepting absent all-time bounds.
+- All 62 detail-navigation/rendering and 45 New Project screen tests pass on the
+  final code, including export URL scope and unchanged shared input defaults.
+- Native Chromium passes real CSV/Excel/PDF downloads for all-time and one-day
+  scopes, keyboard/focus, 320/390/768/1440px layout, 200% text, short-viewport
+  download access, foreign projects, invalid queries, oversize fields and revoked
+  report authority. The suite is included in the default browser runner.
+- The same final run also passes project-report-links, project-activity and
+  project-invoice against one disposable database. Imported data is unchanged.
+- Final all-target server Clippy with warnings denied, WASM compilation and
+  formatting pass. No schema or SQLx metadata changed in this increment.
+
+F026 is implemented and its focused journeys are verified. This is not full
+Project Detail acceptance: the remaining dashboard gaps and all Clients and
+Settings/Workspace delivery slices remain open; PR #208 stays draft.

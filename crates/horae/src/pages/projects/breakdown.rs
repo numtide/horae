@@ -63,12 +63,17 @@ pub(super) fn ProjectBreakdownPanel(
             .as_ref()
             .map(|(_, value)| value.as_ref().cloned().map_err(ToString::to_string))
     };
+    let export_ready = result.as_ref().is_some_and(Result::is_ok);
     rsx! {
         section { class: "mt-8 min-w-0", aria_label: "Project breakdown",
             BreakdownTables { project_id, data: result, invoice_state, can_report, initial_tab, on_tab_change,
                 on_retry: move |_| data.restart(),
                 on_invoice_retry: move |_| on_invoice_retry.call(()),
-                activity::ProjectReportingPeriod { interval, onchange: on_interval_change }
+                activity::ProjectReportingPeriod { interval, onchange: on_interval_change,
+                    if can_report {
+                        exports::ProjectExport { project_id, interval: interval(), disabled: !export_ready }
+                    }
+                }
             }
         }
     }
