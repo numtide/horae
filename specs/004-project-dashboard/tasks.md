@@ -30,8 +30,13 @@ F001–F003 does not complete Project Detail or the four-surface delivery.
 - [x] F009 [US1] Extend the authorized identity projection and implement the
   design header with real client/type/status, permission-gated edit navigation
   and confirmed archive/reactivate using the existing server action.
-- [ ] F010 [US1] Verify identity/role/archive/route behavior, SQLx metadata,
+- [x] F010 [US1] Verify identity/role/archive/route behavior, SQLx metadata,
   server/WASM and responsive browser layout; record evidence in `delivery.md`.
+  Native Chromium now covers keyboard confirmation/cancel, failed and held
+  requests, duplicate-submit protection, focus return, persisted status, retained
+  invoice/time/configuration, expected editor revision changes, manager access and
+  revoked member authority. Confirmation layout is checked at four widths and
+  enlarged text. Broader application acceptance remains separate.
 - [x] F011 [US1] Test and implement checked scope-budget aggregation in core.
 - [x] F012 [US1] Add and test the scoped lifetime-hours/current-budget/internal-cost
   summary projection, preserving current permissions and existing spending rules.
@@ -82,6 +87,10 @@ F001–F003 does not complete Project Detail or the four-surface delivery.
   its position from visible configured-week buckets rather than the last entry.
   Preserve both chart modes, exact totals and historical navigation; verify
   clipped/year-boundary weeks, empty/old intervals, keyboard and enlarged layouts.
+- [ ] F029 [US1] Integrate the native project lifecycle suite into the default
+  browser runner and run the complete chained regression. Update existing tests
+  for optional-query detail URLs and collapsed task/team management without dropping
+  identity, persistence, permission or error-recovery assertions.
 
 **Input**: Design documents from `specs/004-project-dashboard/`
 

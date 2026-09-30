@@ -262,7 +262,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
           if (width === 1440) await choose('np-budget-mode', 'Budget', 'No budget');
         }
         await activate(screen.getByRole('button', { name: 'Save project', exact: true }));
-        await page.waitForURL(/\/projects\/[0-9a-f-]{36}$/);
+        await page.waitForURL(url => url.origin === base && /^\/projects\/[0-9a-f-]{36}$/.test(url.pathname) && url.search === '');
         const detail = page.getByRole('region', { name: 'Project details', exact: true });
         await expect(detail).toContainText(name);
         await expect(detail).toContainText('Acme Corp');
@@ -273,7 +273,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
         await expect(detail).toContainText(name);
         await expect(detail).toContainText('Acme Corp');
         await readsFinished();
-        const id = page.url().split('/').at(-1);
+        const id = new URL(page.url()).pathname.split('/').at(-1);
         assert.match(id, /^[0-9a-f-]{36}$/);
         assert.equal(sql(`SELECT project_type::text FROM projects WHERE id = '${id}'`), {
           'Time & Materials': 'time_and_materials', 'Fixed Fee': 'fixed_fee', 'Non-Billable': 'non_billable',

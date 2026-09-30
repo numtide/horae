@@ -53,14 +53,15 @@ const name = 'Permission fixture project';
   const absent = (value, field) => assert.equal(Object.hasOwn(value, field), false, `${field} must be omitted, not merely hidden by the UI`);
   let projectId;
   try {
+    // Establish the actor before adding another admin eligible for dev login.
+    await page.goto(`${base}/auth/login`);
+    await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
+    await page.waitForURL(`${base}/`);
     sql(`UPDATE users SET cost_rate_cents = 4321 WHERE id = '${actor.id}';
       INSERT INTO users (id, org_id, email, name, org_role) VALUES ('${other}', '${actor.org_id}', 'permission-owner@example.test', 'Other draft owner', 'admin');
       INSERT INTO organizations (id, name) VALUES ('${foreignOrg}', 'Permission foreign organization');
       INSERT INTO clients (id, org_id, name, currency) VALUES ('${foreignClient}', '${foreignOrg}', 'Permission foreign client', 'EUR');
       INSERT INTO projects (id, org_id, client_id, name, currency) VALUES ('${foreignProject}', '${foreignOrg}', '${foreignClient}', 'Permission foreign project', 'EUR')`);
-    await page.goto(`${base}/auth/login`);
-    await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
-    await page.waitForURL(`${base}/`);
     await visit('/projects/new');
     const screen = page.locator('.np-page');
     await screen.getByRole('button', { name: 'Client', exact: true }).click();
@@ -80,8 +81,8 @@ const name = 'Permission fixture project';
     await screen.getByLabel('Cost rate for Admin User (EUR/h) · admins only', { exact: true }).fill('47.25');
     await expect(screen.locator('header').getByRole('status')).toContainText('Draft saved at');
     await screen.getByRole('button', { name: 'Save project', exact: true }).click();
-    await page.waitForURL(/\/projects\/[0-9a-f-]{36}$/);
-    projectId = page.url().split('/').at(-1);
+    await page.waitForURL(url => url.origin === base && /^\/projects\/[0-9a-f-]{36}$/.test(url.pathname) && url.search === '');
+    projectId = new URL(page.url()).pathname.split('/').at(-1);
     const creation = structuredClone(endpoints.get('finalize_project_draft').data);
     assert.equal(creation.form.admin_notes, privateNote);
     await expect(page.getByRole('region', { name: 'Project details', exact: true })).toContainText(privateNote);
@@ -237,6 +238,8 @@ const name = 'Permission fixture project';
     console.log('PASS: inactive/anonymous requests are denied and a manager creates a real project without private overrides');
   } finally {
     await browser.close();
-    sql(`UPDATE users SET org_role = '${actor.org_role}', active = true, cost_rate_cents = ${actor.cost_rate_cents ?? 'NULL'} WHERE id = '${actor.id}'`);
+    // Keep the auxiliary owner's history without changing later suites' login.
+    sql(`UPDATE users SET org_role = '${actor.org_role}', active = true, cost_rate_cents = ${actor.cost_rate_cents ?? 'NULL'} WHERE id = '${actor.id}';
+      UPDATE users SET active = false WHERE id = '${other}'`);
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

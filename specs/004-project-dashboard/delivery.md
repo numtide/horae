@@ -36,15 +36,19 @@ This coordinates the complete outcome, not a replacement for feature specificati
 The implementation is still on `feat/project-dashboard`, not accepted as a whole.
 The following are current source findings, not additional exclusions from scope:
 
-- **Project Detail:** the chart controls still need the handoff's grouped period
-  presentation; reporting controls now sit in the Tasks/Team toolbar. Contextual
-  report links and selected-period exports are implemented and tested below.
-  Applicable hour-budget overlays, the uninvoiced tile, invoice
+- **Project Detail:** grouped chart-week controls, applicable hour-budget
+  references, the current-week marker, contextual reports and selected-period
+  exports are implemented and tested below. Chart month labels and weekly bar
+  emphasis still differ from the handoff. The uninvoiced tile, invoice
   subject/payment-date persistence and recent entries remain incomplete. Additional
   action semantics are still the open decisions recorded in `spec.md`.
 - **Clients:** `ClientList` has basic CRUD and active/inactive rows, but no designed
   search/filter/selection toolbar. `ClientDetail` still only renders its UUID.
   The project's client link therefore does not yet complete the intended journey.
+  The independent `feat/clients-design` branch now contains the feature 012 draft
+  specification and Harvest comparison in PR #209. Contact/payment-term scope
+  and client archive/reactivation policy await user decisions; no client code is
+  implemented by that specification.
 - **Personal Settings:** `Settings` only implements theme and plugin display;
   profile, assigned people/projects, actual permissions and notifications are not
   supplied by this page.
@@ -58,8 +62,8 @@ manager-only boundary; project-progress access does not grant access to people's
 detailed entries. See `harvest-reference.md` for the observed behavior and
 limitations of the browser evidence.
 
-Next independent dashboard work: grouped chart controls and applicable hour-budget
-overlays, followed by the remaining acceptance gaps. Billing policy decisions must
+Next independent dashboard work: remaining chart fidelity and acceptance gaps.
+Billing policy decisions must
 be resolved before representing unknown external billing as a known amount. The
 Clients and Settings/Workspace slices remain required, not replaced by this work.
 
@@ -791,3 +795,50 @@ Verification:
 F028 is implemented. Broader chart/dashboard visual acceptance, billing and action
 decisions, full application/Nix acceptance, Clients and Settings/Workspace remain
 open. This marker is not evidence that the full requested delivery is complete.
+
+## Native lifecycle and complete-run regression — 2026-09-30
+
+The new `project-lifecycle` browser suite uses only the runner's disposable
+PostgreSQL database. Normal keyboard input exercises confirmation/cancel, failed
+transport, a held retry, duplicate-submit/cancel guards, focus return,
+archive/reload and manager reactivation. It compares full fixture records for
+time, tasks, assignments, invoice header/lines and project configuration; only
+status and one editor revision increment per transition may change. A member
+cannot see management/invoice controls or replay a previously authorized mutation.
+Arrow/Home/End tab navigation and confirmation bounds pass at 320/390/768/1440px,
+including 200% text at desktop and mobile widths.
+
+The initial complete browser run stopped in `action-errors`: one assertion
+matched a raw detail URL without the router's empty query delimiter, and another
+looked for assignment controls before opening the new team disclosure. Both
+cases now pass using the real disclosure and exact origin/path/empty-query
+checks. The same stale URL parsing in three New Project suites is updated,
+retaining database identity and permission assertions. The subsequent complete
+run passed those first nine suites, then exposed the same detail-URL assumption
+in `project-task-rates`. That suite now normalizes exact project destinations,
+matches project-row links with or without the empty query delimiter, and opens
+task management before exercising its controls in every billing mode. These
+changes retain the existing rate, currency, persistence and recovery assertions.
+
+A later complete run passed the first sixteen suites, then exposed a fixture
+isolation bug: `new-project-permissions` left a second active administrator in the
+disposable database. Dev login could choose that account while subsequent tests
+revoked the seeded administrator's role. The permissions suite now signs in
+before creating that auxiliary administrator and deactivates only its own
+auxiliary account in cleanup. Permission assertions remain intact; no application
+authentication behavior changes.
+
+The new lifecycle fixture initially used an incorrect Actions accessible name
+and assumed the project edit revision never changed. It now uses the stable
+trigger ID and asserts the expected revision increment. Viewport/focus scrolling
+is allowed to settle for two animation frames before keyboard opening because
+the shared menu intentionally dismisses on scrolling. No forced clicks or fixed
+sleep delays are used. The focused lifecycle and action-error suites pass.
+
+The 69 detail-navigation/rendering tests, 45 New Project screen tests, strict
+all-target server Clippy, WASM check and full formatting check pass. No production
+Rust, CSS, query, migration or dependency changes are involved. After the fixture
+cleanup fix, the chained permissions, invoice, activity, task-filter, report-link,
+export, chart-budget and lifecycle suites all pass, including the actual Cancel
+button and revoked-member mutation replay. The complete 23-suite rerun and final
+Nix acceptance remain pending at this checkpoint.
