@@ -98,6 +98,13 @@ pub struct ProjectInvoices {
 
 /// An explicit task rate in the currency shown to the project manager.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(
+    not(feature = "server"),
+    expect(
+        dead_code,
+        reason = "Retained for the task-linking server-function API"
+    )
+)]
 pub struct ProjectTaskRate {
     pub amount: String,
     pub currency: String,

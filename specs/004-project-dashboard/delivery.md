@@ -963,3 +963,29 @@ F032 is complete as investigation, bounded execution and fresh regression
 evidence, not a proven root-cause fix for the unreproduced wait. Full Nix CI and
 the remaining feature requirements are still open; no new permission policy has
 been activated, and no imported data or preview instance was changed.
+
+## Task/team management belongs in the editor — 2026-09-30
+
+The detail handoff uses Tasks/Team for reporting; task and team configuration
+belongs in Edit project. Removed the legacy management accordions, their local
+state, redundant catalog/assignment reads and the unused breakdown refresh input.
+The shared editor, reporting tabs, fee balances, server APIs and authorization
+rules remain unchanged. No shared CSS, migrations or SQL queries changed.
+
+The new browser regression first failed against the old build because both
+accordions were present. Coverage now exercises the detail-to-editor link,
+task/team removal and re-addition, failed-save preservation and retry, and task
+rates through the shared editor rather than the retired controls. Navigation
+tests use the reporting projection and still reject stale project data.
+
+Server/WASM builds, strict all-target server Clippy and all 74 tests in
+`detail_navigation` pass. Browser verification uses the runner's disposable
+database; the imported account and database are not test fixtures. An intermediate
+browser run was invalidated by concurrent bundle regeneration and is not counted
+as passing evidence.
+
+The final stable-bundle run passed `project-edit`, `project-task-rates`,
+`action-errors`, `project-report-links` and `project-lifecycle` together with exit
+status zero. This includes three editor widths, enlarged-text lifecycle checks,
+exact stored rates, task/team persistence and error recovery. F033 is complete;
+this is a five-suite targeted regression, not a new full 23-suite or Nix CI pass.

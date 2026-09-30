@@ -5,14 +5,11 @@ use uuid::Uuid;
 use super::{is_admin, is_manager, loaded, run_action};
 use crate::components::combobox::{ComboOption, Combobox};
 use crate::components::controls::Checkbox;
-use crate::components::form::{FormCard, FormGroup, Input, Select};
 use crate::components::icons::NavIcon;
 use crate::components::menu::{Menu, MenuDivider, MenuItem};
 use crate::components::modal::Modal;
 use crate::components::table::DataTable;
-use crate::models::{
-    Client, Project, ProjectBudgetProgress, ProjectDetails, ProjectTagLink, ProjectTaskRate,
-};
+use crate::models::{Client, Project, ProjectBudgetProgress, ProjectDetails, ProjectTagLink};
 use crate::route::Route;
 use crate::server_fns;
 use horae_core::money::format_cents;
@@ -977,13 +974,11 @@ fn ProjectDetailContent(
             tab.set(initial_tab);
         }
     }));
-    let mut breakdown_revision = use_signal(|| 0_u64);
     let mut details =
         use_resource(move || async move { server_fns::get_project_details(id.to_string()).await });
     let me = use_resource(|| async move { server_fns::get_me().await });
-    let summary_data = use_resource(move || {
-        let _ = breakdown_revision();
-        async move { server_fns::summary::get_project_summary(id.to_string()).await }
+    let summary_data = use_resource(move || async move {
+        server_fns::summary::get_project_summary(id.to_string()).await
     });
     let chart_budget = if summary_data.state()() == UseResourceState::Ready {
         summary_data
@@ -1015,19 +1010,6 @@ fn ProjectDetailContent(
             _ => billing::InvoiceHistoryState::Loading,
         }
     };
-    let assignments = use_resource(move || {
-        let pid = id.to_string();
-        async move { server_fns::list_assignments(pid).await }
-    });
-    let users_res = use_resource(|| async move { server_fns::list_users(false).await });
-
-    let mut show_assign_form = use_signal(|| false);
-    let mut assign_user_id = use_signal(String::new);
-    let mut assign_role = use_signal(|| "freelancer".to_string());
-    let error = use_signal(|| None::<String>);
-    let action_error = use_signal(|| None::<String>);
-
-    let is_admin = is_admin(&me);
     let mut status_action = use_signal(|| None::<bool>);
     let mut status_busy = use_signal(|| false);
     let mut status_error = use_signal(|| None::<String>);
@@ -1037,25 +1019,6 @@ fn ProjectDetailContent(
     } else {
         "Archive"
     };
-
-    // Build a lookup from user_id -> user name
-    let users_map: std::collections::HashMap<uuid::Uuid, String> = match &*users_res.read() {
-        Some(Ok(users)) => users.iter().map(|u| (u.id, u.name.clone())).collect(),
-        _ => std::collections::HashMap::new(),
-    };
-
-    let assign_user_opts: Vec<(String, String)> =
-        std::iter::once((String::new(), "Select a user...".to_string()))
-            .chain(
-                users_res
-                    .read()
-                    .as_ref()
-                    .and_then(|r| r.as_ref().ok())
-                    .into_iter()
-                    .flatten()
-                    .map(|u| (u.id.to_string(), format!("{} ({})", u.name, u.email))),
-            )
-            .collect();
 
     rsx! {
         div {
@@ -1146,146 +1109,15 @@ fn ProjectDetailContent(
             summary::ProjectSummaryPanel { project_id: id, can_manage: is_manager(&me), summary: summary_data,
                 billing::InvoiceSummary { state: invoice_state.clone(), on_retry: move |_| invoices.restart() }
             }
-            breakdown::ProjectBreakdownPanel { project_id: id, interval, revision: breakdown_revision, invoice_state,
+            breakdown::ProjectBreakdownPanel { project_id: id, interval, invoice_state,
                 can_report: is_manager(&me), initial_tab: tab(),
                 on_tab_change: move |value| { tab.set(value); navigator.replace(project_view_route(id, interval(), value)); },
                 on_interval_change: move |value| { navigator.replace(project_view_route(id, value, tab())); },
                 on_invoice_retry: move |_| invoices.restart() }
 
-            details { class: "mt-6",
-                summary { class: "text-sm text-primary cursor-pointer py-3", "Manage project tasks" }
-                ProjectTasks {
-                    project_id: id,
-                    on_change: move |_| breakdown_revision += 1,
-                    can_manage: is_manager(&me) && details.state()() == UseResourceState::Ready
-                        && matches!(&*details.read(), Some(Ok(_))),
-                    task_rate_currency: details.read().as_ref().and_then(|result| result.as_ref().ok())
-                        .and_then(|project| project.task_rate_currency.clone()),
-                }
-            }
-
             if is_manager(&me) && details.state()() == UseResourceState::Ready
                 && matches!(&*details.read(), Some(Ok(_))) {
                 fee_balances::ProjectFeeBalances { project_id: id }
-            }
-
-            // ── Assignments section ─────────────────────────────────────
-            details { class: "mt-6",
-                summary { class: "text-sm text-primary cursor-pointer py-3", "Manage project team" }
-                div { class: "page-header",
-                    h2 { class: "page-title text-xl", "Assignments" }
-                    div { class: "page-actions",
-                        if is_admin {
-                            button {
-                                class: "btn btn-primary",
-                                onclick: move |_| show_assign_form.set(!show_assign_form()),
-                                if show_assign_form() { "Cancel" } else { "Assign User" }
-                            }
-                        }
-                    }
-                }
-
-                if show_assign_form() && is_admin {
-                    FormCard { title: "Assign User", error,
-                        FormGroup { label: "User", id: "assign-user",
-                            Select {
-                                id: "assign-user",
-                                options: assign_user_opts,
-                                selected: assign_user_id(),
-                                onchange: move |e: FormEvent| assign_user_id.set(e.value()),
-                            }
-                        }
-                        FormGroup { label: "Role", id: "assign-role",
-                            Select {
-                                id: "assign-role",
-                                options: vec![
-                                    ("lead".to_string(), "Lead".to_string()),
-                                    ("freelancer".to_string(), "Freelancer".to_string()),
-                                    ("admin".to_string(), "Admin".to_string()),
-                                ],
-                                selected: assign_role(),
-                                onchange: move |e: FormEvent| assign_role.set(e.value()),
-                            }
-                        }
-                        button {
-                            class: "btn btn-primary",
-                            onclick: move |_| {
-                                let pid = id.to_string();
-                                let uid = assign_user_id();
-                                let r = assign_role();
-                                run_action(
-                                    server_fns::create_assignment(pid, uid, r),
-                                    assignments,
-                                    error,
-                                    move || {
-                                        assign_user_id.set(String::new());
-                                        assign_role.set("freelancer".to_string());
-                                        show_assign_form.set(false);
-                                        breakdown_revision += 1;
-                                    },
-                                );
-                            },
-                            "Assign"
-                        }
-                    }
-                }
-
-                if let Some(message) = action_error() {
-                    div { class: "alert alert-danger", role: "alert", "Could not remove assignment: {message}" }
-                }
-
-                div { class: "card",
-                    {loaded(&*assignments.read(), |list| {
-                        if list.is_empty() {
-                            return rsx! {
-                                p { class: "text-muted text-sm p-5", "No users assigned yet." }
-                            };
-                        }
-                        rsx! {
-                            DataTable {
-                                table {
-                                    thead {
-                                        tr {
-                                            th { "User" }
-                                            th { "Role" }
-                                            if is_admin {
-                                                th { "Actions" }
-                                            }
-                                        }
-                                    }
-                                    tbody {
-                                        for a in list.iter() {
-                                            {
-                                                let aid = a.id.to_string();
-                                                let user_name = users_map.get(&a.user_id).cloned().unwrap_or_else(|| a.user_id.to_string());
-                                                rsx! {
-                                                    tr { key: "{a.id}",
-                                                        td { "{user_name}" }
-                                                        td { "{a.role}" }
-                                                        if is_admin {
-                                                            td {
-                                                                button {
-                                                                    class: "btn btn-danger btn-sm",
-                                                                    onclick: move |_| run_action(
-                                                                        server_fns::delete_assignment(aid.clone()),
-                                                                        assignments,
-                                                                        action_error,
-                                                                        move || breakdown_revision += 1,
-                                                                    ),
-                                                                    "Remove"
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    })}
-                }
             }
         }
     }
@@ -1359,108 +1191,6 @@ fn SavedProjectDetails(
                 div { class: "mt-4",
                     h3 { class: "text-sm text-subtle m-0 mb-2", "Administrator notes" }
                     for line in notes.lines() { p { class: "text-sm m-0", "{line}" } }
-                }
-            }
-        }
-    }
-}
-
-#[component]
-fn ProjectTasks(
-    project_id: Uuid,
-    can_manage: bool,
-    task_rate_currency: Option<String>,
-    on_change: EventHandler<()>,
-) -> Element {
-    let mut enabled = use_resource(move || async move {
-        server_fns::list_project_tasks(project_id.to_string()).await
-    });
-    let mut catalog = use_resource(|| async move { server_fns::list_tasks().await });
-    let mut selected = use_signal(String::new);
-    let mut rate = use_signal(String::new);
-    let mut name = use_signal(String::new);
-    let mut billable = use_signal(|| true);
-    let mut error = use_signal(|| None::<String>);
-    let mut saving = use_signal(|| false);
-    let enabled_ids: BTreeSet<_> = enabled
-        .read()
-        .as_ref()
-        .and_then(|result| result.as_ref().ok())
-        .into_iter()
-        .flatten()
-        .map(|task| task.id)
-        .collect();
-
-    rsx! {
-        div { class: "card mt-6 p-5",
-            h2 { class: "page-title text-xl", "Project tasks" }
-            {loaded(&*enabled.read(), |tasks| rsx! {
-                if tasks.is_empty() { p { "No tasks enabled yet." } }
-                ul { for task in tasks { li { key: "{task.id}", "{task.name}" } } }
-            })}
-            if let Some(message) = error() {
-                div { class: "alert alert-danger", role: "alert", "{message}" }
-            }
-            if can_manage {
-                FormGroup { label: "Enable an existing task", id: "project-task",
-                    {loaded(&*catalog.read(), |tasks| rsx! {
-                        select {
-                            id: "project-task", class: "form-select", value: "{selected}",
-                            disabled: saving(), onchange: move |e| {
-                                selected.set(e.value()); rate.set(String::new()); error.set(None);
-                            },
-                            option { value: "", "Select task…" }
-                            for task in tasks { option { value: "{task.id}", disabled: enabled_ids.contains(&task.id), "{task.name}" } }
-                        }
-                    })}
-                }
-                if let Some(currency) = task_rate_currency.as_deref() {
-                    FormGroup { label: "Task hourly rate ({currency})", id: "project-task-rate",
-                        hint: "For newly enabled tasks. Leave blank to inherit a compatible catalog rate; enter 0 for a zero rate.",
-                        Input { id: "project-task-rate", class: "w-30 max-w-full font-mono text-right",
-                            value: "{rate}", disabled: saving(), oninput: move |event: FormEvent| rate.set(event.value()) }
-                    }
-                }
-                button {
-                    class: "btn btn-secondary", disabled: saving() || selected().is_empty(),
-                    onclick: move |_| {
-                        let task_id = selected();
-                        let explicit_rate = task_rate_currency.as_ref().filter(|_| !rate().trim().is_empty())
-                            .map(|currency| ProjectTaskRate { amount: rate(), currency: currency.clone() });
-                        error.set(None);
-                        saving.set(true);
-                        spawn(async move {
-                            match server_fns::link_project_task(project_id.to_string(), task_id, explicit_rate).await {
-                                Ok(()) => { error.set(None); selected.set(String::new()); rate.set(String::new()); enabled.restart(); on_change.call(()); }
-                                Err(e) => error.set(Some(e.to_string())),
-                            }
-                            saving.set(false);
-                        });
-                    },
-                    "Enable task"
-                }
-                FormGroup { label: "New task name", id: "new-project-task",
-                    Input { id: "new-project-task", value: "{name}", oninput: move |e: FormEvent| name.set(e.value()) }
-                }
-                label { class: "form-label flex items-center gap-2",
-                    input { r#type: "checkbox", checked: billable(), onchange: move |e| billable.set(e.checked()) }
-                    "Billable on this project"
-                }
-                button {
-                    class: "btn btn-primary", disabled: saving() || name().trim().is_empty(),
-                    onclick: move |_| {
-                        let task_name = name();
-                        let task_billable = billable();
-                        saving.set(true);
-                        spawn(async move {
-                            match server_fns::create_task(task_name, task_billable, Some(project_id.to_string())).await {
-                                Ok(_) => { error.set(None); name.set(String::new()); enabled.restart(); catalog.restart(); on_change.call(()); }
-                                Err(e) => error.set(Some(e.to_string())),
-                            }
-                            saving.set(false);
-                        });
-                    },
-                    "Create and enable task"
                 }
             }
         }

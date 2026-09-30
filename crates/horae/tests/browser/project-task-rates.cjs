@@ -106,6 +106,8 @@ assert.ok(task.default_rate_cents > 0);
       await page.getByRole('button', { name: 'Retry', exact: true }).click();
     }
     await expect(screen.getByRole('heading', { name: 'Edit project', exact: true })).toBeVisible();
+    await expect(screen.getByRole('region', { name: 'Tasks', exact: true })).toBeVisible();
+    if (mode !== 'Task') await expect(screen.getByRole('textbox', { name: /^Hourly rate for Development/ })).toHaveCount(0);
     await expect(screen.locator('#np-currency')).toBeDisabled();
     const type = mode === 'fixed' ? /^Fixed Fee/ : mode === 'nonbillable' ? /^Non-Billable/ : /^Time & Materials/;
     await expect(screen.getByRole('radio', { name: type })).toBeChecked();
@@ -164,52 +166,52 @@ assert.ok(task.default_rate_cents > 0);
       await page.setViewportSize({ width, height: 900 });
       const id = await createProject('Task');
       firstConfiguredId ??= id;
-      await page.locator('summary').filter({ hasText: 'Manage project tasks' }).click();
-      const rate = page.getByLabel('Task hourly rate (USD)', { exact: true });
+      await openEditor(id);
+      const screen = page.locator('.np-page');
+      await screen.getByRole('button', { name: 'Development', exact: true }).click();
+      const rate = screen.getByRole('textbox', { name: 'Hourly rate for Development (USD)', exact: true });
       await expect(rate).toBeVisible();
-      await page.getByLabel('Enable an existing task', { exact: true }).selectOption(task.id);
-      const enable = page.getByRole('button', { name: 'Enable task', exact: true });
-      await enable.click();
-      await expect(page.getByRole('alert')).toContainText('explicit rate in the project currency');
+      const save = screen.getByRole('button', { name: 'Save changes', exact: true });
+      await save.click();
+      await expect(screen.getByRole('alert')).toContainText('explicit task rate in the project currency');
       assert.equal(storedRate(id), '');
       await rate.fill('-1');
-      await enable.click();
-      await expect(page.getByRole('alert')).toContainText('Rate cannot be negative');
+      await save.click();
+      await expect(screen.getByRole('alert')).toBeVisible();
+      await expect(rate).toHaveAttribute('aria-invalid', 'true');
       await expect(rate).toHaveValue('-1');
       assert.equal(storedRate(id), '');
       await rate.fill(amount);
       let release;
       const blocked = new Promise(resolve => { release = resolve; });
-      await page.route('**/api/link_project_task*', async route => { await blocked; await route.abort(); });
+      await page.route('**/api/save_project_editor*', async route => { await blocked; await route.abort(); });
       try {
-        await enable.click();
+        await save.click();
         await expect(rate).toBeDisabled();
-        await expect(page.getByLabel('Enable an existing task', { exact: true })).toBeDisabled();
-        await expect(enable).toBeDisabled();
+        await expect(screen.getByRole('button', { name: 'Remove task Development', exact: true })).toBeDisabled();
+        await expect(screen.locator('.np-footer .btn-primary')).toBeDisabled();
       } finally {
         release();
       }
       await expect(page.getByRole('alert')).toBeVisible();
-      await expect(rate).toBeEnabled();
+      await expect(rate).toBeDisabled();
       await expect(rate).toHaveValue(amount);
       await readsFinished();
-      await page.unroute('**/api/link_project_task*');
-      await enable.focus();
+      await page.unroute('**/api/save_project_editor*');
+      await screen.getByRole('button', { name: 'Retry request', exact: true }).focus();
       await page.keyboard.press('Enter');
-      await expect(page.getByRole('alert')).toHaveCount(0);
-      await expect(rate).toHaveValue('');
+      await expect(page).toHaveURL(url => url.origin === base && url.pathname === `/projects/${id}` && url.search === '');
       assert.equal(storedRate(id), cents);
-      await expect(page.getByLabel('Enable an existing task', { exact: true })).toHaveValue('');
-      await expect(page.locator(`#project-task option[value="${task.id}"]`)).toBeDisabled();
+      await openEditor(id);
+      await expect(rate).toHaveValue((Number(cents) / 100).toFixed(2));
+      await expect(screen.getByRole('button', { name: 'Development', exact: true })).toBeDisabled();
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
       if (process.env.HORAE_TEST_SCREENSHOT_DIR) await page.screenshot({ path: `${process.env.HORAE_TEST_SCREENSHOT_DIR}/project-task-rate-${width}.png` });
+      await screen.getByRole('button', { name: 'Cancel', exact: true }).click();
       await verifyEditor(id, 'Task', width === 390);
     }
     for (const mode of ['Person', 'Project', 'fixed', 'nonbillable']) {
       const id = await createProject(mode);
-      await page.locator('summary').filter({ hasText: 'Manage project tasks' }).click();
-      await expect(page.locator('#project-task-rate')).toHaveCount(0);
-      await expect(page.getByLabel('Enable an existing task', { exact: true })).toBeVisible();
       await verifyEditor(id, mode);
     }
     for (const scope of ['task', 'person']) {
@@ -252,10 +254,10 @@ assert.ok(task.default_rate_cents > 0);
     await page.unroute('**/api/load_project_editor*');
     await page.locator('.np-footer').getByRole('button', { name: 'Cancel', exact: true }).click();
     const id = await createProject('Task', 'EUR');
-    await page.locator('summary').filter({ hasText: 'Manage project tasks' }).click();
-    await page.getByLabel('Enable an existing task', { exact: true }).selectOption(task.id);
-    await page.getByRole('button', { name: 'Enable task', exact: true }).click();
-    await expect(page.getByLabel('Enable an existing task', { exact: true })).toHaveValue('');
+    await openEditor(id);
+    await page.getByRole('button', { name: 'Development', exact: true }).click();
+    await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect(page).toHaveURL(url => url.origin === base && url.pathname === `/projects/${id}` && url.search === '');
     assert.equal(storedRate(id), String(task.default_rate_cents));
     for (const [source, amount, currency, placeholder, override, expected] of [
       ['USD', 8000, 'USD', '80.00', undefined, '8000'],

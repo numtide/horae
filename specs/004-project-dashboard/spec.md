@@ -98,7 +98,7 @@ A manager uses contextual actions and the shared editor without losing history o
 - **FR-011**: Uninvoiced time uses actual invoice eligibility; fixed-fee remaining uses approved per-occurrence partial-fee accounting. Do not subtract lifetime tracked value from an unrelated agreed fee.
 - **FR-012**: Invoice navigation/creation works with project context. A reference alone cannot change financial attribution, balances or locks.
 - **FR-013**: Recent entries are newest-first with deterministic ties and respect current person-level reporting and note permissions.
-- **FR-014**: Edit reuses the shared editor. Task/team management remains available through it or existing authorized controls, with no second divergent form.
+- **FR-014**: Edit reuses the shared editor. Task/team management belongs in Edit project; the detail page keeps the reporting Tasks/Team tabs without separate management forms or accordions.
 - **FR-015**: Archive/reactivate provides confirmation, pending protection, visible errors and recovery, preserving history and billing.
 - **FR-016**: CSV, spreadsheet and PDF summary exports match the selected authorized scope. Explain bounded limits before download; never silently truncate or widen access.
 - **FR-017**: Recheck current user/organization authority on every read/export. Inaccessible identities are non-disclosing; private fields are absent from unauthorized payloads, not merely hidden visually.

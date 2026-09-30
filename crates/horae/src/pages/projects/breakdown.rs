@@ -32,7 +32,6 @@ impl Tab {
 pub(super) fn ProjectBreakdownPanel(
     project_id: Uuid,
     interval: Signal<Option<ProjectActivityInterval>>,
-    revision: ReadSignal<u64>,
     invoice_state: InvoiceHistoryState,
     on_invoice_retry: EventHandler<()>,
     can_report: bool,
@@ -42,7 +41,6 @@ pub(super) fn ProjectBreakdownPanel(
 ) -> Element {
     let mut data = use_resource(move || {
         let requested = interval();
-        let _ = revision();
         async move {
             (
                 requested,

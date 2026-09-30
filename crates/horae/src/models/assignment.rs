@@ -5,6 +5,10 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "server", derive(sqlx::FromRow))]
+#[cfg_attr(
+    not(feature = "server"),
+    expect(dead_code, reason = "Retained for the assignment server-function API")
+)]
 pub struct Assignment {
     pub id: Uuid,
     pub project_id: Uuid,

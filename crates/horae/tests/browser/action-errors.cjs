@@ -36,14 +36,6 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated, seeded test instance');
         await page.getByRole('menuitem', { name: 'Archive', exact: true }).click();
       },
     },
-    {
-      name: 'assignment removal',
-      path: '/projects/01950000-0000-7000-8000-000000000005',
-      resource: 'list_assignments', endpoint: 'delete_assignment', form: 'Assign User',
-      formEndpoint: 'create_assignment', submit: 'Assign',
-      prepare: async () => page.locator('summary').filter({ hasText: 'Manage project team' }).click(),
-      action: async () => page.getByRole('button', { name: 'Remove', exact: true }).first().click(),
-    },
   ];
   try {
     await page.goto(`${base}/auth/login`);
@@ -60,7 +52,6 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated, seeded test instance');
           page.goto(`${base}${scenario.path}`, { waitUntil: 'domcontentloaded' }),
         ]);
         await ready.finished();
-        if (scenario.prepare) await scenario.prepare();
         await expect(page.getByRole('button', { name: scenario.form, exact: true }).first()).toBeVisible();
         const rejected = page.waitForEvent('requestfailed', r => r.url().includes(`/api/${scenario.endpoint}`));
         await scenario.action();

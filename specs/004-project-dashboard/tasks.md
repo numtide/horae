@@ -104,6 +104,10 @@ F001–F003 does not complete Project Detail or the four-surface delivery.
   regression before claiming the current revision passes all suites.
   The wait did not reproduce; the runner now bounds suites and all 23 pass.
   This does not establish or claim a fix for the original wait's cause.
+- [x] F033 [US1] Remove legacy task/team management accordions from Project
+  Detail; keep reporting tabs and route management through the shared editor.
+  Remove unused UI resources, preserve server authorization APIs, and migrate
+  task-rate and assignment failure/retry coverage to Edit project.
 
 **Input**: Design documents from `specs/004-project-dashboard/`
 
