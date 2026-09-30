@@ -5,6 +5,7 @@ use crate::models::project::ProjectFeeBalance;
 use crate::models::{ProjectDetails, ProjectTagLink, ProjectTaskRate};
 
 pub mod activity;
+pub mod billing;
 pub mod breakdown;
 pub mod summary;
 

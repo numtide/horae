@@ -20,6 +20,8 @@ use horae_core::types::{BudgetKind, ProjectType};
 
 #[path = "projects/activity.rs"]
 mod activity;
+#[path = "projects/billing.rs"]
+mod billing;
 #[path = "projects/breakdown.rs"]
 mod breakdown;
 #[path = "projects/fee_balances.rs"]
@@ -1056,7 +1058,7 @@ fn ProjectDetailContent(id: Uuid) -> Element {
 
             activity::ProjectActivityPanel { project_id: id, interval }
             summary::ProjectSummaryPanel { project_id: id, can_manage: is_manager(&me), revision: breakdown_revision }
-            breakdown::ProjectBreakdownPanel { project_id: id, interval, revision: breakdown_revision }
+            breakdown::ProjectBreakdownPanel { project_id: id, interval, revision: breakdown_revision, can_view_invoices: is_manager(&me) }
 
             details { class: "mt-6",
                 summary { class: "text-sm text-primary cursor-pointer py-3", "Manage project tasks" }

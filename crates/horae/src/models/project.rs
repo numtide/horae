@@ -77,6 +77,25 @@ pub struct ProjectBreakdown {
     pub totals: horae_core::project_breakdown::WorkSummary,
 }
 
+/// One invoice's stored net contribution to this project, never its full total.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(sqlx::FromRow))]
+pub struct ProjectInvoice {
+    pub id: Uuid,
+    pub number: String,
+    pub status: horae_core::types::InvoiceStatus,
+    pub issued_on: NaiveDate,
+    pub currency: String,
+    pub net_before_tax_cents: i64,
+}
+
+/// All invoice history, independent of the chart's work-date interval.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProjectInvoices {
+    pub invoices: Vec<ProjectInvoice>,
+    pub totals: std::collections::BTreeMap<String, horae_core::invoice::InvoiceLedgerTotals>,
+}
+
 /// An explicit task rate in the currency shown to the project manager.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ProjectTaskRate {

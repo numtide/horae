@@ -42,6 +42,11 @@ F001–F003 does not complete Project Detail or the four-surface delivery.
   and historical identities, cost privacy, explicit bounds and PostgreSQL tests.
 - [ ] F016 [US2] Connect Tasks/Team tabs, counts, stable sorting and reciprocal
   disclosures to the chart period; verify route/loading and real browser behavior.
+- [x] F017 [US3] Test checked invoice lifecycle totals without mixing currencies.
+- [x] F018 [US3] Read project-attributable time/fee invoice history with stored
+  discounts, current billing permissions, explicit bounds and database tests.
+- [ ] F019 [US3] Integrate the invoice tab, real counts/links, labelled history,
+  empty/loading/error states and keyboard navigation without resetting chart scope.
 
 **Input**: Design documents from `specs/004-project-dashboard/`
 

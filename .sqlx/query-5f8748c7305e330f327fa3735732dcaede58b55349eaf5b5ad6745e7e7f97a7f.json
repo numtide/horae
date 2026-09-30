@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO invoices (id,org_id,client_id,number,status,issued_on,due_on,currency) SELECT id,$1,$2,id::text,'void','2026-09-01','2026-09-30','EUR' FROM unnest($3::uuid[]) id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5f8748c7305e330f327fa3735732dcaede58b55349eaf5b5ad6745e7e7f97a7f"
+}

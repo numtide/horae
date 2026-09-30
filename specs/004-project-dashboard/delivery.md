@@ -305,3 +305,40 @@ F016 remains open until the final browser acceptance is complete. The invoice
 tab, financial tiles, exports and remaining dashboard requirements are still
 required, followed by Clients and Settings/Workspace. This is not final visual
 acceptance or permission to merge PR 208.
+
+## Invoice history increment
+
+Add project-attributable invoice history from stored after-discount, before-tax
+line amounts, including time and fee sources. A shared invoice contributes only
+this project's lines. Keep currencies and lifecycle states separate; exclude void
+invoices from totals without losing void/reissue history. Current rate or project
+status changes do not reprice historical invoice lines.
+
+The read checks current organization-manager/admin authority and project access
+within a read-only repeatable-read transaction. Foreign/inactive/unauthorized
+viewers are rejected, and more than 5,000 invoices fails without partial totals.
+The UI adds a permission-gated Invoices tab, real counts and invoice links, loading
+and retry states, and all-history labels independent of the chart's work dates.
+It reuses the shared table, status badges and utilities without changing CSS.
+
+Evidence so far: all 146 core tests pass; all four new PostgreSQL billing tests
+pass (mixed-project discounts and fees, void/reissue and currencies, current
+permissions and foreign organizations, excessive history). SQLx metadata was
+regenerated for server/all-targets with incremental compilation disabled; no
+tracked metadata was deleted. No migration or business-data mutation was made.
+
+Invoice subject and payment date are not stored yet and are explicitly shown as
+not recorded instead of inferred. Contextual creation, financial tiles, the
+metadata decision and full browser acceptance remain required. Chrome shows the
+new tab and its real empty count; the native click again timed out waiting for
+stability. This is not native interaction acceptance or completion of F019.
+
+The final detail suite passes all 47 tests, including currency-labelled invoice
+links, HTML escaping, empty history, role-gated requests and switching back from
+Invoices without changing the work period. All 82 Projects PostgreSQL tests pass.
+Chrome MCP's DOM-event check opens the real empty invoice history, preserves the
+activity period and makes no additional invoice request. A first attempt crossed
+a development reload and was inconclusive; the repeated single-evaluation check
+above succeeded. Populated-history browser and native pointer checks remain open.
+Offline server Clippy (all targets, warnings denied), the application WASM check,
+`nix fmt` and whitespace checks also pass on this increment.

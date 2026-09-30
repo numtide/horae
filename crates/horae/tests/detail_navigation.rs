@@ -79,6 +79,7 @@ struct Probe {
     detail_requests: Rc<RefCell<Vec<Uuid>>>,
     task_requests: Rc<RefCell<Vec<Uuid>>>,
     activity_requests: Rc<RefCell<Vec<Uuid>>>,
+    project_invoice_requests: Rc<RefCell<Vec<Uuid>>>,
     navigator: Rc<RefCell<Option<Navigator>>>,
     scope: Rc<RefCell<Option<ScopeId>>>,
     response: Rc<RefCell<Option<oneshot::Receiver<InvoiceResponse>>>>,
@@ -535,10 +536,19 @@ async fn project_header_has_identity_and_manager_only_edit_navigation() {
             viewer_role: Some(role),
             ..Probe::default()
         };
-        let mut dom = VirtualDom::new_with_props(app, probe);
+        let mut dom = VirtualDom::new_with_props(app, probe.clone());
         dom.rebuild_in_place();
         settle(&mut dom);
         let html = dioxus::ssr::render(&dom);
+        assert_eq!(
+            html.contains("project-tab-invoices"),
+            role != OrgRole::Member,
+            "{html}"
+        );
+        assert_eq!(
+            probe.project_invoice_requests.borrow().len(),
+            usize::from(role != OrgRole::Member)
+        );
         assert!(html.contains("Back to Projects"), "{html}");
         assert!(html.contains("[CODE-1] Project-1"), "{html}");
         assert!(html.contains("Time &#38; Materials"), "{html}");
@@ -870,6 +880,21 @@ mod server_fns {
                 people: Vec::new(),
                 cells: Vec::new(),
                 totals: horae_core::project_breakdown::summarize(&[], false).unwrap(),
+            })
+        }
+    }
+    pub mod billing {
+        use super::*;
+        pub async fn get_project_invoices(
+            id: String,
+        ) -> Result<project::ProjectInvoices, ServerFnError> {
+            consume_context::<Probe>()
+                .project_invoice_requests
+                .borrow_mut()
+                .push(id.parse().unwrap());
+            Ok(project::ProjectInvoices {
+                invoices: vec![],
+                totals: Default::default(),
             })
         }
     }

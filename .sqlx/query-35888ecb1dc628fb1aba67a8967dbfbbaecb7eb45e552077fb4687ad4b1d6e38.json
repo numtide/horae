@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO invoices (id,org_id,client_id,number,status,issued_on,due_on,currency,notes) VALUES ($1,$2,$3,$4,$5,'2026-09-01','2026-09-30',$6,'Private invoice note')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        {
+          "Custom": {
+            "name": "invoice_status",
+            "kind": {
+              "Enum": [
+                "draft",
+                "sent",
+                "paid",
+                "void"
+              ]
+            }
+          }
+        },
+        "Bpchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "35888ecb1dc628fb1aba67a8967dbfbbaecb7eb45e552077fb4687ad4b1d6e38"
+}

@@ -116,6 +116,30 @@ shared editor covers their complete behavior. Bound rows explicitly and fail
 instead of silently truncating. Invoice attribution, exports and whole-delivery
 acceptance remain required independent follow-ups.
 
+### Invoice history integration
+
+Read stored `net_before_tax_cents` through both time-entry and fee-occurrence
+sources, scoped to the project and organization. Do not join through the current
+`time_entries.invoice_id`: a voided invoice keeps its lines after the entry is
+released or billed again. Current application writes do not move existing
+time-entry/fee sources between projects, and imported existing entries are
+skipped. A future source-move feature must preserve historical attribution before
+changing this invariant.
+
+Return all invoice history, labelled independently of chart work dates; preserve
+the chart interval while switching tabs. Keep draft reservations, sent/paid
+contributions and void history distinct and group totals by stored invoice
+currency. Recheck current organization-manager/admin authority, active status and
+project access within a bounded read-only snapshot. Exceeding the row or integer
+limit fails without partial results. Reuse exact checked domain sums and real
+invoice routes; do not reprice historical lines or attribute a whole mixed invoice.
+
+The model does not currently store invoice subject or payment date. Their addition
+to the invoice workflow is a pending product choice; do not substitute private
+notes, issue date or an invented payment timestamp. Invoice creation with project
+context, those metadata fields, financial tiles and remaining acceptance are
+separate required follow-ups, not satisfied by a read projection.
+
 ## Summary
 
 Replace the stub `ProjectDetail` page (today: `"Project detail for {id}"` plus an assignments table) with a real, data-honest project dashboard. It shows the project's identity, budget & progress (driven by `budget_kind`), total/billable/non-billable hours, billable amount, invoiced vs uninvoiced money, per-task and per-person breakdowns, the team and enabled tasks, and a recent-entries feed.
