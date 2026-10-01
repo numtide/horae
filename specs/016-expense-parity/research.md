@@ -39,7 +39,9 @@ Further research separates two directions that must not be conflated: invoice
 line edits do not rewrite the original tracked expense, but the cited invoice
 article does not establish what a privileged source-expense edit does to an
 existing invoice. FR-010 now covers the documented direction; EXP-E02 remains
-open for the reverse direction. No persisted invoice fixture has been tested.
+partially open for the reverse direction. A subsequent owner-only draft fixture
+confirms source correction/deletion leaves the draft line and total unchanged;
+sent-state, attribution and report consequences remain open.
 
 The fetched currency page contains an internal conflict: its project-specific
 currency section permits an override, while its expense FAQ describes client-only
@@ -112,8 +114,10 @@ behavior. Recorded in the spec's clarification, FR-013 and assumptions.
   tiny positive rates, true upper bounds, other currency exponents and historical
   currency transitions using only the authorized disposable fixtures.
 - **EXP-E02 — Billing contract**: Define privileged correction/deletion effects
-  on invoice lines, source links and already issued totals, with the billing
-  owner. Keep manual billed status separate from a real invoice relationship.
+  on source links, recipient reports and already issued totals, with the billing
+  owner. Draft line/amount independence is now verified after both source
+  correction and deletion. Keep manual billed status separate from a real
+  invoice relationship, and do not generalize owner-only results to other grants.
 - **EXP-E03 — Permission dependency**: Extend 015 to expense operations and
   receipt downloads. Six read/write grants and profile defaults are now observed
   and recorded with the owner; lifecycle mapping and non-owner enforcement remain
@@ -194,3 +198,14 @@ This is a draft self-review, not independent review or `speckit-analyze`.
   expense note is historical, preserved by clarify's marker-only rule. Remaining
   work includes source billing, receipt lifecycle/access, currency history and
   operation-level permissions. Fixture cleanup remains tracked in local scratch.
+- Draft billing follow-up: created one fixture-only draft through the UI (never
+  sent/marked sent), then changed source quantity 2 to 4 and its note. Expense
+  became USD 2.00; invoice retained its original quantity 2, description and USD
+  1.00 total. Permanent source deletion likewise preserved the draft. Updated
+  FR-006/011 and acceptance coverage; billing-evidence separates this proof from
+  still-unverified attribution, reports and sent-state behavior. Deleted only the
+  disposable expense, not the invoice or existing business data; exact remaining
+  cleanup targets are in scratch. Invoice review's client-currency default is
+  observed, but cross-currency persistence is not. Checklist remains 11/16; no
+  new product questions or hook executions. Next: currency/history and remaining
+  receipt/report checks; E-AUTH still needs suitable non-owner access.

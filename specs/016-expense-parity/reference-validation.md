@@ -12,10 +12,13 @@ read-back of the project editor confirmed EUR on the test client and an explicit
 USD project override. Exact IDs and cleanup targets are recorded only in the
 main checkout's `.scratch/playwright-windows/expense-fixture-ledger-20261001.md`.
 A fixture expense and unit category have now been saved and reused for numeric,
-repricing and synthetic receipt experiments. No invoice has been saved. Chrome
+repricing and synthetic receipt experiments. A draft invoice was subsequently
+saved; correcting and then permanently deleting the fixture source expense left
+its original invoice line and amount unchanged. The draft remains unsent. Chrome
 still reports hidden visibility, but focused keyboard and guarded DOM actions
 successfully save records; visibility is no longer a blocker. Reuse the ledger's
-exact fixtures after connection interruptions. Cleanup is pending further tests.
+exact surviving fixtures after connection interruptions; the deleted source
+expense cannot be reused. Cleanup of the draft/client/project/category is pending.
 
 ## Persisted numeric follow-up
 
@@ -117,8 +120,15 @@ establish a separate client-facing expense report. It is generated when the
 invoice is saved, excludes lines removed before save, and is regenerated when an
 attached draft invoice is edited and saved. Its files are accessible to invoice
 recipients. This is not general access to the underlying expense or receipt URL.
-Source edits without an invoice save, sent-invoice regeneration and subsequent
-receipt deletion effects remain unverified.
+Effects on this report of source edits without an invoice save, sent-invoice
+regeneration and subsequent receipt deletion remain unverified.
+
+The later [draft-invoice fixture](billing-evidence.md) verifies source-to-invoice
+line independence: changing source quantity/note or deleting it does not update
+the saved draft's original line or total. The owner editor disables date,
+project, category and billability and warns that source edits will not update
+the invoice. No report content or sent-invoice behavior was verified; these
+remain separate from the proven draft line/amount behavior.
 
 [Detailed reports](https://support.getharvest.com/hc/en-us/articles/360048687171-Detailed-time-and-detailed-expense-reports)
 include archived history; explicitly selecting archived filter options requires
@@ -152,7 +162,7 @@ the account owner. Use only explicitly authorized disposable fixtures.
 | E-NUM / FR-002/004/011 | Ordinary and unit persisted cases complete in numeric evidence; finish locale, true bounds, currency exponents and exports | Precision/sign/rounding stage verified for USD; zero UI/server divergence must remain explicit |
 | E-RATE / FR-004/011 | Active-category change and unchanged-field resave complete; finish archived category, tiny positive rates and mode changes | Historical 0.25 remains until resave reprices to 1.00; three-decimal rate verified, zero/negative rates rejected |
 | E-CUR / FR-011 | EUR-client/USD-project persistence complete; change only disposable client/project currencies after saving | Historical totals/labels, override inheritance and unchanged versus converted numbers remain open |
-| E-BILL / FR-006/010 | Link fixture expenses to a draft invoice, then correct/delete a source; inspect invoice lines, totals, source links and attached report | Source-to-invoice effects, distinct from invoice-to-source rules already documented; sent-state evidence requires separately safe access |
+| E-BILL / FR-006/010 | Draft source correction/deletion verified without invoice-line changes; finish attribution/report and sent-state effects | Owner-only draft evidence does not prove non-owner authorization, report retention or sent behavior; sent-state evidence requires separately safe access |
 | E-REC / FR-003/012 | PDF boundary/replacement, text-file rejection and removal/cancel complete; finish content/access/retention lifecycle | Strictly below 10,485,760 bytes; failed replacement preserves old receipt and fields; removal disables the internal receipt route |
 | E-AUTH / FR-005/006/014 | Use an editable non-owner reference person with own, managed and all read/write combinations; repeat after scope revocation | Allow/deny matrix for expenses, receipts, categories, locks, billing and approval; account currently exposes only an immutable owner |
 | E-ARCH / FR-003/004/009 | Archive fixture project/person/category and inspect historical expense, receipt, reporting and portable archive | Retained history and access rules; category archive must not itself prohibit editing existing expenses |
