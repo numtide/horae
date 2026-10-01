@@ -35,9 +35,10 @@ their implementation has merged. Recheck heads before modifying an owning branch
 | Clients, `012-clients-design` | [bc5d063](https://github.com/numtide/horae/tree/bc5d06315738f028665386fb405c54232227cf73/specs/012-clients-design), [#209](https://github.com/numtide/horae/pull/209) | Confirmed permission model propagated; draft spec/research/checklist, no plan/tasks | Settle contacts and lifecycle conflict, then plan against feature 015's completed contract |
 | Workspace, `013-workspace-design` | [9a7ec5a](https://github.com/numtide/horae/tree/9a7ec5ac01a1670c009767a6b0d9354a365d61f5/specs/013-workspace-design), [#210](https://github.com/numtide/horae/pull/210) | Draft spec, research and requirements checklist; no plan/tasks | Invitations, backup and deletion contracts |
 | Personal Settings, `014-personal-settings-design` | [6aafd4e](https://github.com/numtide/horae/tree/6aafd4eb3d24f74ba659ae5c6766f610f8604fb4/specs/014-personal-settings-design), [#211](https://github.com/numtide/horae/pull/211) | Draft spec, research and requirements checklist; no plan/tasks | Profile ownership and notification delivery |
-| Scoped permissions/approvals, `015-scoped-permissions` | [b3ee8da](https://github.com/numtide/horae/tree/b3ee8da3fed172888a174ff3dc32a16477c1ca5b/specs/015-scoped-permissions), [#212](https://github.com/numtide/horae/pull/212) | Planning artifacts, migration/rate protocols and constitution 1.1.0 amendment included; full policy remains unresolved | Complete reference matrix, review mappings and propagate permission contracts to dependent specs |
+| Scoped permissions/approvals, `015-scoped-permissions` | [b569c75](https://github.com/numtide/horae/tree/b569c7536d7705c11a1e745756a73457a241ef5c/specs/015-scoped-permissions), [#212](https://github.com/numtide/horae/pull/212) | Planning artifacts, migration/rate protocols and constitution 1.1.0 amendment included; confirmed expense/estimate/retainer/payment scope propagated; full policy unresolved | Complete reference matrix, review mappings and propagate permission contracts to dependent specs |
+| Expenses, `016-expense-parity` | [c5bf7d5](https://github.com/numtide/horae/tree/c5bf7d594d2c10fff1fa60b4e3e4630f99269868/specs/016-expense-parity), [#214](https://github.com/numtide/horae/pull/214) | Draft spec, reference research and checklist; specify/clarify started, 11/16 checks; no plan/tasks | Missing-surface design choice; precision, invoice-correction, attachment and permission contracts |
 
-All five PRs were drafts at the inventory snapshot. Status is not a promise about
+All six feature PRs were drafts at the latest inventory snapshot. Status is not a promise about
 later GitHub state. No merge is part of this specification delivery.
 
 ## Coverage map
@@ -52,13 +53,14 @@ their requirements. Missing mockups do not exclude approved web workflows.
 | --- | --- | --- |
 | Sign-in and onboarding | 001; design 01/02/03; existing OIDC/CLI bootstrap | Separate self-hosted admission and invitations from Harvest ID, hosted signup and subscriptions |
 | Time tracking | 001/003; design 04; Timesheet routes | Day/week/calendar parity, copy/reuse flows, validation, timers, historical locks and date boundaries |
+| Time off (Beta) | Current authenticated Harvest navigation and `/pto/activation`, observed 2026-10-01; no owner yet | Native web surface: activation overview advertises allowances, requests, balances and team calendar; setup names holiday calendars, people assignment and vacation policy. Investigate without activating or assuming those flows have been tested. Not Forecast. |
 | Projects and task catalog | 009/010/011 and pending dashboard; design 05/11/13 | Reconcile delivered list/editor behavior; remaining actions, reporting and global task lifecycle |
 | Clients and contacts | Pending 012; design 12 list/detail | Multi-contact billing identity, archive/reactivation, bulk actions and currency-safe totals |
 | People, capacity and rates | 001 and pending 013/014/015 | Directory versus admin UI, assignments, contractors/capacity, rate history and effective dates |
 | Permissions and approvals | Pending 015; design 06/08/09 | All six profiles, custom grants, scoped approval/withdrawal and every entry point; extend matrix for newly approved domains |
 | Reports | 001 and `004-invoice-timesheet-exports`; design 07 | Time/project/team and financial reports, saved/shared/scheduled behavior, permissions and exact export reconciliation |
 | Invoice lifecycle and payments | 001/011 and existing invoice modules; dashboard consumers | Draft/send/view, numbering/settings, dates, reminders, recurrence, partial payments/write-offs and project attribution |
-| Expenses | No dedicated expense spec or route found in this inventory | Categories, receipts, reimbursable/billable amounts, approval, reporting and invoice integration |
+| Expenses | Pending 016 / #214; official reference and read-only Chrome snapshots | Finish numeric/currency, receipt, six-profile and invoice-correction contracts; actual form validation remains unverified |
 | Estimates | No dedicated estimate spec or route found | Creation, client delivery/response and downstream project/invoice relationships |
 | Retainers | Historical 001 project-kind mention; no dedicated ledger spec found | Distinguish advance-payment balance/draws from fixed or recurring project fees |
 | Personal settings | Pending 014; design 08 | Profile, timezone, rates, assignments, notifications and truthful security/integration destinations |
@@ -96,6 +98,8 @@ Only the former should be presented as a choice to the user.
 | D-010 | Reference contract / dashboard | PD-001 still asks whether to omit Pin/Duplicate/Delete/Link/Unlink. Reconcile with the new parity request; investigate their semantics and destructive safeguards, not just whether a button is visible. |
 | D-011 | Reference access / 015 | Current evidence account has only its immutable owner; invite path requests another paid seat. Custom-profile persistence and several approval edge cases remain unverified. Use available documentation first; request suitable test access if needed, never purchase or bypass restrictions. |
 | D-012 | Governance and contract dependency / 015 + consumers | PR #212 proposes constitution 1.1.0, not merged. PRs #208/#209 now use the confirmed six-profile/custom target and distinguish legacy evidence from acceptance. Full operation-matrix integration, persistence and migration review remain required; the broad three-role contradiction is resolved in the pending specs. |
+| D-013 | Product/design / 016 and other absent mockups | Asked whether screens without a dedicated handoff may be composed from Horae's existing design system or must await a new handoff. No answer recorded. This does not reopen functional web scope. |
+| D-014 | Evidence and contracts / 016 + billing + 015 | Expense quantity/rate precision, currency transitions, privileged correction/deletion after invoicing, receipt lifecycle and new-profile operation matrix remain unresolved. Research these reference facts before presenting any genuine product deviation for approval. |
 
 ## Proposed dependency order
 
@@ -114,6 +118,39 @@ This orders planning, not implementation authorization:
    review all cross-screen journeys and close analysis findings.
 
 ## Iteration log
+
+### 2026-10-01 — Expense specification and live inventory
+
+- Rechecked remote branches/PRs and existing worktrees; retained their owners.
+  Created `feat/expense-parity` in `.worktrees/expense-parity` from the unchanged
+  master baseline; feature number 016 was free locally and remotely.
+- Executed the installed specify workflow with template resolution, helper
+  dry-run, feature pointer, quality checklist and absent-hook checks. Executed
+  clarify path resolution and coverage scan; D-013 was asked, not answered.
+- Published draft PR #214, commit `c5bf7d5`: expense stories/requirements,
+  seven official reference links, browser limitations and preliminary adversarial
+  self-review. Checklist 11/16; high findings remain open. No full plan/tasks or
+  `speckit-analyze` readiness is claimed.
+- Windows Chrome/MCP opened a dedicated reference tab without disturbing the
+  existing tab. Expenses empty state and Categories list were observed; clicks
+  timed out, so form validation and mutations are not verified. A direct visit
+  to the Categories link succeeded. Local snapshots are under the main worktree's
+  `.scratch/playwright-windows/` and are not committed.
+- Found Time off (Beta) in live navigation. Its read-only activation overview
+  is recorded in `time-off-inventory-20261001.md`; no module was activated and no
+  policy or account record was changed. Added the surface to the coverage map
+  rather than silently omitting it or conflating it with Forecast.
+- Propagated confirmed web scope into feature 015 through clarify: PR #212
+  `b569c75` expands target matrix coverage and receipt-denial acceptance while
+  retaining implementation boundaries. Checklist remains 12/16; grants are not
+  inferred and no runtime authorization changes were made.
+- Nix format/fail-on-change and Git whitespace checks passed for the changed
+  feature documents. No application code, migrations, real-data mutations or
+  merges occurred. Existing operational integrations are unchanged.
+- Next: record D-013 when answered, continue expense numeric/billing evidence,
+  assign invoice/report contracts and investigate Time off using read-only
+  evidence. Other feature decisions remain open; do not repeat finished scope
+  research or call the backlog implementation-ready.
 
 ### 2026-10-01 — Inventory bootstrap
 
