@@ -345,3 +345,13 @@ adds the documented budget requirement; the remaining findings stay open.
   audit remaining receipt rendering/budget-variant evidence and reconcile gate
   ownership before deciding whether independent work is complete. Do not use
   this publication checkpoint as an implementation-ready declaration.
+- Read-only closure audit: task-fee/task-hour/person-hour editor modes expose no
+  expense-inclusion option; the current official guide corroborates exclusion.
+  Returned No budget and cancelled without saving. Internal receipt PDF uses
+  attachment download; the editor has no PDF viewer. Generated-report rendering
+  remains an artifact/delivery gate, not a failed internal preview. No new file
+  replacement or fixture identity was necessary. Recorded requirement-by-
+  requirement status and clarification coverage in independent-work-audit.md.
+  Checklist still 11/16 with no changes; no questions, hooks or implementation.
+  Next: resolve the remaining detailed-report target-set evidence gap without
+  repeating the already-closed budget/currency/101-row experiments. Goal active.

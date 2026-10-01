@@ -33,9 +33,12 @@ reconciliation and budget contribution now have persisted reference evidence.
 The three consumer specs name the budget dependency; their historical plans/tasks
 are not thereby reconciled. No final plan/tasks/analyze is claimed.
 
-The independent-work goal remains active at this publication checkpoint. Next:
-audit remaining receipt rendering and budget-variant evidence, then classify
-every remaining gate by evidence, product conflict or unavailable authority.
+The independent-work goal remains active at this publication checkpoint. The
+[independent-work audit](independent-work-audit.md) classifies the remaining
+gates after checking receipt download and other budget controls. The internal
+PDF path downloads an attachment; its success does not certify generated-report
+rendering. Other budget modes expose no inclusion option, corroborating the
+documented exclusion without claiming persisted consumption tests for each.
 Detailed-report pagination is still not exposed at tested volumes; do not call
 that a passed multi-page case or turn it into endless equivalent probes.
 Export email, non-owner permissions, alternate account locale, nonzero time/rate

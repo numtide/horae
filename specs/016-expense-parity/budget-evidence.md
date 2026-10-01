@@ -68,3 +68,14 @@ the later mixed-currency experiment it was active again; the source retained
 October 1, three units / USD 1.50, billable, unbilled, unlocked, no invoice, with
 its original downloadable 431-byte receipt. No time, rates or notifications
 were created to establish these results.
+
+## Other budget controls
+
+Read-only editor follow-up selected Fees per task, Hours per task and Hours per
+person. None rendered the expense-inclusion checkbox; Fees per task retained
+monthly-reset and alert controls. Returned to No budget and cancelled without
+saving. This corroborates the documented Total project fees-only option, not
+server persistence or a full consumption test for each other budget kind.
+The [current budget guide](https://support.getharvest.com/hc/en-us/articles/360052763131-How-do-I-include-expenses-in-my-project-budget)
+was reread on the same date and explicitly limits expense inclusion to Total
+project fees. No alternative expense allowance was invented for the other modes.

@@ -92,3 +92,20 @@ invoice-recipient artifact lifecycle. Provider backup erasure is not observable
 through this browser; the Horae storage policy needs its own explicit contract.
 Private cases: `expense-lifecycle-results-20261001.md`. These tests do not close
 the full attachment contract.
+
+## Internal download versus generated-report rendering
+
+Read-only follow-up on the restored valid fixture found a list control labelled
+Download attachment, opening the internal receipt route in a new tab. Its
+response was `application/pdf` with `Content-Disposition: attachment` and the
+expected 431 bytes. The editor displayed Attached receipt / Delete receipt,
+not an embedded PDF preview; its one hidden iframe belonged to an existing
+payment-library bootstrap, not the receipt. Cancelled the editor without saving.
+
+Do not invent an in-app PDF viewer or claim that this download path validates
+rendering. The earlier accepted header-only PDF likewise remained downloadable.
+Failures while incorporating receipts into a generated report are a different
+contract: export generation may email, and the current invoice Preview has its
+separately recorded access gate. Those artifacts cannot be certified from a
+successful internal receipt download. No malformed file was uploaded again
+merely to repeat its already-proven acceptance.

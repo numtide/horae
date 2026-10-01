@@ -46,7 +46,7 @@ fee-budget fixture. Not a completed technical plan or implemented capability.
 | Monthly inclusion on, source October 1 → September 30 | FR-019 | October remaining USD 100; All time costs USD 1.50; persisted reference verified |
 | Restore source October 1 | FR-019 | October remaining USD 98.50; persisted reference verified |
 | Total project hours budget 100, no time | FR-019 | List/detail remaining 100, spent 0, expense costs USD 1.50; persisted reference verified |
-| Task/person-scoped budgets | FR-019 | No automatic expense consumption; documented rule, variants not exercised |
+| Task/person-scoped budgets | FR-019 | No automatic expense consumption; documented rule and absent editor option verified for fees per task/hours per task/hours per person; no per-variant persisted consumption test |
 | Fee-budget list/detail and detailed expense report | FR-019, SC-003 | USD 1.50 contribution, USD 98.50 remainder on budget surfaces and USD 1.50 report total; owner-only USD fixture verified |
 | Permitted and forbidden actors; multiple currencies | FR-012/014/019, SC-002/003 | Same authorized contribution and currency semantics; complete permission and cross-currency matrix remains open |
 
