@@ -44,6 +44,7 @@ A permitted viewer opens a project and sees identity, client, status and real pr
 1. An hours-budgeted project shows tracked hours, billable/non-billable split, consumed allowance and signed remaining allowance. An overrun remains visible when the bar is full.
 1. No budget produces real totals and an authorized Set up a budget link, not a synthetic zero allowance.
 1. Monthly and task/person-scoped budgets identify period/scope. Unallocated allowances are not zero allowances or a fabricated project cap.
+1. A Total project fees budget with expense inclusion enabled consumes both billable and non-billable expenses in the budget's work-date period. USD 100 with USD 1.50 expenses and no time shows USD 98.50 remaining, matching Projects. Disabling inclusion restores USD 100 without removing expense costs; a 100-hour budget retains 100 hours. Detailed expense reporting reconciles the contribution, not a synthetic budget remainder.
 1. Archived projects remain readable to authorized viewers; inaccessible projects reveal no identity.
 
 ### User Story 2 — Explore time and costs (Priority: P1)
@@ -111,6 +112,7 @@ A person with the applicable project-management capability uses contextual actio
 - **FR-020**: Reuse current design tokens/utilities/components and preserve shared defaults. Do not copy prototype handlers, inline styles or sample data.
 - **FR-021**: Use exact integer quantities and explicit currency; overflow is an error rather than wrapping, saturation or partial success.
 - **FR-022**: Dashboard reads do not mutate business records or send notifications. Verification uses disposable data, preserving imported development data and existing previews.
+- **FR-023**: Consume feature 016's shared expense-budget contract: expense inclusion belongs to Total project fees only, includes both billability states when enabled and follows work-date monthly boundaries independently of All time costs. Keep expense costs distinct from tracked-time costs, invoice values and eligibility. List/detail contributions must reconcile to authorized expense reports without mixing currencies or disclosing forbidden expense data. Editor ownership remains feature 011; this adds no management form to the dashboard. The expense package in [PR #214](https://github.com/numtide/horae/pull/214) owns the contract and reference evidence; historical dashboard task completion does not certify this new dependency.
 
 ## Open product decision
 
@@ -162,6 +164,7 @@ The handoff lists Pin, Duplicate, Delete, Link invoice and Unlink, but its handl
 
 - Retain single-organization OIDC. The final permission boundary is feature 015's user-confirmed six-profile/custom model, not the old administrator/manager/member assumption. Its [pending PR #212](https://github.com/numtide/horae/pull/212) owns the constitution amendment, verified matrix and reviewed migration; none is silently activated by this dashboard spec. Current implementation evidence remains valid only for the legacy policy it actually tested.
 - Reuse feature 011's editor, budgets, privacy and fee accounting plus current report/export infrastructure.
+- Expense contribution depends on feature 016's `budget-contract.md` and its applicable authorization/currency contract. Owner-only USD reference reconciliation is not a complete permission matrix or Horae implementation test. Refresh the plan and trace FR-023 into implementation and regression tasks when that package is ready.
 - Charts visualize recorded data, not forecasts. Currency conversion and historical financial-snapshot editing are not introduced.
 - Client navigation is an end-to-end acceptance dependency on the Clients slice, not complete while its destination is a placeholder.
 - Preserve the imported handoff; document actual differences and any explicit user-approved exclusions in acceptance evidence.

@@ -171,3 +171,20 @@ PD-001, imported-billing semantics and the dependent permission matrix remain
 unresolved. Only those two markers changed; checklist notes retain their dated
 historical snapshot. No item became newly passing. Full clarification/planning
 remains open rather than treating this narrow reconciliation as feature readiness.
+
+## Expense budget dependency — 2026-10-01
+
+Feature 016's isolated reference checks verify USD 100 fee budget / USD 1.50
+expense → USD 98.50 remaining, including non-billable expenses, with removal
+from consumption when inclusion is disabled and work-date monthly boundaries.
+A 100-hour budget retains 100 hours; both cases reconcile with Projects. The
+detailed expense report reports the USD 1.50 contribution, not a budget balance.
+Added US1 acceptance, FR-023 and the dependency on the owning expense package in
+PR #214. Editing stays in feature 011; no new detail management panel or global
+CSS change is implied. Expense costs must not be silently relabeled into the
+organization's time-cost currency or derived from an invoice line.
+
+This is cross-contract propagation, not a new runtime test of Horae or a completed
+technical plan. Existing planning/task artifacts remain historical. Rechecked
+the current requirements checklist: 11/16 unchanged; pending action scope,
+imported billing and operation-level permissions still prevent full readiness.
