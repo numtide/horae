@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE time_entries\n         SET state = $4, rounded_minutes = NULL\n         WHERE user_id = $1\n           AND spent_date BETWEEN $2 AND $3\n           AND (state = $5 OR state = $6)",
+  "query": "UPDATE time_entries\n         SET state = $4, rounded_minutes = NULL\n         WHERE user_id = $1\n           AND org_id = $7\n           AND spent_date BETWEEN $2 AND $3\n           AND (state = $5 OR state = $6)",
   "describe": {
     "columns": [],
     "parameters": {
@@ -46,10 +46,11 @@
               ]
             }
           }
-        }
+        },
+        "Uuid"
       ]
     },
     "nullable": []
   },
-  "hash": "757aec0948b67de65fac3ec3abff999aebc4cbdef10e6f7372e10d1b026a92b6"
+  "hash": "95330e960e445ca04d5c3300e8d2e5ddf2078a210e91136038d0172e6d6cb2c5"
 }

@@ -181,7 +181,7 @@ async fn submit_user_week(
         )
     })?;
 
-    let total_minutes = week_total_minutes(&mut *tx, user_id, ws, we).await?;
+    let total_minutes = week_total_minutes(&mut *tx, user_id, org_id, ws, we).await?;
     tx.commit().await.map_err(server_err)?;
     Ok((approval, total_minutes))
 }
@@ -248,18 +248,21 @@ pub async fn list_approvals(status: Option<String>) -> Result<Vec<ApprovalSummar
 
 /// Approve every submitted approval in `ids` within one transaction: flip each
 /// row Submitted→Approved, transition its period's submitted entries, and return
-/// the rows actually approved (ids not in 'submitted' are skipped). Shared by the
+/// the rows actually approved (foreign or non-submitted ids are skipped). Shared by the
 /// single- and bulk-approve server functions so the transition lives in one place.
 #[cfg(feature = "server")]
-async fn approve_ids(manager: &User, ids: &[uuid::Uuid]) -> Result<Vec<Approval>, ServerFnError> {
-    let state = crate::state::global_state().await;
-    let mut tx = state.db.begin().await.map_err(server_err)?;
+async fn approve_periods(
+    pool: &sqlx::PgPool,
+    manager: &User,
+    ids: &[uuid::Uuid],
+) -> Result<Vec<Approval>, ServerFnError> {
+    let mut tx = pool.begin().await.map_err(server_err)?;
 
     let approvals = sqlx::query_as!(
         Approval,
         r#"UPDATE approvals
              SET state = $2, approved_by = $3, approved_at = now()
-           WHERE id = ANY($1) AND state = $4
+           WHERE id = ANY($1) AND state = $4 AND org_id = $5
         RETURNING id, org_id, user_id,
                   period_start as "period_start: chrono::NaiveDate",
                   period_end as "period_end: chrono::NaiveDate",
@@ -271,6 +274,7 @@ async fn approve_ids(manager: &User, ids: &[uuid::Uuid]) -> Result<Vec<Approval>
         EntryState::Approved as EntryState,
         manager.id,
         EntryState::Submitted as EntryState,
+        manager.org_id,
     )
     .fetch_all(&mut *tx)
     .await
@@ -284,6 +288,7 @@ async fn approve_ids(manager: &User, ids: &[uuid::Uuid]) -> Result<Vec<Approval>
              FROM approvals a
             WHERE a.id = ANY($1)
               AND te.user_id = a.user_id
+              AND te.org_id = a.org_id
               AND te.spent_date BETWEEN a.period_start AND a.period_end
               AND te.state = $3"#,
         &approved_ids,
@@ -295,6 +300,14 @@ async fn approve_ids(manager: &User, ids: &[uuid::Uuid]) -> Result<Vec<Approval>
     .map_err(server_err)?;
 
     tx.commit().await.map_err(server_err)?;
+    Ok(approvals)
+}
+
+#[cfg(feature = "server")]
+async fn approve_ids(manager: &User, ids: &[uuid::Uuid]) -> Result<Vec<Approval>, ServerFnError> {
+    let state = crate::state::global_state().await;
+    let approvals = approve_periods(&state.db, manager, ids).await?;
+    let approved_ids: Vec<uuid::Uuid> = approvals.iter().map(|a| a.id).collect();
 
     // Sum every approved period's tracked minutes in one grouped query instead of
     // a round-trip per approval. This matches `week_total_minutes` exactly: all of
@@ -305,10 +318,12 @@ async fn approve_ids(manager: &User, ids: &[uuid::Uuid]) -> Result<Vec<Approval>
            FROM approvals a
            LEFT JOIN time_entries te
              ON te.user_id = a.user_id
+            AND te.org_id = a.org_id
             AND te.spent_date BETWEEN a.period_start AND a.period_end
-           WHERE a.id = ANY($1)
+           WHERE a.id = ANY($1) AND a.org_id = $2
            GROUP BY a.id"#,
         &approved_ids,
+        manager.org_id,
     )
     .fetch_all(&state.db)
     .await
@@ -360,7 +375,7 @@ pub async fn approve_submission(approval_id: String) -> Result<Approval, ServerF
 }
 
 /// Approve several submitted weeks at once (the "approve visible" action).
-/// Returns the number actually approved; ids not in 'submitted' are skipped.
+/// Returns the number actually approved; foreign or non-submitted ids are skipped.
 #[server]
 pub async fn approve_submissions(approval_ids: Vec<String>) -> Result<usize, ServerFnError> {
     let manager = require_manager().await?;
@@ -382,8 +397,34 @@ pub async fn reject_submission(approval_id: String) -> Result<(), ServerFnError>
 
     let state = crate::state::global_state().await;
     let approval_id = parse_uuid(&approval_id, "approval_id")?;
+    let approval = reopen_period(&state.db, &manager, approval_id).await?;
 
-    let mut tx = state.db.begin().await.map_err(server_err)?;
+    let total_minutes = week_total_minutes(
+        &state.db,
+        approval.user_id,
+        approval.org_id,
+        approval.period_start,
+        approval.period_end,
+    )
+    .await?;
+    state
+        .plugins
+        .dispatch(crate::plugin::AppEvent::SubmissionRejected {
+            occurred_at: chrono::Utc::now(),
+            org_id: approval.org_id,
+            submission: submission_payload(&approval, total_minutes),
+        });
+
+    Ok(())
+}
+
+#[cfg(feature = "server")]
+async fn reopen_period(
+    pool: &sqlx::PgPool,
+    manager: &User,
+    approval_id: uuid::Uuid,
+) -> Result<Approval, ServerFnError> {
+    let mut tx = pool.begin().await.map_err(server_err)?;
 
     // Fetch the approval to know user + period + current state, locking the
     // row so a concurrent approve can't interleave with the reopen below.
@@ -396,9 +437,10 @@ pub async fn reject_submission(approval_id: String) -> Result<(), ServerFnError>
                 submitted_at as "submitted_at: chrono::DateTime<chrono::Utc>",
                 approved_by,
                 approved_at as "approved_at: chrono::DateTime<chrono::Utc>"
-         FROM approvals WHERE id = $1
+         FROM approvals WHERE id = $1 AND org_id = $2
          FOR UPDATE"#,
         approval_id,
+        manager.org_id,
     )
     .fetch_optional(&mut *tx)
     .await
@@ -418,6 +460,7 @@ pub async fn reject_submission(approval_id: String) -> Result<(), ServerFnError>
         "UPDATE time_entries
          SET state = $4, rounded_minutes = NULL
          WHERE user_id = $1
+           AND org_id = $7
            AND spent_date BETWEEN $2 AND $3
            AND (state = $5 OR state = $6)",
         approval.user_id,
@@ -426,35 +469,25 @@ pub async fn reject_submission(approval_id: String) -> Result<(), ServerFnError>
         EntryState::Open as EntryState,
         EntryState::Submitted as EntryState,
         EntryState::Approved as EntryState,
+        manager.org_id,
     )
     .execute(&mut *tx)
     .await
     .map_err(server_err)?;
 
     // Delete the approval row (per schema: "reject deletes the row")
-    sqlx::query!("DELETE FROM approvals WHERE id = $1", approval_id)
-        .execute(&mut *tx)
-        .await
-        .map_err(server_err)?;
+    sqlx::query!(
+        "DELETE FROM approvals WHERE id = $1 AND org_id = $2",
+        approval_id,
+        manager.org_id,
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(server_err)?;
 
     tx.commit().await.map_err(server_err)?;
 
-    let total_minutes = week_total_minutes(
-        &state.db,
-        approval.user_id,
-        approval.period_start,
-        approval.period_end,
-    )
-    .await?;
-    state
-        .plugins
-        .dispatch(crate::plugin::AppEvent::SubmissionRejected {
-            occurred_at: chrono::Utc::now(),
-            org_id: approval.org_id,
-            submission: submission_payload(&approval, total_minutes),
-        });
-
-    Ok(())
+    Ok(approval)
 }
 
 // DB-backed guard tests (`#[sqlx::test]`, throwaway database per test). They
@@ -530,3 +563,6 @@ mod tests {
 
 #[cfg(all(test, feature = "server"))]
 mod submission_tests;
+
+#[cfg(all(test, feature = "server"))]
+mod isolation_tests;

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "DELETE FROM assignments WHERE id = $1\n         RETURNING id, project_id, user_id, role as \"role: ProjectRole\", rate_cents,\n                   created_at as \"created_at: chrono::DateTime<chrono::Utc>\"",
+  "query": "DELETE FROM assignments a USING projects p, users u\n         WHERE a.id = $1 AND a.project_id = p.id AND a.user_id = u.id\n           AND p.org_id = $2 AND u.org_id = $2\n         RETURNING a.id, a.project_id, a.user_id, a.role as \"role: ProjectRole\", a.rate_cents,\n                   a.created_at as \"created_at: chrono::DateTime<chrono::Utc>\"",
   "describe": {
     "columns": [
       {
@@ -47,6 +47,7 @@
     ],
     "parameters": {
       "Left": [
+        "Uuid",
         "Uuid"
       ]
     },
@@ -59,5 +60,5 @@
       false
     ]
   },
-  "hash": "bf248c120afd6597cca80888849b61d556010df90858f0d347bc99c19bd475a0"
+  "hash": "3279e9a50b5c6b2eee51793ee2b22c533c6f979efef77bdc9005bfe6263aaae3"
 }

@@ -1,21 +1,26 @@
 <!--
 Sync Impact Report
-- Version change: (unratified template) → 1.0.0
-- Ratification: initial adoption; principles derived from SPEC.md §0 pinned decisions
-- Principles defined:
-  I. Exactness (NON-NEGOTIABLE)
-  II. Domain Purity
-  III. Single Datastore
-  IV. Mutations Through Server Functions
-  V. Reproducible Builds & Formatting Gate
-- Added sections: Technology & Data Constraints; Development Workflow & Quality Gates
+- Version change: 1.0.0 → 1.1.0
+- Basis: user-confirmed six-profile/custom-permission scope in feature 015,
+  Clarifications, 2026-09-30. MINOR expands authorization guidance without removing
+  or redefining any of the five core principles.
+- Modified principles: none; Principle IV's role checks follow the effective
+  capability/scope constraints below rather than an ordered role-name comparison.
+- Added sections: none; expanded Technology & Data Constraints and quality gates
 - Removed sections: none
-- Templates checked:
-  - .specify/templates/plan-template.md — Constitution Check gate present ✅ (no change required)
-  - .specify/templates/spec-template.md — no mandatory-section change ✅
-  - .specify/templates/tasks-template.md — task categories already cover these principles ✅
-  - specs/001-time-tracking-invoicing/plan.md — updated to reference this ratified constitution ✅
-- Deferred TODOs: none
+- Consistency propagation:
+  - .specify/templates/plan-template.md — checked; dynamic Constitution Check remains applicable
+  - .specify/templates/spec-template.md — checked; existing requirements/acceptance sections suffice
+  - .specify/templates/tasks-template.md — checked; security/test tasks support these gates;
+    generic optional-test examples do not override constitutional correctness tests
+  - .specify/templates/commands/ — absent; no command templates to update
+  - AGENTS.md / README.md — checked; retain accurate current-runtime descriptions,
+    not a claim that six profiles are already deployed
+  - specs/015-scoped-permissions/spec.md / plan.md / research.md — updated
+- Follow-up: reconcile pending dashboard/client role-based acceptance through
+  feature 015's verified matrix; finish policy persistence, migration review and
+  cross-surface verification. T008 remains open for those dependencies.
+- No unexplained placeholders; this amendment does not activate runtime policy.
 -->
 
 # Horae Constitution
@@ -72,8 +77,20 @@ trustworthy; a formatting gate keeps diffs about substance.
 
 - Language: Rust (edition 2024); the web UI compiles to WASM via Dioxus fullstack.
 - Persistence: PostgreSQL 15+ via `sqlx`; schema changes ship as ordered migrations under `migrations/`.
-- Authentication is credential/identity-provider based with role-based authorization
-  (administrator / manager / member); a local development bypass is permitted but MUST be off by default.
+- Authentication is credential/identity-provider based; a local development bypass is permitted
+  but MUST be off by default. Permission changes MUST NOT rebind identity or turn imports into
+  admission or privilege grants.
+- The target authorization model MUST provide Member, Project Manager, People Admin, Accounting,
+  Executive Manager and Administrator profiles, reusable custom profiles and per-person adjustments.
+  Access MUST depend on effective capabilities and applicable own/person/project/organization scope,
+  not profile-name ordering. Membership, project management and person management MUST be distinct.
+- Current authorization MUST be enforced across mutations, reads, aggregates, exports and delegated
+  work. Sensitive fields MUST be withheld from unauthorized responses, not merely hidden in the UI.
+  Organization isolation, inactive-account denial and independent business-state locks MUST remain
+  mandatory. Service jobs/plugins MUST use explicitly bounded service authority, not assumed user grants.
+- Profile/privilege changes MUST require administrator authority and protect the last active
+  administrator under concurrent changes. Assignment authority MUST follow the verified operation
+  contract and MUST NOT become an indirect privilege-escalation path.
 - Plugins (when present) run sandboxed and MUST NOT bypass these principles — in particular, they have
   no direct datastore write access (they use granted host capabilities only).
 
@@ -83,6 +100,11 @@ trustworthy; a formatting gate keeps diffs about substance.
   `specs/<NNN-feature>/`.
 - Correctness-critical changes MUST include tests in `horae-core` and/or `#[sqlx::test]` integration
   tests; the NixOS e2e check exercises the deployed surface.
+- Authorization changes MUST include allowed/denied, record-scope, sensitive-payload and revocation
+  verification across affected delivery paths. Before replacing legacy Admin/Manager/Member checks,
+  the operation matrix, existing-data migration differences and concurrent activation/recovery
+  contract MUST be reviewed. Preserve business records; no silent role remapping or database reset.
+  The legacy roles describe the pre-cutover implementation, not an accepted substitute for the target.
 - A change MUST NOT merge with a red `nix flake check` or unformatted files.
 - Any deviation from a principle MUST be justified in the plan's Complexity Tracking (or rejected).
 
@@ -94,4 +116,4 @@ added principles or materially expanded guidance, PATCH for clarifications. Ever
 Check gate MUST verify compliance before Phase 0, and again after design. Unjustified violations block
 merge. Runtime working guidance for agents lives in `AGENTS.md`.
 
-**Version**: 1.0.0 | **Ratified**: 2026-07-10 | **Last Amended**: 2026-07-10
+**Version**: 1.1.0 | **Ratified**: 2026-07-10 | **Last Amended**: 2026-10-01
