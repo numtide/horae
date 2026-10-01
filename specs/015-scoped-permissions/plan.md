@@ -6,7 +6,7 @@
 
 Deliver Harvest parity: six built-in profiles, reusable custom profiles, per-person adjustments and scoped approvals. No fixed-role-only or whole-week-only substitute is accepted.
 
-This is an incremental plan. The independent record-scope foundation is executable; the full feature's research and policy design are not complete. Implementing that foundation does not authorize replacing runtime role checks. FR-002's complete operation matrix, governance amendment and reviewed migration remain prerequisites to the policy cutover.
+This is an incremental plan. The independent record-scope foundation is executable; the full feature's research and policy design are not complete. Implementing that foundation does not authorize replacing runtime role checks. FR-002's complete operation matrix, adoption of the included governance amendment, dependent-spec reconciliation and reviewed migration remain prerequisites to the policy cutover.
 
 ## Technical Context
 
@@ -26,7 +26,7 @@ This is an incremental plan. The independent record-scope foundation is executab
 | PostgreSQL, org isolation, UUID v7 | No schema changes; isolation tested | Required in migrations and every assignment |
 | Server-function mutations | No new mutation surface | All access mutations session-authenticated |
 | Reproducible validation | Nix core tests, Clippy and formatting | Full flake and integration checks before merge |
-| Existing three-role constraint | Existing roles unchanged | Amendment with Sync Impact Report/version required before new roles |
+| Authorization target and transition | Runtime roles unchanged | Constitution 1.1.0 amendment included; matrix, migration and cross-surface acceptance still required before cutover |
 
 Foundation design passes these gates. The full-feature post-design check is still open, not waived. No complexity exception is requested.
 
@@ -55,7 +55,7 @@ crates/horae/tests/integration.rs
 ## Execution and Dependencies
 
 1. Implement the independent FR-006 scope predicate with failing tests first: own, managed people, managed projects and organization; union without privilege inference; fail closed for inactive or mismatched identities/organizations.
-1. Finish the Harvest reference matrix, custom prerequisite graph, approval/withdrawal semantics and access-path inventory. Inspect current runtime checks and review migration differences. Amend the constitution through its governance procedure.
+1. Finish the Harvest reference matrix, custom prerequisite graph, approval/withdrawal semantics and access-path inventory. Inspect current runtime checks and review migration differences. Review the included constitution amendment and reconcile dependent feature contracts before cutover.
 1. Finalize capability/profile and assignment persistence contracts. Add transactional authorization, stale-edit rejection, audit and concurrent last-administrator protection.
 1. Integrate current permissions across server functions, lists/aggregates, exports/downloads, compatibility API, CLI, jobs and plugins. Do not activate a partially migrated policy.
 1. Replace whole-week-only approval storage with verified date/project coverage, including empty-cell locks, submission editing and independent locks.

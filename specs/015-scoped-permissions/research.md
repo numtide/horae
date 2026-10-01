@@ -71,9 +71,27 @@ already run or permission-policy activation.
 
 `design/project/app/08_Settings.dc.html` displays the six profiles. `09_Workspace.dc.html` explicitly describes three fixed roles with no per-person permissions. The new approved matrix must become authoritative for both screens; neither inconsistent mockup can silently settle the policy.
 
-The constitution also names three organization roles. Record the approved extension through its amendment procedure before implementation. This draft does not amend it or grant new access.
+The baseline constitution named three organization roles. The 2026-10-01 amendment
+to 1.1.0 in this branch records the approved extension and its migration gates;
+it grants no runtime access. The exact operation matrix and dependent feature
+acceptance remain to be reconciled before cutover.
 
 ## Workflow
+
+### Constitution reconciliation — 2026-10-01
+
+- Executed the checked-in `speckit-constitution` workflow against the user's
+  already recorded six-profile/custom-permission decision. Version 1.1.0 expands
+  authorization constraints and verification guidance without replacing the five
+  core principles, authentication, financial invariants or datastore rules.
+- Checked all three feature templates and runtime guidance. No command-template
+  directory or extension hooks exists. Kept generic templates and accurate
+  current-runtime documentation unchanged; added the required Sync Impact Report.
+- Updated this specification and plan to distinguish the included amendment from
+  completed policy design or deployment. T008 remains unchecked: dependent-spec
+  reconciliation and persisted authorization/revocation design are not finished.
+- The change is proposed in PR #212, not merged or a substitute for reviewing
+  migration differences. No schema, application behavior or data changed.
 
 ### Migration research — 2026-10-01
 
