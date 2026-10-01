@@ -8,6 +8,12 @@
 
 **Input**: Complete Harvest web parity, including expenses, using Horae's design language; specify before implementation. Native applications and new integrations are excluded.
 
+## Clarifications
+
+### Session 2026-10-01
+
+- Q: May screens without a dedicated mockup be composed from Horae's existing design system, preserving Harvest behavior? → A: Yes, authorized. Reuse current components and tokens; a new handoff is not a prerequisite for these surfaces.
+
 ## User Scenarios & Testing
 
 ### User Story 1 - Record and correct a project expense (Priority: P1)
@@ -51,6 +57,8 @@ Reviewers and billing staff use the same expense identities without confusing ap
 1. **Given** a non-billable expense, **When** preparing a client invoice, **Then** it is excluded from tracked-expense billing and uninvoiced value.
 1. **Given** multiple independent locks, **When** one is removed, **Then** the other protections remain effective.
 1. **Given** two currencies, **When** displaying totals, **Then** they remain separate and reconcile exactly to their constituent entries.
+1. **Given** an expense incurred in a different currency from the expense form's applicable currency, **When** recording it, **Then** the user enters a manually converted amount; Horae does not fetch an exchange rate. The applicable-currency contract remains gated by FR-011.
+1. **Given** an invoice containing tracked expenses, **When** its line amount is edited, **Then** the source amounts stay unchanged and their full billed status remains; invoice value and tracked value are not required to be equal.
 
 ### Edge Cases
 
@@ -73,10 +81,10 @@ Reviewers and billing staff use the same expense identities without confusing ap
 - **FR-007**: Account for invoice date-range locks separately for time and expenses, alongside approval, archive and company-wide locks. A time-only invoice MUST NOT alone lock expense dates. Shared lock ownership belongs to 015 and the billing specification. [Locking](https://support.getharvest.com/hc/en-us/articles/360048687491-Unlocking-time-and-expenses).
 - **FR-008**: Respect workspace expense-module and reimbursement preferences. Reimbursable and billable MUST remain independent; marking reimbursement MUST NOT imply transferring money. Feature 013 owns configuration. [Preferences](https://support.getharvest.com/hc/en-us/articles/360048179912-Customizing-account-preferences).
 - **FR-009**: Provide detailed expense reporting with date/client/project/person/category filters, billing filters, authorized receipt access, printing and CSV/XLSX/PDF export, including supported receipt images in PDF. Shared saved/shared/recurring reporting belongs to the reporting package. [Detailed reports](https://support.getharvest.com/hc/en-us/articles/360048687171-Detailed-time-and-detailed-expense-reports).
-- **FR-010**: Define billable-expense invoice selection, manual billed/unbilled marking and source attribution with the billing owner. Do not equate a manual billing flag with an invoice or bypass an independent approval lock.
-- **FR-011**: Preserve exact currency-specific amounts and historical attribution. [NEEDS CLARIFICATION: reference research must establish supported quantity precision, monetary rounding, currency-change effects and the invoice consequences of privileged correction/deletion.]
+- **FR-010**: Define billable-expense invoice selection, manual billed/unbilled marking and source attribution with the billing owner. Editing invoice description, quantity or unit price MUST NOT change its source expenses or partially release their billed status. Removing a saved tracked-expense line or deleting its invoice releases the associated billing status/lock, not independent approval or administrative protection. Free-form lines MUST NOT create source expenses. Do not equate manual billed status with an invoice. [Invoice editing](https://support.getharvest.com/hc/en-us/articles/360048181012-Editing-and-deleting-invoices-and-estimates).
+- **FR-011**: Preserve exact currency-specific amounts and historical attribution. Users manually convert foreign-currency receipts before recording amounts in the applicable expense currency; do not add exchange-rate retrieval or automatic conversion. [Currency reference](https://support.getharvest.com/hc/en-us/articles/360055384512-Does-Harvest-support-multiple-currencies). [NEEDS CLARIFICATION: resolve the reference's project-currency override versus client-currency expense guidance, supported quantity precision, monetary rounding, historical currency-change effects and invoice consequences of privileged source-expense correction/deletion.]
 - **FR-012**: Validate permission, identity, project/category availability and business state at save/download time. Reject stale conflicting edits visibly without partial success. Logging MUST not expose receipt contents or private notes.
-- **FR-013**: Supply keyboard-operable forms, labelled controls, explicit empty/loading/error/pending states and recoverable validation. [NEEDS CLARIFICATION: no dedicated expense mockup exists; confirm whether missing surfaces may be composed from the existing Horae design system or require a new handoff.]
+- **FR-013**: Supply keyboard-operable forms, labelled controls, explicit empty/loading/error/pending states and recoverable validation. Compose expense surfaces without dedicated mockups from Horae's existing design system, preserving verified Harvest behavior. Record the screen composition and control/state mapping during planning; do not change shared defaults or require a new handoff. Verify shared project/time/settings screens for regressions under SC-005.
 - **FR-014**: Finalize the operation-level expense/receipt/category matrix with feature 015, including privileged locked-entry operations and custom grants. [NEEDS CLARIFICATION: the approved six-profile matrix must cover this newly scoped domain; legacy Harvest role wording is not sufficient evidence.]
 
 ### Key Entities
@@ -100,5 +108,5 @@ Reviewers and billing staff use the same expense identities without confusing ap
 
 - Scope confirmation includes this domain despite older omissions. Existing import is preserved, not expanded to expense ingestion by this specification.
 - Feature 015 owns authorization and approval; 013 owns workspace preferences. Invoice/payment and reporting owners must be assigned before dependent contracts are finalized.
-- Current handoff inventory and `DESIGN.md` constrain appearance. Missing mockups are a design decision, not permission to omit expenses or redesign shared controls.
+- Current handoff inventory and `DESIGN.md` constrain appearance. The user authorized composing missing surfaces from existing components and tokens; this is not permission to omit expenses, invent behavior or redesign shared controls.
 - Research evidence and unresolved questions are in [research.md](research.md). No feature readiness, runtime verification or complete Harvest parity is claimed.

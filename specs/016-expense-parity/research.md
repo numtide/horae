@@ -22,11 +22,27 @@ Official references, retrieved on the date above:
 | [Preferences](https://support.getharvest.com/hc/en-us/articles/360048179912-Customizing-account-preferences) | FR-008 module/reimbursement and currency context | Existing configuration scope is owned by 013 |
 | [Detailed reports](https://support.getharvest.com/hc/en-us/articles/360048687171-Detailed-time-and-detailed-expense-reports) | FR-009/010 filters, downloads and manual billing status | Legacy role wording does not settle the six-profile matrix |
 | [Expense object](https://help.getharvest.com/api-v2/expenses-api/expenses/expenses/) | FR-005 identity and distinct state fields | An API description is not proof of browser behavior or authority to expand Horae's compatibility API |
+| [Invoice editing](https://support.getharvest.com/hc/en-us/articles/360048181012-Editing-and-deleting-invoices-and-estimates) | FR-010 invoice-to-source behavior | Does not settle the reverse direction: changing/deleting a source expense |
+| [Currencies](https://support.getharvest.com/hc/en-us/articles/360055384512-Does-Harvest-support-multiple-currencies) | FR-011 manual conversion | Project-specific currency section conflicts with client-only expense guidance; historical changes also unresolved |
 
 The expense reference describes quantity as integer but examples serialize it
 as `1.0`. Neither proves the accepted fractional precision or rounding rule.
 Do not choose a lossy representation from that mismatch. Existing exact-money
 invariants remain mandatory.
+
+Further research separates two directions that must not be conflated: invoice
+line edits do not rewrite the original tracked expense, but the cited invoice
+article does not establish what a privileged source-expense edit does to an
+existing invoice. FR-010 now covers the documented direction; EXP-E02 remains
+open for the reverse direction. No persisted browser test was performed.
+
+The fetched currency page establishes manual conversion but also contains an
+internal conflict: its project-specific currency section permits an override,
+while its expense FAQ still describes client-only currency. Therefore neither
+override propagation to expenses nor historical currency changes is settled.
+The search excerpt omitted the override section; the fetched page takes
+precedence over that incomplete excerpt. Fractional precision and receipt size
+limits were not established by the focused search; no policy has been guessed.
 
 ### Browser observation
 
@@ -58,25 +74,29 @@ unlike the older Manage menu wording in the help article.
 ## Clarification scan
 
 `speckit-clarify` resolved this feature using the checked-in prerequisite helper.
-One product question was presented; no answer has yet been recorded.
+One product question was presented and answered: the user authorized composing
+missing screens from the current Horae design system while preserving Harvest
+behavior. Recorded in the spec's clarification, FR-013 and assumptions.
 
 | Category | Status | Next action |
 | --- | --- | --- |
 | Functional scope | Clear | Native expense workflow included by confirmed web scope |
 | Domain and data | Partial | Resolve FR-011 precision, currency and invoice-correction effects from evidence |
-| Interaction and UX | Partial | FR-013: user choice on absent handoff; recover reference form access |
+| Interaction and UX | Partial | Missing-handoff policy resolved in FR-013; detailed composition belongs to planning and reference form access remains unverified |
 | Non-functional quality | Partial | Select explicit upload/scale/failure limits during planning; final receipt privacy contract required |
 | Dependencies | Partial | Complete 015 matrix and assign invoice/report owners |
 | Edge cases | Partial | Turn remaining numeric, attachment and correction cases into exact expectations |
 | Constraints | Clear | Self-hosted architecture, exactness, no new integration, no application/data changes in this phase |
 | Terminology | Clear | Billing, approval, reimbursement and invoice association remain distinct |
 | Completion signals | Partial | SC-001–005 defined; unresolved contracts prevent full acceptance coverage |
-| Placeholders | Partial | Three explicit clarification markers; two are reference/dependency work, not questions for the user to guess |
+| Placeholders | Partial | Two clarification markers remain, both reference/dependency work rather than questions for the user to guess |
 
 ### Open work
 
-- **EXP-D01 — Product/design**: May missing screens be composed from Horae's
-  existing design system, or must a new handoff arrive first? Asked; unanswered.
+- **EXP-D01 — Resolved product/design**: On 2026-10-01 the user authorized
+  composing missing surfaces from current Horae components/tokens, preserving
+  Harvest behavior. No new handoff is required. FR-013 requires a planning-time
+  composition/control-state mapping and shared-screen regression checks.
 - **EXP-E01 — Numeric evidence**: Read-only form validation where possible;
   determine supported precision, range, signs, rate application and currency
   transitions. Any test requiring a save needs disposable fixtures and appropriate
@@ -103,7 +123,7 @@ This is a draft self-review, not independent review or `speckit-analyze`.
 | New expense grants could bypass approved scoped permissions | High | Open EXP-E03; matrix completion is a prerequisite |
 | Undefined fractional arithmetic could create inconsistent totals | High | Open EXP-E01; FR-011 blocks readiness |
 | A receipt URL could leak confidential material after revocation | High | FR-003/012 require current authorization; EXP-E04 contract still incomplete |
-| Missing prototype could lead to omission or unrelated global CSS changes | Medium | Open EXP-D01; preserve shared defaults and require cross-screen regression |
+| Missing prototype could lead to omission or unrelated global CSS changes | Medium | EXP-D01 resolved; FR-013/SC-005 require existing design-system composition, shared defaults and cross-screen regression; execution remains future work |
 
 ## Spec Kit execution record
 
@@ -117,6 +137,11 @@ This is a draft self-review, not independent review or `speckit-analyze`.
 - No `.specify/extensions.yml` exists; before/after hooks are inapplicable.
 - Ran `check-prerequisites.sh --json --paths-only` for clarification and reviewed
   the resulting spec with the coverage taxonomy above.
+- After the user's design authorization, reran clarification path resolution
+  and integrated the answer. Checklist remains 11/16, with no newly passing or
+  regressing items: numeric, receipt, permission and billing contracts still
+  prevent full readiness. The checklist's original FR-013 note is historical;
+  its content is preserved by the clarify workflow's marker-only update rule.
 - `speckit-plan`, `speckit-tasks` and `speckit-analyze` are not complete or claimed
   by the existence of this research file. Implementation tasks remain uncreated
   until the blocking contracts are resolved.
