@@ -17,6 +17,10 @@
 
 Parity is the acceptance target for this permissions and approvals feature, not merely visual resemblance. Existing Horae authorization or approval behavior is not a reason to omit a required Harvest behavior. Differences must be identified and resolved explicitly; unknown reference behavior requires investigation rather than another request to approve a smaller scope.
 
+### Session 2026-10-01
+
+- Q: Which product domains must the permission contract cover? → A: The user confirmed complete Harvest web parity, including expenses, estimates, retainers, invoicing and payment recording; native applications, Forecast and new integrations are excluded. Domain implementation remains separate from this permission feature.
+
 ## User Scenarios & Testing
 
 ### User Story 1 - Assign a role that matches a person's responsibilities (Priority: P1)
@@ -68,6 +72,7 @@ A person sees consistent access in the application, reports, downloads and conne
 1. **Given** a direct link or identifier outside the caller's scope or organization, **When** accessed, **Then** it reveals no private identity, amounts, notes, counts or file contents.
 1. **Given** revoked authority, **When** queued work executes or a generated result is downloaded, **Then** it cannot use the earlier permission snapshot to bypass revocation.
 1. **Given** approved/invoiced time or restricted tasks, **When** an otherwise authorized edit is attempted, **Then** existing state and integrity rules still apply; general edit permission does not unlock records.
+1. **Given** an expense receipt or report outside the caller's current scope, **When** its download is requested directly or after revocation, **Then** neither its contents nor identifying metadata are disclosed. General time-management authority does not imply expense-category administration or privileged locked-expense correction.
 
 ### User Story 4 - Understand and maintain permission assignments (Priority: P2)
 
@@ -117,7 +122,7 @@ An administrator can review how existing roles and project assignments translate
 ### Functional Requirements
 
 - **FR-001**: Provide six distinct built-in profiles: Member, Project Manager, People Admin, Accounting, Executive Manager and Administrator. Profile names MUST correspond to implemented capabilities and scope.
-- **FR-002**: Define a complete allowed/denied matrix for Horae's existing time, project, task, client, people, rate, cost, invoice, approval, report, workspace, import/export and integration operations before implementation. Distinguish read, create, edit and lifecycle actions; financial visibility MUST NOT be implied by ordinary project or people management.
+- **FR-002**: Define a complete allowed/denied matrix for Horae's existing time, project, task, client, people, rate, cost, invoice, approval, report, workspace, import/export and integration operations before implementation. Extend the target matrix to approved web-parity domains: expenses/categories/receipts, estimates, retainers and payment recording. Distinguish read, create, edit and lifecycle actions, including privileged corrections and downloads; financial visibility MUST NOT be implied by ordinary project or people management. Record dependencies on owning domain specifications without exposing unimplemented operations as working grants.
 - **FR-003**: The proposed built-in boundaries are listed below. Their exact operation-level matrix MUST resolve differences from existing Horae rules and the Harvest reference, including FR-009. Unsupported Harvest products MUST NOT appear as working grants.
 - **FR-004**: Provide all six built-in profiles, reusable custom profiles derived from them and per-person permission adjustments. Administrators MUST be able to create, apply and delete custom profiles and see differences between an applied template and a person's effective permissions. Fixed profiles alone do not satisfy this requirement.
 - **FR-005**: Project membership, project management and person-management assignments MUST be distinct, organization-scoped relationships. Who may change each assignment and any associated profile transition MUST follow the verified Harvest parity matrix; do not impose an unverified administrator-only restriction on every assignment. Ordinary tracking membership or identity matching MUST NOT silently promote a person.
@@ -178,7 +183,7 @@ These are target responsibilities, not a substitute for the operation-level matr
 
 - Existing authentication and the single-organization deployment remain; new identity providers, login mechanisms and multi-organization administration are outside scope.
 - The user explicitly selected Harvest parity for both custom permissions and scoped approvals. These scope decisions are settled; remaining uncertainty concerns reference evidence and the detailed contract, not permission to simplify the feature.
-- Permissions for expenses, estimates and SaaS subscription billing do not require implementing those absent products. Existing Horae functions, including imports and plugin/service access, still require explicit coverage.
+- The confirmed web scope requires expense, estimate, retainer and payment permission contracts even before those domains are implemented. Feature 016 owns expense behavior; its operation-level grants remain unresolved and must not be inferred from legacy role names. This permission feature does not implement those domains or authorize SaaS subscription billing, native applications, Forecast or new integrations. Existing imports and plugin/service access retain explicit regression coverage.
 - Current data is preserved even though the application is not in production. Verification uses disposable fixtures, not destructive changes to the user's account or Harvest.
 - Constitution 1.1.0 records the approved six-profile/custom-permission target and transition safeguards in this branch. Older feature permission statements still require reconciliation with the verified operation matrix; the amendment does not activate runtime access or approve migration mappings.
 - This feature resolves permission dependencies of Project Detail, Clients, Settings and Workspace; it does not authorize their unrelated profile, notification, invitation, backup or deletion decisions.
