@@ -46,6 +46,14 @@ current-page from all-filtered-records behavior. The prior unconditional
 current-page specification was too strong and must not survive as settled
 parity. Projects' independently confirmed disabled-empty Actions remain unchanged.
 
+Follow-up [target-set investigation](report-scope-evidence.md) tested 101 exact
+fixtures. The detailed report rendered all on one page and ignored `page=2` /
+`per_page=1` probes; ordinary expense-list pagination is a different surface.
+Empty selection marked exactly those 101 while an out-of-date-filter baseline
+stayed unbilled. No hypothetical report pagination behavior is certified by that
+result, and the shared all-pages client code must not be treated as proof that
+the expense report exposes the control.
+
 ## Export controls and delivery boundary
 
 The UI exposes Excel, CSV, PDF and Custom. Custom offered CSV/Excel and ordered

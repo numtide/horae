@@ -29,6 +29,22 @@ removed the archive banner. Expense baseline restoration is tracked in the
 private fixture ledger. No business record, person, invoice state or workspace
 lock was changed during this experiment.
 
+## Combined manual-billing and project-archive locks
+
+A follow-up explicitly selected the existing billable fixture in the detailed
+report and marked it invoiced without creating an invoice. Archiving its project
+then left the expense editor showing the manual-invoiced warning, with date,
+project, category and billability disabled. The displayed primary warning is
+therefore not an exhaustive enumeration of concurrent protection reasons.
+
+With the project still archived, explicitly selecting that expense in the report
+and confirming uninvoiced cleared its billed state. Reloading the expense's
+delivered data returned `is_billed=false`, `invoice=null`, `is_locked=true`, and
+the archive reason. Amount and quantity remained USD 1.50 / 3. Thus clearing
+billing did not remove the independent archive lock. Restore was performed
+separately on the fixture project. No approval or organization-wide lock was
+changed; those combinations still require suitable reference access/authority.
+
 ## Shared contract consequence
 
 FR-006 must distinguish invoice and archive locks. Feature 015 owns who can

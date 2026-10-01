@@ -23,7 +23,7 @@ Official references, retrieved on the date above:
 | [Detailed reports](https://support.getharvest.com/hc/en-us/articles/360048687171-Detailed-time-and-detailed-expense-reports) | FR-009/010 filters, downloads and manual billing status | Legacy role wording does not settle the six-profile matrix |
 | [Expense object](https://help.getharvest.com/api-v2/expenses-api/expenses/expenses/) | FR-005 identity and distinct state fields | An API description is not proof of browser behavior or authority to expand Horae's compatibility API |
 | [Invoice editing](https://support.getharvest.com/hc/en-us/articles/360048181012-Editing-and-deleting-invoices-and-estimates) | FR-010 invoice-to-source behavior | Does not settle the reverse direction: changing/deleting a source expense |
-| [Currencies](https://support.getharvest.com/hc/en-us/articles/360055384512-Does-Harvest-support-multiple-currencies) | FR-011 manual conversion | Unbilled and draft-linked historical relabeling verified; sent-state and mixed-currency reconciliation remain unresolved |
+| [Currencies](https://support.getharvest.com/hc/en-us/articles/360055384512-Does-Harvest-support-multiple-currencies) | FR-011 manual conversion | Historical relabeling and USD/GBP weekly/report totals verified; sent-state and export reconciliation remain unresolved |
 | [Current permissions](https://support.getharvest.com/hc/en-us/articles/44171549176077-Permissions) | FR-014 read/write scopes | Corroborated by delivered editor configuration, not lifecycle enforcement |
 | [Invoice attachments](https://support.getharvest.com/hc/en-us/articles/9864825272589-Attaching-files-and-reports-to-invoices) | FR-015 recipient report and draft regeneration | Source correction/deletion and sent artifacts remain unverified |
 | [Receipt announcement](https://www.getharvest.com/blog/2010/05/upload-expense-receipts-in-harvest) | Historical 10 MB limit | Published 2010; not proof of current exact byte boundary |
@@ -97,7 +97,7 @@ behavior. Recorded in the spec's clarification, FR-013 and assumptions.
 | --- | --- | --- |
 | Functional scope | Clear | Native expense workflow included by confirmed web scope |
 | Domain and data | Partial | USD/JPY/BHD response precision and historical relabeling verified; finish bounds, exports, attribution and exact-representation constitution check |
-| Interaction and UX | Partial | Persisted capture/correction and single-row selection verified; multi-page report scope conflicts with help wording; detailed composition remains |
+| Interaction and UX | Partial | Persisted capture/correction, UI exponent normalization and 101-row filter containment verified; detailed-report pagination not exposed at tested volumes; composition remains |
 | Non-functional quality | Partial | Upload byte boundary/failure preservation verified; scale and final receipt privacy/retention contract required |
 | Dependencies | Partial | Complete 015 matrix and assign invoice/report owners |
 | Edge cases | Partial | Turn remaining numeric, attachment and correction cases into exact expectations |
@@ -120,7 +120,9 @@ behavior. Recorded in the spec's clarification, FR-013 and assumptions.
   Ordinary-amount bound messages conflict with persisted acceptance and one
   large response loses cents; resolve an exact-money contract instead of
   copying reference precision loss. Finish other locales, other currencies and
-  export/mixed-currency reconciliation using only authorized disposable fixtures.
+  export reconciliation using only authorized disposable fixtures. USD/GBP
+  weekly/report grouping and current-locale exponent normalization now have
+  persisted evidence; no scientific-notation UI support is inferred.
 - **EXP-E02 — Billing contract**: Define privileged correction/deletion effects
   on source links, recipient reports and already issued totals, with the billing
   owner. Draft line/amount independence is now verified after both source
@@ -145,12 +147,24 @@ behavior. Recorded in the spec's clarification, FR-013 and assumptions.
   failure, download revocation,
   storage/backup retention and recipient report lifecycle. Never leave
   attachments outside organization/expense access checks.
-- **EXP-E05 — Report scope and export delivery**: A single-row report proves
-  reconciliation, confirmation/cancel and manual billing but cannot prove
-  pagination. Help says page scope; the delivered empty-selection form sends
-  filters without IDs. Resolve with a multi-page fixture before fixing the
-  target-set contract. Export generation can deliver email and was not submitted
-  under the no-messages authorization; columns/routes were inspected only.
+- **EXP-E05 — Report scope and export delivery**: The bounded 101-row fixture
+  verifies empty-selection marking within filters and preservation of an
+  out-of-filter source. All rows render on one detailed-report page; shared
+  all-pages code and ordinary-list pagination do not prove report pagination.
+  No threshold was found in current public help. Larger-volume target scope
+  remains a reference uncertainty; do not repeat the same one-page experiment
+  or claim it passed a multi-page case. Mixed USD/GBP list/report reconciliation
+  now passes, including mixed-client N/A and currency-specific project groups.
+  Export generation can deliver email and was not submitted under the
+  no-messages authorization; columns/routes were inspected only.
+- **EXP-E06 — Budget consumption**: Live fee inclusion on/off, both billability
+  states, monthly boundaries and total-hours exclusion are verified. Project
+  list/detail and detailed expenses reconcile for the owner USD fixture.
+  [The shared contract](budget-contract.md) feeds editor FR-026 and dashboard
+  FR-023; it does not change invoice eligibility or remove costs when disabled.
+  Other budget variants and non-owner cases remain distinct. Nonzero unlike
+  time-cost/expense-cost aggregation needs time/rate fixtures outside the
+  authorized disposable-expense scope.
 
 These gates block final planning/tasks/analysis, not independent research.
 The concrete distinguishing checks and evidence required are recorded in
@@ -176,7 +190,7 @@ adds the documented budget requirement; the remaining findings stay open.
 | A receipt URL could leak confidential material after revocation | High | FR-003/012 require current authorization; EXP-E04 contract still incomplete |
 | A blanket internal receipt rule could either expose source records to clients or omit supported invoice attachments | High | FR-015 separates recipient reports; sent/source-change retention remains open with EXP-E02/04 |
 | Client formatting could be mistaken for accepted precision or negative support | High | Addressed for recorded cases by separate UI/endpoint evidence, read-back and explicit zero divergence; do not extrapolate to other currencies or inputs |
-| Empty selection could affect unseen pages while the specification promises page-only scope | High | Open EXP-E05; removed the unsupported guarantee from FR-016 and acceptance scenarios; a multi-page reference test is required. Projects remains unchanged |
+| Empty selection could affect unseen pages while the specification promises page-only scope | High | Open EXP-E05 for larger volumes: 101-row test verifies filter containment, not pagination. Shared code does not prove an exposed report control; do not promise page-only behavior. Projects remains unchanged |
 | Missing prototype could lead to omission or unrelated global CSS changes | Medium | EXP-D01 resolved; FR-013/SC-005 require existing design-system composition, shared defaults and cross-screen regression; execution remains future work |
 
 ## Spec Kit execution record
@@ -303,3 +317,31 @@ adds the documented budget requirement; the remaining findings stay open.
   project-budget inclusion, then reconcile remaining cross-contract findings.
   Alternate locale/account access, recipient artifacts and export email authority
   remain separate gates. Final independent-work completion is not yet proven.
+- Reconciliation iteration: prior recommendation-only turn was no progress;
+  reused the confirmed live browser session and resolved its pending unsaved
+  project warning instead of restarting. Read clarify/constitution, ran path
+  resolution once, confirmed no extension hooks and asked no new product
+  questions. Combined manual/archive lock release and a bounded 101-row report
+  experiment are recorded separately from hypothetical report pagination.
+  All 101 temporary rows were deleted by exact verified identity.
+  Fee inclusion on/off, both billability states, monthly dates, hours exclusion
+  and list/detail/report reconciliation now have live reference evidence.
+  A second disposable GBP project/expense establishes separate USD/GBP totals,
+  N/A mixed-client subtotal, project grouping and active-only exclusion. UI
+  quantity and ordinary exponent inputs normalize to 13, not the endpoint's
+  1000\. Removed the temporary GBP expense, archived its project and restored
+  the original project/expense/receipt; IDs and verification remain in scratch.
+  Added budget-contract and propagated editor FR-026/dashboard FR-023. Review
+  caught and corrected the editor's blanket cost-currency wording.
+  Requirements checklist revalidated 11/16→11/16, no marker changes. The five
+  unchecked items remain no clarification markers, unambiguous requirements,
+  complete scenarios, complete requirement acceptance and feature readiness.
+  Sections touched: User Scenarios, Edge Cases and Functional Requirements;
+  no new accepted-answer bullet. Functional scope, constraints and terminology
+  remain clear; domain, interaction, quality, dependencies, edge cases,
+  completion and unresolved placeholders remain partial pending named gates.
+  No plan/tasks/analyze, implementation, migration, sent invoice, payment,
+  account-wide configuration change, email or merge. Next clarification work:
+  audit remaining receipt rendering/budget-variant evidence and reconcile gate
+  ownership before deciding whether independent work is complete. Do not use
+  this publication checkpoint as an implementation-ready declaration.

@@ -66,6 +66,33 @@ a draft, not for an issued invoice. The project override was restored to USD.
 
 ## Evidence and limitations
 
+### Mixed-currency list and report
+
+A second disposable project on the same EUR client used a GBP override and a
+one-unit GBP 0.50 expense. The existing USD project was temporarily archived to
+respect the account's active-project limit; no business project was changed.
+The ordinary weekly expense list retained both sources and displayed separate
+USD 1.50 and GBP 0.50 totals, without conversion or a combined 2.00 amount.
+
+The client-filtered detailed expense report likewise displayed both source IDs,
+their currency-specific row amounts, and separate USD 1.50 / GBP 0.50 headline
+and footer totals. Its mixed-currency **client group subtotal displayed N/A**,
+not one amount or a silently converted EUR client total. Do not assume every
+group header renders the same per-currency subtotal presentation as the report's
+overall total. Archived source inclusion remained enabled by default.
+Grouping by Project instead displayed each single-currency project subtotal
+as USD 1.50 or GBP 0.50, with the same separate overall totals.
+Enabling Active projects only excluded the archived USD source: a fresh report
+response contained only the GBP source ID and GBP 0.50, with no USD 1.50 amount.
+
+These are owner-only list/report results, not export-byte reconciliation or a
+cross-currency invoice test. Exact fixture IDs and cleanup are in the local
+ledger; the two currencies use synthetic records only.
+After numeric UI follow-up, the temporary GBP expense was deleted by its verified
+identity. Its project was archived, not deleted; the original USD project was
+restored active and its original source/receipt verified unchanged. No invoice,
+payment, message or business-record change was needed for this reconciliation.
+
 Private scratch evidence includes `expense-currency-results-20261001.md`,
 `expense-currency-jpy-history-20261001.md`,
 `expense-currency-inherited-gbp-history-20261001.md`, the project/client save

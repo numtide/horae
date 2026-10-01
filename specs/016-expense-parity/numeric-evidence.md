@@ -169,6 +169,17 @@ known contradiction. Private cases: `expense-lifecycle-results-20261001.md`.
 
 ## Remaining limits
 
+Current-locale UI follow-up used the disposable GBP reconciliation expense.
+Entering `1e3` in the quantity field and leaving it changed the visible value to
+`13.00`, not `1000.00`; Update expense saved 13 units at rate 0.5 / GBP 6.50.
+Thus endpoint exponent acceptance is not evidence that the UI supports scientific
+notation. This is an observed normalization distinction, not an exponent parser
+to infer from the endpoint or a financial arithmetic rule.
+Changing that same disposable expense to an ordinary category and repeating the
+UI input likewise normalized `1e3` to `13.00`; saving displayed GBP 13.00.
+The reference therefore does not interpret scientific notation in either tested
+web field. The ordinary endpoint's 1000 response remains separate evidence.
+
 Other locale configurations and exports still need evidence; ordinary amount
 bounds need the conflict resolution above. Subsequent
 [currency/history](currency-evidence.md), [category archive](category-evidence.md)
