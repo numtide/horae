@@ -36,7 +36,7 @@ their implementation has merged. Recheck heads before modifying an owning branch
 | Workspace, `013-workspace-design` | [9a7ec5a](https://github.com/numtide/horae/tree/9a7ec5ac01a1670c009767a6b0d9354a365d61f5/specs/013-workspace-design), [#210](https://github.com/numtide/horae/pull/210) | Draft spec, research and requirements checklist; no plan/tasks | Invitations, backup and deletion contracts |
 | Personal Settings, `014-personal-settings-design` | [6aafd4e](https://github.com/numtide/horae/tree/6aafd4eb3d24f74ba659ae5c6766f610f8604fb4/specs/014-personal-settings-design), [#211](https://github.com/numtide/horae/pull/211) | Draft spec, research and requirements checklist; no plan/tasks | Profile ownership and notification delivery |
 | Scoped permissions/approvals, `015-scoped-permissions` | [f5cf02d](https://github.com/numtide/horae/tree/f5cf02db992d50638c9d89a3f7f661443cc7a5fa/specs/015-scoped-permissions), [#212](https://github.com/numtide/horae/pull/212) | Planning artifacts and constitution 1.1.0 proposal retained; expense read/write defaults now observed; full lifecycle policy unresolved | Complete reference matrix, review mappings and propagate permission contracts to dependent specs |
-| Expenses, `016-expense-parity` | [d393d53](https://github.com/numtide/horae/tree/d393d537bd383d7343b6d82d4731d0a2d97666a3/specs/016-expense-parity), [#214](https://github.com/numtide/horae/pull/214) | Persisted numeric/receipt rules and draft line independence after source correction/deletion verified; 11/16 checks; no plan/tasks | Currency history/exponents/bounds, sent-state/attribution/report effects, receipt content/access/retention and operation-level permissions |
+| Expenses, `016-expense-parity` | [fc352ae](https://github.com/numtide/horae/tree/fc352ae75e09eef3fedd77e49536c2981c3ed93e/specs/016-expense-parity), [#214](https://github.com/numtide/horae/pull/214) | Numeric/receipt rules, USD/JPY/BHD precision, unbilled currency history, draft independence/release and category archive verified; 11/16 checks; no plan/tasks | Bounds/locale/exports, sent-state/attribution/report effects, receipt content/access/retention and operation permissions; Preview requires paid access or Stripe in reference account |
 
 All six feature PRs were drafts at the latest inventory snapshot. Status is not a promise about
 later GitHub state. No merge is part of this specification delivery.
@@ -60,7 +60,7 @@ their requirements. Missing mockups do not exclude approved web workflows.
 | Permissions and approvals | Pending 015; design 06/08/09 | All six profiles, custom grants, scoped approval/withdrawal and every entry point; extend matrix for newly approved domains |
 | Reports | 001 and `004-invoice-timesheet-exports`; design 07 | Time/project/team and financial reports, saved/shared/scheduled behavior, permissions and exact export reconciliation |
 | Invoice lifecycle and payments | 001/011 and existing invoice modules; dashboard consumers | Draft/send/view, numbering/settings, dates, reminders, recurrence, partial payments/write-offs and project attribution |
-| Expenses | Pending 016 / #214; official sources, persisted isolated numeric/receipt fixtures and client/configuration evidence | Finish numeric bounds/currency history, receipt retention/access, lifecycle permissions and invoice-correction contracts; separate endpoint acceptance from UI behavior |
+| Expenses | Pending 016 / #214; persisted currency, category, receipt and draft-billing fixtures plus official sources | Finish bounds/locale/exports, receipt retention/access, lifecycle permissions and issued-artifact contracts; preserve UI/server evidence distinction and account gates |
 | Estimates | No dedicated estimate spec or route found | Creation, client delivery/response and downstream project/invoice relationships |
 | Retainers | Historical 001 project-kind mention; no dedicated ledger spec found | Distinguish advance-payment balance/draws from fixed or recurring project fees |
 | Personal settings | Pending 014; design 08 | Profile, timezone, rates, assignments, notifications and truthful security/integration destinations |
@@ -99,7 +99,7 @@ Only the former should be presented as a choice to the user.
 | D-011 | Reference access / 015 | Current evidence account has only its immutable owner; invite path requests another paid seat. Custom-profile persistence and several approval edge cases remain unverified. Use available documentation first; request suitable test access if needed, never purchase or bypass restrictions. |
 | D-012 | Governance and contract dependency / 015 + consumers | PR #212 proposes constitution 1.1.0, not merged. PRs #208/#209 now use the confirmed six-profile/custom target and distinguish legacy evidence from acceptance. Full operation-matrix integration, persistence and migration review remain required; the broad three-role contradiction is resolved in the pending specs. |
 | D-013 | Confirmed / 016 and other absent mockups | On 2026-10-01 the user authorized composing screens without a dedicated mockup from current Horae components and tokens, preserving Harvest behavior. A new handoff is not required. Plans must record composition/control states and protect shared defaults through cross-screen regression. This does not authorize implementation in the specification phase. |
-| D-014 | Evidence and contracts / 016 + billing + 015 | Isolated-fixture mutations authorized; numeric USD precision, project override, rate resave, receipt byte/removal and owner draft-source correction/deletion verified. Currency history/bounds, sent/report/attribution effects and receipt/permission lifecycles remain open. Six basic read/write defaults are observed, not a full enforcement matrix. Non-owner checks require suitable access; no paid seats or owner changes authorized. |
+| D-014 | Evidence and contracts / 016 + billing + 015 | Isolated fixtures verify USD/JPY/BHD precision, historical current-currency relabeling without FX, tiny-rate rounding, category archive, receipt boundaries and draft source independence/release. Bounds/exports, issued reports/attribution and permissions remain open. Invoice Preview requires paid access or Stripe on the current account; no upgrade/integration authorized. Non-owner checks need suitable access; six defaults do not prove enforcement. |
 
 ## Proposed dependency order
 
@@ -118,6 +118,36 @@ This orders planning, not implementation authorization:
    review all cross-screen journeys and close analysis findings.
 
 ## Iteration log
+
+### 2026-10-01 — Independent currency, category and draft-release tests
+
+- Reused #214/#213 and their worktrees. Feature checkpoint `fc352ae` adds
+  currency-evidence and category-evidence, extends billing evidence, narrows
+  FR-011/017 and updates acceptance cases. No feature implementation or merge.
+- New isolated expense verified two-decimal JPY/BHD endpoint amounts versus JPY
+  zero-decimal list display. Changing project currency and client inheritance
+  relabeled old unbilled expenses without conversion; original client EUR and
+  project USD override were restored. Plan must reconcile exact fractional
+  representation with the constitution, not truncate from display formatting.
+- Saved a second test draft as EUR1.24 from USD1.24 source, then permanently
+  deleted only that draft through exact-ID/number confirmation. Source and PDF
+  survived with invoice/billed/lock flags cleared. Unrelated locks were absent;
+  no claim about their release. Original business invoices untouched.
+- Invoice report preparation retained its include flag, but saved draft exposed
+  no attachment link. Preview explicitly requires paid plan or Stripe; did not
+  upgrade, connect, send or pay. Report generation/content remain unverified;
+  missing controls are not proof the feature is removed or caused by that gate.
+- Category0.0004 rejected,0.0005→0.001; restored0.5. Archive preserved existing
+  entry correction and receipt; new capture returned422. Restored category to
+  active and verified read-back. Delete-in-use is UI-disabled; server deletion
+  enforcement was not claimed.
+- Clarify prerequisites, absent hooks, coverage and self-review completed for
+  this evidence iteration; zero new product questions. Checklist11/16→11/16,
+  no marker changes; Nix format/whitespace checks passed. No final plan/tasks/
+  analyze or complete parity claim. Private ledger retains all cleanup targets.
+- Next independent checks: locale/bounds, export reconciliation and receipt
+  content validation. Non-owner and recipient/issued-artifact validation need
+  suitable reference access; no new paid seats or integrations are authorized.
 
 ### 2026-10-01 — Draft invoice and source independence
 
