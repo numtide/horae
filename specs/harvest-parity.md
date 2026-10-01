@@ -35,8 +35,8 @@ their implementation has merged. Recheck heads before modifying an owning branch
 | Clients, `012-clients-design` | [bc5d063](https://github.com/numtide/horae/tree/bc5d06315738f028665386fb405c54232227cf73/specs/012-clients-design), [#209](https://github.com/numtide/horae/pull/209) | Confirmed permission model propagated; draft spec/research/checklist, no plan/tasks | Settle contacts and lifecycle conflict, then plan against feature 015's completed contract |
 | Workspace, `013-workspace-design` | [9a7ec5a](https://github.com/numtide/horae/tree/9a7ec5ac01a1670c009767a6b0d9354a365d61f5/specs/013-workspace-design), [#210](https://github.com/numtide/horae/pull/210) | Draft spec, research and requirements checklist; no plan/tasks | Invitations, backup and deletion contracts |
 | Personal Settings, `014-personal-settings-design` | [6aafd4e](https://github.com/numtide/horae/tree/6aafd4eb3d24f74ba659ae5c6766f610f8604fb4/specs/014-personal-settings-design), [#211](https://github.com/numtide/horae/pull/211) | Draft spec, research and requirements checklist; no plan/tasks | Profile ownership and notification delivery |
-| Scoped permissions/approvals, `015-scoped-permissions` | [b569c75](https://github.com/numtide/horae/tree/b569c7536d7705c11a1e745756a73457a241ef5c/specs/015-scoped-permissions), [#212](https://github.com/numtide/horae/pull/212) | Planning artifacts, migration/rate protocols and constitution 1.1.0 amendment included; confirmed expense/estimate/retainer/payment scope propagated; full policy unresolved | Complete reference matrix, review mappings and propagate permission contracts to dependent specs |
-| Expenses, `016-expense-parity` | [35d8d31](https://github.com/numtide/horae/tree/35d8d310cacc9cfa7d286d81763c37ffd60897a7/specs/016-expense-parity), [#214](https://github.com/numtide/horae/pull/214) | Missing-surface design authorized; draft spec/research/checklist, 11/16 checks; no plan/tasks | Precision, project/client currency conflict, source-expense correction, attachment and permission contracts |
+| Scoped permissions/approvals, `015-scoped-permissions` | [f5cf02d](https://github.com/numtide/horae/tree/f5cf02db992d50638c9d89a3f7f661443cc7a5fa/specs/015-scoped-permissions), [#212](https://github.com/numtide/horae/pull/212) | Planning artifacts and constitution 1.1.0 proposal retained; expense read/write defaults now observed; full lifecycle policy unresolved | Complete reference matrix, review mappings and propagate permission contracts to dependent specs |
+| Expenses, `016-expense-parity` | [9c87682](https://github.com/numtide/horae/tree/9c876822a9b06a6a9b3c7e25c69c044afcb700e5/specs/016-expense-parity), [#214](https://github.com/numtide/horae/pull/214) | Current client currency priority, recipient-report boundary and basic scopes clarified; 11/16 checks; no plan/tasks | Persisted precision/currency, source correction, receipt limits/lifecycle and operation-level permissions |
 
 All six feature PRs were drafts at the latest inventory snapshot. Status is not a promise about
 later GitHub state. No merge is part of this specification delivery.
@@ -60,7 +60,7 @@ their requirements. Missing mockups do not exclude approved web workflows.
 | Permissions and approvals | Pending 015; design 06/08/09 | All six profiles, custom grants, scoped approval/withdrawal and every entry point; extend matrix for newly approved domains |
 | Reports | 001 and `004-invoice-timesheet-exports`; design 07 | Time/project/team and financial reports, saved/shared/scheduled behavior, permissions and exact export reconciliation |
 | Invoice lifecycle and payments | 001/011 and existing invoice modules; dashboard consumers | Draft/send/view, numbering/settings, dates, reminders, recurrence, partial payments/write-offs and project attribution |
-| Expenses | Pending 016 / #214; official reference and read-only Chrome snapshots | Finish numeric/currency, receipt, six-profile and invoice-correction contracts; actual form validation remains unverified |
+| Expenses | Pending 016 / #214; official sources, live form and delivered client/configuration evidence | Finish persisted numeric/currency, receipt, lifecycle permissions and invoice-correction contracts; unsaved formatting experiments are inconclusive |
 | Estimates | No dedicated estimate spec or route found | Creation, client delivery/response and downstream project/invoice relationships |
 | Retainers | Historical 001 project-kind mention; no dedicated ledger spec found | Distinguish advance-payment balance/draws from fixed or recurring project fees |
 | Personal settings | Pending 014; design 08 | Profile, timezone, rates, assignments, notifications and truthful security/integration destinations |
@@ -99,7 +99,7 @@ Only the former should be presented as a choice to the user.
 | D-011 | Reference access / 015 | Current evidence account has only its immutable owner; invite path requests another paid seat. Custom-profile persistence and several approval edge cases remain unverified. Use available documentation first; request suitable test access if needed, never purchase or bypass restrictions. |
 | D-012 | Governance and contract dependency / 015 + consumers | PR #212 proposes constitution 1.1.0, not merged. PRs #208/#209 now use the confirmed six-profile/custom target and distinguish legacy evidence from acceptance. Full operation-matrix integration, persistence and migration review remain required; the broad three-role contradiction is resolved in the pending specs. |
 | D-013 | Confirmed / 016 and other absent mockups | On 2026-10-01 the user authorized composing screens without a dedicated mockup from current Horae components and tokens, preserving Harvest behavior. A new handoff is not required. Plans must record composition/control states and protect shared defaults through cross-screen regression. This does not authorize implementation in the specification phase. |
-| D-014 | Evidence and contracts / 016 + billing + 015 | Expense quantity/rate precision, currency transitions, privileged correction/deletion after invoicing, receipt lifecycle and new-profile operation matrix remain unresolved. Research these reference facts before presenting any genuine product deviation for approval. |
+| D-014 | Evidence and contracts / 016 + billing + 015 | Current expense client prefers project currency over client currency; six basic read/write grants/defaults are observed. Persisted precision/currency transitions, source correction/deletion, receipt boundaries and lifecycle permissions remain open. Feature 016's reference-validation register defines distinguishing experiments; saves require disposable-fixture authority and non-owner checks require suitable access. |
 
 ## Proposed dependency order
 
@@ -118,6 +118,36 @@ This orders planning, not implementation authorization:
    review all cross-screen journeys and close analysis findings.
 
 ## Iteration log
+
+### 2026-10-01 — Expense rules and discriminating reference checks
+
+- Reused PRs #214/#212/#213 and their isolated branches; all three were checked
+  open and draft. Expense commit `9c87682`; permission evidence commit `f5cf02d`.
+- Ran the clarify prerequisite/coverage workflow. Opened the actual expense form
+  without saving. Hidden duplicate buttons explain the initial failed selector,
+  but later interaction failures remain. Unsaved numeric experiments were
+  inconsistent; no server precision/range/rounding rule is certified from them.
+- Inspected the delivered expense asset and current permission configuration.
+  Recorded project-over-client currency priority and six read/write scope
+  defaults with evidence levels, without treating configuration as enforcement.
+- Added the distinct invoice-recipient expense-report contract, draft report
+  regeneration and billable-only manual marking. Expense-report no-selection
+  actions follow the documented current-page target and confirmation; Projects'
+  separately confirmed disabled-empty behavior and shared defaults stay intact.
+- Recorded eight discriminating reference checks for precision/rate, currency,
+  invoice source correction, receipts, permissions, archive and reports. The
+  historical 10 MB announcement does not establish today's exact byte boundary.
+- Revalidated the expense checklist: 11/16, unchanged. High financial/permission/
+  receipt findings remain open; no final analyze or implementation readiness is
+  claimed. Nix formatting and whitespace checks passed on the feature documents.
+- No reference records were saved, no messages sent, no migrations or application
+  changes made and no merges performed. Discarded the unsaved form and ended the
+  MCP client connection, preserving the user's tabs.
+- Next: obtain explicit authority for disposable reference fixtures (no existing
+  business records, delivery, payments or account changes), then execute E-NUM,
+  E-RATE, E-CUR, E-BILL and E-REC. E-AUTH additionally needs editable non-owner
+  access; do not buy seats or change the owner. Continue evidence work rather
+  than inventing the missing rules or marking clarification complete.
 
 ### 2026-10-01 — Missing-surface design authorization
 
