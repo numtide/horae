@@ -31,8 +31,8 @@ their implementation has merged. Recheck heads before modifying an owning branch
 
 | Package | Snapshot / PR | Actual planning state | Next gate |
 | --- | --- | --- | --- |
-| Project Detail, `004-project-dashboard` | [cc04bd6](https://github.com/numtide/horae/tree/cc04bd695ec3e7c05ce41f66c0d6db7851cfb02b/specs/004-project-dashboard), [#208](https://github.com/numtide/horae/pull/208) | Spec/plan/tasks and supporting artifacts exist; partial implementation, whole-feature acceptance open | Reconcile permissions, imported billing and remaining actions before final analysis |
-| Clients, `012-clients-design` | [fb5c4ea](https://github.com/numtide/horae/tree/fb5c4ea01095b6fe4b7f3f65a62a90f99a1d57cb/specs/012-clients-design), [#209](https://github.com/numtide/horae/pull/209) | Draft spec, research and requirements checklist; no plan/tasks | Settle contacts and lifecycle conflict, then plan |
+| Project Detail, `004-project-dashboard` | [fa15ff4](https://github.com/numtide/horae/tree/fa15ff4e45955f7f0c0512d3a0f7f4ea3c124283/specs/004-project-dashboard), [#208](https://github.com/numtide/horae/pull/208) | Confirmed permission model propagated; historical plan and partial implementation remain unaccepted | Resolve imported billing/actions and finish the dependent permission matrix before full planning/analysis |
+| Clients, `012-clients-design` | [bc5d063](https://github.com/numtide/horae/tree/bc5d06315738f028665386fb405c54232227cf73/specs/012-clients-design), [#209](https://github.com/numtide/horae/pull/209) | Confirmed permission model propagated; draft spec/research/checklist, no plan/tasks | Settle contacts and lifecycle conflict, then plan against feature 015's completed contract |
 | Workspace, `013-workspace-design` | [9a7ec5a](https://github.com/numtide/horae/tree/9a7ec5ac01a1670c009767a6b0d9354a365d61f5/specs/013-workspace-design), [#210](https://github.com/numtide/horae/pull/210) | Draft spec, research and requirements checklist; no plan/tasks | Invitations, backup and deletion contracts |
 | Personal Settings, `014-personal-settings-design` | [6aafd4e](https://github.com/numtide/horae/tree/6aafd4eb3d24f74ba659ae5c6766f610f8604fb4/specs/014-personal-settings-design), [#211](https://github.com/numtide/horae/pull/211) | Draft spec, research and requirements checklist; no plan/tasks | Profile ownership and notification delivery |
 | Scoped permissions/approvals, `015-scoped-permissions` | [b3ee8da](https://github.com/numtide/horae/tree/b3ee8da3fed172888a174ff3dc32a16477c1ca5b/specs/015-scoped-permissions), [#212](https://github.com/numtide/horae/pull/212) | Planning artifacts, migration/rate protocols and constitution 1.1.0 amendment included; full policy remains unresolved | Complete reference matrix, review mappings and propagate permission contracts to dependent specs |
@@ -92,7 +92,7 @@ Only the former should be presented as a choice to the user.
 | D-009 | Cross-spec conflict / dashboard + importer | Dashboard US3/FR-011 assumes known external billed state; importer FR-016 deliberately leaves entries locally open without persisting it. Choose an explicit unknown-state/import policy before claiming uninvoiced certainty. |
 | D-010 | Reference contract / dashboard | PD-001 still asks whether to omit Pin/Duplicate/Delete/Link/Unlink. Reconcile with the new parity request; investigate their semantics and destructive safeguards, not just whether a button is visible. |
 | D-011 | Reference access / 015 | Current evidence account has only its immutable owner; invite path requests another paid seat. Custom-profile persistence and several approval edge cases remain unverified. Use available documentation first; request suitable test access if needed, never purchase or bypass restrictions. |
-| D-012 | Governance conflict / 015 + consumers | PR #212 now proposes constitution 1.1.0 for the confirmed six-profile/custom model, with Sync Impact Report and preserved core principles. It is not merged. Dashboard's three-role assumption and 012's old financial boundaries still need reconciliation with the verified matrix before cutover. |
+| D-012 | Governance and contract dependency / 015 + consumers | PR #212 proposes constitution 1.1.0, not merged. PRs #208/#209 now use the confirmed six-profile/custom target and distinguish legacy evidence from acceptance. Full operation-matrix integration, persistence and migration review remain required; the broad three-role contradiction is resolved in the pending specs. |
 
 ## Proposed dependency order
 
@@ -169,3 +169,36 @@ This orders planning, not implementation authorization:
   boundary to pending consumer specs without inventing the unresolved matrix.
 - D-001 remains unanswered; new product-area specifications are not authorized
   by this governance update.
+
+### 2026-10-01 — Consumer clarification reconciliation
+
+- Ran `speckit-clarify` path resolution for dashboard and Clients, read their
+  specs/constitution/checklists and propagated the already confirmed permission
+  answer. No new user answer was inferred and no new scope question was settled.
+- PR #208 `fa15ff4`: updated dashboard permissions/acceptance/dependencies and
+  annotated legacy plan/research boundaries. Checklist 13/16 → 11/16: corrected
+  two optimistic markers for ambiguity and complete scenarios; existing action,
+  imported-billing and permission-contract gaps prevent those checks passing.
+- PR #209 `bc5d063`: updated client-management personas, capability boundaries,
+  six-profile/custom acceptance and the feature 015 dependency. Checklist remains
+  11/16. Contact/lifecycle choices remain unanswered.
+- Nix formatting and Git whitespace checks passed; only documentation changed.
+  Full clarification/planning/analysis is still incomplete for both features.
+
+### Clarification checkpoint
+
+The independent propagation of confirmed decisions is complete for the five
+pending surface/permission packages. The remaining readiness gates cannot be
+closed by another status update or by selecting an unanswered option:
+
+- Delivery: D-001 must bound the complete feature inventory.
+- Dashboard/Clients: action/import-billing and contact/lifecycle choices remain.
+- Workspace/Settings: invitation, backup/deletion, identity and delivery policy
+  choices remain.
+- Permissions: current-reference conflicts need suitable non-owner test access;
+  documented research has not resolved them. Migration mappings remain unapproved.
+
+Resume by recording the user's D-001 answer, then handle the next consequential
+feature clarification one at a time. Do not create speculative implementation
+plans, claim full analysis, purchase reference access or silently reduce parity
+to bypass these gates. All published work remains reviewable; no PR was merged.
