@@ -62,3 +62,18 @@ The shared Project Detail action policy, including Pin, already awaits a separat
 The installed `speckit-specify` instructions were followed using `create-new-feature.sh --json --number 012 --short-name clients-design` in this worktree. `.specify/feature.json` resolves to `specs/012-clients-design`. The template was replaced with a feature specification and reviewed against `checklists/requirements.md`.
 
 No `.specify/extensions.yml` exists, so no before/after specification hooks apply. Validation remains incomplete pending FR-015/FR-016 answers. `speckit-clarify`, planning, tasks and implementation are not claimed complete; the workflow engine has not been run.
+
+### Clarification propagation — 2026-10-01
+
+Ran the checked-in clarification paths helper and propagated the user's recorded
+six-profile/custom-permission decision from feature 015. Updated the spec's
+clarifications, personas, FR-003, SC-005 and dependencies. The old catalog and
+Manager guards above are current-code evidence, not the final acceptance policy.
+Client management does not itself authorize rates, invoices, projects or imports;
+the exact operation/contact boundaries remain owned by feature 015's matrix.
+
+No new product answer was inferred. Contact cardinality, archive/reactivation
+and the shared Pin policy remain open. Revalidated the checklist at 11/16, with
+no marker changes or newly passing items. The pending constitution amendment in
+PR #212 is not merged into this branch; full clarification, plan/tasks and
+implementation are not complete. No application or database changes were made.

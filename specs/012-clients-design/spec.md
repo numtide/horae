@@ -8,6 +8,12 @@
 
 **Input**: Implement Clients list/detail from the design handoff, compare the flows with Harvest, and preserve existing project, invoice, import and access-control behavior. This is the Clients portion of Project Detail + Clients + Settings/Workspace, not a replacement for that wider objective.
 
+## Clarifications
+
+### Session 2026-10-01
+
+- Q: Does client access retain the three-role boundary or use the confirmed Harvest permission model? → A: Reuse the user's 2026-09-30 decision recorded in feature 015: six built-in profiles, custom profiles, individual adjustments and applicable scopes. This is propagation of an existing answer, not a new scope approval. Contact cardinality and archive policy remain unresolved.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Find and review clients (Priority: P1)
@@ -28,7 +34,7 @@ As a person managing client work, I can find a client and understand its project
 
 ### User Story 2 - Maintain client information (Priority: P1)
 
-As a manager, I can create/edit clients through the designed dialogs while preserving their existing work.
+As a person with client-management authority, I can create/edit clients through the designed dialogs while preserving their existing work.
 
 **Why this priority**: The redesign must retain current client management and make the billing panel useful.
 
@@ -45,7 +51,7 @@ As a manager, I can create/edit clients through the designed dialogs while prese
 
 ### User Story 3 - Manage selected clients (Priority: P2)
 
-As a manager, I can review and apply a change to explicitly selected clients only.
+As a person with the required client-operation authority, I can review and apply a change to explicitly selected clients only.
 
 **Why this priority**: Multi-selection and Actions are explicit design requirements and avoid repetitive editing.
 
@@ -62,7 +68,7 @@ As a manager, I can review and apply a change to explicitly selected clients onl
 
 ### User Story 4 - Continue work and manage lifecycle (Priority: P2)
 
-As a manager, I can open a client's project/invoice workflows and archive inactive business without losing history.
+As an authorized person, I can open a client's project/invoice workflows and archive inactive business without losing history, subject to each destination's separate permissions.
 
 **Why this priority**: Detail must connect to working flows; lifecycle changes affect tracking beyond this page.
 
@@ -94,7 +100,7 @@ As a manager, I can open a client's project/invoice workflows and archive inacti
 
 - **FR-001**: List MUST match the Clients handoff: title, New client, selection-based Actions, Import, client/contact search, lifecycle/currency filters, four cards, selectable table and empty state.
 - **FR-002**: Detail MUST match its handoff: back link, identity/currency, contextual creation/edit/actions, four cards, project table, contact/billing panels and recent invoices. Prototype shell/example data MUST NOT appear as real content.
-- **FR-003**: Current catalog access MUST remain, but project, financial, contact and invoice reads MUST enforce their appropriate permissions independently. Managers/administrators may mutate clients; members may not. Contact details MUST be limited to client managers.
+- **FR-003**: Client list/detail, metadata, contact, financial and lifecycle operations MUST use feature 015's verified effective capabilities and scopes, including its six built-in profiles, custom profiles and individual adjustments. Client management MUST NOT imply project, invoice, rate-editing or import authority. Minimal client identities needed by an authorized tracking picker MUST remain distinct from full catalog/contact access. Sensitive fields, counts, search matches and exports MUST exclude unauthorized data. Existing broad role checks are a migration input, not the final acceptance boundary; do not invent a contact permission or permanently restrict client management to a role named Manager.
 - **FR-004**: Search MUST ignore case across client names and authorized contact names/email. Currency filtering MUST match preferred currency or visible project currencies. Scope counts MUST honor search/currency filters across all lifecycle alternatives.
 - **FR-005**: Active/archived card MUST count matching clients across both states. Other list cards MUST use clients matching all current filters. Hours card MUST be year-to-date; row/detail hours MUST be explicitly lifetime. Project counts MUST exclude inaccessible projects.
 - **FR-006**: Billed this year MUST sum non-draft, non-void invoices issued in the current year through today, preserving invoice currency/amount. Year comparison MUST use the equivalent prior-year elapsed period, labeled year-to-date, with no percentage for a zero denominator. Count/last issue date MUST use the same population.
@@ -129,7 +135,7 @@ As a manager, I can open a client's project/invoice workflows and archive inacti
 - **SC-002**: Every count, minute and per-currency amount reconciles exactly against fixtures covering lifecycle states, mixed currencies, missing rates, imports, all project types and draft/open/paid/void invoices.
 - **SC-003**: Create/reload/edit preserves every supported field from both entry points; all invalid-input and cancel cases leave saved state unchanged.
 - **SC-004**: For each bulk operation, changed identities equal authorized/applicable selected clients; every selected client has a truthful result and hidden/unselected clients remain unchanged.
-- **SC-005**: Member, manager, administrator and cross-organization checks disclose zero unauthorized records or financial/contact values.
+- **SC-005**: All six built-in profiles, custom grants, individual adjustments, revoked scopes and cross-organization cases pass feature 015's client-operation matrix with zero unauthorized records or financial/contact values. Verify direct requests, search/counts, exports and contextual destination access; permitted client management never grants an unrelated financial or import action.
 - **SC-006**: List/detail/dialogs are keyboard operable at desktop and 320 CSS pixels, including 200% text size, without overlapping checkboxes or inaccessible actions.
 - **SC-007**: Every designed section/action has a verified implementation or explicitly approved deviation. Unresolved policy questions and placeholder/no-op controls prevent completion.
 
@@ -141,4 +147,5 @@ As a manager, I can open a client's project/invoice workflows and archive inacti
 - Deletion is limited to clients without history; import identity is never discarded to make deletion succeed. Duplicate display names do not merge identities.
 - Calendar periods use the organization's reporting date boundary. No currency conversion service is introduced.
 - Shared Project Detail actions, invoice accounting/eligibility, project drafts and importer are dependencies, not independently redefined here.
+- Feature 015 owns the effective-access matrix and migration. Its [pending PR #212](https://github.com/numtide/horae/pull/212) includes the constitution amendment; it is not merged into this branch. Runtime permission changes require that governance/migration gate, and the unresolved operation matrix prevents full acceptance here. Existing OIDC and organization isolation remain unchanged.
 - Settings/Workspace and unfinished Project Detail work remain in the wider goal; this specification does not mark them complete.
