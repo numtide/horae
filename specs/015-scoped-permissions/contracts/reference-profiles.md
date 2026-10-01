@@ -42,6 +42,12 @@ The live editor differs from the general help article:
 
 Expenses, estimates, Forecast, subscription billing and currently absent report products do not become working Horae features merely because the reference supports them. FR-003 requires explicit product-surface mapping. The general time report must derive its row scope and sensitive fields from applicable implemented capabilities.
 
+The confirmed web scope includes expenses. The 2026-10-01
+[expense permission evidence](expense-permissions-evidence.md) records its six
+read/write grants and built-in defaults from the current editor configuration.
+Category, receipt, billing, approval and privileged lifecycle mapping remains
+open; ordinary expense writing must not stand in for all of these operations.
+
 ## Customizable dimensions present in the reference
 
 In addition to the defaults above, the catalog includes managed-person read/write, managed billable-rate read/write, managed-project invoice read, managed-project draft editing and managed-project invoice management. These must not be lost by hard-coding only built-in profile defaults.
