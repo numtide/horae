@@ -2,7 +2,20 @@
 
 Checked 2026-10-01. This records reference evidence, not completed Horae tests.
 `Documented`, `client-observed` and `persisted` are different evidence levels.
-No persisted expense experiment has been authorized or executed in this phase.
+The user authorized disposable reference experiments on 2026-10-01: create,
+modify and delete only test clients/projects, categories, expenses, receipts and
+draft invoices. Existing business records, messages, payments, seat purchases and
+owner changes remain excluded. Authorization is not a successful test result.
+
+A dedicated test client and T&M project were created after authorization. A
+read-back of the project editor confirmed EUR on the test client and an explicit
+USD project override. Exact IDs and cleanup targets are recorded only in the
+main checkout's `.scratch/playwright-windows/expense-fixture-ledger-20261001.md`.
+No expense, category, receipt or invoice has yet been saved. The expense tab
+currently reports `document.visibilityState = hidden`; tab selection and
+`window.focus()` did not restore visibility. The user was asked to restore Chrome
+before continuing interactive validation. Reuse these fixtures; do not recreate
+them after a connection or visibility interruption.
 
 ## Current browser evidence
 
@@ -105,8 +118,8 @@ permission is not automatically an expense-write permission or vice versa.
 
 ## Remaining discriminating checks
 
-These are reference experiments awaiting suitable access/authority, not
-unchecked Horae implementation tasks. Capture before/after values and relevant
+These are authorized reference experiments requiring suitable account access,
+not unchecked Horae implementation tasks. Capture before/after values and relevant
 errors; identify fixture records before any mutation. Do not touch existing
 business records, send invoices, notify clients, pay, purchase seats or change
 the account owner. Use only explicitly authorized disposable fixtures.

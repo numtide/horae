@@ -167,3 +167,12 @@ This is a draft self-review, not independent review or `speckit-analyze`.
   suitable non-owner access for E-AUTH; execute the discriminating checks before
   closing the numeric, attachment and source-billing contracts. No application
   change, migration, reference save or merge occurred in this iteration.
+- Authorization follow-up: the user approved isolated fixture mutations, now
+  recorded in Clarifications and the reference-validation scope. Created one
+  test client/project and verified the persisted EUR client / USD project pair.
+  No expense or invoice has been saved. Fixture IDs and cleanup ledger remain in
+  local scratch. Browser visibility is currently hidden despite tab selection;
+  requested restoration of Chrome, retaining the same live connection and
+  fixtures. Next: once visible, save/reopen the first fixture expense, then run
+  E-NUM/E-CUR. E-AUTH still needs suitable non-owner access, not another fixture
+  authorization. Checklist remains 11/16; authorization does not prove a rule.

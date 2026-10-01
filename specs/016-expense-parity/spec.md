@@ -13,6 +13,7 @@
 ### Session 2026-10-01
 
 - Q: May screens without a dedicated mockup be composed from Horae's existing design system, preserving Harvest behavior? → A: Yes, authorized. Reuse current components and tokens; a new handoff is not a prerequisite for these surfaces.
+- Q: May reference checks create, modify and delete isolated test records in Harvest? → A: Yes, authorized. Limit them to disposable clients/projects, categories, expenses, receipts and draft invoices. Preserve existing records; no messages, payments, seat purchases or owner changes.
 
 ## User Scenarios & Testing
 
