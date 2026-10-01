@@ -35,8 +35,8 @@ their implementation has merged. Recheck heads before modifying an owning branch
 | Clients, `012-clients-design` | [bc5d063](https://github.com/numtide/horae/tree/bc5d06315738f028665386fb405c54232227cf73/specs/012-clients-design), [#209](https://github.com/numtide/horae/pull/209) | Confirmed permission model propagated; draft spec/research/checklist, no plan/tasks | Settle contacts and lifecycle conflict, then plan against feature 015's completed contract |
 | Workspace, `013-workspace-design` | [9a7ec5a](https://github.com/numtide/horae/tree/9a7ec5ac01a1670c009767a6b0d9354a365d61f5/specs/013-workspace-design), [#210](https://github.com/numtide/horae/pull/210) | Draft spec, research and requirements checklist; no plan/tasks | Invitations, backup and deletion contracts |
 | Personal Settings, `014-personal-settings-design` | [6aafd4e](https://github.com/numtide/horae/tree/6aafd4eb3d24f74ba659ae5c6766f610f8604fb4/specs/014-personal-settings-design), [#211](https://github.com/numtide/horae/pull/211) | Draft spec, research and requirements checklist; no plan/tasks | Profile ownership and notification delivery |
-| Scoped permissions/approvals, `015-scoped-permissions` | [f5cf02d](https://github.com/numtide/horae/tree/f5cf02db992d50638c9d89a3f7f661443cc7a5fa/specs/015-scoped-permissions), [#212](https://github.com/numtide/horae/pull/212) | Planning artifacts and constitution 1.1.0 proposal retained; expense read/write defaults now observed; full lifecycle policy unresolved | Complete reference matrix, review mappings and propagate permission contracts to dependent specs |
-| Expenses, `016-expense-parity` | [49f8038](https://github.com/numtide/horae/tree/49f8038364108b51fb3eb5ef815f659fa35f0221/specs/016-expense-parity), [#214](https://github.com/numtide/horae/pull/214) | Combined locks, 101-row filter containment, fee/hour budgets, USD/GBP list/report reconciliation and UI exponent normalization verified; shared contract propagated to editor/dashboard; 11/16 checks, no final plan/tasks | Receipt-download/budget-control audit published; resolve the remaining detailed-report target-set evidence. Larger-volume report scope remains uncertain; numeric conflict, export email, non-owner and recipient access remain distinct gates |
+| Scoped permissions/approvals, `015-scoped-permissions` | [6ce9071](https://github.com/numtide/horae/tree/6ce907112da0288a3b1282884d6895aebee7be72/specs/015-scoped-permissions), [#212](https://github.com/numtide/horae/pull/212) | Planning artifacts and constitution 1.1.0 proposal retained; expense defaults and owner-only action/period-lock evidence recorded; full lifecycle policy unresolved | Complete non-owner reference matrix, interval policy and dependent operation mappings; owner success is not proof of custom grants |
+| Expenses, `016-expense-parity` | [85791e9](https://github.com/numtide/horae/tree/85791e9300915d29b6a1e7be1c7ebc2cbe1163e8/specs/016-expense-parity), [#214](https://github.com/numtide/horae/pull/214) | Independent reference investigations and shared-contract propagation complete at their recorded evidence levels; current-filter versus selected-ID action scope resolved; 11/16 checks, no final plan/tasks | Answer ordinary-money policy question, then resolve retention, export delivery authority and non-owner/recipient/locale/time-rate access gates. Full expense specification remains incomplete |
 
 All six feature PRs were drafts at the latest inventory snapshot. Status is not a promise about
 later GitHub state. No merge is part of this specification delivery.
@@ -60,7 +60,7 @@ their requirements. Missing mockups do not exclude approved web workflows.
 | Permissions and approvals | Pending 015; design 06/08/09 | All six profiles, custom grants, scoped approval/withdrawal and every entry point; extend matrix for newly approved domains |
 | Reports | 001 and `004-invoice-timesheet-exports`; design 07 | Time/project/team and financial reports, saved/shared/scheduled behavior, permissions and exact export reconciliation |
 | Invoice lifecycle and payments | 001/011 and existing invoice modules; dashboard consumers | Draft/send/view, numbering/settings, dates, reminders, recurrence, partial payments/write-offs and project attribution |
-| Expenses | Pending 016 / #214; persisted capture/category/receipt/draft/manual-billing and budget/currency reconciliation evidence | Finish independent evidence audit and shared contract review; keep larger-volume scope uncertainty, export delivery authority and non-owner/recipient access distinct |
+| Expenses | Pending 016 / #214; independent evidence audit and shared-contract review published | Continue clarification from explicit money/retention policies and access/authority gates; report target-set ambiguity is resolved, not a reason for repeated volume probes |
 | Estimates | No dedicated estimate spec or route found | Creation, client delivery/response and downstream project/invoice relationships |
 | Retainers | Historical 001 project-kind mention; no dedicated ledger spec found | Distinguish advance-payment balance/draws from fixed or recurring project fees |
 | Personal settings | Pending 014; design 08 | Profile, timezone, rates, assignments, notifications and truthful security/integration destinations |
@@ -100,9 +100,9 @@ Only the former should be presented as a choice to the user.
 | D-012 | Governance and contract dependency / 015 + consumers | PR #212 proposes constitution 1.1.0, not merged. PRs #208/#209 now use the confirmed six-profile/custom target and distinguish legacy evidence from acceptance. Full operation-matrix integration, persistence and migration review remain required; the broad three-role contradiction is resolved in the pending specs. |
 | D-013 | Confirmed / 016 and other absent mockups | On 2026-10-01 the user authorized composing screens without a dedicated mockup from current Horae components and tokens, preserving Harvest behavior. A new handoff is not required. Plans must record composition/control states and protect shared defaults through cross-screen regression. This does not authorize implementation in the specification phase. |
 | D-014 | Evidence and contracts / 016 + billing + 015 | Isolated fixtures verify USD/JPY/BHD precision, historical current-currency relabeling without FX, tiny-rate rounding, category archive, receipt boundaries and draft source independence/release. Bounds/exports, issued reports/attribution and permissions remain open. Invoice Preview requires paid access or Stripe on the current account; no upgrade/integration authorized. Non-owner checks need suitable access; six defaults do not prove enforcement. |
-| D-015 | Reference discrepancy / 016 + reporting | Empty-selection marking of 101 fixture records respects date/project filters and leaves an out-of-filter source unchanged. Detailed report renders all 101 on one page and ignores page/per_page probes; ordinary expense list separately paginates at 50. Larger-volume report scope remains uncertain; shared all-pages code does not prove an exposed report control. Projects' disabled-empty Actions stay unchanged. |
+| D-015 | Resolved target-set contract / 016 + reporting | With 1,000 rows loaded, an eligible expense moved into the filter after confirmation opened was also marked: 1,001 current matches, outside control unchanged. Explicit two-ID clearing changed only two. No selection uses current matching filters at execution, not a loaded-row snapshot. Tested volume is not an unlimited-volume or pagination guarantee. Projects' disabled-empty Actions stay unchanged. |
 | D-016 | Delivery authority / 016 exports | CSV/XLSX/PDF controls and fixture-filtered generation URLs observed, but generation can return an emailed result. No generation submitted under the no-messages authorization. This is not proof of a paid-plan export gate or a content-validation pass. |
-| D-017 | Reference conflict / 016 money | Bounded tests establish quantity/rate limits, but ordinary-amount boundary messages disagree with accepted values and a large accepted response loses cents. Preserve constitutional exactness; agree an explicit bound/overflow contract rather than copying that loss or treating an error message as a verified bound. |
+| D-017 | Pending product decision / 016 money | Bounded tests establish quantity/rate limits, but ordinary-amount boundary messages disagree with accepted values and a large accepted response loses cents. Asked whether to adopt advertised limits with exact arithmetic and overflow rejection; no answer accepted. These messages are not verified inclusive acceptance bounds. Preserve constitutional exactness; do not copy precision loss or silently choose the policy. |
 | D-018 | Shared dependency / 016 + project editor/dashboard | Live fee inclusion on/off, both billability states, monthly boundaries, total-hours exclusion and owner USD list/detail/report reconciliation verified. Shared contract in #214 feeds expense FR-019, editor FR-026 and dashboard FR-023 (#208). USD/GBP expense totals remain separate; mixed-client subtotal is N/A. Nonzero unlike time-cost/expense-cost testing requires time/rate fixtures outside current authorization; complete permission and budget-variant evidence remain separate. |
 
 ## Proposed dependency order
@@ -122,6 +122,44 @@ This orders planning, not implementation authorization:
    review all cross-screen journeys and close analysis findings.
 
 ## Iteration log
+
+### 2026-10-01 — Independent investigations completed and published
+
+- Published expense revision `85791e9` in #214 and permission evidence
+  `6ce9071` in #212. Dashboard dependency remains `48a4156` in #208; editor
+  FR-026/FR-004 and the shared budget contract are in #214. The existing branches
+  and worktrees were reused, with unsigned documentation-only commits.
+- The decisive report test loaded 1,000 rows, opened confirmation, then moved an
+  existing disposable expense into the filter without refreshing. No selection
+  marked all 1,001 current matches; explicit selection cleared only two IDs.
+  The outside control stayed unchanged. A cleared row retained project-period
+  protection while 999 remained billed; clearing the remaining set removed it.
+  FR-007/016 and feature 015 evidence preserve these separate states without
+  inventing interval-overlap algorithms or non-owner grants.
+- Cleanup evidence matches all 1,001 created/deleted IDs, each deletion returning
+  200; one separately verified synthetic duplicate was also removed, cause
+  unknown. Final October 3/4 reports are empty. Original October 1 expense,
+  USD 1.50 / three units, receipt (200 / 431 bytes) and active/no-budget project
+  remain unchanged. Reusable earlier fixture entities and unsent drafts remain
+  intentionally retained in the private ledger; not every fixture was erased.
+- Completion audit: `016-expense-parity/independent-work-audit.md` maps each named
+  investigation to its evidence and limitations. Category/archive, numeric and
+  receipt behavior, draft/source independence, report targets, currency and
+  budgets have their stated reference coverage. Cross-contract self-review and
+  propagation are complete for these findings, not a full independent review
+  or completed `speckit-analyze`. Scoped Nix formatting and diff checks pass.
+- The previous recommendation-only turn did not finish publication. This
+  iteration completes that handoff and checks the published revisions. The goal
+  `termina lo independiente` is complete once this register's revision is also
+  published and verified; the broader `delivery-goal.md` remains incomplete.
+  No implementation, migrations, merges, emails, payments or account settings
+  changes were made during this closure.
+- Clarify: one money-policy question asked, zero answers accepted; checklist
+  11/16 remains unchanged, with two clarification markers. Full acceptance,
+  unambiguous requirements and readiness remain unchecked. No extension hooks.
+  Next action: obtain D-017's answer and integrate it with `speckit-clarify`,
+  then address the other explicit retention/access/authority gates. Do not rerun
+  completed independent tests or start final plan/tasks/analyze prematurely.
 
 ### 2026-10-01 — Independent evidence audit
 
