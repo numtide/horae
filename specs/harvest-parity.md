@@ -35,7 +35,7 @@ their implementation has merged. Recheck heads before modifying an owning branch
 | Clients, `012-clients-design` | [fb5c4ea](https://github.com/numtide/horae/tree/fb5c4ea01095b6fe4b7f3f65a62a90f99a1d57cb/specs/012-clients-design), [#209](https://github.com/numtide/horae/pull/209) | Draft spec, research and requirements checklist; no plan/tasks | Settle contacts and lifecycle conflict, then plan |
 | Workspace, `013-workspace-design` | [9a7ec5a](https://github.com/numtide/horae/tree/9a7ec5ac01a1670c009767a6b0d9354a365d61f5/specs/013-workspace-design), [#210](https://github.com/numtide/horae/pull/210) | Draft spec, research and requirements checklist; no plan/tasks | Invitations, backup and deletion contracts |
 | Personal Settings, `014-personal-settings-design` | [6aafd4e](https://github.com/numtide/horae/tree/6aafd4eb3d24f74ba659ae5c6766f610f8604fb4/specs/014-personal-settings-design), [#211](https://github.com/numtide/horae/pull/211) | Draft spec, research and requirements checklist; no plan/tasks | Profile ownership and notification delivery |
-| Scoped permissions/approvals, `015-scoped-permissions` | [dcf21ef](https://github.com/numtide/horae/tree/dcf21ef73cb9b093bd36c4fd2f7bf1f681b5b537/specs/015-scoped-permissions), [#212](https://github.com/numtide/horae/pull/212) | Spec/plan/tasks, migration-preview contract and rate-scope verification protocol exist; full policy remains unresolved | Complete reference matrix, approve actual migration mappings and reconcile governance |
+| Scoped permissions/approvals, `015-scoped-permissions` | [b3ee8da](https://github.com/numtide/horae/tree/b3ee8da3fed172888a174ff3dc32a16477c1ca5b/specs/015-scoped-permissions), [#212](https://github.com/numtide/horae/pull/212) | Planning artifacts, migration/rate protocols and constitution 1.1.0 amendment included; full policy remains unresolved | Complete reference matrix, review mappings and propagate permission contracts to dependent specs |
 
 All five PRs were drafts at the inventory snapshot. Status is not a promise about
 later GitHub state. No merge is part of this specification delivery.
@@ -92,7 +92,7 @@ Only the former should be presented as a choice to the user.
 | D-009 | Cross-spec conflict / dashboard + importer | Dashboard US3/FR-011 assumes known external billed state; importer FR-016 deliberately leaves entries locally open without persisting it. Choose an explicit unknown-state/import policy before claiming uninvoiced certainty. |
 | D-010 | Reference contract / dashboard | PD-001 still asks whether to omit Pin/Duplicate/Delete/Link/Unlink. Reconcile with the new parity request; investigate their semantics and destructive safeguards, not just whether a button is visible. |
 | D-011 | Reference access / 015 | Current evidence account has only its immutable owner; invite path requests another paid seat. Custom-profile persistence and several approval edge cases remain unverified. Use available documentation first; request suitable test access if needed, never purchase or bypass restrictions. |
-| D-012 | Governance conflict / 015 + consumers | Constitution still names three roles. Dashboard also retains a three-role assumption, while 012 contains old role-based financial boundaries. Reconcile through explicit governance and shared capability contracts before runtime cutover. |
+| D-012 | Governance conflict / 015 + consumers | PR #212 now proposes constitution 1.1.0 for the confirmed six-profile/custom model, with Sync Impact Report and preserved core principles. It is not merged. Dashboard's three-role assumption and 012's old financial boundaries still need reconciliation with the verified matrix before cutover. |
 
 ## Proposed dependency order
 
@@ -150,3 +150,22 @@ This orders planning, not implementation authorization:
   recorded rate/profile/approval evidence gaps, or continue independent research
   in the already requested screens. D-001 is still unanswered; no new product
   area has been treated as approved.
+
+### 2026-10-01 — Authorization governance reconciliation
+
+- Followed `speckit-constitution` using the already confirmed profile/custom
+  permission scope. PR #212 commit `b3ee8da` proposes constitution 1.1.0 and updates
+  feature 015's specification, plan and research; no new product choice inferred.
+- Compared the five core principles byte-for-byte with the previous revision:
+  unchanged. Checked feature templates, runtime guidance, version/date consistency
+  and absence of unresolved constitution placeholders. No extension hooks or
+  command-template directory exists in the owning worktree.
+- Nix format validation passed for the three feature documents; constitution
+  whitespace and content checks passed separately because `.specify/` is excluded
+  from the repository formatter. No runtime or database changes were made.
+- T008 remains open for dependent-spec reconciliation and policy persistence;
+  the amendment alone does not approve mappings, deployment or full-feature
+  acceptance. Next independent work is propagating the confirmed capability
+  boundary to pending consumer specs without inventing the unresolved matrix.
+- D-001 remains unanswered; new product-area specifications are not authorized
+  by this governance update.
