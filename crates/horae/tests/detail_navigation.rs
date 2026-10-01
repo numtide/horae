@@ -11,7 +11,7 @@ use dioxus::prelude::*;
 use dioxus::router::Navigator;
 use dioxus::router::components::HistoryProvider;
 use futures_util::FutureExt;
-use horae_core::types::{InvoiceStatus, OrgRole, ProjectRole};
+use horae_core::types::{InvoiceStatus, OrgRole};
 use tokio::sync::oneshot;
 use uuid::Uuid;
 
@@ -19,6 +19,8 @@ use uuid::Uuid;
 pub mod combobox;
 #[path = "../src/components/controls.rs"]
 pub mod controls;
+#[path = "../src/components/date_picker.rs"]
+pub mod date_picker;
 #[path = "../src/components/form.rs"]
 pub mod form;
 #[path = "../src/components/icons.rs"]
@@ -30,10 +32,10 @@ pub mod modal;
 #[path = "../src/components/table.rs"]
 pub mod table;
 mod components {
-    pub use super::{combobox, controls, form, icons, menu, modal, table};
+    pub use super::{avatar, combobox, controls, date_picker, form, icons, menu, modal, table};
 }
-#[path = "../src/models/assignment.rs"]
-mod assignment;
+#[path = "../src/components/avatar.rs"]
+pub mod avatar;
 #[path = "../src/models/client.rs"]
 mod client;
 #[path = "../src/models/invoice.rs"]
@@ -41,41 +43,46 @@ pub mod invoice;
 #[path = "../src/pages/invoices.rs"]
 mod invoices;
 #[path = "../src/models/project.rs"]
-mod project;
+pub mod project;
 #[path = "../src/models/project_creation.rs"]
 pub mod project_creation;
 #[path = "../src/pages/projects.rs"]
 mod projects;
-#[path = "../src/models/task.rs"]
-mod task;
 #[path = "../src/models/user.rs"]
 mod user;
 mod models {
+    pub(crate) use super::project;
     pub use super::{
         client::Client,
-        project::{
-            Project, ProjectBudgetProgress, ProjectDetails, ProjectTagLink, ProjectTaskRate,
-        },
+        project::{Project, ProjectBudgetProgress, ProjectDetails, ProjectTagLink},
     };
     pub use super::{invoice, project_creation};
 }
 
 type InvoiceResponse = Result<invoice::InvoiceWithLines, ServerFnError>;
-type AssignmentResponse = Result<Vec<assignment::Assignment>, ServerFnError>;
 type ProjectDetailsResponse = Result<project::ProjectDetails, ServerFnError>;
+type ActivityResponse = Result<project::ProjectActivity, ServerFnError>;
+type SummaryResponse = Result<project::ProjectSummary, ServerFnError>;
+type BreakdownResponse = Result<project::ProjectBreakdown, ServerFnError>;
+type InvoiceHistoryResponse = Result<project::ProjectInvoices, ServerFnError>;
 
 #[derive(Clone, Default)]
 struct Probe {
+    viewer_role: Option<OrgRole>,
     initial_path: Option<String>,
     requests: Rc<RefCell<Vec<Uuid>>>,
-    assignment_requests: Rc<RefCell<Vec<Uuid>>>,
     detail_requests: Rc<RefCell<Vec<Uuid>>>,
-    task_requests: Rc<RefCell<Vec<Uuid>>>,
+    breakdown_requests: Rc<RefCell<Vec<Uuid>>>,
+    activity_requests: Rc<RefCell<Vec<Uuid>>>,
+    project_invoice_requests: Rc<RefCell<Vec<Uuid>>>,
     navigator: Rc<RefCell<Option<Navigator>>>,
     scope: Rc<RefCell<Option<ScopeId>>>,
     response: Rc<RefCell<Option<oneshot::Receiver<InvoiceResponse>>>>,
-    assignment_response: Rc<RefCell<Option<oneshot::Receiver<AssignmentResponse>>>>,
     detail_response: Rc<RefCell<Option<oneshot::Receiver<ProjectDetailsResponse>>>>,
+    activity_response: Rc<RefCell<Option<oneshot::Receiver<ActivityResponse>>>>,
+    summary_response: Rc<RefCell<Option<oneshot::Receiver<SummaryResponse>>>>,
+    breakdown_response: Rc<RefCell<Option<oneshot::Receiver<BreakdownResponse>>>>,
+    invoice_history_response: Rc<RefCell<Option<oneshot::Receiver<InvoiceHistoryResponse>>>>,
 }
 
 fn app(probe: Probe) -> Element {
@@ -94,7 +101,7 @@ fn app(probe: Probe) -> Element {
 
 mod route {
     use super::*;
-    use invoices::{InvoiceDetail, InvoiceList};
+    use invoices::{InvoiceDetail, InvoiceList, NewProjectInvoice};
     use projects::{ProjectDetail, ProjectList};
 
     #[derive(Clone, PartialEq, Routable)]
@@ -110,10 +117,72 @@ mod route {
         NewProject {},
         #[route("/projects/:id/edit")]
         EditProject { id: Uuid },
-        #[route("/projects/:id")]
-        ProjectDetail { id: Uuid },
+        #[route("/projects/:id/invoices/new")]
+        NewProjectInvoice { id: Uuid },
+        #[route("/projects/:id?:from&:to&:tab")]
+        ProjectDetail {
+            id: Uuid,
+            from: Option<String>,
+            to: Option<String>,
+            tab: Option<String>,
+        },
+        #[route("/reports?:project_id&:task_id&:user_id&:from&:to&:period")]
+        Reports {
+            project_id: Option<String>,
+            task_id: Option<String>,
+            user_id: Option<String>,
+            from: Option<String>,
+            to: Option<String>,
+            period: Option<String>,
+        },
+        #[route("/clients/:id")]
+        ClientDetail { id: Uuid },
         #[route("/admin/importers")]
         HarvestImport {},
+    }
+
+    impl Route {
+        pub fn project_detail(id: Uuid) -> Self {
+            Self::ProjectDetail {
+                id,
+                from: None,
+                to: None,
+                tab: None,
+            }
+        }
+
+        pub fn project_report(
+            id: Uuid,
+            task: Option<Uuid>,
+            person: Option<Uuid>,
+            interval: Option<project::ProjectActivityInterval>,
+        ) -> Self {
+            Self::Reports {
+                project_id: Some(id.to_string()),
+                task_id: task.map(|id| id.to_string()),
+                user_id: person.map(|id| id.to_string()),
+                from: interval.map(|range| range.from.to_string()),
+                to: interval.map(|range| range.to.to_string()),
+                period: Some(if interval.is_some() { "custom" } else { "all" }.into()),
+            }
+        }
+    }
+
+    #[component]
+    fn Reports(
+        project_id: Option<String>,
+        task_id: Option<String>,
+        user_id: Option<String>,
+        from: Option<String>,
+        to: Option<String>,
+        period: Option<String>,
+    ) -> Element {
+        rsx! { h1 { "Reports {project_id:?} {task_id:?} {user_id:?} {from:?} {to:?} {period:?}" } }
+    }
+
+    #[component]
+    fn ClientDetail(id: Uuid) -> Element {
+        rsx! { h1 { "Client {id}" } }
     }
 
     #[component]
@@ -151,6 +220,160 @@ fn settle(dom: &mut VirtualDom) {
 }
 
 #[tokio::test]
+async fn same_project_query_navigation_updates_period_and_tab_without_stale_labels() {
+    let id = Uuid::from_u128(1);
+    let probe = Probe {
+        initial_path: Some(format!("/projects/{id}")),
+        ..Probe::default()
+    };
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    let navigator = probe.navigator.borrow().unwrap();
+    dom.in_scope(probe.scope.borrow().unwrap(), || {
+        navigator.replace(route::Route::ProjectDetail {
+            id,
+            from: Some("2026-09-01".into()),
+            to: Some("2026-09-30".into()),
+            tab: Some("team".into()),
+        })
+    });
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(
+        html.contains("Custom period") && html.contains("01 Sep 2026 – 30 Sep 2026"),
+        "{html}"
+    );
+    assert!(
+        html.contains("aria-labelledby=\"project-tab-team\""),
+        "{html}"
+    );
+    dom.in_scope(probe.scope.borrow().unwrap(), || {
+        navigator.replace(route::Route::project_detail(id))
+    });
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(
+        html.contains("All time") && !html.contains("01 Sep 2026 – 30 Sep 2026"),
+        "{html}"
+    );
+    assert!(
+        html.contains("aria-labelledby=\"project-tab-tasks\""),
+        "{html}"
+    );
+}
+
+fn invoice_history() -> project::ProjectInvoices {
+    let invoices = vec![project::ProjectInvoice {
+        id: Uuid::from_u128(700),
+        number: "INV-HISTORY".into(),
+        status: InvoiceStatus::Paid,
+        issued_on: "2026-09-01".parse().unwrap(),
+        currency: "CHF".into(),
+        net_before_tax_cents: 97531,
+    }];
+    let totals = horae_core::invoice::invoice_ledger_totals(
+        invoices
+            .iter()
+            .map(|i| (i.currency.as_str(), i.status, i.net_before_tax_cents)),
+    )
+    .unwrap();
+    project::ProjectInvoices { invoices, totals }
+}
+
+#[tokio::test]
+async fn invoiced_tile_uses_one_read_and_remains_available_when_work_summary_fails() {
+    let probe = Probe {
+        initial_path: Some(format!("/projects/{}", Uuid::from_u128(1))),
+        ..Probe::default()
+    };
+    let (summary_send, summary_receive) = oneshot::channel();
+    *probe.summary_response.borrow_mut() = Some(summary_receive);
+    let (send, receive) = oneshot::channel();
+    *probe.invoice_history_response.borrow_mut() = Some(receive);
+    send.send(Ok(invoice_history())).unwrap();
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(
+        html.contains("Loading project summary") && html.contains("CHF 975.31"),
+        "{html}"
+    );
+    summary_send
+        .send(Err(ServerFnError::new("Work summary unavailable")))
+        .unwrap();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(
+        html.contains("Work summary unavailable") && html.contains("CHF 975.31"),
+        "{html}"
+    );
+    assert_eq!(
+        *probe.project_invoice_requests.borrow(),
+        [Uuid::from_u128(1)]
+    );
+}
+
+#[tokio::test]
+async fn pending_or_failed_invoice_history_never_shows_previous_project_amounts() {
+    let probe = Probe {
+        initial_path: Some(format!("/projects/{}", Uuid::from_u128(1))),
+        ..Probe::default()
+    };
+    let (send, receive) = oneshot::channel();
+    *probe.invoice_history_response.borrow_mut() = Some(receive);
+    send.send(Ok(invoice_history())).unwrap();
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains("CHF 975.31"));
+    let (send, receive) = oneshot::channel();
+    *probe.invoice_history_response.borrow_mut() = Some(receive);
+    let navigator = probe.navigator.borrow().unwrap();
+    dom.in_scope(probe.scope.borrow().unwrap(), || {
+        navigator.push(route::Route::project_detail(Uuid::from_u128(2)));
+    });
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(
+        html.contains("Loading invoiced total") && !html.contains("975.31"),
+        "{html}"
+    );
+    send.send(Err(ServerFnError::new("Invoice authority revoked")))
+        .unwrap();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(
+        html.contains("Invoice authority revoked")
+            && html.contains("Retry invoiced total")
+            && !html.contains("975.31"),
+        "{html}"
+    );
+    assert_eq!(
+        *probe.project_invoice_requests.borrow(),
+        [Uuid::from_u128(1), Uuid::from_u128(2)]
+    );
+}
+
+#[tokio::test]
+async fn project_invoice_route_waits_for_recovery_before_loading_sources() {
+    for role in [OrgRole::Admin, OrgRole::Member] {
+        let probe = Probe {
+            initial_path: Some(format!("/projects/{}/invoices/new", Uuid::from_u128(1))),
+            viewer_role: Some(role),
+            ..Probe::default()
+        };
+        let mut dom = VirtualDom::new_with_props(app, probe.clone());
+        dom.rebuild_in_place();
+        settle(&mut dom);
+        let html = dioxus::ssr::render(&dom);
+        assert!(!html.contains("Prepare invoice"), "{html}");
+        assert!(probe.detail_requests.borrow().is_empty());
+    }
+}
+
+#[tokio::test]
 async fn project_creation_links_use_the_static_new_project_route() {
     let probe = Probe {
         initial_path: Some("/projects".into()),
@@ -172,7 +395,7 @@ async fn project_creation_links_use_the_static_new_project_route() {
     });
     settle(&mut dom);
     assert!(dioxus::ssr::render(&dom).contains("New project"));
-    assert!(probe.assignment_requests.borrow().is_empty());
+    assert!(probe.detail_requests.borrow().is_empty());
     dom.in_scope(probe.scope.borrow().unwrap(), || navigator.go_back());
     settle(&mut dom);
     assert!(dioxus::ssr::render(&dom).contains("No projects yet"));
@@ -329,7 +552,7 @@ async fn pending_or_failed_navigation_never_shows_the_previous_invoice() {
 }
 
 #[tokio::test]
-async fn navigating_between_project_ids_loads_current_assignments_and_tasks() {
+async fn navigating_between_project_ids_loads_current_details_and_breakdown() {
     let first = Uuid::from_u128(1);
     let second = Uuid::from_u128(2);
     let probe = Probe {
@@ -340,24 +563,17 @@ async fn navigating_between_project_ids_loads_current_assignments_and_tasks() {
     dom.rebuild_in_place();
     settle(&mut dom);
     let html = dioxus::ssr::render(&dom);
-    assert!(html.contains("User-101"), "rendered: {html}");
-    assert!(html.contains("Task-1"), "rendered: {html}");
-    assert!(html.contains("Fee-1"), "rendered: {html}");
-    assert!(
-        html.contains("Over-invoiced: EUR -0.10"),
-        "rendered: {html}"
-    );
-    assert_eq!(*probe.assignment_requests.borrow(), [first]);
-    assert_eq!(*probe.task_requests.borrow(), [first]);
+    assert!(html.contains("Breakdown-task-1"), "rendered: {html}");
+    assert_eq!(*probe.breakdown_requests.borrow(), [first]);
 
     let navigator = probe.navigator.borrow().unwrap();
     dom.in_scope(probe.scope.borrow().unwrap(), || {
-        navigator.push(route::Route::ProjectDetail { id: second })
+        navigator.push(route::Route::project_detail(second))
     });
     assert_eq!(
         dom.in_scope(probe.scope.borrow().unwrap(), || dioxus::history::history()
             .current_route()),
-        format!("/projects/{second}")
+        route::Route::project_detail(second).to_string()
     );
     settle(&mut dom);
     let html = dioxus::ssr::render(&dom);
@@ -366,29 +582,231 @@ async fn navigating_between_project_ids_loads_current_assignments_and_tasks() {
         "rendered: {html}"
     );
     assert_eq!(
-        *probe.assignment_requests.borrow(),
+        *probe.breakdown_requests.borrow(),
         [first, second],
         "rendered: {html}"
     );
-    assert_eq!(
-        *probe.task_requests.borrow(),
-        [first, second],
-        "rendered: {html}"
-    );
-    assert!(html.contains("User-102"), "rendered: {html}");
-    assert!(html.contains("Task-2"), "rendered: {html}");
-    assert!(html.contains("Fee-2"), "rendered: {html}");
-    assert!(!html.contains("Fee-1"), "rendered: {html}");
-    assert!(!html.contains("User-101"), "rendered: {html}");
-    assert!(!html.contains("Task-1"), "rendered: {html}");
+    assert!(html.contains("Breakdown-task-2"), "rendered: {html}");
+    assert!(!html.contains("Breakdown-task-1"), "rendered: {html}");
     assert!(!html.contains("CODE-1"), "rendered: {html}");
     assert!(!html.contains("Tag-1"), "rendered: {html}");
     assert_eq!(*probe.detail_requests.borrow(), [first, second]);
 
     dom.in_scope(probe.scope.borrow().unwrap(), || navigator.go_back());
     settle(&mut dom);
-    assert_eq!(*probe.assignment_requests.borrow(), [first, second, first]);
-    assert_eq!(*probe.task_requests.borrow(), [first, second, first]);
+    assert_eq!(*probe.breakdown_requests.borrow(), [first, second, first]);
+}
+
+#[tokio::test]
+async fn pending_or_failed_breakdown_never_shows_previous_project_rows() {
+    let first = Uuid::from_u128(1);
+    let second = Uuid::from_u128(2);
+    let probe = Probe {
+        initial_path: Some(format!("/projects/{first}")),
+        ..Probe::default()
+    };
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains("Breakdown-task-1"));
+    let (send, receive) = oneshot::channel();
+    *probe.breakdown_response.borrow_mut() = Some(receive);
+    let navigator = probe.navigator.borrow().unwrap();
+    dom.in_scope(probe.scope.borrow().unwrap(), || {
+        navigator.push(route::Route::project_detail(second))
+    });
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(
+        html.contains("Loading project breakdown…") && !html.contains("Breakdown-task-1"),
+        "{html}"
+    );
+    send.send(Err(ServerFnError::new("Breakdown permission revoked")))
+        .unwrap();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(
+        html.contains("Breakdown permission revoked")
+            && html.contains("Retry breakdown")
+            && !html.contains("Breakdown-task-1"),
+        "{html}"
+    );
+    dom.in_scope(probe.scope.borrow().unwrap(), || navigator.go_back());
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains("Breakdown-task-1"));
+}
+
+#[tokio::test]
+async fn pending_or_failed_summary_never_shows_previous_project_totals() {
+    let first = Uuid::from_u128(1);
+    let second = Uuid::from_u128(2);
+    let probe = Probe {
+        initial_path: Some(format!("/projects/{first}")),
+        ..Probe::default()
+    };
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains("Lifetime total: 1h"));
+    let (send, receive) = oneshot::channel();
+    *probe.summary_response.borrow_mut() = Some(receive);
+    let navigator = probe.navigator.borrow().unwrap();
+    dom.in_scope(probe.scope.borrow().unwrap(), || {
+        navigator.push(route::Route::project_detail(second))
+    });
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains("Loading project summary…"), "{html}");
+    assert!(!html.contains("Lifetime total:"), "{html}");
+    send.send(Err(ServerFnError::new("Summary permission revoked")))
+        .unwrap();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(
+        html.contains("Summary permission revoked") && html.contains("Retry summary"),
+        "{html}"
+    );
+    assert!(!html.contains("Lifetime total:"), "{html}");
+    dom.in_scope(probe.scope.borrow().unwrap(), || navigator.go_back());
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains("Lifetime total: 1h"));
+}
+
+#[tokio::test]
+async fn reporting_controls_follow_the_breakdown_tabs_not_the_chart() {
+    let probe = Probe {
+        initial_path: Some(format!("/projects/{}", Uuid::from_u128(1))),
+        ..Probe::default()
+    };
+    let mut dom = VirtualDom::new_with_props(app, probe);
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    let tabs = html.find("Project breakdown views").unwrap();
+    let toolbar = html
+        .find("Project reporting period")
+        .expect("report toolbar missing");
+    let table = html
+        .find("Tasks — actual tracked hours and internal costs")
+        .unwrap();
+    assert!(tabs < toolbar && toolbar < table);
+    assert!(!html[..tabs].contains("Apply period"));
+}
+
+#[tokio::test]
+async fn pending_or_failed_activity_never_keeps_the_previous_projects_chart() {
+    let first = Uuid::from_u128(1);
+    let second = Uuid::from_u128(2);
+    let probe = Probe {
+        initial_path: Some(format!("/projects/{first}")),
+        ..Probe::default()
+    };
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains("Selected period total: 1h"), "{html}");
+
+    let (send, receive) = oneshot::channel();
+    *probe.activity_response.borrow_mut() = Some(receive);
+    let navigator = probe.navigator.borrow().unwrap();
+    dom.in_scope(probe.scope.borrow().unwrap(), || {
+        navigator.push(route::Route::project_detail(second))
+    });
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains("Loading project activity…"), "{html}");
+    assert!(!html.contains("Selected period total:"), "{html}");
+    assert!(!html.contains("Weekly activity —"), "{html}");
+    assert_eq!(*probe.activity_requests.borrow(), [first, second]);
+
+    send.send(Err(ServerFnError::new("Progress permission revoked")))
+        .unwrap();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains("Progress permission revoked"), "{html}");
+    assert!(html.contains("Retry activity"), "{html}");
+    assert!(!html.contains("Selected period total:"), "{html}");
+
+    dom.in_scope(probe.scope.borrow().unwrap(), || navigator.go_back());
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains("Selected period total: 1h"), "{html}");
+    assert!(!html.contains("Progress permission revoked"), "{html}");
+}
+
+#[tokio::test]
+async fn project_header_has_identity_and_manager_only_edit_navigation() {
+    let id = Uuid::from_u128(1);
+    for role in [OrgRole::Admin, OrgRole::Manager, OrgRole::Member] {
+        let probe = Probe {
+            initial_path: Some(format!("/projects/{id}")),
+            viewer_role: Some(role),
+            ..Probe::default()
+        };
+        let mut dom = VirtualDom::new_with_props(app, probe.clone());
+        dom.rebuild_in_place();
+        settle(&mut dom);
+        let html = dioxus::ssr::render(&dom);
+        assert_eq!(
+            html.contains("project-tab-invoices"),
+            role != OrgRole::Member,
+            "{html}"
+        );
+        assert_eq!(
+            probe.project_invoice_requests.borrow().len(),
+            usize::from(role != OrgRole::Member)
+        );
+        assert!(html.contains("Back to Projects"), "{html}");
+        assert!(html.contains("[CODE-1] Project-1"), "{html}");
+        assert!(html.contains("Time &#38; Materials"), "{html}");
+        assert!(html.contains("Active"), "{html}");
+        assert_eq!(
+            html.contains("project-detail-actions-trigger"),
+            role != OrgRole::Member,
+            "{html}"
+        );
+        assert_eq!(
+            html.contains(&format!("href=\"/clients/{}\"", Uuid::from_u128(400))),
+            role != OrgRole::Member,
+            "{html}",
+        );
+        assert_eq!(
+            html.contains(&format!("href=\"/projects/{id}/edit\"")),
+            role != OrgRole::Member,
+            "{html}",
+        );
+    }
+}
+
+#[tokio::test]
+async fn archived_project_header_without_code_preserves_edit_and_reactivation() {
+    let id = Uuid::from_u128(2);
+    let probe = Probe {
+        initial_path: Some(format!("/projects/{id}")),
+        ..Probe::default()
+    };
+    let mut project = server_fns::project_details(id);
+    project.code = None;
+    project.active = false;
+    project.project_type = horae_core::types::ProjectType::FixedFee;
+    let (send, receive) = oneshot::channel();
+    *probe.detail_response.borrow_mut() = Some(receive);
+    send.send(Ok(project)).unwrap();
+    let mut dom = VirtualDom::new_with_props(app, probe);
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains(">Project-2</h1>"), "{html}");
+    assert!(
+        html.contains("Fixed Fee") && html.contains("Archived"),
+        "{html}"
+    );
+    assert!(
+        html.contains("Reactivate") && html.contains("Edit project"),
+        "{html}"
+    );
+    assert!(!html.contains("CODE-2") && !html.contains("[]"), "{html}");
 }
 
 #[tokio::test]
@@ -403,18 +821,19 @@ async fn pending_or_failed_project_details_never_show_previous_metadata() {
     dom.rebuild_in_place();
     settle(&mut dom);
     assert!(dioxus::ssr::render(&dom).contains("CODE-1"));
-    assert!(dioxus::ssr::render(&dom).contains("Task hourly rate (EUR)"));
+    assert!(dioxus::ssr::render(&dom).contains("Edit project"));
     let (send, receive) = oneshot::channel();
     *probe.detail_response.borrow_mut() = Some(receive);
     let navigator = probe.navigator.borrow().unwrap();
     dom.in_scope(probe.scope.borrow().unwrap(), || {
-        navigator.push(route::Route::ProjectDetail { id: second })
+        navigator.push(route::Route::project_detail(second))
     });
     settle(&mut dom);
     let html = dioxus::ssr::render(&dom);
     assert!(html.contains("Loading project details"), "{html}");
     assert!(!html.contains("project-task-rate"), "{html}");
     assert!(!html.contains("Enable task"), "{html}");
+    assert!(!html.contains("Edit project"), "{html}");
     assert!(
         !html.contains("CODE-1") && !html.contains("Tag-1"),
         "{html}"
@@ -429,6 +848,7 @@ async fn pending_or_failed_project_details_never_show_previous_metadata() {
     );
     assert!(!html.contains("project-task-rate"), "{html}");
     assert!(!html.contains("Enable task"), "{html}");
+    assert!(!html.contains("Edit project"), "{html}");
     assert!(
         !html.contains("CODE-1") && !html.contains("Tag-1"),
         "{html}"
@@ -436,44 +856,35 @@ async fn pending_or_failed_project_details_never_show_previous_metadata() {
 }
 
 #[tokio::test]
-async fn pending_or_failed_project_assignments_never_show_previous_assignments() {
-    let first = Uuid::from_u128(1);
-    let second = Uuid::from_u128(2);
-    let probe = Probe {
-        initial_path: Some(format!("/projects/{first}")),
-        ..Probe::default()
-    };
-    let mut dom = VirtualDom::new_with_props(app, probe.clone());
-    dom.rebuild_in_place();
-    settle(&mut dom);
-    assert!(dioxus::ssr::render(&dom).contains("User-101"));
-
-    let (send, receive) = oneshot::channel();
-    *probe.assignment_response.borrow_mut() = Some(receive);
-    let navigator = probe.navigator.borrow().unwrap();
-    dom.in_scope(probe.scope.borrow().unwrap(), || {
-        navigator.push(route::Route::ProjectDetail { id: second })
-    });
-    settle(&mut dom);
-    let html = dioxus::ssr::render(&dom);
-    assert!(html.contains("Loading"), "rendered: {html}");
-    assert!(!html.contains("User-101"), "rendered: {html}");
-    assert!(!html.contains("Remove"), "rendered: {html}");
-    send.send(Err(ServerFnError::new("Assignments unavailable")))
-        .unwrap();
-    settle(&mut dom);
-    let html = dioxus::ssr::render(&dom);
-    assert!(html.contains("Assignments unavailable"), "rendered: {html}");
-    assert!(!html.contains("User-101"), "rendered: {html}");
-
-    dom.in_scope(probe.scope.borrow().unwrap(), || navigator.go_back());
-    settle(&mut dom);
-    let html = dioxus::ssr::render(&dom);
-    assert!(html.contains("User-101"), "rendered: {html}");
-    assert!(
-        !html.contains("Assignments unavailable"),
-        "rendered: {html}"
-    );
+async fn project_detail_keeps_reporting_tabs_without_extra_management_or_fee_panels() {
+    for role in [OrgRole::Admin, OrgRole::Manager, OrgRole::Member] {
+        let id = Uuid::from_u128(1);
+        let probe = Probe {
+            initial_path: Some(format!("/projects/{id}")),
+            viewer_role: Some(role),
+            ..Probe::default()
+        };
+        let mut dom = VirtualDom::new_with_props(app, probe);
+        dom.rebuild_in_place();
+        settle(&mut dom);
+        let html = dioxus::ssr::render(&dom);
+        assert!(
+            html.contains("project-tab-tasks") && html.contains("project-tab-team"),
+            "{html}"
+        );
+        assert!(
+            !html.contains("Manage project tasks") && !html.contains("Manage project team"),
+            "{html}"
+        );
+        assert!(
+            !html.contains("Fee balances") && !html.contains("project-fee-from"),
+            "{html}"
+        );
+        assert!(
+            !html.contains("Assign User") && !html.contains("Enable task"),
+            "{html}"
+        );
+    }
 }
 
 // Dependency doubles for page helpers and endpoints. The component, data
@@ -508,11 +919,9 @@ fn run_action<O: 'static, T: 'static>(
 
 mod server_fns {
     use super::*;
-    use assignment::Assignment;
     use client::Client;
     use invoice::{Invoice, InvoiceWithLines};
     use project::Project;
-    use task::Task;
     use user::User;
 
     pub struct ProjectSpend {
@@ -537,50 +946,14 @@ mod server_fns {
     }
 
     pub async fn get_me() -> Result<User, ServerFnError> {
-        Ok(user(300, OrgRole::Admin))
+        Ok(user(
+            300,
+            consume_context::<Probe>()
+                .viewer_role
+                .unwrap_or(OrgRole::Admin),
+        ))
     }
 
-    pub async fn list_users(_archived: bool) -> Result<Vec<User>, ServerFnError> {
-        Ok(vec![user(101, OrgRole::Member), user(102, OrgRole::Member)])
-    }
-
-    pub async fn list_assignments(id: String) -> AssignmentResponse {
-        let id = Uuid::parse_str(&id).unwrap();
-        let probe = consume_context::<Probe>();
-        probe.assignment_requests.borrow_mut().push(id);
-        let response = probe.assignment_response.borrow_mut().take();
-        if let Some(response) = response {
-            return response.await.expect("controlled response was dropped");
-        }
-        Ok(vec![Assignment {
-            id,
-            project_id: id,
-            user_id: Uuid::from_u128(100 + id.as_u128()),
-            role: ProjectRole::Freelancer,
-            rate_cents: None,
-            created_at: chrono::DateTime::UNIX_EPOCH,
-        }])
-    }
-
-    pub async fn list_project_tasks(id: String) -> Result<Vec<Task>, ServerFnError> {
-        let id = Uuid::parse_str(&id).unwrap();
-        consume_context::<Probe>()
-            .task_requests
-            .borrow_mut()
-            .push(id);
-        Ok(vec![Task {
-            id,
-            org_id: Uuid::nil(),
-            name: format!("Task-{}", id.as_u128()),
-            billable_default: true,
-            default_rate_cents: None,
-            active: true,
-        }])
-    }
-
-    pub async fn list_tasks() -> Result<Vec<Task>, ServerFnError> {
-        Ok(Vec::new())
-    }
     pub async fn list_projects(
         _client: Option<String>,
         _archived: bool,
@@ -590,23 +963,6 @@ mod server_fns {
     pub async fn list_project_tags() -> Result<Vec<project::ProjectTagLink>, ServerFnError> {
         Ok(Vec::new())
     }
-    pub async fn get_project_fee_balances(
-        id: String,
-        _from: String,
-        _to: String,
-    ) -> Result<Vec<project::ProjectFeeBalance>, ServerFnError> {
-        let id = Uuid::parse_str(&id).unwrap();
-        Ok(vec![project::ProjectFeeBalance {
-            period_key: "single".into(),
-            description: format!("Fee-{}", id.as_u128()),
-            currency: "EUR".into(),
-            balance: invoice::InvoiceFeeBalance {
-                agreed_cents: 100,
-                invoiced_cents: 110,
-                remaining_cents: -10,
-            },
-        }])
-    }
     pub async fn get_project_details(id: String) -> ProjectDetailsResponse {
         let id = Uuid::parse_str(&id).unwrap();
         let probe = consume_context::<Probe>();
@@ -615,18 +971,135 @@ mod server_fns {
         if let Some(response) = response {
             return response.await.unwrap();
         }
-        Ok(project::ProjectDetails {
+        Ok(project_details(id))
+    }
+
+    pub(super) fn project_details(id: Uuid) -> project::ProjectDetails {
+        project::ProjectDetails {
             id,
             name: format!("Project-{}", id.as_u128()),
             code: Some(format!("CODE-{}", id.as_u128())),
+            client_id: Uuid::from_u128(400),
             client_name: "Client".into(),
+            project_type: horae_core::types::ProjectType::TimeAndMaterials,
+            active: true,
             currency: "EUR".into(),
             task_rate_currency: Some("EUR".into()),
             starts_on: None,
             ends_on: None,
             tags: vec![format!("Tag-{}", id.as_u128())],
             admin_notes: None,
-        })
+        }
+    }
+    pub mod breakdown {
+        use super::*;
+        pub async fn get_project_breakdown(
+            id: String,
+            interval: Option<project::ProjectActivityInterval>,
+        ) -> BreakdownResponse {
+            consume_context::<Probe>()
+                .breakdown_requests
+                .borrow_mut()
+                .push(id.parse().unwrap());
+            let response = consume_context::<Probe>()
+                .breakdown_response
+                .borrow_mut()
+                .take();
+            if let Some(response) = response {
+                return response.await.unwrap();
+            }
+            let id = Uuid::parse_str(&id).unwrap();
+            let tasks = vec![project::ProjectWorkEntity {
+                id,
+                name: format!("Breakdown-task-{}", id.as_u128()),
+                active: true,
+                current: true,
+                manager: false,
+            }];
+            Ok(project::ProjectBreakdown {
+                interval,
+                cost_currency: None,
+                tasks,
+                people: Vec::new(),
+                cells: Vec::new(),
+                totals: horae_core::project_breakdown::summarize(&[], false).unwrap(),
+            })
+        }
+    }
+    pub mod billing {
+        use super::*;
+        pub async fn get_project_invoices(
+            id: String,
+        ) -> Result<project::ProjectInvoices, ServerFnError> {
+            let probe = consume_context::<Probe>();
+            probe
+                .project_invoice_requests
+                .borrow_mut()
+                .push(id.parse().unwrap());
+            let response = probe.invoice_history_response.borrow_mut().take();
+            if let Some(response) = response {
+                return response.await.unwrap();
+            }
+            Ok(project::ProjectInvoices {
+                invoices: vec![],
+                totals: Default::default(),
+            })
+        }
+    }
+    pub mod summary {
+        use super::*;
+
+        pub async fn get_project_summary(id: String) -> SummaryResponse {
+            let probe = consume_context::<Probe>();
+            let response = probe.summary_response.borrow_mut().take();
+            if let Some(response) = response {
+                return response.await.unwrap();
+            }
+            let id = Uuid::parse_str(&id).unwrap();
+            Ok(project::ProjectSummary {
+                total_minutes: id.as_u128() as i64 * 60,
+                billable_minutes: id.as_u128() as i64 * 60,
+                non_billable_minutes: 0,
+                configured_budget: false,
+                budgets: Vec::new(),
+                budget_totals: horae_core::budget::summarize_scopes([]).unwrap(),
+                internal_costs: None,
+            })
+        }
+    }
+
+    pub mod activity {
+        use super::*;
+
+        pub async fn get_project_activity(
+            id: String,
+            interval: Option<project::ProjectActivityInterval>,
+        ) -> Result<project::ProjectActivity, ServerFnError> {
+            let id = Uuid::parse_str(&id).unwrap();
+            let probe = consume_context::<Probe>();
+            probe.activity_requests.borrow_mut().push(id);
+            let response = probe.activity_response.borrow_mut().take();
+            if let Some(response) = response {
+                return response.await.unwrap();
+            }
+            let date = chrono::Utc::now().date_naive();
+            let interval = interval.unwrap_or(project::ProjectActivityInterval {
+                from: date,
+                to: date,
+            });
+            let minutes = id.as_u128() as i64 * 60;
+            Ok(project::ProjectActivity {
+                interval: Some(interval),
+                week_start: chrono::Weekday::Mon,
+                weeks: vec![project::ProjectActivityWeek {
+                    from: interval.from,
+                    to: interval.to,
+                    billable_minutes: minutes,
+                    non_billable_minutes: 0,
+                    cumulative_minutes: minutes,
+                }],
+            })
+        }
     }
     pub async fn list_project_spend() -> Result<Vec<ProjectSpend>, ServerFnError> {
         Ok(Vec::new())
@@ -635,7 +1108,7 @@ mod server_fns {
     -> Result<Vec<crate::models::ProjectBudgetProgress>, ServerFnError> {
         Ok(Vec::new())
     }
-    pub async fn set_project_active(_id: String, _active: bool) -> Result<(), ServerFnError> {
+    pub async fn set_project_active(_id: String, _active: bool) -> Result<Project, ServerFnError> {
         panic!("unexpected mutation");
     }
     pub async fn set_projects_active(
@@ -644,31 +1117,6 @@ mod server_fns {
     ) -> Result<Vec<Project>, ServerFnError> {
         panic!("unexpected mutation");
     }
-    pub async fn create_assignment(
-        _project: String,
-        _user: String,
-        _role: String,
-    ) -> Result<Assignment, ServerFnError> {
-        panic!("unexpected mutation");
-    }
-    pub async fn delete_assignment(_id: String) -> Result<(), ServerFnError> {
-        panic!("unexpected mutation");
-    }
-    pub async fn link_project_task(
-        _project: String,
-        _task: String,
-        _rate: Option<crate::project::ProjectTaskRate>,
-    ) -> Result<(), ServerFnError> {
-        panic!("unexpected mutation");
-    }
-    pub async fn create_task(
-        _name: String,
-        _billable: bool,
-        _project: Option<String>,
-    ) -> Result<Task, ServerFnError> {
-        panic!("unexpected mutation");
-    }
-
     pub async fn get_invoice(id: String) -> Result<InvoiceWithLines, ServerFnError> {
         let id = Uuid::parse_str(&id).unwrap();
         let probe = consume_context::<Probe>();

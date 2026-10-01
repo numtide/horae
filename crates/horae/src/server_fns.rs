@@ -81,7 +81,7 @@ pub(crate) fn unauthorized(msg: impl std::fmt::Display) -> ServerFnError {
 #[cfg(feature = "server")]
 pub(crate) fn parse_uuid(s: &str, field: &str) -> Result<uuid::Uuid, ServerFnError> {
     s.parse()
-        .map_err(|_| server_err(format!("Invalid {field}")))
+        .map_err(|_| err(BAD_REQUEST, format!("Invalid {field}")))
 }
 
 /// Parse an optional UUID filter: `None`/empty → `None`, otherwise a validated
@@ -523,3 +523,33 @@ pub use projects::*;
 pub use reports::*;
 pub use time_entries::*;
 pub use users::*;
+
+#[cfg(all(test, feature = "server"))]
+mod argument_tests {
+    use super::*;
+
+    #[test]
+    fn malformed_uuid_arguments_are_bad_requests_not_internal_errors() {
+        for field in ["task_id", "project_id", "user_id", "client_id", "tag_id"] {
+            assert!(matches!(
+                parse_opt_uuid(Some("invalid".into()), field),
+                Err(ServerFnError::ServerError { code: BAD_REQUEST, message, .. })
+                    if message == format!("Invalid {field}")
+            ));
+        }
+    }
+
+    #[test]
+    fn optional_uuid_filters_preserve_absent_empty_and_valid_values() {
+        assert_eq!(parse_opt_uuid(None, "task_id").unwrap(), None);
+        assert_eq!(
+            parse_opt_uuid(Some(String::new()), "task_id").unwrap(),
+            None
+        );
+        let id = uuid::Uuid::now_v7();
+        assert_eq!(
+            parse_opt_uuid(Some(id.to_string()), "task_id").unwrap(),
+            Some(id)
+        );
+    }
+}

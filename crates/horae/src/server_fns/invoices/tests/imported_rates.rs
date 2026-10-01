@@ -58,7 +58,7 @@ async fn imported_legacy_project_keeps_exact_rates_and_totals_on_retry(pool: PgP
     let report = crate::server_fns::reports::fetch_report(
         &pool,
         ids.user_id,
-        (day, day),
+        Some((day, day)),
         "project",
         crate::reports::ReportFilters::default(),
     )

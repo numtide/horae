@@ -34,6 +34,9 @@ pub fn DatePicker(
     /// The first weekday in both the grid and the selected weekly period.
     #[props(default = Weekday::Mon)]
     first_day: Weekday,
+    /// Optional inclusive bound; existing scheduling calendars remain unrestricted.
+    #[props(default)]
+    max_date: Option<NaiveDate>,
     onpick: EventHandler<NaiveDate>,
 ) -> Element {
     let today = chrono::Utc::now().date_naive();
@@ -75,13 +78,14 @@ pub fn DatePicker(
                     onclick: move |_| month.set(shift_month(month(), false)),
                     "←"
                 }
-                div { class: "flex-1 text-center font-display text-lg font-semibold text-strong",
+                div { class: "flex-1 min-w-0 wrap-anywhere text-center font-display text-lg font-semibold text-strong",
                     "{visible.format(\"%B %Y\")}"
                 }
                 button {
                     r#type: "button",
-                    class: "dp-nav",
+                    class: if max_date.is_some_and(|limit| shift_month(visible, true) > limit) { "dp-nav opacity-60" } else { "dp-nav" },
                     "aria-label": "Next month",
+                    disabled: max_date.is_some_and(|limit| shift_month(visible, true) > limit),
                     onclick: move |_| month.set(shift_month(month(), true)),
                     "→"
                 }
@@ -97,7 +101,11 @@ pub fn DatePicker(
                 for offset in 0..CELLS {
                     {
                         let day = grid_start + Duration::days(offset);
+                        let disabled = max_date.is_some_and(|limit| day > limit);
                         let mut class = String::from("dp-day");
+                        if disabled {
+                            class.push_str(" opacity-60");
+                        }
                         if day.month() != visible.month() {
                             class.push_str(" outside");
                         }
@@ -117,7 +125,8 @@ pub fn DatePicker(
                                 r#type: "button",
                                 class: "{class}",
                                 "aria-label": "{day.format(\"%-d %B %Y\")}",
-                                onclick: move |_| onpick.call(day),
+                                disabled,
+                                onclick: move |_| { if !disabled { onpick.call(day); } },
                                 "{day.day()}"
                             }
                         }
@@ -125,11 +134,12 @@ pub fn DatePicker(
                 }
             }
 
-            div { class: "flex items-center gap-3 mt-4 pt-3 border-t",
+            div { class: "flex flex-wrap items-center gap-3 mt-4 pt-3 border-t",
                 button {
                     r#type: "button",
                     class: "btn btn-ghost btn-sm text-sm font-semibold",
-                    onclick: move |_| onpick.call(today),
+                    disabled: max_date.is_some_and(|limit| today > limit),
+                    onclick: move |_| { if max_date.is_none_or(|limit| today <= limit) { onpick.call(today); } },
                     if week {
                         "This week"
                     } else {
@@ -146,5 +156,56 @@ pub fn DatePicker(
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn date(value: &str) -> NaiveDate {
+        value.parse().unwrap()
+    }
+
+    fn disabled(html: &str, label: &str) -> bool {
+        html.split("<button")
+            .find(|button| {
+                button
+                    .split('>')
+                    .next()
+                    .unwrap()
+                    .contains(&format!("aria-label=\"{label}\""))
+            })
+            .unwrap()
+            .split('>')
+            .next()
+            .unwrap()
+            .contains("disabled")
+    }
+
+    fn fixture(max_date: Option<NaiveDate>) -> Element {
+        rsx! { DatePicker { selected: date("2026-09-27"), week: true, first_day: Weekday::Sun, max_date, onpick: |_| {} } }
+    }
+
+    fn render(max_date: Option<NaiveDate>) -> String {
+        let mut dom = VirtualDom::new_with_props(fixture, max_date);
+        dom.rebuild_in_place();
+        dioxus::ssr::render(&dom)
+    }
+
+    #[test]
+    fn calendar_bound_is_inclusive_and_does_not_restrict_default_scheduling() {
+        let bounded = render(Some(date("2026-10-03")));
+        assert!(!disabled(&bounded, "3 October 2026"));
+        assert!(disabled(&bounded, "4 October 2026"));
+        let unbounded = render(None);
+        assert!(!disabled(&unbounded, "4 October 2026"));
+        assert!(!disabled(&unbounded, "Next month"));
+    }
+
+    #[test]
+    fn next_month_is_disabled_only_when_its_first_day_exceeds_the_bound() {
+        assert!(disabled(&render(Some(date("2026-09-30"))), "Next month"));
+        assert!(!disabled(&render(Some(date("2026-10-01"))), "Next month"));
     }
 }

@@ -49,7 +49,7 @@ pub(super) fn DateField(
             }
         }
         div {
-            id: "{id}-calendar", class: "menu-popover np-date-popover p-0 border-0",
+            id: "{id}-calendar", class: "menu-popover calendar-popover p-0 border-0",
             popover: "auto", role: "dialog", aria_label: "Choose {label}",
             "data-popover-trigger": "{id}", "data-calendar": "true",
             // A keyed fragment remounts the calendar on reopening, discarding only

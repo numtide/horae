@@ -761,7 +761,7 @@ async fn configured_project_currency_and_cost_override_keep_their_denominations(
     let report = crate::server_fns::reports::fetch_report(
         &pool,
         ids.user_id,
-        (day, day),
+        Some((day, day)),
         "project",
         crate::reports::ReportFilters::default(),
     )
@@ -810,7 +810,7 @@ async fn configured_fixed_fee_hours_are_not_invoiced_but_legacy_fees_are_unchang
         let report = crate::server_fns::reports::fetch_report(
             &pool,
             ids.user_id,
-            (day, day),
+            Some((day, day)),
             "project",
             crate::reports::ReportFilters::default(),
         )
@@ -986,7 +986,7 @@ async fn selected_project_rate_modes_agree_across_billing_consumers(pool: PgPool
         let report = crate::server_fns::reports::fetch_report(
             &pool,
             ids.user_id,
-            (day, day),
+            Some((day, day)),
             "project",
             crate::reports::ReportFilters::default(),
         )
@@ -1050,7 +1050,7 @@ async fn billing_cascade_agrees_across_all_four_levels_including_zero(pool: PgPo
         let report = crate::server_fns::reports::fetch_report(
             &pool,
             ids.user_id,
-            (day, day),
+            Some((day, day)),
             "project",
             crate::reports::ReportFilters::default(),
         )
@@ -1103,7 +1103,7 @@ async fn project_rate_is_used_by_invoices_reports_and_spend(pool: PgPool) {
     let report = crate::server_fns::reports::fetch_report(
         &pool,
         ids.user_id,
-        (day, day),
+        Some((day, day)),
         "project",
         crate::reports::ReportFilters::default(),
     )
@@ -1141,7 +1141,7 @@ async fn invoiced_amounts_survive_rate_changes_and_void_uses_current_rates(pool:
     let report = crate::server_fns::reports::fetch_report(
         &pool,
         ids.user_id,
-        (day, day),
+        Some((day, day)),
         "project",
         crate::reports::ReportFilters::default(),
     )
@@ -1200,7 +1200,7 @@ async fn non_billable_context_produces_no_unbilled_amount_on_any_report(pool: Pg
         let report = crate::server_fns::reports::fetch_report(
             &pool,
             ids.user_id,
-            (day, day),
+            Some((day, day)),
             "project",
             crate::reports::ReportFilters::default(),
         )
@@ -1222,7 +1222,7 @@ async fn non_billable_context_produces_no_unbilled_amount_on_any_report(pool: Pg
         let detail = crate::reports::fetch_entries(
             &pool,
             ids.org_id,
-            (day, day),
+            Some((day, day)),
             crate::reports::ReportFilters::default(),
         )
         .await
@@ -1262,7 +1262,7 @@ async fn invoiced_billability_survives_later_project_changes(pool: PgPool) {
     let report = crate::server_fns::reports::fetch_report(
         &pool,
         ids.user_id,
-        (day, day),
+        Some((day, day)),
         "project",
         crate::reports::ReportFilters::default(),
     )
@@ -1356,7 +1356,7 @@ async fn large_invoice_and_reports_agree_without_intermediate_overflow(pool: PgP
     let report = crate::server_fns::reports::fetch_report(
         &pool,
         ids.user_id,
-        (day, day),
+        Some((day, day)),
         "project",
         crate::reports::ReportFilters::default(),
     )
@@ -1379,7 +1379,7 @@ async fn large_invoice_and_reports_agree_without_intermediate_overflow(pool: PgP
     let report_error = crate::server_fns::reports::fetch_report(
         &pool,
         ids.user_id,
-        (day, day),
+        Some((day, day)),
         "project",
         crate::reports::ReportFilters::default(),
     )
@@ -1486,7 +1486,7 @@ async fn assert_reporting_minutes(
     let report = crate::server_fns::reports::fetch_report(
         pool,
         ids.user_id,
-        (day, day),
+        Some((day, day)),
         "project",
         crate::reports::ReportFilters::default(),
     )
@@ -1513,7 +1513,7 @@ async fn assert_reporting_minutes(
     let detail = crate::reports::fetch_entries(
         pool,
         ids.org_id,
-        (day, day),
+        Some((day, day)),
         crate::reports::ReportFilters::default(),
     )
     .await

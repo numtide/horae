@@ -1,0 +1,51 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT te.task_id, te.user_id,\n                  SUM(te.minutes)::bigint AS \"minutes!\",\n                  COALESCE(SUM(te.minutes) FILTER (WHERE te.billable), 0)::bigint AS \"billable_minutes!\",\n                  CASE WHEN $5 AND COUNT(*) FILTER (WHERE COALESCE(mc.cost_rate_cents, u.cost_rate_cents) IS NULL) = 0\n                       THEN SUM(line_amount_cents(COALESCE(mc.cost_rate_cents, u.cost_rate_cents), te.minutes)) FILTER (WHERE $5)::bigint\n                       ELSE NULL END AS \"cost_cents?\"\n           FROM time_entries te JOIN users u ON u.id = te.user_id AND u.org_id = te.org_id\n           LEFT JOIN project_member_costs mc ON $5 AND mc.org_id = te.org_id\n             AND mc.project_id = te.project_id AND mc.user_id = te.user_id\n           WHERE te.org_id = $1 AND te.project_id = $2\n             AND ($3::date IS NULL OR te.spent_date >= $3)\n             AND ($4::date IS NULL OR te.spent_date <= $4)\n           GROUP BY te.task_id, te.user_id ORDER BY te.task_id, te.user_id LIMIT $6",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "task_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "minutes!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "billable_minutes!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "cost_cents?",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Date",
+        "Date",
+        "Bool",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "8d3aaca8698ab56ddd00464b0bae5897a5364a79b619607cd7627c1243acc4d5"
+}

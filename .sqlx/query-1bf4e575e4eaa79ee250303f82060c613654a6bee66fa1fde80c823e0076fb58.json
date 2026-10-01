@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT o.default_currency, o.week_start,\n           (u.org_role = 'admin' OR (u.org_role = 'manager' AND NOT EXISTS (\n             SELECT 1 FROM time_entries te\n             JOIN project_member_costs mc ON mc.project_id = te.project_id\n               AND mc.user_id = te.user_id AND mc.org_id = te.org_id\n             WHERE te.org_id = p.org_id AND te.project_id = p.id\n           ))) as \"can_view_costs!\"\n           FROM projects p JOIN organizations o ON o.id = p.org_id\n           JOIN project_read_access a ON a.project_id = p.id AND a.org_id = p.org_id\n           JOIN users u ON u.id = a.user_id AND u.org_id = a.org_id\n           WHERE p.org_id = $1 AND p.id = $2 AND a.user_id = $3 AND a.can_view_progress",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "default_currency",
+        "type_info": "Bpchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "week_start",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 2,
+        "name": "can_view_costs!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "1bf4e575e4eaa79ee250303f82060c613654a6bee66fa1fde80c823e0076fb58"
+}

@@ -38,10 +38,17 @@ const before = sql(`SELECT json_build_array(
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin' }).click();
     await page.waitForURL(`${base}/`);
+    await page.goto(`${base}/projects/${project.id}`);
+    await expect(page.getByRole('region', { name: 'Project details', exact: true })).toBeVisible();
+    await expect(page.locator('summary').filter({ hasText: /Manage project (tasks|team)/ })).toHaveCount(0);
+    await expect(page.getByRole('tab', { name: /^Tasks/ })).toBeVisible();
+    await expect(page.getByRole('tab', { name: /^Team/ })).toBeVisible();
+    await page.getByRole('link', { name: 'Edit project', exact: true }).click();
+    await expect(page).toHaveURL(`${base}/projects/${project.id}/edit`);
     for (const width of [390, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`${base}/projects`);
-      const row = page.locator('.proj-row').filter({ has: page.locator(`a[href="/projects/${project.id}"]`) });
+      const row = page.locator('.proj-row').filter({ has: page.locator(`a[href="/projects/${project.id}?"], a[href="/projects/${project.id}"]`) });
       await row.getByRole('button', { name: /^Actions/ }).click();
       await page.getByRole('menuitem', { name: 'Edit', exact: true }).click();
       await expect(page).toHaveURL(`${base}/projects/${project.id}/edit`);
@@ -67,7 +74,7 @@ const before = sql(`SELECT json_build_array(
       const name = `Shared project editor ${width}`;
       await editor.getByLabel('Project name', { exact: true }).fill(name);
       await editor.getByRole('button', { name: 'Save changes', exact: true }).click();
-      await expect(page).toHaveURL(`${base}/projects/${project.id}`);
+      await expect(page).toHaveURL(url => url.origin === base && url.pathname === `/projects/${project.id}` && url.search === '');
       assert.equal(sql(`SELECT name FROM projects WHERE id = '${project.id}'`), name);
       project.name = name;
       await page.goto(`${base}/projects/${project.id}/edit`);
@@ -103,7 +110,7 @@ const before = sql(`SELECT json_build_array(
     await editor.locator('#np-po-number').fill('PO-BEFORE');
     await expect(editor.locator('header').getByRole('status')).toContainText('Draft saved at');
     await editor.getByRole('button', { name: 'Save project', exact: true }).click();
-    await expect(page).toHaveURL(/\/projects\/[0-9a-f-]{36}$/);
+    await expect(page).toHaveURL(url => url.origin === base && /^\/projects\/[0-9a-f-]{36}$/.test(url.pathname) && url.search === '');
     const configuredId = new URL(page.url()).pathname.split('/').pop();
     const draftWritesAfterCreate = draftWrites;
     const configuredBefore = sql(`SELECT json_build_array(
@@ -127,7 +134,7 @@ const before = sql(`SELECT json_build_array(
     await editor.locator('#np-notes').fill('Private context after editing');
     await editor.locator('#np-po-number').fill('PO-AFTER');
     await editor.getByRole('button', { name: 'Save changes', exact: true }).click();
-    await expect(page).toHaveURL(`${base}/projects/${configuredId}`);
+    await expect(page).toHaveURL(url => url.origin === base && url.pathname === `/projects/${configuredId}` && url.search === '');
     assert.equal(sql(`SELECT code || ':' || rate_cents || ':' || budget_minutes FROM projects WHERE id = '${configuredId}'`), 'EDIT-AFTER:3725:1245');
     await page.goto(`${base}/projects/${configuredId}/edit`);
     await expect(editor.locator('#np-project-rate')).toHaveValue('37.25');
@@ -135,7 +142,7 @@ const before = sql(`SELECT json_build_array(
     await expect(editor.locator('#np-po-number')).toHaveValue('PO-AFTER');
     const revision = sql(`SELECT edit_revision FROM projects WHERE id = '${configuredId}'`);
     await editor.getByRole('button', { name: 'Save changes', exact: true }).click();
-    await expect(page).toHaveURL(`${base}/projects/${configuredId}`);
+    await expect(page).toHaveURL(url => url.origin === base && url.pathname === `/projects/${configuredId}` && url.search === '');
     assert.equal(sql(`SELECT edit_revision FROM projects WHERE id = '${configuredId}'`), revision, 'Unchanged save must remain a no-op');
     assert.equal(sql(`SELECT json_build_array(
       (SELECT count(*) FROM projects),
@@ -145,8 +152,42 @@ const before = sql(`SELECT json_build_array(
     )`), configuredBefore, 'Configured editing preserves project, assignment and task identities and creation drafts');
     assert.equal(draftWrites, draftWritesAfterCreate);
     console.log('PASS: configured editor prefills exact zero, budgets, private notes and invoice defaults; persists changes and preserves identity on no-op');
+    const member = JSON.parse(sql(`SELECT row_to_json(u) FROM (
+      SELECT u.id, u.name FROM users u JOIN assignments a ON a.user_id = u.id
+      WHERE a.project_id = '${configuredId}' ORDER BY u.id LIMIT 1
+    ) u`));
+    const membership = () => sql(`SELECT json_build_array(
+      (SELECT jsonb_agg(to_jsonb(t) ORDER BY task_id) FROM project_tasks t WHERE project_id = '${configuredId}'),
+      (SELECT jsonb_agg(to_jsonb(a) ORDER BY id) FROM assignments a WHERE project_id = '${configuredId}')
+    )`);
+    const membershipBefore = membership();
+    await page.getByRole('link', { name: 'Edit project', exact: true }).click();
+    await editor.getByRole('button', { name: 'Remove task Development', exact: true }).click();
+    await editor.getByRole('button', { name: `Remove ${member.name} from project`, exact: true }).click();
+    assert.equal(membership(), membershipBefore, 'Task/team changes stay local until saved');
+    await page.route('**/api/save_project_editor*', route => route.abort());
+    await editor.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect(editor.getByRole('alert')).toBeVisible();
+    await expect(editor.getByRole('button', { name: 'Remove task Development', exact: true })).toHaveCount(0);
+    await expect(editor.getByRole('button', { name: `Remove ${member.name} from project`, exact: true })).toHaveCount(0);
+    await expect(editor.getByRole('button', { name: 'Cancel', exact: true })).toBeDisabled();
+    assert.equal(membership(), membershipBefore, 'A failed save must not remove tasks or teammates');
+    await page.unroute('**/api/save_project_editor*');
+    await editor.getByRole('button', { name: 'Retry request', exact: true }).click();
+    await expect(page).toHaveURL(url => url.origin === base && url.pathname === `/projects/${configuredId}` && url.search === '');
+    assert.equal(sql(`SELECT count(*) FROM project_tasks WHERE project_id = '${configuredId}'`), '0');
+    assert.equal(sql(`SELECT count(*) FROM assignments WHERE project_id = '${configuredId}' AND user_id = '${member.id}'`), '0');
+    await page.getByRole('link', { name: 'Edit project', exact: true }).click();
+    await editor.getByRole('button', { name: 'Development', exact: true }).click();
+    await editor.getByRole('button', { name: 'Add everyone', exact: true }).click();
+    await expect(editor.getByRole('button', { name: `Remove ${member.name} from project`, exact: true })).toBeVisible();
+    await editor.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect(page).toHaveURL(url => url.origin === base && url.pathname === `/projects/${configuredId}` && url.search === '');
+    assert.equal(sql(`SELECT count(*) FROM project_tasks WHERE project_id = '${configuredId}'`), '1');
+    assert.equal(sql(`SELECT count(*) FROM assignments WHERE project_id = '${configuredId}' AND user_id = '${member.id}'`), '1');
+    console.log('PASS: detail links to shared task/team editing; failed removal preserves changes and data, retry and re-add persist');
     await page.goto(`${base}/projects`);
-    const configuredRow = page.locator('.proj-row').filter({ has: page.locator(`a[href="/projects/${configuredId}"]`) });
+    const configuredRow = page.locator('.proj-row').filter({ has: page.locator(`a[href="/projects/${configuredId}?"], a[href="/projects/${configuredId}"]`) });
     await configuredRow.getByRole('button', { name: /^Actions/ }).click();
     await page.getByRole('menuitem', { name: 'Edit', exact: true }).click();
     await expect(editor.locator('#np-name')).toHaveValue('Configured edit fixture');
@@ -209,7 +250,7 @@ const before = sql(`SELECT json_build_array(
     });
     await editor.getByRole('button', { name: 'Retry request', exact: true }).focus();
     await page.keyboard.press('Enter');
-    await expect(page).toHaveURL(`${base}/projects/${configuredId}`);
+    await expect(page).toHaveURL(url => url.origin === base && url.pathname === `/projects/${configuredId}` && url.search === '');
     assert.equal(requests.length, 2);
     assert.equal(requests[0], requests[1], 'Retry reuses the exact operation and snapshot');
     assert.equal(sql(`SELECT edit_revision FROM projects WHERE id = '${configuredId}'`), savedRevision);
@@ -223,7 +264,7 @@ const before = sql(`SELECT json_build_array(
     await otherTab.goto(`${base}/projects/${configuredId}/edit`);
     await otherTab.locator('#np-name').fill('Saved from another tab');
     await otherTab.getByRole('button', { name: 'Save changes', exact: true }).click();
-    await expect(otherTab).toHaveURL(`${base}/projects/${configuredId}`);
+    await expect(otherTab).toHaveURL(url => url.origin === base && url.pathname === `/projects/${configuredId}` && url.search === '');
     await otherTab.close();
     await editor.getByRole('button', { name: 'Save changes', exact: true }).click();
     await expect(editor.getByRole('alert')).toBeVisible();

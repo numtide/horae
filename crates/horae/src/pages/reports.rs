@@ -50,14 +50,19 @@ fn FilterSelect(
     options: Vec<(String, String)>,
     onselect: EventHandler<String>,
 ) -> Element {
+    let id = format!("report-{}", label.to_lowercase().replace(' ', "-"));
     rsx! {
         div { class: "form-group",
-            label { class: "form-label", "{label}" }
+            label { class: "form-label", r#for: "{id}", "{label}" }
             select {
+                id,
                 class: "form-select",
                 value: "{value}",
                 oninput: move |e| onselect.call(e.value()),
                 option { value: "", "{all_label}" }
+                if !value.is_empty() && !options.iter().any(|(id, _)| *id == value) {
+                    option { value: "{value}", disabled: true, "Selected {label.to_lowercase()} unavailable" }
+                }
                 for (v, name) in options.iter() {
                     option { value: "{v}", "{name}" }
                 }
@@ -66,19 +71,103 @@ fn FilterSelect(
     }
 }
 
-#[component]
-pub fn Reports() -> Element {
-    let today = chrono::Utc::now().date_naive();
-    let month_start = today.with_day(1).unwrap_or(today);
+#[derive(Clone, Debug, PartialEq)]
+struct ReportContext {
+    from: String,
+    to: String,
+    all_time: bool,
+    project: String,
+    task: String,
+    person: String,
+}
 
-    let mut from_date = use_signal(move || month_start.to_string());
-    let mut to_date = use_signal(move || today.to_string());
+impl ReportContext {
+    fn parse(
+        project: Option<String>,
+        task: Option<String>,
+        person: Option<String>,
+        from: Option<String>,
+        to: Option<String>,
+        period: Option<String>,
+    ) -> Result<Self, String> {
+        let filter = |value: Option<String>, name| -> Result<String, String> {
+            value
+                .map(|value| {
+                    value
+                        .parse::<uuid::Uuid>()
+                        .map(|id| id.to_string())
+                        .map_err(|_| format!("Invalid {name} filter"))
+                })
+                .transpose()
+                .map(Option::unwrap_or_default)
+        };
+        let today = chrono::Utc::now().date_naive();
+        let range = match period.as_deref() {
+            Some("all") if from.is_none() && to.is_none() => None,
+            None if from.is_none() && to.is_none() => Some(
+                horae_core::project_activity::ActivityRange::new(
+                    today.with_day(1).unwrap_or(today),
+                    today,
+                )
+                .map_err(|error| error.to_string())?,
+            ),
+            None | Some("custom") => Some(
+                horae_core::project_activity::ActivityRange::parse_optional(
+                    from.as_deref(),
+                    to.as_deref(),
+                )
+                .map_err(|error| error.to_string())?
+                .ok_or("Choose both reporting dates")?,
+            ),
+            _ => return Err("Invalid report period".into()),
+        };
+        Ok(Self {
+            from: range
+                .map_or(today.with_day(1).unwrap_or(today), |range| range.from())
+                .to_string(),
+            to: range.map_or(today, |range| range.to()).to_string(),
+            all_time: range.is_none(),
+            project: filter(project, "project")?,
+            task: filter(task, "task")?,
+            person: filter(person, "teammate")?,
+        })
+    }
+}
+
+#[component]
+pub fn Reports(
+    project_id: Option<String>,
+    task_id: Option<String>,
+    user_id: Option<String>,
+    from: Option<String>,
+    to: Option<String>,
+    period: Option<String>,
+) -> Element {
+    match ReportContext::parse(project_id, task_id, user_id, from, to, period) {
+        Ok(context) => {
+            rsx! { for initial in [context] { ReportsContent { key: "{initial:?}", initial } } }
+        }
+        Err(error) => {
+            rsx! { h1 { class: "page-title", "Reports" } p { class: "alert alert-danger", role: "alert", "{error}" } }
+        }
+    }
+}
+
+#[component]
+fn ReportsContent(initial: ReportContext) -> Element {
+    let detailed_context =
+        !initial.project.is_empty() || !initial.task.is_empty() || !initial.person.is_empty();
+    let mut from_date = use_signal(move || initial.from);
+    let mut to_date = use_signal(move || initial.to);
+    let mut all_time = use_signal(move || initial.all_time);
     let mut group_by = use_signal(|| "project".to_string());
     let mut client_filter = use_signal(String::new);
-    let mut project_filter = use_signal(String::new);
-    let mut user_filter = use_signal(String::new);
+    let mut project_filter = use_signal(move || initial.project);
+    let mut user_filter = use_signal(move || initial.person);
     let mut tag_filter = use_signal(String::new);
-    let mut active_tab = use_signal(|| "time".to_string());
+    let mut task_filter = use_signal(move || initial.task);
+    let mut active_tab =
+        use_signal(move || if detailed_context { "detailed" } else { "time" }.to_string());
 
     let me = use_resource(|| async move { server_fns::get_me().await });
 
@@ -86,6 +175,7 @@ pub fn Reports() -> Element {
     let clients = use_resource(|| async move { server_fns::list_clients(false).await });
     let users = use_resource(|| async move { server_fns::list_users(false).await });
     let mut tags = use_resource(|| async move { server_fns::list_project_tags().await });
+    let mut tasks = use_resource(|| async move { server_fns::list_tasks().await });
     let projects = use_resource(move || {
         let c = opt(client_filter.read().clone());
         async move { server_fns::list_projects(c, false).await }
@@ -94,8 +184,8 @@ pub fn Reports() -> Element {
     // Read the signals inside each resource so a filter change re-loads.
     let mut summary = use_resource(move || {
         let (f, t, g) = (
-            from_date.read().clone(),
-            to_date.read().clone(),
+            (!all_time()).then(|| from_date.read().clone()),
+            (!all_time()).then(|| to_date.read().clone()),
             group_by.read().clone(),
         );
         let (cl, pr, us) = (
@@ -104,17 +194,22 @@ pub fn Reports() -> Element {
             opt(user_filter.read().clone()),
         );
         let tag = opt(tag_filter());
-        async move { server_fns::report_time(f, t, g, cl, pr, us, tag).await }
+        let task = opt(task_filter());
+        async move { server_fns::report_time(f, t, g, cl, pr, us, tag, task).await }
     });
     let mut detailed = use_resource(move || {
-        let (f, t) = (from_date.read().clone(), to_date.read().clone());
+        let (f, t) = (
+            (!all_time()).then(|| from_date.read().clone()),
+            (!all_time()).then(|| to_date.read().clone()),
+        );
         let (cl, pr, us) = (
             opt(client_filter.read().clone()),
             opt(project_filter.read().clone()),
             opt(user_filter.read().clone()),
         );
         let tag = opt(tag_filter());
-        async move { server_fns::report_detailed(f, t, cl, pr, us, tag).await }
+        let task = opt(task_filter());
+        async move { server_fns::report_detailed(f, t, cl, pr, us, tag, task).await }
     });
 
     // Reports cover every user's time and money, so the endpoints are
@@ -137,21 +232,31 @@ pub fn Reports() -> Element {
     // The export must match what the tables show, so the active filters ride
     // along in the query string; unset ones are left out and mean "all".
     let export_query = {
-        let mut q = format!("from={}&to={}", from_date.read(), to_date.read());
+        let mut parts = Vec::new();
+        if !all_time() {
+            parts.push(format!("from={}&to={}", from_date(), to_date()));
+        }
         for (name, value) in [
             ("client_id", client_filter.read().clone()),
             ("project_id", project_filter.read().clone()),
             ("user_id", user_filter.read().clone()),
             ("tag_id", tag_filter()),
+            ("task_id", task_filter()),
         ] {
             if !value.is_empty() {
-                q.push_str(&format!("&{name}={value}"));
+                parts.push(format!("{name}={value}"));
             }
         }
-        q
+        parts.join("&")
     };
     let export_csv_url = format!("/api/reports/export/csv?{export_query}");
     let export_xlsx_url = format!("/api/reports/export/xlsx?{export_query}");
+    let period_error = horae_core::project_activity::ActivityRange::parse_optional(
+        (!all_time()).then_some(from_date.read().as_str()),
+        (!all_time()).then_some(to_date.read().as_str()),
+    )
+    .err()
+    .map(|error| error.to_string());
 
     let client_opts: Vec<(String, String)> = clients
         .read()
@@ -185,6 +290,14 @@ pub fn Reports() -> Element {
         .unwrap_or_default();
 
     let tab = active_tab.read().clone();
+    let task_options = tasks
+        .read()
+        .as_ref()
+        .and_then(|result| result.as_ref().ok())
+        .into_iter()
+        .flatten()
+        .map(|task| (task.id.to_string(), task.name.clone()))
+        .collect();
     let mut seen_tags = std::collections::BTreeSet::new();
     let tag_options = tags
         .read()
@@ -201,23 +314,41 @@ pub fn Reports() -> Element {
             div { class: "page-header",
                 h1 { class: "page-title", "Reports" }
                 div { class: "page-actions",
-                    a { class: "btn btn-secondary", href: "{export_csv_url}", "Export CSV" }
-                    a { class: "btn btn-secondary", href: "{export_xlsx_url}", "Export XLSX" }
+                    if period_error.is_none() {
+                        a { class: "btn btn-secondary", href: "{export_csv_url}", "Export CSV" }
+                        a { class: "btn btn-secondary", href: "{export_xlsx_url}", "Export XLSX" }
+                    } else {
+                        button { class: "btn btn-secondary", disabled: true, "Export CSV" }
+                        button { class: "btn btn-secondary", disabled: true, "Export XLSX" }
+                    }
                 }
             }
 
             div { class: "card mb-6",
                 div { class: "flex gap-4 items-end flex-wrap",
-                    FormGroup { label: "From",
+                    FormGroup { label: "Period", id: "report-period",
+                        select {
+                            id: "report-period", class: "form-select",
+                            value: if all_time() { "all" } else { "custom" },
+                            oninput: move |event| all_time.set(event.value() == "all"),
+                            option { value: "custom", "Custom dates" }
+                            option { value: "all", "All time" }
+                        }
+                    }
+                    FormGroup { label: "From", id: "report-from",
                         Input {
+                            id: "report-from",
                             kind: "date",
+                            disabled: all_time(),
                             value: "{from_date}",
                             oninput: move |e: FormEvent| from_date.set(e.value()),
                         }
                     }
-                    FormGroup { label: "To",
+                    FormGroup { label: "To", id: "report-to",
                         Input {
+                            id: "report-to",
                             kind: "date",
+                            disabled: all_time(),
                             value: "{to_date}",
                             oninput: move |e: FormEvent| to_date.set(e.value()),
                         }
@@ -258,6 +389,13 @@ pub fn Reports() -> Element {
                         options: user_opts,
                         onselect: move |v| user_filter.set(v),
                     }
+                    FilterSelect {
+                        label: "Task",
+                        value: task_filter(),
+                        all_label: "All tasks",
+                        options: task_options,
+                        onselect: move |v| task_filter.set(v),
+                    }
                     if !tag_options.is_empty() || !tag_filter().is_empty() {
                         FormGroup { label: "Project tag", id: "report-tag",
                             select { id: "report-tag", class: "form-select", value: tag_filter(),
@@ -279,6 +417,12 @@ pub fn Reports() -> Element {
                 }
             }
 
+            if matches!(&*tasks.read(), Some(Err(_))) {
+                div { class: "alert alert-danger", role: "alert", "Could not load report tasks. "
+                    button { class: "btn btn-secondary btn-sm", onclick: move |_| tasks.restart(), "Retry tasks" }
+                }
+            }
+
             div { class: "report-tabs flex items-center gap-6 mb-6",
                 button {
                     class: if tab == "time" { "report-tab active" } else { "report-tab" },
@@ -292,7 +436,11 @@ pub fn Reports() -> Element {
                 }
             }
 
-            if tab == "time" {
+            if let Some(error) = &period_error {
+                div { class: "alert alert-danger", role: "alert", "{error}" }
+            }
+
+            if tab == "time" && period_error.is_none() {
                 if summary.state()() != UseResourceState::Ready {
                     p { role: "status", "Loading report…" }
                 } else if matches!(&*summary.read(), Some(Err(_))) {
@@ -355,7 +503,7 @@ pub fn Reports() -> Element {
                 }
             }
 
-            if tab == "detailed" {
+            if tab == "detailed" && period_error.is_none() {
                 if detailed.state()() != UseResourceState::Ready {
                     p { role: "status", "Loading detailed report…" }
                 } else if matches!(&*detailed.read(), Some(Err(_))) {
@@ -422,6 +570,76 @@ pub fn Reports() -> Element {
 mod tests {
     use super::*;
     use crate::models::ReportRow;
+
+    #[test]
+    fn contextual_reports_keep_all_time_and_every_entity_filter() {
+        let project = uuid::Uuid::now_v7().to_string();
+        let task = uuid::Uuid::now_v7().to_string();
+        let person = uuid::Uuid::now_v7().to_string();
+        let context = ReportContext::parse(
+            Some(project.clone()),
+            Some(task.clone()),
+            Some(person.clone()),
+            None,
+            None,
+            Some("all".into()),
+        )
+        .unwrap();
+        assert!(context.all_time);
+        assert_eq!(
+            (context.project, context.task, context.person),
+            (project, task, person)
+        );
+    }
+
+    #[test]
+    fn contextual_reports_preserve_custom_dates_and_reject_ambiguous_scope() {
+        let context = ReportContext::parse(
+            None,
+            None,
+            None,
+            Some("2026-09-01".into()),
+            Some("2026-09-30".into()),
+            Some("custom".into()),
+        )
+        .unwrap();
+        assert!(!context.all_time);
+        assert_eq!(
+            (context.from.as_str(), context.to.as_str()),
+            ("2026-09-01", "2026-09-30")
+        );
+        for (from, to, period) in [
+            (None, None, Some("custom")),
+            (None, None, Some("invalid")),
+            (Some(""), Some(""), None),
+            (Some("2026-09-01"), None, None),
+            (Some("2026-09-30"), Some("2026-09-01"), None),
+            (Some("2026-09-01"), Some("2026-09-30"), Some("all")),
+        ] {
+            assert!(
+                ReportContext::parse(
+                    None,
+                    None,
+                    None,
+                    from.map(str::to_owned),
+                    to.map(str::to_owned),
+                    period.map(str::to_owned)
+                )
+                .is_err()
+            );
+        }
+        for value in ["", "invalid", "id&task_id=other"] {
+            assert!(
+                ReportContext::parse(Some(value.into()), None, None, None, None, None).is_err()
+            );
+            assert!(
+                ReportContext::parse(None, Some(value.into()), None, None, None, None).is_err()
+            );
+            assert!(
+                ReportContext::parse(None, None, Some(value.into()), None, None, None).is_err()
+            );
+        }
+    }
 
     fn row(currency: &str, cents: i64) -> ReportRow {
         ReportRow {

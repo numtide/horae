@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH contributions AS (\n             SELECT l.invoice_id, l.net_before_tax_cents\n             FROM invoice_line_items l JOIN time_entries e ON e.id=l.time_entry_id\n             WHERE e.org_id=$1 AND e.project_id=$2\n             UNION ALL\n             SELECT l.invoice_id, l.net_before_tax_cents\n             FROM invoice_line_items l JOIN project_fee_occurrences f ON f.id=l.fee_occurrence_id\n             WHERE f.org_id=$1 AND f.project_id=$2\n           ), totals AS (\n             SELECT invoice_id, SUM(net_before_tax_cents::numeric)::bigint AS amount\n             FROM contributions GROUP BY invoice_id\n           )\n           SELECT i.id, i.number, i.status AS \"status: InvoiceStatus\", i.issued_on AS \"issued_on: chrono::NaiveDate\",\n                  i.currency, t.amount AS \"net_before_tax_cents!\"\n           FROM invoices i JOIN totals t ON t.invoice_id=i.id\n           WHERE i.org_id=$1 ORDER BY i.issued_on DESC, i.created_at DESC, i.id DESC\n           LIMIT 5001",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "number",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "status: InvoiceStatus",
+        "type_info": {
+          "Custom": {
+            "name": "invoice_status",
+            "kind": {
+              "Enum": [
+                "draft",
+                "sent",
+                "paid",
+                "void"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "issued_on: chrono::NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 4,
+        "name": "currency",
+        "type_info": "Bpchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "net_before_tax_cents!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "135edf102f2522eb13c050ac297eddcbc6e853ced910c6cd8fc0135c5f807850"
+}

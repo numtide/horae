@@ -19,6 +19,14 @@ use super::recovery::{PendingInvoice, RecoveryStorage, release_navigation};
 #[path = "preparation/fees.rs"]
 mod fees;
 
+#[derive(Clone, PartialEq)]
+pub(super) struct ProjectSource {
+    pub project_id: Uuid,
+    pub project_name: String,
+    pub client_id: Uuid,
+    pub client_name: String,
+}
+
 #[derive(Clone, PartialEq, Eq)]
 struct InvoiceRequest {
     client: String,
@@ -51,13 +59,20 @@ pub(super) fn PrepareInvoice(
     client_opts: Vec<(String, String)>,
     mut busy: Signal<bool>,
     oncreated: EventHandler<Uuid>,
+    #[props(default)] project: Option<ProjectSource>,
 ) -> Element {
     let storage = use_context::<RecoveryStorage>();
-    let mut client = use_signal(String::new);
+    let mut client = use_signal(|| {
+        project
+            .as_ref()
+            .map(|p| p.client_id.to_string())
+            .unwrap_or_default()
+    });
     let mut from = use_signal(String::new);
     let mut to = use_signal(String::new);
     let mut projects = use_signal(Vec::<Project>::new);
-    let mut selected = use_signal(|| None::<Vec<String>>);
+    let mut selected = use_signal(|| project.as_ref().map(|p| vec![p.project_id.to_string()]));
+    let project_scoped = project.is_some();
     let mut fields = use_signal(InvoiceDefaultsInput::default);
     let mut started = use_signal(|| false);
     let mut preview = use_signal(|| None::<InvoicePreparation>);
@@ -199,12 +214,21 @@ pub(super) fn PrepareInvoice(
     });
 
     rsx! {
-        div { "data-editor-kind": "invoice", "data-editor-state": if busy() { "pending" } else if !client().is_empty() || !from().is_empty() || !to().is_empty() || started() { "dirty" } else { "clean" },
+        div { "data-editor-kind": "invoice", "data-editor-state": if busy() { "pending" } else if (!project_scoped && !client().is_empty()) || !from().is_empty() || !to().is_empty() || started() { "dirty" } else { "clean" },
         FormCard { title: "Prepare invoice", error,
             p { class: "text-muted text-sm",
                 "Review unbilled time and monthly fees in this period, plus overdue single fees and milestones. The estimate reserves nothing; generation rechecks available charges. Nothing is sent automatically."
             }
             fieldset { class: "border-0 p-0 m-0 min-w-0", disabled: busy(), aria_label: "Invoice sources",
+                if let Some(source) = &project {
+                    dl { class: "mb-4",
+                        dt { class: "text-sm text-muted", "Client" }
+                        dd { class: "m-0 mb-2 wrap-anywhere", "{source.client_name}" }
+                        dt { class: "text-sm text-muted", "Project" }
+                        dd { class: "m-0 wrap-anywhere", "{source.project_name}" }
+                    }
+                    p { class: "text-sm text-muted mb-4", "Only this project's time and fees will be reviewed." }
+                } else {
                 FormGroup { label: "Client", id: "inv-client",
                     Select { id: "inv-client", options: client_opts, selected: client(),
                         onchange: move |event: FormEvent| {
@@ -222,6 +246,7 @@ pub(super) fn PrepareInvoice(
                         }
                     }
                 }
+                }
                 div { class: "grid md:grid-cols-2 gap-3",
                     FormGroup { label: "Period from", id: "inv-from",
                         Input { id: "inv-from", kind: "date", value: from(), oninput: move |event: FormEvent| from.set(event.value()) }
@@ -230,7 +255,7 @@ pub(super) fn PrepareInvoice(
                         Input { id: "inv-to", kind: "date", value: to(), oninput: move |event: FormEvent| to.set(event.value()) }
                     }
                 }
-                if !projects.read().is_empty() {
+                if !project_scoped && !projects.read().is_empty() {
                     div { class: "mb-4",
                         h4 { class: "text-sm font-semibold mb-2", "Projects" }
                         Checkbox { label: "All projects for this client", checked: selected.read().is_none(), disabled: busy(),
@@ -303,7 +328,7 @@ pub(super) fn PrepareInvoice(
                         busy.set(true);
                         spawn(async move {
                             let result = async {
-                                projects.set(server_fns::list_projects(Some(request.client.clone()), true).await?);
+                                if !project_scoped { projects.set(server_fns::list_projects(Some(request.client.clone()), true).await?); }
                                 server_fns::prepare_invoice(request.client.clone(), request.from.clone(), request.to.clone(), request.projects.clone(), request.overrides.clone(), request.fees.clone()).await
                             }.await;
                             match result {
@@ -338,7 +363,7 @@ pub(super) fn PrepareInvoice(
                             busy.set(true); error.set(None); reviewed.set(None); generation.set(None); confirm.set(false);
                             spawn(async move {
                                 let result = async {
-                                    projects.set(server_fns::list_projects(Some(request.client.clone()), true).await?);
+                                    if !project_scoped { projects.set(server_fns::list_projects(Some(request.client.clone()), true).await?); }
                                     server_fns::prepare_invoice(request.client, request.from, request.to, request.projects, None, None).await
                                 }.await;
                                 match result {

@@ -363,22 +363,22 @@ const feesBefore = Number(sql('SELECT count(*) FROM project_fee_occurrences'));
     await expect(stalePage.getByRole('button', { name: 'Save invoice values', exact: true })).toBeDisabled();
     assert.equal(Number(sql(`SELECT amount_cents FROM invoice_line_items WHERE invoice_id='${result.invoice.id}'`)), 10000);
     await stalePage.close();
-    const newFeeInvoice = async () => {
+    const newFeeInvoice = async (selectedProject = project, periodTo = '2026-09-30', feeCount = 1) => {
       await readsFinished();
       await page.getByRole('link', { name: 'Invoices', exact: true }).first().click();
       await readsFinished();
       await page.getByRole('button', { name: 'New Invoice', exact: true }).click();
       await page.getByLabel('Client', { exact: true }).selectOption({ label: 'Acme Corp' });
       await page.getByLabel('Period from', { exact: true }).fill('2026-09-01');
-      await page.getByLabel('Period to', { exact: true }).fill('2026-09-30');
+      await page.getByLabel('Period to', { exact: true }).fill(periodTo);
       await review.click();
-      await expect(page.getByRole('checkbox', { name: project.name, exact: true })).toHaveCount(0);
+      await expect(page.getByRole('checkbox', { name: selectedProject.name, exact: true })).toHaveCount(0);
       await page.getByRole('checkbox', { name: 'All projects for this client', exact: true }).click();
-      await page.getByRole('checkbox', { name: project.name, exact: true }).click();
-      const useDefaults = page.getByRole('button', { name: `Use defaults from ${project.name}`, exact: true });
+      await page.getByRole('checkbox', { name: selectedProject.name, exact: true }).click();
+      const useDefaults = page.getByRole('button', { name: `Use defaults from ${selectedProject.name}`, exact: true });
       if (await useDefaults.isVisible()) await useDefaults.click();
       await review.click();
-      await expect(page.getByRole('group', { name: 'Fees to invoice', exact: true }).getByRole('checkbox')).toHaveCount(1);
+      await expect(page.getByRole('group', { name: 'Fees to invoice', exact: true }).getByRole('checkbox')).toHaveCount(feeCount);
       await expect(review).toBeEnabled();
     };
     await newFeeInvoice();
@@ -479,54 +479,56 @@ const feesBefore = Number(sql('SELECT count(*) FROM project_fee_occurrences'));
     await page.getByRole('button', { name: 'Retry loading invoices', exact: true }).click();
     await expect(page.getByRole('button', { name: 'New Invoice', exact: true })).toBeVisible();
     await page.goto(`${base}/projects/${project.id}`);
-    const balances = page.getByRole('region', { name: 'Project fee balances', exact: true });
-    await expect(balances).toBeVisible();
-    await balances.getByLabel('Fee period from', { exact: true }).fill('2026-09-01');
-    await balances.getByLabel('Fee period to', { exact: true }).fill('2026-09-30');
+    await expect(page.getByRole('region', { name: 'Project details', exact: true })).toBeVisible();
+    await readsFinished();
+    await expect(page.getByRole('region', { name: 'Project fee balances', exact: true })).toHaveCount(0);
+
+    let preparationRequest;
+    page.on('request', request => { if (request.url().includes('/api/prepare_invoice')) preparationRequest = request; });
+    await newFeeInvoice();
+    const balances = page.getByRole('group', { name: 'Fees to invoice', exact: true });
     await expect(balances).toContainText('Invoiced (including drafts): EUR 127.00');
-    await expect(balances).toContainText('Over-invoiced: EUR -2.00');
-    let feeEndpoint;
-    page.on('request', request => { if (request.url().includes('/api/get_project_fee_balances')) feeEndpoint = request; });
+    await expect(balances).toContainText('Remaining: EUR -2.00');
     for (const width of [390, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
-      await expect(balances.getByRole('button', { name: 'Refresh balances', exact: true })).toBeVisible();
+      await expect(balances).toBeVisible();
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     }
-    await page.route('**/api/get_project_fee_balances*', route => route.abort(), { times: 1 });
-    await balances.getByRole('button', { name: 'Refresh balances', exact: true }).click();
-    await expect(balances.getByRole('alert')).toContainText('Could not load fee balances');
-    await expect(balances).not.toContainText('127.00');
-    await balances.getByRole('button', { name: 'Refresh balances', exact: true }).click();
-    await expect(balances).toContainText('Over-invoiced: EUR -2.00');
-    assert.ok(feeEndpoint);
+    await page.route('**/api/prepare_invoice*', route => route.abort(), { times: 1 });
+    await review.click();
+    await expect(page.locator('.alert-danger')).toBeVisible();
+    await expect(generate).toBeDisabled();
+    await review.click();
+    await expect(page.locator('.alert-danger')).toHaveCount(0);
+    await expect(balances).toContainText('Remaining: EUR -2.00');
+    assert.ok(preparationRequest);
     const actor = sql("SELECT id FROM users WHERE email = 'admin@example.com'");
     try {
       sql(`UPDATE users SET org_role='member' WHERE id='${actor}'`);
-      const response = await context.request.post(feeEndpoint.url(), {
-        headers: { 'content-type': feeEndpoint.headers()['content-type'] }, data: feeEndpoint.postData(),
+      const response = await context.request.post(preparationRequest.url(), {
+        headers: { 'content-type': preparationRequest.headers()['content-type'] }, data: preparationRequest.postData(),
       });
       assert.equal(response.status(), 403);
       assert.ok(!(await response.text()).includes('12700'));
-      await page.reload();
-      await expect(page.getByRole('heading', { name: 'Project', exact: true })).toBeVisible();
+      page.once('dialog', dialog => dialog.accept());
+      await page.goto(`${base}/projects/${project.id}`);
+      await expect(page.getByRole('region', { name: 'Project details', exact: true }).getByRole('heading', { level: 1 })).toContainText(project.name);
       await readsFinished();
-      await expect(balances).toHaveCount(0);
+      await expect(page.getByRole('region', { name: 'Project fee balances', exact: true })).toHaveCount(0);
     } finally {
       sql(`UPDATE users SET org_role='admin' WHERE id='${actor}'`);
     }
-    const monthlyProject = sql("SELECT id FROM projects WHERE code='TECH-01'");
-    sql(`UPDATE project_settings SET fee_mode='monthly', monthly_day='last' WHERE project_id='${monthlyProject}'`);
-    await page.goto(`${base}/projects/${monthlyProject}`);
-    await expect(balances).toBeVisible();
-    await balances.getByLabel('Fee period from', { exact: true }).fill('2026-09-01');
-    await balances.getByLabel('Fee period to', { exact: true }).fill('2026-10-31');
+    const monthlyProject = JSON.parse(sql("SELECT row_to_json(p) FROM (SELECT id, name FROM projects WHERE code='TECH-01') p"));
+    sql(`UPDATE project_settings SET fee_mode='monthly', monthly_day='last' WHERE project_id='${monthlyProject.id}'`);
+    await page.reload();
+    await newFeeInvoice(monthlyProject, '2026-10-31', 2);
     await expect(balances.getByRole('group')).toHaveCount(2);
-    await expect(balances.getByRole('group').nth(0)).toContainText('Occurrence: month:2026-09');
-    await expect(balances.getByRole('group').nth(1)).toContainText('Occurrence: month:2026-10');
-    await expect(balances.getByRole('group').nth(1)).toContainText('Remaining: EUR 900.00');
-    assert.equal(Number(sql(`SELECT count(*) FROM project_fee_occurrences WHERE project_id='${monthlyProject}'`)), 0);
+    for (const row of await balances.getByRole('group').all()) {
+      await expect(row).toContainText('Remaining: EUR 900.00');
+    }
+    assert.equal(Number(sql(`SELECT count(*) FROM project_fee_occurrences WHERE project_id='${monthlyProject.id}'`)), 0);
     assert.deepEqual(errors, []);
-    console.log('PASS: invoice selection, partial balances, exact excess, dirty/pending navigation, reload recovery, account-scoped replay, storage failure safety and authorized per-occurrence project balances');
+    console.log('PASS: invoice selection, partial balances, exact excess, dirty/pending navigation, reload recovery, account-scoped replay, storage failure safety and authorized per-occurrence balances in invoice preparation');
   } catch (error) {
     console.error(error);
     console.error({ url: page.url(), errors, page: await page.locator('body').ariaSnapshot({ timeout: 3000 }).catch(failure => failure.message) });

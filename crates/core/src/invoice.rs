@@ -44,6 +44,50 @@ pub enum InvoiceAmountError {
     Overflow,
 }
 
+/// Stored, after-discount invoice contributions, separated by lifecycle state.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct InvoiceLedgerTotals {
+    pub draft_cents: i64,
+    pub sent_cents: i64,
+    pub paid_cents: i64,
+    pub void_cents: i64,
+    /// Includes draft reservations, but never void history.
+    pub non_void_cents: i64,
+}
+
+/// Sum already-attributed net contributions without combining currencies.
+///
+/// Amounts must already include their stored line discount; this function does
+/// not reprice time or allocate invoice taxes. Rejects negatives and overflow.
+pub fn invoice_ledger_totals<'a>(
+    rows: impl IntoIterator<Item = (&'a str, crate::types::InvoiceStatus, i64)>,
+) -> Result<std::collections::BTreeMap<String, InvoiceLedgerTotals>, InvoiceAmountError> {
+    use crate::types::InvoiceStatus;
+    let mut totals = std::collections::BTreeMap::<String, InvoiceLedgerTotals>::new();
+    for (currency, status, amount) in rows {
+        if amount < 0 {
+            return Err(InvoiceAmountError::NegativeLine);
+        }
+        let total = totals.entry(currency.to_owned()).or_default();
+        let bucket = match status {
+            InvoiceStatus::Draft => &mut total.draft_cents,
+            InvoiceStatus::Sent => &mut total.sent_cents,
+            InvoiceStatus::Paid => &mut total.paid_cents,
+            InvoiceStatus::Void => &mut total.void_cents,
+        };
+        *bucket = bucket
+            .checked_add(amount)
+            .ok_or(InvoiceAmountError::Overflow)?;
+        if status != InvoiceStatus::Void {
+            total.non_void_cents = total
+                .non_void_cents
+                .checked_add(amount)
+                .ok_or(InvoiceAmountError::Overflow)?;
+        }
+    }
+    Ok(totals)
+}
+
 /// Return each line's contribution after discount and before taxes.
 ///
 /// Allocates the rounded invoice discount proportionally using largest
@@ -156,6 +200,69 @@ pub fn line_amount_cents(rate_cents: i64, minutes: i32) -> Result<i64, std::num:
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ledger_keeps_currency_and_status_totals_separate() {
+        use crate::types::InvoiceStatus::*;
+        let totals = invoice_ledger_totals([
+            ("EUR", Draft, 100),
+            ("EUR", Sent, 200),
+            ("EUR", Paid, 300),
+            ("EUR", Void, 400),
+            ("USD", Paid, 500),
+            ("USD", Paid, 0),
+        ])
+        .unwrap();
+        assert_eq!(
+            totals["EUR"],
+            InvoiceLedgerTotals {
+                draft_cents: 100,
+                sent_cents: 200,
+                paid_cents: 300,
+                void_cents: 400,
+                non_void_cents: 600,
+            }
+        );
+        assert_eq!(totals["USD"].non_void_cents, 500);
+        assert_eq!(totals.len(), 2);
+    }
+
+    #[test]
+    fn ledger_preserves_empty_zero_and_void_only_history() {
+        use crate::types::InvoiceStatus::*;
+        assert!(invoice_ledger_totals([]).unwrap().is_empty());
+        let totals = invoice_ledger_totals([("EUR", Draft, 0), ("USD", Void, 50)]).unwrap();
+        assert_eq!(totals["EUR"], InvoiceLedgerTotals::default());
+        assert_eq!(totals["USD"].non_void_cents, 0);
+        assert_eq!(totals["USD"].void_cents, 50);
+    }
+
+    #[test]
+    fn ledger_rejects_negative_contributions_and_combined_status_overflow() {
+        use crate::types::InvoiceStatus::*;
+        assert_eq!(
+            invoice_ledger_totals([("EUR", Paid, -1)]),
+            Err(InvoiceAmountError::NegativeLine)
+        );
+        for status in [Draft, Sent, Paid] {
+            assert_eq!(
+                invoice_ledger_totals([("EUR", Draft, i64::MAX), ("EUR", status, 1)]),
+                Err(InvoiceAmountError::Overflow)
+            );
+        }
+        assert_eq!(
+            invoice_ledger_totals([("EUR", Void, i64::MAX), ("EUR", Void, 1)]),
+            Err(InvoiceAmountError::Overflow)
+        );
+        assert!(
+            invoice_ledger_totals([
+                ("EUR", Draft, i64::MAX),
+                ("EUR", Void, i64::MAX),
+                ("USD", Paid, i64::MAX)
+            ])
+            .is_ok()
+        );
+    }
 
     #[test]
     fn discounted_fee_contribution_leaves_discount_available() {

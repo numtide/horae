@@ -13,6 +13,67 @@
 /// configured warning threshold.
 pub const OVER_BUDGET_BAND: i32 = 100;
 
+/// Exact combined budget quantities; unallocated scopes do not imply zero budgets.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct BudgetTotals {
+    pub budget: Option<i64>,
+    pub consumed: i64,
+    pub remaining: Option<i64>,
+    pub unallocated_scopes: usize,
+    pub overrun_scopes: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum BudgetSummaryError {
+    #[error("Budget totals exceed the supported integer range")]
+    Overflow,
+    #[error("Budget allowances cannot be negative")]
+    NegativeBudget,
+}
+
+/// Combine scopes without hiding individual overruns or inventing an allowance.
+pub fn summarize_scopes(
+    scopes: impl IntoIterator<Item = (Option<i64>, i64)>,
+) -> Result<BudgetTotals, BudgetSummaryError> {
+    let mut allowance = 0_i64;
+    let mut consumed = 0_i64;
+    let mut unallocated_scopes = 0;
+    let mut overrun_scopes = 0;
+    let mut has_scopes = false;
+    for (budget, spent) in scopes {
+        has_scopes = true;
+        consumed = consumed
+            .checked_add(spent)
+            .ok_or(BudgetSummaryError::Overflow)?;
+        if let Some(budget) = budget {
+            if budget < 0 {
+                return Err(BudgetSummaryError::NegativeBudget);
+            }
+            allowance = allowance
+                .checked_add(budget)
+                .ok_or(BudgetSummaryError::Overflow)?;
+            overrun_scopes += usize::from(spent > budget);
+        } else {
+            unallocated_scopes += 1;
+        }
+    }
+    let budget = (has_scopes && unallocated_scopes == 0).then_some(allowance);
+    let remaining = budget
+        .map(|budget| {
+            budget
+                .checked_sub(consumed)
+                .ok_or(BudgetSummaryError::Overflow)
+        })
+        .transpose()?;
+    Ok(BudgetTotals {
+        budget,
+        consumed,
+        remaining,
+        unallocated_scopes,
+        overrun_scopes,
+    })
+}
+
 /// Rounded consumption for a progress bar. The remaining percentage is its
 /// complement; absent/non-positive budgets have no meaningful percentage.
 pub fn used_percent(consumed: i64, budget: i64) -> Option<u8> {
@@ -89,6 +150,60 @@ mod tests {
     use super::*;
 
     const BANDS: &[i32] = &[80, 100];
+
+    #[test]
+    fn scope_summary_preserves_overruns_even_when_the_combined_budget_is_positive() {
+        assert_eq!(
+            summarize_scopes([(Some(60), 90), (Some(180), 30)]).unwrap(),
+            BudgetTotals {
+                budget: Some(240),
+                consumed: 120,
+                remaining: Some(120),
+                unallocated_scopes: 0,
+                overrun_scopes: 1,
+            }
+        );
+    }
+
+    #[test]
+    fn scope_summary_distinguishes_empty_unallocated_and_zero_allowances() {
+        assert_eq!(summarize_scopes([]).unwrap().budget, None);
+        let unallocated = summarize_scopes([(Some(60), 90), (None, 30)]).unwrap();
+        assert_eq!(
+            (
+                unallocated.budget,
+                unallocated.remaining,
+                unallocated.consumed,
+                unallocated.unallocated_scopes
+            ),
+            (None, None, 120, 1)
+        );
+        let zero = summarize_scopes([(Some(0), 1)]).unwrap();
+        assert_eq!(
+            (zero.budget, zero.remaining, zero.overrun_scopes),
+            (Some(0), Some(-1), 1)
+        );
+    }
+
+    #[test]
+    fn scope_summary_rejects_overflow_and_negative_allowances() {
+        assert_eq!(
+            summarize_scopes([(Some(i64::MAX), 0), (Some(1), 0)]),
+            Err(BudgetSummaryError::Overflow)
+        );
+        assert_eq!(
+            summarize_scopes([(None, i64::MAX), (None, 1)]),
+            Err(BudgetSummaryError::Overflow)
+        );
+        assert_eq!(
+            summarize_scopes([(Some(i64::MAX), -1)]),
+            Err(BudgetSummaryError::Overflow)
+        );
+        assert_eq!(
+            summarize_scopes([(Some(-1), 0)]),
+            Err(BudgetSummaryError::NegativeBudget)
+        );
+    }
 
     #[test]
     fn display_percentage_rounds_clamps_and_never_overflows() {

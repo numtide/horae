@@ -179,7 +179,7 @@ const missingPerson = '01960000-0000-7000-8000-000000000202';
     }
     console.log('PASS: stale client/task/person references and archived task-name conflicts preserve drafts and support field-level recovery at three widths');
     await screen.getByRole('button', { name: 'Save project', exact: true }).click();
-    await page.waitForURL(/\/projects\/[0-9a-f-]{36}$/);
+    await page.waitForURL(url => url.origin === base && /^\/projects\/[0-9a-f-]{36}$/.test(url.pathname) && url.search === '');
     await expect(page.getByRole('region', { name: 'Project details', exact: true })).toContainText('Task error recovery project');
     await readsFinished();
     assert.deepEqual(errors, []);

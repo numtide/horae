@@ -1,5 +1,124 @@
 # Contract: Dashboard Server Functions (read-only)
 
+## Current activity contract
+
+`get_project_activity(project_id: String, interval: Option<ProjectActivityInterval>)`
+returns `ProjectActivity` from `server_fns/projects/activity.rs`. This increment
+implements the time-series part only; the historical financial contracts below
+remain pending reconciliation.
+
+- Require an active session and current `project_read_access.can_view_progress`.
+  An inaccessible or foreign project returns non-disclosing `NOT_FOUND`, before
+  date-range/bucket validation. No progress access follows merely from own history.
+- `Some({from,to})` uses inclusive work dates; `None` derives both bounds from
+  actual recorded dates. Empty all-time has no invented interval or buckets.
+- Use a repeatable-read/read-only transaction for authorization, interval and
+  daily aggregate. Set a five-second statement timeout.
+- Week boundaries follow the stored organization setting; reject invalid settings.
+- Aggregate actual tracked minutes by original billable flag, without invoice
+  rounding or entry notes. Include inactive historical projects/tasks/contributors.
+- Return interval, week start and weekly billable/non-billable/cumulative minutes;
+  no people, financial fields or private notes are part of this payload.
+- Bound to 5,200 weekly buckets and reject excessive ranges before fetching daily
+  values. The UI must explain the limit and request a shorter interval on error;
+  it must not silently change the selected interval or truncate the series.
+- Invalid/reversed ranges are `BAD_REQUEST`; invalid stored configuration and
+  unexpected arithmetic/database failures are errors, not zero totals.
+- No schema or mutation change. Tests use disposable PostgreSQL databases.
+
+## Shared chart budget reference
+
+Project Detail shares one existing `get_project_summary` resource between the
+summary tiles and cumulative chart. This is a presentation change, not a new
+endpoint or authorization rule. Loading, failure and retry hide the reference
+until that same resource is ready; chart modes and reporting-period changes do
+not fetch another summary.
+
+Use the checked total only for complete hour allocations with one scope and
+period. Lifetime references require all-time reporting. Monthly references require
+the exact month returned by the current summary, not a partial or historical
+month. Money, absent budgets, unallocated scopes and unavailable reads never
+produce a line. Zero is a valid allowance. Combined task/person allocations are
+labelled as allowances, not a project cap or proof against individual overruns.
+
+The chart remains actual tracked minutes; the reference is the current allowance,
+not configured rounded consumption. The budget tile retains those consumption
+rules. Weekly mode does not use the cumulative reference or its scale. No SQL,
+schema, wire type or stored accounting value changes.
+
+## Report task-filter extension
+
+The existing `report_time` and `report_detailed` server functions accept an
+additional `task_id: Option<String>`, parsed with the same strict UUID helper as
+their other entity filters. CSV/XLSX export query parameters accept the same
+optional task UUID. All five entity filters are conjunctive; a missing task means
+all tasks, not a different permission scope. Detailed rows and CSV still share
+one query; XLSX preflight applies the same task predicate before checking limits.
+Unknown/foreign tasks produce no rows, and malformed UUIDs fail explicitly.
+The current active-manager gates and organization/cost privacy stay unchanged.
+No schema or financial-rule change is part of this extension.
+
+## Report period extension
+
+`report_time`, `report_detailed` and timesheet CSV/XLSX accept optional `from`
+and `to`. Both absent means all recorded work dates, including future entries;
+both present means an inclusive interval. Partial, empty, malformed or reversed
+ranges return `BAD_REQUEST`, never an unbounded fallback. Parsing shares
+`ActivityRange::parse_optional` in core. All entity predicates, current-manager
+checks, currency/privacy rules and bounded-download limits remain unchanged.
+
+Reports still defaults to the current month through today. Selecting **All time**
+explicitly omits the dates, disables date editing and preserves the custom pair
+for returning to it. Invalid custom dates hide stale rows and disable downloads.
+Project Detail links reuse these report and download endpoints without changing
+their authorization or query predicates.
+
+## Contextual report URLs
+
+- `/reports` accepts optional `project_id`, `task_id`, `user_id`, `from`, `to`
+  and `period` query parameters. Entity UUIDs and date pairs are validated before
+  mounting report resources. Empty or malformed supplied values are errors, not
+  missing filters. `period=all` requires absent dates; `period=custom` requires
+  both dates. Bare Reports retains its current-month default.
+- Project hours links explicitly select all/custom, always restrict the project
+  and open Detailed time. Parent rows restrict task or person; reciprocal rows
+  restrict both; the total restricts neither. Zero hours and viewers without
+  report authority have no report link. Reports still enforces its own gate.
+- `/projects/:id` accepts inclusive `from`/`to` and `tab=tasks|team|invoices`.
+  Absent dates mean all time, and an absent tab means Tasks. Invalid query state
+  is shown as an error without loading project reporting data. Period/tab changes
+  replace the current history entry so browser Back restores the original view.
+
+## Project PDF download
+
+`GET /api/projects/{id}/export/pdf` accepts only optional `from` and `to`.
+Both absent means all time; both present are inclusive work dates. Empty,
+malformed, partial, reversed or unknown query fields return 400. Existing session,
+manager-report and project-progress gates apply; foreign projects return 404.
+
+The PDF includes selected-period task/person rows, exact minutes, formatted hours
+and current permitted internal costs. It reuses the dashboard breakdown's
+repeatable-read projection, including zero-time and historical contributors.
+Project/client labels are read separately; the whole document is not one shared
+metadata/work snapshot. Restricted costs, missing rates and zero remain distinct.
+No entry notes, rate values, invoices or lifetime budgets are serialized.
+
+The existing export permit bounds concurrent work, rendering time and generated
+bytes. Before Typst rendering, reject over 1,000 task/person rows, 1 MiB of input
+labels or 32,767 bytes per field with 413, without partial output. Text bounds
+are checked after fetching the bounded dashboard projection. Capacity/timeout
+responses offer retry or a shorter period; successful responses are PDF
+attachments with `Cache-Control: private, no-store` and UUID-based filenames.
+
+The toolbar also reuses detailed CSV/XLSX exports with the selected project/date
+scope. A pre-download dialog explains format limits and summary contents. Native
+downloads preserve the project page; this additional dialog is an intentional
+handoff deviation to satisfy FR-016's limit explanation.
+
+> Historical contract, pending reconciliation with the 2026-09-29 specification.
+> Its visibility and accounting assumptions predate feature 011; it is not the
+> current implementation contract.
+
 All new surfaces are Dioxus `#[server]` **read** functions in `crates/horae/src/server_fns/projects.rs`. They are session-authenticated like the rest of `server_fns` (`session_user_id().await?`), org-scoped, and issue **no mutations** (Constitution IV — the feature adds zero write paths). No Axum route, no Harvest v2 change. Money-visibility follows Horae's existing policy; where money is hidden the cents fields are returned as `None`.
 
 Types below are the view models from `models/dashboard.rs` (see `data-model.md`). `ServerFnError` codes use the repo's named constants (e.g. `NOT_FOUND`), not integer literals.

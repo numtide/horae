@@ -392,7 +392,7 @@ async fn imports_preserve_finalized_project_configuration_and_restricted_access(
             let report = crate::server_fns::reports::fetch_report(
                 &pool,
                 ids.user_id,
-                (day, day),
+                Some((day, day)),
                 "project",
                 crate::reports::ReportFilters::default(),
             )

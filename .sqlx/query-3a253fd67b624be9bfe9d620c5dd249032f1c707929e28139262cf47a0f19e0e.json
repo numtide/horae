@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT MIN(spent_date) AS \"from: chrono::NaiveDate\",\n                          MAX(spent_date) AS \"to: chrono::NaiveDate\"\n                   FROM time_entries WHERE org_id = $1 AND project_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "from: chrono::NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 1,
+        "name": "to: chrono::NaiveDate",
+        "type_info": "Date"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "3a253fd67b624be9bfe9d620c5dd249032f1c707929e28139262cf47a0f19e0e"
+}

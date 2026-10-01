@@ -1,5 +1,122 @@
 # Tasks: Project Detail Dashboard
 
+> Historical tasks, pending regeneration from the expanded 2026-09-29 spec and
+> reconciled plan. Do not execute these tasks as the current implementation
+> contract. None is newly marked complete by the specification revision.
+
+## Current independent foundation (2026-09-29)
+
+These tasks replace the historical fold work for this increment only. The full
+dashboard/action task set below is not executable until reconciled; completing
+F001–F003 does not complete Project Detail or the four-surface delivery.
+
+- [x] F001 [US2] Add failing domain tests in `crates/core/src/project_activity.rs`
+  for calendar ranges, clipped configurable weeks, empty buckets, cumulative
+  reconciliation, invalid input and explicit bucket/overflow errors.
+- [x] F002 [US2] Implement the tested reporting ranges and activity series in
+  `crates/core/src/project_activity.rs`; register in `crates/core/src/lib.rs`.
+- [x] F003 [US2] Run core tests, Clippy and formatting in the Nix dev shell;
+  record results and remaining integration in `specs/004-project-dashboard/delivery.md`.
+- [x] F004 [US2] Add authorized activity DTOs and server projection in
+  `crates/horae/src/models/project.rs` and `crates/horae/src/server_fns/projects/activity.rs`.
+- [x] F005 [US2] Verify real database interval/split/week behavior and the full
+  progress-permission boundary in `crates/horae/src/server_fns/projects/activity/tests.rs`.
+- [x] F006 [US2] Regenerate `.sqlx/` with server/all-targets against the disposable
+  migrated database; check server/WASM builds and update `delivery.md` evidence.
+- [x] F007 [US2] Connect real activity charts, reporting presets/custom dates and
+  an accessible weekly table using shared controls and scoped SVG styling.
+- [x] F008 [US2] Test period/geometry boundaries and request/route transitions;
+  verify server/WASM, framework consistency and Chrome behavior.
+- [x] F009 [US1] Extend the authorized identity projection and implement the
+  design header with real client/type/status, permission-gated edit navigation
+  and confirmed archive/reactivate using the existing server action.
+- [x] F010 [US1] Verify identity/role/archive/route behavior, SQLx metadata,
+  server/WASM and responsive browser layout; record evidence in `delivery.md`.
+  Native Chromium now covers keyboard confirmation/cancel, failed and held
+  requests, duplicate-submit protection, focus return, persisted status, retained
+  invoice/time/configuration, expected editor revision changes, manager access and
+  revoked member authority. Confirmation layout is checked at four widths and
+  enlarged text. Broader application acceptance remains separate.
+- [x] F011 [US1] Test and implement checked scope-budget aggregation in core.
+- [x] F012 [US1] Add and test the scoped lifetime-hours/current-budget/internal-cost
+  summary projection, preserving current permissions and existing spending rules.
+- [x] F013 [US1] Connect the three summary tiles and verify loading/error/route
+  behavior, both build targets, cache metadata and browser layout.
+- [x] F014 [US2] Test and implement exact reciprocal task/person totals in core.
+- [x] F015 [US2] Add the authorized interval-scoped breakdown projection, current
+  and historical identities, cost privacy, explicit bounds and PostgreSQL tests.
+- [x] F016 [US2] Connect Tasks/Team tabs, counts, stable sorting and reciprocal
+  disclosures to the chart period; verify route/loading and real browser behavior.
+- [x] F017 [US3] Test checked invoice lifecycle totals without mixing currencies.
+- [x] F018 [US3] Read project-attributable time/fee invoice history with stored
+  discounts, current billing permissions, explicit bounds and database tests.
+- [ ] F019 [US3] Integrate the invoice tab, real counts/links, labelled history,
+  empty/loading/error states and keyboard navigation without resetting chart scope.
+- [x] F020 [US3] Reuse invoice preparation and recovery from Project Detail with
+  fixed client/project context, safe cancellation and route/browser regression.
+- [x] F021 [US3] Add the Invoiced tile using the history's shared authorized
+  response; separate currencies/counts and test pending/error/route behavior.
+- [x] F022 [US2] Add independent weekly chart-window navigation with configured
+  weeks, cumulative carry-in, no future navigation and browser regression.
+- [x] F023 [US2] Reuse the shared calendar for chart-week selection with a local
+  no-future bound; verify focus, dismissal, responsiveness and scheduling regression.
+- [x] F024 [US2] Move the reporting period into the Tasks/Team toolbar; preserve
+  selected tabs and independent invoice access through pending/failed reads, and
+  test custom validation, cancellation, retry and chart/report isolation.
+- [x] F025 [US2] Add task filtering to grouped/detailed Reports and CSV/XLSX,
+  including the bounded-export preflight. Verify filter intersections, organization
+  isolation, unchanged permission gates, real downloads and SQLx metadata.
+- [x] F026 [US2] Connect contextual task/person/total report links and the project
+  export menu, preserving all-time/custom scope and current report authority;
+  implement the PDF summary and verify complete journeys from Project Detail.
+  The shared all-time report/export period and explicit Reports selector are
+  implemented. Contextual route/link integration passes route, screen and native
+  browser regressions. CSV/Excel/PDF downloads, inclusive/all-time scope, keyboard
+  and responsive controls, invalid filters, foreign scope, size rejection and
+  revoked report authority pass the isolated browser suite. Full dashboard
+  acceptance remains separate.
+- [x] F027 [US2] Group chart week controls to match PeriodNav, preserving the
+  configured week, calendar, no-future bound and return-to-current-week action.
+  Reuse the summary read for a labelled hours-budget reference only when its
+  period matches cumulative reporting and allocations are complete. Never turn
+  money into hours or show a monthly/lifetime allowance against a different
+  interval; distinguish current allowance from configured rounded consumption.
+  Verify scale, zero/large budgets, privacy/loading/retry, one summary request,
+  weekly-mode isolation and responsive/keyboard/browser regressions.
+- [x] F028 [US2] Add the handoff's current-week chart band and label, deriving
+  its position from visible configured-week buckets rather than the last entry.
+  Preserve both chart modes, exact totals and historical navigation; verify
+  clipped/year-boundary weeks, empty/old intervals, keyboard and enlarged layouts.
+- [x] F029 [US1] Integrate the native project lifecycle suite into the default
+  browser runner and run the complete chained regression. Update existing tests
+  for optional-query detail URLs and collapsed task/team management without dropping
+  identity, persistence, permission or error-recovery assertions.
+- [x] F030 [US2] Match the chart's month labels and three weekly bar tones to the
+  handoff using real visible dates and existing geometry. Distinguish recent
+  visible weeks from the actual current-week marker; preserve zero/short series,
+  year boundaries, exact totals and reads. Verify narrow/enlarged-text labels,
+  both themes, browser regression and both build targets.
+- [x] F031 [US2] Reproduce the CI current-week label wrapping with only fallback
+  fonts at 200% text, correct the chart-local spacing without changing shared
+  badge defaults, and rerun browser/build checks with diagnostic word bounds.
+- [x] F032 Investigate the full-run wait in `action-errors.cjs`, preserve its
+  assignment failure/recovery assertions, and obtain a fresh complete browser
+  regression before claiming the current revision passes all suites.
+  The wait did not reproduce; the runner now bounds suites and all 23 pass.
+  This does not establish or claim a fix for the original wait's cause.
+- [x] F033 [US1] Remove legacy task/team management accordions from Project
+  Detail; keep reporting tabs and route management through the shared editor.
+  Remove unused UI resources, preserve server authorization APIs, and migrate
+  task-rate and assignment failure/retry coverage to Edit project.
+- [x] F034 Remove the extra Fee balances panel and chart diagnostic copy. Use
+  the handoff's compact legend, retain exact accessible chart data and preserve
+  per-occurrence balances, failed-read recovery and authority checks in invoicing.
+- [x] F035 Align the Invoiced tile and invoice history with the handoff and
+  observed Harvest presentation: remove permanent accounting prose and status
+  summaries, keep exact per-currency totals and void exclusion, and correct mobile
+  invoice ID wrapping using existing CSS utilities. Verify browser flows and
+  synthetic multi-state invoice history without changing imported data.
+
 **Input**: Design documents from `specs/004-project-dashboard/`
 
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/server-fns.md, quickstart.md

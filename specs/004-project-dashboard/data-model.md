@@ -1,5 +1,9 @@
 # Phase 1 Data Model: Project Detail Dashboard
 
+> Historical model, pending reconciliation with the 2026-09-29 specification.
+> The rate, permission, invoice and budget derivations below predate feature 011
+> and must not be implemented as written.
+
 ## Schema change
 
 **None.** This feature is read-only. No new columns, tables, enum values, or migrations (FR-016, SC-007). It reads existing tables from `0001_init.sql` and `0002_invoices.sql`:

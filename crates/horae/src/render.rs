@@ -7,6 +7,8 @@ use typst_as_lib::TypstEngine;
 
 use crate::models::{Invoice, InvoiceLine, OrgBranding};
 
+pub(crate) mod project;
+
 static INVOICE_TEMPLATE: &str = include_str!("../templates/invoice.typ");
 
 fn build_engine() -> TypstEngine<typst_as_lib::TypstTemplateMainFile> {

@@ -36,13 +36,6 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated, seeded test instance');
         await page.getByRole('menuitem', { name: 'Archive', exact: true }).click();
       },
     },
-    {
-      name: 'assignment removal',
-      path: '/projects/01950000-0000-7000-8000-000000000005',
-      resource: 'list_assignments', endpoint: 'delete_assignment', form: 'Assign User',
-      formEndpoint: 'create_assignment', submit: 'Assign',
-      action: async () => page.getByRole('button', { name: 'Remove', exact: true }).first().click(),
-    },
   ];
   try {
     await page.goto(`${base}/auth/login`);
@@ -54,9 +47,11 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated, seeded test instance');
       await page.route(pattern, route => route.abort('failed'));
       await page.route(formPattern, route => route.abort('failed'));
       try {
-        const ready = page.waitForResponse(r => r.url().includes(`/api/${scenario.resource}`) && r.status() === 200);
-        await page.goto(`${base}${scenario.path}`);
-        await (await ready).finished();
+        const [ready] = await Promise.all([
+          page.waitForResponse(r => r.url().includes(`/api/${scenario.resource}`) && r.status() === 200),
+          page.goto(`${base}${scenario.path}`, { waitUntil: 'domcontentloaded' }),
+        ]);
+        await ready.finished();
         await expect(page.getByRole('button', { name: scenario.form, exact: true }).first()).toBeVisible();
         const rejected = page.waitForEvent('requestfailed', r => r.url().includes(`/api/${scenario.endpoint}`));
         await scenario.action();
@@ -71,6 +66,7 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated, seeded test instance');
           await expect(page.getByRole('alert')).toBeVisible();
           await scenario.openForm();
           await expect(page).toHaveURL(/\/projects\/[0-9a-f-]{36}\/edit$/);
+          const detailPath = new URL(page.url()).pathname.replace(/\/edit$/, '');
           const editor = page.locator('.np-page');
           const originalName = await editor.locator('#np-name').inputValue();
           const formRejected = page.waitForEvent('requestfailed', r => r.url().includes(`/api/${scenario.formEndpoint}`));
@@ -81,7 +77,7 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated, seeded test instance');
           await expect(editor.getByRole('button', { name: 'Cancel', exact: true })).toBeDisabled();
           await page.unroute(formPattern);
           await editor.getByRole('button', { name: 'Retry request', exact: true }).click();
-          await expect(page).toHaveURL(/\/projects\/[0-9a-f-]{36}$/);
+          await expect(page).toHaveURL(url => url.origin === base && url.pathname === detailPath && url.search === '');
           await expect(page.getByRole('alert')).toHaveCount(0);
           console.log('PASS: archive failure survives menu dismissal; shared edit failure preserves input and safely retries');
           continue;
