@@ -111,6 +111,11 @@ F001–F003 does not complete Project Detail or the four-surface delivery.
 - [x] F034 Remove the extra Fee balances panel and chart diagnostic copy. Use
   the handoff's compact legend, retain exact accessible chart data and preserve
   per-occurrence balances, failed-read recovery and authority checks in invoicing.
+- [x] F035 Align the Invoiced tile and invoice history with the handoff and
+  observed Harvest presentation: remove permanent accounting prose and status
+  summaries, keep exact per-currency totals and void exclusion, and correct mobile
+  invoice ID wrapping using existing CSS utilities. Verify browser flows and
+  synthetic multi-state invoice history without changing imported data.
 
 **Input**: Design documents from `specs/004-project-dashboard/`
 

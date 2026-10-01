@@ -113,15 +113,21 @@ const invoicesBefore = Number(sql('SELECT count(*) FROM invoices'));
     await page.goto(`${base}/projects/${project.id}`);
     const invoiced = page.getByRole('region', { name: 'Invoiced', exact: true });
     await expect(invoiced).toContainText('EUR 100.00');
-    await expect(invoiced).toContainText('Invoices: 1');
-    await expect(invoiced).toContainText('Includes drafts; excludes void invoices');
+    await expect(invoiced).toContainText('Across 1 invoice');
+    await expect(invoiced).not.toContainText('Lifetime');
     await page.getByRole('tab', { name: /^Invoices/ }).click();
     await expect(page.getByRole('table', { name: 'Project invoice history', exact: true })).toBeVisible();
+    const invoiceTable = page.getByRole('table', { name: 'Project invoice history', exact: true });
+    await expect(page.getByRole('heading', { name: 'All invoice history', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('tabpanel').locator('dl')).toHaveCount(0);
+    await expect(invoiceTable.locator('tfoot')).toHaveText('TotalEUR 100.00');
     assert.equal(historyReads, 1, 'Summary and history share one invoice read');
     for (const width of [320, 390, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
       assert.equal(await invoiced.evaluate(element => element.scrollWidth <= element.clientWidth + 1), true);
+      assert.equal(await invoiceTable.locator('tbody a').evaluate(element => getComputedStyle(element).whiteSpace), 'nowrap');
+      assert.equal(await invoiceTable.locator('..').evaluate(element => getComputedStyle(element).borderRadius), '16px');
     }
     await page.route('**/api/get_project_invoices*', route => route.abort(), { times: 1 });
     // The assertions below wait for the application's error/retry state.

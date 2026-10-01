@@ -1019,3 +1019,34 @@ remain compact and the diagnostic text is absent. The worktree's ignored
 All 74 `detail_navigation` tests and strict all-target server Clippy also pass.
 F034 is complete. This correction is not a new full 23-suite or Nix CI pass, and
 does not complete the remaining dashboard requirements; PR #208 remains draft.
+
+## Compact project invoice presentation — 2026-10-01
+
+Read-only Windows Chrome MCP verification confirms Harvest's Invoiced amount
+block and project invoice table do not display the extra accounting paragraphs
+or per-state summary. See `harvest-reference.md` for the observation's limits
+and the official attribution documentation.
+
+Removed those paragraphs, the extra history heading and status-total panels.
+The Invoiced tile uses the handoff's compact invoice count. Currencies with only
+void history no longer produce a zero headline; actual non-void zero invoices
+still do. The table preserves every historical row and exact per-currency totals,
+with a short exclusion qualifier only for currencies containing void invoices.
+Invoice IDs remain on one line, dates use the mono font, headers have stronger
+contrast and the table uses the handoff's spacing and rounded surface. All styling
+uses existing utilities and the semantic table container; no shared CSS, queries,
+migrations, permission rules or financial calculations changed.
+
+Verification: fullstack build, strict all-target server Clippy, WASM check,
+all 75 `detail_navigation` tests and formatting pass. Three focused Chromium
+suites pass: `project-invoice`, `invoice-preparation`, `project-report-links`.
+A separate disposable fixture verifies draft/sent/paid/void history, currency
+separation, keyboard tabs, empty state and 320/390/1440px captures. Desktop and
+mobile captures were inspected in `.scratch/invoices-cleanup/`. Initial browser
+attempts crashed in Fontconfig because the local scratch configuration referenced
+a missing Nix font path; correcting that test-only path resolved the failure.
+
+F035 is complete. Subject/payment-date data, Link/Unlink and the uninvoiced toolbar
+integration remain separate functional gaps. This is not full Harvest parity,
+a complete browser-suite rerun or full Nix CI acceptance. PR #208 stays draft;
+the imported database and running preview were not changed.

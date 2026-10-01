@@ -273,10 +273,12 @@ time-entry/fee sources between projects, and imported existing entries are
 skipped. A future source-move feature must preserve historical attribution before
 changing this invariant.
 
-Return all invoice history, labelled independently of chart work dates; preserve
-the chart interval while switching tabs. Keep draft reservations, sent/paid
-contributions and void history distinct and group totals by stored invoice
-currency. Recheck current organization-manager/admin authority, active status and
+Return all invoice history independently of chart work dates; preserve
+the chart interval while switching tabs. Distinguish draft, sent, paid and void
+rows with their status badges and group totals by stored invoice currency.
+Follow the handoff's compact table without an extra history heading, accounting
+paragraphs or per-state summary. Label totals excluding void only when that
+currency has void history. Recheck current organization-manager/admin authority, active status and
 project access within a bounded read-only snapshot. Exceeding the row or integer
 limit fails without partial results. Reuse exact checked domain sums and real
 invoice routes; do not reprice historical lines or attribute a whole mixed invoice.
@@ -303,8 +305,12 @@ invoice preparation regression. No new billing policy, schema or mutation API.
 
 Lift the existing authorized invoice resource to the keyed project page and share
 its state/retry with the summary tile and history. Reuse stored non-void totals;
-count only non-void invoices per stored currency and label draft reservations,
-discounts, tax exclusion and lifetime scope explicitly. Empty, private, pending
+count only non-void invoices per stored currency. Follow the handoff's amount
+and compact invoice count, without permanent accounting prose. Keep the exact
+discount, tax and lifetime semantics in the calculation contract; the table's
+Pre-tax amount header identifies the displayed basis. Currencies containing only
+void invoices have no summary amount; real zero-value non-void invoices still do.
+Empty, private, pending
 and failed results are not monetary zero. Keep the tile readable independently
 of a failed work-summary request, and do not add another server query or change
 external-billing eligibility. Use the existing auto-fit tile grid and verify

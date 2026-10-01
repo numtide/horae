@@ -94,7 +94,7 @@ A manager uses contextual actions and the shared editor without losing history o
 - **FR-007**: Provide Tasks, Team and Invoices tabs with meaningful counts and keyboard interaction. Preserve the interval across tabs.
 - **FR-008**: Provide reciprocal expandable task/person groups, stable hours sorting, enabled zero-time rows and disabled historical contributors. Complete subtotals reconcile exactly.
 - **FR-009**: Apply existing cost permissions and rules, keeping currencies distinct and identifying missing rates. Cost access is not inferred from progress or billing-rate access.
-- **FR-010**: Invoice totals use stored attributable contributions, not current-rate recomputation or whole mixed-project invoices. Distinguish draft reservations, non-void invoiced contributions and void history.
+- **FR-010**: Invoice totals use stored attributable contributions, not current-rate recomputation or whole mixed-project invoices. Distinguish draft reservations, non-void invoiced contributions and void history through row statuses and exact totals. Follow the handoff's compact Invoiced tile and table; do not add permanent accounting paragraphs, an extra history heading or per-state summary panels.
 - **FR-011**: Uninvoiced time uses actual invoice eligibility; fixed-fee remaining uses approved per-occurrence partial-fee accounting. Do not subtract lifetime tracked value from an unrelated agreed fee.
 - **FR-012**: Invoice navigation/creation works with project context. A reference alone cannot change financial attribution, balances or locks.
 - **FR-013**: Recent entries are newest-first with deterministic ties and respect current person-level reporting and note permissions.

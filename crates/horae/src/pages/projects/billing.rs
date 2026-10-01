@@ -16,7 +16,7 @@ pub(super) fn InvoiceSummary(
     #[props(default)] on_retry: Option<EventHandler<()>>,
 ) -> Element {
     rsx! {
-        section { class: "card p-5 min-w-0 wrap-anywhere", aria_labelledby: "project-invoiced-title",
+        section { class: "card p-5 rounded-xl min-w-0 wrap-anywhere", aria_labelledby: "project-invoiced-title",
             h2 { id: "project-invoiced-title", class: "text-sm font-sans font-normal text-secondary m-0", "Invoiced" }
             match state {
                 InvoiceHistoryState::Hidden => rsx! {
@@ -40,14 +40,19 @@ pub(super) fn InvoiceSummary(
                     rsx! {
                         if data.invoices.is_empty() {
                             p { class: "text-sm text-muted mt-2 mb-3", "No invoices for this project." }
+                        } else if counts.is_empty() {
+                            p { class: "text-sm text-muted mt-2 mb-3", "No non-void invoices." }
                         }
                         for (currency, total) in &data.totals {
-                            div { key: "{currency}",
-                                p { class: "font-mono text-3xl font-semibold text-strong mt-2 mb-3", "{format_cents(total.non_void_cents, currency)}" }
-                                p { class: "text-xs text-muted m-0", "Invoices: {counts.get(currency.as_str()).copied().unwrap_or(0)} · {currency}" }
+                            if let Some(count) = counts.get(currency.as_str()) {
+                                div { key: "{currency}",
+                                    p { class: "font-mono text-3xl font-semibold text-strong mt-2 mb-3", "{format_cents(total.non_void_cents, currency)}" }
+                                    p { class: "text-xs text-muted m-0",
+                                        if *count == 1 { "Across 1 invoice" } else { "Across {count} invoices" }
+                                    }
+                                }
                             }
                         }
-                        p { class: "text-xs text-muted m-0 mt-3", "Lifetime · after discounts, before tax. Includes drafts; excludes void invoices." }
                     }
                 },
             }
@@ -58,65 +63,47 @@ pub(super) fn InvoiceSummary(
 #[component]
 pub(super) fn InvoiceHistory(data: ProjectInvoices) -> Element {
     rsx! {
-        div { class: "mt-6",
-            h2 { class: "text-2xl font-semibold text-strong m-0", "All invoice history" }
-            p { class: "text-xs text-muted mt-2 mb-4",
-                "Project amounts after discounts, before tax. Includes all issue dates, independently of the chart period."
-            }
+        div { class: "mt-4",
             if data.invoices.is_empty() {
                 p { class: "text-muted", "No invoices for this project" }
             } else {
-                div { class: "bg-secondary rounded-xl",
-                    DataTable { table { aria_label: "Project invoice history",
-                        thead { tr {
-                            th { scope: "col", "Status" }
-                            th { scope: "col", class: "whitespace-nowrap", "Issue date" }
-                            th { scope: "col", class: "whitespace-nowrap", "Paid on" }
-                            th { scope: "col", "ID" }
-                            th { scope: "col", "Subject" }
-                            th { scope: "col", class: "text-right whitespace-nowrap", "Pre-tax amount" }
+                div { class: "table-container bg-secondary rounded-xl",
+                    table { aria_label: "Project invoice history",
+                        thead { class: "bg-cell-empty", tr {
+                            th { scope: "col", class: "text-secondary", "Status" }
+                            th { scope: "col", class: "text-secondary whitespace-nowrap", "Issue date" }
+                            th { scope: "col", class: "text-secondary whitespace-nowrap", "Paid on" }
+                            th { scope: "col", class: "text-secondary", "ID" }
+                            th { scope: "col", class: "text-secondary", "Subject" }
+                            th { scope: "col", class: "text-secondary text-right whitespace-nowrap", "Pre-tax amount" }
                         } }
                         tbody { for invoice in &data.invoices {
                             tr { key: "{invoice.id}",
-                                td { span { class: super::super::invoices::invoice_badge_class(invoice.status), "{invoice.status}" } }
-                                td { class: "whitespace-nowrap", "{invoice.issued_on.format(\"%d %b %Y\")}" }
-                                td { class: "text-muted whitespace-nowrap",
+                                td { class: "py-3", span { class: super::super::invoices::invoice_badge_class(invoice.status), "{invoice.status}" } }
+                                td { class: "py-3 font-mono whitespace-nowrap", "{invoice.issued_on.format(\"%d %b %Y\")}" }
+                                td { class: "py-3 text-muted font-mono whitespace-nowrap",
                                     if invoice.status == horae_core::types::InvoiceStatus::Paid { "Not recorded" }
                                     else { "—" }
                                 }
-                                td { Link { to: Route::InvoiceDetail { id: invoice.id },
-                                    class: "inline-flex items-center min-h-control font-mono", "{invoice.number}"
+                                td { class: "py-3", Link { to: Route::InvoiceDetail { id: invoice.id },
+                                    class: "inline-flex items-center min-h-control font-mono whitespace-nowrap", "{invoice.number}"
                                 } }
-                                td { class: "text-muted", "Not recorded" }
-                                td { class: "font-mono text-right whitespace-nowrap", "{format_cents(invoice.net_before_tax_cents, &invoice.currency)}" }
+                                td { class: "py-3 text-muted whitespace-nowrap", "Not recorded" }
+                                td { class: "py-3 font-mono text-right whitespace-nowrap", "{format_cents(invoice.net_before_tax_cents, &invoice.currency)}" }
                             }
                         } }
                         tfoot { for (currency, totals) in &data.totals {
-                            tr { key: "{currency}",
-                                th { scope: "row", colspan: "5", class: "px-5 py-4 text-right font-semibold", "Total excluding void ({currency})" }
-                                td { class: "px-5 py-4 text-right font-mono whitespace-nowrap", "{format_cents(totals.non_void_cents, currency)}" }
+                            tr { key: "{currency}", class: "bg-cell-empty",
+                                th { scope: "row", colspan: "5", class: "px-5 py-4 text-right font-semibold",
+                                    if data.invoices.iter().any(|invoice| invoice.currency == *currency && invoice.status == horae_core::types::InvoiceStatus::Void) {
+                                        "Total (excl. void)"
+                                    } else { "Total" }
+                                }
+                                td { class: "px-5 py-4 text-right font-mono font-semibold whitespace-nowrap", "{format_cents(totals.non_void_cents, currency)}" }
                             }
                         } }
-                    } }
-                }
-                div { class: "flex flex-wrap gap-6 mt-4",
-                    for (currency, totals) in &data.totals {
-                        dl { key: "{currency}", class: "text-sm m-0",
-                            for (label, amount) in [
-                                ("Draft reservations", totals.draft_cents),
-                                ("Sent", totals.sent_cents),
-                                ("Paid", totals.paid_cents),
-                                ("Void history", totals.void_cents),
-                            ] {
-                                div { class: "flex justify-between gap-4",
-                                    dt { class: "text-muted", "{label}" }
-                                    dd { class: "font-mono m-0", "{format_cents(amount, currency)}" }
-                                }
-                            }
-                        }
                     }
                 }
-                p { class: "text-xs text-muted mt-4", "Totals include draft reservations; void invoices remain in history but are excluded from totals." }
             }
         }
     }
@@ -175,19 +162,40 @@ mod tests {
         let html = dioxus::ssr::render_element(rsx! { InvoiceSummary {
             state: InvoiceHistoryState::Ready(fixture()),
         } });
-        for expected in [
-            "Invoiced",
-            "USD 12.34",
-            "EUR 0.00",
-            "Invoices: 1",
-            "Invoices: 0",
-            "Includes drafts",
-            "excludes void",
-            "before tax",
-        ] {
+        for expected in ["Invoiced", "USD 12.34", "Across 1 invoice"] {
             assert!(html.contains(expected), "missing {expected}: {html}");
         }
         assert!(!html.contains("EUR 56.78"), "{html}");
+        assert!(!html.contains("EUR 0.00"), "{html}");
+        assert!(!html.contains("Lifetime"), "{html}");
+    }
+
+    #[test]
+    fn invoice_tile_distinguishes_void_only_history_from_a_real_zero_invoice() {
+        for (status, expected) in [
+            (InvoiceStatus::Void, "No non-void invoices."),
+            (InvoiceStatus::Draft, "USD 0.00"),
+        ] {
+            let mut data = fixture();
+            data.invoices.truncate(1);
+            data.invoices[0].status = status;
+            data.invoices[0].net_before_tax_cents = 0;
+            data.totals = horae_core::invoice::invoice_ledger_totals(
+                data.invoices
+                    .iter()
+                    .map(|row| (row.currency.as_str(), row.status, row.net_before_tax_cents)),
+            )
+            .unwrap();
+            let html = dioxus::ssr::render_element(rsx! { InvoiceSummary {
+                state: InvoiceHistoryState::Ready(data),
+            } });
+            assert!(html.contains(expected), "{html}");
+            if status == InvoiceStatus::Void {
+                assert!(!html.contains("0.00"), "{html}");
+            } else {
+                assert!(html.contains("Across 1 invoice"), "{html}");
+            }
+        }
     }
 
     #[test]
@@ -228,17 +236,26 @@ mod tests {
         dom.rebuild_in_place();
         let html = dioxus::ssr::render(&dom);
         for expected in [
-            "All invoice history",
+            "Project invoice history",
             "INV &#60;10&#62;",
             "/invoices/00000000-0000-0000-0000-00000000000a",
             "USD 12.34",
             "EUR 56.78",
-            "Void history",
-            "Draft reservations",
+            "Total (excl. void)",
             "Not recorded",
-            "after discounts",
+            "min-h-control font-mono whitespace-nowrap",
+            "font-mono whitespace-nowrap",
         ] {
             assert!(html.contains(expected), "missing {expected}: {html}");
+        }
+        for removed in [
+            "All invoice history",
+            "Draft reservations",
+            "Void history",
+            "after discounts",
+            "<dl",
+        ] {
+            assert!(!html.contains(removed), "unexpected {removed}: {html}");
         }
     }
 

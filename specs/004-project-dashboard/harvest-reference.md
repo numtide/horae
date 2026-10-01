@@ -97,6 +97,25 @@ no Harvest records or settings are changed.
   reduces that project's uninvoiced amount. Retainer invoices have special limits.
   [Invoice-project linking](https://support.getharvest.com/hc/en-us/articles/360048686631-Linking-invoices-to-projects).
 
+## Project invoice presentation recheck — 2026-10-01
+
+Read-only Windows Chrome MCP inspection of the existing fixed-fee project
+confirmed the Invoiced amount block contains only its label and amount, without
+an accounting paragraph or tooltip. The loaded Invoices table ends with Total;
+there is no extra history heading or draft/sent/paid/void summary below it.
+The linked draft contributes to the displayed amount in this observed example.
+This does not establish Harvest's handling of every invoice state.
+
+The accounting attribution explanation belongs to Harvest's
+[invoice-project linking documentation](https://support.getharvest.com/hc/en-us/articles/360048686631-Linking-invoices-to-projects):
+the project's table shows pre-tax amounts and, for mixed-project invoices, only
+the portion attributed to that project. This is reference evidence, not a reason
+to change Horae's existing discount allocation or void exclusion in a visual fix.
+
+Local snapshot and screenshot are in the root checkout's ignored
+`.scratch/playwright-windows/harvest-project-invoices-2026-10-01.{yml,png}`.
+No records were changed; the inspection tab was closed after capture.
+
 ## Implications for Horae planning
 
 1. Duplicate should reuse the existing creation draft/editor, with a fresh identity
