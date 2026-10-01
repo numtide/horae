@@ -949,6 +949,8 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await clientSearch.press('Escape');
     // Leave room for the persistent actions and a trigger in the lower half.
     await page.setViewportSize({ width: 390, height: 420 });
+    // The resize event dismisses open popovers; let it run before keyboard opening.
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
     await clientTrigger.evaluate(element => {
       const scroller = element.closest('.np-scroll');
       const target = Math.min(innerHeight / 2 + 20, scroller.getBoundingClientRect().bottom - element.offsetHeight);
