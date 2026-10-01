@@ -36,7 +36,7 @@ their implementation has merged. Recheck heads before modifying an owning branch
 | Workspace, `013-workspace-design` | [9a7ec5a](https://github.com/numtide/horae/tree/9a7ec5ac01a1670c009767a6b0d9354a365d61f5/specs/013-workspace-design), [#210](https://github.com/numtide/horae/pull/210) | Draft spec, research and requirements checklist; no plan/tasks | Invitations, backup and deletion contracts |
 | Personal Settings, `014-personal-settings-design` | [6aafd4e](https://github.com/numtide/horae/tree/6aafd4eb3d24f74ba659ae5c6766f610f8604fb4/specs/014-personal-settings-design), [#211](https://github.com/numtide/horae/pull/211) | Draft spec, research and requirements checklist; no plan/tasks | Profile ownership and notification delivery |
 | Scoped permissions/approvals, `015-scoped-permissions` | [f5cf02d](https://github.com/numtide/horae/tree/f5cf02db992d50638c9d89a3f7f661443cc7a5fa/specs/015-scoped-permissions), [#212](https://github.com/numtide/horae/pull/212) | Planning artifacts and constitution 1.1.0 proposal retained; expense read/write defaults now observed; full lifecycle policy unresolved | Complete reference matrix, review mappings and propagate permission contracts to dependent specs |
-| Expenses, `016-expense-parity` | [7f193af](https://github.com/numtide/horae/tree/7f193af139c435e3179b4731b6353006090f86b1/specs/016-expense-parity), [#214](https://github.com/numtide/horae/pull/214) | Combined locks, 101-row filter containment, fee/hour budgets, USD/GBP list/report reconciliation and UI exponent normalization verified; shared contract propagated to editor/dashboard; 11/16 checks, no final plan/tasks | Audit remaining receipt-rendering/budget-variant evidence and gate ownership. Larger-volume report scope remains uncertain; numeric conflict, export email, non-owner and recipient access remain distinct gates |
+| Expenses, `016-expense-parity` | [49f8038](https://github.com/numtide/horae/tree/49f8038364108b51fb3eb5ef815f659fa35f0221/specs/016-expense-parity), [#214](https://github.com/numtide/horae/pull/214) | Combined locks, 101-row filter containment, fee/hour budgets, USD/GBP list/report reconciliation and UI exponent normalization verified; shared contract propagated to editor/dashboard; 11/16 checks, no final plan/tasks | Receipt-download/budget-control audit published; resolve the remaining detailed-report target-set evidence. Larger-volume report scope remains uncertain; numeric conflict, export email, non-owner and recipient access remain distinct gates |
 
 All six feature PRs were drafts at the latest inventory snapshot. Status is not a promise about
 later GitHub state. No merge is part of this specification delivery.
@@ -122,6 +122,24 @@ This orders planning, not implementation authorization:
    review all cross-screen journeys and close analysis findings.
 
 ## Iteration log
+
+### 2026-10-01 — Independent evidence audit
+
+- Expense checkpoint `49f8038` adds `independent-work-audit.md` with named
+  investigations, evidence strength, unresolved gates and clarification coverage.
+  Budget variants expose no expense-inclusion control, corroborating official
+  guidance without claiming per-variant persisted consumption tests.
+- Internal receipt PDF is served as an attachment; the expense editor has no
+  receipt PDF viewer. Generated-report rendering remains separate and cannot be
+  certified without its export/recipient artifact path. No new mutations were
+  needed; cancelled both editor inspections without saving.
+- Checklist remains 11/16, no new questions or marker changes. Scoped formatting
+  and diff checks pass; PRs remain open drafts, no merge or implementation.
+- Next independent action: investigate the remaining detailed-report target-set
+  gap with a discriminating reference, not another equivalent 101-row test.
+  Larger-volume behavior remains unproven. Money-bound conflict, retention,
+  export email and reference-access/fixture-authority gates stay explicit; the
+  active goal is not declared complete by this audit.
 
 ### 2026-10-01 — Expense budgets and cross-currency reconciliation
 
