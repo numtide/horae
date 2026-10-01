@@ -35,7 +35,7 @@ their implementation has merged. Recheck heads before modifying an owning branch
 | Clients, `012-clients-design` | [fb5c4ea](https://github.com/numtide/horae/tree/fb5c4ea01095b6fe4b7f3f65a62a90f99a1d57cb/specs/012-clients-design), [#209](https://github.com/numtide/horae/pull/209) | Draft spec, research and requirements checklist; no plan/tasks | Settle contacts and lifecycle conflict, then plan |
 | Workspace, `013-workspace-design` | [9a7ec5a](https://github.com/numtide/horae/tree/9a7ec5ac01a1670c009767a6b0d9354a365d61f5/specs/013-workspace-design), [#210](https://github.com/numtide/horae/pull/210) | Draft spec, research and requirements checklist; no plan/tasks | Invitations, backup and deletion contracts |
 | Personal Settings, `014-personal-settings-design` | [6aafd4e](https://github.com/numtide/horae/tree/6aafd4eb3d24f74ba659ae5c6766f610f8604fb4/specs/014-personal-settings-design), [#211](https://github.com/numtide/horae/pull/211) | Draft spec, research and requirements checklist; no plan/tasks | Profile ownership and notification delivery |
-| Scoped permissions/approvals, `015-scoped-permissions` | [d3a4ff3](https://github.com/numtide/horae/tree/d3a4ff3d38669f1ddca50ca6d5a23d5245188283/specs/015-scoped-permissions), [#212](https://github.com/numtide/horae/pull/212) | Spec/plan/tasks and supporting artifacts exist; foundational code, unresolved parity/cutover gates | Complete matrix and evidence, migration mapping and constitution amendment |
+| Scoped permissions/approvals, `015-scoped-permissions` | [dcf21ef](https://github.com/numtide/horae/tree/dcf21ef73cb9b093bd36c4fd2f7bf1f681b5b537/specs/015-scoped-permissions), [#212](https://github.com/numtide/horae/pull/212) | Spec/plan/tasks, migration-preview contract and rate-scope verification protocol exist; full policy remains unresolved | Complete reference matrix, approve actual migration mappings and reconcile governance |
 
 All five PRs were drafts at the inventory snapshot. Status is not a promise about
 later GitHub state. No merge is part of this specification delivery.
@@ -128,3 +128,25 @@ This orders planning, not implementation authorization:
 - Next action: record D-001, expand the approved inventory, then reconcile 015's
   evidence/governance and the existing feature clarifications. Use this register
   as a checkpoint, not as a substitute for executing the feature workflows.
+
+### 2026-10-01 — Permission planning research
+
+- Continued the already confirmed feature 015 scope without assuming a D-001
+  answer. Reran Spec Kit's plan setup helper and continued Phase 0 research;
+  full planning/analysis readiness is not claimed.
+- Published `dcf21ef` on PR #212, documentation only: added the missing migration
+  contract, defined reviewable access differences and stale-preview/activation
+  safeguards, and documented historical assignment, job and approval gaps.
+- Compared current guards with target profiles: old Manager is not an equivalent
+  replacement for Project Manager or Executive Manager. Mappings remain subject
+  to explicit review, not automatic renaming.
+- Investigated managed-rate scope through official permission and API references.
+  Their people/project and old/new-profile discrepancies remain unresolved.
+  Added a discriminating test protocol instead of choosing an unverified rule.
+- Nix formatting with fail-on-change and Git whitespace checks passed for the six
+  changed Markdown files. No application tests, browser mutation, data migration
+  or runtime policy change took place. T006/T007 remain open.
+- Next: obtain suitable new-model non-owner reference access to resolve the
+  recorded rate/profile/approval evidence gaps, or continue independent research
+  in the already requested screens. D-001 is still unanswered; no new product
+  area has been treated as approved.
