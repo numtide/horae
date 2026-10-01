@@ -31,12 +31,12 @@ their implementation has merged. Recheck heads before modifying an owning branch
 
 | Package | Snapshot / PR | Actual planning state | Next gate |
 | --- | --- | --- | --- |
-| Project Detail, `004-project-dashboard` | [fa15ff4](https://github.com/numtide/horae/tree/fa15ff4e45955f7f0c0512d3a0f7f4ea3c124283/specs/004-project-dashboard), [#208](https://github.com/numtide/horae/pull/208) | Confirmed permission model propagated; historical plan and partial implementation remain unaccepted | Resolve imported billing/actions and finish the dependent permission matrix before full planning/analysis |
+| Project Detail, `004-project-dashboard` | [48a4156](https://github.com/numtide/horae/tree/48a415608f22fac8141a5f7609febcca1bef5d6d/specs/004-project-dashboard), [#208](https://github.com/numtide/horae/pull/208) | Permission model and expense-budget FR-023 propagated; historical plan/implementation remain unaccepted | Resolve imported billing/actions and finish the dependent permission matrix before full planning/analysis |
 | Clients, `012-clients-design` | [bc5d063](https://github.com/numtide/horae/tree/bc5d06315738f028665386fb405c54232227cf73/specs/012-clients-design), [#209](https://github.com/numtide/horae/pull/209) | Confirmed permission model propagated; draft spec/research/checklist, no plan/tasks | Settle contacts and lifecycle conflict, then plan against feature 015's completed contract |
 | Workspace, `013-workspace-design` | [9a7ec5a](https://github.com/numtide/horae/tree/9a7ec5ac01a1670c009767a6b0d9354a365d61f5/specs/013-workspace-design), [#210](https://github.com/numtide/horae/pull/210) | Draft spec, research and requirements checklist; no plan/tasks | Invitations, backup and deletion contracts |
 | Personal Settings, `014-personal-settings-design` | [6aafd4e](https://github.com/numtide/horae/tree/6aafd4eb3d24f74ba659ae5c6766f610f8604fb4/specs/014-personal-settings-design), [#211](https://github.com/numtide/horae/pull/211) | Draft spec, research and requirements checklist; no plan/tasks | Profile ownership and notification delivery |
 | Scoped permissions/approvals, `015-scoped-permissions` | [f5cf02d](https://github.com/numtide/horae/tree/f5cf02db992d50638c9d89a3f7f661443cc7a5fa/specs/015-scoped-permissions), [#212](https://github.com/numtide/horae/pull/212) | Planning artifacts and constitution 1.1.0 proposal retained; expense read/write defaults now observed; full lifecycle policy unresolved | Complete reference matrix, review mappings and propagate permission contracts to dependent specs |
-| Expenses, `016-expense-parity` | [7dc6064](https://github.com/numtide/horae/tree/7dc60642961a1f795a52b1df67b394a5d6ef9ec2/specs/016-expense-parity), [#214](https://github.com/numtide/horae/pull/214) | Archive field policy, stale category deletion, quantity/rate bounds, malformed files and draft line/currency lifecycle verified; cross-contract self-review added; 11/16 checks, no final plan/tasks | Multi-page scope, combined locks, mixed-currency reconciliation and budget inclusion remain independent work. Ordinary bound conflict, export email authority, non-owner and recipient access remain distinct gates |
+| Expenses, `016-expense-parity` | [7f193af](https://github.com/numtide/horae/tree/7f193af139c435e3179b4731b6353006090f86b1/specs/016-expense-parity), [#214](https://github.com/numtide/horae/pull/214) | Combined locks, 101-row filter containment, fee/hour budgets, USD/GBP list/report reconciliation and UI exponent normalization verified; shared contract propagated to editor/dashboard; 11/16 checks, no final plan/tasks | Audit remaining receipt-rendering/budget-variant evidence and gate ownership. Larger-volume report scope remains uncertain; numeric conflict, export email, non-owner and recipient access remain distinct gates |
 
 All six feature PRs were drafts at the latest inventory snapshot. Status is not a promise about
 later GitHub state. No merge is part of this specification delivery.
@@ -60,7 +60,7 @@ their requirements. Missing mockups do not exclude approved web workflows.
 | Permissions and approvals | Pending 015; design 06/08/09 | All six profiles, custom grants, scoped approval/withdrawal and every entry point; extend matrix for newly approved domains |
 | Reports | 001 and `004-invoice-timesheet-exports`; design 07 | Time/project/team and financial reports, saved/shared/scheduled behavior, permissions and exact export reconciliation |
 | Invoice lifecycle and payments | 001/011 and existing invoice modules; dashboard consumers | Draft/send/view, numbering/settings, dates, reminders, recurrence, partial payments/write-offs and project attribution |
-| Expenses | Pending 016 / #214; persisted currency/category modes, receipt content, current-locale input and draft/manual billing evidence | Finish remaining bounds/lifecycle tests and cross-contract review; discriminate multi-page selection; distinguish export-delivery authority from non-owner/recipient access |
+| Expenses | Pending 016 / #214; persisted capture/category/receipt/draft/manual-billing and budget/currency reconciliation evidence | Finish independent evidence audit and shared contract review; keep larger-volume scope uncertainty, export delivery authority and non-owner/recipient access distinct |
 | Estimates | No dedicated estimate spec or route found | Creation, client delivery/response and downstream project/invoice relationships |
 | Retainers | Historical 001 project-kind mention; no dedicated ledger spec found | Distinguish advance-payment balance/draws from fixed or recurring project fees |
 | Personal settings | Pending 014; design 08 | Profile, timezone, rates, assignments, notifications and truthful security/integration destinations |
@@ -100,10 +100,10 @@ Only the former should be presented as a choice to the user.
 | D-012 | Governance and contract dependency / 015 + consumers | PR #212 proposes constitution 1.1.0, not merged. PRs #208/#209 now use the confirmed six-profile/custom target and distinguish legacy evidence from acceptance. Full operation-matrix integration, persistence and migration review remain required; the broad three-role contradiction is resolved in the pending specs. |
 | D-013 | Confirmed / 016 and other absent mockups | On 2026-10-01 the user authorized composing screens without a dedicated mockup from current Horae components and tokens, preserving Harvest behavior. A new handoff is not required. Plans must record composition/control states and protect shared defaults through cross-screen regression. This does not authorize implementation in the specification phase. |
 | D-014 | Evidence and contracts / 016 + billing + 015 | Isolated fixtures verify USD/JPY/BHD precision, historical current-currency relabeling without FX, tiny-rate rounding, category archive, receipt boundaries and draft source independence/release. Bounds/exports, issued reports/attribution and permissions remain open. Invoice Preview requires paid access or Stripe on the current account; no upgrade/integration authorized. Non-owner checks need suitable access; six defaults do not prove enforcement. |
-| D-015 | Reference discrepancy / 016 + reporting | Help describes empty-selection actions as page-scoped; the live form submits report filters without IDs. Single-row mark/clear is verified, pagination is not. Removed the unsupported page-only guarantee; discriminate with multi-page fixtures. Projects' disabled-empty Actions stay unchanged. |
+| D-015 | Reference discrepancy / 016 + reporting | Empty-selection marking of 101 fixture records respects date/project filters and leaves an out-of-filter source unchanged. Detailed report renders all 101 on one page and ignores page/per_page probes; ordinary expense list separately paginates at 50. Larger-volume report scope remains uncertain; shared all-pages code does not prove an exposed report control. Projects' disabled-empty Actions stay unchanged. |
 | D-016 | Delivery authority / 016 exports | CSV/XLSX/PDF controls and fixture-filtered generation URLs observed, but generation can return an emailed result. No generation submitted under the no-messages authorization. This is not proof of a paid-plan export gate or a content-validation pass. |
 | D-017 | Reference conflict / 016 money | Bounded tests establish quantity/rate limits, but ordinary-amount boundary messages disagree with accepted values and a large accepted response loses cents. Preserve constitutional exactness; agree an explicit bound/overflow contract rather than copying that loss or treating an error message as a verified bound. |
-| D-018 | Shared dependency / 016 + project editor/dashboard | Official Harvest guidance includes billable and non-billable expenses only in Total project fees budgets when its inclusion option is enabled. Added expense FR-019 and cross-contract finding; propagate the option and consumption/reconciliation cases without changing hours budgets or invoice eligibility. Live fixture verification remains independent work. |
+| D-018 | Shared dependency / 016 + project editor/dashboard | Live fee inclusion on/off, both billability states, monthly boundaries, total-hours exclusion and owner USD list/detail/report reconciliation verified. Shared contract in #214 feeds expense FR-019, editor FR-026 and dashboard FR-023 (#208). USD/GBP expense totals remain separate; mixed-client subtotal is N/A. Nonzero unlike time-cost/expense-cost testing requires time/rate fixtures outside current authorization; complete permission and budget-variant evidence remain separate. |
 
 ## Proposed dependency order
 
@@ -122,6 +122,38 @@ This orders planning, not implementation authorization:
    review all cross-screen journeys and close analysis findings.
 
 ## Iteration log
+
+### 2026-10-01 — Expense budgets and cross-currency reconciliation
+
+- Expense checkpoint `7f193af` and dashboard checkpoint `48a4156` publish the
+  shared budget contract and its owning editor/dashboard requirements. No
+  application implementation, migration or merge is included.
+- Combined manual/archive locks: clearing billing preserves the archive lock;
+  restoring the project separately removes it. A bounded 101-record report
+  action respects filters; all rows appear on one report page. Ordinary-list
+  pagination is not report pagination. Deleted all 101 exact test identities.
+- Fee budgets include both billable and non-billable expenses when enabled;
+  disabling inclusion removes consumption, not costs. Monthly consumption uses
+  expense work dates. A 100-hour budget with only expenses retains 100 hours.
+  List/detail/report reconcile the same USD 1.50 expense contribution.
+- A disposable GBP project verifies separate USD/GBP list/report totals,
+  mixed-client N/A, denominated project subtotals and active-only filtering.
+  UI 1e3 normalizes and saves 13 in both amount and quantity fields, unlike the
+  endpoint's 1000. Removed that temporary expense, archived its project and
+  restored the original active/no-budget USD fixture and its unchanged receipt.
+- Cross-contract self-review corrected the editor's blanket organization-cost
+  currency statement. Exactness, expense authority, time-cost currency, budget
+  inclusion and invoice eligibility remain separate. New requirements are not
+  covered by historical checked implementation tasks.
+- Clarify asked/answered zero new product questions; checklist 11/16 unchanged.
+  Scoped Nix formatting and diff checks passed. No mail, payment, sent invoice,
+  pre-existing business-record change, account-wide setting or new integration.
+- Next: audit remaining receipt-rendering and budget-variant evidence, then
+  classify every residual gate before the independent-work completion audit.
+  Larger-volume report scope is an unresolved reference uncertainty, not a
+  passed multi-page test. Export email authority, alternate account locale,
+  nonzero time/rate fixtures, non-owner and recipient/sent-state access remain
+  separate from work that can still proceed. Goal remains active.
 
 ### 2026-10-01 — Archive locks and draft line lifecycle
 
