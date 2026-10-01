@@ -36,7 +36,7 @@ their implementation has merged. Recheck heads before modifying an owning branch
 | Workspace, `013-workspace-design` | [9a7ec5a](https://github.com/numtide/horae/tree/9a7ec5ac01a1670c009767a6b0d9354a365d61f5/specs/013-workspace-design), [#210](https://github.com/numtide/horae/pull/210) | Draft spec, research and requirements checklist; no plan/tasks | Invitations, backup and deletion contracts |
 | Personal Settings, `014-personal-settings-design` | [6aafd4e](https://github.com/numtide/horae/tree/6aafd4eb3d24f74ba659ae5c6766f610f8604fb4/specs/014-personal-settings-design), [#211](https://github.com/numtide/horae/pull/211) | Draft spec, research and requirements checklist; no plan/tasks | Profile ownership and notification delivery |
 | Scoped permissions/approvals, `015-scoped-permissions` | [f5cf02d](https://github.com/numtide/horae/tree/f5cf02db992d50638c9d89a3f7f661443cc7a5fa/specs/015-scoped-permissions), [#212](https://github.com/numtide/horae/pull/212) | Planning artifacts and constitution 1.1.0 proposal retained; expense read/write defaults now observed; full lifecycle policy unresolved | Complete reference matrix, review mappings and propagate permission contracts to dependent specs |
-| Expenses, `016-expense-parity` | [3df72c9](https://github.com/numtide/horae/tree/3df72c92486f4b430e79542475d83e46daa9d976/specs/016-expense-parity), [#214](https://github.com/numtide/horae/pull/214) | Persisted USD precision/signs, rate repricing, project override, receipt byte limit and removal verified; 11/16 checks; no plan/tasks | Currency history/exponents/bounds, source correction, receipt content/access/retention and operation-level permissions |
+| Expenses, `016-expense-parity` | [d393d53](https://github.com/numtide/horae/tree/d393d537bd383d7343b6d82d4731d0a2d97666a3/specs/016-expense-parity), [#214](https://github.com/numtide/horae/pull/214) | Persisted numeric/receipt rules and draft line independence after source correction/deletion verified; 11/16 checks; no plan/tasks | Currency history/exponents/bounds, sent-state/attribution/report effects, receipt content/access/retention and operation-level permissions |
 
 All six feature PRs were drafts at the latest inventory snapshot. Status is not a promise about
 later GitHub state. No merge is part of this specification delivery.
@@ -99,7 +99,7 @@ Only the former should be presented as a choice to the user.
 | D-011 | Reference access / 015 | Current evidence account has only its immutable owner; invite path requests another paid seat. Custom-profile persistence and several approval edge cases remain unverified. Use available documentation first; request suitable test access if needed, never purchase or bypass restrictions. |
 | D-012 | Governance and contract dependency / 015 + consumers | PR #212 proposes constitution 1.1.0, not merged. PRs #208/#209 now use the confirmed six-profile/custom target and distinguish legacy evidence from acceptance. Full operation-matrix integration, persistence and migration review remain required; the broad three-role contradiction is resolved in the pending specs. |
 | D-013 | Confirmed / 016 and other absent mockups | On 2026-10-01 the user authorized composing screens without a dedicated mockup from current Horae components and tokens, preserving Harvest behavior. A new handoff is not required. Plans must record composition/control states and protect shared defaults through cross-screen regression. This does not authorize implementation in the specification phase. |
-| D-014 | Evidence and contracts / 016 + billing + 015 | Isolated-fixture mutations authorized; numeric USD precision, project override, rate resave and receipt byte/removal rules verified. Currency history/bounds, source correction/deletion and receipt/permission lifecycles remain open. Six basic read/write defaults are observed, not a full enforcement matrix. Non-owner checks require suitable access; no paid seats or owner changes authorized. |
+| D-014 | Evidence and contracts / 016 + billing + 015 | Isolated-fixture mutations authorized; numeric USD precision, project override, rate resave, receipt byte/removal and owner draft-source correction/deletion verified. Currency history/bounds, sent/report/attribution effects and receipt/permission lifecycles remain open. Six basic read/write defaults are observed, not a full enforcement matrix. Non-owner checks require suitable access; no paid seats or owner changes authorized. |
 
 ## Proposed dependency order
 
@@ -118,6 +118,28 @@ This orders planning, not implementation authorization:
    review all cross-screen journeys and close analysis findings.
 
 ## Iteration log
+
+### 2026-10-01 — Draft invoice and source independence
+
+- Expense checkpoint `d393d53` adds owner-only browser evidence: saved one
+  fixture-only draft invoice for USD 1.00, corrected its source expense to USD
+  2.00 and changed the note. Reloaded invoice retained its original quantity,
+  description and USD 1.00 total. Permanently deleting the test source expense
+  also left that draft unchanged; no business expense was touched.
+- Invoice review defaulted to client EUR despite the project's USD override.
+  USD was explicitly selected before saving; cross-currency persistence is not
+  claimed. The source editor warns about invoice independence and disables date,
+  project, category and billability. Non-owner authorization is still untested.
+- FR-006/011 and acceptance coverage updated; Nix formatting and whitespace
+  checks passed. Checklist still 11/16 with no marker changes; no final analysis
+  or readiness claim. No invoice sent/marked sent, payment, migration or merge.
+- Remaining fixture client/project/category and unsent draft are identified in
+  the private scratch ledger. The original test expense and synthetic receipt
+  were deleted during their lifecycle checks and must not be reused by ID.
+- Next: currency/history and receipt/report lifecycle using only isolated
+  fixtures; resolve source attribution and safe sent-state evidence with billing.
+  E-AUTH continues to need suitable non-owner reference access, without seat
+  purchase or owner changes. Do not repeat the completed numeric/boundary tests.
 
 ### 2026-10-01 — Persisted expense and receipt fixtures
 
