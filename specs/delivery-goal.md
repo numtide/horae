@@ -109,8 +109,11 @@ the same contract and include integration acceptance cases:
   downloads: consuming feature contracts using existing jobs where appropriate;
   infrastructure availability is not proof of a delivered user workflow.
 - Shared components/tokens, navigation and responsive states: feature-specific
-  handoff acceptance plus a cross-screen regression matrix. Missing mockups need
-  an explicit design decision, not omission of an approved feature.
+  handoff acceptance plus a cross-screen regression matrix. D-013 is confirmed:
+  compose surfaces without mockups from current Horae components/tokens while
+  preserving Harvest behavior; no new handoff is required. Record their
+  composition and control/state mapping in the owning plan, preserve shared
+  defaults and do not omit approved functionality.
 
 ## Completion gates
 

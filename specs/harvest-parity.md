@@ -36,7 +36,7 @@ their implementation has merged. Recheck heads before modifying an owning branch
 | Workspace, `013-workspace-design` | [9a7ec5a](https://github.com/numtide/horae/tree/9a7ec5ac01a1670c009767a6b0d9354a365d61f5/specs/013-workspace-design), [#210](https://github.com/numtide/horae/pull/210) | Draft spec, research and requirements checklist; no plan/tasks | Invitations, backup and deletion contracts |
 | Personal Settings, `014-personal-settings-design` | [6aafd4e](https://github.com/numtide/horae/tree/6aafd4eb3d24f74ba659ae5c6766f610f8604fb4/specs/014-personal-settings-design), [#211](https://github.com/numtide/horae/pull/211) | Draft spec, research and requirements checklist; no plan/tasks | Profile ownership and notification delivery |
 | Scoped permissions/approvals, `015-scoped-permissions` | [b569c75](https://github.com/numtide/horae/tree/b569c7536d7705c11a1e745756a73457a241ef5c/specs/015-scoped-permissions), [#212](https://github.com/numtide/horae/pull/212) | Planning artifacts, migration/rate protocols and constitution 1.1.0 amendment included; confirmed expense/estimate/retainer/payment scope propagated; full policy unresolved | Complete reference matrix, review mappings and propagate permission contracts to dependent specs |
-| Expenses, `016-expense-parity` | [c5bf7d5](https://github.com/numtide/horae/tree/c5bf7d594d2c10fff1fa60b4e3e4630f99269868/specs/016-expense-parity), [#214](https://github.com/numtide/horae/pull/214) | Draft spec, reference research and checklist; specify/clarify started, 11/16 checks; no plan/tasks | Missing-surface design choice; precision, invoice-correction, attachment and permission contracts |
+| Expenses, `016-expense-parity` | [35d8d31](https://github.com/numtide/horae/tree/35d8d310cacc9cfa7d286d81763c37ffd60897a7/specs/016-expense-parity), [#214](https://github.com/numtide/horae/pull/214) | Missing-surface design authorized; draft spec/research/checklist, 11/16 checks; no plan/tasks | Precision, project/client currency conflict, source-expense correction, attachment and permission contracts |
 
 All six feature PRs were drafts at the latest inventory snapshot. Status is not a promise about
 later GitHub state. No merge is part of this specification delivery.
@@ -98,7 +98,7 @@ Only the former should be presented as a choice to the user.
 | D-010 | Reference contract / dashboard | PD-001 still asks whether to omit Pin/Duplicate/Delete/Link/Unlink. Reconcile with the new parity request; investigate their semantics and destructive safeguards, not just whether a button is visible. |
 | D-011 | Reference access / 015 | Current evidence account has only its immutable owner; invite path requests another paid seat. Custom-profile persistence and several approval edge cases remain unverified. Use available documentation first; request suitable test access if needed, never purchase or bypass restrictions. |
 | D-012 | Governance and contract dependency / 015 + consumers | PR #212 proposes constitution 1.1.0, not merged. PRs #208/#209 now use the confirmed six-profile/custom target and distinguish legacy evidence from acceptance. Full operation-matrix integration, persistence and migration review remain required; the broad three-role contradiction is resolved in the pending specs. |
-| D-013 | Product/design / 016 and other absent mockups | Asked whether screens without a dedicated handoff may be composed from Horae's existing design system or must await a new handoff. No answer recorded. This does not reopen functional web scope. |
+| D-013 | Confirmed / 016 and other absent mockups | On 2026-10-01 the user authorized composing screens without a dedicated mockup from current Horae components and tokens, preserving Harvest behavior. A new handoff is not required. Plans must record composition/control states and protect shared defaults through cross-screen regression. This does not authorize implementation in the specification phase. |
 | D-014 | Evidence and contracts / 016 + billing + 015 | Expense quantity/rate precision, currency transitions, privileged correction/deletion after invoicing, receipt lifecycle and new-profile operation matrix remain unresolved. Research these reference facts before presenting any genuine product deviation for approval. |
 
 ## Proposed dependency order
@@ -118,6 +118,25 @@ This orders planning, not implementation authorization:
    review all cross-screen journeys and close analysis findings.
 
 ## Iteration log
+
+### 2026-10-01 — Missing-surface design authorization
+
+- D-013 is confirmed: compose missing mockups from Horae's current components
+  and tokens while preserving Harvest behavior. Updated the delivery contract
+  and feature 016's clarification, FR-013 and assumptions; no UI implementation
+  or global design-system change is authorized in this phase.
+- Executed `speckit-clarify` path resolution, absent-hook checks, answer
+  integration and checklist revalidation. One product question answered;
+  checklist remains 11/16 with no marker changes. Remaining gaps are numeric,
+  currency, receipt, permission and billing contracts, not missing-handoff policy.
+- Extended expense research with current invoice-editing and currency sources.
+  Invoice-line edits and source-expense edits are distinct directions; the latter
+  remains unverified. Manual currency conversion is documented, but the fetched
+  currency page contradicts itself about project overrides versus client-only
+  expense currency. Recorded this conflict instead of choosing an unverified rule.
+- No browser mutations, application changes, migrations or merges. Next:
+  resolve the expense currency/precision and privileged source-correction
+  evidence, then finish the shared billing and permission contracts before plan.
 
 ### 2026-10-01 — Expense specification and live inventory
 
@@ -248,6 +267,7 @@ to bypass these gates. All published work remains reviewable; no PR was merged.
 ### Session 2026-10-01
 
 - Q: Complete Harvest web application, with native applications, Forecast and integrations treated separately? → A: The user confirmed the complete web scope and explicitly does not want native applications, Forecast or integrations for now. Integrations are excluded from this phase, not pending selection.
+- Q: May screens without a dedicated mockup be composed from existing Horae components and tokens while preserving Harvest behavior? → A: Yes, authorized on 2026-10-01. D-013 is closed; no new handoff is required for those surfaces.
 
 The completed answer supersedes the earlier D-001 waiting checkpoints. Existing
 product-specific decisions remain open; this answer does not choose contact
