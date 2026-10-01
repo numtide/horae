@@ -11,15 +11,28 @@ A dedicated test client and T&M project were created after authorization. A
 read-back of the project editor confirmed EUR on the test client and an explicit
 USD project override. Exact IDs and cleanup targets are recorded only in the
 main checkout's `.scratch/playwright-windows/expense-fixture-ledger-20261001.md`.
-No expense, category, receipt or invoice has yet been saved. The expense tab
-currently reports `document.visibilityState = hidden`; tab selection and
-`window.focus()` did not restore visibility. The user was asked to restore Chrome
-before continuing interactive validation. Reuse these fixtures; do not recreate
-them after a connection or visibility interruption.
+A fixture expense and unit category have now been saved and reused for numeric,
+repricing and synthetic receipt experiments. No invoice has been saved. Chrome
+still reports hidden visibility, but focused keyboard and guarded DOM actions
+successfully save records; visibility is no longer a blocker. Reuse the ledger's
+exact fixtures after connection interruptions. Cleanup is pending further tests.
 
-## Current browser evidence
+## Persisted numeric follow-up
 
-The authenticated expense list is empty. The new-expense form was opened without
+[Numeric evidence](numeric-evidence.md) records successful UI saves and separate
+form-endpoint tests. The persisted EUR-client/USD-project case follows project
+currency. USD amounts round to two decimals, quantities to two decimals before
+multiplication, and category rates to three. Tested ties round away from zero.
+Negative amounts/quantities persist; malformed inputs fail. Zero is accepted by
+the endpoint but cleared and blocked by the UI's required-field validation.
+Changing a rate leaves old expenses unchanged until resaved, even when no field
+is changed. These findings supersede the inconclusive unsaved cases below only
+where a matching persisted case exists. Bounds, currency transitions/exponents,
+locale, archive and billing behavior remain separate open questions.
+
+## Initial unsaved browser evidence
+
+The authenticated expense list was initially empty. The new-expense form was opened without
 saving. It exposes date, project, category, notes, one receipt, billability,
 reimbursement and amount. Choosing Mileage changes the amount suffix to miles.
 The picker advertises GIF, JPEG, PNG and PDF; this does not prove server-side
@@ -69,8 +82,9 @@ Read-only inspection of the public
 - Save failures re-enable the form controls. The client inspection did not
   establish server numeric bounds or a receipt-size validator.
 
-This resolves the **current client currency priority**, not historical currency
-changes, stored representation, invoice currency or server-side enforcement.
+This asset inspection resolves the **current client currency priority**, not
+historical currency changes, stored representation or invoice currency. The
+subsequent persisted fixture separately confirms project-override acceptance.
 Horae must preserve exact arithmetic, not copy the reference's floating-point
 implementation. The older client-only expense FAQ on the
 [currency page](https://support.getharvest.com/hc/en-us/articles/360055384512-Does-Harvest-support-multiple-currencies)
@@ -82,6 +96,15 @@ The [receipt launch announcement](https://www.getharvest.com/blog/2010/05/upload
 advertised 10 MB in 2010. A current search excerpt for the marketing upload page
 also says 10 MB, but opening that page returned 404. Neither establishes today's
 exact byte boundary; do not silently pick 10,000,000 or 10,485,760 bytes.
+
+Subsequent authorized [receipt experiments](receipt-evidence.md) resolve the
+boundary: 10,485,759-byte PDFs save, whereas 10,485,760 and 10,485,761 fail with
+422\. An invalid replacement preserves the prior downloadable receipt and the
+expense note. A `.txt` file is rejected without persisting its other field changes.
+Cancelling removal retains the receipt; saving removal makes the old internal
+receipt route return 404 while preserving the expense. Content validation,
+storage retention and access lifecycle remain open; the limit is no longer
+inferred from the old article.
 
 The [expense API](https://help.getharvest.com/api-v2/expenses-api/expenses/expenses/)
 documents one receipt and explicit deletion. Its broader locked-update wording
@@ -126,11 +149,11 @@ the account owner. Use only explicitly authorized disposable fixtures.
 
 | ID / requirement | Reference experiment | Evidence needed to close |
 | --- | --- | --- |
-| E-NUM / FR-002/004/011 | Save ordinary and unit expenses with fractional values, half-way products, zero, negative, malformed and boundary values; reopen and export | Accepted precision/range/sign, input locale, stored quantity/rate/total and rounding stage; include supported currency exponents |
-| E-RATE / FR-004/011 | Change a fixture rate and resave an old expense, including a notes-only edit and an archived category | Old versus new total, applicable rate and resave behavior; category mode/zero-rate handling |
-| E-CUR / FR-011 | Compare client currency with an explicit project override; change only disposable client/project currencies after saving | New-entry currency, historical totals/labels, override inheritance and unchanged versus converted numbers |
+| E-NUM / FR-002/004/011 | Ordinary and unit persisted cases complete in numeric evidence; finish locale, true bounds, currency exponents and exports | Precision/sign/rounding stage verified for USD; zero UI/server divergence must remain explicit |
+| E-RATE / FR-004/011 | Active-category change and unchanged-field resave complete; finish archived category, tiny positive rates and mode changes | Historical 0.25 remains until resave reprices to 1.00; three-decimal rate verified, zero/negative rates rejected |
+| E-CUR / FR-011 | EUR-client/USD-project persistence complete; change only disposable client/project currencies after saving | Historical totals/labels, override inheritance and unchanged versus converted numbers remain open |
 | E-BILL / FR-006/010 | Link fixture expenses to a draft invoice, then correct/delete a source; inspect invoice lines, totals, source links and attached report | Source-to-invoice effects, distinct from invoice-to-source rules already documented; sent-state evidence requires separately safe access |
-| E-REC / FR-003/012 | Upload synthetic valid files around both possible 10 MB boundaries; replace/remove; attempt an invalid replacement | Exact size/type/error rules and preservation of original expense/receipt on failure |
+| E-REC / FR-003/012 | PDF boundary/replacement, text-file rejection and removal/cancel complete; finish content/access/retention lifecycle | Strictly below 10,485,760 bytes; failed replacement preserves old receipt and fields; removal disables the internal receipt route |
 | E-AUTH / FR-005/006/014 | Use an editable non-owner reference person with own, managed and all read/write combinations; repeat after scope revocation | Allow/deny matrix for expenses, receipts, categories, locks, billing and approval; account currently exposes only an immutable owner |
 | E-ARCH / FR-003/004/009 | Archive fixture project/person/category and inspect historical expense, receipt, reporting and portable archive | Retained history and access rules; category archive must not itself prohibit editing existing expenses |
 | E-REP / FR-009/010/015 | Compare explicit selection with no selection; save a draft expense report, remove a source line and save again | Bulk-action target/confirmation, regenerated report scope and recipient versus internal receipt access |
