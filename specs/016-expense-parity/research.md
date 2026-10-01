@@ -97,14 +97,14 @@ behavior. Recorded in the spec's clarification, FR-013 and assumptions.
 | --- | --- | --- |
 | Functional scope | Clear | Native expense workflow included by confirmed web scope |
 | Domain and data | Partial | USD/JPY/BHD response precision and historical relabeling verified; finish bounds, exports, attribution and exact-representation constitution check |
-| Interaction and UX | Partial | Persisted capture/correction, UI exponent normalization and 101-row filter containment verified; detailed-report pagination not exposed at tested volumes; composition remains |
+| Interaction and UX | Partial | Named capture/currency/budget/input flows and live-filter versus selected-ID actions verified; detailed composition remains a planning responsibility |
 | Non-functional quality | Partial | Upload byte boundary/failure preservation verified; scale and final receipt privacy/retention contract required |
 | Dependencies | Partial | Complete 015 matrix and assign invoice/report owners |
 | Edge cases | Partial | Turn remaining numeric, attachment and correction cases into exact expectations |
 | Constraints | Clear | Self-hosted architecture, exactness, no new integration or application/business-data changes; isolated reference fixtures authorized |
 | Terminology | Clear | Billing, approval, reimbursement and invoice association remain distinct |
 | Completion signals | Partial | SC-001–005 defined; unresolved contracts prevent full acceptance coverage |
-| Placeholders | Partial | Three clarification markers remain: numeric/billing, lifecycle permissions and multi-page report scope; investigate before asking the user to guess |
+| Placeholders | Partial | Two clarification markers remain: numeric/billing/locale and lifecycle permissions; the report target-set question is resolved |
 
 ### Open work
 
@@ -147,16 +147,17 @@ behavior. Recorded in the spec's clarification, FR-013 and assumptions.
   failure, download revocation,
   storage/backup retention and recipient report lifecycle. Never leave
   attachments outside organization/expense access checks.
-- **EXP-E05 — Report scope and export delivery**: The bounded 101-row fixture
-  verifies empty-selection marking within filters and preservation of an
-  out-of-filter source. All rows render on one detailed-report page; shared
-  all-pages code and ordinary-list pagination do not prove report pagination.
-  No threshold was found in current public help. Larger-volume target scope
-  remains a reference uncertainty; do not repeat the same one-page experiment
-  or claim it passed a multi-page case. Mixed USD/GBP list/report reconciliation
-  now passes, including mixed-client N/A and currency-specific project groups.
-  Export generation can deliver email and was not submitted under the
-  no-messages authorization; columns/routes were inspected only.
+- **EXP-E05 — Report scope resolved; export delivery gated**: A report with
+  1,000 loaded rows also marked an expense moved into its filters after the
+  confirmation opened, yielding 1,001 billed records and preserving the outside
+  control. Explicit two-ID clearance changed only two. FR-016 now specifies
+  current filter matches at execution versus selected identities; no speculative
+  page boundary is required to resolve that distinction. A project-period lock
+  persisted on a cleared row while 999 remained billed, then disappeared after
+  clearing the remaining set. Mixed USD/GBP list/report reconciliation also
+  passes, including mixed-client N/A and denominated project groups. Export
+  generation remains unsubmitted because delivery can email; no file-byte or
+  generated-receipt rendering acceptance is claimed.
 - **EXP-E06 — Budget consumption**: Live fee inclusion on/off, both billability
   states, monthly boundaries and total-hours exclusion are verified. Project
   list/detail and detailed expenses reconcile for the owner USD fixture.
@@ -190,7 +191,7 @@ adds the documented budget requirement; the remaining findings stay open.
 | A receipt URL could leak confidential material after revocation | High | FR-003/012 require current authorization; EXP-E04 contract still incomplete |
 | A blanket internal receipt rule could either expose source records to clients or omit supported invoice attachments | High | FR-015 separates recipient reports; sent/source-change retention remains open with EXP-E02/04 |
 | Client formatting could be mistaken for accepted precision or negative support | High | Addressed for recorded cases by separate UI/endpoint evidence, read-back and explicit zero divergence; do not extrapolate to other currencies or inputs |
-| Empty selection could affect unseen pages while the specification promises page-only scope | High | Open EXP-E05 for larger volumes: 101-row test verifies filter containment, not pagination. Shared code does not prove an exposed report control; do not promise page-only behavior. Projects remains unchanged |
+| Empty selection could affect entries absent from the loaded report while the specification promises page-only scope | High | Resolved EXP-E05 target set: late-matching entry was included in 1,001-row action; explicit two-ID action changed only two. FR-016 uses current filter matches, not loaded rows; Projects remains unchanged |
 | Missing prototype could lead to omission or unrelated global CSS changes | Medium | EXP-D01 resolved; FR-013/SC-005 require existing design-system composition, shared defaults and cross-screen regression; execution remains future work |
 
 ## Spec Kit execution record
@@ -355,3 +356,35 @@ adds the documented budget requirement; the remaining findings stay open.
   Checklist still 11/16 with no changes; no questions, hooks or implementation.
   Next: resolve the remaining detailed-report target-set evidence gap without
   repeating the already-closed budget/currency/101-row experiments. Goal active.
+- Final independent investigation: the previous goal turn made concrete
+  progress through published contracts/evidence, not an unchanged-state wait.
+  Reread clarify and constitution, resolved paths once, checked absent hooks and
+  reused the confirmed live browser session. Created a bounded 1,001-record
+  fixture with per-record browser checkpoints and durable batch ledgers. Its
+  report showed every row on one page. The decisive test moved one record out
+  of the filter, loaded 1,000 rows/opened confirmation, then moved it back without
+  refreshing. Empty selection marked all 1,001 current matches; the outside
+  control was preserved. Explicit two-ID clearance changed only two. Cleared
+  entries could still have project-period protection while others remained
+  billed; clearing the remaining filter released it. Propagated that evidence
+  and execution-time authority requirement to feature 015 without assigning
+  unverified custom grants.
+  Deleted all 1,001 exact IDs plus a separately verified synthetic duplicate;
+  duplicate cause remains unknown. Fresh October 3/4 reports are empty and the
+  original October 1 expense/project/431-byte receipt retain their baseline.
+  Updated FR-007/016, scenarios, edge cases, report evidence, review and audit.
+  Revalidated checklist 11/16→11/16, no marker changes; report clarification
+  removed, two numeric/billing/permission clarification markers remain. No
+  extension hooks, runtime Horae tests, implementation, migration, mail, payment,
+  account-wide changes or merges. Independent evidence work is complete subject
+  to publication checks; feature readiness and the wider parity goal are not.
+  Handoff proposes one product question (no answer accepted): whether to adopt
+  Harvest's advertised ordinary-amount limits using exact arithmetic despite
+  its inconsistent edge responses. No numeric policy was silently selected.
+- Publication handoff: the ordinary-money question has now been asked, with no
+  answer accepted. The intervening status/recommendation turn did not complete
+  publication; resumed by checking the dirty worktrees, exact PR heads, evidence,
+  unchanged readiness checklist and scoped formatter results. Publish the expense
+  and permission evidence, then record their verified revisions and the narrow
+  independent-work completion in PR #213. No further reference mutations are
+  needed for this handoff; the full parity specification remains incomplete.

@@ -31,7 +31,7 @@ Restoring billability returned the same unbilled/unlocked/null-invoice state and
 USD 1.50. Thus the action's presence is not proof of entry eligibility; the
 operation enforces the billable rule. No reimbursement state was changed.
 
-### Pagination evidence conflict
+### Initial pagination hypothesis and resolved target set
 
 The [official guide](https://support.getharvest.com/hc/en-us/articles/360048687171-Detailed-time-and-detailed-expense-reports)
 describes empty selection in terms of entries on the page. However, the actual
@@ -40,11 +40,10 @@ contains the report filters and no expense IDs when nothing is selected.
 The delivered report client also serializes explicit selection as `ids[]` but
 omits IDs for empty selection and for its separate all-pages selection state.
 
-This is a **discrepancy requiring a multi-page discriminating fixture**, not
-proof of either server scope. The single-row experiment cannot distinguish
-current-page from all-filtered-records behavior. The prior unconditional
-current-page specification was too strong and must not survive as settled
-parity. Projects' independently confirmed disabled-empty Actions remain unchanged.
+Initially this left a target-set discrepancy: the single-row experiment could
+not distinguish loaded rows from current matching records. The prior
+unconditional current-page specification was too strong. Projects' independently
+confirmed disabled-empty Actions remain unchanged.
 
 Follow-up [target-set investigation](report-scope-evidence.md) tested 101 exact
 fixtures. The detailed report rendered all on one page and ignored `page=2` /
@@ -53,6 +52,15 @@ Empty selection marked exactly those 101 while an out-of-date-filter baseline
 stayed unbilled. No hypothetical report pagination behavior is certified by that
 result, and the shared all-pages client code must not be treated as proof that
 the expense report exposes the control.
+
+The subsequent 1,001-fixture discriminator resolves the target set without
+requiring pagination. A report and confirmation loaded with 1,000 rows also
+marked the expense moved into its filter afterwards, for 1,001 changed entries;
+the outside control remained unchanged. Explicitly clearing two IDs changed
+only two. Thus no selection means current filter matches at execution, not the
+loaded-row snapshot. See the before/after and project-period lock sequence in
+[report-scope-evidence.md](report-scope-evidence.md). No unlimited-volume or
+non-owner guarantee follows from this result.
 
 ## Export controls and delivery boundary
 

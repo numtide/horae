@@ -152,8 +152,11 @@ including them in the filter picker. Billable expenses can be manually marked
 billed; non-billable expenses cannot. CSV/XLSX support column customization and
 PDF includes receipt images. The guide describes no-selection bulk actions as
 targeting entries on the page, not an empty set. However, the live form submits
-filters without IDs; [report evidence](report-evidence.md) records this unresolved
-page-versus-filter discrepancy. FR-016 no longer claims page scope is verified.
+filters without IDs; [report evidence](report-evidence.md) records the initial
+page-versus-filter discrepancy. A later changed-result-set experiment
+resolves it: with 1,000 rows loaded, an entry moved into the filter afterwards
+was included when the no-selection action marked 1,001. FR-016 now specifies
+current filter matches at execution, while explicit selection remains ID-scoped.
 Projects' separately confirmed disabled-empty Actions and shared table defaults
 remain unchanged.
 
@@ -183,7 +186,7 @@ the account owner. Use only explicitly authorized disposable fixtures.
 | E-REC / FR-003/012 | Size/removal, content matrix and internal PDF attachment-download path verified; editor has no receipt PDF viewer | Generated-report rendering failure remains behind export/recipient artifact gates, separate from internal download. Define access/revocation and retention; do not claim full parser/sanitizer or provider-backup erasure |
 | E-AUTH / FR-005/006/014 | Use an editable non-owner reference person with own, managed and all read/write combinations; repeat after scope revocation | Allow/deny matrix for expenses, receipts, categories, locks, billing and approval; account currently exposes only an immutable owner |
 | E-ARCH / FR-003/004/009 | Category and project archive/correction/restore, receipt retention, default archived report inclusion and active-only exclusion verified | Project archive permits owner billability correction unlike invoice lock; person archive needs suitable access, portable archive depends on export authority; do not infer non-owner behavior |
-| E-REP / FR-009/010/015/016 | 101-row empty-selection action verifies filter containment; USD/GBP list/report reconciliation verified; export controls inspected | Detailed report has no pagination at tested volumes, unlike the ordinary list's 50-row pages; larger-volume scope remains uncertain, not a failed or passed multi-page test. Export generation may email and remains unsubmitted. Invoice Preview separately requires paid plan/Stripe; no upgrade authorized |
+| E-REP / FR-009/010/015/016 | 1,000 loaded rows plus a later-matching entry proves no-selection acts on current filters; explicit two-ID clearing changes only two. USD/GBP reconciliation verified | Target-set gate resolved without inventing pagination. Tested volume 1,001 is not an unlimited-volume claim. Export generation may email and remains unsubmitted; invoice Preview separately requires paid plan/Stripe, no upgrade authorized |
 | E-BUD / FR-019 | Fee inclusion on/off, both billability states, monthly work dates, total-hours exclusion and owner USD list/detail/report reconciliation verified; other modes expose no expense checkbox | Shared contract propagated to editor and dashboard. Other modes have documented/UI evidence, not per-variant persisted consumption tests. Non-owner authority and nonzero unlike time/expense-cost aggregation remain unverified; no time-entry/rate mutation authorized by the disposable-expense scope |
 
 Until these gates are resolved, no final expense plan, complete operation matrix
