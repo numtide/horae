@@ -47,6 +47,33 @@ Evidence is local to `.scratch/playwright-windows/`, including
 cleanup state are in the private ledger. Files and authenticated receipt links
 are not committed or shared externally.
 
-Remaining checks: content validation, non-owner access/revocation,
-storage/backup retention and invoice-recipient artifact
-lifecycle. These boundary tests do not close the full attachment contract.
+## Content and format follow-up
+
+The next fixture's existing 431-byte PDF was downloaded and checked before
+replacement. Benign synthetic text and one-pixel images exercised the same
+multipart endpoint; each attempt was followed by a receipt download.
+
+| File / declared MIME | Result | Download after attempt |
+| --- | --- | --- |
+| Empty PDF / application/pdf | 422 content mismatch | Previous PDF retained |
+| Plain text named .pdf / application/pdf | 422 content mismatch | Previous PDF retained |
+| Plain text named .png / image/png | 422 content mismatch | Previous PDF retained |
+| PNG, 68 bytes / image/png | 200 | PNG, same size |
+| Same PNG named .png / text/plain | 200 | Served as image/png |
+| Same PNG named .txt / image/png | 422 content mismatch | Previous PNG retained |
+| GIF, 34 bytes / image/gif | 200 | GIF, same size |
+| Canvas-generated JPEG, 285 bytes, .jpg / image/jpeg | 200 | JPEG, same size |
+| Same JPEG, .jpeg / image/jpeg | 200 | JPEG, same size |
+
+These cases establish content-sensitive validation and MIME normalization, not
+an extension-only or client-MIME-only rule. They do not prove full structural
+decoding, antivirus scanning or sanitization of every accepted document. No
+executable payload was uploaded. The original synthetic PDF, note and quantity
+were restored successfully; download returned 200 with the original 431 bytes.
+Private results: `expense-independent-results-20261001.md`.
+
+Remaining checks: malformed-but-recognizable file handling, non-owner
+access/revocation, storage/backup retention and invoice-recipient artifact
+lifecycle. Provider backup erasure is not observable through this browser; the
+Horae storage policy needs its own explicit contract. These tests do not close
+the full attachment contract.

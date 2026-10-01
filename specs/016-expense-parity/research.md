@@ -16,14 +16,14 @@ Official references, retrieved on the date above:
 | Reference | Contract coverage | Limit |
 | --- | --- | --- |
 | [Tracking](https://support.getharvest.com/hc/en-us/articles/360048687611-Tracking-expenses) | FR-002/003 and billability | Does not settle upload limits or numeric precision |
-| [Categories](https://support.getharvest.com/hc/en-us/articles/360048686731-Managing-expense-categories) | FR-004 lifecycle and repricing | Fractional fixture now verified; archived resave remains open |
+| [Categories](https://support.getharvest.com/hc/en-us/articles/360048686731-Managing-expense-categories) | FR-004 lifecycle and repricing | Fractional, archived-resave and mode-change fixtures verified; delete-in-use server enforcement remains open |
 | [Editing](https://support.getharvest.com/hc/en-us/articles/4406054281101-How-to-edit-expenses) | FR-006 privileged locked corrections | Does not explain consequences for an issued invoice |
 | [Locks](https://support.getharvest.com/hc/en-us/articles/360048687491-Unlocking-time-and-expenses) | FR-007 independent protection and date coverage | Reconcile with feature 015 before planning |
 | [Preferences](https://support.getharvest.com/hc/en-us/articles/360048179912-Customizing-account-preferences) | FR-008 module/reimbursement and currency context | Existing configuration scope is owned by 013 |
 | [Detailed reports](https://support.getharvest.com/hc/en-us/articles/360048687171-Detailed-time-and-detailed-expense-reports) | FR-009/010 filters, downloads and manual billing status | Legacy role wording does not settle the six-profile matrix |
 | [Expense object](https://help.getharvest.com/api-v2/expenses-api/expenses/expenses/) | FR-005 identity and distinct state fields | An API description is not proof of browser behavior or authority to expand Horae's compatibility API |
 | [Invoice editing](https://support.getharvest.com/hc/en-us/articles/360048181012-Editing-and-deleting-invoices-and-estimates) | FR-010 invoice-to-source behavior | Does not settle the reverse direction: changing/deleting a source expense |
-| [Currencies](https://support.getharvest.com/hc/en-us/articles/360055384512-Does-Harvest-support-multiple-currencies) | FR-011 manual conversion | Asset and persisted fixture confirm override priority; historical changes remain unresolved |
+| [Currencies](https://support.getharvest.com/hc/en-us/articles/360055384512-Does-Harvest-support-multiple-currencies) | FR-011 manual conversion | Unbilled history/override priority verified; already-invoiced currency changes remain unresolved |
 | [Current permissions](https://support.getharvest.com/hc/en-us/articles/44171549176077-Permissions) | FR-014 read/write scopes | Corroborated by delivered editor configuration, not lifecycle enforcement |
 | [Invoice attachments](https://support.getharvest.com/hc/en-us/articles/9864825272589-Attaching-files-and-reports-to-invoices) | FR-015 recipient report and draft regeneration | Source correction/deletion and sent artifacts remain unverified |
 | [Receipt announcement](https://www.getharvest.com/blog/2010/05/upload-expense-receipts-in-harvest) | Historical 10 MB limit | Published 2010; not proof of current exact byte boundary |
@@ -80,7 +80,8 @@ The Categories tab also timed out on click. Navigating directly to its observed
 link succeeded: the category list exposes New category and per-category Edit,
 Archive and Delete controls, including a mileage rate display. Visibility is not
 proof that these mutations, rate validation or restrictions work. Later tests
-verified creation and rate validation, not archive/delete restrictions. Current
+verified creation, rate validation, archive/resave/restore and mode changes;
+delete-in-use enforcement remains UI/documentation evidence only. Current
 navigation places Categories under Expenses,
 unlike the older Manage menu wording in the help article.
 
@@ -95,14 +96,14 @@ behavior. Recorded in the spec's clarification, FR-013 and assumptions.
 | --- | --- | --- |
 | Functional scope | Clear | Native expense workflow included by confirmed web scope |
 | Domain and data | Partial | USD/JPY/BHD response precision and historical relabeling verified; finish bounds, exports, attribution and exact-representation constitution check |
-| Interaction and UX | Partial | Form opened; missing-handoff policy and report selection specified; numeric interaction and detailed composition remain |
+| Interaction and UX | Partial | Persisted capture/correction and single-row selection verified; multi-page report scope conflicts with help wording; detailed composition remains |
 | Non-functional quality | Partial | Upload byte boundary/failure preservation verified; scale and final receipt privacy/retention contract required |
 | Dependencies | Partial | Complete 015 matrix and assign invoice/report owners |
 | Edge cases | Partial | Turn remaining numeric, attachment and correction cases into exact expectations |
-| Constraints | Clear | Self-hosted architecture, exactness, no new integration, no application/data changes in this phase |
+| Constraints | Clear | Self-hosted architecture, exactness, no new integration or application/business-data changes; isolated reference fixtures authorized |
 | Terminology | Clear | Billing, approval, reimbursement and invoice association remain distinct |
 | Completion signals | Partial | SC-001–005 defined; unresolved contracts prevent full acceptance coverage |
-| Placeholders | Partial | Two clarification markers remain, both reference/dependency work rather than questions for the user to guess |
+| Placeholders | Partial | Three clarification markers remain: numeric/billing, lifecycle permissions and multi-page report scope; investigate before asking the user to guess |
 
 ### Open work
 
@@ -114,13 +115,15 @@ behavior. Recorded in the spec's clarification, FR-013 and assumptions.
   rounding order, signs and active-category repricing now have persisted
   evidence, including JPY/BHD responses and historical currency changes. UI zero
   rejection differs from endpoint acceptance. Tiny-rate rounding before positive
-  validation is verified. Finish locale, true upper bounds, other currencies and
+  validation and current-locale separators are verified. Finish other locales,
+  true upper bounds, other currencies and
   export/mixed-currency reconciliation using only authorized disposable fixtures.
 - **EXP-E02 — Billing contract**: Define privileged correction/deletion effects
   on source links, recipient reports and already issued totals, with the billing
   owner. Draft line/amount independence is now verified after both source
   correction and deletion. Keep manual billed status separate from a real
   invoice relationship, and do not generalize owner-only results to other grants.
+  Manual mark/clear and non-billable refusal now have owner browser evidence.
   Deleting a second fixture draft released billing/lock state while retaining the
   source and receipt. The current account's Preview explicitly requires paid
   access or Stripe; no bypass, upgrade or integration is authorized. Report
@@ -129,10 +132,17 @@ behavior. Recorded in the spec's clarification, FR-013 and assumptions.
   receipt downloads. Six read/write grants and profile defaults are now observed
   and recorded with the owner; lifecycle mapping and non-owner enforcement remain
   open. Do not translate legacy Manager wording into an unverified grant.
-- **EXP-E04 — Receipt contract**: Size, replacement failure, removal and owner
-  access after category archive are verified. Finish content validation, download
-  revocation, storage/backup retention and recipient report lifecycle. Never leave
+- **EXP-E04 — Receipt contract**: Size, replacement failure, removal, benign
+  content checks, MIME normalization and owner access after category archive are
+  verified. Finish recognizable malformed-file behavior, download revocation,
+  storage/backup retention and recipient report lifecycle. Never leave
   attachments outside organization/expense access checks.
+- **EXP-E05 — Report scope and export delivery**: A single-row report proves
+  reconciliation, confirmation/cancel and manual billing but cannot prove
+  pagination. Help says page scope; the delivered empty-selection form sends
+  filters without IDs. Resolve with a multi-page fixture before fixing the
+  target-set contract. Export generation can deliver email and was not submitted
+  under the no-messages authorization; columns/routes were inspected only.
 
 These gates block final planning/tasks/analysis, not independent research.
 The concrete distinguishing checks and evidence required are recorded in
@@ -154,7 +164,7 @@ This is a draft self-review, not independent review or `speckit-analyze`.
 | A receipt URL could leak confidential material after revocation | High | FR-003/012 require current authorization; EXP-E04 contract still incomplete |
 | A blanket internal receipt rule could either expose source records to clients or omit supported invoice attachments | High | FR-015 separates recipient reports; sent/source-change retention remains open with EXP-E02/04 |
 | Client formatting could be mistaken for accepted precision or negative support | High | Addressed for recorded cases by separate UI/endpoint evidence, read-back and explicit zero divergence; do not extrapolate to other currencies or inputs |
-| Empty selection could silently apply a bulk action or regress other tables | Medium | FR-016 specifies report targets and confirmation while preserving Projects; future regression checks required |
+| Empty selection could affect unseen pages while the specification promises page-only scope | High | Open EXP-E05; removed the unsupported guarantee from FR-016 and acceptance scenarios; a multi-page reference test is required. Projects remains unchanged |
 | Missing prototype could lead to omission or unrelated global CSS changes | Medium | EXP-D01 resolved; FR-013/SC-005 require existing design-system composition, shared defaults and cross-screen regression; execution remains future work |
 
 ## Spec Kit execution record
@@ -237,3 +247,26 @@ This is a draft self-review, not independent review or `speckit-analyze`.
   and readiness stay unchecked because unresolved contracts remain. Next:
   locale/bounds, exports and receipt content cases; non-owner/recipient evidence
   requires suitable reference access, not another generic fixture authorization.
+- Independent continuation: reread clarify and constitution, ran path resolution
+  once and confirmed no extension hooks. Previous status-only turn classified
+  as no progress; reused the live browser handle and current fixture read-back
+  instead of restarting. No product questions asked or answered. Verified
+  current-locale `1,25`→125 through a UI save and separate ordinary endpoint
+  cases; larger amount samples through 100000000000000 accepted, no maximum
+  claimed. Verified empty/disguised-file rejection, PNG/GIF/JPEG acceptance and
+  MIME normalization, then restored the original synthetic PDF and fields.
+  Verified manual billing/clearing, non-billable refusal and ordinary↔unit
+  category history/resave behavior. All surviving fixtures restored to the
+  ledger's baseline; no new identity, message, payment, deletion, migration,
+  application change or merge. Export generation was not submitted because its
+  delivery path may send email; UI columns/routes are evidence, file bytes are
+  not. Self-review found an unsupported page-only bulk guarantee: corrected
+  FR-016 and acceptance coverage, recorded the live-form/documentation conflict
+  as EXP-E05 rather than asserting a scope from a one-row fixture. Checklist
+  re-evaluated 11/16→11/16, no marker changes: unresolved requirements, complete
+  acceptance coverage and readiness remain unchecked. Next independent work:
+  archived rate editing/change-away-return, project archive, bounded numeric
+  and recognizable malformed-file cases, invoice-line removal/currency effects,
+  and a multi-page scope test followed by cross-contract review. Export bytes,
+  non-owner enforcement and recipient artifacts retain distinct authority/access
+  gates. Do not mark the active independent-work goal complete at this checkpoint.

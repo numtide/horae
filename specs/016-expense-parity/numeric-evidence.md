@@ -102,9 +102,36 @@ Local evidence includes `expense-first-response-20261001.json`,
 `expense-numeric-results-20261001.md`, and
 `expense-before-reprice-20261001.md` / `expense-after-reprice-20261001.md`.
 
+## Current-locale input and larger values
+
+The report's delivered configuration explicitly identifies `.` as decimal symbol
+and `,` as thousands separator. No account preference was changed. Entering
+`1,25` in the existing unit expense and saving through the UI persisted quantity
+125 and USD 62.50 at rate 0.5. Its input still contained `1,25` immediately before
+submission: this experiment proves saved interpretation, not blur formatting.
+
+Separate ordinary-amount endpoint cases returned:
+
+| Input | HTTP | Exact lexical response amount |
+| --- | --- | --- |
+| 1,25 | 200 | 125.0 |
+| 1,234.56 | 200 | 1234.56 |
+| 1.234,56 | 422 | Not a number |
+| 1 234.56 | 422 | Not a number |
+| 1e3 | 200 | 1000.0 |
+| 9999999999999.99 | 200 | 9999999999999.99 |
+| 10000000000000 | 200 | 10000000000000.0 |
+| 100000000000000 | 200 | 100000000000000.0 |
+
+Raw numeric substrings were retained rather than trusting JavaScript arithmetic
+at large scales. The last value is an accepted sample, **not the maximum**.
+The fixture was restored to quantity 3 / USD 1.50 and its original category/note.
+Private results: `expense-independent-results-20261001.md`; UI snapshot:
+`expense-locale-comma-persisted-20261001.md`.
+
 ## Remaining limits
 
-Input locale, true upper bounds and exports still need evidence. Subsequent
+Other locale configurations, true upper bounds and exports still need evidence. Subsequent
 [currency/history](currency-evidence.md), [category archive](category-evidence.md)
 and [draft billing](billing-evidence.md) checks narrow their respective gates;
 they do not settle all currencies, permission combinations or issued artifacts.

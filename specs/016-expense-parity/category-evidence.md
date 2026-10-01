@@ -39,3 +39,22 @@ Private evidence: `expense-category-before-archive-20261001.md`,
 ledger. Non-owner authorization, archived-category rate editing, changing away
 and back, portable exports and delete enforcement at the server remain distinct
 untested cases.
+
+## Switching category mode with historical entries
+
+Starting with quantity 3 / USD 1.50 at rate 0.5, unchecking the category's unit
+price option and saving through its editor removed its rate display. Reloading
+the expense retained USD 1.50 but hid the unit suffix; its editor showed ordinary
+amount 1.50. Saving that expense without changing fields retained total 1.50 and
+returned units 1 with null category rate/name fields.
+
+Restoring the category's unit name and rate 0.5 did not reprice the expense:
+its row now displayed one unit but still USD 1.50. Opening and saving without
+changing fields then produced one unit / USD 0.50. Thus a category-mode change
+does not immediately recompute historical totals, but a subsequent expense
+save follows the current mode and can replace the quantity basis.
+
+The fixture was restored to quantity 3 / USD 1.50, billable, unbilled/unlocked
+with no invoice. The category remained active at 0.5. Private response:
+`expense-category-mode-ordinary-response-20261001.json`; numeric read-backs in
+`expense-independent-results-20261001.md`.

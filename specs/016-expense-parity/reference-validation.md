@@ -40,8 +40,9 @@ is changed. These findings supersede the inconclusive unsaved cases below only
 where a matching persisted case exists. Later [currency checks](currency-evidence.md)
 verify two-decimal response amounts for JPY/BHD, JPY zero-decimal list display,
 and historical relabeling without exchange conversion after project/client
-currency changes. Bounds, locale, exports, archive and remaining billing effects
-remain separate questions.
+currency changes. Current-locale inputs and category mode changes are now
+verified. True bounds, other locales, exports and remaining archive/billing
+effects remain separate questions.
 
 ## Initial unsaved browser evidence
 
@@ -115,9 +116,10 @@ boundary: 10,485,759-byte PDFs save, whereas 10,485,760 and 10,485,761 fail with
 422\. An invalid replacement preserves the prior downloadable receipt and the
 expense note. A `.txt` file is rejected without persisting its other field changes.
 Cancelling removal retains the receipt; saving removal makes the old internal
-receipt route return 404 while preserving the expense. Content validation,
-storage retention and access lifecycle remain open; the limit is no longer
-inferred from the old article.
+receipt route return 404 while preserving the expense. Later benign content
+tests accepted real PNG/GIF/JPEG, rejected empty/disguised-text files and
+normalized PNG MIME. Recognizable malformed files, storage retention and access
+lifecycle remain open; the size limit is no longer inferred from the old article.
 
 The [expense API](https://help.getharvest.com/api-v2/expenses-api/expenses/expenses/)
 documents one receipt and explicit deletion. Its broader locked-update wording
@@ -144,11 +146,12 @@ remain separate from the proven draft line/amount behavior.
 include archived history; explicitly selecting archived filter options requires
 including them in the filter picker. Billable expenses can be manually marked
 billed; non-billable expenses cannot. CSV/XLSX support column customization and
-PDF includes receipt images. Its no-selection bulk-action behavior targets all
-entries on the page, not an empty set. FR-016 follows that documented report
-behavior under the confirmed parity scope while preserving Horae's separately
-confirmed disabled-empty Actions behavior on Projects. This is a screen-specific
-contract, not a change to shared table defaults.
+PDF includes receipt images. The guide describes no-selection bulk actions as
+targeting entries on the page, not an empty set. However, the live form submits
+filters without IDs; [report evidence](report-evidence.md) records this unresolved
+page-versus-filter discrepancy. FR-016 no longer claims page scope is verified.
+Projects' separately confirmed disabled-empty Actions and shared table defaults
+remain unchanged.
 
 ## Permission evidence and owner
 
@@ -169,14 +172,14 @@ the account owner. Use only explicitly authorized disposable fixtures.
 
 | ID / requirement | Reference experiment | Evidence needed to close |
 | --- | --- | --- |
-| E-NUM / FR-002/004/011 | USD/JPY/BHD response precision and tiny-rate boundary verified; finish locale, true bounds and exports | Keep list formatting separate from exact numeric value; zero UI/server divergence remains explicit |
-| E-RATE / FR-004/011 | Active repricing, tiny-rate boundary, archive/resave/new-capture rejection and restore verified; finish mode changes and archived rate editing | 0.0004 rejected, 0.0005→0.001; archived existing entry remains editable, new capture422; deletion-in-use UI disabled |
+| E-NUM / FR-002/004/011 | USD/JPY/BHD precision, tiny rates and current-locale input verified; amount samples accepted through 100000000000000 | True bounds, other locale configurations and exports remain; preserve lexical exactness and zero UI/server distinction |
+| E-RATE / FR-004/011 | Active repricing, tiny rates, archive/resave/new-capture rejection, restore and unit↔ordinary mode changes verified | Finish archived rate editing/change-away-return and delete-in-use server enforcement; mode change preserves total until resave, ordinary resave sets units1 |
 | E-CUR / FR-011 | Project override/inheritance, historical relabeling and client EUR→GBP verified; original currencies restored | No observed conversion; separate invoice defaults/persistence verified; mixed-currency exports and already-invoiced currency changes remain open |
 | E-BILL / FR-006/010 | Draft source correction/deletion verified without invoice-line changes; finish attribution/report and sent-state effects | Owner-only draft evidence does not prove non-owner authorization, report retention or sent behavior; sent-state evidence requires separately safe access |
-| E-REC / FR-003/012 | PDF boundary/replacement, text-file rejection and removal/cancel complete; finish content/access/retention lifecycle | Strictly below 10,485,760 bytes; failed replacement preserves old receipt and fields; removal disables the internal receipt route |
+| E-REC / FR-003/012 | Size/removal and benign content matrix verified: valid PNG/GIF/JPEG/PDF, empty/disguised-text rejection and MIME normalization | Finish recognizable malformed files, access/revocation and retention; do not claim full parser/sanitizer or provider-backup erasure |
 | E-AUTH / FR-005/006/014 | Use an editable non-owner reference person with own, managed and all read/write combinations; repeat after scope revocation | Allow/deny matrix for expenses, receipts, categories, locks, billing and approval; account currently exposes only an immutable owner |
 | E-ARCH / FR-003/004/009 | Category archive/resave, receipt retention and restore verified; project/person archive, reporting and portable archive remain | Category archive does not prohibit existing-entry correction or owner receipt access; do not infer non-owner behavior |
-| E-REP / FR-009/010/015 | Report flag retained in prepared draft, but no attachment link observed; Preview explicitly requires paid plan/Stripe | Report content/regeneration/recipient access not certified; obtain suitable reference access, not a new paid plan or integration; report selection still separate |
+| E-REP / FR-009/010/015/016 | Single-row report reconciliation and manual billing verified; export controls inspected; empty-selection page scope contradicted by form shape | Multi-page scope needs discrimination. Generation not submitted because delivery can email; no export bytes certified. Invoice Preview separately requires paid plan/Stripe; no upgrade authorized |
 
 Until these gates are resolved, no final expense plan, complete operation matrix
 or implementation-ready status is claimed. Additional read-only documentation
