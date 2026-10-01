@@ -36,7 +36,7 @@ their implementation has merged. Recheck heads before modifying an owning branch
 | Workspace, `013-workspace-design` | [9a7ec5a](https://github.com/numtide/horae/tree/9a7ec5ac01a1670c009767a6b0d9354a365d61f5/specs/013-workspace-design), [#210](https://github.com/numtide/horae/pull/210) | Draft spec, research and requirements checklist; no plan/tasks | Invitations, backup and deletion contracts |
 | Personal Settings, `014-personal-settings-design` | [6aafd4e](https://github.com/numtide/horae/tree/6aafd4eb3d24f74ba659ae5c6766f610f8604fb4/specs/014-personal-settings-design), [#211](https://github.com/numtide/horae/pull/211) | Draft spec, research and requirements checklist; no plan/tasks | Profile ownership and notification delivery |
 | Scoped permissions/approvals, `015-scoped-permissions` | [f5cf02d](https://github.com/numtide/horae/tree/f5cf02db992d50638c9d89a3f7f661443cc7a5fa/specs/015-scoped-permissions), [#212](https://github.com/numtide/horae/pull/212) | Planning artifacts and constitution 1.1.0 proposal retained; expense read/write defaults now observed; full lifecycle policy unresolved | Complete reference matrix, review mappings and propagate permission contracts to dependent specs |
-| Expenses, `016-expense-parity` | [8452653](https://github.com/numtide/horae/tree/8452653422734c0b1086a4764a107cd44c9106b1/specs/016-expense-parity), [#214](https://github.com/numtide/horae/pull/214) | Added current-locale parsing, receipt content/MIME checks, manual billing/non-billable refusal and category mode history to prior currency/draft evidence; 11/16 checks; no plan/tasks | Bounds, remaining lifecycle/cross-contract tests and multi-page selection discrepancy. Export generation may email and was not submitted; separate non-owner and invoice-preview access gates remain |
+| Expenses, `016-expense-parity` | [7dc6064](https://github.com/numtide/horae/tree/7dc60642961a1f795a52b1df67b394a5d6ef9ec2/specs/016-expense-parity), [#214](https://github.com/numtide/horae/pull/214) | Archive field policy, stale category deletion, quantity/rate bounds, malformed files and draft line/currency lifecycle verified; cross-contract self-review added; 11/16 checks, no final plan/tasks | Multi-page scope, combined locks, mixed-currency reconciliation and budget inclusion remain independent work. Ordinary bound conflict, export email authority, non-owner and recipient access remain distinct gates |
 
 All six feature PRs were drafts at the latest inventory snapshot. Status is not a promise about
 later GitHub state. No merge is part of this specification delivery.
@@ -102,6 +102,8 @@ Only the former should be presented as a choice to the user.
 | D-014 | Evidence and contracts / 016 + billing + 015 | Isolated fixtures verify USD/JPY/BHD precision, historical current-currency relabeling without FX, tiny-rate rounding, category archive, receipt boundaries and draft source independence/release. Bounds/exports, issued reports/attribution and permissions remain open. Invoice Preview requires paid access or Stripe on the current account; no upgrade/integration authorized. Non-owner checks need suitable access; six defaults do not prove enforcement. |
 | D-015 | Reference discrepancy / 016 + reporting | Help describes empty-selection actions as page-scoped; the live form submits report filters without IDs. Single-row mark/clear is verified, pagination is not. Removed the unsupported page-only guarantee; discriminate with multi-page fixtures. Projects' disabled-empty Actions stay unchanged. |
 | D-016 | Delivery authority / 016 exports | CSV/XLSX/PDF controls and fixture-filtered generation URLs observed, but generation can return an emailed result. No generation submitted under the no-messages authorization. This is not proof of a paid-plan export gate or a content-validation pass. |
+| D-017 | Reference conflict / 016 money | Bounded tests establish quantity/rate limits, but ordinary-amount boundary messages disagree with accepted values and a large accepted response loses cents. Preserve constitutional exactness; agree an explicit bound/overflow contract rather than copying that loss or treating an error message as a verified bound. |
+| D-018 | Shared dependency / 016 + project editor/dashboard | Official Harvest guidance includes billable and non-billable expenses only in Total project fees budgets when its inclusion option is enabled. Added expense FR-019 and cross-contract finding; propagate the option and consumption/reconciliation cases without changing hours budgets or invoice eligibility. Live fixture verification remains independent work. |
 
 ## Proposed dependency order
 
@@ -120,6 +122,35 @@ This orders planning, not implementation authorization:
    review all cross-screen journeys and close analysis findings.
 
 ## Iteration log
+
+### 2026-10-01 — Archive locks and draft line lifecycle
+
+- Expense checkpoint `7dc6064` integrates category endpoint rate changes while
+  archived, change-away/return rejection and server refusal of stale Delete.
+  Project archive preserves expense/receipt and permits owner amount/billability
+  correction, unlike the invoice lock's disabled billability. Corrected FR-006;
+  default reports include archived expenses, Active projects only excludes them.
+- Quantity/rate boundaries now have bounded evidence. Ordinary amount error
+  limits disagree with acceptance and one accepted response loses cents; exact
+  money remains mandatory, not a request to copy that defect. Header-only PDF
+  acceptance versus signature-only PNG rejection distinguishes upload recognition
+  from structural validity/renderability.
+- A third fixture-only draft verifies invoice price correction leaves source
+  values unchanged; changing a draft-linked source's project USD→GBP relabels
+  the expense without changing the invoice's EUR amount. Saved removal of its
+  sole line releases source billing and keeps the receipt, leaving an empty
+  unsent draft. Project/expense baseline restored; exact fixtures tracked locally.
+- Cross-contract self-review found missing expense inclusion in project budgets;
+  FR-019 now records the documented Total project fees inclusion option. This
+  must feed editor/dashboard/report planning; it is not a passed live budget test.
+- Clarify prerequisites/coverage/checklist and targeted Nix formatting passed;
+  11/16 unchanged, zero new product questions. No app implementation, migration,
+  existing-business-record change, message, payment, integration or merge.
+- Next independent checks: multi-page report targeting, combined locks,
+  mixed-currency reconciliation and budget inclusion, then reconcile remaining
+  cross-contract findings. Export generation remains unsubmitted pending email
+  authority; non-owner enforcement and recipient artifacts need suitable access.
+  Goal `termina lo independiente` remains active, not complete at this checkpoint.
 
 ### 2026-10-01 — Independent input, receipt and report-action checks
 
