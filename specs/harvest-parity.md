@@ -36,7 +36,7 @@ their implementation has merged. Recheck heads before modifying an owning branch
 | Workspace, `013-workspace-design` | [9a7ec5a](https://github.com/numtide/horae/tree/9a7ec5ac01a1670c009767a6b0d9354a365d61f5/specs/013-workspace-design), [#210](https://github.com/numtide/horae/pull/210) | Draft spec, research and requirements checklist; no plan/tasks | Invitations, backup and deletion contracts |
 | Personal Settings, `014-personal-settings-design` | [6aafd4e](https://github.com/numtide/horae/tree/6aafd4eb3d24f74ba659ae5c6766f610f8604fb4/specs/014-personal-settings-design), [#211](https://github.com/numtide/horae/pull/211) | Draft spec, research and requirements checklist; no plan/tasks | Profile ownership and notification delivery |
 | Scoped permissions/approvals, `015-scoped-permissions` | [f5cf02d](https://github.com/numtide/horae/tree/f5cf02db992d50638c9d89a3f7f661443cc7a5fa/specs/015-scoped-permissions), [#212](https://github.com/numtide/horae/pull/212) | Planning artifacts and constitution 1.1.0 proposal retained; expense read/write defaults now observed; full lifecycle policy unresolved | Complete reference matrix, review mappings and propagate permission contracts to dependent specs |
-| Expenses, `016-expense-parity` | [fc352ae](https://github.com/numtide/horae/tree/fc352ae75e09eef3fedd77e49536c2981c3ed93e/specs/016-expense-parity), [#214](https://github.com/numtide/horae/pull/214) | Numeric/receipt rules, USD/JPY/BHD precision, unbilled currency history, draft independence/release and category archive verified; 11/16 checks; no plan/tasks | Bounds/locale/exports, sent-state/attribution/report effects, receipt content/access/retention and operation permissions; Preview requires paid access or Stripe in reference account |
+| Expenses, `016-expense-parity` | [8452653](https://github.com/numtide/horae/tree/8452653422734c0b1086a4764a107cd44c9106b1/specs/016-expense-parity), [#214](https://github.com/numtide/horae/pull/214) | Added current-locale parsing, receipt content/MIME checks, manual billing/non-billable refusal and category mode history to prior currency/draft evidence; 11/16 checks; no plan/tasks | Bounds, remaining lifecycle/cross-contract tests and multi-page selection discrepancy. Export generation may email and was not submitted; separate non-owner and invoice-preview access gates remain |
 
 All six feature PRs were drafts at the latest inventory snapshot. Status is not a promise about
 later GitHub state. No merge is part of this specification delivery.
@@ -60,7 +60,7 @@ their requirements. Missing mockups do not exclude approved web workflows.
 | Permissions and approvals | Pending 015; design 06/08/09 | All six profiles, custom grants, scoped approval/withdrawal and every entry point; extend matrix for newly approved domains |
 | Reports | 001 and `004-invoice-timesheet-exports`; design 07 | Time/project/team and financial reports, saved/shared/scheduled behavior, permissions and exact export reconciliation |
 | Invoice lifecycle and payments | 001/011 and existing invoice modules; dashboard consumers | Draft/send/view, numbering/settings, dates, reminders, recurrence, partial payments/write-offs and project attribution |
-| Expenses | Pending 016 / #214; persisted currency, category, receipt and draft-billing fixtures plus official sources | Finish bounds/locale/exports, receipt retention/access, lifecycle permissions and issued-artifact contracts; preserve UI/server evidence distinction and account gates |
+| Expenses | Pending 016 / #214; persisted currency/category modes, receipt content, current-locale input and draft/manual billing evidence | Finish remaining bounds/lifecycle tests and cross-contract review; discriminate multi-page selection; distinguish export-delivery authority from non-owner/recipient access |
 | Estimates | No dedicated estimate spec or route found | Creation, client delivery/response and downstream project/invoice relationships |
 | Retainers | Historical 001 project-kind mention; no dedicated ledger spec found | Distinguish advance-payment balance/draws from fixed or recurring project fees |
 | Personal settings | Pending 014; design 08 | Profile, timezone, rates, assignments, notifications and truthful security/integration destinations |
@@ -100,6 +100,8 @@ Only the former should be presented as a choice to the user.
 | D-012 | Governance and contract dependency / 015 + consumers | PR #212 proposes constitution 1.1.0, not merged. PRs #208/#209 now use the confirmed six-profile/custom target and distinguish legacy evidence from acceptance. Full operation-matrix integration, persistence and migration review remain required; the broad three-role contradiction is resolved in the pending specs. |
 | D-013 | Confirmed / 016 and other absent mockups | On 2026-10-01 the user authorized composing screens without a dedicated mockup from current Horae components and tokens, preserving Harvest behavior. A new handoff is not required. Plans must record composition/control states and protect shared defaults through cross-screen regression. This does not authorize implementation in the specification phase. |
 | D-014 | Evidence and contracts / 016 + billing + 015 | Isolated fixtures verify USD/JPY/BHD precision, historical current-currency relabeling without FX, tiny-rate rounding, category archive, receipt boundaries and draft source independence/release. Bounds/exports, issued reports/attribution and permissions remain open. Invoice Preview requires paid access or Stripe on the current account; no upgrade/integration authorized. Non-owner checks need suitable access; six defaults do not prove enforcement. |
+| D-015 | Reference discrepancy / 016 + reporting | Help describes empty-selection actions as page-scoped; the live form submits report filters without IDs. Single-row mark/clear is verified, pagination is not. Removed the unsupported page-only guarantee; discriminate with multi-page fixtures. Projects' disabled-empty Actions stay unchanged. |
+| D-016 | Delivery authority / 016 exports | CSV/XLSX/PDF controls and fixture-filtered generation URLs observed, but generation can return an emailed result. No generation submitted under the no-messages authorization. This is not proof of a paid-plan export gate or a content-validation pass. |
 
 ## Proposed dependency order
 
@@ -118,6 +120,28 @@ This orders planning, not implementation authorization:
    review all cross-screen journeys and close analysis findings.
 
 ## Iteration log
+
+### 2026-10-01 — Independent input, receipt and report-action checks
+
+- Expense checkpoint `8452653` records current-locale parsing (`1,25` saves as
+  125), larger accepted amounts without claiming a maximum, content-based
+  receipt rejection and valid PNG/GIF/JPEG acceptance with MIME normalization.
+- Confirmed manual expense mark/clear and refusal of non-billable marking using
+  only the fixture project. No invoice was created or sent. Category mode
+  changes retain historical amounts until expense resave; ordinary resave sets
+  quantity1, later unit resave applies the current rate. Restored all fixtures.
+- Self-review found the page-only guarantee was stronger than available live
+  evidence. FR-016 now carries the discrepancy rather than an invented rule.
+  Export controls/columns are inspected; bytes remain unverified because of the
+  possible email delivery side effect. No export job was launched.
+- Clarify workflow/prerequisites/checklist and targeted Nix formatting passed;
+  11/16 remains, no readiness claim. No new product questions, app changes,
+  migrations, messages, payments, deletions or merges. PRs/worktrees reused.
+- Goal `termina lo independiente` remains active. Next: archived rate editing,
+  change-away/return, project archive, bounded numeric/malformed-file checks,
+  invoice-line/currency effects and multi-page selection, then cross-contract
+  review. Keep export authority, non-owner enforcement and recipient artifacts
+  as distinct remaining gates; do not confuse this checkpoint with completion.
 
 ### 2026-10-01 — Independent currency, category and draft-release tests
 
