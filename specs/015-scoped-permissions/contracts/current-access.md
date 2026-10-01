@@ -17,7 +17,7 @@ Baseline: `a7727f1`, reviewed 2026-09-30; approval and legacy assignment repairs
 | `server_fns/clients.rs` | Any active org user reads catalog/address/tax data; Manager mutates and can set defaults | Separate catalog identity from contacts/financial values and client management |
 | `server_fns/users.rs` | Active directory for all; Member rates redacted; inactive directory/profile/activation/role writes Admin-only | Split people management from permission administration; preserve last-admin locking |
 | `get_me`, compatibility `/users/me` | Own full model including rates/costs | Explicit payload redaction; avoid returning identity-provider subject in directory DTOs |
-| `server_fns/approvals.rs` | Self submits whole week; Manager/Admin approve/reopen any selected ID | Repair missing tenant filter; later replace weekly storage and role-only authority |
+| `server_fns/approvals.rs` | Self submits whole week; repaired Manager/Admin approve/reopen mutations constrain selected IDs to the same organization | Preserve repaired tenant boundary; replace weekly storage and role-only authority through the verified flexible-approval contract |
 | `server_fns/reports::{report_time,report_detailed}` | Manager/Admin org reports; aggregate contains financial values, detailed contains notes | Scoped rows, counts/totals and field-level redaction before serialization |
 | `server_fns/invoices.rs`, `invoices/editing.rs` | Manager/Admin org-wide read/write/lifecycle; editing locks current actor | Distinguish invoice read/draft/manage and authorize all affected projects |
 | `server_fns/organization.rs` | Org name/week-start for active users; branding read/write for Manager | Workspace setting capabilities must not inherit old Manager allowance |
@@ -55,3 +55,8 @@ There is no verified drop-in replacement for the old Manager. Identity linking/i
 | Manager → People Admin | Add people/time management; remove finance/invoices and project/client/task management unless explicitly granted |
 
 These are review inputs, not approved mappings. Preserve current business data and expose grant/revocation differences before activation. Do not infer equivalence from a profile label.
+
+The [migration contract](migration.md), checked against `d3a4ff3` on 2026-10-01,
+specifies preview evidence, stale-confirmation and activation safeguards,
+historical assignment/job/approval gaps and required fixtures. It does not choose
+the mappings or complete the runtime cutover gate.

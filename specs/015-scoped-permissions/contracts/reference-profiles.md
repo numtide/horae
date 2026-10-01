@@ -73,3 +73,8 @@ These are documented API semantics, not observed UI persistence. Lookup normaliz
 ## Remaining acceptance gaps
 
 The full Horae operation matrix still needs lifecycle mapping, managed-rate conflict resolution, custom save/delete persistence checks, assignment-authority checks, exact approval/withdrawal enforcement and migration review. UI configuration/source evidence alone does not pass those tests. Keep the full-feature gate open while using these findings to replace earlier guesses.
+
+The 2026-10-01 [rate-scope investigation](rate-scope-evidence.md) confirms that
+public permission/API documentation does not settle the people-versus-project
+conflict. It defines a discriminating reference fixture and records which legacy
+API statements cannot be used as new-model enforcement proof.

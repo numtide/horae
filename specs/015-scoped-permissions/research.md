@@ -75,6 +75,32 @@ The constitution also names three organization roles. Record the approved extens
 
 ## Workflow
 
+### Migration research — 2026-10-01
+
+- Decision: compare effective operation/scope/field access, not profile labels,
+  before activating a reviewed mapping. Rationale: the current Manager has
+  financial/project writes but the timesheet still operates on the session
+  person's entries; none of the new profile labels proves equivalent access.
+  Rejected: automatic Manager-to-Project-Manager or Executive-Manager mapping.
+- Decision: retain explicit unknowns for historical job requesters and approval
+  coverage. Rationale: current storage does not contain those new facts.
+  Rejected: attributing jobs to the current owner or inventing project approval
+  history during migration.
+- The new [migration contract](contracts/migration.md) supplies the previously
+  missing T007 artifact, preview/activation acceptance and concrete fixture
+  categories. Actual mappings, compatibility strategy and historical job/approval
+  transition remain review gates; T007 and T019 are not marked complete.
+- Reran the checked-in plan setup helper; it preserved the existing plan and
+  resolved feature 015. Continued Phase 0 research only. Full Phase 1 design,
+  post-design constitution approval and full-feature analysis remain incomplete.
+
+Additional Phase 0 investigation of managed rates could not resolve the conflict
+from current official documentation. [Rate-scope evidence](contracts/rate-scope-evidence.md)
+records the sources, limits and independent person/project probes required to
+settle it. No rate scope or prerequisite has been invented to close the gate.
+
+### Previous workflow record
+
 - Followed the checked-in `speckit-specify` skill, local template and constitution. No extension hooks or template preset overrides were found.
 - Feature 015 follows the independent 012/013/014 design drafts. The branch/worktree starts from fetched `origin/master`, not an unmerged application branch.
 - The two scope questions are answered by the user's explicit parity instruction. The clarification is recorded in the spec and its scenarios, requirements and success criteria.

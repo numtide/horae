@@ -63,6 +63,11 @@ crates/horae/tests/integration.rs
 
 Steps 2–6 need detailed contracts before coding. Step 1 neither chooses role grants nor changes approval behavior. It does not satisfy any full user story by itself.
 
+The [migration contract](contracts/migration.md) now defines the reviewable access
+diff, stale-preview/atomic-cutover acceptance and historical provenance gaps for
+step 2. Mappings and compatibility policy remain unapproved; the artifact's
+existence does not complete T007 or authorize policy activation.
+
 ### Independent tenant-isolation repair
 
 The access inventory found missing organization filters in the existing approval/reopen mutations. Correct these without introducing new roles or changing same-organization weekly semantics. Extract the existing transactions into pool-injected helpers so database tests exercise the production SQL; retain plugin dispatch after commit in the server wrappers. Test Manager and Admin callers against foreign pending/approved weeks, mixed-ID bulk requests, same-org success and invoice-lock preservation. Regenerate the SQLx cache and run approval regression tests. This closes an existing invariant violation; it does not bypass the matrix/governance gates for the new policy.
