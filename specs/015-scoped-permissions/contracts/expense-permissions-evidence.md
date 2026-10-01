@@ -58,3 +58,26 @@ findings narrow FR-002/020's gaps but do not close the complete operation matrix
 supersede last-administrator protection or expose unimplemented product grants.
 An editable non-owner reference account is still needed for enforcement checks;
 no seat purchase or invitation is authorized by this document.
+
+## Owner-only action and lock evidence from feature 016
+
+The authorized disposable experiments in [PR #214](https://github.com/numtide/horae/pull/214)
+now distinguish execution scope from actor authority. With 1,000 rows loaded,
+an expense moved into the report filter afterwards was also marked by the
+no-selection action: all 1,001 current matching entries were marked, while an
+out-of-date-filter control stayed unchanged. Explicit selection subsequently
+cleared exactly two IDs and left 999 billed. Authorization must be rechecked for
+the actual execution target set; a previously loaded report is not authority to
+mutate later matching records outside the actor's current scope.
+
+The cleared expense had no invoice association and `is_billed=false`, but still
+reported a project-period lock while the other 999 expenses remained billed.
+Clearing the remaining filtered set left all 1,001 unbilled and unlocked. This
+establishes the named case, not the complete interval derivation algorithm.
+The separate archive experiment proves clearing manual billing on an archived
+project retains its archive lock until restoration.
+
+Keep billed status, invoice association, project-period protection, archive and
+approval/company locks distinct. These are owner reference results, not proof
+that any expense-write grant permits bulk billing, interval unlocking or
+privileged correction. The non-owner lifecycle matrix above remains open.
