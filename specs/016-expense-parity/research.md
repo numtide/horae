@@ -47,8 +47,10 @@ The fetched currency page contains an internal conflict: its project-specific
 currency section permits an override, while its expense FAQ describes client-only
 currency. Subsequent [client inspection](reference-validation.md) resolves the
 current form/row/weekly-total priority in favor of project overrides, corroborated
-by the persisted EUR-client/USD-project fixture. Historical currency changes
-remain open. Neither incomplete search excerpts
+by the persisted EUR-client/USD-project fixture. Subsequent historical tests
+confirm current-currency relabeling without conversion, project override removal
+and client inheritance. JPY/BHD accepted precision differs from assumptions based
+on display; see currency-evidence. Neither incomplete search excerpts
 nor client formatting alone establish those rules.
 
 ### Browser observation
@@ -92,9 +94,9 @@ behavior. Recorded in the spec's clarification, FR-013 and assumptions.
 | Category | Status | Next action |
 | --- | --- | --- |
 | Functional scope | Clear | Native expense workflow included by confirmed web scope |
-| Domain and data | Partial | Resolve FR-011 precision, currency and invoice-correction effects from evidence |
+| Domain and data | Partial | USD/JPY/BHD response precision and historical relabeling verified; finish bounds, exports, attribution and exact-representation constitution check |
 | Interaction and UX | Partial | Form opened; missing-handoff policy and report selection specified; numeric interaction and detailed composition remain |
-| Non-functional quality | Partial | Select explicit upload/scale/failure limits during planning; final receipt privacy contract required |
+| Non-functional quality | Partial | Upload byte boundary/failure preservation verified; scale and final receipt privacy/retention contract required |
 | Dependencies | Partial | Complete 015 matrix and assign invoice/report owners |
 | Edge cases | Partial | Turn remaining numeric, attachment and correction cases into exact expectations |
 | Constraints | Clear | Self-hosted architecture, exactness, no new integration, no application/data changes in this phase |
@@ -110,21 +112,27 @@ behavior. Recorded in the spec's clarification, FR-013 and assumptions.
   composition/control-state mapping and shared-screen regression checks.
 - **EXP-E01 — Numeric evidence**: USD amounts, fractional quantities/rates,
   rounding order, signs and active-category repricing now have persisted
-  evidence. UI zero rejection differs from endpoint acceptance. Finish locale,
-  tiny positive rates, true upper bounds, other currency exponents and historical
-  currency transitions using only the authorized disposable fixtures.
+  evidence, including JPY/BHD responses and historical currency changes. UI zero
+  rejection differs from endpoint acceptance. Tiny-rate rounding before positive
+  validation is verified. Finish locale, true upper bounds, other currencies and
+  export/mixed-currency reconciliation using only authorized disposable fixtures.
 - **EXP-E02 — Billing contract**: Define privileged correction/deletion effects
   on source links, recipient reports and already issued totals, with the billing
   owner. Draft line/amount independence is now verified after both source
   correction and deletion. Keep manual billed status separate from a real
   invoice relationship, and do not generalize owner-only results to other grants.
+  Deleting a second fixture draft released billing/lock state while retaining the
+  source and receipt. The current account's Preview explicitly requires paid
+  access or Stripe; no bypass, upgrade or integration is authorized. Report
+  generation was requested, but its content/regeneration could not be certified.
 - **EXP-E03 — Permission dependency**: Extend 015 to expense operations and
   receipt downloads. Six read/write grants and profile defaults are now observed
   and recorded with the owner; lifecycle mapping and non-owner enforcement remain
   open. Do not translate legacy Manager wording into an unverified grant.
-- **EXP-E04 — Receipt contract**: Establish size, replacement, error, download
-  revocation and data-archive behavior. Never leave attachments outside the
-  organization/expense access checks.
+- **EXP-E04 — Receipt contract**: Size, replacement failure, removal and owner
+  access after category archive are verified. Finish content validation, download
+  revocation, storage/backup retention and recipient report lifecycle. Never leave
+  attachments outside organization/expense access checks.
 
 These gates block final planning/tasks/analysis, not independent research.
 The concrete distinguishing checks and evidence required are recorded in
@@ -141,6 +149,8 @@ This is a draft self-review, not independent review or `speckit-analyze`.
 | Financial correction/deletion could diverge from issued invoice totals | High | Open EXP-E02; no invented cascade or silent invoice rewrite |
 | New expense grants could bypass approved scoped permissions | High | Open EXP-E03; matrix completion is a prerequisite |
 | Incomplete numeric bounds/currency rules could create inconsistent totals | High | FR-017 resolves tested arithmetic; remaining EXP-E01 cases and exact-rate constitutional reconciliation still gate planning |
+| Display precision could discard JPY fractions or invent BHD precision | High | Currency evidence distinguishes two-decimal accepted values from list formatting; exact representation must pass the plan's constitution check |
+| Treating current expense currency as a frozen historical snapshot would diverge from reference | High | FR-011 now requires current project/client relabeling without FX; invoice currency is independently persisted |
 | A receipt URL could leak confidential material after revocation | High | FR-003/012 require current authorization; EXP-E04 contract still incomplete |
 | A blanket internal receipt rule could either expose source records to clients or omit supported invoice attachments | High | FR-015 separates recipient reports; sent/source-change retention remains open with EXP-E02/04 |
 | Client formatting could be mistaken for accepted precision or negative support | High | Addressed for recorded cases by separate UI/endpoint evidence, read-back and explicit zero divergence; do not extrapolate to other currencies or inputs |
@@ -209,3 +219,21 @@ This is a draft self-review, not independent review or `speckit-analyze`.
   observed, but cross-currency persistence is not. Checklist remains 11/16; no
   new product questions or hook executions. Next: currency/history and remaining
   receipt/report checks; E-AUTH still needs suitable non-owner access.
+- Independent-test iteration: reread clarify, repository instructions and
+  constitution; resolved prerequisites once and checked absent hooks. No product
+  questions asked/answered. Created one new disposable expense (previous source
+  was deleted), verified JPY/BHD response precision, historical currency labels,
+  project/client inheritance and restored the original EUR/USD fixture settings.
+  Saved a second draft with EUR default from a USD source, then deleted that
+  exact draft through confirmation; source and receipt survived with billing
+  locks released. Preview reported an explicit paid-plan/Stripe requirement;
+  no report content/generation success is claimed and no account upgrade or
+  integration was attempted. Verified tiny positive rate boundary, category
+  archive, existing-entry resave and receipt access; new capture with the archived
+  category returned 422. Recorded evidence and narrowed FR-011/017; all fixtures
+  remain identified in scratch. No implementation, migration, sent invoice,
+  payment, business-record change or merge. Checklist revalidated 11/16→11/16;
+  no passing-state changes. Remaining requirements, complete acceptance coverage
+  and readiness stay unchecked because unresolved contracts remain. Next:
+  locale/bounds, exports and receipt content cases; non-owner/recipient evidence
+  requires suitable reference access, not another generic fixture authorization.

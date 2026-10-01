@@ -13,8 +13,9 @@ entered as `1.235` formatted to `1.24` on blur, saved with HTTP 201, and display
 USD 1.24. Editing to `-1.235` formatted and persisted as USD -1.24 (HTTP 200).
 The expense response's embedded client currency was USD although the actual
 client retained EUR: that response field is not proof of the client's stored
-currency. Project precedence is verified for this persisted case; historical
-currency changes and other currency exponents remain open.
+currency. Project precedence is verified for this persisted case; subsequent
+[currency evidence](currency-evidence.md) adds historical relabeling and JPY/BHD
+precision without implying coverage of every supported currency.
 
 Additional cases used the observed web form PUT endpoint from the same browser,
 with its session token kept inside the page. These are **server acceptance
@@ -83,7 +84,9 @@ category form endpoint established:
 Three-decimal rates must not be truncated to monetary cents. The technical plan
 must explicitly reconcile exact fractional rates with the constitution's
 integer-minor-unit amounts; floating-point is not acceptable. Tiny positive
-rates that round to zero and maximum bounds remain untested.
+rates that round to zero were tested subsequently: `0.0004` is rejected and
+`0.0005` persists as `0.001`, documented in [category evidence](category-evidence.md).
+Maximum bounds remain untested.
 
 ## Historical rate behavior
 
@@ -101,7 +104,9 @@ Local evidence includes `expense-first-response-20261001.json`,
 
 ## Remaining limits
 
-Input locale, true upper bounds, other currency exponents, currency changes,
-archived categories, exports and invoice-source effects still need evidence.
+Input locale, true upper bounds and exports still need evidence. Subsequent
+[currency/history](currency-evidence.md), [category archive](category-evidence.md)
+and [draft billing](billing-evidence.md) checks narrow their respective gates;
+they do not settle all currencies, permission combinations or issued artifacts.
 The inconclusive earlier unsaved experiments are superseded only for the cases
 above. Endpoint acceptance is not UI acceptance or proof of non-owner authority.

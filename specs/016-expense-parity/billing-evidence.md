@@ -64,4 +64,48 @@ its generation/content was not verified; no recipient artifact test has passed.
 
 Still open: sent-invoice behavior, report regeneration/retention, non-owner
 correction/deletion authorization, attribution after source deletion, and source
-lock release when removing an invoice line or deleting the draft invoice.
+lock release when removing an invoice line. The subsequent draft-deletion check
+below resolves that separate case without independent locks.
+
+## Independent follow-up: currency and draft deletion
+
+A second disposable draft was created from the new USD 1.24 expense, this time
+retaining the client's EUR default. The saved draft showed EUR 1.24 with source
+quantity 1 and price 1.24, without conversion. This supersedes the earlier
+UI-only cross-currency limitation for this exact case; it does not establish
+exchange-rate behavior or mixed-project currency reconciliation.
+
+The second draft was deleted through its own More actions menu, exact invoice
+number confirmation and required DELETE text. The source expense remained with
+its receipt. Its date/project/category/billability controls became editable,
+and a subsequent successful fixture update returned `is_billed=false`,
+`is_locked=false`, `invoice=null`. No independent approval/admin lock was present;
+the test does not prove that deleting an invoice removes such locks.
+
+Private snapshots: `expense-report-invoice-saved-20261001.md`,
+`expense-report-draft-delete-dialog-20261001.md`,
+`expense-report-draft-deleted-20261001.md`, and
+`expense-after-draft-deletion-20261001.md`. Only the disposable second draft was
+permanently deleted; pre-existing business invoices were preserved.
+
+## Report validation limitation in the current account
+
+The new source had a synthetic PDF receipt. Invoice preparation selected the
+expense report and the review form retained its true include-report flag and
+the exact source expense identity. The saved draft did not expose an attachment
+link or attachment controls in the observed page. This does not establish that
+no report was generated or that the feature was removed.
+
+Trying the draft's Preview action opened an explicit restriction: the current
+free/trial account needs a paid plan or a connected Stripe account to preview.
+Neither action is authorized or necessary for the independent tests. No bypass,
+upgrade, new integration, sending or payment was attempted. The documented
+[draft report generation/regeneration](https://support.getharvest.com/hc/en-us/articles/9864825272589-Attaching-files-and-reports-to-invoices)
+contract remains documented rather than browser-certified. The missing attachment
+controls and the explicit preview restriction are separate observations; their
+causal relationship is not proven.
+
+Evidence: `expense-report-invoice-review-20261001.md`,
+`expense-report-invoice-actions-20261001.md` and
+`expense-report-preview-opened-20261001.md`. Report content, regeneration and
+recipient access remain open until suitable reference access is available.

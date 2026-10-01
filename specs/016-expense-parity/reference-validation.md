@@ -20,6 +20,13 @@ successfully save records; visibility is no longer a blocker. Reuse the ledger's
 exact surviving fixtures after connection interruptions; the deleted source
 expense cannot be reused. Cleanup of the draft/client/project/category is pending.
 
+Independent follow-up reused that client/project and created a new expense.
+Currency changes and inheritance were exercised then restored to client EUR /
+project USD. A second EUR draft retained the USD expense's numeric 1.24; deleting
+that disposable draft released the source billing lock and preserved its receipt.
+The first draft remains. Report Preview hit an explicit paid-plan/Stripe gate;
+no upgrade or integration was attempted. See the private ledger for current IDs.
+
 ## Persisted numeric follow-up
 
 [Numeric evidence](numeric-evidence.md) records successful UI saves and separate
@@ -30,8 +37,11 @@ Negative amounts/quantities persist; malformed inputs fail. Zero is accepted by
 the endpoint but cleared and blocked by the UI's required-field validation.
 Changing a rate leaves old expenses unchanged until resaved, even when no field
 is changed. These findings supersede the inconclusive unsaved cases below only
-where a matching persisted case exists. Bounds, currency transitions/exponents,
-locale, archive and billing behavior remain separate open questions.
+where a matching persisted case exists. Later [currency checks](currency-evidence.md)
+verify two-decimal response amounts for JPY/BHD, JPY zero-decimal list display,
+and historical relabeling without exchange conversion after project/client
+currency changes. Bounds, locale, exports, archive and remaining billing effects
+remain separate questions.
 
 ## Initial unsaved browser evidence
 
@@ -159,14 +169,14 @@ the account owner. Use only explicitly authorized disposable fixtures.
 
 | ID / requirement | Reference experiment | Evidence needed to close |
 | --- | --- | --- |
-| E-NUM / FR-002/004/011 | Ordinary and unit persisted cases complete in numeric evidence; finish locale, true bounds, currency exponents and exports | Precision/sign/rounding stage verified for USD; zero UI/server divergence must remain explicit |
-| E-RATE / FR-004/011 | Active-category change and unchanged-field resave complete; finish archived category, tiny positive rates and mode changes | Historical 0.25 remains until resave reprices to 1.00; three-decimal rate verified, zero/negative rates rejected |
-| E-CUR / FR-011 | EUR-client/USD-project persistence complete; change only disposable client/project currencies after saving | Historical totals/labels, override inheritance and unchanged versus converted numbers remain open |
+| E-NUM / FR-002/004/011 | USD/JPY/BHD response precision and tiny-rate boundary verified; finish locale, true bounds and exports | Keep list formatting separate from exact numeric value; zero UI/server divergence remains explicit |
+| E-RATE / FR-004/011 | Active repricing, tiny-rate boundary, archive/resave/new-capture rejection and restore verified; finish mode changes and archived rate editing | 0.0004 rejected, 0.0005→0.001; archived existing entry remains editable, new capture422; deletion-in-use UI disabled |
+| E-CUR / FR-011 | Project override/inheritance, historical relabeling and client EUR→GBP verified; original currencies restored | No observed conversion; separate invoice defaults/persistence verified; mixed-currency exports and already-invoiced currency changes remain open |
 | E-BILL / FR-006/010 | Draft source correction/deletion verified without invoice-line changes; finish attribution/report and sent-state effects | Owner-only draft evidence does not prove non-owner authorization, report retention or sent behavior; sent-state evidence requires separately safe access |
 | E-REC / FR-003/012 | PDF boundary/replacement, text-file rejection and removal/cancel complete; finish content/access/retention lifecycle | Strictly below 10,485,760 bytes; failed replacement preserves old receipt and fields; removal disables the internal receipt route |
 | E-AUTH / FR-005/006/014 | Use an editable non-owner reference person with own, managed and all read/write combinations; repeat after scope revocation | Allow/deny matrix for expenses, receipts, categories, locks, billing and approval; account currently exposes only an immutable owner |
-| E-ARCH / FR-003/004/009 | Archive fixture project/person/category and inspect historical expense, receipt, reporting and portable archive | Retained history and access rules; category archive must not itself prohibit editing existing expenses |
-| E-REP / FR-009/010/015 | Compare explicit selection with no selection; save a draft expense report, remove a source line and save again | Bulk-action target/confirmation, regenerated report scope and recipient versus internal receipt access |
+| E-ARCH / FR-003/004/009 | Category archive/resave, receipt retention and restore verified; project/person archive, reporting and portable archive remain | Category archive does not prohibit existing-entry correction or owner receipt access; do not infer non-owner behavior |
+| E-REP / FR-009/010/015 | Report flag retained in prepared draft, but no attachment link observed; Preview explicitly requires paid plan/Stripe | Report content/regeneration/recipient access not certified; obtain suitable reference access, not a new paid plan or integration; report selection still separate |
 
 Until these gates are resolved, no final expense plan, complete operation matrix
 or implementation-ready status is claimed. Additional read-only documentation
