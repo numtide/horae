@@ -1,6 +1,6 @@
 # Harvest parity: specification delivery
 
-Status: inventory and clarification in progress; not implementation-ready.
+Status: web scope confirmed; feature specification and clarification in progress; not implementation-ready.
 Started: 2026-10-01. Baseline: `9301112c6a02ae3c92716273534f38889db241d1`.
 
 ## Objective
@@ -34,9 +34,15 @@ document, not a replacement for `specs/<feature>/spec.md`.
 - The six profiles, custom permissions and scoped approvals in feature 015 are
   already requested. Do not ask again whether three profiles or whole-person
   approval would be sufficient.
-- The boundary between the web application, integrations and separate products
-  is awaiting confirmation (D-001). Inventory candidates without claiming they
-  are approved, implemented or excluded.
+- D-001 is confirmed: cover the complete Harvest web application, including
+  expenses, estimates, retainers and invoicing. Native applications, Forecast and
+  new integrations are excluded from this delivery, not merely awaiting selection.
+  Preserve existing Harvest import, OIDC, compatibility API and plugin behavior;
+  the exclusion does not authorize removing working functionality.
+- Third-party payment gateways and other new connectors are excluded. Invoice
+  payment recording, outstanding balances and other native billing workflows
+  remain in scope. Existing operational infrastructure is not a request to add
+  new integration products.
 - Historical v1 exclusions are evidence of the original scope, not blanket
   exemptions from this delivery. Supersede them explicitly where appropriate.
 
@@ -89,11 +95,11 @@ the same contract and include integration acceptance cases:
 - Effective capabilities, project/person scope, revocation and imported-role
   mapping: feature 015; amend the constitution explicitly before role cutover.
 - Time submission, partial approval, empty-date coverage, withdrawal and
-  independent invoice locks: feature 015, shared with time, expenses if approved,
+  independent invoice locks: feature 015, shared with time and expenses,
   invoice eligibility and Workspace preferences.
 - Currency, rate inheritance, tracked versus invoice value, invoice contribution,
   unknown external billing and payments: existing billing/editor/import specs
-  plus the billing-parity owner selected after D-001. Do not conflate a project
+  plus the billing-parity owner to be assigned during decomposition. Do not conflate a project
   fee schedule with a client's retainer ledger.
 - Work dates, reporting intervals, workspace/personal timezones and week starts:
   time/reporting owners with features 013/014; no implicit historical rewrites.
@@ -108,7 +114,8 @@ the same contract and include integration acceptance cases:
 
 ## Completion gates
 
-- [ ] D-001 is answered; each discovered surface is in scope, an explicitly
+- [x] D-001 is answered: complete web application; no native apps, Forecast or new integrations in this phase.
+- [ ] Each discovered surface maps to the confirmed scope, an explicitly
   approved exclusion, or a separately agreed follow-up. No silent omissions.
 - [ ] Every in-scope behavior has a feature owner and dated evidence; reference
   uncertainty and design conflicts that affect behavior are resolved.

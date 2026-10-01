@@ -1,6 +1,6 @@
 # Harvest parity register
 
-Checked: 2026-10-01. Stage: initial inventory and scope clarification.
+Checked: 2026-10-01. Stage: web scope confirmed; feature decomposition and clarification.
 
 This register supports [the specification delivery](delivery-goal.md). It does
 not certify functional parity or replace feature artifacts. An existing route,
@@ -40,12 +40,13 @@ their implementation has merged. Recheck heads before modifying an owning branch
 All five PRs were drafts at the inventory snapshot. Status is not a promise about
 later GitHub state. No merge is part of this specification delivery.
 
-## Candidate coverage map
+## Coverage map
 
-The following is an initial discovery map, not an exhaustive or approved backlog.
-Split future features by independently testable workflow after D-001; do not
-allocate all feature numbers up front. Reuse existing specifications and record
-supersession rather than duplicating their requirements.
+The web application scope is approved by D-001 below. The following is an initial
+discovery map, not an exhaustive implementation-ready backlog. Split features by
+independently testable workflow; do not allocate all feature numbers up front.
+Reuse existing specifications and record supersession rather than duplicating
+their requirements. Missing mockups do not exclude approved web workflows.
 
 | Area | Existing owner / evidence | Required investigation before a ready backlog |
 | --- | --- | --- |
@@ -62,15 +63,17 @@ supersession rather than duplicating their requirements.
 | Retainers | Historical 001 project-kind mention; no dedicated ledger spec found | Distinguish advance-payment balance/draws from fixed or recurring project fees |
 | Personal settings | Pending 014; design 08 | Profile, timezone, rates, assignments, notifications and truthful security/integration destinations |
 | Workspace administration | Pending 013; design 09 | People/invitations, preferences, export/backup guarantees, audit and deletion semantics |
-| Import and migration | `004-harvest-importer`, 005–008; design 10 | Preserve delivered job/CLI/account-switch behavior; inventory additional entity import and unknown billing history |
-| Integrations and API | 001/002, compatibility API and plugin infrastructure | Name required connectors and read/write contracts; don't equate plugins with supported Harvest integrations |
-| Separate/plan-dependent capabilities | Harvest indexes; no scope decision yet | Explicit disposition for native apps/extensions, Forecast, AI, e-invoicing, payment gateways and commercial account features |
+| Import and migration | `004-harvest-importer`, 005–008; design 10 | Preserve delivered job/CLI/account-switch behavior and resolve unknown billing semantics; new connector/entity-import expansion is not authorized by web parity |
+| Existing integrations and API | 001/002, compatibility API and plugin infrastructure | Regression/authorization coverage only; do not remove working features or add new connectors/write endpoints |
+| Native applications, Forecast and new integrations | Excluded by D-001 | No implementation/specification work for these products in this phase, including new payment gateways, calendar/accounting connectors and third-party extensions |
+| Other plan-dependent web capabilities | Harvest indexes; investigate within confirmed web scope | Classify AI, e-invoicing and commercial account features against the self-hosted architecture and no-new-integration boundary; do not silently invent external services |
 
 Harvest's navigation documents time, expenses, people, clients, projects, tasks,
 invoices, estimates, approvals, reporting and account/profile configuration.
 Its billing index separately exposes retainers, recurrence and online payments.
-Those are candidates even without a dedicated Horae mockup; membership in an
-index does not settle integration scope or justify a new external service.
+The native web workflows are required even without a dedicated Horae mockup;
+online-payment connectors are excluded by the user's no-integration decision.
+Membership in an index does not justify a new external service.
 [Navigation](https://support.getharvest.com/hc/en-us/articles/44165229587469-Navigating-Harvest),
 [billing index](https://support.getharvest.com/hc/en-us/categories/360004023632-Invoices-estimates).
 
@@ -81,7 +84,7 @@ Only the former should be presented as a choice to the user.
 
 | ID | Kind / owner | Current state and next action |
 | --- | --- | --- |
-| D-001 | Product scope / delivery | Asked, unanswered: complete web application with integrations selected separately, only existing/design surfaces, or the broader ecosystem including native apps/Forecast? Recommendation is the complete web application, preserving self-hosting, with named integrations agreed separately. No option is assumed approved. |
+| D-001 | Confirmed / delivery | On 2026-10-01 the user confirmed the complete Harvest web application and explicitly excluded native apps, Forecast and integrations for now. Expenses, estimates, retainers and invoicing are included. No new connectors are planned; preserve existing working integrations without expanding them. |
 | D-002 | Confirmed / 015 | Six built-in profiles, custom profiles, per-person changes and scoped approvals were requested on 2026-09-30. Complete exact contracts; do not reopen scope to simplify them. |
 | D-003 | Evidence and source conflict / 012 | Contact cardinality and archive policy remain open. Existing Harvest research documents separate contacts and archive only after all projects are archived; the handoff cascades. Reconcile under the confirmed parity mandate and explicitly resolve the visual/behavioral conflict. |
 | D-004 | Product policy / 013 | FR-006: named-recipient invitation versus reusable workspace join link; admission, expiry and role rules depend on it. |
@@ -98,16 +101,16 @@ Only the former should be presented as a choice to the user.
 
 This orders planning, not implementation authorization:
 
-1. Confirm D-001 and complete the surface inventory, including commercial and
-   integration boundaries. Create explicit accepted exclusions only with the
-   user's decision.
+1. Complete the surface inventory against confirmed D-001: native web workflows
+   in scope; native applications, Forecast and new integrations excluded. Review
+   ambiguous commercial/web capabilities without reopening the answered boundary.
 1. Complete shared permission/approval evidence and migration governance in 015;
    define billing/date/identity contract ownership alongside it.
 1. Reconcile and finish the existing dashboard, Clients, Workspace and Settings
    packages. Their independent research can proceed while specific decisions wait.
 1. Specify remaining approved domains using shared contracts. Invoice/payment,
    expense, estimate and retainer boundaries must avoid competing money models.
-1. Complete report/integration/import coverage against those domain contracts;
+1. Complete reports and existing integration/import regression coverage against those domain contracts;
    review all cross-screen journeys and close analysis findings.
 
 ## Iteration log
@@ -148,8 +151,8 @@ This orders planning, not implementation authorization:
   or runtime policy change took place. T006/T007 remain open.
 - Next: obtain suitable new-model non-owner reference access to resolve the
   recorded rate/profile/approval evidence gaps, or continue independent research
-  in the already requested screens. D-001 is still unanswered; no new product
-  area has been treated as approved.
+  in the already requested screens. At this checkpoint D-001 was unanswered;
+  no new product area had been treated as approved.
 
 ### 2026-10-01 — Authorization governance reconciliation
 
@@ -167,8 +170,8 @@ This orders planning, not implementation authorization:
   the amendment alone does not approve mappings, deployment or full-feature
   acceptance. Next independent work is propagating the confirmed capability
   boundary to pending consumer specs without inventing the unresolved matrix.
-- D-001 remains unanswered; new product-area specifications are not authorized
-  by this governance update.
+- At this checkpoint D-001 was unanswered; the governance update did not
+  authorize new product-area specifications.
 
 ### 2026-10-01 — Consumer clarification reconciliation
 
@@ -185,7 +188,7 @@ This orders planning, not implementation authorization:
 - Nix formatting and Git whitespace checks passed; only documentation changed.
   Full clarification/planning/analysis is still incomplete for both features.
 
-### Clarification checkpoint
+### Historical clarification checkpoint — before D-001 answer
 
 The independent propagation of confirmed decisions is complete for the five
 pending surface/permission packages. The remaining readiness gates cannot be
@@ -202,3 +205,16 @@ Resume by recording the user's D-001 answer, then handle the next consequential
 feature clarification one at a time. Do not create speculative implementation
 plans, claim full analysis, purchase reference access or silently reduce parity
 to bypass these gates. All published work remains reviewable; no PR was merged.
+
+## Clarifications
+
+### Session 2026-10-01
+
+- Q: Complete Harvest web application, with native applications, Forecast and integrations treated separately? → A: The user confirmed the complete web scope and explicitly does not want native applications, Forecast or integrations for now. Integrations are excluded from this phase, not pending selection.
+
+The completed answer supersedes the earlier D-001 waiting checkpoints. Existing
+product-specific decisions remain open; this answer does not choose contact
+lifecycle, invitation admission, backup/deletion policy or unverified permissions.
+The delivery checklist records scope confirmation only, not feature readiness.
+Next: decompose the newly confirmed native web domains into feature specifications
+and continue feature clarifications without reopening D-001.
