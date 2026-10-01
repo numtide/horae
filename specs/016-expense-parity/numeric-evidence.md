@@ -86,15 +86,17 @@ must explicitly reconcile exact fractional rates with the constitution's
 integer-minor-unit amounts; floating-point is not acceptable. Tiny positive
 rates that round to zero were tested subsequently: `0.0004` is rejected and
 `0.0005` persists as `0.001`, documented in [category evidence](category-evidence.md).
-Maximum bounds remain untested.
+The later bounded-magnitude section records rate/quantity limits and the
+ordinary-amount boundary conflict.
 
 ## Historical rate behavior
 
 The expense was saved with quantity 2 and total USD 0.25 at rate 0.125. Changing
 the category rate to 0.5 left its reloaded row at USD 0.25. Opening Edit and
 saving without changing any fields then changed the row to USD 1.00. This
-confirms resave repricing, not background repricing. Archived-category resave and
-invoiced-source correction are separate, still-open cases.
+confirms resave repricing, not background repricing. Subsequent archived-category
+and invoiced-source correction results are recorded separately in category and
+billing evidence; they must not be inferred from this active-category case.
 
 Local evidence includes `expense-first-response-20261001.json`,
 `expense-negative-response-20261001.json`,
@@ -129,9 +131,46 @@ The fixture was restored to quantity 3 / USD 1.50 and its original category/note
 Private results: `expense-independent-results-20261001.md`; UI snapshot:
 `expense-locale-comma-persisted-20261001.md`.
 
+## Bounded magnitude follow-up
+
+Additional fixed-size probes found explicit server validation limits. They used
+short decimal strings, not load testing or unbounded fuzzing, and restored the
+fixture after each batch.
+
+| Quantity input | Result |
+| --- | --- |
+| 999999999.99 | 200, same quantity |
+| 999999999.994 | 200, quantity 999999999.99 |
+| 999999999.995 | 422, maximum 999999999.99 |
+| -100000 | 200, same quantity |
+| -100000.01 | 422, minimum -100000.0 |
+
+Rate 10000000 is accepted; 10000000.0004 rounds to that value and is accepted;
+10000000.0005 fails the maximum-10000000 validation. Together with the tiny-rate
+cases this supports positivity and maximum validation after three-decimal
+rounding. At rate 0.5 the maximum accepted quantity returned total 500000000.0.
+
+Ordinary-amount limits have a **reference discrepancy**, not a clean proven
+range. The upper error names 999999999999999.99, but inputs ending in .50, .90,
+.93, .94 or .99 at that magnitude were rejected. Input 999999999999999.00 was
+accepted. Input 999999999999998.99 returned 999999999999999.0, losing its cent in
+the lexical response. The lower error names -10000000000000.0, yet both that
+value and -10000000000000.01 were accepted; -1000000000000000 was rejected.
+These results do not establish whether every discrepancy occurs in parsing,
+validation, storage or response serialization. No database representation was
+inspected. Public documentation searches did not settle these boundaries.
+
+Do not label an error message as a verified inclusive bound or reproduce lost
+cents in Horae. The constitution requires exact arithmetic and reconciliation.
+The final amount-bound contract needs an explicit resolution of this conflict;
+the independent investigation is recorded, not silently converted into an
+invented limit. No larger-magnitude probing is needed merely to repeat this
+known contradiction. Private cases: `expense-lifecycle-results-20261001.md`.
+
 ## Remaining limits
 
-Other locale configurations, true upper bounds and exports still need evidence. Subsequent
+Other locale configurations and exports still need evidence; ordinary amount
+bounds need the conflict resolution above. Subsequent
 [currency/history](currency-evidence.md), [category archive](category-evidence.md)
 and [draft billing](billing-evidence.md) checks narrow their respective gates;
 they do not settle all currencies, permission combinations or issued artifacts.

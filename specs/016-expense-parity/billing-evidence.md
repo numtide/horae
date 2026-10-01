@@ -63,9 +63,9 @@ private ledger. Invoice report attachment was requested during preparation, but
 its generation/content was not verified; no recipient artifact test has passed.
 
 Still open: sent-invoice behavior, report regeneration/retention, non-owner
-correction/deletion authorization, attribution after source deletion, and source
-lock release when removing an invoice line. The subsequent draft-deletion check
-below resolves that separate case without independent locks.
+correction/deletion authorization and attribution after source deletion. The
+subsequent draft-deletion and line-removal checks below resolve source billing
+release for those cases without independent locks.
 
 ## Independent follow-up: currency and draft deletion
 
@@ -87,6 +87,29 @@ Private snapshots: `expense-report-invoice-saved-20261001.md`,
 `expense-report-draft-deleted-20261001.md`, and
 `expense-after-draft-deletion-20261001.md`. Only the disposable second draft was
 permanently deleted; pre-existing business invoices were preserved.
+
+## Invoice line correction and removal follow-up
+
+A third disposable draft included quantity 3 at 0.50 from the USD 1.50 expense,
+using its client's EUR default. Updating the invoice price to 0.75 saved EUR
+2.25; the source remained quantity 3 / USD 1.50 and its editor still linked to
+that invoice with an invoiced warning. No partial release or source repricing
+occurred. The subsequent project USD→GBP change relabeled the source to GBP
+1.50 without changing the invoice's EUR 2.25; see [currency evidence](currency-evidence.md).
+
+After restoring project USD, deleting the sole tracked line in the draft editor
+and saving succeeded. The invoice remained Draft, now EUR 0.00 with no item,
+and the success message explicitly reported that associated expenses became
+uninvoiced. This is a saved empty draft, not an invoice deletion. No recipient
+artifact or sent-state behavior was tested.
+
+The source list again exposed ordinary Edit. A subsequent successful baseline
+save returned quantity 3 / USD 1.50, billable, `is_billed=false`,
+`is_locked=false`, `invoice=null`; the original receipt downloaded with 200 and
+431 bytes. No independent approval/archive/admin lock was present. Private
+snapshot: `expense-after-line-removal-20261001.md`. The empty test draft remains
+identified for cleanup; its removed test line can be recreated, but its original
+line identity is not restored by doing so.
 
 ## Report validation limitation in the current account
 

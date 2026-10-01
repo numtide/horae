@@ -51,7 +51,18 @@ The technical plan must reconcile this exact fractional representation and
 historical currency attribution with Horae's integer-money constitution. No
 floating-point implementation or implicit lossy conversion is authorized by
 these reference observations. Export precision, mixed-currency summation and
-invoiced historical currency changes remain separate cases.
+sent-state historical currency changes remain separate cases. The follow-up
+below resolves the draft-linked source case.
+
+## Already-invoiced project currency
+
+A later fixture draft included the expense at USD 1.50 using invoice currency
+EUR. Editing its invoice unit price to 0.75 yielded EUR 2.25; the source remained
+quantity 3 / USD 1.50 with its invoice link. Changing the project's override to
+GBP relabeled that same source to GBP 1.50, still linked to the draft. Reloading
+the invoice retained EUR 2.25, quantity 3 and price 0.75. No exchange conversion
+or invoice rewrite occurred. This closes the already-invoiced currency case for
+a draft, not for an issued invoice. The project override was restored to USD.
 
 ## Evidence and limitations
 

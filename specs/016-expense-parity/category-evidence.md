@@ -36,9 +36,29 @@ Private evidence: `expense-category-before-archive-20261001.md`,
 `expense-category-archived-20261001.md` and
 `expense-archived-category-resaved-20261001.md`, plus
 `expense-category-restored-20261001.md`. Fixture IDs are in the scratch
-ledger. Non-owner authorization, archived-category rate editing, changing away
-and back, portable exports and delete enforcement at the server remain distinct
-untested cases.
+ledger. The follow-up below resolves archived-category endpoint rate editing,
+changing away/back and server delete enforcement. Non-owner authorization and
+portable exports remain separate open cases.
+
+## Archived-category and stale-control follow-up
+
+The archived list exposed Restore but no Edit. A scoped request to the already
+observed category form endpoint nevertheless accepted rate 0.75 while keeping
+the category archived. Resaving its existing quantity-3 expense returned USD
+2.25. This is endpoint behavior, not evidence for adding an Edit control to the
+archived-category UI.
+
+Changing that expense to an active ordinary category succeeded. Trying to
+assign the archived category again returned 422 and required restoration first.
+Restoring the category through the UI, then its rate to 0.5 and the expense to
+quantity 3, returned the original USD 1.50.
+
+A category list loaded while the fixture category was unused retained a stale
+enabled Delete control after the expense was assigned back. Clicking that exact
+fixture control sent DELETE and returned 422 with a not-removable message.
+The category and expense survived. This follow-up establishes server-side
+delete-in-use enforcement, not merely a disabled button. Non-owner enforcement
+and portable export remain separate open checks.
 
 ## Switching category mode with historical entries
 

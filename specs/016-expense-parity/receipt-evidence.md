@@ -72,8 +72,23 @@ executable payload was uploaded. The original synthetic PDF, note and quantity
 were restored successfully; download returned 200 with the original 431 bytes.
 Private results: `expense-independent-results-20261001.md`.
 
-Remaining checks: malformed-but-recognizable file handling, non-owner
-access/revocation, storage/backup retention and invoice-recipient artifact
-lifecycle. Provider backup erasure is not observable through this browser; the
-Horae storage policy needs its own explicit contract. These tests do not close
+## Recognizable malformed files
+
+A nine-byte file consisting only of `%PDF-1.4` and a newline, named `.pdf` and
+declared application/pdf, was accepted and downloaded unchanged as a PDF. It
+contains no page tree, content or cross-reference table. An eight-byte PNG
+signature without image data, named `.png` and declared image/png, was rejected
+with a content-mismatch error; the previous nine-byte PDF remained downloadable.
+The original 431-byte valid synthetic PDF was then restored and downloaded.
+
+Therefore acceptance is **not full document-validity certification**. Preserve
+the distinction between upload type checks and render/preview failure handling;
+do not claim every accepted PDF is renderable. Do not add a stricter structural
+rejection rule and call it verified Harvest parity. Security controls remain
+required independently of this observed weak reference validation.
+
+Remaining checks: non-owner access/revocation, storage/backup retention and
+invoice-recipient artifact lifecycle. Provider backup erasure is not observable
+through this browser; the Horae storage policy needs its own explicit contract.
+Private cases: `expense-lifecycle-results-20261001.md`. These tests do not close
 the full attachment contract.

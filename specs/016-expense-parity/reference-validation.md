@@ -41,8 +41,10 @@ where a matching persisted case exists. Later [currency checks](currency-evidenc
 verify two-decimal response amounts for JPY/BHD, JPY zero-decimal list display,
 and historical relabeling without exchange conversion after project/client
 currency changes. Current-locale inputs and category mode changes are now
-verified. True bounds, other locales, exports and remaining archive/billing
-effects remain separate questions.
+verified. Bounded follow-up establishes quantity/rate limits, but ordinary
+amount errors conflict with actual acceptance and one response loses cents;
+that conflict needs an exact-money contract, not more escalating probes.
+Other locales, exports and remaining billing effects remain separate questions.
 
 ## Initial unsaved browser evidence
 
@@ -118,8 +120,10 @@ expense note. A `.txt` file is rejected without persisting its other field chang
 Cancelling removal retains the receipt; saving removal makes the old internal
 receipt route return 404 while preserving the expense. Later benign content
 tests accepted real PNG/GIF/JPEG, rejected empty/disguised-text files and
-normalized PNG MIME. Recognizable malformed files, storage retention and access
-lifecycle remain open; the size limit is no longer inferred from the old article.
+normalized PNG MIME. Follow-up accepted a nine-byte PDF header without a full
+document but rejected a signature-only PNG; acceptance is not structural
+validity. Rendering failure, storage retention and access lifecycle remain open;
+the size limit is no longer inferred from the old article.
 
 The [expense API](https://help.getharvest.com/api-v2/expenses-api/expenses/expenses/)
 documents one receipt and explicit deletion. Its broader locked-update wording
@@ -172,13 +176,13 @@ the account owner. Use only explicitly authorized disposable fixtures.
 
 | ID / requirement | Reference experiment | Evidence needed to close |
 | --- | --- | --- |
-| E-NUM / FR-002/004/011 | USD/JPY/BHD precision, tiny rates and current-locale input verified; amount samples accepted through 100000000000000 | True bounds, other locale configurations and exports remain; preserve lexical exactness and zero UI/server distinction |
-| E-RATE / FR-004/011 | Active repricing, tiny rates, archive/resave/new-capture rejection, restore and unit↔ordinary mode changes verified | Finish archived rate editing/change-away-return and delete-in-use server enforcement; mode change preserves total until resave, ordinary resave sets units1 |
-| E-CUR / FR-011 | Project override/inheritance, historical relabeling and client EUR→GBP verified; original currencies restored | No observed conversion; separate invoice defaults/persistence verified; mixed-currency exports and already-invoiced currency changes remain open |
-| E-BILL / FR-006/010 | Draft source correction/deletion verified without invoice-line changes; finish attribution/report and sent-state effects | Owner-only draft evidence does not prove non-owner authorization, report retention or sent behavior; sent-state evidence requires separately safe access |
-| E-REC / FR-003/012 | Size/removal and benign content matrix verified: valid PNG/GIF/JPEG/PDF, empty/disguised-text rejection and MIME normalization | Finish recognizable malformed files, access/revocation and retention; do not claim full parser/sanitizer or provider-backup erasure |
+| E-NUM / FR-002/004/011 | USD/JPY/BHD precision, tiny rates, current locale and quantity/rate bounds verified; ordinary boundary messages contradict some responses, including lost cents | Resolve exact ordinary bound contract; other locale configurations and exports remain; preserve lexical exactness and zero UI/server distinction |
+| E-RATE / FR-004/011 | Active repricing, archive/resave/new-capture rejection, restore, mode changes, archived endpoint rate editing, change-away/return and stale Delete rejection verified | Independent named category cases complete; archived list has Restore only, endpoint acceptance does not add an Edit UI; non-owner authority remains E-AUTH |
+| E-CUR / FR-011 | Project override/inheritance, historical relabeling, client EUR→GBP and draft-linked source USD→GBP verified; original currencies restored | No observed conversion; draft currency/value remains independent; mixed-currency reports/exports and sent-state effects remain open |
+| E-BILL / FR-006/010 | Draft source correction/deletion and invoice-price/source independence verified; deleting a saved tracked line releases source billing and retains receipt, leaving an empty draft | Finish independent multiple-lock case; owner-only draft evidence does not prove non-owner authorization, report retention or sent behavior; sent-state evidence requires separately safe access |
+| E-REC / FR-003/012 | Size/removal and benign content matrix verified, including accepted header-only PDF and rejected signature-only PNG | Define rendering failure, access/revocation and retention; do not claim full parser/sanitizer or provider-backup erasure |
 | E-AUTH / FR-005/006/014 | Use an editable non-owner reference person with own, managed and all read/write combinations; repeat after scope revocation | Allow/deny matrix for expenses, receipts, categories, locks, billing and approval; account currently exposes only an immutable owner |
-| E-ARCH / FR-003/004/009 | Category archive/resave, receipt retention and restore verified; project/person archive, reporting and portable archive remain | Category archive does not prohibit existing-entry correction or owner receipt access; do not infer non-owner behavior |
+| E-ARCH / FR-003/004/009 | Category and project archive/correction/restore, receipt retention, default archived report inclusion and active-only exclusion verified | Project archive permits owner billability correction unlike invoice lock; person archive needs suitable access, portable archive depends on export authority; do not infer non-owner behavior |
 | E-REP / FR-009/010/015/016 | Single-row report reconciliation and manual billing verified; export controls inspected; empty-selection page scope contradicted by form shape | Multi-page scope needs discrimination. Generation not submitted because delivery can email; no export bytes certified. Invoice Preview separately requires paid plan/Stripe; no upgrade authorized |
 
 Until these gates are resolved, no final expense plan, complete operation matrix
