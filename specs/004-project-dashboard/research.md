@@ -68,6 +68,10 @@ must remain incomplete, not a confident zero.
 
 ## D4 — Permissions are not one financial-access flag
 
+This table records the legacy implementation boundary, not the final Harvest
+parity matrix. The confirmed feature 015 capability/scope model supersedes it for
+final acceptance; changing this document does not activate that pending policy.
+
 **Decision:** Use active-user checks and `project_read_access`
 (`0035_project_read_access.sql`) before loading dashboard/export data.
 
@@ -98,6 +102,10 @@ Administrators may see private overrides. Managers may see user costs only where
 no private override participates; an aggregate containing one must be unavailable,
 not partially summed. A private zero remains private. Keep missing rates distinct
 from explicit zero.
+
+Those role-specific visibility rules describe the legacy boundary. Final cost
+access must follow feature 015's verified contract; cost valuation and currency
+exactness remain separate from permission to see the result.
 
 **Rationale:** Existing reports establish privacy and precedence but coalesce
 missing defaults to zero. Reuse their policy, not that coercion. Regression anchor:
@@ -147,3 +155,19 @@ exporting everything before suppressing forbidden columns in the browser.
 
 Plan, data model, contracts and tasks remain historical until reconciled.
 Their old assumptions are not implementation authority.
+
+## Clarification propagation — 2026-10-01
+
+Ran the checked-in clarification paths helper and reused the user's recorded
+six-profile/custom-permission decision from feature 015. Updated the spec's
+clarifications, management persona, FR-009/017, SC-005 and dependencies; annotated
+the historical plan/research so legacy checks are not mistaken for the target.
+No new question was answered and no runtime authority changed. Constitution 1.1.0
+is proposed in PR #212, not merged into this worktree.
+
+Revalidated the requirements checklist: 13/16 → 11/16. The earlier checks for
+unambiguous requirements and complete acceptance scenarios were too optimistic:
+PD-001, imported-billing semantics and the dependent permission matrix remain
+unresolved. Only those two markers changed; checklist notes retain their dated
+historical snapshot. No item became newly passing. Full clarification/planning
+remains open rather than treating this narrow reconciliation as feature readiness.

@@ -4,6 +4,12 @@
 > Do not execute its old rate, permission, no-chart or no-migration assumptions.
 > Planning resumes after PD-001 is clarified; this document is not acceptance.
 
+The final permission contract now depends on feature 015 ([PR #212](https://github.com/numtide/horae/pull/212)):
+six profiles, custom grants and scoped access. References below to manager-only
+pipelines describe implemented legacy increments, not the target acceptance
+matrix. Full plan reconciliation must include that feature's governance/migration
+gate and field/record-scope checks; the historical PASS below does not satisfy it.
+
 ## Independent implementation increment — reporting periods and activity
 
 The complete dashboard plan below remains historical. The ongoing delivery may

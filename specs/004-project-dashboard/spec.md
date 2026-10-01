@@ -16,6 +16,10 @@ Existing accounting and access rules take precedence over sample values and simu
 
 ## Clarifications
 
+### Session 2026-10-01
+
+- Q: Does dashboard access retain the three-role boundary or use the confirmed Harvest permission model? → A: Reuse the user's 2026-09-30 decision recorded in feature 015: six built-in profiles, custom profiles, individual adjustments and applicable scopes. This propagates an existing answer; it does not approve the pending action or imported-billing decisions.
+
 ### Reconciliation 2026-09-29
 
 These are conclusions from approved feature 011 and current application code, not newly answered user questions:
@@ -72,7 +76,7 @@ A financially authorized viewer sees actual invoices and remaining time/fee bala
 
 ### User Story 4 — Manage from the dashboard (Priority: P2)
 
-A manager uses contextual actions and the shared editor without losing history or navigating into a disconnected form.
+A person with the applicable project-management capability uses contextual actions and the shared editor without losing history or navigating into a disconnected form.
 
 **Independent Test**: Edit/save/cancel, archive/reactivate, switch projects and return from reports/invoices using keyboard and browser history.
 
@@ -93,7 +97,7 @@ A manager uses contextual actions and the shared editor without losing history o
 - **FR-006**: Support all-time, month, quarter, year and custom reporting intervals, inclusive by work date. Reject invalid intervals; label selected-period, lifetime and budget-period metrics distinctly.
 - **FR-007**: Provide Tasks, Team and Invoices tabs with meaningful counts and keyboard interaction. Preserve the interval across tabs.
 - **FR-008**: Provide reciprocal expandable task/person groups, stable hours sorting, enabled zero-time rows and disabled historical contributors. Complete subtotals reconcile exactly.
-- **FR-009**: Apply existing cost permissions and rules, keeping currencies distinct and identifying missing rates. Cost access is not inferred from progress or billing-rate access.
+- **FR-009**: Apply feature 015's distinct cost capability and scope contract, keeping currencies distinct and identifying missing rates. Preserve existing cost valuation and private-override protection until a reviewed policy migration. Cost access is not inferred from progress or billing-rate access.
 - **FR-010**: Invoice totals use stored attributable contributions, not current-rate recomputation or whole mixed-project invoices. Distinguish draft reservations, non-void invoiced contributions and void history through row statuses and exact totals. Follow the handoff's compact Invoiced tile and table; do not add permanent accounting paragraphs, an extra history heading or per-state summary panels.
 - **FR-011**: Uninvoiced time uses actual invoice eligibility; fixed-fee remaining uses approved per-occurrence partial-fee accounting. Do not subtract lifetime tracked value from an unrelated agreed fee.
 - **FR-012**: Invoice navigation/creation works with project context. A reference alone cannot change financial attribution, balances or locks.
@@ -101,7 +105,7 @@ A manager uses contextual actions and the shared editor without losing history o
 - **FR-014**: Edit reuses the shared editor. Task/team management belongs in Edit project; the detail page keeps the reporting Tasks/Team tabs without separate management forms or accordions.
 - **FR-015**: Archive/reactivate provides confirmation, pending protection, visible errors and recovery, preserving history and billing.
 - **FR-016**: CSV, spreadsheet and PDF summary exports match the selected authorized scope. Explain bounded limits before download; never silently truncate or widen access.
-- **FR-017**: Recheck current user/organization authority on every read/export. Inaccessible identities are non-disclosing; private fields are absent from unauthorized payloads, not merely hidden visually.
+- **FR-017**: Recheck feature 015's effective capabilities and current person/project/organization scopes on every read, export and contextual mutation. Enforce project progress, detailed time/notes, rates, costs, invoices and administrative private notes independently. Inaccessible identities are non-disclosing; unauthorized fields and records are absent from payloads and derived totals, not merely hidden visually. Project membership or a Manager-like label MUST NOT substitute for the operation's required authority.
 - **FR-018**: Distinguish loading, empty, incomplete, forbidden and error states. Retry cannot expose stale data from another project/period.
 - **FR-019**: Support 320/390/768/1440px, short viewports, 200% text zoom and keyboard-only operation. Tables may scroll inside containers; preserve mobile navigation and avoid shell overflow.
 - **FR-020**: Reuse current design tokens/utilities/components and preserve shared defaults. Do not copy prototype handlers, inline styles or sample data.
@@ -150,13 +154,13 @@ The handoff lists Pin, Duplicate, Delete, Link invoice and Unlink, but its handl
 - **SC-002**: Equivalent list/detail budget and spend figures match exactly for every fixture; different periods/bases are visibly identified.
 - **SC-003**: Charts and breakdown subdivisions reconcile to their relevant parents/totals down to the minute and minor currency unit.
 - **SC-004**: Billing summaries agree with preparation, stored invoice contributions and partial-fee balances through every listed lifecycle case.
-- **SC-005**: No unauthorized private amounts, notes, foreign identities or exports appear in the acceptance permission matrix.
+- **SC-005**: All six built-in profiles, custom grants, individual adjustments and revoked/overlapping person/project scopes pass feature 015's applicable operation matrix. No unauthorized private amounts, notes, identities, aggregate contributions or exports appear. Verify direct reads/actions and downloads as well as visible controls.
 - **SC-006**: Primary flows pass keyboard/viewport/zoom checks and preserve the eight-screen shared-style baseline.
 - **SC-007**: Full application/browser, domain, permission, export and deployment verification passes on the final implementation before acceptance.
 
 ## Assumptions and Dependencies
 
-- Retain single-organization OIDC and current administrator/manager/member roles. Mock permission profiles do not introduce new authority.
+- Retain single-organization OIDC. The final permission boundary is feature 015's user-confirmed six-profile/custom model, not the old administrator/manager/member assumption. Its [pending PR #212](https://github.com/numtide/horae/pull/212) owns the constitution amendment, verified matrix and reviewed migration; none is silently activated by this dashboard spec. Current implementation evidence remains valid only for the legacy policy it actually tested.
 - Reuse feature 011's editor, budgets, privacy and fee accounting plus current report/export infrastructure.
 - Charts visualize recorded data, not forecasts. Currency conversion and historical financial-snapshot editing are not introduced.
 - Client navigation is an end-to-end acceptance dependency on the Clients slice, not complete while its destination is a placeholder.
