@@ -250,3 +250,33 @@ moving to the shared form. No new PR is published yet; no merge performed.
 
 Next: T013 validation and transactional-save tests, then shared form/context
 integration. No new PR, merge, real-data write or migration in this iteration.
+
+## Iteration: shared client validation foundation
+
+- Saved the verified detail checkpoint as unsigned commit `6c08dae`.
+- Added six tests first for the core profile contract: Unicode character limits,
+  blank/overlong/NUL names, supported currencies, NUL billing fields, absent/zero
+  and exact large rates, negative/fractional-cent/overflow rejection, and optional
+  text normalization without stripping legitimate nonempty address text.
+- All six failed against the unimplemented functions, then passed after adding
+  validation using the existing currency set and exact `parse_cents` parser.
+  Full `cargo test -p horae-core`: 121 passed; core all-target clippy with
+  `--locked -- -D warnings`: passed. No dependency, float or I/O in core.
+- Existing project-client creation now calls this shared core validation instead
+  of duplicating the name/currency/rate rules. Its transaction/authorization and
+  SQL are unchanged. The dedicated DB regression passed against the previously
+  created disposable cluster at `/tmp/horae-clients-mvp-pg.pSefis`, explicitly
+  selected through DATABASE_URL; the cluster was verified accepting connections.
+- T013/T014 remain incomplete: transactional explicit-rate profile saves,
+  concurrent financial edits, history preservation and event assertions are
+  still required. The old list form is not yet replaced and this foundation is
+  not claimed as a completed create/edit journey.
+
+- `client_dialog_validates_details_and_persists_an_explicit_zero_rate`: passed,
+  including persisted zero, rejected invalid name/currency/negative rate,
+  rejected member creation and no extra inserted records. `nix fmt -- --ci`
+  passed with zero changed files. No SQL changed, so no cache regeneration needed.
+
+Next: add failing profile-save persistence/concurrency tests and implement their
+transaction before T015 shared form. No new Harvest question required repeating
+the documented evidence, and no browser verification is claimed for this step.
