@@ -161,3 +161,35 @@ confirmed predicates from C01–C07. Add local persistence and revocation tests 
 server integration; do not silently choose a legacy Manager mapping or destructive
 template lifecycle. Continue toward full implementation, not another owner-only
 research loop. Goal remains active; T027–T029 do not complete any full user story.
+
+## 2026-10-02 — Reauthorize user-administration transactions
+
+- Reused the same worktree/branch and draft #212 at `e8dcb77`. The previous
+  implementation iteration made progress; this iteration closes a demonstrated
+  prerequisite race, without narrowing the active full-permission objective.
+- Spec Kit implementation prerequisites resolve feature 015; requirement checks
+  remain 12/16 with previously authorized continuation. Applied Rust testing,
+  best-practices, async and Ponytail guidance: test the actual transaction helpers,
+  observe lock dependencies, reuse PostgreSQL locks and add no dependencies.
+- Four new negative tests failed before the fix. Creation, role and activation
+  now take the authenticated actor, acquire the organization lock, then reload
+  and lock active same-organization administrator authority until commit. Events
+  remain post-commit; existing last-administrator protection remains in force.
+- Added seven tests, including allowed lifecycle, denied revoked/foreign/unknown
+  actors, revocation while waiting at both locks, actor-lock lifetime and rollback
+  after duplicate creation. Full server binary suite: 795 passed, 11 manual
+  measurements ignored, zero failures. Core: 143 passed. SQLx regenerated in full
+  with two new cache entries and no removals; offline Clippy and formatting passed.
+- Focused adversarial review covered wrapper-derived identity, all helper callers,
+  lock ordering, rollback, unchanged records after denial and post-commit events.
+  No unresolved critical/high finding for this increment. No browser or full-flake
+  result claimed. T030–T032 are complete, not T010/T011 or full SC-003.
+- PostgreSQL uses the isolated worktree development stack on port 55415; tests
+  use throwaway databases. No Harvest access, real-account changes, schema
+  migrations, UI/CSS changes or merge in this increment.
+
+Next: finish the persisted authorization/revision/audit contract and its file-level
+tasks for T008/T009, then add failing local persistence tests. Keep the operation
+matrix and legacy mapping review explicit before runtime cutover; unresolved
+C01–C07 remain reference limitations, not invented defaults or a reason to repeat
+owner-only browser probes. Full five-story implementation remains active.

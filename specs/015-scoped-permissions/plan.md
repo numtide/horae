@@ -80,6 +80,14 @@ The access inventory found missing organization filters in the existing approval
 
 The same inventory identifies unscoped legacy assignment creation/removal. Preserve their existing administrator-only policy, but validate both project and person organization and reload active administrator authority under a transaction lock. Tests must call the production helpers, cover both foreign-ID directions, unknown IDs, duplicate creation, repeat removal, and completed/concurrent revocation. Return no foreign assignment details and emit events only for committed changes. This requires no schema or role migration and does not settle the future assignment-authority matrix.
 
+User creation, role changes and activation changes also need transactional
+reauthorization. Share the existing organization lock for last-administrator
+protection, then reload and lock the active same-organization actor through commit.
+Exercise completed revocation, waits on both organization and actor locks,
+foreign/unknown actors, creation rollback and the existing concurrent last-admin
+cases against the actual helpers. This closes the current FR-010/011 boundary;
+it does not replace profile persistence, revisions or durable audit.
+
 ## Workflow Notes
 
 The checked-in `setup-plan.sh --json` was executed. This repository does not contain `update-agent-context.sh`; no agent-context generation is claimed. Requirements checklist remains 12/16; the user requested continuation despite the remaining full-feature gaps.

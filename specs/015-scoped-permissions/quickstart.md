@@ -104,3 +104,44 @@ Evidence from 2026-09-30:
 - No profile, schema, CSS or existing data migration is included. Current administrator-only assignment authority is preserved. Full assignment parity, schema provenance, other entry-point revocation and HTTP/plugin end-to-end checks remain separate work.
 
 The initial incremental SQLx preparation omitted cached integration-test queries even with `--all-targets`. Regeneration disables incremental compilation so the complete target set emits query metadata; do not commit the incomplete intermediate cache.
+
+## User-administration transactional revocation
+
+Using the isolated PostgreSQL stack on port 55415, through the Nix dev shell:
+
+```sh
+cargo test -p horae --features server --bin horae server_fns::users::tests:: --locked
+cargo test -p horae --features server --bin horae --locked
+cargo test -p horae-core --locked
+CARGO_INCREMENTAL=0 cargo sqlx prepare --workspace -- --features server --all-targets
+SQLX_OFFLINE=true cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+```
+
+Evidence from 2026-10-02:
+
+- RED: four negative tests failed against the extracted production helpers;
+  revoked/foreign/unknown actors and concurrent revocations could still create
+  users. Nine existing/positive checks passed. Each negative test now exercises
+  creation, role changes and deactivation, not just one mutation path.
+- GREEN: the initial 13 user tests passed. Added rollback/lock-lifetime cases;
+  the full server binary suite passed 795 tests with 11 pre-existing manual
+  measurement tests ignored, including all 15 user checks. All 143 core tests
+  passed. This is not the separate integration binary or full Nix flake suite.
+- Creation, role and activation helpers take actor IDs from the authenticated
+  wrapper, serialize on the organization, reload active administrator authority
+  and retain its row lock through commit. Revocation is checked after waiting
+  for either organization or actor locks; foreign/unknown actors fail without
+  changes. Concurrent self-demotions/deactivations retain one active admin.
+- Tests observe actual PostgreSQL blocking relationships, not sleeps. A separate
+  case proves revocation waits until the access transaction commits. Duplicate
+  creation rolls back and releases locks so a subsequent authorized change works.
+- Complete SQLx regeneration adds only two test-query cache files and removes
+  none. The production actor-lock query already exists in the cache. No schema,
+  UI, CSS, legacy-role mapping or real account data changed.
+- Server/all-targets offline Clippy and full formatting passed. Clippy's initial
+  redundant-dereference finding in a test was corrected, not suppressed.
+- Focused adversarial review traced all three authenticated wrappers and helpers,
+  organization-before-actor locking, commit/error paths and event dispatch after
+  successful commit. No unresolved high/critical finding in this increment.
+  Durable audit, stale-form revisions, six-profile runtime enforcement and the
+  complete operation matrix remain pending; this is not full SC-003 acceptance.

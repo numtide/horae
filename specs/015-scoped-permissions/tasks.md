@@ -31,6 +31,15 @@ T027 → T028 → T029 builds on T005. It supplies pure grant logic for T010/T01
 but persistence, administrative identity, scope/field enforcement and migration
 still need their own tests and cannot be inferred from a selected grant set.
 
+### Current administrator mutation boundary (FR-010/011)
+
+- [x] T030 Pass authenticated actor IDs into user role/activation/create transaction helpers in `crates/horae/src/server_fns/users.rs`; add failing stale/revoked/foreign actor and concurrent-revocation tests in `users/tests/authority.rs`, retaining existing last-admin tests.
+- [x] T031 Reauthorize and lock the active same-organization administrator inside the access-change transaction, after the organization lock; keep user creation and post-commit events on the same boundary.
+- [x] T032 Run real PostgreSQL user/concurrency and affected regressions, regenerate the complete SQLx cache, check server/core builds and formatting, and record evidence.
+
+These tasks close a current access-change race required by the eventual six-profile
+mutations. They do not replace T010/T011's profile persistence or revision/audit tests.
+
 Inventory evidence is in `contracts/current-access.md`; browser limitations and unresolved reference cases are in `contracts/harvest-evidence.md`. Neither T006 nor T007 is complete until the remaining verification/migration review is done.
 
 - [ ] T006 Complete operation-level parity matrix and custom prerequisite/approval contracts in `specs/015-scoped-permissions/contracts/`, with documented/observed/conflicting/unverified evidence in `research.md` (FR-002/003/005/009/015/019/020).

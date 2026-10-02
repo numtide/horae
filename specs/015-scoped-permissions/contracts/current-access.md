@@ -1,6 +1,6 @@
 # Current authorization inventory
 
-Baseline: `a7727f1`, reviewed 2026-09-30; approval and legacy assignment repairs are recorded below. This describes current code, not the target permission policy. New scope evaluation is not yet consumed by the application.
+Baseline: `a7727f1`, reviewed 2026-09-30; approval and legacy assignment repairs are recorded below, with user-mutation reauthorization added on 2026-10-02. This describes current code, not the target permission policy. New scope evaluation is not yet consumed by the application.
 
 ## Delivery paths
 
@@ -15,7 +15,7 @@ Baseline: `a7727f1`, reviewed 2026-09-30; approval and legacy assignment repairs
 | `project_creation` create/edit/finalize | Manager can edit all org projects, billing and team; Admin-only private notes/project costs; actor locked/reloaded | Preserve working actor-lock pattern and separate rates/costs/team capabilities |
 | `projects::{create_assignment,delete_assignment}` | Legacy Admin-only APIs; repaired to validate both resources' organization and lock/reload the active administrator until commit | Reconcile with editor allowing Manager team changes; assignments still lack org FK |
 | `server_fns/clients.rs` | Any active org user reads catalog/address/tax data; Manager mutates and can set defaults | Separate catalog identity from contacts/financial values and client management |
-| `server_fns/users.rs` | Active directory for all; Member rates redacted; inactive directory/profile/activation/role writes Admin-only | Split people management from permission administration; preserve last-admin locking |
+| `server_fns/users.rs` | Active directory for all; Member rates redacted; inactive directory/profile/activation/role writes Admin-only; create/role/activation recheck active same-org actor after organization lock and retain actor lock through commit | Split people management from permission administration; preserve last-admin locking; profile revisions/audit still pending |
 | `get_me`, compatibility `/users/me` | Own full model including rates/costs | Explicit payload redaction; avoid returning identity-provider subject in directory DTOs |
 | `server_fns/approvals.rs` | Self submits whole week; repaired Manager/Admin approve/reopen mutations constrain selected IDs to the same organization | Preserve repaired tenant boundary; replace weekly storage and role-only authority through the verified flexible-approval contract |
 | `server_fns/reports::{report_time,report_detailed}` | Manager/Admin org reports; aggregate contains financial values, detailed contains notes | Scoped rows, counts/totals and field-level redaction before serialization |
@@ -38,7 +38,7 @@ Baseline: `a7727f1`, reviewed 2026-09-30; approval and legacy assignment repairs
 
 1. `approve_ids` originally updated approvals by ID/state without organization; `reject_submission` originally loaded by ID alone. Tests must invoke actual transaction helpers using two tenants, not duplicate SQL in a test body. The independent tenant repair is tracked separately from the future flexible-approval cutover.
 1. Legacy assignment endpoints previously accepted foreign project/person IDs. The independent repair now validates both sides and current administrator authority transactionally. Database assignment relationships still lack organization provenance; schema-level constraints and treatment of pre-existing malformed links remain part of the full migration. The repair does not delete or rewrite those links.
-1. Entry-time role checks do not prevent every stale-authority commit. Project/invoice editor actor locks provide a pattern, but access changes also need compatible locking/revisions.
+1. Entry-time role checks do not prevent every stale-authority commit. User creation/role/activation now reload and lock the actor after acquiring the organization lock, retaining existing last-admin serialization. Profile revisions, durable access-change audit and other entry-point revocation remain separate cutover work.
 1. Jobs cannot reauthorize an initiating actor they never recorded. A service/system job is a different trust boundary, not an implicit administrator.
 1. Progress and directory DTOs can expose monetary values or identity-provider metadata; hiding controls alone is insufficient.
 1. Plugin events after commit are not a durable, attributed permission audit. Global widget output also needs an explicit consumer-access contract.
