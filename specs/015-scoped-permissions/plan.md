@@ -88,7 +88,7 @@ The 2026-10-02 user clarification now selects C01 deletion semantics: detach the
 template while preserving assignees' effective grants/scope as person-specific
 configurations. Apply it to US4 tests and persistence/audit design. This resolves
 that product choice only, not remaining template update/reapplication rules,
-reference conflicts C03–C07, migration mappings or full runtime readiness.
+reference conflicts C04–C07, migration mappings or full runtime readiness.
 
 The user also selected C02 option A: authorize financial report projections and
 their matching exports through the report grant, without adding ordinary rate
@@ -96,6 +96,13 @@ grants or requiring them. T014/T015 must distinguish report-only access from
 direct source/rate access, test the reciprocal rate-only denial, and preserve
 current scope/revocation checks. This is an approved Horae contract, not verified
 restricted-user Harvest enforcement or permission to activate an incomplete policy.
+
+The user selected C03's resource-specific rate scope (FR-021): person defaults
+follow person management; project rates and person/task overrides follow project
+management. Both require the matching financial permission. T014/T015 must cover
+the independent person/project cross-product, inherited-rate versus history
+projection, read-only denial and revocation. This does not settle C04 cost rules,
+approve migration mappings or activate runtime policy.
 
 The [operation matrix](contracts/operation-matrix.md) maps all 80 inspected public
 async server-function symbols plus HTTP/authentication, worker and operator

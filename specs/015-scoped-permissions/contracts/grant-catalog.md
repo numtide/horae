@@ -41,6 +41,7 @@ edges are not yet the complete server operation contract.
 Tests cover all catalog entries, exact direct defaults, all six normalized sets,
 every dependency edge and removal, immutable floor, normalization laws, unknown
 wire names, financial/report separation and approval/withdrawal separation.
-No capability-to-record-scope mapping is inferred for unresolved managed rates.
+The catalog does not infer scope from labels: FR-021's user-approved C03 rule
+maps managed billable rates by their owning person/project during integration.
 No runtime guard consumes this increment before reviewed integration and migration.
 Full feature acceptance remains all five user stories and SC-001–009, not this module.

@@ -42,7 +42,7 @@ The live editor differs from the general help article:
 - Separate `timers:approve:managed` and `timers:approve:all` grants exist. Approval is not inferred from time editing or mere visibility.
 - People Admin includes `reports:read:contractor`; Accounting does not. Accounting includes profitability and invoicing report grants. Executive Manager and Administrator include all three.
 - `saved_reports:read:inactive` and `saved_reports:write:inactive` concern deactivated owners' reports, not ordinary personal saved reports. Accounting, Executive Manager and Administrator include both.
-- The managed billable-rate labels refer to managed **people**, while the help article describes managed **projects**. Record this conflict; verify actual rate visibility and edit boundaries before implementing it.
+- The managed billable-rate labels refer to managed **people**, while the help article describes managed **projects**. Harvest enforcement remains unverified. The user resolved C03 for Horae through FR-021's resource-specific person/project rule; retain the reference conflict without treating it as an unanswered product choice.
 - Two Administrator IDs (59 and 60) have no entry in this account's displayed permission catalog. They must not be assigned invented meanings or imported as trusted Horae grants.
 
 Expenses, estimates, Forecast, subscription billing and currently absent report products do not become working Horae features merely because the reference supports them. FR-003 requires explicit product-surface mapping. The general time report must derive its row scope and sensitive fields from applicable implemented capabilities.
@@ -92,7 +92,7 @@ These are documented API semantics, not observed UI persistence. Lookup normaliz
 
 ## Remaining acceptance gaps
 
-The full Horae operation matrix still needs lifecycle mapping, managed-rate conflict resolution, custom save/delete persistence checks, assignment-authority checks, exact approval/withdrawal enforcement and migration review. UI configuration/source evidence alone does not pass those tests. Keep the full-feature gate open while using these findings to replace earlier guesses.
+The full Horae operation matrix still needs lifecycle mapping, local verification of approved managed-rate scope, cost-visibility resolution, custom save/delete persistence checks, assignment-authority checks, exact approval/withdrawal enforcement and migration review. UI configuration/source evidence alone does not pass those tests. Keep the full-feature gate open while using these findings to replace earlier guesses.
 
 The 2026-10-01 [rate-scope investigation](rate-scope-evidence.md) confirms that
 public permission/API documentation does not settle the people-versus-project

@@ -1,7 +1,8 @@
 # Managed-rate scope: reference evidence and verification
 
-Checked: 2026-10-01. Status: unresolved reference conflict, not an approved policy.
-Owns the rate-scope portion of T006 and FR-002/005/008/015/020.
+Checked: 2026-10-02. Status: C03 resolved for Horae by user decision; Harvest
+enforcement remains unverified and C04 cost visibility remains unresolved.
+Owns the rate-scope portion of T006 and FR-002/005/008/015/020/021.
 
 ## What the evidence establishes
 
@@ -15,7 +16,7 @@ Owns the rate-scope portion of T006 and FR-002/005/008/015/020.
 | [User Cost Rates API](https://help.getharvest.com/api-v2/users-api/users/cost-rates/) | Describes administrator-only endpoint access. | Does not explain newer Accounting/Executive Manager read access in the application. |
 | [Project User Assignments API](https://help.getharvest.com/api-v2/projects-api/projects/user-assignments/) | Membership/manager designation and default/custom rate fields are distinct. | A broad endpoint role statement does not prove which custom permission permits each field mutation. |
 
-Decision: retain the conflict rather than choose a people-only, project-only or
+Initial investigation decision: retain the conflict rather than choose a people-only, project-only or
 union predicate from documentation wording. Rationale: each interpretation grants
 different sensitive data access. Rejected: treating the most permissive union as
 safe, using API legacy role prose as proof of current UI enforcement, or inventing
@@ -57,13 +58,16 @@ manager assignments, exact selected grants and automatic prerequisites separatel
 Every result must identify the account permission model, actor grants, exact
 resource relation, request surface and outcome. A denied request to an old-model
 API endpoint does not automatically settle the new-model web application's rule.
-Do not complete the operation matrix while these rows lack outcomes.
+For unresolved reference cases, retain the missing outcomes in the matrix.
+The approved C03 decision may supply Horae's contract and local expected results;
+it does not turn a local pass into an observed Harvest result.
 
-This is a reference-validation protocol, not executed tests. Once observations
-resolve the conflict, update the capability matrix, migration deltas, redaction
-contract and executable Horae acceptance tasks together.
+This is a reference-validation protocol, not executed tests. The approved C03
+rule below supplies expected local outcomes without claiming Harvest verification.
+Record any later reference difference explicitly; do not silently change the
+approved contract or use it to approve existing-data migration mappings.
 
-## 2026-10-02 clarification proposal — not selected
+## 2026-10-02 approved Horae rule
 
 Rechecked the linked permission, rate-setting and Users API documentation.
 [Editing billable rates](https://support.getharvest.com/hc/en-us/articles/12522267831181-Editing-billable-rates)
@@ -72,7 +76,7 @@ inherit that rate, whereas person-project overrides affect only that project.
 Its access instructions still use legacy Manager terminology, so this does not
 establish new custom-grant enforcement or resolve C03 by itself.
 
-Recommended product decision, pending user confirmation: with the corresponding
+User accepted option A after the resource-specific recommendation: with the corresponding
 managed billable read/write grant, authorize person-default rates/history by the
 managed-person relationship and project-owned rates/history (including person
 and task overrides) by the managed-project relationship. Managing a project does
@@ -82,10 +86,16 @@ effective inherited rate needed for that project, not unrelated personal rate
 history. Global task defaults require organization-wide rate authority; retain
 separate operation/resource permissions and independent cost permissions.
 
-This is a field-specific proposal, not a generic person-or-project union. A
+This is a field-specific rule, not a generic person-or-project union. A
 person-default edit can legitimately affect inheriting projects outside the
 actor's project-management scope; show that effect without exposing unauthorized
 project identities. Such an edit must not write those projects' local overrides.
-Alternative: keep C03 pending until a restricted-actor reference test or an
-authoritative clarification is available. No paid seat or company-account write
-is requested. Neither option has been selected; no runtime contract is changed.
+The alternative of leaving C03 undecided was not selected. No paid seat or
+company-account write is required for local verification. FR-021 defines the
+approved contract; application enforcement has not been implemented.
+
+Local tests must cross managed/unmanaged B/C with managed/unmanaged P/Q for
+read and write independently, then remove each grant or relationship. Include
+inherited-rate display versus unrelated history, global task defaults,
+read-only mutation denial, foreign organizations and unchanged project overrides
+after a permitted person-default change. Full-feature acceptance remains gated.

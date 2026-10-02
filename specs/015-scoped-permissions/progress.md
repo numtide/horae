@@ -379,3 +379,31 @@ reopen C01/C02 or activate runtime policy before the existing integration gates.
 - Next: ask whether to adopt this resource-specific rule as a Horae decision or
   retain C03 pending authoritative/reference verification. No answer is assumed;
   no application, schema, account or permission-spec requirement changed.
+
+## 2026-10-02 — User accepts resource-specific managed billable rates
+
+- User confirmed option A, resolving C03 for Horae. General person rates follow
+  person management; project-owned rates/person/task overrides follow project
+  management. Both require the matching financial permission. No reference
+  enforcement claim or automatic privilege grant follows from this decision.
+- Used Spec Kit clarify in the existing clean worktree at `8455740`; paths-only
+  prerequisite check passed and no extension hooks are configured. Integrated
+  one accepted answer into Clarifications, FR-021 and US2, then reconciled the
+  rate contract, matrix, reference register, model, plan, T014/T015 and quickstart.
+- Acceptance covers the independent person/project cross-product, read/write
+  distinction, inherited rates versus personal history, default-rate propagation
+  without override mutation, foreign organizations and loss of either required
+  grant or relationship. Tests are specified, not executed implementation tests.
+- Checklist remains 12/16 with no marker changes. Requirements outside this
+  decision, full acceptance coverage, complete criterion coverage and achieved
+  outcomes remain incomplete. C04–C07, migration and runtime activation gates
+  remain open. No application/schema/data change or merge.
+- Validation: `git diff --check` and `nix fmt -- --ci` passed with zero formatter
+  changes. Cross-file review removed a stale requirement for Harvest-only
+  verification of the now user-resolved C03 rule, and qualified managed-only
+  revocation expectations so independent organization-wide grants remain valid.
+  No runtime test suite or full-flake result is claimed.
+
+Next: resolve C04's cost-visibility contradiction using current role documentation
+and captured grants; do not reopen C01–C03. Continue Spec Kit clarification before
+finalizing the integrated policy plan; do not call this delivered permissions.

@@ -96,6 +96,14 @@ Independent test: replay forbidden direct reads/writes and downloads; revoke bet
 
 - [ ] T015 [US3] Integrate trusted permission loading and enforcement across the completed entry-point inventory in `crates/horae/src/server_fns/`, `reports.rs`, `harvest/`, jobs, CLI and plugin hosts; activate only after all paths are covered (FR-007/008/010/017/018).
 
+T014/T015 also cover approved C03 (FR-021): cross managed/unmanaged people with
+managed/unmanaged projects for general person rates and project/person/task
+overrides; require the corresponding read/write financial grant. Test global
+task defaults, inherited-rate display versus unrelated history, read-only
+mutation denial, removal of either grant or relationship, foreign organizations,
+and person-default propagation without changing project overrides. Use production
+paths when integrating; passing pure selection tests does not establish enforcement.
+
 - [ ] T039 [US3] Add cross-command lock-order/revocation tests in `crates/horae/tests/integration.rs` and affected `server_fns/` test modules for project creation/editing, membership/management, activation and settings; include organization-row updates, trigger/FK lock paths, snapshot readers waiting across revocation, whole-transaction retry, bounded import commits, credential writes, report conversion and caller-aware download pages (FR-005/007/010/018).
 
 - [ ] T040 [US3] Apply T042's hierarchy by reconciling organization-first locking in `crates/horae/src/server_fns/project_creation/`, `server_fns/projects.rs`, `server_fns/users.rs`, `cli.rs` and all remaining access-affecting writers in the final inventory; no shared-to-exclusive upgrade or fabricated operator user (FR-007/010/017/018).
