@@ -476,3 +476,51 @@ Next: integrate the user's C06 answer when provided; then settle C07's exact
 assignment-loss/promotion predicates and reviewed migration choices. Do not
 restart owner-only probes or create more foundation increments to evade these
 decisions. Full-feature analysis awaits executable coverage of the remaining gates.
+
+## 2026-10-02 — User accepts combined approval visibility
+
+- Integrated one accepted clarification using Spec Kit clarify from clean
+  `ece40f5`; the paths-only prerequisite check selected feature 015. No extension
+  hooks exist before or after clarification.
+- Added the dated answer, US2 scenarios and FR-024 to `spec.md`, with
+  `contracts/approval-visibility.md` and matching OP06, expense evidence, design
+  gate, plan, T012/T013 and quickstart updates. C06's visibility decision is
+  resolved for Horae, not proven restricted-user Harvest enforcement.
+- Approval requires authority and visibility of every affected time/expense
+  record. Denial is atomic and non-disclosing; explicit scoped selection remains
+  supported, but silently omitting hidden expenses does not. No implicit grant,
+  ordinary expense-edit permission or new catalog prerequisite is introduced.
+- Reviewed the accepted wording against the earlier broader proposal: the final
+  question concerns approval, not withdrawal. Kept withdrawal, self-approval,
+  force submission and coverage/migration gates open rather than enlarging the
+  user's answer. Review also distinguishes expense-free selections from hidden
+  expenses and report projections from source-record visibility.
+- Re-evaluated all checklist items: 12/16 → 12/16, no newly passing items or
+  regressions. Remaining unchecked areas are complete unambiguous requirements,
+  full acceptance scenarios, criteria for every requirement and achieved
+  measurable outcomes. Tests described here remain planned, not executed.
+- No runtime code, schema, real records or active permissions changed. T006 and
+  full-feature Analyze remain open; no merge is authorized by this clarification.
+- Validation: `git diff --check` and `nix fmt -- --ci` pass; the formatter changed
+  zero files. No runtime tests or independent adversarial review were run for
+  this documentation-only clarification.
+
+Clarify coverage after this answer:
+
+| Category | Status |
+| --- | --- |
+| Functional scope and behavior | Resolved for approval visibility; remaining lifecycle/assignment decisions deferred |
+| Domain and data model | Deferred: coverage transitions and reviewed migration |
+| Interaction and UX | Clear for atomic denial; remaining profile/assignment flows deferred |
+| Non-functional quality | Clear for isolation, current authorization and exactness; implementation validation pending |
+| Integrations and dependencies | Clear for this rule: feature 016 expense fixtures and existing transaction protocol |
+| Edge cases and failure handling | Resolved for unreadable records, revocation and concurrent additions |
+| Constraints and tradeoffs | Clear: no implicit grants, data changes or reduced parity scope |
+| Terminology and consistency | Clear: approval is not withdrawal or ordinary expense editing |
+| Completion signals | Deferred: full matrix, acceptance and runtime verification |
+| Miscellaneous placeholders | Clear: no new unresolved placeholder introduced |
+
+Next: continue Spec Kit clarify/research on C07's project-manager assignment-loss
+threshold and explicit keep-access behavior, then remaining lifecycle/migration
+predicates before completing plan/tasks and Analyze. Do not reopen the accepted
+approval-visibility decision or activate partial policy.

@@ -217,7 +217,7 @@ lock key does not establish denial or justify granting that operation implicitly
 | C03 | Exact managed billable keys still label scope as managed people, whereas public help describes projects. | Resolved for Horae by user decision, 2026-10-02 (A), FR-021: person management for general person rates, project management for project-owned rates/person/task overrides, always with the corresponding financial permission. No generic person-or-project union or management-only financial access. Execute the local cross-product in `rate-scope-evidence.md`; Harvest enforcement remains unverified. |
 | C04 | Person Rates page still describes cost visibility as administrator-only, but current Accounting/Executive defaults contain cost read. | Resolved for Horae by user decision, 2026-10-02, FR-022: explicit organization-wide cost read/write and new-model defaults; Accounting/Executive read-only, Administrator read/write, other built-ins neither. Custom effective grants control access, not Administrator identity. Validate local payloads/mutations/revocation and preserve FR-008 report separation; restricted-user Harvest enforcement remains unverified. |
 | C05 | Current Preferences disables auto-lock/submit until a submission deadline is configured; newer company-lock guidance describes custom schedules independent of deadlines. | Deadline dependency resolved from current dedicated guides and the refreshed general approval guide: use the newer documented modes under the existing parity mandate. FR-019/023 and `company-locks.md` define target and local verification; retained owner controls are rollout evidence, not a universal prerequisite. No account setting was changed. |
-| C06 | `aJ` gives approve-managed its managed/own time reads and approve-all its all read plus managed approval; it does not add time-write or expense grants. Withdrawal has no such edge, despite a hint recommending time visibility. | FR-019/020: verify custom approve/withdraw eligibility and expense handling independently; no hidden expense mutation authority inferred from time approval. |
+| C06 | `aJ` gives approve-managed its managed/own time reads and approve-all its all read plus managed approval; it does not add time-write or expense grants. Withdrawal has no such edge, despite a hint recommending time visibility. | Approval visibility resolved for Horae by user decision, 2026-10-02 (FR-024): approval authority plus visibility of every selected time/expense record; otherwise deny atomically, never silently approve only time. No catalog dependency or ordinary expense-write grant added. Harvest enforcement, withdrawal and other lifecycle predicates remain unverified/open; see `approval-visibility.md`. |
 | C07 | Permission-loss preview uses POST; `a3` warns about lost project-manager assignments. Its keep-access option adds managed-project read and write. | FR-005/015: preview/save/assignment-loss and cancellation need explicit persistence cases. Preview POST was not invoked; do not assume it is read-only or silently add privileges. |
 
 Source inspection also distinguishes initial template/profile selection (`dt`,
@@ -241,10 +241,12 @@ Independent read-only review rechecked the public approval guides, Users API
 and retained editor source. C06 remains an authority question, not a missing
 ordinary edit prerequisite: custom approval adds time reads but no expense
 grants, although the documented workflow handles time and expenses together.
-The requested Horae decision is whether combined approval/withdrawal requires
-visibility of the entire selected time/expense set and otherwise fails atomically.
-This proposal is not selected until the user answers; it does not imply adding
-expense grants to the editor dependency graph.
+The user accepted requiring visibility of the entire selected time/expense set
+for approval, otherwise denying it atomically (FR-024). The final question and
+answer concern approval only: withdrawal remains distinct and unresolved. This
+does not add expense grants to the editor dependency graph or prove Harvest's
+restricted-user enforcement. See [the approved contract](approval-visibility.md)
+for acceptance cases and the remaining boundaries.
 
 For C07, the [Users API](https://help.getharvest.com/api-v2/users-api/users/users/#custom-profiles)
 documents preserving individual permissions when repeating the current profile,

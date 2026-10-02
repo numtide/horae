@@ -85,9 +85,9 @@ gated on T006–T009; the proposal's existence does not make them executable yet
 
 Independent test: two projects/two approvers with overlapping people scope, filtered dates, empty cells and withdrawal; no unrelated changes.
 
-- [ ] T012 [US2] Add management-assignment and scoped approval/withdrawal/lock concurrency tests in `crates/horae/tests/integration.rs` (FR-005/006/009/019).
+- [ ] T012 [US2] Add management-assignment and scoped approval/withdrawal/lock concurrency tests in `crates/horae/tests/integration.rs`. Cover every FR-024 case in `contracts/approval-visibility.md`: readable/unreadable time and expenses, missing approval authority, truly expense-free selections, revocation/new-record races, non-disclosing errors, direct requests and atomic full-selection effects. Combined acceptance requires feature 016 expense fixtures, not mocks alone (FR-005/006/009/010/019/024).
 
-- [ ] T013 [US2] Implement verified assignment storage, date/project approval coverage and transitions in `crates/horae/migrations/`, `crates/horae/src/server_fns/approvals.rs`, relevant project/person server functions and `crates/core/src/state.rs`; refresh `.sqlx/` (FR-005/006/009/017/019).
+- [ ] T013 [US2] Implement verified assignment storage, date/project approval coverage and transitions in `crates/horae/migrations/`, `crates/horae/src/server_fns/approvals.rs`, relevant project/person server functions and `crates/core/src/state.rs`; refresh `.sqlx/`. Enforce FR-024's complete-set visibility and atomic denial under the reviewed transaction protocol, without silent filtering, implicit grants or extrapolating withdrawal semantics (FR-005/006/009/010/017/019/024).
 
 - [ ] T043 [US2] Finalize the calendar/execution and correction cases in `specs/015-scoped-permissions/contracts/company-locks.md`; add failing injected-clock boundary tests in `crates/core/src/permissions/company_lock/tests.rs` for the finalized modes, timezone/week-start/month-end/DST rules and nondecreasing automatic cutoff (FR-019/023). T006–T009 gate code; this is not an independent permission foundation.
 

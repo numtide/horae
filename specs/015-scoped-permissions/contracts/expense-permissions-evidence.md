@@ -47,7 +47,7 @@ Do not infer scope from a role-name hierarchy or from time editing.
 | Categories | Legacy documentation identifies Administrator management | Whether any custom capability permits administration, separately from expense writing |
 | Receipt view/download/change | Expense relationship documented | Current-grant mapping; direct download, report inclusion and revocation enforcement |
 | Mark billed/unbilled | Billable-only expense marking documented | New-model authority and independent lock effects |
-| Approve/withdraw expenses | Shared timesheet workflow documented | Exact combination of time approval, expense scope and withdrawal grants; do not collapse these operations |
+| Approve/withdraw expenses | Shared timesheet workflow documented; Horae FR-024 now requires approval authority plus visibility of all selected time/expenses, with atomic denial if any are inaccessible | Harvest restricted-user enforcement, remaining approval predicates and withdrawal mapping; do not extend the approved visibility rule to withdrawal or infer ordinary expense-write/receipt authority |
 
 Legacy lifecycle sources: [editing expenses](https://support.getharvest.com/hc/en-us/articles/4406054281101-How-to-edit-expenses),
 [tracking/categories](https://support.getharvest.com/hc/en-us/articles/360048687611-Tracking-expenses),

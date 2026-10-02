@@ -119,6 +119,14 @@ settings/banner UI and worker integration. Retain the existing infrastructure;
 configuration and due execution must share current organization state. Full
 implementation remains gated, including feature 016 for combined expense behavior.
 
+The user accepted C06's approval-visibility boundary in FR-024 and
+[approval visibility](contracts/approval-visibility.md): require current approval
+authority and visibility over all selected time/expense records, or deny the
+complete command. T012/T013 cover policy and transactional checks, including
+revocation and concurrent additions; feature 016 supplies expense fixtures.
+Do not add a catalog dependency, silently filter expenses, infer ordinary expense
+editing or extend this approval decision to the unresolved withdrawal contract.
+
 The
 [concrete lock inventory](contracts/permission-state.md#concrete-lock-inventory-t042-partial)
 records current ordering, trigger/FK effects and a candidate common hierarchy.
