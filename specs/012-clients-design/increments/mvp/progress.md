@@ -214,3 +214,39 @@ CSS, shared component, schema or dependency changed in this iteration.
 Next action remains T012. Save this implementation checkpoint on the isolated
 branch, then replace the UUID detail placeholder and cover route changes before
 moving to the shared form. No new PR is published yet; no merge performed.
+
+## Iteration: real client detail and route isolation
+
+- Replaced the UUID placeholder with persisted identity/address/tax ID and
+  manager-authorized default rate; absent rates remain distinct from explicit
+  zero. The invoice panel mounts only when the server returns billing authority.
+- Related projects reuse existing progress-authorized reads; invoices use the
+  exact-client read. Amounts retain each record's ISO currency. Missing project
+  totals render an em dash, never a fabricated zero.
+- Client identity, project rows, totals and invoices have separate pending/error
+  states and real retry actions. Keyed detail content cancels old requests and
+  discards all client-local state when the route ID changes. Clients remains
+  selected in the sidebar on a detail route.
+- Eight client component regressions exercise production components/router with
+  controlled endpoint responses: navigation/back, pending/error identity,
+  member restrictions, independent invoice/project/totals errors, unset versus
+  zero, real destination links and cancellation of an old invoice request.
+  The initial four tests failed against the old placeholder before implementation.
+  Expanded `cargo test -p horae --features server --test detail_navigation` passed
+  all 35 tests, including existing project/invoice and helper regressions.
+- CSS adds only a scoped two-column structure and its 1180px stack breakpoint;
+  spacing/type/color reuse the utility layer. Removed an unsupported `list-none`
+  class; flex list items already suppress markers and explicit list semantics
+  remain. No global CSS defaults or utility-generator changes.
+- Data-honest handoff differences: “Added to Horae” describes the local creation
+  timestamp, not an invented Harvest relationship date; “Invoices” lists actual
+  stored rows without claiming an unimplemented recent limit. No fake contacts,
+  payment terms, financial cards or inert action controls. Edit/context actions
+  remain T015/T020, not omitted from the increment.
+- Nix formatting passed. All three `route::tests` passed, server all-target clippy
+  (`--locked -- -D warnings`) and the web/WASM check passed. These checks cover
+  the detail checkpoint, not the subsequent shared-form implementation.
+  Browser interaction/visual proof and independent review remain T021–T024.
+
+Next: T013 validation and transactional-save tests, then shared form/context
+integration. No new PR, merge, real-data write or migration in this iteration.

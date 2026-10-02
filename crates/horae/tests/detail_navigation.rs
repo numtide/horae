@@ -15,6 +15,8 @@ use horae_core::types::{InvoiceStatus, OrgRole, ProjectRole};
 use tokio::sync::oneshot;
 use uuid::Uuid;
 
+#[path = "../src/components/badge.rs"]
+pub mod badge;
 #[path = "../src/components/combobox.rs"]
 pub mod combobox;
 #[path = "../src/components/controls.rs"]
@@ -30,12 +32,14 @@ pub mod modal;
 #[path = "../src/components/table.rs"]
 pub mod table;
 mod components {
-    pub use super::{combobox, controls, form, icons, menu, modal, table};
+    pub use super::{badge, combobox, controls, form, icons, menu, modal, table};
 }
 #[path = "../src/models/assignment.rs"]
 mod assignment;
 #[path = "../src/models/client.rs"]
-mod client;
+pub mod client;
+#[path = "../src/pages/clients.rs"]
+mod clients;
 #[path = "../src/models/invoice.rs"]
 pub mod invoice;
 #[path = "../src/pages/invoices.rs"]
@@ -51,21 +55,32 @@ mod task;
 #[path = "../src/models/user.rs"]
 mod user;
 mod models {
+    pub use super::{client, invoice, project_creation};
     pub use super::{
         client::Client,
         project::{
             Project, ProjectBudgetProgress, ProjectDetails, ProjectTagLink, ProjectTaskRate,
         },
     };
-    pub use super::{invoice, project_creation};
 }
 
 type InvoiceResponse = Result<invoice::InvoiceWithLines, ServerFnError>;
 type AssignmentResponse = Result<Vec<assignment::Assignment>, ServerFnError>;
 type ProjectDetailsResponse = Result<project::ProjectDetails, ServerFnError>;
+type ClientDetailsResponse = Result<client::ClientDetails, ServerFnError>;
+type ClientInvoicesResponse = Result<Vec<invoice::Invoice>, ServerFnError>;
+type ClientProjectsResponse = Result<Vec<project::Project>, ServerFnError>;
+type ProjectSpendResponse = Result<Vec<server_fns::ProjectSpend>, ServerFnError>;
 
 #[derive(Clone, Default)]
 struct Probe {
+    member: bool,
+    client_requests: Rc<RefCell<Vec<Uuid>>>,
+    client_invoice_requests: Rc<RefCell<Vec<Uuid>>>,
+    client_response: Rc<RefCell<Option<oneshot::Receiver<ClientDetailsResponse>>>>,
+    client_invoice_response: Rc<RefCell<Option<oneshot::Receiver<ClientInvoicesResponse>>>>,
+    client_projects_response: Rc<RefCell<Option<oneshot::Receiver<ClientProjectsResponse>>>>,
+    project_spend_response: Rc<RefCell<Option<oneshot::Receiver<ProjectSpendResponse>>>>,
     initial_path: Option<String>,
     requests: Rc<RefCell<Vec<Uuid>>>,
     assignment_requests: Rc<RefCell<Vec<Uuid>>>,
@@ -94,12 +109,17 @@ fn app(probe: Probe) -> Element {
 
 mod route {
     use super::*;
+    use clients::{ClientDetail, ClientList};
     use invoices::{InvoiceDetail, InvoiceList};
     use projects::{ProjectDetail, ProjectList};
 
     #[derive(Clone, PartialEq, Routable)]
     pub enum Route {
         #[layout(Layout)]
+        #[route("/clients")]
+        ClientList {},
+        #[route("/clients/:id")]
+        ClientDetail { id: Uuid },
         #[route("/invoices")]
         InvoiceList {},
         #[route("/invoices/:id")]
@@ -148,6 +168,244 @@ fn settle(dom: &mut VirtualDom) {
         dom.render_immediate_to_vec();
     }
     panic!("detail navigation did not settle");
+}
+
+#[tokio::test]
+async fn client_detail_navigation_loads_current_identity_billing_and_work() {
+    let first = Uuid::from_u128(1);
+    let second = Uuid::from_u128(2);
+    let probe = Probe {
+        initial_path: Some(format!("/clients/{first}")),
+        ..Probe::default()
+    };
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    for expected in [
+        "Client-1",
+        "Address-1",
+        "Client-project-1",
+        "INV-1",
+        "EUR 0.00 / h",
+    ] {
+        assert!(html.contains(expected), "missing {expected}: {html}");
+    }
+    let navigator = probe.navigator.borrow().unwrap();
+    dom.in_scope(probe.scope.borrow().unwrap(), || {
+        navigator.push(route::Route::ClientDetail { id: second })
+    });
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    for expected in ["Client-2", "Address-2", "Client-project-2", "INV-2"] {
+        assert!(html.contains(expected), "missing {expected}: {html}");
+    }
+    for stale in ["Client-1", "Address-1", "Client-project-1", "INV-1"] {
+        assert!(!html.contains(stale), "stale {stale}: {html}");
+    }
+    assert_eq!(*probe.client_requests.borrow(), [first, second]);
+    assert_eq!(*probe.client_invoice_requests.borrow(), [first, second]);
+    dom.in_scope(probe.scope.borrow().unwrap(), || navigator.go_back());
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains("Client-1"));
+    assert_eq!(*probe.client_requests.borrow(), [first, second, first]);
+}
+
+#[tokio::test]
+async fn pending_or_failed_client_navigation_never_shows_previous_identity_or_work() {
+    let first = Uuid::from_u128(1);
+    let probe = Probe {
+        initial_path: Some(format!("/clients/{first}")),
+        ..Probe::default()
+    };
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains("Client-1"));
+    let (send, receive) = oneshot::channel();
+    *probe.client_response.borrow_mut() = Some(receive);
+    let navigator = probe.navigator.borrow().unwrap();
+    dom.in_scope(probe.scope.borrow().unwrap(), || {
+        navigator.push(route::Route::ClientDetail {
+            id: Uuid::from_u128(2),
+        })
+    });
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains("Loading client"), "{html}");
+    for stale in ["Client-1", "Address-1", "Client-project-1", "INV-1"] {
+        assert!(!html.contains(stale), "stale {stale}: {html}");
+    }
+    send.send(Err(ServerFnError::new("Client unavailable")))
+        .unwrap();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains("Retry client"), "{html}");
+    assert!(!html.contains("No projects"), "{html}");
+    assert_eq!(*probe.client_invoice_requests.borrow(), [first]);
+}
+
+#[tokio::test]
+async fn member_client_detail_never_requests_invoices_or_displays_default_rates() {
+    let probe = Probe {
+        member: true,
+        initial_path: Some(format!("/clients/{}", Uuid::from_u128(1))),
+        ..Probe::default()
+    };
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(
+        html.contains("Address-1") && html.contains("Client-project-1"),
+        "{html}"
+    );
+    assert!(
+        !html.contains("Default rate") && !html.contains("Invoices"),
+        "{html}"
+    );
+    assert!(probe.client_invoice_requests.borrow().is_empty());
+}
+
+#[tokio::test]
+async fn client_project_failure_preserves_billing_and_invoices() {
+    let probe = Probe {
+        initial_path: Some(format!("/clients/{}", Uuid::from_u128(1))),
+        ..Probe::default()
+    };
+    let (send, receive) = oneshot::channel();
+    *probe.client_projects_response.borrow_mut() = Some(receive);
+    let mut dom = VirtualDom::new_with_props(app, probe);
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains("Loading projects"));
+    send.send(Err(ServerFnError::new("Projects unavailable")))
+        .unwrap();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    for expected in ["Address-1", "INV-1", "Retry projects"] {
+        assert!(html.contains(expected), "missing {expected}: {html}");
+    }
+    assert!(!html.contains("No projects available"), "{html}");
+}
+
+#[tokio::test]
+async fn client_project_totals_failure_does_not_invent_zero_or_hide_project_links() {
+    let id = Uuid::from_u128(1);
+    let probe = Probe {
+        initial_path: Some(format!("/clients/{id}")),
+        ..Probe::default()
+    };
+    let (send, receive) = oneshot::channel();
+    *probe.project_spend_response.borrow_mut() = Some(receive);
+    let mut dom = VirtualDom::new_with_props(app, probe);
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains("Loading project totals"));
+    send.send(Err(ServerFnError::new("Totals unavailable")))
+        .unwrap();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    for expected in [
+        "Client-project-1",
+        "Retry totals",
+        &format!("href=\"/projects/{id}\""),
+        &format!("href=\"/invoices/{id}\""),
+    ] {
+        assert!(html.contains(expected), "missing {expected}: {html}");
+    }
+    assert!(html.contains('—'), "{html}");
+    assert!(!html.contains("USD 0.00"), "{html}");
+}
+
+#[tokio::test]
+async fn client_detail_distinguishes_unset_rate_from_known_zero_project_totals() {
+    let id = Uuid::from_u128(1);
+    let probe = Probe {
+        initial_path: Some(format!("/clients/{id}")),
+        ..Probe::default()
+    };
+    let (send, receive) = oneshot::channel();
+    *probe.client_response.borrow_mut() = Some(receive);
+    let (send_spend, receive_spend) = oneshot::channel();
+    *probe.project_spend_response.borrow_mut() = Some(receive_spend);
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    let mut detail = dom.in_scope(probe.scope.borrow().unwrap(), || {
+        server_fns::get_client_details(id.to_string())
+            .now_or_never()
+            .unwrap()
+            .unwrap()
+    });
+    detail.billing.as_mut().unwrap().default_rate_cents = None;
+    send.send(Ok(detail)).unwrap();
+    send_spend
+        .send(Ok(vec![server_fns::ProjectSpend {
+            project_id: id,
+            spent_minutes: 0,
+            spent_cents: 0,
+        }]))
+        .unwrap();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains("USD 0.00"), "{html}");
+    assert!(html.contains("Not set"), "{html}");
+    assert!(!html.contains("EUR 0.00 / h"), "{html}");
+    assert!(!html.contains('—'), "{html}");
+}
+
+#[tokio::test]
+async fn client_navigation_cancels_previous_pending_invoice_panel() {
+    let first = Uuid::from_u128(1);
+    let second = Uuid::from_u128(2);
+    let probe = Probe {
+        initial_path: Some(format!("/clients/{first}")),
+        ..Probe::default()
+    };
+    let (send, receive) = oneshot::channel();
+    *probe.client_invoice_response.borrow_mut() = Some(receive);
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains("Loading invoices"));
+    let navigator = probe.navigator.borrow().unwrap();
+    dom.in_scope(probe.scope.borrow().unwrap(), || {
+        navigator.push(route::Route::ClientDetail { id: second })
+    });
+    settle(&mut dom);
+    assert!(
+        send.is_closed(),
+        "the previous client's request must be cancelled"
+    );
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains("INV-2"), "{html}");
+    assert!(
+        !html.contains("INV-1") && !html.contains("Loading invoices"),
+        "{html}"
+    );
+}
+
+#[tokio::test]
+async fn failed_client_invoices_keep_identity_and_projects_without_claiming_empty_results() {
+    let probe = Probe {
+        initial_path: Some(format!("/clients/{}", Uuid::from_u128(1))),
+        ..Probe::default()
+    };
+    let (send, receive) = oneshot::channel();
+    *probe.client_invoice_response.borrow_mut() = Some(receive);
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains("Loading invoices"));
+    send.send(Err(ServerFnError::new("Invoice list unavailable")))
+        .unwrap();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    for expected in ["Client-1", "Client-project-1", "Retry invoices"] {
+        assert!(html.contains(expected), "missing {expected}: {html}");
+    }
+    assert!(!html.contains("No invoices"), "{html}");
 }
 
 #[tokio::test]
@@ -515,6 +773,7 @@ mod server_fns {
     use task::Task;
     use user::User;
 
+    #[derive(Debug)]
     pub struct ProjectSpend {
         pub project_id: Uuid,
         pub spent_minutes: i64,
@@ -537,7 +796,77 @@ mod server_fns {
     }
 
     pub async fn get_me() -> Result<User, ServerFnError> {
-        Ok(user(300, OrgRole::Admin))
+        Ok(user(
+            300,
+            if consume_context::<Probe>().member {
+                OrgRole::Member
+            } else {
+                OrgRole::Admin
+            },
+        ))
+    }
+
+    pub async fn get_client_details(id: String) -> ClientDetailsResponse {
+        let id = Uuid::parse_str(&id).unwrap();
+        let probe = consume_context::<Probe>();
+        probe.client_requests.borrow_mut().push(id);
+        let response = probe.client_response.borrow_mut().take();
+        if let Some(response) = response {
+            return response.await.unwrap();
+        }
+        Ok(client::ClientDetails {
+            client: Client {
+                id,
+                org_id: Uuid::nil(),
+                name: format!("Client-{}", id.as_u128()),
+                currency: "EUR".into(),
+                address: Some(format!("Address-{}", id.as_u128())),
+                tax_id: None,
+                active: true,
+                created_at: chrono::DateTime::UNIX_EPOCH,
+            },
+            billing: (!probe.member).then_some(client::ClientBilling {
+                default_rate_cents: Some(0),
+            }),
+        })
+    }
+
+    pub async fn list_client_invoices(id: String) -> ClientInvoicesResponse {
+        let id = Uuid::parse_str(&id).unwrap();
+        let probe = consume_context::<Probe>();
+        assert!(!probe.member, "member must not request invoices");
+        probe.client_invoice_requests.borrow_mut().push(id);
+        let response = probe.client_invoice_response.borrow_mut().take();
+        if let Some(response) = response {
+            return response.await.unwrap();
+        }
+        let mut invoice = get_invoice(id.to_string()).await?.invoice;
+        invoice.client_id = id;
+        Ok(vec![invoice])
+    }
+
+    pub async fn list_client_summaries() -> Result<Vec<client::ClientSummary>, ServerFnError> {
+        Ok(Vec::new())
+    }
+    pub async fn create_client(
+        _name: String,
+        _currency: String,
+        _address: Option<String>,
+        _tax: Option<String>,
+    ) -> Result<Client, ServerFnError> {
+        panic!("navigation must not create clients");
+    }
+    pub async fn update_client(
+        _id: String,
+        _name: String,
+        _currency: String,
+        _address: Option<String>,
+        _tax: Option<String>,
+    ) -> Result<Client, ServerFnError> {
+        panic!("navigation must not edit clients");
+    }
+    pub async fn set_client_active(_id: String, _active: bool) -> Result<Client, ServerFnError> {
+        panic!("navigation must not change client status");
     }
 
     pub async fn list_users(_archived: bool) -> Result<Vec<User>, ServerFnError> {
@@ -582,10 +911,37 @@ mod server_fns {
         Ok(Vec::new())
     }
     pub async fn list_projects(
-        _client: Option<String>,
+        client: Option<String>,
         _archived: bool,
     ) -> Result<Vec<Project>, ServerFnError> {
-        Ok(Vec::new())
+        let Some(client) = client else {
+            return Ok(Vec::new());
+        };
+        let response = consume_context::<Probe>()
+            .client_projects_response
+            .borrow_mut()
+            .take();
+        if let Some(response) = response {
+            return response.await.unwrap();
+        }
+        let id = Uuid::parse_str(&client).unwrap();
+        Ok(vec![Project {
+            id,
+            org_id: Uuid::nil(),
+            client_id: id,
+            code: None,
+            name: format!("Client-project-{}", id.as_u128()),
+            project_type: horae_core::types::ProjectType::TimeAndMaterials,
+            currency: "USD".into(),
+            rate_cents: None,
+            starts_on: None,
+            ends_on: None,
+            budget_kind: horae_core::types::BudgetKind::None,
+            budget_amount_cents: None,
+            budget_minutes: None,
+            active: true,
+            created_at: chrono::DateTime::UNIX_EPOCH,
+        }])
     }
     pub async fn list_project_tags() -> Result<Vec<project::ProjectTagLink>, ServerFnError> {
         Ok(Vec::new())
@@ -629,6 +985,13 @@ mod server_fns {
         })
     }
     pub async fn list_project_spend() -> Result<Vec<ProjectSpend>, ServerFnError> {
+        let response = consume_context::<Probe>()
+            .project_spend_response
+            .borrow_mut()
+            .take();
+        if let Some(response) = response {
+            return response.await.unwrap();
+        }
         Ok(Vec::new())
     }
     pub async fn list_project_budget_progress()

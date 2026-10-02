@@ -31,7 +31,7 @@ real related rows, no hidden fields and no mixed-currency totals.
 
 - [x] T010 [US2] Add failing detail/rate/invoice authorization and serialization tests in crates/horae/src/server_fns/clients/tests.rs and client-filter regression in server_fns/projects/privacy_tests.rs (MVP-002, MVP-003, MVP-SC-002).
 - [x] T011 [US2] Implement exact-client and manager billing reads in crates/horae/src/server_fns/clients.rs, reusing current related-project/invoice authorities (MVP-002, MVP-003).
-- [ ] T012 [US2] Build actual detail with independent panel error/retry and stale-route protection in crates/horae/src/pages/clients/detail.rs; fix detail sidebar selection in crates/horae/src/route.rs (MVP-002, MVP-008).
+- [x] T012 [US2] Build actual detail with independent panel error/retry and stale-route protection in crates/horae/src/pages/clients/detail.rs; fix detail sidebar selection in crates/horae/src/route.rs (MVP-002, MVP-008).
 
 ## Phase 5: US3 — Maintain existing information (P1)
 

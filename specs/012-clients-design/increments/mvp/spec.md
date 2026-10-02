@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-02
 
-**Status**: Clarified increment; implementation pending
+**Status**: Implementation in progress; browser and delivery gates pending
 
 **Input**: User-authorized implementation of searchable/filterable Clients, useful
 detail, existing-field create/edit and contextual navigation, following `design/`

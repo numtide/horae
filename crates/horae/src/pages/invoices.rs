@@ -21,7 +21,7 @@ mod editing;
 mod recovery;
 
 /// The badge class for an invoice status — one convention for list and detail.
-fn invoice_badge_class(status: InvoiceStatus) -> &'static str {
+pub(super) fn invoice_badge_class(status: InvoiceStatus) -> &'static str {
     match status {
         InvoiceStatus::Paid => "badge badge-success",
         InvoiceStatus::Sent => "badge badge-info",

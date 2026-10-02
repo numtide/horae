@@ -10,8 +10,13 @@ use crate::components::menu::{Menu, MenuItem};
 use crate::route::Route;
 use crate::server_fns;
 
+#[path = "clients/filters.rs"]
 mod filters;
 use filters::{ClientScope, matches_query_currency};
+
+#[path = "clients/detail.rs"]
+mod detail;
+pub use detail::ClientDetail;
 
 #[component]
 pub fn ClientList() -> Element {
@@ -319,20 +324,6 @@ pub fn ClientList() -> Element {
                         }
                     }
                 }
-            }
-        }
-    }
-}
-
-#[component]
-pub fn ClientDetail(id: Uuid) -> Element {
-    rsx! {
-        div {
-            div { class: "page-header",
-                h1 { class: "page-title", "Client" }
-            }
-            div { class: "card",
-                p { class: "text-muted", "Client detail for {id}" }
             }
         }
     }
