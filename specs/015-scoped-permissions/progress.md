@@ -758,3 +758,22 @@ Next: integrate the person-management authority answer when available; continue
 remaining reference/operation contracts without reopening accepted project
 delegation. Migration role mappings still require a complete access comparison
 and review before implementation.
+
+## 2026-10-02 — Continuation paused on unresolved policy
+
+- Revalidated clean `eb85bc1`. The preceding continuation produced no artifact
+  progress: Spec Kit Analyze stopped because tasks explicitly remain a partial
+  breakdown; a successful file-existence check did not satisfy its prerequisite.
+- The person-management authority question remains unanswered across successive
+  continuations since `80e2e42`. Independent inventory and migration-preservation
+  reviews have been recorded; repeating them adds no evidence. No automatic
+  continuation selects A or B.
+- Reviewed all remaining open tasks. Runtime/storage/tests depend on T006–T009;
+  T042 depends on finalized operation predicates. Full Analyze cannot substitute
+  for those decisions. No further implementation is justified from the current
+  evidence, and no reference/account mutation or expanded access is authorized.
+- Pause the active goal as blocked, not completed, pending the user's next policy
+  answer. A reserves person-management assignment writes to Administrators;
+  B also permits organization-wide people writers. This answer is the next
+  clarification, not a claim that all other permission/migration gates are solved.
+- No runtime changes or tests. This status record is not implementation progress.
