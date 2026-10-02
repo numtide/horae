@@ -777,3 +777,51 @@ and review before implementation.
   B also permits organization-wide people writers. This answer is the next
   clarification, not a claim that all other permission/migration gates are solved.
 - No runtime changes or tests. This status record is not implementation progress.
+
+## 2026-10-02 — Accept Administrator-only person-management assignments
+
+- The user explicitly answered A to the pending person-management writer
+  question. This resolves the recorded policy-answer blocker, not all feature
+  gates. No automatic continuation or project-delegation answer was reused.
+- Followed Spec Kit Clarify: read the skill, constitution and current spec; ran
+  the paths-only prerequisite check. No before/after extension hooks exist.
+  Integrated one answer into Clarifications, US2 acceptance, FR-005 and FR-027.
+- Only current active same-organization Administrators may add/remove/replace
+  person-management relationships. People Admin, Executive Manager and ordinary
+  custom people grants cannot confer this authority, including for one's own
+  managed-person set. Ordinary person operations and own-access explanations
+  remain independently authorized; project delegation FR-026 is unchanged.
+- Reconciled OP16/OP47, reference status, dependent-screen obligations, plan,
+  data model, tasks, research and quickstart. Tests cover atomicity, revisions,
+  revoked authority, scope, audit and no implicit profile/global grant changes.
+  Target eligibility, self-assignment and retention remain separate predicates.
+- Revalidated the checklist: 12/16 → 12/16, no newly checked items or regressions.
+  Complete unambiguous requirements, all acceptance scenarios, criteria for every
+  requirement and achieved outcomes remain unchecked. Full Plan/Analyze and
+  implementation acceptance are not claimed complete.
+- Self-reviewed actor/subject scope, explicit Administrator identity, project
+  versus person relationships and remaining open gates. No independent review or
+  runtime tests ran for this documentation-only clarification. No schema/data,
+  browser/account, runtime policy or other worktree changed; no merge.
+- Validation: `git diff --check` and `nix fmt -- --ci` pass with zero formatter
+  changes; the acceptance scenarios above remain pending runtime verification.
+
+Clarify coverage:
+
+| Category | Status |
+| --- | --- |
+| Functional scope and behavior | Resolved for person-management writer authority; other predicates deferred |
+| Domain and data model | Clear distinction between relationships and grants; eligibility/retention deferred |
+| Interaction and UX | Resolved for assignment controls versus permitted explanations/ordinary edits |
+| Non-functional quality | Clear existing privacy/authorization requirements; runtime validation pending |
+| Integrations and dependencies | Clear cross-screen/task ownership; full reconciliation deferred |
+| Edge cases and failure handling | Resolved for own-set requests, revocation, stale revisions and atomic denial |
+| Constraints and tradeoffs | Clear: no grant expansion or policy activation |
+| Terminology and consistency | Clear: project delegation differs from person-management administration |
+| Completion signals | Deferred: matrix, migration and full acceptance remain incomplete |
+| Miscellaneous placeholders | Clear: no new placeholder |
+
+Next: continue Spec Kit clarify/research on remaining target eligibility and
+operation predicates, then finish plan/tasks before full Analyze. Do not ask the
+settled person-management writer question again or interpret it as migration
+approval.

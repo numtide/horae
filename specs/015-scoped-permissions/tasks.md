@@ -73,8 +73,8 @@ note, but neither this nor the existing constitution amendment completes T008.
 
 - [ ] T009 Refine remaining work packages into executable file-level tasks in `specs/015-scoped-permissions/tasks.md`, complete requirement checks and repeat analysis before replacing runtime authorization.
 
-T006/T009 must also resolve OP47 person-management administration separately
-from FR-026 project delegation, and bind OP48 project duplication/deletion to
+T006/T009 must finish OP47 target eligibility/retention under FR-027's approved
+Administrator-only writer boundary, separately from FR-026 project delegation, and bind OP48 project duplication/deletion to
 its owning domain requirements. Feature 010's archive-only increment does not
 remove those operations from full web parity. T012/T013 cover relationship
 authority and revisions; T014/T015 cover source projection, dependent resources,
@@ -114,7 +114,14 @@ managed/all actor authority, read-only denial, compatible target grants evaluate
 with the proposed project scope, no automatic profile changes, removal without
 requiring target grants, same-organization active identities, atomic multi-person
 saves, revocation and negative permission payloads. Target grant changes remain
-Administrator-only. Project-creation and person-management authority stay separate.
+Administrator-only. Project-creation remains separate. T012/T013 also enforce
+FR-027 for person-management add/remove/replace: Administrator success with valid
+subjects, non-admin PeopleWriteAll/People Admin/Executive Manager/custom denial,
+own managed-set attempts, cross-org IDs, revocation/stale revisions, atomic batches
+and audit. Preserve profiles, global grants, project membership and history.
+T016–T018 distinguish assignment controls from independently authorized ordinary
+person editing and own-access explanations. Target eligibility/self-assignment/
+retention remain separate unresolved predicates, not waived by actor authority.
 
 - [ ] T043 [US2] Finalize the calendar/execution and correction cases in `specs/015-scoped-permissions/contracts/company-locks.md`; add failing injected-clock boundary tests in `crates/core/src/permissions/company_lock/tests.rs` for the finalized modes, timezone/week-start/month-end/DST rules and nondecreasing automatic cutoff (FR-019/023). T006–T009 gate code; this is not an independent permission foundation.
 

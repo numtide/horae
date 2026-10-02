@@ -34,7 +34,7 @@ with those features.
 | 009 manager-only controls and 010 FR-001 bulk guard | Their delivered legacy behavior is not the final permission model. Current capability and actual selected project coverage will replace role names at cutover; atomic batch and no-history-change rules remain | OP13 lifecycle predicate is not resolved by ordinary editing. T014/T015 must cover managed/all scope, unauthorized IDs and revocation before any role check is replaced |
 | 012 full feature FR-003 / SC-005 | Already defers to 015. Client management alone does not grant source rate, project, invoice or import authority | OP17/18 rate-default/contact/lifecycle predicates remain open. T014/T015 plus 012 verify fields, counts, search and contextual destination checks |
 | 012 MVP-003 and its explicit no-cutover clarification | Deliberately preserves legacy authorization for the delivered increment; this is not a contradiction requiring early policy activation | Re-run increment regressions after the actual cutover. Its existing test evidence does not prove six-profile acceptance |
-| 013 FR-002/003 and 014 FR-007/008/009 | Both already use 015 for effective permission explanations and assignment distinctions. FR-021/022 apply to Rates; being the subject is not authority. FR-025 read-only retention must not display project-edit powers | T016/T017 plus 013/014: consistent descriptions, reachable non-admin own explanations and permitted people destinations, no privilege controls from descriptive labels |
+| 013 FR-002/003 and 014 FR-007/008/009 | Both already use 015 for effective permission explanations and assignment distinctions. FR-021/022 apply to Rates; being the subject is not authority. FR-025 read-only retention must not display project-edit powers; FR-027 limits person-management assignment controls to Administrators without blocking authorized ordinary people operations | T016/T017 plus 013/014: consistent descriptions, reachable non-admin own explanations and permitted people destinations, no privilege controls from descriptive labels |
 | 013 FR-002 Workspace settings restriction | Administrator-only settings conflicts with OP27's candidate custom CompanyRead/CompanyWrite mapping. This is unresolved, not an accepted blanket boundary or authority expansion | Resolve per-operation settings predicates before cutover. FR-023's Administrator-plus-company-write company-lock rule does not decide all preferences; permission administration/audit remain separate |
 | 013 administrative Audit and operational approval history | FR-013 protects permission-change audit. OP46 is a separate scoped operational-history projection; do not expose privilege snapshots there or make all approval history admin-only | T012/T014/T015/T041: own/managed/all history and exports versus denied permission audit, current scope and mixed-scope event filtering; custom activity-history predicate remains open |
 
@@ -47,7 +47,7 @@ with those features.
   A redacted read is not permission to overwrite unseen data with defaults.
 - Keep feature-local requirement numbers qualified: 015 FR-024 is combined
   approval visibility; older features use the same number for unrelated rules.
-- Person-management delegation, creation/keep-access behavior, Workspace settings,
+- Person-management target eligibility/retention, creation/keep-access behavior, Workspace settings,
   invoice/contact/lifecycle scope, activity-history
   grants and reviewed migration still prevent closing T008/T009 or full Analyze.
-  This register does not choose them or reopen accepted FR-021/022/024/025/026.
+  This register does not choose them or reopen accepted FR-021/022/024/025/026/027.

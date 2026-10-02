@@ -218,7 +218,7 @@ lock key does not establish denial or justify granting that operation implicitly
 | C04 | Person Rates page still describes cost visibility as administrator-only, but current Accounting/Executive defaults contain cost read. | Resolved for Horae by user decision, 2026-10-02, FR-022: explicit organization-wide cost read/write and new-model defaults; Accounting/Executive read-only, Administrator read/write, other built-ins neither. Custom effective grants control access, not Administrator identity. Validate local payloads/mutations/revocation and preserve FR-008 report separation; restricted-user Harvest enforcement remains unverified. |
 | C05 | Current Preferences disables auto-lock/submit until a submission deadline is configured; newer company-lock guidance describes custom schedules independent of deadlines. | Deadline dependency resolved from current dedicated guides and the refreshed general approval guide: use the newer documented modes under the existing parity mandate. FR-019/023 and `company-locks.md` define target and local verification; retained owner controls are rollout evidence, not a universal prerequisite. No account setting was changed. |
 | C06 | `aJ` gives approve-managed its managed/own time reads and approve-all its all read plus managed approval; it does not add time-write or expense grants. Withdrawal has no such edge, despite a hint recommending time visibility. | Approval visibility resolved for Horae by user decision, 2026-10-02 (FR-024): approval authority plus visibility of every selected time/expense record; otherwise deny atomically, never silently approve only time. No catalog dependency or ordinary expense-write grant added. Harvest enforcement, withdrawal and other lifecycle predicates remain unverified/open; see `approval-visibility.md`. |
-| C07 | Permission-loss preview uses POST; `a3` warns about lost project-manager assignments. Its keep-access option adds managed-project read and write. | User-approved FR-025 retains with project read; confirmed read loss removes designations atomically, preserving membership/history. FR-026 permits project-editor delegation to compatible targets without global grant changes. Person-management delegation, creation and explicit keep-access behavior remain open. Harvest enforcement and preview POST effects remain unverified. |
+| C07 | Permission-loss preview uses POST; `a3` warns about lost project-manager assignments. Its keep-access option adds managed-project read and write. | User-approved FR-025 retains with project read; confirmed read loss removes designations atomically, preserving membership/history. FR-026 permits project-editor delegation to compatible targets without global grant changes. Person-management writer authority is resolved by FR-027; target eligibility/retention, creation and explicit keep-access behavior remain open. Harvest enforcement and preview POST effects remain unverified. |
 
 Source inspection also distinguishes initial template/profile selection (`dt`,
 built-in wins an equal-size tie) from non-admin automatic best-fit classification
@@ -393,10 +393,13 @@ does not explicitly state who may redefine another manager's managed-person set.
 Its role summaries and legacy API subject label do not establish custom-profile
 eligibility. FR-026 decides project delegation, not this relation.
 
-Asked one product question: retain Administrator-only person-management
-assignment writes (recommended, matching the explicit relationship docs), or
-also allow current organization-wide people writers. No answer yet. Neither
-choice would authorize implicit global grant changes; subject eligibility,
+Accepted user choice A, FR-027: only active same-organization Administrators
+may add, remove or replace person-management relationships. PeopleWriteAll,
+People Admin, Executive Manager and custom ordinary grants do not confer this
+authority, including when changing one's own managed-person set. This selects
+Horae's boundary, not verified new-model Harvest enforcement. Preserve current
+transactional authority, revisions, atomic audit and non-disclosing denial;
+never copy the legacy API's role-promotion side effect. Subject eligibility,
 self-assignment and relationship retention still need distinct predicates.
 OP47 makes this non-implemented operation explicit instead of hiding it under
 ordinary person editing or project membership.

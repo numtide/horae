@@ -276,7 +276,7 @@ settle it. No rate scope or prerequisite has been invented to close the gate.
   permission, silently promoting project managers or enabling grants piecemeal.
 - This is bounded Phase 0 integration research and partial T008 reconciliation.
   FR-026 now settles project-editor delegation to compatible people. Creation,
-  person-management delegation, remaining lifecycle predicates and migration
+  person-management eligibility/retention, remaining lifecycle predicates and migration
   remain open, so full planning/Analyze gates are not satisfied.
 
 ### Migration schema dependencies — 2026-10-02
@@ -290,9 +290,10 @@ settle it. No rate scope or prerequisite has been invented to close the gate.
 - Alternatives rejected: delete/reinsert membership, checking counts only,
   assuming safe child rows prove all parent tenancy, deriving requester identity
   from job tenant/lease metadata or repairing historical attribution by guess.
-- This is bounded Phase 0 evidence and fixture refinement. The unanswered person-
-  delegation choice, remaining operation matrix and migration mappings still
-  gate full planning, Analyze and runtime activation.
+- This is bounded Phase 0 evidence and fixture refinement. Person-management
+  writer authority is now settled by FR-027; remaining eligibility/retention,
+  operation predicates and migration mappings still gate full planning, Analyze
+  and runtime activation.
 
 ### Previous workflow record
 

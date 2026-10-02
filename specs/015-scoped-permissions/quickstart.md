@@ -111,6 +111,19 @@ Evidence from 2026-09-30:
 
 The browser preview on port 8092 and the user's Harvest account were not changed by these database tests. The whole feature remains draft; no full-flake or end-to-end permission acceptance is claimed here.
 
+## Person-management writer authority acceptance
+
+After the full implementation gates pass, verify FR-027 through the UI and direct
+requests: an active same-org Administrator can commit valid add/remove/replace
+operations; People Admin, Executive Manager and custom all-people writers cannot,
+including when editing their own managed-person set. Revoke administrative status
+between preview and save and change relationship revisions concurrently; no stale
+or partially authorized batch may commit. Check scope-change audit and unchanged
+profiles, global grants, project membership and historical work. Ordinary permitted
+person editing and own-access explanations remain available to non-administrators.
+Target eligibility, self-assignment and retention cases need their own completed
+contract; this is a test obligation, not an executed test or Harvest parity proof.
+
 ## Independent assignment isolation and revocation repair
 
 Using the same isolated PostgreSQL stack:
