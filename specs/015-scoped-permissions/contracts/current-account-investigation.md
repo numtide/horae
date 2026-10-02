@@ -264,6 +264,48 @@ changes under FR-010/011/013; those are local integrity obligations, not observe
 Harvest persistence. Nothing here authorizes removing tracking memberships,
 historical records or managed-person relations along with manager designation.
 
+### C07 assignment threshold follow-up — 2026-10-02
+
+Rechecked current official sources without changing an account:
+
+- The [Users API](https://help.getharvest.com/api-v2/users-api/users/users/#custom-profiles)
+  still defines loss of project access as removing manager designations, but
+  does not distinguish read-only from read/write access.
+- [Person profiles](https://support.getharvest.com/hc/en-us/articles/360048687291-Person-profiles)
+  and [project creation](https://support.getharvest.com/hc/en-us/articles/360048686831-Create-and-duplicate-projects)
+  describe an explicit confirmation when a Member becomes a manager. Their
+  legacy Manager terminology does not specify the new custom-grant transition.
+- The [bulk assignment guide](https://support.getharvest.com/hc/en-us/articles/360048687351-How-do-I-assign-a-person-to-multiple-projects)
+  describes role-dependent manager defaults and an exception for existing
+  projects with Member-tracked time. Do not apply these legacy defaults to
+  arbitrary custom profiles or confuse adding membership with granting powers.
+- The [assignment API](https://help.getharvest.com/api-v2/projects-api/projects/user-assignments/)
+  separates the manager flag, active assignment, rates and budget. Its old role
+  defaults do not resolve the read-only threshold either.
+
+Re-reading the retained editor's `a3` and confirmation handler confirms that the
+server supplies the lost-assignment count; the unchecked keep-access choice
+adds both managed-project read and write. The client does not reveal the server
+predicate. The existing owner-only snapshot offers no discriminating case, so
+repeating owner navigation would not settle this question.
+
+Proposed Horae choice, awaiting user acceptance: retain an existing manager
+designation when the resulting effective grants allow reading that project
+(managed or organization-wide project read); editing is independently granted.
+Tracking membership or shared progress alone does not satisfy this threshold.
+Remove the designation when project read access is lost, with affected projects
+previewed and explicitly confirmed. Never restore editing implicitly. The
+alternative is to require project editing too, which would remove designations
+on an intentional read-only downgrade. Neither threshold is verified Harvest
+enforcement; do not mark C07 resolved before a decision.
+
+After selection, acceptance must check absent/read-only/read-write/all-project
+grants, other existing managed capabilities, removal's effect on project-derived
+scope, preserved membership/history, cancellation and concurrent changes.
+Eligibility to create a new designation, promotion and the explicit keep-access
+action remain separate from retaining an existing designation. This proposal
+does not waive administrator-only privilege changes or migration review.
+
 ## Acceptance boundary
 
 This research increment is complete only when every read-only probe has an

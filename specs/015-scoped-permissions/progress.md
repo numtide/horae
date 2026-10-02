@@ -524,3 +524,30 @@ Next: continue Spec Kit clarify/research on C07's project-manager assignment-los
 threshold and explicit keep-access behavior, then remaining lifecycle/migration
 predicates before completing plan/tasks and Analyze. Do not reopen the accepted
 approval-visibility decision or activate partial policy.
+
+## 2026-10-02 — Narrow C07 to the read-only assignment threshold
+
+- Continued Spec Kit clarify from clean `7bcb3e2`, using the paths-only check,
+  current spec and constitution; no extension hooks exist. No accepted answer
+  was added or existing product decision reopened.
+- Rechecked the Users API, newer permissions article, person/project creation
+  guides, assignment API and bulk-assignment guide. Legacy promotion/default
+  behavior cannot establish the newer custom-grant threshold. Recorded source
+  links and limits in `contracts/current-account-investigation.md`.
+- Re-read the retained editor's loss-preview and keep-access handlers. The
+  server owns the unknown predicate; adding read AND write in an optional
+  preservation action does not prove both are required to retain a designation.
+  No POST, account change or redundant owner-only browser probe was performed.
+- Prepared one clarification: recommend retaining existing designations with
+  project read access, keeping editing independent; contrast requiring editing
+  too. Preview/confirmation is required before removing designations, with no
+  implicit grants or loss of tracking membership/history. This is a proposal,
+  not an accepted requirement or claim of observed Harvest persistence.
+- No runtime, migration, data or permission change. Full-feature readiness and
+  the 12/16 checklist status are unchanged; no full Analyze pass is claimed.
+- Validation: `git diff --check` and `nix fmt -- --ci` pass with zero formatting
+  changes. No runtime tests were run for this research-only update.
+
+Next: obtain the user's C07 retention-threshold decision, integrate the answer
+and matching acceptance cases, then resolve explicit assignment/promotion
+authority. Do not infer acceptance from a generic request to continue.
