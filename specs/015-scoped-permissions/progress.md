@@ -362,3 +362,20 @@ C01 or require paid/company-account access for the already approved behavior.
 Next: investigate C03's managed-person versus managed-project rate scope from
 the existing evidence before requesting any necessary product decision. Do not
 reopen C01/C02 or activate runtime policy before the existing integration gates.
+
+## 2026-10-02 — Narrow managed-rate clarification to the owning resource
+
+- Reused clean worktree at `f17fafa`; Spec Kit clarify paths check passed and no
+  extension hooks are configured. C01/C02 remain settled for Horae.
+- Reviewed official rate-setting, rate-editing, permissions and Users API pages.
+  Person defaults and project overrides have distinct effects; legacy Manager
+  prose does not establish the new custom grant's enforcement. Retained C03's
+  conflict rather than marking it resolved from documentation.
+- Recorded one pending proposal in `contracts/rate-scope-evidence.md`: managed
+  person authority for global person rates; managed project authority for local
+  project/person/task rates, with corresponding financial and resource grants.
+  Explicitly distinguish inherited-rate display from personal history, and
+  person-default propagation from modification of unrelated project overrides.
+- Next: ask whether to adopt this resource-specific rule as a Horae decision or
+  retain C03 pending authoritative/reference verification. No answer is assumed;
+  no application, schema, account or permission-spec requirement changed.

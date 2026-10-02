@@ -62,3 +62,30 @@ Do not complete the operation matrix while these rows lack outcomes.
 This is a reference-validation protocol, not executed tests. Once observations
 resolve the conflict, update the capability matrix, migration deltas, redaction
 contract and executable Horae acceptance tasks together.
+
+## 2026-10-02 clarification proposal — not selected
+
+Rechecked the linked permission, rate-setting and Users API documentation.
+[Editing billable rates](https://support.getharvest.com/hc/en-us/articles/12522267831181-Editing-billable-rates)
+adds a useful resource distinction: person-default changes affect projects that
+inherit that rate, whereas person-project overrides affect only that project.
+Its access instructions still use legacy Manager terminology, so this does not
+establish new custom-grant enforcement or resolve C03 by itself.
+
+Recommended product decision, pending user confirmation: with the corresponding
+managed billable read/write grant, authorize person-default rates/history by the
+managed-person relationship and project-owned rates/history (including person
+and task overrides) by the managed-project relationship. Managing a project does
+not authorize changing participants' global defaults; managing a person does not
+authorize their overrides in unrelated projects. Project access may disclose the
+effective inherited rate needed for that project, not unrelated personal rate
+history. Global task defaults require organization-wide rate authority; retain
+separate operation/resource permissions and independent cost permissions.
+
+This is a field-specific proposal, not a generic person-or-project union. A
+person-default edit can legitimately affect inheriting projects outside the
+actor's project-management scope; show that effect without exposing unauthorized
+project identities. Such an edit must not write those projects' local overrides.
+Alternative: keep C03 pending until a restricted-actor reference test or an
+authoritative clarification is available. No paid seat or company-account write
+is requested. Neither option has been selected; no runtime contract is changed.
