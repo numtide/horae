@@ -27,9 +27,10 @@ The [current-account investigation](contracts/current-account-investigation.md)
 records conflicting evidence: public help promises preserved permissions after
 template deletion while the editor warns of a possible Member downgrade. The
 2026-10-02 decision below resolves C01 for Horae; actual Harvest deletion remains
-unverified, not established parity. FR-008's sensitive-data contract
-also requires C02/C03/C04 resolution: report-authorized displayed data is not
-automatically ordinary rate-API access, and rate scopes remain contradictory.
+unverified, not established parity. The same session resolves C02 for Horae:
+report permission authorizes its displayed financial data within the report's
+scope, without granting ordinary rate access. Restricted-user Harvest enforcement
+remains unverified; C03/C04 rate scopes remain contradictory.
 C05–C07 retain the scheduling, approval and assignment-loss gates. T006 remains
 open; no acceptance scenario is marked passed from owner-visible controls.
 
@@ -46,6 +47,7 @@ confirmed contracts; local tests alone cannot settle contradictory reference fac
 ### Session 2026-10-02
 
 - Q: Should deleting a reusable permission template preserve the permissions of its existing assignees despite the conflicting Harvest editor warning? → A: Yes. Remove the template from future assignment choices and retain every assignee's current permissions as a person-specific configuration. Explain this in the confirmation dialog; revoking permissions is a separate explicit action that previews the affected people. This is an approved Horae behavior, not a claim of verified Harvest persistence.
+- Q: Does access to a financial report authorize its displayed amounts without separate ordinary rate permissions? → A: Yes (option A). Authorize the report's defined financial fields and corresponding exports within its scope, without granting general rate access or editing. Ordinary source records, rate history and unrelated report families retain their own permissions. This resolves C02 for Horae; restricted-user enforcement in Harvest remains unverified.
 
 ## User Scenarios & Testing
 
@@ -94,7 +96,9 @@ A person sees consistent access in the application, reports, downloads and conne
 
 **Acceptance Scenarios**:
 
-1. **Given** no rate or cost permission, **When** a person reads a project, picker, report, export or integration response, **Then** those values are absent, not merely hidden in the screen.
+1. **Given** neither ordinary rate/cost permission nor applicable report-specific financial permission, **When** a person reads a project, picker, report, export or integration response, **Then** restricted financial values are absent, not merely hidden in the screen.
+1. **Given** permission for a financial report but no ordinary rate/cost permission, **When** the person reads that report or its corresponding export, **Then** its defined financial fields and amounts are present within the authorized report scope, while direct rate reads, rate history, edits and unrelated report families remain denied without their own permissions.
+1. **Given** report permission has been revoked, **When** the person next requests the report, queues its generation or downloads a retained result, **Then** the earlier report permission cannot authorize disclosure; ordinary rate access alone does not restore access to the report.
 1. **Given** a direct link or identifier outside the caller's scope or organization, **When** accessed, **Then** it reveals no private identity, amounts, notes, counts or file contents.
 1. **Given** revoked authority, **When** queued work executes or a generated result is downloaded, **Then** it cannot use the earlier permission snapshot to bypass revocation.
 1. **Given** approved/invoiced time or restricted tasks, **When** an otherwise authorized edit is attempted, **Then** existing state and integrity rules still apply; general edit permission does not unlock records.
@@ -155,7 +159,7 @@ An administrator can review how existing roles and project assignments translate
 - **FR-005**: Project membership, project management and person-management assignments MUST be distinct, organization-scoped relationships. Who may change each assignment and any associated profile transition MUST follow the verified Harvest parity matrix; do not impose an unverified administrator-only restriction on every assignment. Ordinary tracking membership or identity matching MUST NOT silently promote a person.
 - **FR-006**: Within the same organization, a capability's authorized self/project/person scopes combine without duplicates. No capability or matching scope means denial. Inactive identity, organization boundaries, task restrictions and business-state locks remain mandatory constraints, not overridable grants.
 - **FR-007**: All delivery paths MUST enforce current effective permissions, including direct operations, lists and aggregates, downloads, compatibility interfaces, remote administration and user-initiated background work. Trusted system jobs and plugins MUST retain explicitly documented service capabilities rather than acquiring unrestricted end-user authority.
-- **FR-008**: Separate permission to view/edit billable rates, view/edit costs, view invoices, manage invoices and view private notes. Restricted fields and derived amounts MUST be absent from unauthorized responses and exports. Aggregate project progress MUST NOT grant detailed personal-note access.
+- **FR-008**: Separate permission to view/edit billable rates, view/edit costs, view invoices, manage invoices, view financial report families and view private notes. A financial report permission MUST authorize that report's defined financial fields and derived amounts, including corresponding exports, within its authorized scope without requiring ordinary rate/cost permissions. It MUST NOT grant general rate access, rate history, editing, unrelated report access or access to underlying source records outside the report projection. Ordinary rate permissions alone MUST NOT grant financial report access. Restricted fields and derived amounts MUST be absent from otherwise unauthorized responses and exports. Aggregate project progress MUST NOT grant detailed personal-note access.
 - **FR-009**: Support separately actionable project portions of a person's submission. The effective approval selection MUST be limited by current project/person authority and the displayed person/project/client/date filters; grouping MUST NOT widen it. Approving one project MUST leave other projects' approval state unchanged. Show partial versus complete approval truthfully and retain the actual actor, affected scope and history. Whole-person approval remains possible when its full selected scope is authorized, but MUST NOT be the only supported operation.
 - **FR-010**: Permission changes MUST apply on the next authorization check, including still-live sessions, queued execution and result download. Mutations racing a completed revocation MUST not commit using stale authority. Already downloaded data cannot be recalled; no such promise may be displayed.
 - **FR-011**: Only administrators may assign profiles or customize privileges. Assignment management MUST follow FR-005's verified capability/scope rules and MUST NOT become an indirect privilege-escalation path. Last-active-administrator protection MUST hold under concurrent changes. Changes MUST be atomic, reject stale edits and leave existing privileges intact on failure.

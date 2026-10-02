@@ -335,3 +335,30 @@ all five stories remain active and unfinished.
 Next: clarify C02's report-specific financial visibility versus ordinary rate
 access using the existing evidence. Ask one decision at a time; do not reopen
 C01 or require paid/company-account access for the already approved behavior.
+
+## 2026-10-02 — User resolves report financial visibility
+
+- User explicitly selected C02 option A. A financial report grant authorizes its
+  defined financial projection and matching exports within report scope without
+  ordinary rate/cost grants. It does not grant source/rate/history access,
+  editing or unrelated report access; rate-only access does not open reports.
+- Used Spec Kit clarify and its paths-only prerequisite check in the existing
+  clean worktree at `5fb78a7`; no extension hooks are configured. Integrated the
+  accepted answer into dated Clarifications, FR-008, US3, the operation matrix,
+  evidence register, plan, model, T014 and validation guide.
+- Removed US3's contradictory blanket financial-redaction condition. Acceptance
+  now distinguishes report-only, rate-only, both and neither, including export,
+  tenant/scope, forged-selector and revocation cases. These are specified tests,
+  not executed runtime checks or verified restricted-user Harvest behavior.
+- Spec quality remains 12/16, with no marker changes: remaining requirements,
+  acceptance coverage, complete requirement-to-criterion coverage and achieved
+  success criteria remain incomplete. C03–C07 and migration/persistence gates
+  are not waived. No runtime, schema, real-account data or browser config changed.
+- Validation: `git diff --check` and `nix fmt -- --ci` passed (zero formatting
+  changes); reviewed the cross-file diff for blanket-redaction contradictions
+  and accidental source-access grants. No runtime suite was rerun for this
+  specification-only update.
+
+Next: investigate C03's managed-person versus managed-project rate scope from
+the existing evidence before requesting any necessary product decision. Do not
+reopen C01/C02 or activate runtime policy before the existing integration gates.

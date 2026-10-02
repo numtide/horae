@@ -118,7 +118,7 @@ revisions supply mechanics, not approval of any mapping or a permanent legacy mo
 | Gate | Decision/evidence still required | Why storage mechanics do not settle it |
 | --- | --- | --- |
 | Saved template application (C01 deletion resolved) | Update/reapply outcomes, name equivalence and saved classification outside the approved deletion flow | Determines remaining person/template changes and uniqueness/transition constraints |
-| C02–C04 | Ordinary versus report-derived rate/cost scopes | Determines trusted operation predicates and field redaction, not a profile label |
+| C02 resolved; C03–C04 open | Report grants authorize their financial projection/export without ordinary rate grants; managed billable/cost scopes remain unresolved | Keep report and ordinary rate authorization separate; no extra rate grant is persisted merely to open a report |
 | C05–C06 and FR-019 | Independent scheduling locks, approval/withdrawal predicates and coverage transitions | Determines approval locks and migration, not merely grant serialization |
 | C07 and FR-005 | Assignment authority, loss preview, induced profile changes | Determines complete affected set, prerequisites and audit scope |
 | T007 / US5 | Approved existing-data mapping and historical job/approval transition | Needed before any policy activation, including imported/development data |
