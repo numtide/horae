@@ -727,3 +727,34 @@ Do not reopen the accepted delegation choice or claim full permission readiness.
 Next: integrate the person-assignment answer when supplied. Continue independent
 contract work without assuming that answer, purchasing account access or treating
 legacy role labels as the final capability matrix.
+
+## 2026-10-02 — Migration dependency and preservation review
+
+- Previous goal turn made progress in `80e2e42`; confirmed that revision and a
+  clean worktree. Person-management delegation remains unanswered. No automatic
+  continuation or recommended option was recorded as a user decision.
+- Used Spec Kit Plan for bounded Phase 0 research: read skill/template, current
+  spec, constitution and existing artifacts; ran setup-plan, preserving the
+  existing plan. No extension hooks exist. Remaining policy gates prevent full
+  Phase 1/Analyze completion or runtime activation.
+- Inspected SQL migration dependencies, with an independent research review of
+  assignment relationships. Found that deleting/reinserting memberships would
+  cascade-delete costs, budgets and restricted-task allowances; matching parent
+  counts would not prove preservation. Assignment rates also distinguish NULL
+  inheritance from zero, and SQL views retain old role-based financial access.
+- Added concrete cases M01–M08 to `contracts/migration.md`, linked from the data
+  model and T007/T019: tenant anomalies, business-child identities, rate resolution,
+  role namespaces, SQL consumers, stale/exhausted revisions, approval provenance
+  and unknown job requesters versus already tenant-bound artifacts. No live data
+  audit was performed or claimed; these facts describe checked-in schema only.
+- Independent adversarial review of the resulting delta found no high/medium
+  findings. `git diff --check` and `nix fmt -- --ci` pass, with zero formatter
+  changes. No runtime or database tests ran; the listed fixtures remain pending.
+- No migration, runtime/schema edit, account write, new product choice or merge.
+  T007/T019 and full implementation acceptance remain open; no checklist items
+  were marked complete from static inspection.
+
+Next: integrate the person-management authority answer when available; continue
+remaining reference/operation contracts without reopening accepted project
+delegation. Migration role mappings still require a complete access comparison
+and review before implementation.

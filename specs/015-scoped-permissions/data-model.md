@@ -33,6 +33,13 @@ organization column plus a globally unique resource ID does not prevent linking
 resources across organizations. Existing malformed assignments block their
 reviewed migration; do not erase or relink them to make constraints pass.
 
+Separating management must preserve existing tracking memberships, not rebuild
+them by delete/insert: `0030_project_creation.sql` cascades membership deletion
+into cost overrides, budgets and restricted-task allowances. Preserve assignment
+IDs, rates and child identities/content; verify M01–M08 in the
+[migration contract](contracts/migration.md#concrete-preservation-and-preflight-cases).
+These fixtures refine preservation, not the unapproved legacy role mapping.
+
 | Proposed entity | Stored facts | Constraints and consumers |
 | --- | --- | --- |
 | Person permission state | User ID, canonical normalized grant set, explicit administrative identity, selected profile/template provenance, catalog version, person revision | One row per organization/user; active status and sign-in identity remain on `users`. Custom grants/display classification cannot create administrative identity. Trusted loaders, both permission screens and audit use this same state. |

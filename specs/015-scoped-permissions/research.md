@@ -279,6 +279,21 @@ settle it. No rate scope or prerequisite has been invented to close the gate.
   person-management delegation, remaining lifecycle predicates and migration
   remain open, so full planning/Analyze gates are not satisfied.
 
+### Migration schema dependencies — 2026-10-02
+
+- Decision: refine T007/T019 with M01–M08 in `contracts/migration.md` from the
+  checked-in SQL, without selecting role mappings or running a migration.
+- Rationale: assignment pairs own cascading cost/budget/task-access children;
+  replacing membership rows would destroy business settings. Rate NULL/zero
+  semantics, SQL authorization views and revision triggers also participate in
+  a data-preserving cutover, beyond copying role labels.
+- Alternatives rejected: delete/reinsert membership, checking counts only,
+  assuming safe child rows prove all parent tenancy, deriving requester identity
+  from job tenant/lease metadata or repairing historical attribution by guess.
+- This is bounded Phase 0 evidence and fixture refinement. The unanswered person-
+  delegation choice, remaining operation matrix and migration mappings still
+  gate full planning, Analyze and runtime activation.
+
 ### Previous workflow record
 
 - Followed the checked-in `speckit-specify` skill, local template and constitution. No extension hooks or template preset overrides were found.

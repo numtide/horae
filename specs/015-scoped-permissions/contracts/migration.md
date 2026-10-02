@@ -30,6 +30,69 @@ Paths in this table are relative to `crates/horae/`, with Rust modules under
 `src/`. Static inspection establishes these shapes and guards, not a database
 audit of the user's installation or executed migration acceptance.
 
+### Schema dependency follow-up
+
+Checked migration SQL at `80e2e42` on 2026-10-02, independently of any live
+database. These additional facts refine preservation/preflight obligations;
+they do not establish that the installation contains anomalous rows.
+
+- `0001_init.sql` gives `assignments` independent project/user foreign keys and
+  `UNIQUE(project_id, user_id)`, but no organization column. A cross-organization
+  membership can satisfy those constraints. Ordinary duplicate membership pairs
+  cannot coexist under the intact unique constraint.
+- `0030_project_creation.sql` makes `project_member_costs`,
+  `project_member_budgets` and `project_task_members` reference that membership
+  pair with `ON DELETE CASCADE`. Their composite tenant checks do not prove that
+  a parent assignment without children is tenant-safe. No migration FK references
+  `assignments.id`; preserving the pair by deleting/reinserting it would still
+  delete the children. Preserve membership identity, creation time and child
+  identities/content while introducing separate management relationships.
+- `0031_project_billing.sql::resolve_project_rate` uses the assignment override
+  for legacy/person billing. NULL inherits, while zero is a real override;
+  permission migration must not replace either with a person's default rate.
+- `0034_task_tracking_access.sql::time_entry_contexts`,
+  `0035_project_read_access.sql::project_read_access` and
+  `0036_task_read_access.sql::task_read_access` embed legacy role or membership
+  predicates. The latter two also expose a legacy role-based rate flag. These
+  SQL consumers must participate in activation; changing only Rust guards leaves
+  old financial access. Preserve narrow own-history identity reads independently
+  of new tracking eligibility, management and financial fields.
+- `0039_project_editing.sql` invalidates project revisions after assignment or
+  dependent-child changes. Rewriting a relationship can lock/update project
+  parents and fail on exhausted revisions. The migration must follow the common
+  hierarchy and stale-editor contract, not disable triggers to hide changes.
+- `0001_init.sql::approvals` stores organization, person and optional approver
+  through independent foreign keys, not composite tenant references. Attribution
+  and person tenancy require preflight; a valid actor UUID is not proof of the
+  same organization. Historical audit rows have still weaker references and
+  must not be used to invent missing authority or approval coverage.
+- Job migrations `0023`/`0025`/`0029` record leases, claim tokens and account
+  generations, not a typed initiating-user field. `0026` and `0027` already bind
+  uploads/error chunks to `(job_id, org_id)`. Artifact tenancy is not requester
+  provenance, and a worker ID, generation or uploader filename cannot supply it.
+
+## Concrete preservation and preflight cases
+
+These cases extend the fixtures below and are owned by T007/T019. They are
+required test inputs/outcomes, not executed tests or approved role mappings.
+
+| Case | Fixture and required result |
+| --- | --- |
+| M01 — Parent tenancy | A cross-org assignment without child settings blocks affected activation. Preflight derives tenancy from both resources, never only the project or existence of tenant-safe children. Tenant-facing diagnostics expose no foreign identity or financial payload. |
+| M02 — Cascaded settings | A membership with cost override, per-person budget and restricted-task allowance retains membership ID/pair/creation time and every child ID/value when management is separated or removed. A delete/reinsert implementation fails this fixture even if membership counts match. |
+| M03 — Financial preservation | Use NULL, zero and positive assignment rates with nonzero fallback defaults under legacy/person billing; verify identical resolved rates, exact amounts and snapshots before/after migration and retry. No repricing follows from designation changes. |
+| M04 — Role namespaces | Cross each legacy organization role with lead/admin/freelancer project roles and active/inactive state. Only the explicitly reviewed mapping sets management/grants; project `admin` never supplies organization Administrator identity or inferred managed people. |
+| M05 — SQL consumers | Compare tracking contexts, project/task identities, progress and financial payloads across UI/API/export consumers after activation. A legacy Manager label cannot restore denied rates; own-history identity access cannot become fresh tracking or management authority. |
+| M06 — Revision/rollback | Race activation with a project editor and membership/child changes; reject stale confirmations. Exercise an exhausted revision and an interrupted transaction: preserve all source rows and business values on rollback, with no partial policy or silent revision reset. |
+| M07 — Approval provenance | Foreign person/approver references and missing/ambiguous historical facts prevent unreviewed conversion. Preserve existing attribution as evidence; never assign the current admin or derive historical project coverage from today's assignments. No repair is implicit in preflight. |
+| M08 — Jobs and artifacts | Cover queued/running/terminal jobs with unknown requesters and retained tenant-bound uploads/chunks. Require the reviewed provenance policy before execution/retry/publication after cutover; preserve lease/generation fences and artifacts, never infer authority from their tenancy. |
+
+Preflight must be read-only and distinguish a source invariant violation from a
+candidate mapping difference or missing reference evidence. Reread/fence its
+inputs at activation; a report from an earlier snapshot is not permission to
+commit. Anomalies block the affected organization transition without silently
+deleting, reparenting, resetting revisions or normalizing financial values.
+
 ## Reviewable preview
 
 Before any policy activation, produce a same-organization, administrator-only

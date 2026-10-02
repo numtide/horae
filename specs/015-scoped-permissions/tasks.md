@@ -172,6 +172,14 @@ Independent test: populated migration fixture, reviewed access differences, safe
 
 - [ ] T019 [US5] Add migration, import and identity-linking fixtures in `crates/horae/tests/integration.rs`; implement only the reviewed migration in `crates/horae/migrations/` and import/auth consumers (FR-014/017).
 
+T007/T019 include migration cases M01–M08 in `contracts/migration.md`: parent
+tenancy without child rows, cascading cost/budget/task membership preservation,
+NULL/zero rate resolution, distinct role namespaces, SQL-view consumers,
+revision exhaustion/stale editors, historical approval attribution and unknown
+job requesters versus tenant-safe artifacts. Compare identities and values, not
+just counts. Fixtures must use isolated databases; preflight is read-only and no
+data repair, role mapping or runtime activation is authorized by these cases.
+
 ## Phase 9: Acceptance
 
 - [ ] T020 Verify every matrix row, regression surface and migration case; record evidence in `specs/015-scoped-permissions/quickstart.md`, complete all requirement checks and run full Nix gates before requesting merge (FR-018/020, SC-001–009).
