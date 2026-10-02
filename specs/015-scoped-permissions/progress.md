@@ -407,3 +407,33 @@ reopen C01/C02 or activate runtime policy before the existing integration gates.
 Next: resolve C04's cost-visibility contradiction using current role documentation
 and captured grants; do not reopen C01–C03. Continue Spec Kit clarification before
 finalizing the integrated policy plan; do not call this delivered permissions.
+
+## 2026-10-02 — User accepts explicit cost permissions
+
+- User accepted the new-model C04 recommendation. Accounting/Executive Manager
+  read organization cost rates without writing, Administrator has both, and the
+  other built-ins have neither by default. Custom/per-person effective grants,
+  not Administrator identity, control cost access; write includes read.
+- Used Spec Kit clarify from clean `168d536`, with paths-only prerequisite
+  check and no extension hooks. Integrated one accepted answer into dated
+  Clarifications, FR-022 and US3; reconciled the rate contract, evidence register,
+  operation matrix, profile notes, model, plan, T014/T015 and quickstart.
+- Preserved FR-008 report-only projection and independent person/project/action
+  constraints. Billable/management grants do not imply costs. Acceptance covers
+  built-in/custom read/write, history, supported overrides, denied mutations,
+  tenant isolation and revocation. These are planned tests, not executed checks.
+- Re-evaluated the quality checklist: 12/16 remains 12/16, no regressions or marker
+  changes. Remaining ambiguous requirements, acceptance coverage, complete
+  requirement criteria and achieved outcomes still prevent full completion.
+  C01–C04 are settled for Horae, not verified restricted-user Harvest enforcement.
+  C05–C07 and migration/integration gates remain; no runtime/schema/account change.
+- Validation: `git diff --check` and `nix fmt -- --ci` pass. The first formatter
+  check exposed a loose-list spacing change around FR-022; restored the compact
+  requirement list and reran successfully with zero changes. Reviewed the diff
+  for lingering C04 product gates and accidental report/resource privilege
+  expansion. No runtime tests or full-flake run are claimed for this docs-only edit.
+
+Next: investigate C05's submission-deadline versus independent scheduled-lock
+behavior using current documentation and existing captured settings. Continue
+clarification only where a material product choice remains, without reopening
+C01–C04 or treating these contracts as implemented permissions.

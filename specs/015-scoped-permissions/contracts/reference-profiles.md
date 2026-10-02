@@ -92,7 +92,7 @@ These are documented API semantics, not observed UI persistence. Lookup normaliz
 
 ## Remaining acceptance gaps
 
-The full Horae operation matrix still needs lifecycle mapping, local verification of approved managed-rate scope, cost-visibility resolution, custom save/delete persistence checks, assignment-authority checks, exact approval/withdrawal enforcement and migration review. UI configuration/source evidence alone does not pass those tests. Keep the full-feature gate open while using these findings to replace earlier guesses.
+The full Horae operation matrix still needs lifecycle mapping, local verification of approved billable/cost access (FR-021/022), custom save/delete persistence checks, assignment-authority checks, exact approval/withdrawal enforcement and migration review. C04 now follows the user-approved new-model cost grants rather than Administrator-only help. UI configuration/source evidence alone does not pass those tests. Keep the full-feature gate open while using these findings to replace earlier guesses.
 
 The 2026-10-01 [rate-scope investigation](rate-scope-evidence.md) confirms that
 public permission/API documentation does not settle the people-versus-project

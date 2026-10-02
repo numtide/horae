@@ -1,8 +1,8 @@
 # Managed-rate scope: reference evidence and verification
 
-Checked: 2026-10-02. Status: C03 resolved for Horae by user decision; Harvest
-enforcement remains unverified and C04 cost visibility remains unresolved.
-Owns the rate-scope portion of T006 and FR-002/005/008/015/020/021.
+Checked: 2026-10-02. Status: C03/C04 resolved for Horae by user decisions;
+restricted-user Harvest enforcement remains unverified.
+Owns the rate-scope portion of T006 and FR-002/005/008/015/020/021/022.
 
 ## What the evidence establishes
 
@@ -99,3 +99,18 @@ read and write independently, then remove each grant or relationship. Include
 inherited-rate display versus unrelated history, global task defaults,
 read-only mutation denial, foreign organizations and unchanged project overrides
 after a permitted person-default change. Full-feature acceptance remains gated.
+
+The user also resolved C04: follow the new-model cost grants and defaults in
+[Permissions](https://support.getharvest.com/hc/en-us/articles/44171549176077-Permissions)
+and the captured editor catalog. Accounting/Executive Manager read organization
+cost rates without writing; Administrator has both; other built-ins have neither.
+Custom profiles use explicit cost read/write grants with write implying read,
+not Administrator identity. FR-022 governs this contract.
+
+The [cost-rate guide](https://support.getharvest.com/hc/en-us/articles/360048687391-Setting-and-editing-cost-rates)
+still says Administrator-only and both denies and describes project-specific
+cost rates. Treating that copy as outdated is an interpretation supported by the
+new-model guide/catalog, not an observed restricted-user enforcement test.
+Local acceptance must cover ordinary cost fields/history and supported project
+overrides, independent resource constraints, custom grants, read-only mutation
+denial, revocation, foreign organizations and FR-008 report-only separation.

@@ -104,6 +104,12 @@ mutation denial, removal of either grant or relationship, foreign organizations,
 and person-default propagation without changing project overrides. Use production
 paths when integrating; passing pure selection tests does not establish enforcement.
 
+For C04/FR-022, T014/T015 also cover built-in and custom cost read/write grants,
+write-implies-read dependencies, ordinary cost fields/history and supported
+project overrides, read-only mutation denial, revocation and foreign organizations.
+Preserve independent resource authority and distinguish report-only disclosure
+from ordinary cost access; neither profile names nor billable grants authorize costs.
+
 - [ ] T039 [US3] Add cross-command lock-order/revocation tests in `crates/horae/tests/integration.rs` and affected `server_fns/` test modules for project creation/editing, membership/management, activation and settings; include organization-row updates, trigger/FK lock paths, snapshot readers waiting across revocation, whole-transaction retry, bounded import commits, credential writes, report conversion and caller-aware download pages (FR-005/007/010/018).
 
 - [ ] T040 [US3] Apply T042's hierarchy by reconciling organization-first locking in `crates/horae/src/server_fns/project_creation/`, `server_fns/projects.rs`, `server_fns/users.rs`, `cli.rs` and all remaining access-affecting writers in the final inventory; no shared-to-exclusive upgrade or fabricated operator user (FR-007/010/017/018).

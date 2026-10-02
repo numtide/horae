@@ -88,7 +88,7 @@ The 2026-10-02 user clarification now selects C01 deletion semantics: detach the
 template while preserving assignees' effective grants/scope as person-specific
 configurations. Apply it to US4 tests and persistence/audit design. This resolves
 that product choice only, not remaining template update/reapplication rules,
-reference conflicts C04–C07, migration mappings or full runtime readiness.
+reference conflicts C05–C07, migration mappings or full runtime readiness.
 
 The user also selected C02 option A: authorize financial report projections and
 their matching exports through the report grant, without adding ordinary rate
@@ -101,8 +101,12 @@ The user selected C03's resource-specific rate scope (FR-021): person defaults
 follow person management; project rates and person/task overrides follow project
 management. Both require the matching financial permission. T014/T015 must cover
 the independent person/project cross-product, inherited-rate versus history
-projection, read-only denial and revocation. This does not settle C04 cost rules,
-approve migration mappings or activate runtime policy.
+projection, read-only denial and revocation. C04 now follows approved FR-022:
+explicit organization-wide cost read/write, Accounting/Executive read-only,
+Administrator read/write and custom effective grants. Apply the same separation
+to ordinary cost payloads and supported project overrides, preserving unrelated
+resource authority. These decisions do not approve migration mappings or activate
+runtime policy; local integration and restricted-user reference checks differ.
 
 The [operation matrix](contracts/operation-matrix.md) maps all 80 inspected public
 async server-function symbols plus HTTP/authentication, worker and operator
