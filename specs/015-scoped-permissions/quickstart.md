@@ -66,7 +66,28 @@ for the focused increment. The same full-core and Clippy commands above apply.
   Passing selection tests is not proof of administrative identity or persisted
   access enforcement. T006–T020 and the full feature remain open.
 
-### Remaining full-feature checks
+### Strict saved-grant restoration evidence (2026-10-02)
+
+- RED: the nine new `permissions::catalog::stored_tests` failed to compile before
+  the restoration API existed (exit 101).
+- GREEN: all 152 core tests pass. New checks cover six built-ins, custom grants,
+  changed/revoked selections, arbitrary input order, unsupported versions, every
+  missing floor/dependency and every duplicated catalog grant. The pair exercise
+  covers 2,500 ordered grant pairs and their valid removal outcomes.
+- Mutation check: bypassing the prerequisite-closure check made the negative test
+  fail on `TimeWriteManaged` without `TimeReadManaged`. Restored the check and
+  reran all 152 tests successfully.
+- Core/all-targets Clippy with warnings denied passed. Formatting and diff
+  whitespace checks passed. Self-review verified no editor normalization in the
+  loader, no default-profile lookup and no runtime callers. No independent-agent
+  review is claimed for this increment.
+- No schema, SQLx query/cache, app authorization, data or dependency changes.
+  T035/T036 and full feature acceptance remain open; this is a pure structural
+  boundary, not authenticated PostgreSQL loading or new-policy enforcement.
+
+Run with `nix develop --command cargo test -p horae-core permissions::catalog::stored_tests --locked`.
+
+### Remaining full-feature scenarios
 
 For FR-023 use the acceptance matrix in [company locks](contracts/company-locks.md)
 and T043–T046. Verification uses disposable data and an injected clock, not a

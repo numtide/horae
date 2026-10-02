@@ -54,6 +54,13 @@ crates/horae/tests/integration.rs
 
 ## Execution and Dependencies
 
+The renewed implementation request also permits T047–T049: strict restoration of
+the confirmed saved grant selection in the pure core. Validate catalog version,
+duplicates, Member floor and prerequisite closure without adding grants on load.
+Keep this separate from editor normalization. No schema, source-classification,
+administrative identity or runtime authorization is introduced by this increment;
+the persistence and cutover gates below remain unchanged.
+
 The 2026-10-02 implementation request permits advancing the confirmed catalog and
 profile/dependency model with local tests while reference conflicts remain isolated.
 Follow [grant-catalog.md](contracts/grant-catalog.md) and T027–T029 before runtime

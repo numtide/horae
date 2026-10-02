@@ -4,6 +4,10 @@ use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
 
+/// Version of the grant identifiers, immutable floor and prerequisite semantics.
+/// Changes to these persisted semantics require an explicit migration review.
+pub const PERMISSION_CATALOG_VERSION: u32 = 1;
+
 /// Known grant identifiers. Ordering only provides deterministic set iteration.
 ///
 /// A catalog entry does not enable a product or define its record/field scope.
@@ -185,8 +189,9 @@ const MEMBER_FLOOR: &[Permission] = &[
 /// Editable grant set with the Member floor and transitive prerequisites included.
 ///
 /// This is not an authenticated policy. In particular, possessing every grant
-/// does not establish administrator identity. Deserialized grants must go through
-/// explicit selection construction before preview, then server authorization on save.
+/// does not establish administrator identity. Editor input uses [`Self::new`];
+/// saved grants use [`Self::from_stored`] to prevent silent privilege expansion.
+/// Neither construction path replaces server authorization.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(transparent)]
 pub struct PermissionSelection(BTreeSet<Permission>);
@@ -198,7 +203,50 @@ pub enum PermissionEditError {
     MemberFloor,
 }
 
+/// Invalid saved grants must be explicitly repaired, never normalized on read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum StoredPermissionError {
+    #[error("Unsupported permission catalog version")]
+    UnsupportedCatalogVersion,
+    #[error("Stored permissions contain duplicate grants")]
+    DuplicatePermission,
+    #[error("Stored permissions are missing required grants")]
+    NonCanonicalSelection,
+}
+
 impl PermissionSelection {
+    /// Restores a saved grant set without adding defaults or prerequisites.
+    ///
+    /// Input order is irrelevant. The caller must decode every grant, rejecting
+    /// unknown identifiers, and verify tenant, identity, revision and scope.
+    /// This result is structurally valid, not an authenticated authority.
+    ///
+    /// # Errors
+    /// Rejects unsupported versions, duplicate grants and incomplete selections.
+    pub fn from_stored(
+        catalog_version: u32,
+        permissions: &[Permission],
+    ) -> Result<Self, StoredPermissionError> {
+        if catalog_version != PERMISSION_CATALOG_VERSION {
+            return Err(StoredPermissionError::UnsupportedCatalogVersion);
+        }
+        let grants: BTreeSet<_> = permissions.iter().copied().collect();
+        if grants.len() != permissions.len() {
+            return Err(StoredPermissionError::DuplicatePermission);
+        }
+        if MEMBER_FLOOR.iter().any(|grant| !grants.contains(grant))
+            || grants.iter().any(|grant| {
+                grant
+                    .prerequisites()
+                    .iter()
+                    .any(|required| !grants.contains(required))
+            })
+        {
+            return Err(StoredPermissionError::NonCanonicalSelection);
+        }
+        Ok(Self(grants))
+    }
+
     /// Builds a selection with the Member floor and every required grant.
     #[must_use]
     pub fn new(permissions: &[Permission]) -> Self {
@@ -401,3 +449,6 @@ impl BuiltInProfile {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod stored_tests;

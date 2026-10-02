@@ -825,3 +825,31 @@ Next: continue Spec Kit clarify/research on remaining target eligibility and
 operation predicates, then finish plan/tasks before full Analyze. Do not ask the
 settled person-management writer question again or interpret it as migration
 approval.
+
+## 2026-10-02 — Implement strict restoration of stored grants
+
+- Resumed the existing worktree/PR at `3cc9afe` following the explicit implementation
+  request and continuation despite the 12/16 checklist. Read Spec Kit Implement,
+  Rust best practices/testing and Ponytail; reran the implementation prerequisite
+  helper. No extension hooks exist. Full feature gates remain incomplete.
+- The initial intent was additive persistence, but the checked-in plan explicitly
+  gates schema on unresolved saved-profile classification and operation contracts.
+  Kept that boundary and added T047–T049 for the confirmed pure loading validation;
+  did not silently reclassify T035/T036 as completed or waive their dependencies.
+- Implemented `PermissionSelection::from_stored` with a catalog-version check and
+  typed errors for duplicate or incomplete grants. It never calls editor
+  normalization, infers Administrator identity or reapplies profile defaults.
+  Unknown identifiers retain the existing closed-enum decoding rejection.
+- TDD: nine new tests first failed on the missing API, then the full 152-test core
+  suite passed. A deliberate prerequisite-check bypass was caught, restored and
+  the suite passed again. Core Clippy with denied warnings passed; formatting and
+  whitespace checks passed. No database/browser/full-flake result is claimed.
+- Self-reviewed version rejection, prerequisite closure, floor, custom/revoked
+  selections, absence of runtime callers and no new dependencies. No external
+  account, database, schema, other worktree or legacy authorization changed.
+  PR #212 remains open/draft; no merge. Full permission implementation is pending.
+
+Next: resolve the remaining saved-state/relationship predicates under T006–T009
+before implementing T035/T036 database storage. Reuse the strict loading boundary
+there; do not add another normalizing loader or present this increment as a
+delivered permission UI or completed goal.

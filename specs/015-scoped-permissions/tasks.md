@@ -42,6 +42,18 @@ mutations. They do not replace T010/T011's profile persistence or revision/audit
 
 ### Persistence protocol planning (not policy activation)
 
+The renewed implementation request permits a strict pure loading boundary before
+the database work below. This reuses the confirmed catalog and rejects malformed
+saved grants without choosing schema, profile provenance or unresolved policy.
+
+- [x] T047 Add failing strict-restoration tests in `crates/core/src/permissions/catalog/stored_tests.rs`: all six profiles, custom selections, unsupported catalog versions, missing floor/prerequisites, duplicates and unchanged saved grants (FR-001/011/015).
+- [x] T048 Add versioned, fallible restoration to `PermissionSelection` in `crates/core/src/permissions/catalog.rs`; never normalize stored grants, infer administrative identity or activate runtime consumers.
+- [x] T049 Run focused/full core tests, Clippy, formatting and a mutation check; record limits in `quickstart.md` and `progress.md`.
+
+T029 → T047 → T048 → T049 is the pure portion of T035's loading validation.
+It does not complete T035/T036: tenant constraints, trusted database loading,
+explicit administrative identity and schema remain gated on T006–T009.
+
 - [x] T033 Define proposed stored entities, tenant constraints, explicit administrative identity, revisions/receipts/audit and cross-surface lock ordering in `specs/015-scoped-permissions/data-model.md` and `contracts/permission-state.md` (FR-005/007/010/011/013/014/017).
 - [x] T034 Adversarially review the proposal against current writers, record findings/gates in `specs/015-scoped-permissions/research.md` and `progress.md`, and refine dependent tests without marking T006–T009 complete.
 - [ ] T042 Complete the cross-command resource hierarchy and trigger/FK lock inventory in `specs/015-scoped-permissions/contracts/permission-state.md` from the finalized operation matrix before closing T009 or executing T039/T040.

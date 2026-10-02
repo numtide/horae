@@ -38,6 +38,23 @@ edges are not yet the complete server operation contract.
 
 ## Verification and boundary
 
+### Strict restoration of saved selections
+
+`PermissionSelection::from_stored` accepts the saved catalog version and decoded
+grant list. Version 1 identifies the current grant IDs, floor and prerequisite
+semantics; changing those semantics requires an explicit version/migration review.
+Reject unsupported versions (including zero), duplicate grants, missing floor
+grants and missing prerequisites. Input ordering is immaterial because grants are
+a set; successful output uses the existing deterministic iteration order.
+Unknown wire names still fail at `Permission` decoding, never get filtered out.
+Restoration must not call the editor constructor to repair invalid data, derive
+defaults from a profile, or add grants from a newer catalog. Valid custom/revoked
+selections round-trip unchanged. The returned selection proves structural validity
+only: identity, tenant, active status, revision and scope remain trusted-loader
+obligations. This pure boundary does not complete the PostgreSQL storage tasks.
+
+### Catalog checks
+
 Tests cover all catalog entries, exact direct defaults, all six normalized sets,
 every dependency edge and removal, immutable floor, normalization laws, unknown
 wire names, financial/report separation and approval/withdrawal separation.
