@@ -40,6 +40,7 @@ Absence of general project/client/task/directory access is not denial of the min
 The live editor differs from the general help article:
 
 - Separate `timers:approve:managed` and `timers:approve:all` grants exist. Approval is not inferred from time editing or mere visibility.
+- The current guide rechecked on 2026-10-02 excludes withdrawal, not approval, for Project Manager. Older search snippets retain the conflicting wording. This removes that textual contradiction with the delivered default, not the remaining omission of explicit approval grants from the guide's Time catalog or the unverified custom enforcement.
 - People Admin includes `reports:read:contractor`; Accounting does not. Accounting includes profitability and invoicing report grants. Executive Manager and Administrator include all three.
 - `saved_reports:read:inactive` and `saved_reports:write:inactive` concern deactivated owners' reports, not ordinary personal saved reports. Accounting, Executive Manager and Administrator include both.
 - The managed billable-rate labels refer to managed **people**, while the help article describes managed **projects**. Harvest enforcement remains unverified. The user resolved C03 for Horae through FR-021's resource-specific person/project rule; retain the reference conflict without treating it as an unanswered product choice.

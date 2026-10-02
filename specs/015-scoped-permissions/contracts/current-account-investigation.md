@@ -316,6 +316,64 @@ Eligibility to create a new designation, promotion and the explicit keep-access
 action remain separate from retaining an existing designation. This decision
 does not waive administrator-only privilege changes or migration review.
 
+### Assignment authority and remaining reference checks — 2026-10-02
+
+The [Member FAQ](https://support.getharvest.com/hc/en-us/articles/360048687031-Members-FAQs-and-troubleshooting)
+explicitly describes an Administrator or Manager assigning a project manager,
+and an Administrator restoring Member permissions afterwards. Together with the
+project-creation guide, this supports separating project delegation from global
+profile administration. The newer custom-grant predicate remains unspecified;
+legacy Manager wording must not become a blanket new-model grant.
+
+The new-model [permissions guide](https://support.getharvest.com/hc/en-us/articles/44171549176077-Permissions)
+reserves profile administration to Administrators. Its current Project Manager
+exclusions now name withdrawal, not approval; older search snippets still say
+approval. The current page therefore no longer contradicts the captured
+approve-managed / no-withdraw default on that particular statement. Its Time
+catalog still omits the explicit approval grants seen in the delivered editor,
+and it does not resolve arbitrary custom eligibility or self-approval.
+
+Pending Horae choice: permit someone with current project-edit authority to add
+or remove manager designations within that project when the target already has
+compatible project-read grants. This is project delegation, not a global profile
+change. A read-only manager may retain a designation under FR-025 but cannot
+delegate merely because it is retained. If compatible grants are absent, an
+Administrator must explicitly change permissions; neither project editing nor
+ordinary membership may promote the target. The alternative is reserving all
+manager designation changes to Administrators. The question is pending, not a
+new requirement or an implemented endpoint.
+
+If accepted, reconcile OP10/11/16/20 and feature 011's existing no-silent-profile-
+change requirement. Test actor authority on the actual project, target
+eligibility, active same-organization identities, direct/bulk requests and
+concurrent revocation. Adding scope can activate the target's already-granted
+managed capabilities; it must not add grants or reveal their full permission
+configuration to a non-administrator. Authority to manage another person's
+person-management relationships remains separate.
+
+Independent template check: current documentation describes editing a person's
+grants and saving them as a new reusable role, not updating every existing
+assignee. The retained editor likewise exposes save-as-new and delete. This
+narrows the evidenced UI workflows but does not establish same-template
+reapplication persistence, creation-name equivalence or an in-place rename API.
+Keep those distinctions rather than infer propagation from mutable provenance.
+No new account probe or state-changing request was made.
+
+The independent withdrawal review followed the flexible-approval guide through
+its FAQ, submission-report and activity-log links. Neither the FAQ nor the
+submission-report page establishes the post-withdrawal state or overlapping
+coverage algorithm; their older whole-week statements do not supersede flexible
+approval. Do not repeat these sources as if they settle those gaps.
+
+The [approval activity-log guide](https://support.getharvest.com/hc/en-us/articles/34910294705037-Activity-log-Approvals)
+does establish a distinct read surface: own history for Members, own/managed
+project/person history for Managers, all for Administrators, with actor/owner/
+project/event filters and CSV/XLSX exports. This is operational approval history,
+not FR-013's administrator-only permission-change audit. Exact custom-grant
+mapping remains unverified, but the two projections must not share blanket
+administrator-only access or expose each other's private fields. OP46 tracks
+this contract; it does not activate a new report or infer withdrawal authority.
+
 ## Acceptance boundary
 
 This research increment is complete only when every read-only probe has an

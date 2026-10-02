@@ -41,6 +41,8 @@ Both files are under the primary checkout, not this worktree. DOM inspection was
 | Empty-cell locks and submitted-work editing | Documented | FR-019; entry creation/edit tests before/after approval |
 | Scoped vs Day/Week withdrawal | Documented | FR-019; unrelated coverage and independent locks preserved |
 | Approval from arbitrary custom combinations | Explicit managed/all approval grants observed; enforcement unverified | FR-009/015; explicit eligibility matrix |
+| Project Manager approval versus withdrawal | Current guide excludes withdrawal rather than approval; older search snippets conflict. Delivered defaults distinguish the two | FR-009/019; the textual discrepancy is narrowed, not proof of custom lifecycle enforcement |
 | New projects after whole-submission approval, overlap splitting, post-withdrawal submission state | Unverified | FR-019; browser fixtures before final storage contract |
+| Operational approval history and export | Own/managed/all visibility documented in the [approval activity-log guide](https://support.getharvest.com/hc/en-us/articles/34910294705037-Activity-log-Approvals); custom-grant mapping unverified | FR-007/009/018 and OP46; separate scoped operational history from FR-013's administrator-only permission audit |
 
 Sources: [new permission framework](https://support.getharvest.com/hc/en-us/articles/44171549176077-Permissions), [flexible approval](https://support.getharvest.com/hc/en-us/articles/39974542812429-Flexible-timesheet-approval), [independent locks](https://support.getharvest.com/hc/en-us/articles/360048687491-Unlocking-time-and-expenses). This register retains full parity as the target; the account limitation does not authorize a simpler product.

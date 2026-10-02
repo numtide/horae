@@ -99,6 +99,7 @@ called out instead of treating a family name as blanket authorization.
 | OP41 | Retainers and payment recording | Approved invoice/retainer/payment features must distinguish balances, funding, application/refund, payment records and downloads. Do not map Harvest subscription billing grants to client retainers/payments. |
 | OP42 | `SavedReportReadInactive`, `SavedReportWriteInactive` | Deactivated owners' saved reports only, not a blanket permission for all personal reports; feature lifecycle and underlying report data checks still required. |
 | OP43 | `BillingRead`, `BillingWrite`; unknown reference IDs 59/60 | Harvest subscription billing is outside self-hosted client invoicing; do not expose these as working Horae grants or invent meanings for unknown IDs. Native apps, Forecast and new integrations remain excluded. |
+| OP46 | Approval activity history and CSV/XLSX export | [Documented](https://support.getharvest.com/hc/en-us/articles/34910294705037-Activity-log-Approvals) own / managed project-person / all history for Member / Manager / Administrator. Custom-grant mapping remains open. Distinct from FR-013 permission-change audit: preserve FR-009 attribution without exposing permission snapshots or unrelated event portions, actors, filter values or counts. T012/T014/T015 must cover scoped history, equivalent exports, revocation and mixed-scope events; viewing history does not grant approval/withdrawal. |
 
 ## Completion rule
 

@@ -599,3 +599,40 @@ Next: continue Spec Kit clarify/research on authority to create manager
 designations and explicit privilege expansion; do not reopen the accepted
 read-only retention rule. Complete remaining contracts before final plan/tasks
 and full-feature Analyze.
+
+## 2026-10-02 — Continue assignment authority and independent reference checks
+
+- Previous turn made progress: accepted FR-025 was committed and published as
+  `a1cc799`. Revalidated the clean worktree and active continuation goal before
+  proceeding. The full permissions outcome is still incomplete.
+- Continued Spec Kit clarify research with the paths-only check; no extension
+  hooks. The Member FAQ explicitly describes Manager project-manager assignment,
+  but newer custom-grant mapping is still absent. Asked one focused question:
+  allow project editors to delegate to already-compatible people, while only an
+  Administrator may change global grants, or reserve all designations to admins.
+  No answer has been assumed.
+- Independent fresh evidence: the current permissions page's Project Manager
+  exclusion says withdrawal, while older search snippets say approval. Updated
+  the evidence register and profile notes to stop carrying that particular
+  textual contradiction forward. The explicit approval catalog, custom
+  enforcement and lifecycle boundaries remain separately unverified.
+- Checked documented template adjustment/save-as-new flows against retained
+  editor evidence; no proof of global assignee propagation or in-place rename.
+  Recorded the evidence boundary rather than invent those operations.
+- Followed independent approval FAQ/report/activity links: no evidence settles
+  withdrawal state or overlap splitting. The activity-log guide does establish
+  scoped operational history distinct from administrator-only permission audit;
+  added OP46 and its T012/T014/T015 verification obligations. No arbitrary
+  custom-grant mapping or new runtime report was inferred.
+- No new browser connection or owner-only retry would discriminate the missing
+  non-owner cases. No account writes, code/schema changes, migrations or merges.
+  Accepted decisions remain intact; the checklist stays 12/16 and full Analyze
+  is not claimed complete.
+- Validation: `git diff --check` and `nix fmt -- --ci` pass on the complete
+  research/matrix diff with zero formatter changes. No runtime tests were run
+  for these research-only changes.
+
+Next: integrate the assignment-authority answer when available and reconcile
+project creation/editing paths. While it is pending, continue independent
+withdrawal/coverage research; do not substitute another foundation increment
+for unresolved policy.
