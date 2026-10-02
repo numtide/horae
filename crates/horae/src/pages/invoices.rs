@@ -90,6 +90,14 @@ fn InvoiceListContent(client_context: Option<String>) -> Element {
             }
 
             if storage.ready() && show_form() {
+                if clients.state()() != UseResourceState::Ready {
+                    p { role: "status", "Loading clients…" }
+                } else if matches!(&*clients.read(), Some(Err(_))) {
+                    div { class: "alert alert-danger", role: "alert",
+                        "Could not load clients for invoicing. "
+                        button { class: "btn btn-secondary btn-sm", onclick: move |_| clients.restart(), "Retry clients" }
+                    }
+                } else {
                 {loaded(&*clients.read(), |_| match preparation::initial_client(&client_opts, client_context.as_deref()) {
                     Ok(initial_client) => rsx! {
                         preparation::PrepareInvoice { client_opts: client_opts.clone(), initial_client, busy,
@@ -105,6 +113,7 @@ fn InvoiceListContent(client_context: Option<String>) -> Element {
                         Link { to: Route::InvoiceList {}, class: "btn btn-ghost", "Back to Invoices" }
                     }
                 })}
+                }
             }
 
             div { class: "card",

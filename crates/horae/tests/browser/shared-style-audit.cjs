@@ -24,7 +24,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
     await page.waitForURL(`${base}/`);
     const result = {};
     for (const [path, resource] of [
-      ['/clients', 'list_clients'], ['/invoices', 'list_invoices'],
+      ['/clients', 'list_client_summaries'], ['/invoices', 'list_invoices'],
       ['/reports', 'report_time'], ['/admin/users', 'list_users'],
       ['/settings', 'get_me'], ['/admin/importers', 'import/harvest/connection'],
       ['/components', 'get_me'], [`/timesheet/week/${week}`, 'list_time_entries'],

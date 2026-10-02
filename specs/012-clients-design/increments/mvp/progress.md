@@ -395,39 +395,48 @@ claimed as observed. This checkpoint does not complete feature 012 or the goal.
 - Resumed the existing worktree at `9a08466`; the intervening prompt-rewrite turn
   did not advance implementation. Prior test session handles were missing, so
   reran the otherwise unobserved checks rather than treating them as successful.
+
 - Tests-first evidence: four route/draft tests failed against absent contextual
   routes and draft-prefill placeholders. Two invoice-context tests subsequently
   failed against their placeholder. The new detail-link authorization test failed
   because the contextual links were absent.
+
 - Chromium `invoice-preparation` failed on the previous built artifact precisely
   at the new contextual-recovery assertion: the route rendered 404 instead of
   the stored invoice request. The disposable cluster
   `/tmp/horae-browser.ucLKRK` was stopped by the runner. This is expected RED
   evidence, not a passing recovery check.
+
 - Added separate `/projects/new/client/:client`, `/projects/client/:client` and
   `/invoices/new/client/:client` entries delegating to existing screens. Bare
   routes stay unchanged. Context uses a string so malformed links reach draft/
   recovery precedence before validation; keyed children reset per-client state.
+
 - Project initialization restores any saved draft first, including an empty
   client. Without a draft, it resolves the exact authorized active client and
   leaves currency inherited. The initial prefill remains dirty until normal
   autosave acknowledges it; it is not falsely treated as persisted.
+
 - Invoice context is applied once only after RecoveryGate is ready, validates an
   exact active-picker identity, and never selects the first client on failure.
   Existing recovery storage, payloads and request IDs are unchanged.
+
 - Detail links retain client identity and current role boundaries. View in
   Projects opens the existing filtered list after an authorized client lookup.
   New project/invoice links are limited to active clients with manager billing
   authority; this does not change historical billing server policy.
+
 - Nix checks passed: all 44 `detail_navigation` tests, five production route
   tests and seven project draft-state tests. No database/migration or SQL macro
   changes in this iteration.
+
 - Added `client-context` Chromium coverage for real filtering, prefill, unchanged
   saved/empty-client drafts, invalid/missing client links and full before/after
   project/invoice rows. Added it to the default isolated browser runner.
 
 - The isolated fullstack build completed successfully in 75 seconds using the
   cached dependencies. Both WASM and server output remain under this worktree.
+
 - `run-design-checks.sh client-context invoice-preparation new-project-navigation clients`
   passed in Chromium against `/tmp/horae-browser.bsM3yA`; the runner stopped the
   temporary cluster afterward. Contextual invoice links for another client and
@@ -436,9 +445,11 @@ claimed as observed. This checkpoint does not complete feature 012 or the goal.
   creating another invoice. Context navigation leaves project/invoice snapshots
   unchanged, preserves the entire saved draft row, and permits subsequent
   intentional client selection in the invoice form.
+
 - Existing project pending/dirty navigation, identical retry, Cancel/discard and
   finalization regressions passed. Existing client form recovery, historical-row
   preservation and import entry-point checks passed as well.
+
 - `cargo clippy -p horae --features server --all-targets -- -D warnings` passed.
   `nix fmt -- --ci` passed with zero changes; `git diff --check` passed.
 
@@ -447,3 +458,51 @@ browser coverage, including contextual loading failures. Then the bounded visual
 matrix and cross-feature regressions, full Nix gates, adversarial review and
 PR/CI delivery remain required. No new Harvest observation or merge is claimed;
 the increment and the goal are not yet complete.
+
+## Iteration: browser authorization and failure recovery
+
+- The previous turn made implementation progress. Its final commit operation
+  timed out during automatic permission review, not during Git execution; the
+  permitted single retry succeeded as `c015c7d` without a signature.
+- Added `clients-access` using a real authenticated browser session and observed
+  server-function URLs, not guessed endpoint names. All fixture writes are
+  restricted to the runner's disposable PostgreSQL socket. The test restores the
+  synthetic actor's original active/admin role on exit.
+- Chromium passed the administrator, manager, member/project-lead and assigned
+  member cases. Assertions cover actual JSON billing omission, project rate
+  omission, visible-only counts/currencies, client-filtered projects/invoices,
+  foreign/missing IDs with indistinguishable errors, forbidden direct mutations,
+  contextual editor denial, inactive and anonymous sessions, and invalid direct
+  profile submissions. Denied/no-op requests leave the client row unchanged.
+- Added `clients-errors` for loading/error/retry, explicitly injected empty
+  payload versus no matches, combined name/state/currency filtering and counts,
+  independent panel failures, editor-load retry and retained failed-save input.
+  Empty-list injection verifies presentation only; it does not assert that the
+  seeded database is empty.
+- Tests exposed a real contextual-invoice failure: a failed client catalog read
+  rendered the raw transport error without an accessible alert or a retry.
+  RED evidence is retained in the stopped `/tmp/horae-browser.4g31Jt` run.
+  Added a scoped loading/alert/Retry clients branch to the existing invoice
+  form; RecoveryGate and request storage remain unchanged. No shared helper or
+  CSS behavior was changed.
+- The extended filter test initially filled an SSR search control before the
+  reloaded list was ready; the resulting snapshot showed an empty search and
+  unfiltered counts. It now waits for its actual fixture row, then verifies the
+  entered query and filtered rows before opening the status menu. Assertions
+  were retained, with no sleep or blanket retry.
+- After rebuilding, the failure/retry and contextual suites passed, including
+  the repaired invoice catalog retry. The 44 navigation/state tests and server
+  all-target clippy also passed. Invoice recovery and the existing full
+  responsive regression subsequently passed too: eleven routes at five widths,
+  plus mobile project editing, timesheet controls and admin/import navigation.
+  The stopped passing cluster is `/tmp/horae-browser.5NiKo9`. These automated
+  geometry checks do not replace the outstanding client visual matrix.
+- Updated two pre-existing browser resource waits from `list_clients` to the
+  actual Clients-page `list_client_summaries` call, preserving their assertions.
+  Added both new suites to the default isolated browser runner.
+
+Next: complete keyboard and the list/detail/form viewport/theme/enlarged-text
+matrix. T021 remains unchecked
+until its remaining keyboard acceptance is verified. Full Nix/cache checks,
+adversarial review, PR publication and green CI remain required; no merge or
+real-data mutation has been performed.
