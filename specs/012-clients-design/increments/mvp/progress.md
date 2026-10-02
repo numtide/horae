@@ -581,3 +581,34 @@ unpublished branch onto current master without touching queued branches, then
 publish its scoped PR. The original Nix process is still running; full checks,
 actual green CI and the final requirement audit remain required. No merge,
 real-data mutation or successful CI result is claimed.
+
+### Publication and full-suite regression follow-up
+
+- Saved the visual batch and reviews, then rebased the nine unpublished
+  increment commits onto `386cb58`. The comparison before/after rebase was empty
+  for `crates/`, `.sqlx/` and `nix/`; no production or test behavior changed.
+  The new base's specification pointer remains intact.
+- Published [PR #216](https://github.com/numtide/horae/pull/216), head `c76e3bf`,
+  as draft. Its initial Format check passed; Flake Check was still running in
+  run `36960815197`. No merge or queue operation was performed.
+- The full local browser check exposed an obsolete Clients readiness wait in
+  `mobile-navigation.cjs` (`list_clients` instead of `list_client_summaries`).
+  Inspection also found obsolete labels in New Project's cross-screen client
+  editing regression. These were test compatibility findings, not a reason to
+  omit either suite or change production behavior.
+- Updated mobile readiness/button labels and adapted the project regression to
+  the shared modal's actual field labels, currency select and explicit-rate
+  confirmation. Retained rejection/input/persistence checks and added a rate
+  assertion after reload. Address persistence is checked in the reopened editor
+  because the list does not display addresses. The legacy case-insensitive
+  currency guard remains covered by its database regression.
+- Ran `run-design-checks.sh mobile-navigation new-project` under Nix with the
+  verified fullstack artifact and a fresh disposable database: both suites
+  passed completely, including draft concurrency, lost acknowledgements,
+  project finalization, reports/exports and real invoice preparation/editing.
+  No UI source changed, so the finish/design-system dispositions still apply.
+
+Next: publish the regression-test correction, let the original full Nix process
+finish its remaining checks, then rerun the corrected full gate and verify CI
+on the updated PR head. T023 and T025 are incomplete. The initial local browser
+gate is failed, not green; a successful focused rerun alone does not close it.

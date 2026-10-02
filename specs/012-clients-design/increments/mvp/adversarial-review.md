@@ -38,6 +38,12 @@ changed. No new critical/high issue was found in this final code pass.
 - A browser filter check interacted before its reloaded list was ready. It now
   waits for the real fixture row and asserts the entered query and filtered
   output, with no sleep, blanket retry or removed requirement.
+- The full browser gate exposed a stale mobile Clients resource wait. A related
+  New Project regression still targeted the replaced client editor. Both now
+  exercise the actual summary resource/shared modal while preserving their
+  navigation, currency rejection, input retention and persistence assertions.
+  Both complete suites passed in a focused disposable rerun. The corrected
+  full gate remains required; no production code changed in this follow-up.
 
 ## Spec Kit post-implementation analysis
 
