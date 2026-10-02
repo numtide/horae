@@ -333,3 +333,59 @@ dismissal guard and focus restoration; keep it mounted when closing. Existing
 `project-edit-navigation.js` already recognizes `data-editor-state`; extend only
 its client-facing copy if reusing it, preserving project/invoice recovery rules.
 Do not copy the prototype's cascading archive handler or hardcoded defaults.
+
+## Iteration: shared client editor and browser acceptance
+
+- Replaced the inline list editor with a shared native modal used from list and
+  detail. The editor loads fresh authorized billing data, retains invalid/failed
+  input, distinguishes zero from an unset rate, and requires explicit rate intent
+  when changing its currency. Closing keeps the modal mounted for focus return.
+- Pending saves disable fields, submit and dismissal. Ambiguous creation errors
+  require inspecting a refreshed list in another tab before an explicit new
+  attempt; the original entered values remain available. Existing navigation
+  guards now use client-specific pending/dirty copy without changing the shared
+  history machinery. Modal width is scoped to the client dialog using a token.
+- Form-state tests ran tests-first (five failed against placeholders, then
+  passed). The navigation/state suite passed all 41 tests; server all-target
+  clippy and web/WASM checks passed without warnings in the form implementation
+  checkpoint. Those checks do not substitute for browser acceptance.
+- Added a browser suite for create/reload/edit/cancel, explicit currency/rate
+  intent, duplicate/pending guards, interrupted requests and a committed creation
+  whose acknowledgement is lost. The suite verifies list inspection without
+  losing fields or repeating the committed write. It asserts the test-only
+  localhost port and disposable PostgreSQL socket before performing any writes.
+- Updated the existing action-error regression's client selectors/endpoints and
+  lifecycle filter setup for the shared modal; its assertions are retained.
+- Built with `SQLX_OFFLINE=true dx build --platform web --fullstack true --force-sequential --locked` in Nix. `CARGO_TARGET_DIR` points to this worktree's
+  `target/`; only Rust dependency cache directories are linked to the existing
+  root target. Dioxus output stays in this worktree and does not overwrite the
+  root development server's public assets. Both client and server completed
+  successfully; the first isolated build took 965 seconds, including server
+  dependency compilation. Subsequent iterations can reuse this build output.
+- `run-design-checks.sh clients action-errors`: passed in headless Chromium,
+  including real persisted creation followed by an intercepted/lost response.
+  A second run, `run-design-checks.sh clients action-errors new-project-navigation`,
+  also passed after adding the import entry-point check. Both runs used the Nix
+  environment, built worktree server and existing Nix Playwright packages.
+- The browser checks prove create/reload/edit/cancel, focus return/error focus,
+  zero-rate persistence and explicit denomination changes, dirty/pending exit
+  guards, blocked duplicate submissions/dismissal and uncertain-save recovery.
+  Full before/after JSON snapshots of every project and invoice remain identical
+  across client deactivation/reactivation. The existing admin Import link opens
+  Importers; no import or real data mutation was initiated.
+- Existing action-error regressions passed for client activation, project archive
+  and assignment removal. The project navigation regression passed pending-save,
+  lost-acknowledgement, back/forward, reload, cancel, draft-discard and finalization
+  cases. This checks shared guard behavior, not the outstanding full visual matrix.
+- Test clusters `/tmp/horae-browser.BUae4A` and `/tmp/horae-browser.Lmakdd` were
+  stopped by the runner after success; their server/PostgreSQL logs are retained.
+  Added `clients` to the default browser runner so CI executes the suite too.
+- The first format check corrected only Markdown wrapping in this log and
+  reported that change; the subsequent `nix fmt -- --ci` check passed.
+
+T015/T016 are complete. Next: T017 tests-first for contextual project/invoice
+navigation, retaining existing drafts and recovery precedence. The full role/
+payload browser coverage, visual matrix, cross-feature final checks, adversarial
+review and PR/CI gates remain outstanding. No new Harvest investigation was
+needed for these already documented contracts; no additional Harvest behavior is
+claimed as observed. This checkpoint does not complete feature 012 or the goal.

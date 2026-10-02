@@ -848,21 +848,16 @@ mod server_fns {
     pub async fn list_client_summaries() -> Result<Vec<client::ClientSummary>, ServerFnError> {
         Ok(Vec::new())
     }
-    pub async fn create_client(
-        _name: String,
-        _currency: String,
-        _address: Option<String>,
-        _tax: Option<String>,
-    ) -> Result<Client, ServerFnError> {
+    pub async fn create_client_profile(
+        _profile: client::ClientProfile,
+        _rate: String,
+    ) -> ClientDetailsResponse {
         panic!("navigation must not create clients");
     }
-    pub async fn update_client(
+    pub async fn update_client_profile(
         _id: String,
-        _name: String,
-        _currency: String,
-        _address: Option<String>,
-        _tax: Option<String>,
-    ) -> Result<Client, ServerFnError> {
+        _edit: client::ClientProfileEdit,
+    ) -> ClientDetailsResponse {
         panic!("navigation must not edit clients");
     }
     pub async fn set_client_active(_id: String, _active: bool) -> Result<Client, ServerFnError> {

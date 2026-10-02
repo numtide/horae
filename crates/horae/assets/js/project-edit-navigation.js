@@ -18,12 +18,14 @@
   };
   const canLeave = () => {
     const invoice = document.querySelector('[data-editor-kind="invoice"]');
+    const client = document.querySelector('[data-editor-kind="client"]');
     if (state() === 'pending') {
-      alert(invoice ? 'An invoice request is unresolved. Wait for it to finish, or recover the request before leaving.'
+      alert(client ? 'A client save is pending. Wait for it to finish before leaving.'
+        : invoice ? 'An invoice request is unresolved. Wait for it to finish, or recover the request before leaving.'
         : 'A project save is unresolved. Wait for it to finish, or retry the request before leaving.');
       return false;
     }
-    return state() !== 'dirty' || confirm(invoice ? 'Discard unsaved invoice changes?' : 'Discard unsaved project changes?');
+    return state() !== 'dirty' || confirm(client ? 'Discard unsaved client changes?' : invoice ? 'Discard unsaved invoice changes?' : 'Discard unsaved project changes?');
   };
 
   history.pushState = (data, title, url) => {

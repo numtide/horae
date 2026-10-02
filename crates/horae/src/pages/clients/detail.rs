@@ -14,6 +14,7 @@ pub fn ClientDetail(id: Uuid) -> Element {
 
 #[component]
 fn ClientDetailContent(id: Uuid) -> Element {
+    let mut show_editor = use_signal(|| false);
     let mut details =
         use_resource(move || async move { server_fns::get_client_details(id.to_string()).await });
     let ready = details.state()() == UseResourceState::Ready;
@@ -21,7 +22,7 @@ fn ClientDetailContent(id: Uuid) -> Element {
 
     rsx! {
         div { class: "min-w-0",
-            Link { to: Route::ClientList {}, class: "btn btn-ghost text-secondary mb-5 -ml-2.5",
+            Link { id: "client-back", to: Route::ClientList {}, class: "btn btn-ghost text-secondary mb-5 -ml-2.5",
                 NavIcon { name: "arrow-left" }
                 "Back to Clients"
             }
@@ -42,6 +43,9 @@ fn ClientDetailContent(id: Uuid) -> Element {
                             }
                             if !detail.client.active { Badge { variant: "neutral", "Inactive" } }
                         }
+                    }
+                    if detail.billing.is_some() {
+                        button { r#type: "button", class: "btn btn-secondary", onclick: move |_| show_editor.set(true), "Edit client" }
                     }
                 }
                 div { class: "client-detail-grid grid gap-4 items-start",
@@ -80,6 +84,10 @@ fn ClientDetailContent(id: Uuid) -> Element {
                     button { r#type: "button", class: "btn btn-secondary btn-sm",
                         onclick: move |_| details.restart(), "Retry client" }
                 }
+            }
+            super::form::ClientEditor { open: show_editor(), client_id: Some(id), focus_fallback: "client-back",
+                on_dismiss: move |_| show_editor.set(false),
+                on_saved: move |_| { show_editor.set(false); details.restart(); },
             }
         }
     }

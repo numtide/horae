@@ -132,6 +132,7 @@
   --width-project-code: 10rem;
   --width-tag-entry: 8.75rem;
   --width-form-select: 20rem;
+  --width-client-editor: 35rem;
   --width-assignment-picker: 16.25rem;
   --width-milestone-amount: 8.75rem;
   --height-form-control: 2.75rem;
@@ -1856,6 +1857,7 @@ tbody tr:hover { background: var(--color-row-hover); }
 .imp-icon-muted { color: var(--color-text-muted); }
 /* Client detail keeps the handoff's billing column beside a flexible project table. */
 .client-detail-grid { grid-template-columns: minmax(0, 1fr) var(--width-form-select); }
+#client-editor-dialog > .modal { width: var(--width-client-editor); }
 @media (max-width: 1180px) {
   .client-detail-grid { grid-template-columns: minmax(0, 1fr); }
 }
