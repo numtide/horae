@@ -80,28 +80,57 @@ acceptance remain to be reconciled before cutover.
 
 ### Operation mapping and transaction inventory — 2026-10-02
 
+- Follow-up at `412035d`: fresh reading of the public permissions guide explicitly
+  establishes creation as well as editing under the managed-project draft-invoice
+  permission. OP22 now records this documented allowance instead of retaining an
+  unnecessary creation unknown. Mixed-source financial scope and saved non-owner
+  enforcement remain open; no browser mutation was performed.
+
+- Completed the named source-tracing gaps for OIDC linking, session persistence,
+  credentials, queue maintenance, report publication and outbox delivery. The
+  [state contract](contracts/permission-state.md) distinguishes short queue-only
+  maintenance from user-authorized execution and protected output. Session or
+  lease identity does not carry grants; external work stays outside row gates.
+
+- Independent tracing found a high-priority integration risk: legacy report
+  conversion locks a job before inserting chunks with an organization FK, the
+  reverse of gated imports. Corrected the proposed ordering and specified
+  nonlocking candidate discovery followed by organization-first locked recheck.
+  Startup invocation is not an enforced offline boundary. This is a design
+  correction for future integration, not a repair/test of running code.
+
+- Credential helpers currently lack an actor parameter and the OAuth callback's
+  post-HTTP role check occurs outside their transaction. Download chunk reads
+  likewise lose caller identity after initial authorization. Both require current
+  authorization at their durable write/output boundaries under T039/T040/T015;
+  no new legacy-only implementation detour is selected.
+
 - Decision: map actual public symbols and non-server-function delivery paths in
   [operation-matrix.md](contracts/operation-matrix.md), with unresolved predicates
   explicit. Rationale: profile names and UI categories omit compound effects,
   picker projections, mixed invoices and delegated execution. Rejected: treating
   a catalog key or legacy Manager check as the complete operation policy.
+
 - The map covers 80 public async symbols at `b7e730c`. Independent review found
   no high/critical draft contradiction, but identified omitted authentication
   routes and one-sided wording about invoice-draft creation. Added those routes
   and kept creation eligibility unresolved in both directions. This review is
   not full T006, runtime acceptance or an evidence upgrade for C01–C07.
+
 - Source tracing now records concrete writer order and eleven project-child
   revision triggers plus invoice-line parent writes in
   [permission-state.md](contracts/permission-state.md). Reparenting and cascades
   require existing parents prelocked in the strongest mode; a shared parent lock
   can later upgrade implicitly. Remaining maintenance/identity/job edges and
   the finalized policy still gate T042.
+
 - A local PostgreSQL 17.10 diagnostic rejected the proposed shared row lock in a
   READ ONLY transaction. Three inspected read/preview paths use that mode.
   Decision: retain consistent snapshots while adapting transaction mode and
   testing the organization revision fence and fresh-transaction retry. Rejected:
   adding a lock to a read-only transaction, retaining an old policy snapshot
   after a wait, or weakening export totals/size consistency without analysis.
+
 - Inline import `streaming::apply` awaits entry pages inside its transaction.
   Decision: reconcile bounded preparation/commit with existing import atomicity
   before adding authorization gates; do not hold revocation behind network waits

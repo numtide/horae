@@ -108,6 +108,71 @@ sorted explicit SELECT is insufficient if subsequent FK/trigger work adds an
 earlier resource lock. New transaction-owned rows are uncontended roots, but
 their references to existing parents still participate.
 
+### Authentication and credential writers
+
+Follow-up source inspection at `412035d` distinguishes credential maintenance
+from changing a person's effective grants. None of these paths may acquire an
+organization gate after already locking a later resource.
+
+| Path | Observed boundary | Integration requirement |
+| --- | --- | --- |
+| `auth/oidc::resolve_user` | Verified identity lookup, then conditional pool UPDATE of `users.oidc_subject`; no grant/role write. Competing links are resolved by rereading the subject. | Preserve admission and one-time identity binding. If transactional authorization is added, acquire organization before user; keep provider HTTP and session rotation outside the gate. No role mapping or privilege refresh from provider claims. |
+| `auth/session`, `auth::make_session_layer` | Session stores user UUID, not effective grants; session-store schema initialization is separate. | Session storage/expiry cannot grant access; every protected operation still reloads active identity/current policy. Do not hold the gate across session middleware persistence. |
+| `importers/harvest::complete_connect` → `credentials::store_for_attempt` | Callback checks Administrator again after HTTP, but outside storage transaction. Storage takes import reservation → generation U → binding/credential writes → generation revision. | Pass trusted actor identity into storage and check it under organization gate before generation/credential locks. A post-HTTP pool check alone leaves a check-to-write revocation gap. |
+| `credentials::disconnect`, `account_switch::change` | Server wrapper checks Admin; helpers receive organization, not actor. Reservation → generation U → credential/binding writes. | Same transaction-level actor check as connection; preserve generation checks and historical data. Never hold the organization gate while acquiring a blocking external reservation. |
+| `credentials::update_tokens` from API import | Import reservation held across refresh HTTP; credential UPDATE follows on the reserved connection, outside domain transaction. | Keep transport refresh distinct from local permission administration. Revalidate bounded execution authority before using refreshed credentials; no gate across HTTP, no token/identity data in permission audit. |
+| `credentials::advance_watermark` | Credential row W near the end of inline or durable import's data/report completion transaction. | Include this credential lock before job report/checkpoint finalization in the common hierarchy; preserve atomic watermark/data outcome and never treat it as a user grant. |
+
+Existing wrappers and credential helpers therefore do not yet establish FR-010
+for connect/disconnect/account change. This inventory identifies the required
+integration; it is not a regression test or a claim those races were repaired.
+
+`scheduler::sweep` also writes `time_entries.notified_long_running_at` and returns
+entry notes for a plugin event. It is bounded service work, not a delegated user
+edit: keep its marker semantics and explicit plugin authority distinct from time
+approval/permission changes. Any organization gate must precede entry locks, with
+per-organization bounded selection rather than an unsorted cross-org lock loop.
+`notifications::deliver` reads recipient eligibility before sending externally;
+reevaluate current recipient/payload access under the bounded read protocol, then
+release the gate before mail transport. A queued event is not perpetual recipient
+authority, and already handed-off mail cannot be recalled.
+
+`db::run_migrations` runs schema changes, legacy report conversion and constraint
+validation; `init`/`seed` use an empty-installation table lock. These are explicitly
+coordinated operator/startup operations, not ordinary permission transactions.
+The existing destructive reset command is outside the data-preserving transition
+and is not authorized by this feature. Deployment fencing must prevent old
+writers during activation; adding a row gate cannot substitute for that fence.
+
+### Queue maintenance and report publication
+
+| Path | Observed lock/write set | Required boundary |
+| --- | --- | --- |
+| `jobs::{enqueue_api,enqueue_csv,retry}` | Generation U → job insert/update → optional upload insert, including organization/job FKs | User-authorized organization gate before generation; requester provenance and current authority are separate from idempotency/connection generation |
+| `jobs::cancel` | Conditional job UPDATE in its own statement | User cancellation must authorize in a transaction before job W; never retain a job lock then wait for the organization gate |
+| `jobs::{claim,fail_claimed}`, `JobLease::renew` | Separate queue-only autocommit UPDATEs; claim's candidate uses `SKIP LOCKED`, but its preceding bulk recovery UPDATE does not; no domain transaction retained across claim/execution | Bounded maintenance may remain outside the user gate only while it neither changes policy/domain data nor publishes privileged user results. A lease is execution ownership, not user authorization |
+| `JobLease::{archive_report,save_checkpoint,complete}` | Archive locks job U → chunk INSERTs → conditional checkpoint/completion on the same job, inside caller's domain transaction | Organization/domain locks first, then job root, chunks and final same-root update. Both current permission and lease fences must pass before commit |
+| `jobs::cleanup` | Upload DELETE, then terminal job DELETE in separate statements; job deletion cascades uploads/chunks | Explicit retention maintenance, not authority to execute/retry work. Preserve retention/retry rules and treat missing download chunks as failure, not a complete successful export |
+| `jobs::report::download` / `download_body` | Checks Admin before returning a stream; later chunk reads receive org/job IDs, not actor ID | Carry caller provenance and reauthorize bounded reads/tail release under the read protocol; do not hold an organization transaction while waiting for client consumption |
+| `jobs::{claim_outbox,mark_outbox_delivered,mark_outbox_failed,stop_outbox_delivery}` | Short outbox-only writes; delivery happens after claim returns | Keep claim/ack outside callback duration. Service capabilities and recipient/current disclosure checks remain required at delivery, not inferred from claim possession |
+
+`run_claimed` also invokes `JobLease::complete` after work returns. A standalone
+completion is not exempt from result-publication authorization merely because
+its SQL touches only a job row. Keep phase/heartbeat/failure bookkeeping separate
+from authorizing import effects and publishing a new privileged result.
+
+`jobs::report::upgrade_legacy_reports` is a specific exception to the queue-only
+classification: it locks a job first, then inserts error chunks whose organization
+FK (`0027_job_report_error_chunks.sql`) can acquire an organization key-share lock.
+This is a job → organization edge opposite to a gated import's organization → job
+edge. The safe proposed rewrite discovers a candidate without locking it, then
+locks its organization before locking and rechecking the job; if eligibility
+changed, it retries without trusting the initial discovery. Preserve conversion
+and lease invalidation atomically. Alternatively an offline-only conversion needs
+an enforced deployment fence, not a comment asserting startup is exclusive.
+`db::run_migrations` calls this converter after the SQLx migration call returns;
+that order does not establish exclusion from other running application instances.
+
 ### Candidate common hierarchy, not yet activation-ready
 
 1. Acquire any nonblocking import reservation outside the authorization
@@ -123,15 +188,18 @@ their references to existing parents still participate.
 1. Project settings/assignments, dependent task/member rows, then milestones.
 1. Existing invoice/approval roots, then fee occurrences and time entries in
    consistent class/ID order across all commands.
-1. Lines, provenance, notifications/outbox, receipts/audit and final job
+1. Lines, provenance, notifications/outbox, receipts/audit and any import
+   credential watermark write; then job root, report chunks and final same-root
    checkpoint, with existing FK targets already resolved in their parent order.
 
 This is a candidate ordering to test, not a proof that all edges fit it. T042
-still requires the finalized operation matrix, remaining job-claim/lease/report/
-cleanup and credential/identity writers, and explicit bootstrap/maintenance
-participation or exceptions. T039 must exercise opposing production paths,
+still requires the finalized operation matrix and production-path validation of
+the documented job/credential/identity participation and maintenance exceptions.
+The follow-up inventory closes those named source-tracing gaps, not their runtime
+implementation. T039 must exercise opposing production paths,
 including approval versus entry edits, invoice generation versus edits/voids,
-project changes versus invoicing, and access changes versus imports. A serial
+project changes versus invoicing, access changes versus imports, and legacy
+report conversion versus gated import completion. A serial
 happy-path test or a test that duplicates SQL does not prove this hierarchy.
 
 ### Snapshot and read-only incompatibilities

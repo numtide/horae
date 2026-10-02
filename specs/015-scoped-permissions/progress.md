@@ -274,3 +274,37 @@ predicates in T006, then finalize migration mappings/persistence and execute the
 failing storage tests T035. Do not repeat owner-only browser probes or treat this
 inventory as permission to activate partially enforced profiles. The goal remains
 active; the new evidence is progress toward integration, not delivered permissions.
+
+## 2026-10-02 — Finish named maintenance inventory and resolve draft creation
+
+- Previous goal turn: progress (`412035d`, published to draft #212). Revalidated
+  clean worktree at that commit and reused Spec Kit plan setup without replacing
+  artifacts. This iteration remains contract research; no runtime gate is waived.
+- Current official Harvest permissions documentation explicitly allows creating
+  managed-project invoice drafts. Corrected OP22; this is documented behavior,
+  not observed non-owner enforcement or resolution of mixed-invoice scope.
+- Completed the named T042 source-tracing gaps: identity/session and credential
+  writes, job admission/cancel/retry, claim/lease/recovery/retention, report
+  conversion/publication/download and outbox delivery. Documented maintenance
+  exceptions rather than adding organization gates across external waits.
+- Independent review identified a concrete future deadlock edge in legacy report
+  conversion (job lock → organization FK) against org-first import completion.
+  Corrected the proposed hierarchy, including job root before chunks, and added
+  the necessary candidate/recheck and production concurrency cases. No runtime
+  fix or successful concurrency experiment is claimed.
+- The source inventory is now more complete, but T006/T007–T009/T042 remain open:
+  unresolved reference predicates, migration choices and executable acceptance
+  cannot be replaced by static lock inspection. No new schema, account access,
+  business-data change, application code or merge occurred.
+- `git diff --check` and `nix fmt -- --ci` pass after normalizing Markdown list
+  spacing. No runtime suite was rerun for documentation-only changes. Spec Kit
+  planning remains incomplete because its reference/product gates are unresolved;
+  the next action is a decision, not another claim of implementation readiness.
+
+Next: resolve the first pending product/reference decision C01 (template deletion
+preserves existing grants despite contradictory editor copy). The earlier question
+has no recorded answer; do not treat an automatic goal continuation as approval.
+Then address remaining operation predicates and migration choices one at a time.
+Do not generate more standalone foundation tasks merely to avoid those decisions
+or present another contract increment as permission implementation. Full goal and
+all five stories remain active and unfinished.

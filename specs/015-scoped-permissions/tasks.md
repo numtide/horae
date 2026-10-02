@@ -48,8 +48,10 @@ mutations. They do not replace T010/T011's profile persistence or revision/audit
 
 Partial T042 evidence now identifies the current writer orders, parent-writing
 triggers/cascades, READ ONLY incompatibility and network waits in inline imports.
-Finish remaining credential/identity/job-maintenance paths and validate the
-candidate hierarchy; do not mark it complete from source inspection alone.
+The follow-up source inventory covers credential/identity/job-maintenance paths
+and identifies the legacy-report converter's job-to-organization FK inversion.
+Validate the corrected candidate hierarchy and maintenance exceptions; do not
+mark it complete from source inspection alone.
 
 Inventory evidence is in `contracts/current-access.md`; browser limitations and unresolved reference cases are in `contracts/harvest-evidence.md`. Neither T006 nor T007 is complete until the remaining verification/migration review is done.
 
@@ -94,7 +96,7 @@ Independent test: replay forbidden direct reads/writes and downloads; revoke bet
 
 - [ ] T015 [US3] Integrate trusted permission loading and enforcement across the completed entry-point inventory in `crates/horae/src/server_fns/`, `reports.rs`, `harvest/`, jobs, CLI and plugin hosts; activate only after all paths are covered (FR-007/008/010/017/018).
 
-- [ ] T039 [US3] Add cross-command lock-order/revocation tests in `crates/horae/tests/integration.rs` and affected `server_fns/` test modules for project creation/editing, membership/management, activation and settings; include organization-row updates, trigger/FK lock paths, snapshot readers waiting across revocation, whole-transaction retry and bounded import commits (FR-005/007/010/018).
+- [ ] T039 [US3] Add cross-command lock-order/revocation tests in `crates/horae/tests/integration.rs` and affected `server_fns/` test modules for project creation/editing, membership/management, activation and settings; include organization-row updates, trigger/FK lock paths, snapshot readers waiting across revocation, whole-transaction retry, bounded import commits, credential writes, report conversion and caller-aware download pages (FR-005/007/010/018).
 
 - [ ] T040 [US3] Apply T042's hierarchy by reconciling organization-first locking in `crates/horae/src/server_fns/project_creation/`, `server_fns/projects.rs`, `server_fns/users.rs`, `cli.rs` and all remaining access-affecting writers in the final inventory; no shared-to-exclusive upgrade or fabricated operator user (FR-007/010/017/018).
 
