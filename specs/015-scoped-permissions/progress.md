@@ -853,3 +853,30 @@ Next: resolve the remaining saved-state/relationship predicates under T006–T00
 before implementing T035/T036 database storage. Reuse the strict loading boundary
 there; do not add another normalizing loader or present this increment as a
 delivered permission UI or completed goal.
+
+## 2026-10-02 — Person-management eligibility clarification pending
+
+- Previous goal turn: progress, with tested code published in `524c29e`. Rechecked
+  that commit and a clean worktree before continuing. Full runtime work is still
+  gated; the pure restoration API is not permission-feature completion.
+- Followed Spec Kit Clarify and its paths-only prerequisite helper. Reopened the
+  official assignment, permissions and teammates API guides. They repeat the
+  existing evidence; no new custom-profile eligibility rule was established.
+  This lookup is not additional implementation or parity-validation progress.
+- The actor decision FR-027 is settled and must not be asked again. The next
+  distinct question is whether a person may receive new managed-person
+  relationships when none of their current grants can use that person scope.
+  Recommended A: require at least one applicable existing managed-person grant
+  (time, expense, people, billable-rate or approval withdrawal), without adding
+  any permission. Alternative B: permit dormant relationships even without such
+  grants; they still confer no authority on their own. Neither option is accepted
+  yet. This question does not decide self-assignment or retention after revocation.
+- No new runtime code, schema, migration or account mutation. No fresh test suite
+  or full Analyze pass is claimed. No extension hooks exist. The current
+  implementation gate remains open pending explicit product clarification;
+  the goal is not complete or yet eligible for blocked status on this recurrence.
+
+Next: integrate the user's eligibility answer into FR-005/027 and the operation,
+data-model and acceptance contracts. Keep explicit Administrator identity and
+the already accepted writer rule unchanged. Do not repeat the same documentation
+lookup or fabricate a response on automatic continuation.
