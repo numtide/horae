@@ -21,7 +21,7 @@ fn ClientDetailContent(id: Uuid) -> Element {
     let data = details.read();
 
     rsx! {
-        div { class: "min-w-0",
+        div { class: "client-detail min-w-0",
             Link { id: "client-back", to: Route::ClientList {}, class: "btn btn-ghost text-secondary mb-5 -ml-2.5",
                 NavIcon { name: "arrow-left" }
                 "Back to Clients"
@@ -117,7 +117,6 @@ fn ClientProjects(client_id: Uuid) -> Element {
         section { class: "border rounded-xl bg-secondary min-w-0 overflow-hidden", aria_labelledby: "client-projects-title",
             div { class: "flex flex-wrap items-center gap-3 px-5 py-4 border-b",
                 h2 { id: "client-projects-title", class: "text-lg font-semibold m-0", "Projects" }
-                Link { to: Route::ProjectsForClient { client: client_id.to_string() }, class: "text-sm font-semibold ml-auto", "View in Projects" }
                 if ready {
                     if let Some(Ok(rows)) = &*data {
                         span { class: "text-xs text-secondary",
@@ -125,6 +124,7 @@ fn ClientProjects(client_id: Uuid) -> Element {
                         }
                     }
                 }
+                Link { to: Route::ProjectsForClient { client: client_id.to_string() }, class: "text-sm font-semibold ml-auto", "View in Projects" }
             }
             if !ready {
                 p { class: "p-5 m-0", role: "status", aria_busy: "true", "Loading projects…" }
@@ -142,12 +142,12 @@ fn ClientProjects(client_id: Uuid) -> Element {
                         }
                     }
                     div { class: "overflow-x-auto", role: "region", aria_label: "Client projects", tabindex: "0",
-                        table {
+                        table { class: "client-table",
                             thead { tr {
-                                th { scope: "col", "Project" }
-                                th { scope: "col", class: "text-right", "Hours" }
-                                th { scope: "col", class: "text-right", "Spent" }
-                                th { scope: "col", "Status" }
+                                th { scope: "col", class: "text-secondary", "Project" }
+                                th { scope: "col", class: "text-right text-secondary", "Hours" }
+                                th { scope: "col", class: "text-right text-secondary", "Spent" }
+                                th { scope: "col", class: "text-secondary", "Status" }
                             } }
                             tbody {
                                 for project in rows {

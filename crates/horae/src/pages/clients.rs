@@ -92,7 +92,7 @@ pub fn ClientList() -> Element {
                         Link { to: Route::HarvestImport {}, class: "btn btn-secondary", "Import" }
                     }
                     input {
-                        class: "form-input w-full md:w-form-select max-w-full",
+                        class: "form-input client-search w-form-select max-w-full",
                         r#type: "search",
                         aria_label: "Search clients by name",
                         placeholder: "Search clients by name",
@@ -168,14 +168,14 @@ pub fn ClientList() -> Element {
                     }
                 } else {
                     div { class: "table-container rounded-xl bg-secondary", role: "region", aria_label: "Clients", tabindex: "0",
-                        table {
+                        table { class: "client-table",
                             thead {
                                 tr {
-                                    th { scope: "col", "Client" }
-                                    th { scope: "col", class: "text-right", "Currency" }
-                                    th { scope: "col", class: "text-right", "Projects" }
-                                    th { scope: "col", "Status" }
-                                    if is_manager { th { scope: "col", "Actions" } }
+                                    th { scope: "col", class: "text-secondary", "Client" }
+                                    th { scope: "col", class: "text-right text-secondary", "Currency" }
+                                    th { scope: "col", class: "text-right text-secondary", "Projects" }
+                                    th { scope: "col", class: "text-secondary", "Status" }
+                                    if is_manager { th { scope: "col", class: "text-secondary", "Actions" } }
                                 }
                             }
                             tbody {

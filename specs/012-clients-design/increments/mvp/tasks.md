@@ -55,10 +55,10 @@ IDs and direct navigation; no business record created by navigation.
 
 ## Phase 7: Cross-cutting verification and delivery
 
-- [ ] T021 Add/run durable browser acceptance for clients in nix/checks/ covering failure/retry, keyboard/focus, reload, negative/direct access and historical-row preservation; inspect response payloads (MVP-003, MVP-004, MVP-011, MVP-SC-001 through MVP-SC-004).
-- [ ] T022 Capture/inspect list/detail/form at required viewport/theme/text matrix and rerun Projects/import/Invoices regressions; record evidence in specs/012-clients-design/increments/mvp/progress.md (MVP-008, MVP-009, MVP-011, MVP-SC-005).
+- [x] T021 Add/run durable browser acceptance for clients in nix/checks/ covering failure/retry, keyboard/focus, reload, negative/direct access and historical-row preservation; inspect response payloads (MVP-003, MVP-004, MVP-011, MVP-SC-001 through MVP-SC-004).
+- [x] T022 Capture/inspect list/detail/form at required viewport/theme/text matrix and rerun Projects/import/Invoices regressions; record evidence in specs/012-clients-design/increments/mvp/progress.md (MVP-008, MVP-009, MVP-011, MVP-SC-005).
 - [ ] T023 Run core/server/web/clippy tests, regenerate .sqlx/ with server/all-targets and run Nix formatting/flake checks; record exact outcomes in specs/012-clients-design/increments/mvp/progress.md (MVP-011, MVP-012).
-- [ ] T024 Perform adversarial code/cross-feature review and correct all critical/high findings; record independent versus self-review and rerun analysis/tests in specs/012-clients-design/increments/mvp/progress.md (MVP-012).
+- [x] T024 Perform adversarial code/cross-feature review and correct all critical/high findings; record independent versus self-review and rerun analysis/tests in specs/012-clients-design/increments/mvp/progress.md (MVP-012).
 - [ ] T025 Publish scoped unsigned commits/PR(s), investigate CI until green without weakening checks; record PRs, evidence, deferred parent requirements and final completion audit in specs/012-clients-design/increments/mvp/progress.md (MVP-010, MVP-012, MVP-SC-006).
 
 ## Dependencies and execution

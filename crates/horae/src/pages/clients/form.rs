@@ -256,13 +256,14 @@ fn ClientForm(
                         onchange: move |event: FormEvent| fields.write().currency = event.value(),
                     }
                 }
-                FormGroup { label: "Default rate", id: "client-form-rate", hint: "Per hour. Blank means not set; zero is a valid rate.",
+                FormGroup { label: "Default rate", id: "client-form-rate",
                     Input { id: "client-form-rate", class: "font-mono", value: fields.read().rate.clone(), disabled: busy(),
                         oninput: move |event: FormEvent| {
                             let mut value = fields.write();
                             value.rate = event.value(); value.rate_touched = true; value.confirmed_currency = Some(value.currency.clone());
                         }
                     }
+                    p { class: "text-xs text-secondary mt-1", "Per hour. Blank means not set; zero is a valid rate." }
                 }
             }
             if needs_confirmation {

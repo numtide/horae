@@ -506,3 +506,78 @@ matrix. T021 remains unchecked
 until its remaining keyboard acceptance is verified. Full Nix/cache checks,
 adversarial review, PR publication and green CI remain required; no merge or
 real-data mutation has been performed.
+
+## Iteration: bounded visual inspection and regression fixes
+
+- The intervening prompt rewrite made no implementation progress. Revalidated
+  `1393796` and the untracked visual suite; continued the existing worktree.
+- Completed the first visual inspection round across 64 captures. Added a
+  [visual record](visual-review.md) with the pinned surface contract, exact
+  matrix, findings and keyboard evidence.
+- Added durable browser assertions for identity-column width, desktop search
+  alignment, primary/detail panel balance and computed text contrast. They
+  reproduced the inspected defects before edits in `/tmp/horae-browser.Zu4AvW`.
+- Applied one scoped correction batch: existing search width utility, readable
+  client identity token, title/count/link order, content-relative detail stacking,
+  and secondary-text tokens for small labels and hints. Shared tables, forms,
+  modal behavior and global colors retain their existing defaults.
+- Added the matrix/keyboard suite to the default disposable browser runner.
+  Rebuilding the fullstack artifact before the second confirmation round.
+
+Next: confirm the correction batch, then independent finish/documentation
+handoffs, full Nix gates, adversarial analysis and PR/CI delivery. T022 and the
+goal remain incomplete; no merge or real-data mutation has occurred.
+
+### Confirmation results
+
+- Rebuilt both targets with `dx build --platform web --fullstack true --force-sequential --locked`, under Nix with `SQLX_OFFLINE=true` and four jobs.
+- Ran `run-design-checks.sh clients-visual clients clients-errors clients-access client-context invoice-preparation responsive-layout` against a newly created
+  disposable database. All seven suites passed; cluster `/tmp/horae-browser.xEKOcc`
+  stopped on exit. No existing database was used.
+- Opened all 64 confirmation images. The five batched corrections are visible;
+  the manifest has no browser or geometry/contrast findings. Both themes and
+  the complete keyboard, enlarged-text and short-screen matrix passed.
+- The cross-screen regression checks passed eleven routes at five widths,
+  project table/action navigation, timesheet controls and mobile admin/import.
+- `cargo test -p horae-core`: 121 passed. Server all-target clippy with warnings
+  denied and the WASM web check passed. Formatting normalized one new Markdown
+  file; the final format gate will be repeated after recording review results.
+- Attempted the design detector once; unavailable engine/cache permission is
+  recorded, not a pass. Started a fresh independent finish review over the
+  handoffs, implementation and all second-round captures.
+
+T021 and T022 are complete. Next: finish/documentation handoffs and T023 full
+Nix/cache checks, followed by T024 adversarial analysis and T025 PR/CI delivery.
+The goal remains active; no PR or green CI is claimed yet.
+
+## Iteration: final review and base reconciliation
+
+- The intervening prompt rewrite was no implementation progress. Re-read the
+  attached objective, AGENTS.md and constitution; revalidated the same Nix check
+  process (session 26296), which remained live. No replacement run was started.
+- Independent visual review returned `ship` for all 64 supplied captures and
+  the scoped client UI. The independent documentation handoff confirmed an
+  ordinary extension of the incumbent system and preserved DESIGN.md. See
+  [finish-review.md](finish-review.md) and
+  [design-system-review.md](design-system-review.md); neither certifies backend
+  security or whole-application accessibility.
+- Completed the author-led [adversarial review](adversarial-review.md), including
+  direct authorization, serialization, financial concurrency, history, route
+  cancellation, legacy callers and draft/recovery precedence. No new critical
+  or high issue found. Earlier corrected findings and their regression evidence
+  are explicitly retained in the report.
+- Executed the Spec Kit analysis prerequisite and cross-artifact analysis again:
+  18/18 requirements covered by 25 tasks, no unmapped tasks or specification
+  conflicts found. Restored the helper's feature-pointer side effect. T024 is
+  complete; task coverage does not establish the unfinished delivery gates.
+- GitHub confirms #209 merged at `30dd25b` on 2026-10-02T00:42:45Z. The previous
+  working base `f5bacfbd` is the pre-squash feature branch, not the merge commit.
+  Current remote master is `386cb58`; no PR exists for `feat/clients-mvp`.
+  Fetched master read-only with respect to branches. Its differences from the
+  working base are specifications/context only, not production code.
+
+Next: commit the verified visual batch and reviews unsigned, reconcile this
+unpublished branch onto current master without touching queued branches, then
+publish its scoped PR. The original Nix process is still running; full checks,
+actual green CI and the final requirement audit remain required. No merge,
+real-data mutation or successful CI result is claimed.
