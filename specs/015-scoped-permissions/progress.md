@@ -126,3 +126,38 @@ Do not repeat owner-only probes as substitutes or request a parity simplificatio
   12/16. The next implementation gate is still T006's verified operation matrix,
   followed by migration/dependency review and detailed tasks. PR remains draft;
   no merge or runtime activation is authorized by these observations.
+
+## 2026-10-02 — Permission implementation resumed with local fixtures
+
+- Active objective: implement permissions, all five stories/SC-001–009. This is a
+  new implementation goal, not a continuation of the completed read-only research.
+  No paid Harvest seat or company-account changes are required for confirmed work.
+- Revalidated clean `feat/scoped-permissions` at `6443d56`; reused its isolated
+  worktree and #212. Ran Spec Kit implementation prerequisite discovery; checklist
+  remains 12/16. The user's explicit implementation continuation permits confirmed
+  work while unresolved reference cases remain isolated, not marked resolved.
+- Used Rust best-practices/testing and Ponytail guidance: existing pure core,
+  typed closed enum, standard-library set, no policy-engine or dependency added.
+- Added `contracts/grant-catalog.md`, refined the plan/model and T027–T029, then
+  implemented 50 known grants, six profile defaults and normalized selections.
+  Addition includes prerequisites; removal removes dependants; floor removal is
+  rejected atomically. Unknown wire names fail and grants do not infer profile
+  identity, management assignments or resource access.
+- Initial missing-type tests failed before implementation. Full core now passes
+  143 tests, including 22 new tests; 2,500 pair combinations exercise normalization.
+  A deliberate missing invoice prerequisite triggered three failures, then the
+  restored code passed the full suite. Clippy and full formatting passed.
+- Focused adversarial review: dependency fixture is separate from implementation;
+  all floor members have only floor prerequisites; insertion/removal terminate;
+  no public mutable set or direct selection deserialization bypasses normalization.
+  `BuiltInProfile` has no rank ordering/legacy conversion. No runtime guard consumes
+  this model yet, so this does not prove saved enforcement or migration safety.
+- No Harvest calls, account writes, migrations, user-data changes or UI/CSS edits
+  in this iteration. Existing policy remains active until reviewed integration.
+
+Next action: complete the existing-surface operation contract and persisted
+profile/individual-grant/assignment/revision model for T006–T009, separating
+confirmed predicates from C01–C07. Add local persistence and revocation tests before
+server integration; do not silently choose a legacy Manager mapping or destructive
+template lifecycle. Continue toward full implementation, not another owner-only
+research loop. Goal remains active; T027–T029 do not complete any full user story.

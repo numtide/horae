@@ -54,6 +54,12 @@ crates/horae/tests/integration.rs
 
 ## Execution and Dependencies
 
+The 2026-10-02 implementation request permits advancing the confirmed catalog and
+profile/dependency model with local tests while reference conflicts remain isolated.
+Follow [grant-catalog.md](contracts/grant-catalog.md) and T027–T029 before runtime
+integration. This does not reduce the requested feature, resolve C01–C07 by guess,
+approve legacy mappings or waive the runtime cutover checks below.
+
 1. Implement the independent FR-006 scope predicate with failing tests first: own, managed people, managed projects and organization; union without privilege inference; fail closed for inactive or mismatched identities/organizations.
 1. Finish the Harvest reference matrix, custom prerequisite graph, approval/withdrawal semantics and access-path inventory. Inspect current runtime checks and review migration differences. Review the included constitution amendment and reconcile dependent feature contracts before cutover.
 1. Finalize capability/profile and assignment persistence contracts. Add transactional authorization, stale-edit rejection, audit and concurrent last-administrator protection.

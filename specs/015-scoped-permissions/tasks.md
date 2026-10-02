@@ -17,6 +17,20 @@ Status: executable foundation tasks; later phases are required work packages to 
 
 ## Phase 3: Full-policy gate (blocks all subsequent runtime work)
 
+### Confirmed catalog implementation (independent of runtime cutover)
+
+The user requested implementation without paying for or modifying Harvest on
+2026-10-02. Execute this confirmed pure-model increment while unresolved operation
+and migration cases remain isolated, not waived. It does not complete T006–T020.
+
+- [x] T027 Add failing closed-catalog, profile-default, prerequisite/floor, removal and unknown-wire-value tests in `crates/core/src/permissions/catalog/tests.rs` (FR-001/003/004/015; `contracts/grant-catalog.md`).
+- [x] T028 Implement the typed catalog, six profiles and normalized editable selection in `crates/core/src/permissions/catalog.rs`; expose it from `permissions.rs`, without changing legacy roles or runtime guards.
+- [x] T029 Verify focused and full core tests, Clippy and formatting; adversarially review grant escalation/dependency loss and record evidence in `quickstart.md` and `progress.md`.
+
+T027 → T028 → T029 builds on T005. It supplies pure grant logic for T010/T011/T016,
+but persistence, administrative identity, scope/field enforcement and migration
+still need their own tests and cannot be inferred from a selected grant set.
+
 Inventory evidence is in `contracts/current-access.md`; browser limitations and unresolved reference cases are in `contracts/harvest-evidence.md`. Neither T006 nor T007 is complete until the remaining verification/migration review is done.
 
 - [ ] T006 Complete operation-level parity matrix and custom prerequisite/approval contracts in `specs/015-scoped-permissions/contracts/`, with documented/observed/conflicting/unverified evidence in `research.md` (FR-002/003/005/009/015/019/020).

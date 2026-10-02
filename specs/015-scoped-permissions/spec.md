@@ -33,6 +33,16 @@ automatically ordinary rate-API access, and rate scopes remain contradictory.
 C05–C07 retain the scheduling, approval and assignment-loss gates. T006 remains
 open; no acceptance scenario is marked passed from owner-visible controls.
 
+### Implementation continuation — 2026-10-02
+
+The user requested implementing permissions after deciding not to purchase a
+Harvest seat or depend on the company account. Implement confirmed behavior with
+disposable local tests, isolate unresolved reference cases, and retain the full
+scope. The [grant catalog](contracts/grant-catalog.md) is an independently testable
+increment; it does not activate runtime grants, approve migration mappings or
+claim exact parity for C01–C07. Account access is not a prerequisite for work on
+confirmed contracts; local tests alone cannot settle contradictory reference facts.
+
 ## User Scenarios & Testing
 
 ### User Story 1 - Assign a role that matches a person's responsibilities (Priority: P1)

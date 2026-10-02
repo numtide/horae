@@ -27,6 +27,30 @@ The foundation contract covers FR-006 record union, identity activation and orga
 
 ## Full-feature acceptance (pending implementation)
 
+### Confirmed grant catalog evidence (2026-10-02)
+
+Run `nix develop --command cargo test -p horae-core permissions::catalog --locked`
+for the focused increment. The same full-core and Clippy commands above apply.
+
+- RED: initial tests failed with unresolved catalog/profile/selection types (101).
+- GREEN: all 143 core tests pass, including 22 new catalog tests and the six
+  existing scope tests. Direct defaults are independently enumerated for all six
+  profiles; all 50 grants, 33 prerequisite-bearing nodes and 2,500 ordered grant
+  pairs are covered. Unknown wire names, floor removal and unrelated escalation
+  are checked without adding a test dependency.
+- Mutation check: temporarily removing the managed-invoice → draft-write edge
+  caused three tests to fail (catalog completeness, exact prerequisite graph and
+  dependent removal). Restored the edge and reran all 143 tests successfully.
+- Core/all-targets Clippy with warnings denied and full `nix fmt -- --ci` passed.
+  Focused adversarial review checked unknown grants, floor/prerequisite invariants,
+  finite graph traversal, separate profile identity and lack of runtime consumers.
+- No new dependency, schema, SQLx cache, legacy role conversion or runtime guard
+  changes. No browser/DB/full-flake or cross-surface authorization result is claimed.
+  Passing selection tests is not proof of administrative identity or persisted
+  access enforcement. T006–T020 and the full feature remain open.
+
+### Remaining full-feature checks
+
 The [current access inventory](contracts/current-access.md), [Harvest evidence register](contracts/harvest-evidence.md) and [observed profiles](contracts/reference-profiles.md) now guide the remaining checks. Browser configuration/source inspection is not a substitute for saved-permission enforcement tests.
 
 1. Complete the documented/observed parity matrix and confirm custom dependencies using disposable Harvest fixtures.

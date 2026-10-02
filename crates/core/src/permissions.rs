@@ -6,6 +6,8 @@
 
 use uuid::Uuid;
 
+pub mod catalog;
+
 /// Explicitly granted record scopes; management assignments alone grant nothing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AccessScope(u8);
