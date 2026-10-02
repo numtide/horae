@@ -47,6 +47,27 @@ changed. No new critical/high issue was found in this final code pass.
 
 ## Spec Kit post-implementation analysis
 
+### Full-suite fixture follow-up
+
+The next full browser run exposed shared-seed assumptions: project editing
+renames ACME-01 and fee preparation reassigns TECH-01 to Acme. Error/visual
+readiness checks now use the stable code rather than the changed name.
+Context navigation owns two synthetic project fixtures, asserts both are
+visible before filtering, and verifies each client's inclusion/exclusion by
+exact ID. Full row snapshots still prove navigation causes no business writes.
+No assertion was removed, suite skipped, production filter changed or fixture
+reset to disguise the preceding tests' valid writes. The complete sequential
+browser and Nix gates remain required for closure.
+
+The full sequential rerun passed context navigation and found that the access
+suite mutated a fixed seed administrator rather than the administrator actually
+selected by dev login after another suite added an admin. It now resolves the
+session actor through the real observed `get_me` endpoint and applies/restores
+fixture role changes to that identity. Authorization assertions are unchanged;
+there is no application permission change or test-only grant.
+
+### Artifact analysis
+
 Ran `check-prerequisites.sh --json --require-tasks --include-tasks` with
 `SPECIFY_FEATURE_DIRECTORY=specs/012-clients-design/increments/mvp`, then reviewed
 the specification, plan, contracts, tasks and constitution. The helper's feature

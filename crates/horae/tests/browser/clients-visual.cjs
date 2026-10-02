@@ -88,7 +88,7 @@ if (output) fs.mkdirSync(output, { recursive: true });
         await capture(`${label}-list`);
         await acme.click();
         await expect(page.getByRole('heading', { name: 'Acme Corp', exact: true })).toBeVisible();
-        await expect(page.getByRole('link', { name: /Acme Website Redesign/ })).toBeVisible();
+        await expect(page.getByRole('link', { name: /^\[ACME-01\] / })).toBeVisible();
         await expect(page.getByRole('status')).toHaveCount(0);
         await capture(`${label}-detail`);
         const edit = page.getByRole('button', { name: 'Edit client', exact: true });

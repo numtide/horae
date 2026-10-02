@@ -89,7 +89,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
       await page.unroute(pattern);
       await page.getByRole('button', { name: scenario.retry, exact: true }).click();
       await expect(page.getByRole('alert')).toHaveCount(0);
-      await expect(page.getByRole('link', { name: /Acme Website Redesign/ })).toBeVisible();
+      await expect(page.getByRole('link', { name: /^\[ACME-01\] / })).toBeVisible();
     }
     console.log('PASS: client identity and independent project/totals/invoice panels recover without false empty results');
 

@@ -612,3 +612,112 @@ Next: publish the regression-test correction, let the original full Nix process
 finish its remaining checks, then rerun the corrected full gate and verify CI
 on the updated PR head. T023 and T025 are incomplete. The initial local browser
 gate is failed, not green; a successful focused rerun alone does not close it.
+
+### Full-gate status after the correction
+
+- Published the verified test correction as `eee87ba`. Format passed on that
+  head; Flake Check is running in GitHub Actions run `36961259026`.
+- The original `nix flake check --keep-going --max-jobs 1 --cores 4` finished
+  with exit 1 solely for the stale mobile-navigation wait documented above.
+  Its package, clippy, SQLx cache verification, Rust tests, formatting and both
+  NixOS deployment checks completed successfully. No failed gate was skipped.
+- The test log includes 121 core tests, 817 passing server tests (11 existing
+  ignored cases, with subprocess probes reported separately), 44 detail-
+  navigation tests and the remaining integration/UI test targets, all without
+  failures. SQLx prepare-check used its own fresh database. OIDC and normal
+  deployment VM scripts completed in about 22 and 70 seconds respectively.
+- Started the corrected full gate on `eee87ba` only after that process exited:
+  `nix fmt -- --ci && nix flake check --keep-going --max-jobs 1 --cores 4`.
+  Formatting passed unchanged; the flake process remains active. Its browser
+  derivation is `/nix/store/hw1bsynwhc6wp9d3fcg2ww7b3pkj444d-horae-browser-checks.drv`.
+
+Next action: observe the existing corrected flake process and run `36961259026`,
+investigate any actual failure, and close T023/T025 only after the complete
+checks, final requirement audit and ready-for-review publication. The PR stays
+draft; the goal remains active. No additional feature or merge is authorized.
+
+## Iteration: requirement-by-requirement completion audit
+
+- Previous iteration made implementation/delivery progress: independent reviews,
+  the scoped PR and the verified cross-screen regression correction. Re-read the
+  attached objective and revalidated `eee87ba`, the draft PR head and the same
+  corrected Nix process before proceeding.
+- Added [completion-audit.md](completion-audit.md), checking every MVP requirement,
+  success criterion and process boundary against source and test coverage. The
+  four journeys have functional evidence; T023/T025 and MVP-SC-006 remain open
+  until the full corrected gate and published-head CI pass. Readiness and task
+  coverage are explicitly not substituted for delivery evidence.
+- Verified unsigned increment commits, unchanged dependency/lockfile/migration/
+  design-system paths, ignored private capture artifacts, intact parent-feature
+  requirements and absence of Spec Kit extension hooks.
+- CI run `36961259026` remains active with Format passed. A watcher observes that
+  specific run at 60-second intervals; no CI retry was requested. The corrected
+  local flake process also remains live, with no additional failure reported.
+
+Next: collect those existing executions, investigate failures if any, then
+finalize and commit the delivery audit/tasks and publish the ready-for-review PR
+only with verified green checks. Do not start another flake run merely because
+the current compilation has not printed recent output.
+
+### Verified wait: corrected package and clippy complete
+
+Revalidated the same local flake process and CI watcher; both remain active.
+The corrected release package completed server and WASM builds successfully
+(`w86n5gwp961yq466bap4csrw6kjylysd-horae-0.1.0.drv`, about nine minutes).
+Clippy completed without warnings (`rwx0ni4maji927wphs9nd16f478rwx0z-horae-clippy-0.1.0.drv`).
+The local process has now started the corrected full browser derivation named
+above. No new execution, code edit or CI retry was started during this wait.
+Next remains the existing full-browser/flake and published-head CI results;
+T023/T025 are still open.
+
+## Iteration: remove cross-suite fixture assumptions
+
+- The intervening prompt-only turn did not advance implementation. Re-read the
+  objective and revalidated the same Nix process and CI watcher. The local
+  process is now terminal: every non-browser check passed, but the browser
+  suite failed in `client-context.cjs`; T023 remains open.
+- The failure had two fixture causes. `project-edit.cjs` renames ACME-01;
+  `invoice-preparation.cjs` moves TECH-01 to Acme for fee preparation. Thus the
+  original name and assumed TechStart ownership were invalid after those suites.
+  The client filter correctly matched the modified data; no UI fix was needed.
+- Recovery/visual readiness assertions now identify ACME-01 by its stable code.
+  Context navigation creates two dedicated synthetic projects before taking
+  its baseline snapshot, proves both are visible without a filter, then checks
+  inclusion/exclusion for each client by exact project ID. It still compares
+  full project/invoice snapshots after navigation and preserves all draft tests.
+- `project-edit client-context clients-errors clients-visual` passed on a fresh
+  disposable database with the first selector correction. After discovering
+  the fee suite's ownership mutation, added the independent context fixtures
+  and started all 21 browser suites in their unchanged default order against
+  the exact release package built for `eee87ba`.
+- The previous full gate's Rust tests passed (817 server, 11 existing ignored;
+  other targets also passed), SQLx prepare-check passed, and both deployment
+  checks completed (normal 69.84s, OIDC 21.08s). These results do not override
+  the failed browser gate. No production source, stylesheet, schema or
+  dependency changed in this correction.
+- Re-ran Spec Kit prerequisites for the increment; readiness remains 10/10.
+  Restored the helper's feature-pointer side effect to the inherited
+  `specs/016-expense-parity` value. No extension hooks exist.
+
+Next: collect the full sequential browser run, investigate any remaining
+failure, then publish the correction and run the complete Nix gate and
+published-head CI. PR #216 remains draft; no merge or queue change.
+
+### Session-identity follow-up
+
+The full sequential run passed the corrected context suite, then exposed a
+second isolation assumption in `clients-access.cjs`: it changed the role of
+`admin@example.com`, although dev login had selected the additional administrator
+created by `new-project-permissions.cjs`. The visible New client action correctly
+belonged to that still-administrative session. The access suite now obtains the
+actual session actor through its observed `get_me` endpoint before creating
+assignments or changing roles. All negative-access, payload, foreign-org and
+inactive-user assertions remain unchanged; cleanup restores that same actor.
+Started the focused sequence `new-project-permissions client-context clients-access clients-errors clients-visual` on another fresh disposable DB to
+exercise this case. The complete gate is still required, not marked green.
+
+The five-suite follow-up completed with exit 0: both permission matrices,
+context/draft protection, client error recovery and all 18 visual/keyboard
+configurations passed against the release artifact. Format also passed without
+changes. Publishing the four browser-test corrections and audit record next;
+the new full Nix run and updated-head CI must still pass before delivery.

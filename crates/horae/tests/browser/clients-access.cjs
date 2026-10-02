@@ -9,9 +9,6 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
 assert.equal(database.pathname, '/horae');
 assert.ok(database.searchParams.get('host')?.startsWith('/tmp/horae-browser.'));
 const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v', 'ON_ERROR_STOP=1', '-qAt', '-c', query], { encoding: 'utf8' }).trim();
-const actor = JSON.parse(sql("SELECT row_to_json(u) FROM (SELECT id, org_id, org_role, active FROM users WHERE email = 'admin@example.com') u"));
-assert.equal(actor.org_role, 'admin');
-assert.equal(actor.active, true);
 const id = suffix => `01970000-0000-7000-8000-${suffix.toString().padStart(12, '0')}`;
 const foreignOrg = id(401), foreignClient = id(402), visibleProject = id(403), hiddenProject = id(404);
 const name = 'Access scope client';
@@ -20,6 +17,7 @@ const name = 'Access scope client';
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, headless: true });
   const context = await browser.newContext();
   const page = await context.newPage();
+  let actor;
   const endpoints = new Map(), pending = new Set(), errors = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('request', request => {
@@ -47,6 +45,13 @@ const name = 'Access scope client';
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
     await page.waitForURL(`${base}/`);
     await visit('/clients');
+    await expect.poll(() => endpoints.has('get_me')).toBe(true);
+    // Dev login can select another admin created by a preceding suite.
+    actor = await json('get_me', {});
+    assert.match(actor.id, /^[0-9a-f-]{36}$/);
+    assert.match(actor.org_id, /^[0-9a-f-]{36}$/);
+    assert.equal(actor.org_role, 'admin');
+    assert.equal(actor.active, true);
     await page.getByRole('button', { name: 'New client', exact: true }).first().click();
     const dialog = page.getByRole('dialog');
     await dialog.getByLabel('Client name', { exact: true }).fill(name);
@@ -162,6 +167,6 @@ const name = 'Access scope client';
     console.log('PASS: clients inactive/anonymous access, foreign mutation and direct validation boundaries');
   } finally {
     await browser.close();
-    sql(`UPDATE users SET org_role = '${actor.org_role}', active = true WHERE id = '${actor.id}'`);
+    if (actor) sql(`UPDATE users SET org_role = '${actor.org_role}', active = true WHERE id = '${actor.id}'`);
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

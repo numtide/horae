@@ -17,6 +17,13 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
   page.on('pageerror', error => errors.push(error.message));
   const acme = sql("SELECT id FROM clients WHERE name = 'Acme Corp'");
   const tech = sql("SELECT id FROM clients WHERE name = 'TechStart Inc'");
+  // Other suites rename/reassign the seed projects; own both filter witnesses.
+  const acmeProject = '01970000-0000-7000-8000-000000000431';
+  const techProject = '01970000-0000-7000-8000-000000000432';
+  sql(`INSERT INTO projects (id, org_id, client_id, name, currency)
+    SELECT '${acmeProject}', org_id, id, 'Context Acme project', currency FROM clients WHERE id = '${acme}';
+    INSERT INTO projects (id, org_id, client_id, name, currency)
+    SELECT '${techProject}', org_id, id, 'Context TechStart project', currency FROM clients WHERE id = '${tech}'`);
   const projects = sql("SELECT coalesce(jsonb_agg(to_jsonb(p) ORDER BY id), '[]') FROM projects p");
   const invoices = sql("SELECT coalesce(jsonb_agg(to_jsonb(i) ORDER BY id), '[]') FROM invoices i");
   const draft = () => sql('SELECT row_to_json(d) FROM project_drafts d WHERE discarded_at IS NULL AND completed_project_id IS NULL');
@@ -37,11 +44,19 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
       await expect(editor.locator('#np-name')).toBeVisible();
       await discard();
     }
+    await page.goto(`${base}/projects`);
+    await expect(page.locator(`a[href="/projects/${acmeProject}"]`)).toBeVisible();
+    await expect(page.locator(`a[href="/projects/${techProject}"]`)).toBeVisible();
     await page.goto(`${base}/clients/${acme}`);
     await page.getByRole('link', { name: 'View in Projects', exact: true }).click();
     await expect(page).toHaveURL(`${base}/projects/client/${acme}`);
-    await expect(page.getByRole('link', { name: /Acme Website Redesign/ })).toBeVisible();
-    await expect(page.getByRole('link', { name: /TechStart API Integration/ })).toHaveCount(0);
+    await expect(page.locator(`a[href="/projects/${acmeProject}"]`)).toBeVisible();
+    await expect(page.locator(`a[href="/projects/${techProject}"]`)).toHaveCount(0);
+    await page.goto(`${base}/clients/${tech}`);
+    await page.getByRole('link', { name: 'View in Projects', exact: true }).click();
+    await expect(page).toHaveURL(`${base}/projects/client/${tech}`);
+    await expect(page.locator(`a[href="/projects/${techProject}"]`)).toBeVisible();
+    await expect(page.locator(`a[href="/projects/${acmeProject}"]`)).toHaveCount(0);
     await page.goto(`${base}/clients/${acme}`);
     await page.getByRole('link', { name: 'New project', exact: true }).click();
     await expect(editor.locator('#np-client')).toContainText('Acme Corp');
