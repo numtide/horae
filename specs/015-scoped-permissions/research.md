@@ -78,6 +78,27 @@ acceptance remain to be reconciled before cutover.
 
 ## Workflow
 
+### Current-account investigation — 2026-10-02
+
+- Decision: continue reference discovery using the existing account, as requested,
+  before asking for additional seats or accepting a product deviation. The
+  [probe register](contracts/current-account-investigation.md) tracks safe account
+  surfaces, fresh documentation findings and evidence limits; [progress](progress.md)
+  records the next action.
+- Rationale: current owner-visible configuration can narrow the unknown catalog,
+  dependency and operation boundaries even when non-owner enforcement cannot be
+  exercised. The current browser still needs extension approval; no new account
+  observation is claimed yet.
+- Alternatives rejected: bypassing owner-disabled controls, treating legacy API
+  restrictions as six-profile web policy, or saving an unchanged form as a
+  supposedly read-only probe. Assignment controls may autosave, and eligible
+  invoice saves can move retainer funds.
+- The new evidence identifies separate assignment read/write, own-permission
+  visibility and retainer lifecycle questions, plus a documented company-cutoff
+  lock distinct from scoped approvals. The independent approval review's lock
+  findings were checked directly in the linked official guides. T006 remains
+  open; these are reference questions, not invitations to simplify confirmed parity.
+
 ### Constitution reconciliation — 2026-10-01
 
 - Executed the checked-in `speckit-constitution` workflow against the user's

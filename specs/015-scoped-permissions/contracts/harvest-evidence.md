@@ -2,6 +2,11 @@
 
 Checked 2026-09-30. Status labels distinguish documentation from actual browser observations. This is not yet the complete allow/deny matrix required for runtime cutover.
 
+The [2026-10-02 current-account investigation](current-account-investigation.md)
+adds a read-only probe inventory, fresh documentation conflicts and company-cutoff
+lock evidence. Its connection status is recorded separately: the historical
+account observations below have not yet been revalidated in that session.
+
 ## Current account observations
 
 The connected account exposes the new six-profile editor: Member, Project Manager, People Admin, Accounting, Executive Manager and Administrator. The only person is its owner; the editor disables every profile and save action, explicitly explaining that owner permissions cannot change. There is no individual-permission checkbox panel for this immutable Administrator view.
