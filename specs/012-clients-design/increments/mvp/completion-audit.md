@@ -1,7 +1,8 @@
 # Clients MVP completion audit
 
 Scope: all four journeys in the authorized Clients MVP increment, not the whole
-parent feature 012. Code reviewed at `eee87ba`; subsequent delivery-document
+parent feature 012. Production code reviewed at `eee87ba`, with browser-fixture
+corrections verified in the full gate at `5de6a8b`. Subsequent delivery-document
 changes must not be treated as new functional evidence. The published head and
 its actual checks on [PR #216](https://github.com/numtide/horae/pull/216) are the
 authority for CI, not this document's existence.
@@ -23,8 +24,8 @@ evidence uses synthetic records in disposable databases.
 | MVP-008: handoff/system fidelity | Clients and Client Detail handoffs govern composition. Existing components/tokens are reused with only client-scoped layout/readability rules. `visual-review.md`, independent `finish-review.md` and `design-system-review.md` record evidence, adaptations and limits. | Scoped design review passed. |
 | MVP-009: keyboard and responsive behavior | `clients-visual.cjs` covers both themes, four widths, 100/200% text and short-screen editors; 64 confirmation images were individually inspected. Native modal trapping, Escape and focus return are asserted. Responsive and mobile navigation regressions cover the surrounding shell. | Scoped browser evidence passed. |
 | MVP-010: Harvest comparison | `research.md` records dated official sources and read-only browser observations for fields, search, currency, permissions and lifecycle, plus explicit unverified behaviors and authorized differences. Existing valid evidence was reused; no server-validation or complete Harvest parity claim is made. | Comparison delivered with documented limits. |
-| MVP-011: isolated verification | Browser runner creates its own PostgreSQL cluster; mutation suites guard the loopback test target/socket. Nix tests, SQLx prepare and deployment tests use disposable/sandboxed databases. Focused browser suites, core/server tests, clippy and WASM checks passed; the corrected full gate is still required below. | Functional checks passed; full gate pending. |
-| MVP-012: scoped delivery | Isolated `feat/clients-mvp` worktree/branch, unsigned commits and draft PR #216 exist. Author-led adversarial and independent UI reviews are distinguished. Full current-head CI, final task closure and ready-for-review state remain delivery gates. No merge/queue changes. | Pending final gates. |
+| MVP-011: isolated verification | Browser runner creates its own PostgreSQL cluster; mutation suites guard the loopback test target/socket. Nix tests, SQLx prepare and deployment tests use disposable/sandboxed databases. The full local Nix gate passed on `5de6a8b`: 121 core tests, 817 server tests plus other targets, release server/WASM, Clippy, SQLx, all 21 browser suites and both deployment checks. | Full local gate passed. |
+| MVP-012: scoped delivery | Isolated `feat/clients-mvp` worktree/branch, unsigned commits and PR #216 ready for review. Author-led adversarial and independent UI reviews are distinguished, with no unresolved critical/high findings. Full local checks and CI passed on implementation head `5de6a8b`. No merge/queue changes. Latest published-head checks remain authoritative for the final handoff. | Implementation delivery verified; recheck final head. |
 
 `pages/`, `server_fns/` and `models/` above are under `crates/horae/src/`;
 browser filenames are under `crates/horae/tests/browser/`.
@@ -40,9 +41,12 @@ browser filenames are under `crates/horae/tests/browser/`.
   recovery tests establish navigation without business-record creation/loss.
 - MVP-SC-005: the complete visual/keyboard matrix and focused cross-screen
   suites passed. The first full browser gate found obsolete regression selectors;
-  their correction passed both affected complete suites. The corrected default
-  browser suite remains part of the full gate, not waived by those focused passes.
-- MVP-SC-006: pending current-head CI and final publication state.
+  subsequent runs exposed shared fixture assumptions. After those corrections,
+  the complete default 21-suite browser gate passed on `5de6a8b`, including both
+  permission matrices, navigation, errors/retry and all visual configurations.
+- MVP-SC-006: implementation-head CI passed in run `36964454445`, and PR #216
+  is ready for review. Final handoff must verify the latest published head after
+  the delivery-document commit, not rely solely on this earlier green run.
 - Actual Spec Kit reconciliation, clarification, planning, tasks, analysis and
   implementation are recorded in `progress.md`; all 10 increment readiness
   checklist items are checked. The post-implementation analysis maps all 18
@@ -52,18 +56,24 @@ browser filenames are under `crates/horae/tests/browser/`.
   app, new integration or unrelated refactor appears in the increment diff.
   Commit signature inspection confirms unsigned increment commits.
 
-## Open delivery gates
+## Delivery evidence and final-head verification
 
-T023: the corrected full Nix/format gate must finish successfully. After fixing
-the outdated mobile Clients wait, the next full run found cross-suite seed-name
-and ownership assumptions in the context test. Its other checks passed. The
-context test now owns its filter witnesses and passed the full sequential run.
-That run exposed a fixed-actor assumption in the access suite, now corrected to
-use the actual session identity; its rerun and the full gate remain pending.
-The five-suite follow-up (project permissions, context, client access, errors and
-visual matrix) subsequently passed; the complete Nix gate is still pending.
-T025: current published-head CI must be green, final evidence
-committed and the PR made ready for review. Neither task is complete yet.
+T023 is complete: the full local Nix/format process finished with exit 0 and
+`all checks passed!` on `5de6a8b`. Earlier browser failures were corrected and
+all 21 suites passed together in their unchanged default order. No failed gate
+was skipped. This verifies the current `x86_64-linux` system, not unsupported
+cross-platform targets.
+
+T025 implementation-delivery checks passed: [CI run 36964454445](https://github.com/numtide/horae/actions/runs/36964454445)
+completed successfully for exact head `5de6a8b95e4191e7724a310d22ca6ca61411dacf`.
+Flake Check took 48m36s and Format 56s. PR #216 had no submitted reviews/comments
+pending and was made ready for review after these checks passed. No merge or
+queue operation occurred.
+
+This documentation closes the implementation record, not the checks for a
+future commit. Before the final goal handoff, verify that the latest published
+head (including this documentation-only update) has green checks and that the
+worktree has no unpublished delivery changes. If not, keep the goal active.
 
 ## Limits and next increments
 

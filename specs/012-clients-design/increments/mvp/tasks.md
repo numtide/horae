@@ -57,15 +57,21 @@ IDs and direct navigation; no business record created by navigation.
 
 - [x] T021 Add/run durable browser acceptance for clients in nix/checks/ covering failure/retry, keyboard/focus, reload, negative/direct access and historical-row preservation; inspect response payloads (MVP-003, MVP-004, MVP-011, MVP-SC-001 through MVP-SC-004).
 - [x] T022 Capture/inspect list/detail/form at required viewport/theme/text matrix and rerun Projects/import/Invoices regressions; record evidence in specs/012-clients-design/increments/mvp/progress.md (MVP-008, MVP-009, MVP-011, MVP-SC-005).
-- [ ] T023 Run core/server/web/clippy tests, regenerate .sqlx/ with server/all-targets and run Nix formatting/flake checks; record exact outcomes in specs/012-clients-design/increments/mvp/progress.md (MVP-011, MVP-012).
+- [x] T023 Run core/server/web/clippy tests, regenerate .sqlx/ with server/all-targets and run Nix formatting/flake checks; record exact outcomes in specs/012-clients-design/increments/mvp/progress.md (MVP-011, MVP-012).
 - [x] T024 Perform adversarial code/cross-feature review and correct all critical/high findings; record independent versus self-review and rerun analysis/tests in specs/012-clients-design/increments/mvp/progress.md (MVP-012).
-- [ ] T025 Publish scoped unsigned commits/PR(s), investigate CI until green without weakening checks; record PRs, evidence, deferred parent requirements and final completion audit in specs/012-clients-design/increments/mvp/progress.md (MVP-010, MVP-012, MVP-SC-006).
+- [x] T025 Publish scoped unsigned commits/PR(s), investigate CI until green without weakening checks; record PRs, evidence, deferred parent requirements and final completion audit in specs/012-clients-design/increments/mvp/progress.md (MVP-010, MVP-012, MVP-SC-006).
 
 ## Dependencies and execution
 
 Setup → foundation → US1 → US2 → US3 → US4 → verification/delivery.
 Tests precede corresponding implementation; keep failures and their resolution
 visible. No task authorizes touching real data, queued branches or merging.
+
+Delivery evidence: implementation head `5de6a8b` passed the full local gate and
+[CI run 36964454445](https://github.com/numtide/horae/actions/runs/36964454445),
+and PR #216 is ready for review. Any subsequent documentation-only commit must
+also have green published-head checks before the final handoff; task marks do
+not override the PR's actual check state. Parent feature 012 remains incomplete.
 
 Parallel opportunities (commands only, not automatic agent delegation): after
 server projection tests, US1 filter unit checks and UI reference inspection can

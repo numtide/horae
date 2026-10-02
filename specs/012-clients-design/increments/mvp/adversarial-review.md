@@ -100,6 +100,9 @@ unmapped tasks, ambiguity, duplication or constitutional conflict found.
 Coverage is not completion: full Nix/cache checks and PR/CI delivery remain
 separate gates. The design detector was unavailable and is not counted as a pass.
 
-Next: finish T023, publish the scoped branch on the current base and complete
-T025 only after actual green PR checks and the final requirement audit. Parent
-feature 012 remains incomplete.
+Closure: T023 passed the full local gate and T025's implementation head `5de6a8b`
+passed CI run `36964454445`. All 21 browser suites passed together, including the
+fixture-isolation corrections above. PR #216 is ready for review, not merged.
+The [completion audit](completion-audit.md) maps all requirements to evidence
+and requires checking the final published head after the documentation update.
+Parent feature 012 remains incomplete.

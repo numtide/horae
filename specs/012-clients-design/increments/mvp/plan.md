@@ -23,7 +23,11 @@ invariants, recovery and shared styling. No schema/dependency change planned.
 
 ## Constitution Check
 
-Pre-research and post-contract architectural gates: PASS. Runtime tests pending.
+Pre-research and post-contract architectural gates: PASS. The full local Nix
+gate passed on `5de6a8b`, including runtime/browser and deployment tests.
+Implementation-head CI also passed in run `36964454445`; PR #216 is ready for
+review. Final handoff must check the latest published head, including any
+documentation-only follow-up. See the completion audit and T025 evidence.
 
 | Principle | Contract |
 | --- | --- |

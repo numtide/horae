@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-02
 
-**Status**: Implementation in progress; browser and delivery gates pending
+**Status**: Implemented and verified; delivered in PR #216 (parent 012 remains incomplete)
 
 **Input**: User-authorized implementation of searchable/filterable Clients, useful
 detail, existing-field create/edit and contextual navigation, following `design/`

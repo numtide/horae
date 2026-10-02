@@ -721,3 +721,123 @@ context/draft protection, client error recovery and all 18 visual/keyboard
 configurations passed against the release artifact. Format also passed without
 changes. Publishing the four browser-test corrections and audit record next;
 the new full Nix run and updated-head CI must still pass before delivery.
+
+### Published correction and live delivery checks
+
+Published unsigned commit `5de6a8b95e4191e7724a310d22ca6ca61411dacf` to
+PR #216. The formatter normalized one wrapped inline command in this log;
+the subsequent format check passed unchanged before commit/push.
+
+Started the complete local command
+`nix fmt -- --ci && nix flake check --keep-going --max-jobs 1 --cores 4`
+on that committed head (session `20496`). Format passed and flake evaluation
+completed; the process is live. The browser derivation is
+`601iq1ksxzhdb4j9ri264plcsl4l92l9-horae-browser-checks.drv`.
+Current-head CI is run `36964454445`, watched at 60-second intervals (session
+`89221`). The superseded `eee87ba` run is not evidence for the new head.
+
+Next: resume these exact executions, inspect any actual failure, and finish
+T023/T025 plus the final delivery audit only after full green checks. Do not
+restart because an observation times out. No merge or queue action occurred.
+
+### Verified wait: published-head package complete
+
+The preceding turn made progress by publishing the fixture-isolation corrections.
+This iteration revalidated the same local process `20496` and CI watcher `89221`;
+neither was restarted. Current-head CI Format passed in 56 seconds; Flake Check
+remains running. Locally the release package
+`k33y0yhvd05z8kfq2bwsjfwkwr10qwn0-horae-0.1.0.drv` completed and the process
+advanced to Clippy. A read-only capacity check found 22 GB available; no artifacts
+were removed. T023/T025 remain open. Next: collect the remaining checks from
+these same executions, especially the complete sequential browser suite.
+
+### Full sequential browser gate passed
+
+The browser derivation for `5de6a8b` completed all 21 suites successfully in
+the default order, including the previously failing context/access tests,
+client persistence/error recovery, all 18 visual/keyboard configurations and
+the project/invoice/import-entry regressions. Reviewed the completed log
+`601iq1ksxzhdb4j9ri264plcsl4l92l9-horae-browser-checks.drv`; no suite was skipped.
+Clippy also completed successfully (`gng0ykcmhpw6ih1zk711j84dak31j1c9`, 1m40s).
+The same local process has advanced to SQLx prepare-check. CI Flake Check is
+still active; its Format job passed. Next: finish the remaining local checks
+and current-head CI, then close T023/T025 and the delivery audit.
+
+### T023 complete: full local Nix gate green
+
+The existing process `20496` finished with exit 0 and `all checks passed!` on
+published code head `5de6a8b`. This closes T023: format, release server/WASM,
+Clippy, the full default browser suite, SQLx prepare-check, domain/server/test
+targets and both NixOS deployment checks passed. The check ran for the current
+`x86_64-linux` system; it did not claim cross-platform checks on incompatible
+Darwin/aarch64 systems. Server results include 817 passing cases and 11 existing
+ignored cases; all additional test targets passed. SQLx used a fresh isolated DB.
+
+Current-head GitHub run `36964454445` remains active through watcher `89221`,
+with Format passed. T025 and MVP-SC-006 stay open until green current-head CI,
+final documentation publication and ready-for-review state. The final local
+changes are evidence/task documents only; no functional changes followed the
+validated head. Next: observe that existing CI run and finalize delivery after
+its actual result. Do not rebuild or rerun CI merely because it is still active.
+
+Updated PR #216's description with the full local pass and the explicit pending
+CI gate; the edit completed successfully. Revalidated watcher `89221`: run
+`36964454445` is still executing Flake Check (about 29 minutes after trigger),
+with Format passed. Only delivery documents are dirty locally. The completed
+Nix process is terminal/successful; do not attempt to resume or restart it.
+Next remains this exact CI run, followed by the final documentation commit,
+verification of its own published-head CI and ready-for-review transition.
+
+### Delivery review check while CI runs
+
+The previous iteration completed the full local gate and updated the delivery
+record/PR description. Revalidated CI watcher `89221`; run `36964454445` remains
+live with Format passed. Checked PR #216's actual head and review state: still
+open/draft at `5de6a8b`, with no submitted reviews or comments to address. This
+does not replace the recorded adversarial/independent UI reviews or the CI gate.
+Continue observing the same run; no new CI execution or merge was requested.
+
+### Verified CI wait
+
+Observed the existing watcher `89221` throughout this iteration. Its latest
+response still reports run `36964454445` / Flake Check job `110705041039` in
+progress about 44 minutes after trigger, with Format passed. This is a verified
+wait, not a terminal failure or a product blocker. No run was restarted and no
+additional implementation was invented while waiting. Next: resume this same
+watcher, inspect the actual terminal result, then publish the final documentation
+and verify its head before ready-for-review delivery. Goal remains active.
+
+## Delivery closure
+
+CI watcher `89221` finished successfully. Run
+[36964454445](https://github.com/numtide/horae/actions/runs/36964454445)
+verified exact implementation head `5de6a8b95e4191e7724a310d22ca6ca61411dacf`:
+Flake Check passed in 48m36s and Format in 56s. Re-read run/PR metadata to confirm
+the head, success conclusions and absence of pending reviews/comments, then
+marked [PR #216](https://github.com/numtide/horae/pull/216) ready for review.
+There was no merge or queue operation.
+
+All 25 increment tasks now have evidence. The four authorized journeys are
+implemented and verified, with the requirement-by-requirement mapping in
+[completion-audit.md](completion-audit.md). Local verification passed all 21
+browser suites, 121 domain tests, 817 server tests plus the other targets,
+release server/WASM, Clippy, SQLx cache and both deployment checks. The existing
+11 ignored server cases were not changed or newly introduced by this increment.
+Author-led adversarial review and independent UI reviews are distinguished;
+there are no unresolved critical/high findings from those reviews.
+
+Harvest evidence remains deliberately bounded: official documentation and
+available read-only browser observations, with unverified behavior and approved
+differences recorded in research.md. No real records, outbound messages, schema,
+dependencies, permission-model cutover or merge queue were changed. Parent 012's
+contacts, broader permissions, bulk/export/destructive actions, archive policy,
+new billing terms and summary/provenance panels remain deferred requirements.
+
+The closing commit updates delivery documents only. Next: verify its formatting,
+publish it unsigned and await its own GitHub checks before marking the goal
+complete. Do not infer a later head's CI result from the green implementation
+head. Subsequent delivery-only status and the final-head verification are
+recorded in the linked PR description/checks, avoiding another source commit
+solely to record that source commit's check result. If a real check fails,
+investigate and record the correction here before republishing. No more feature
+work or merge is authorized by this goal.
