@@ -551,3 +551,51 @@ approval-visibility decision or activate partial policy.
 Next: obtain the user's C07 retention-threshold decision, integrate the answer
 and matching acceptance cases, then resolve explicit assignment/promotion
 authority. Do not infer acceptance from a generic request to continue.
+
+## 2026-10-02 — User accepts read-only designation retention
+
+- User selected A for C07's existing-designation retention threshold. Recorded
+  one accepted answer using Spec Kit clarify from clean `0fe8f56`; ran the
+  paths-only prerequisite check and reviewed the constitution. No before/after
+  extension hooks exist.
+- Updated `spec.md` Clarifications, reference status, US2 acceptance and FR-025.
+  Reconciled the current-account evidence/acceptance table, OP16/OP20,
+  data-model gates, plan, T012/T013 and quickstart. Effective project read retains
+  an existing designation; editing stays independent. Read loss requires preview
+  and confirmed atomic removal, preserving membership and historical work.
+- Scope review: retention is not new-assignment authority, implicit promotion,
+  restoration of a previously removed designation or permission to copy the
+  reference keep-access action's read/write expansion. Independent person/all
+  scopes remain available only under their own grants; no other capabilities
+  are added or removed merely because editing was withdrawn.
+- The accepted rule resolves a Horae choice, not Harvest's restricted-user
+  enforcement. Remaining assignment/promotion, lifecycle and migration gates
+  are still open. No runtime, schema, real data or active permission changed.
+- Re-evaluated the quality checklist: 12/16 → 12/16, no new checks or regressions.
+  Full unambiguous requirements, all acceptance scenarios, criteria for every
+  requirement and achieved outcomes remain unchecked. No complete Analyze pass
+  or runtime acceptance is claimed.
+- Validation: `git diff --check` and `nix fmt -- --ci` pass; zero formatter
+  changes. Reviewed the diff for stale C07 proposals and accidental privilege
+  expansion. No runtime tests or independent review were run for this docs-only
+  clarification.
+
+Clarify coverage after this answer:
+
+| Category | Status |
+| --- | --- |
+| Functional scope and behavior | Resolved for retention; new-assignment/promotion and lifecycle rules deferred |
+| Domain and data model | Resolved for retention versus membership; coverage/migration details deferred |
+| Interaction and UX | Resolved for loss preview, confirmation and cancellation; other flows deferred |
+| Non-functional quality | Clear for authorization, exactness, revisions and audit; validation pending |
+| Integrations and dependencies | Clear for current cross-surface reauthorization; full transition pending |
+| Edge cases and failure handling | Resolved for read-only, absent read, independent scope and stale confirmation |
+| Constraints and tradeoffs | Clear: no silent grant restoration, data reset or reduced parity scope |
+| Terminology and consistency | Clear: designation, membership and edit permission are separate |
+| Completion signals | Deferred: remaining contracts and complete implementation/acceptance |
+| Miscellaneous placeholders | Clear: no new unresolved placeholder |
+
+Next: continue Spec Kit clarify/research on authority to create manager
+designations and explicit privilege expansion; do not reopen the accepted
+read-only retention rule. Complete remaining contracts before final plan/tasks
+and full-feature Analyze.

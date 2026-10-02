@@ -127,6 +127,13 @@ revocation and concurrent additions; feature 016 supplies expense fixtures.
 Do not add a catalog dependency, silently filter expenses, infer ordinary expense
 editing or extend this approval decision to the unresolved withdrawal contract.
 
+The user selected C07 retention option A (FR-025): effective managed/all project
+read retains existing designations without project editing. T012/T013 must cover
+confirmed atomic read-loss removal, stale previews, cancellation, preserved
+membership/history and recomputed scope across delivery paths. Do not silently
+restore permissions or conflate retention with new assignment, promotion or
+the still-open explicit keep-access action. Use existing revision/audit mechanics.
+
 The
 [concrete lock inventory](contracts/permission-state.md#concrete-lock-inventory-t042-partial)
 records current ordering, trigger/FK effects and a candidate common hierarchy.

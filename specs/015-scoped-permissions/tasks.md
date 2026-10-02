@@ -87,7 +87,14 @@ Independent test: two projects/two approvers with overlapping people scope, filt
 
 - [ ] T012 [US2] Add management-assignment and scoped approval/withdrawal/lock concurrency tests in `crates/horae/tests/integration.rs`. Cover every FR-024 case in `contracts/approval-visibility.md`: readable/unreadable time and expenses, missing approval authority, truly expense-free selections, revocation/new-record races, non-disclosing errors, direct requests and atomic full-selection effects. Combined acceptance requires feature 016 expense fixtures, not mocks alone (FR-005/006/009/010/019/024).
 
-- [ ] T013 [US2] Implement verified assignment storage, date/project approval coverage and transitions in `crates/horae/migrations/`, `crates/horae/src/server_fns/approvals.rs`, relevant project/person server functions and `crates/core/src/state.rs`; refresh `.sqlx/`. Enforce FR-024's complete-set visibility and atomic denial under the reviewed transaction protocol, without silent filtering, implicit grants or extrapolating withdrawal semantics (FR-005/006/009/010/017/019/024).
+- [ ] T013 [US2] Implement verified assignment storage, date/project approval coverage and transitions in `crates/horae/migrations/`, `crates/horae/src/server_fns/approvals.rs`, relevant project/person server functions and `crates/core/src/state.rs`; refresh `.sqlx/`. Enforce FR-024's complete-set visibility and atomic denial under the reviewed transaction protocol, without silent filtering, implicit grants or extrapolating withdrawal semantics. Apply FR-025's existing-designation retention/read-loss rules atomically with permission revision and audit (FR-005/006/009/010/013/017/019/024/025).
+
+T012 also covers FR-025's acceptance table in
+`contracts/current-account-investigation.md`: absent/managed/all project reads,
+editing removed or retained, confirmed removal versus cancel, direct-request
+bypass, stale-preview/revocation races, preserved membership/history and
+independent scope. T013 must pass these cases without automatic promotion or
+restoring grants; new-assignment authority remains gated.
 
 - [ ] T043 [US2] Finalize the calendar/execution and correction cases in `specs/015-scoped-permissions/contracts/company-locks.md`; add failing injected-clock boundary tests in `crates/core/src/permissions/company_lock/tests.rs` for the finalized modes, timezone/week-start/month-end/DST rules and nondecreasing automatic cutoff (FR-019/023). T006–T009 gate code; this is not an independent permission foundation.
 

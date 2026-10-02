@@ -218,7 +218,7 @@ lock key does not establish denial or justify granting that operation implicitly
 | C04 | Person Rates page still describes cost visibility as administrator-only, but current Accounting/Executive defaults contain cost read. | Resolved for Horae by user decision, 2026-10-02, FR-022: explicit organization-wide cost read/write and new-model defaults; Accounting/Executive read-only, Administrator read/write, other built-ins neither. Custom effective grants control access, not Administrator identity. Validate local payloads/mutations/revocation and preserve FR-008 report separation; restricted-user Harvest enforcement remains unverified. |
 | C05 | Current Preferences disables auto-lock/submit until a submission deadline is configured; newer company-lock guidance describes custom schedules independent of deadlines. | Deadline dependency resolved from current dedicated guides and the refreshed general approval guide: use the newer documented modes under the existing parity mandate. FR-019/023 and `company-locks.md` define target and local verification; retained owner controls are rollout evidence, not a universal prerequisite. No account setting was changed. |
 | C06 | `aJ` gives approve-managed its managed/own time reads and approve-all its all read plus managed approval; it does not add time-write or expense grants. Withdrawal has no such edge, despite a hint recommending time visibility. | Approval visibility resolved for Horae by user decision, 2026-10-02 (FR-024): approval authority plus visibility of every selected time/expense record; otherwise deny atomically, never silently approve only time. No catalog dependency or ordinary expense-write grant added. Harvest enforcement, withdrawal and other lifecycle predicates remain unverified/open; see `approval-visibility.md`. |
-| C07 | Permission-loss preview uses POST; `a3` warns about lost project-manager assignments. Its keep-access option adds managed-project read and write. | FR-005/015: preview/save/assignment-loss and cancellation need explicit persistence cases. Preview POST was not invoked; do not assume it is read-only or silently add privileges. |
+| C07 | Permission-loss preview uses POST; `a3` warns about lost project-manager assignments. Its keep-access option adds managed-project read and write. | Retention threshold resolved for Horae by user choice A, FR-025: project read suffices; removing edit does not remove the designation or restore editing. Losing project read requires preview/confirmation and atomic designation removal, preserving membership/history. New-assignment/promotion authority and explicit keep-access behavior remain open. Harvest enforcement and preview POST effects remain unverified. |
 
 Source inspection also distinguishes initial template/profile selection (`dt`,
 built-in wins an equal-size tie) from non-admin automatic best-fit classification
@@ -252,7 +252,8 @@ For C07, the [Users API](https://help.getharvest.com/api-v2/users-api/users/user
 documents preserving individual permissions when repeating the current profile,
 replacement when switching, and loss of project-manager designations when
 project access is lost. It does not say whether read without write preserves
-designation. That threshold and assignment-driven privilege changes remain open.
+designation. Horae's threshold is now selected by FR-025; assignment-driven
+privilege changes and Harvest enforcement remain open.
 
 The retained editor delegates loss prediction to its server. Its keep-access
 choice starts unchecked and adds managed-project read AND write at confirmation;
@@ -289,21 +290,30 @@ adds both managed-project read and write. The client does not reveal the server
 predicate. The existing owner-only snapshot offers no discriminating case, so
 repeating owner navigation would not settle this question.
 
-Proposed Horae choice, awaiting user acceptance: retain an existing manager
+Accepted Horae choice A, FR-025: retain an existing manager
 designation when the resulting effective grants allow reading that project
 (managed or organization-wide project read); editing is independently granted.
 Tracking membership or shared progress alone does not satisfy this threshold.
 Remove the designation when project read access is lost, with affected projects
-previewed and explicitly confirmed. Never restore editing implicitly. The
-alternative is to require project editing too, which would remove designations
-on an intentional read-only downgrade. Neither threshold is verified Harvest
-enforcement; do not mark C07 resolved before a decision.
+previewed and explicitly confirmed. Never restore editing implicitly. Requiring
+editing too was rejected: a read-only downgrade retains the designation. This
+is an approved local rule, not verified Harvest enforcement or resolution of
+every C07 predicate.
 
-After selection, acceptance must check absent/read-only/read-write/all-project
-grants, other existing managed capabilities, removal's effect on project-derived
-scope, preserved membership/history, cancellation and concurrent changes.
+Acceptance cases for T012/T013 (planned, not executed):
+
+| Permission change / fixture | Required result |
+| --- | --- |
+| Remove editing, retain managed-project read | Retain existing designation; deny project edits and unrelated-project reads |
+| Retain organization-wide project read without editing | Retain existing designations; no new designations or edit grant |
+| Retain read and write | No incidental designation or privilege change |
+| Remove all project read, including custom/per-person grants | Preview all affected designations; explicit confirmation atomically saves grants, removals and audit |
+| Only tracking membership or shared progress remains | Does not count as management project read; preserve membership and historical work while removing confirmed designations |
+| Cancel, direct request without required confirmation, stale preview or revoked actor authority | No partial grant/designation changes or stale-authority commit; refresh the affected-set preview when stale |
+| Project-derived scope removed with independent person/organization scope still granted | Recompute access without stale project scope, duplicates, implicit new grants or revoking independent scope |
+
 Eligibility to create a new designation, promotion and the explicit keep-access
-action remain separate from retaining an existing designation. This proposal
+action remain separate from retaining an existing designation. This decision
 does not waive administrator-only privilege changes or migration review.
 
 ## Acceptance boundary
