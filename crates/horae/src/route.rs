@@ -9,9 +9,9 @@ use crate::pages::{
     clients::{ClientDetail, ClientList},
     gallery::Gallery,
     importers::HarvestImport,
-    invoices::{InvoiceDetail, InvoiceList},
-    new_project::{EditProject, NewProject},
-    projects::{ProjectDetail, ProjectList},
+    invoices::{InvoiceDetail, InvoiceList, NewInvoiceForClient},
+    new_project::{EditProject, NewProject, NewProjectForClient},
+    projects::{ProjectDetail, ProjectList, ProjectsForClient},
     reports::Reports,
     settings::Settings,
     timesheet::{Anchor, CalSpan, Timesheet, ViewMode},
@@ -58,8 +58,12 @@ pub enum Route {
     ClientDetail { id: Uuid },
     #[route("/projects")]
     ProjectList {},
+    #[route("/projects/client/:client")]
+    ProjectsForClient { client: String },
     #[route("/projects/new")]
     NewProject {},
+    #[route("/projects/new/client/:client")]
+    NewProjectForClient { client: String },
     #[route("/projects/:id/edit")]
     EditProject { id: Uuid },
     #[route("/projects/:id")]
@@ -70,6 +74,8 @@ pub enum Route {
     Reports {},
     #[route("/invoices")]
     InvoiceList {},
+    #[route("/invoices/new/client/:client")]
+    NewInvoiceForClient { client: String },
     #[route("/invoices/:id")]
     InvoiceDetail { id: Uuid },
     #[layout(AdminShell)]
@@ -100,14 +106,47 @@ fn matches_navigation(to: &Route, current: &Route) -> bool {
         (to, current),
         (
             Route::ProjectList {},
-            Route::NewProject {} | Route::EditProject { .. }
+            Route::NewProject {}
+                | Route::NewProjectForClient { .. }
+                | Route::ProjectsForClient { .. }
+                | Route::EditProject { .. }
         ) | (Route::ClientList {}, Route::ClientDetail { .. })
+            | (Route::InvoiceList {}, Route::NewInvoiceForClient { .. })
     ) || std::mem::discriminant(current) == std::mem::discriminant(to)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn client_workflow_paths_preserve_context_and_navigation_section() {
+        let id = Uuid::now_v7();
+        for (path, section) in [
+            (format!("/projects/new/client/{id}"), Route::ProjectList {}),
+            (format!("/projects/client/{id}"), Route::ProjectList {}),
+            (format!("/invoices/new/client/{id}"), Route::InvoiceList {}),
+        ] {
+            let route: Route = path.parse().unwrap();
+            assert!(!matches!(route, Route::NotFound { .. }), "{path}");
+            assert_eq!(route.to_string(), path);
+            assert!(matches_navigation(&section, &route));
+            assert!(!matches_navigation(&Route::ClientList {}, &route));
+        }
+    }
+
+    #[test]
+    fn malformed_context_reaches_the_workflow_for_validation_after_recovery() {
+        for path in [
+            "/projects/new/client/not-a-client",
+            "/projects/client/not-a-client",
+            "/invoices/new/client/not-a-client",
+        ] {
+            let route: Route = path.parse().unwrap();
+            assert!(!matches!(route, Route::NotFound { .. }), "{path}");
+            assert_eq!(route.to_string(), path);
+        }
+    }
 
     #[test]
     fn client_detail_preserves_identity_and_highlights_only_clients() {

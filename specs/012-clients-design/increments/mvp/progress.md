@@ -389,3 +389,61 @@ payload browser coverage, visual matrix, cross-feature final checks, adversarial
 review and PR/CI gates remain outstanding. No new Harvest investigation was
 needed for these already documented contracts; no additional Harvest behavior is
 claimed as observed. This checkpoint does not complete feature 012 or the goal.
+
+## Iteration: contextual workflow entry points
+
+- Resumed the existing worktree at `9a08466`; the intervening prompt-rewrite turn
+  did not advance implementation. Prior test session handles were missing, so
+  reran the otherwise unobserved checks rather than treating them as successful.
+- Tests-first evidence: four route/draft tests failed against absent contextual
+  routes and draft-prefill placeholders. Two invoice-context tests subsequently
+  failed against their placeholder. The new detail-link authorization test failed
+  because the contextual links were absent.
+- Chromium `invoice-preparation` failed on the previous built artifact precisely
+  at the new contextual-recovery assertion: the route rendered 404 instead of
+  the stored invoice request. The disposable cluster
+  `/tmp/horae-browser.ucLKRK` was stopped by the runner. This is expected RED
+  evidence, not a passing recovery check.
+- Added separate `/projects/new/client/:client`, `/projects/client/:client` and
+  `/invoices/new/client/:client` entries delegating to existing screens. Bare
+  routes stay unchanged. Context uses a string so malformed links reach draft/
+  recovery precedence before validation; keyed children reset per-client state.
+- Project initialization restores any saved draft first, including an empty
+  client. Without a draft, it resolves the exact authorized active client and
+  leaves currency inherited. The initial prefill remains dirty until normal
+  autosave acknowledges it; it is not falsely treated as persisted.
+- Invoice context is applied once only after RecoveryGate is ready, validates an
+  exact active-picker identity, and never selects the first client on failure.
+  Existing recovery storage, payloads and request IDs are unchanged.
+- Detail links retain client identity and current role boundaries. View in
+  Projects opens the existing filtered list after an authorized client lookup.
+  New project/invoice links are limited to active clients with manager billing
+  authority; this does not change historical billing server policy.
+- Nix checks passed: all 44 `detail_navigation` tests, five production route
+  tests and seven project draft-state tests. No database/migration or SQL macro
+  changes in this iteration.
+- Added `client-context` Chromium coverage for real filtering, prefill, unchanged
+  saved/empty-client drafts, invalid/missing client links and full before/after
+  project/invoice rows. Added it to the default isolated browser runner.
+
+- The isolated fullstack build completed successfully in 75 seconds using the
+  cached dependencies. Both WASM and server output remain under this worktree.
+- `run-design-checks.sh client-context invoice-preparation new-project-navigation clients`
+  passed in Chromium against `/tmp/horae-browser.bsM3yA`; the runner stopped the
+  temporary cluster afterward. Contextual invoice links for another client and
+  a malformed client both preserve the exact stored recovery request. Recovery
+  still handles lost acknowledgements and storage-clear failures without
+  creating another invoice. Context navigation leaves project/invoice snapshots
+  unchanged, preserves the entire saved draft row, and permits subsequent
+  intentional client selection in the invoice form.
+- Existing project pending/dirty navigation, identical retry, Cancel/discard and
+  finalization regressions passed. Existing client form recovery, historical-row
+  preservation and import entry-point checks passed as well.
+- `cargo clippy -p horae --features server --all-targets -- -D warnings` passed.
+  `nix fmt -- --ci` passed with zero changes; `git diff --check` passed.
+
+T017–T020 are complete. Next: T021 role/direct-access/payload and failure/retry
+browser coverage, including contextual loading failures. Then the bounded visual
+matrix and cross-feature regressions, full Nix gates, adversarial review and
+PR/CI delivery remain required. No new Harvest observation or merge is claimed;
+the increment and the goal are not yet complete.

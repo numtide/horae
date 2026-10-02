@@ -110,8 +110,8 @@ fn app(probe: Probe) -> Element {
 mod route {
     use super::*;
     use clients::{ClientDetail, ClientList};
-    use invoices::{InvoiceDetail, InvoiceList};
-    use projects::{ProjectDetail, ProjectList};
+    use invoices::{InvoiceDetail, InvoiceList, NewInvoiceForClient};
+    use projects::{ProjectDetail, ProjectList, ProjectsForClient};
 
     #[derive(Clone, PartialEq, Routable)]
     pub enum Route {
@@ -122,12 +122,18 @@ mod route {
         ClientDetail { id: Uuid },
         #[route("/invoices")]
         InvoiceList {},
+        #[route("/invoices/new/client/:client")]
+        NewInvoiceForClient { client: String },
         #[route("/invoices/:id")]
         InvoiceDetail { id: Uuid },
         #[route("/projects")]
         ProjectList {},
+        #[route("/projects/client/:client")]
+        ProjectsForClient { client: String },
         #[route("/projects/new")]
         NewProject {},
+        #[route("/projects/new/client/:client")]
+        NewProjectForClient { client: String },
         #[route("/projects/:id/edit")]
         EditProject { id: Uuid },
         #[route("/projects/:id")]
@@ -139,6 +145,11 @@ mod route {
     #[component]
     fn NewProject() -> Element {
         rsx! { h1 { "New project" } }
+    }
+
+    #[component]
+    fn NewProjectForClient(client: String) -> Element {
+        rsx! { h1 { "New project for {client}" } }
     }
 
     #[component]
@@ -209,6 +220,33 @@ async fn client_detail_navigation_loads_current_identity_billing_and_work() {
     settle(&mut dom);
     assert!(dioxus::ssr::render(&dom).contains("Client-1"));
     assert_eq!(*probe.client_requests.borrow(), [first, second, first]);
+}
+
+#[tokio::test]
+async fn client_detail_links_use_current_client_and_preserve_member_boundaries() {
+    let id = Uuid::from_u128(1);
+    for member in [false, true] {
+        let probe = Probe {
+            member,
+            initial_path: Some(format!("/clients/{id}")),
+            ..Probe::default()
+        };
+        let mut dom = VirtualDom::new_with_props(app, probe);
+        dom.rebuild_in_place();
+        settle(&mut dom);
+        let html = dioxus::ssr::render(&dom);
+        assert!(
+            html.contains(&format!("href=\"/projects/client/{id}\"")),
+            "{html}"
+        );
+        for prefix in ["/projects/new/client/", "/invoices/new/client/"] {
+            assert_eq!(
+                html.contains(&format!("href=\"{prefix}{id}\"")),
+                !member,
+                "{html}"
+            );
+        }
+    }
 }
 
 #[tokio::test]

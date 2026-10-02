@@ -21,6 +21,14 @@ pub(super) struct DraftState {
 }
 
 impl DraftState {
+    pub fn initial_form(&self, client_context: Option<Uuid>) -> ProjectForm {
+        let mut form = self.saved.clone();
+        if self.saved_at.is_none() {
+            form.client_id = client_context;
+        }
+        form
+    }
+
     pub fn new(draft: Option<ProjectDraft>) -> Self {
         match draft {
             Some(draft) => Self {
@@ -79,6 +87,41 @@ mod tests {
     use crate::models::project_creation::{DraftSaved, ProjectDraft, ProjectForm};
     use chrono::Utc;
     use uuid::Uuid;
+
+    #[test]
+    fn context_prefills_only_a_new_form_without_fixing_its_currency() {
+        let state = DraftState::new(None);
+        let client = Uuid::now_v7();
+        let form = state.initial_form(Some(client));
+        assert_eq!(form.client_id, Some(client));
+        assert_eq!(form.currency, None);
+        assert_eq!(state.saved, ProjectForm::default());
+        assert!(state.is_dirty(&form));
+        assert_eq!(state.initial_form(None), ProjectForm::default());
+    }
+
+    #[test]
+    fn any_saved_draft_wins_over_context_including_empty_or_matching_client() {
+        let context = Uuid::now_v7();
+        for client_id in [None, Some(context), Some(Uuid::now_v7())] {
+            let draft = ProjectDraft {
+                id: Uuid::now_v7(),
+                revision: 4,
+                saved_at: Utc::now(),
+                form: ProjectForm {
+                    client_id,
+                    project_rate: "12.".into(),
+                    currency: Some("CHF".into()),
+                    ..Default::default()
+                },
+            };
+            let state = DraftState::new(Some(draft.clone()));
+            assert_eq!(state.initial_form(Some(context)), draft.form);
+            assert!(!state.is_dirty(&state.initial_form(Some(context))));
+            assert_eq!(state.id, draft.id);
+            assert_eq!(state.revision, draft.revision);
+        }
+    }
 
     #[test]
     fn an_empty_form_is_not_reported_as_saved() {

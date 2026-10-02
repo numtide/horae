@@ -45,7 +45,13 @@ fn ClientDetailContent(id: Uuid) -> Element {
                         }
                     }
                     if detail.billing.is_some() {
-                        button { r#type: "button", class: "btn btn-secondary", onclick: move |_| show_editor.set(true), "Edit client" }
+                        div { class: "page-actions",
+                            if detail.client.active {
+                                Link { to: Route::NewProjectForClient { client: id.to_string() }, class: "btn btn-secondary", "New project" }
+                                Link { to: Route::NewInvoiceForClient { client: id.to_string() }, class: "btn btn-primary", "New invoice" }
+                            }
+                            button { r#type: "button", class: "btn btn-secondary", onclick: move |_| show_editor.set(true), "Edit client" }
+                        }
                     }
                 }
                 div { class: "client-detail-grid grid gap-4 items-start",
@@ -111,6 +117,7 @@ fn ClientProjects(client_id: Uuid) -> Element {
         section { class: "border rounded-xl bg-secondary min-w-0 overflow-hidden", aria_labelledby: "client-projects-title",
             div { class: "flex flex-wrap items-center gap-3 px-5 py-4 border-b",
                 h2 { id: "client-projects-title", class: "text-lg font-semibold m-0", "Projects" }
+                Link { to: Route::ProjectsForClient { client: client_id.to_string() }, class: "text-sm font-semibold ml-auto", "View in Projects" }
                 if ready {
                     if let Some(Ok(rows)) = &*data {
                         span { class: "text-xs text-secondary",

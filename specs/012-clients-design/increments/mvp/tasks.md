@@ -48,10 +48,10 @@ concurrent currency edits, unchanged history and preserved lifecycle behavior.
 Independent check: context without/with drafts and exact pending recovery, invalid
 IDs and direct navigation; no business record created by navigation.
 
-- [ ] T017 [US4] Add failing context route/prefill/recovery precedence tests in crates/horae/src/route.rs, pages/new_project/draft.rs and pages/invoices/recovery.rs (MVP-007, MVP-SC-004).
-- [ ] T018 [US4] Add optional project context in crates/horae/src/route.rs and pages/new_project.rs, preserving all drafts and active-client finalization (MVP-007).
-- [ ] T019 [US4] Add optional invoice context in crates/horae/src/pages/invoices.rs and pages/invoices/preparation.rs under unchanged RecoveryGate (MVP-007).
-- [ ] T020 [US4] Wire contextual and existing-row links in crates/horae/src/pages/clients/detail.rs; retain client filter for Projects and existing navigation guards (MVP-007).
+- [x] T017 [US4] Add failing context route/prefill/recovery precedence tests in crates/horae/src/route.rs, pages/new_project/draft.rs, pages/invoices/preparation.rs and tests/browser/invoice-preparation.cjs (MVP-007, MVP-SC-004).
+- [x] T018 [US4] Add optional project context in crates/horae/src/route.rs and pages/new_project.rs, preserving all drafts and active-client finalization (MVP-007).
+- [x] T019 [US4] Add optional invoice context in crates/horae/src/pages/invoices.rs and pages/invoices/preparation.rs under unchanged RecoveryGate (MVP-007).
+- [x] T020 [US4] Wire contextual and existing-row links in crates/horae/src/pages/clients/detail.rs; retain client filter for Projects and existing navigation guards (MVP-007).
 
 ## Phase 7: Cross-cutting verification and delivery
 
