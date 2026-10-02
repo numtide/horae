@@ -105,7 +105,7 @@ plugin authorization. Exercise production transactions rather than duplicate SQL
 
 ## Phase 7: US4 — Custom profiles and permission explanations (P2)
 
-Independent test: template creation/application/deletion and person-specific adjustments; deletion-preservation expectation remains gated on resolving [C01](contracts/current-account-investigation.md) in T006; both screens explain identical effective access. Do not implement a destructive alternative from source warnings.
+Independent test: template creation/application/deletion and person-specific adjustments; C01 is resolved by the 2026-10-02 user decision: deleting a template preserves all assignees' effective grants/scope as person-specific configurations, including individually adjusted assignees. Test confirmation/cancellation, unavailable deleted templates and separate explicit revocation; both screens explain identical effective access. Remaining T006 predicates are still open.
 
 - [ ] T016 [US4] Add custom dependency, unknown-grant, template lifecycle and audit tests in `crates/core/src/permissions/` and `crates/horae/tests/integration.rs` (FR-004/011/013/015).
 - [ ] T017 [US4] Implement verified custom-template lifecycle and audit in `crates/horae/src/server_fns/`, `models/` and migrations; refresh `.sqlx/` (FR-004/013/015).

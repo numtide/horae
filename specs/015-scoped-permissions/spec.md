@@ -24,10 +24,10 @@ Parity is the acceptance target for this permissions and approvals feature, not 
 ### Reference verification — 2026-10-02
 
 The [current-account investigation](contracts/current-account-investigation.md)
-records fresh evidence, not new product decisions. FR-015 and US4's deletion
-preservation expectation is provisional: public help promises preservation while
-the current editor warns of a possible Member downgrade. Do not implement either
-outcome as verified parity until C01 is resolved. FR-008's sensitive-data contract
+records conflicting evidence: public help promises preserved permissions after
+template deletion while the editor warns of a possible Member downgrade. The
+2026-10-02 decision below resolves C01 for Horae; actual Harvest deletion remains
+unverified, not established parity. FR-008's sensitive-data contract
 also requires C02/C03/C04 resolution: report-authorized displayed data is not
 automatically ordinary rate-API access, and rate scopes remain contradictory.
 C05–C07 retain the scheduling, approval and assignment-loss gates. T006 remains
@@ -42,6 +42,10 @@ scope. The [grant catalog](contracts/grant-catalog.md) is an independently testa
 increment; it does not activate runtime grants, approve migration mappings or
 claim exact parity for C01–C07. Account access is not a prerequisite for work on
 confirmed contracts; local tests alone cannot settle contradictory reference facts.
+
+### Session 2026-10-02
+
+- Q: Should deleting a reusable permission template preserve the permissions of its existing assignees despite the conflicting Harvest editor warning? → A: Yes. Remove the template from future assignment choices and retain every assignee's current permissions as a person-specific configuration. Explain this in the confirmation dialog; revoking permissions is a separate explicit action that previews the affected people. This is an approved Horae behavior, not a claim of verified Harvest persistence.
 
 ## User Scenarios & Testing
 
@@ -111,7 +115,8 @@ People understand their effective access in My Settings; administrators manage p
 1. **Given** an administrator, **When** they create or apply a custom profile, **Then** dependencies, per-person differences and effects on existing assignees are explicit before save.
 1. **Given** a permission depends on another permission, **When** the administrator adds it, **Then** required permissions are included visibly; removing a prerequisite removes its dependants before the complete change is saved.
 1. **Given** a person assigned a custom profile, **When** an administrator adjusts that person's permissions, **Then** the differences are visible and can remain person-specific or be saved as a reusable profile.
-1. **Given** a reusable custom profile is deleted, **When** existing assignees next use Horae, **Then** their effective permissions are unchanged; the deleted template is unavailable for new applications. **Provisional reference expectation:** C01 must be resolved before implementation/acceptance.
+1. **Given** a reusable custom profile is deleted, **When** existing assignees next use Horae, **Then** their effective permissions, including person-specific adjustments and management scope, are unchanged and retained as person-specific configurations; the deleted template is unavailable for new applications. No automatic Member downgrade or reassignment occurs.
+1. **Given** an administrator opens template deletion, **When** reviewing confirmation, **Then** it explains that current users retain their permissions; cancellation changes nothing. Revoking permissions requires a separate explicit change with affected people shown before confirmation.
 1. **Given** a narrow viewport, enlarged text or keyboard navigation, **When** inspecting or editing permissions, **Then** labels, scope descriptions, focus, errors and save/cancel controls remain usable.
 
 ### User Story 5 - Transition existing accounts without hidden privilege changes (Priority: P1)
@@ -157,7 +162,7 @@ An administrator can review how existing roles and project assignments translate
 - **FR-012**: My Settings and Workspace MUST share the same effective permission descriptions. Read-only viewers MUST have a reachable explanation; administrator-only destinations cannot be their sole help path. Loading, empty, forbidden, error and pending states MUST be distinct.
 - **FR-013**: Access changes MUST produce durable, organization-scoped audit records of actor, subject, time and actual change. Audit visibility is administrator-only; rejected unauthorized attempts MUST NOT disclose another person's permission configuration.
 - **FR-014**: Existing access MUST be inventoried and migration differences approved before cutover. Preserve imported/development records; no account reset is authorized. Do not silently map old Manager to a narrower Project Manager or broader Executive Manager. The migration procedure MUST state any temporarily retained legacy profile and how it is retired.
-- **FR-015**: Customization MUST include permission prerequisites and visible dependent-permission changes. Deleting a reusable profile MUST preserve existing assignees' effective permissions while preventing new applications (provisional reference expectation, blocked on C01 resolution before implementation). Applying a profile and saving person-specific adjustments MUST be explicit operations. Template update/reapplication effects MUST be verified against Harvest before the contract is finalized; no silent propagation rule may be invented. Administrator status and last-administrator safeguards MUST not be bypassed through an equivalent-looking custom profile. Unknown permissions MUST be rejected.
+- **FR-015**: Customization MUST include permission prerequisites and visible dependent-permission changes. Deleting a reusable profile MUST preserve existing assignees' effective permissions and management scope as person-specific configurations while preventing new applications; it MUST NOT downgrade or reassign them. The deletion confirmation MUST explain preservation, and cancellation MUST change nothing. Permission revocation MUST remain a separate explicit change showing the affected people before confirmation. Applying a profile and saving person-specific adjustments MUST be explicit operations. Template update/reapplication effects MUST be verified against Harvest before the contract is finalized; no silent propagation rule may be invented. Administrator status and last-administrator safeguards MUST not be bypassed through an equivalent-looking custom profile. Unknown permissions MUST be rejected.
 - **FR-016**: Adapt the permission portions of Settings and Workspace to the selected model using existing controls and styling. Verify both themes, 320/390/768/1440px, short viewports, enlarged text and keyboard operation. Do not redesign unrelated pages as part of this feature.
 - **FR-017**: Role and assignment changes MUST NOT recalculate historical money, alter invoice/time state, send unrelated notifications or rebind sign-in identity. Existing exactness, organization isolation and state-transition safeguards remain intact.
 - **FR-018**: Permission verification MUST cover every identified entry point and each allow/deny/scope boundary, including negative payload and download checks. A passing role-selector screen alone is not acceptance.

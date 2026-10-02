@@ -84,6 +84,12 @@ repository framework or policy engine is proposed. Reuse tenant keys and
 transaction patterns after reconciling lock order across all writers. Saved
 template behavior is not selected by the storage representation.
 
+The 2026-10-02 user clarification now selects C01 deletion semantics: detach the
+template while preserving assignees' effective grants/scope as person-specific
+configurations. Apply it to US4 tests and persistence/audit design. This resolves
+that product choice only, not remaining template update/reapplication rules,
+reference conflicts C02–C07, migration mappings or full runtime readiness.
+
 The [operation matrix](contracts/operation-matrix.md) maps all 80 inspected public
 async server-function symbols plus HTTP/authentication, worker and operator
 surfaces to target dimensions and remaining predicates. The

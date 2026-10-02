@@ -2,6 +2,15 @@
 
 Status: incremental planning; independent scope foundation specified, full policy research incomplete. Baseline `9301112`; inspected 2026-09-30.
 
+Current decision update, 2026-10-02: the user explicitly resolved C01 for Horae.
+Deleting a template retains every assignee's current grants/scope as a
+person-specific configuration, removes future template availability and explains
+that effect before confirmation. Revocation remains a separate explicit change.
+Rationale: deleting a reusable configuration should not silently revoke existing
+access. The rejected alternative is an automatic Member downgrade. Historical
+investigation entries below retain the evidence available then; Harvest's actual
+deletion result remains unverified, while Horae's behavior is now approved.
+
 ## Current Horae boundaries
 
 The expanded [entry-point inventory](contracts/current-access.md) now records current checks, redaction differences, jobs/plugin trust boundaries and migration deltas. The [reference evidence register](contracts/harvest-evidence.md) separates confirmed browser observations from documentation and unverified custom behavior.

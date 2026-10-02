@@ -36,7 +36,7 @@ reviewed migration; do not erase or relink them to make constraints pass.
 | Proposed entity | Stored facts | Constraints and consumers |
 | --- | --- | --- |
 | Person permission state | User ID, canonical normalized grant set, explicit administrative identity, selected profile/template provenance, catalog version, person revision | One row per organization/user; active status and sign-in identity remain on `users`. Custom grants/display classification cannot create administrative identity. Trusted loaders, both permission screens and audit use this same state. |
-| Custom permission profile | Organization-local ID, name, normalized grant set, template revision, creator and timestamps | No cross-org lookup; Member floor and prerequisites enforced; unsupported/unknown grants rejected. Exact name-equivalence/deletion/update rules remain gated below. |
+| Custom permission profile | Organization-local ID, name, normalized grant set, template revision, creator and timestamps | No cross-org lookup; Member floor and prerequisites enforced; unsupported/unknown grants rejected. Deletion preserves assignees' current grants/scope as person-specific configurations. Exact name-equivalence/update rules remain gated below. |
 | Project management assignment | Manager user ID, project ID, revision/provenance | Unique organization/manager/project relationship; distinct from ordinary tracking membership. Migration of legacy Lead/Admin labels is reviewed, not inferred at request time. |
 | Person management assignment | Manager user ID, managed user ID, revision/provenance | Unique organization/manager/person relationship; no inference from shared projects or transitive management. Self-assignment validity remains part of the operation matrix. |
 | Access change and request receipt | Explicit user/operator actor variant, typed action, organization-local subject IDs, request identity, canonical intent, before/after revisions and permission/scope state, timestamp and outcome | One committed receipt per organization/principal/request identity; changed state and durable audit commit together. Administrator-only user-facing audit reads; operator attribution is not a fabricated user FK. No session credentials, OIDC subjects or unrelated financial data in snapshots. |
@@ -58,11 +58,20 @@ Applying a profile is an explicit command. A template change, application or
 removal that affects existing people must update their canonical states, revisions
 and audit in the same authorized operation once that behavior is verified.
 
-This representation supports either observed template lifecycle outcome without
-choosing it. It does **not** approve snapshot-only propagation, destructive
-downgrade, template rename/update endpoints or preserving deleted-template grants
-as established Harvest parity. Those commands remain gated by C01 and the
-application/reapplication evidence. No database cascade may decide the outcome.
+The user resolved C01 on 2026-10-02: deletion removes the reusable template and
+detaches current assignees without changing their canonical grants, individual
+adjustments, administrative identity or management relationships. Their access
+becomes a person-specific configuration, not a newly inferred built-in profile.
+Record the source/template deletion in the same authorized revision/audit
+transaction; preserved grants do not make the provenance change an exact no-op.
+No cascading delete may remove permissions or assignments. Historic audit
+provenance remains available to authorized readers, without keeping a deleted
+template applicable. Confirmation explains preservation; cancellation writes
+nothing. Revocation is a separate confirmed command, not a deletion side effect.
+
+This approved Horae behavior does not establish Harvest's actual deletion result
+or decide template rename/update propagation, name equivalence or reapplication.
+Those remaining contracts still need their own evidence/decision.
 
 Administrative identity is persisted separately from ordinary grant membership:
 only an explicit authorized Administrator assignment can set it. A custom profile
@@ -108,7 +117,7 @@ revisions supply mechanics, not approval of any mapping or a permanent legacy mo
 
 | Gate | Decision/evidence still required | Why storage mechanics do not settle it |
 | --- | --- | --- |
-| C01 and saved template application | Delete/update/reapply outcomes, name equivalence and saved classification | Determines actual person/template changes and uniqueness/transition constraints |
+| Saved template application (C01 deletion resolved) | Update/reapply outcomes, name equivalence and saved classification outside the approved deletion flow | Determines remaining person/template changes and uniqueness/transition constraints |
 | C02–C04 | Ordinary versus report-derived rate/cost scopes | Determines trusted operation predicates and field redaction, not a profile label |
 | C05–C06 and FR-019 | Independent scheduling locks, approval/withdrawal predicates and coverage transitions | Determines approval locks and migration, not merely grant serialization |
 | C07 and FR-005 | Assignment authority, loss preview, induced profile changes | Determines complete affected set, prerequisites and audit scope |

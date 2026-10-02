@@ -74,7 +74,7 @@ The [current access inventory](contracts/current-access.md), [Harvest evidence r
 1. Exercise each profile and custom configuration through direct server calls, screens, exports, API, jobs and downloads; verify redacted payloads and cross-organization denial.
 1. Revoke authority between preview, execution and download; race revocation against mutation and concurrent administrator changes.
 1. Submit mixed-project dates, approve only A, verify B remains pending and approved empty cells reject new entries. Exercise filters, another approver, self-approval settings and scoped/whole-week withdrawal against independent locks.
-1. Resolve the conflicting template-deletion reference evidence [C01](contracts/current-account-investigation.md) before accepting its provisional grant-preservation scenario. Verify migration preserves records and import/identity linking never overwrites privileges.
+1. Verify the approved C01 deletion behavior locally: unchanged effective grants/scope for ordinary and individually adjusted assignees, person-specific configuration after detachment, deleted template unavailable for new applications, confirmation explaining preservation and cancellation without writes. Verify migration preserves records and import/identity linking never overwrites privileges. Actual Harvest deletion remains unverified; the local contract is a user-approved decision.
 1. Verify Settings/Workspace themes, keyboard, narrow/short viewports and enlarged text; run database integration tests and the full flake gate before merge.
 
 ## Independent approval tenant-isolation repair

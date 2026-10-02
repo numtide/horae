@@ -30,7 +30,7 @@ Both files are under the primary checkout, not this worktree. DOM inspection was
 | Owner cannot change own permissions | Observed | Preserve last-administrator safety; ownership is not a custom grant |
 | Only administrators assign/customize profiles | Documented | FR-011; deny direct forged requests |
 | Reusable templates and per-person differences | Documented, interaction unverified | FR-004/015; save/apply/delete and isolated adjustments |
-| Template deletion preserves current grants | Conflicting: documentation versus current editor warning; persistence unverified | FR-015 remains provisional; C01 in the current-account investigation |
+| Template deletion preserves current grants | Reference conflict remains: documentation versus editor warning; Harvest persistence unverified | C01 resolved for Horae by user decision on 2026-10-02: preserve existing grants/scope as person-specific configurations; local acceptance required, not observed Harvest parity |
 | Prerequisite closure/dependent removal | Documented; client-side rule traversal observed, persistence unverified | FR-015; verify every customizable grant dependency |
 | Built-in classification | Client-side selection rule observed; saved classification unverified | FR-015; classification must not grant additional access |
 | Template rename/update/propagation | Unverified; observed editor supports save-as-new | FR-015; do not invent propagation |

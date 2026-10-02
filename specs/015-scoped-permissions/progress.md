@@ -308,3 +308,30 @@ Then address remaining operation predicates and migration choices one at a time.
 Do not generate more standalone foundation tasks merely to avoid those decisions
 or present another contract increment as permission implementation. Full goal and
 all five stories remain active and unfinished.
+
+## 2026-10-02 — User resolves template-deletion behavior
+
+- User accepted the recommendation: deleting a reusable template retains current
+  permissions as person-specific configurations; removing access is a separate
+  explicit action showing affected people. This resolves C01 for Horae and is not
+  evidence of a Harvest save/delete experiment. Do not ask this decision again.
+- Revalidated clean `feat/scoped-permissions` at `324084c`. Used `speckit-clarify`
+  and its paths-only prerequisite check; no extension hooks are registered.
+  Integrated one accepted answer in the spec's dated Clarifications section,
+  FR-015 and US4, and reconciled the model, matrix, evidence, plan, tasks and
+  validation guide. Historical observations remain labelled as such.
+- Deletion tests must cover individually adjusted assignees, retained management
+  scope, detached provenance, unavailable deleted templates, clear confirmation,
+  cancellation and separate revocation. They are acceptance requirements, not
+  tests already run. No application code, schema or account data changed.
+- Re-evaluated all 16 requirement checklist items: 12/16 remains 12/16, with no
+  marker changes or regressions. Ambiguous remaining requirements, incomplete
+  acceptance scenarios, incomplete criterion coverage and unachieved success
+  criteria remain unchecked. This approval does not complete T006–T009 or US4.
+- `git diff --check` and `nix fmt -- --ci` passed with zero formatting changes.
+  The consistency scan found no remaining current C01-provisional/deletion-gate
+  statements. No runtime suite is claimed for this specification-only update.
+
+Next: clarify C02's report-specific financial visibility versus ordinary rate
+access using the existing evidence. Ask one decision at a time; do not reopen
+C01 or require paid/company-account access for the already approved behavior.
