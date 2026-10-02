@@ -68,6 +68,11 @@ for the focused increment. The same full-core and Clippy commands above apply.
 
 ### Remaining full-feature checks
 
+For FR-023 use the acceptance matrix in [company locks](contracts/company-locks.md)
+and T043–T046. Verification uses disposable data and an injected clock, not a
+real lock or settings change in Harvest. Include retained protections and
+concurrent disable/reconfigure cases; owner-visible controls alone are not a pass.
+
 The [current access inventory](contracts/current-access.md), [Harvest evidence register](contracts/harvest-evidence.md) and [observed profiles](contracts/reference-profiles.md) now guide the remaining checks. Browser configuration/source inspection is not a substitute for saved-permission enforcement tests.
 
 1. Complete the documented/observed parity matrix and confirm custom dependencies using disposable Harvest fixtures.

@@ -437,3 +437,42 @@ Next: investigate C05's submission-deadline versus independent scheduled-lock
 behavior using current documentation and existing captured settings. Continue
 clarification only where a material product choice remains, without reopening
 C01–C04 or treating these contracts as implemented permissions.
+
+## 2026-10-02 — Resolve C05 scheduling dependency and narrow C06/C07
+
+- Reused clean `5bf841d`. Ran Spec Kit plan setup (existing artifacts preserved)
+  and tasks setup. No extension hooks are configured. Continued bounded Phase 0
+  research and task refinement; unresolved full-feature gates prevent claiming
+  completed planning or running full Spec Kit Analyze as if tasks were final.
+- Current dedicated lock guides and the refreshed general approval guide agree:
+  independent schedules do not need a submission deadline. Recorded C05 as
+  documented target behavior under the existing parity mandate, not a new user
+  choice or successful live settings experiment. Added FR-023, company-lock
+  contract and dependent T043–T046 with disposable validation and worker ordering.
+- An independent research agent confirmed C06's explicit approval/withdrawal
+  grants do not establish custom expense visibility. Asked one product question:
+  require visibility of the complete selected time/expense set or leave that
+  reference-dependent contract open. No answer has been assumed.
+- The same agent narrowed C07: no-project-access removal is documented, but its
+  precise read/write threshold is not; keep-access explicitly adds managed read
+  AND write. Recorded the distinction and cancellation/preview limitations
+  without inventing assignment-driven promotion or verified POST persistence.
+- Independent adversarial review found no critical/high C05 issue and two medium
+  issues. Corrected both: manual lock submission remains available independently
+  of recurring scheduling, and immutability excludes permitted timer finalization
+  and explicit corrections rather than contradicting those required actions.
+- No code, schema, real records, browser state, queue activation or merge changed.
+  The requirements checklist remains 12/16. The other ambiguous requirements,
+  incomplete acceptance/criterion coverage and unachieved outcomes remain open.
+- Read-only MVP status check: GitHub reports #216 open/non-draft, #208 and #212
+  open/draft. Root master still has the existing application baseline; local
+  Clients increment records implementation/verification, not a merge. Suggested
+  MVP sequencing is not authorization to remove full-parity scope.
+- Validation: `git diff --check` and `nix fmt -- --ci` pass, with zero formatter
+  changes. This documentation-only iteration does not claim runtime tests or a
+  completed full-feature Analyze pass.
+
+Next: integrate the user's C06 answer when provided; then settle C07's exact
+assignment-loss/promotion predicates and reviewed migration choices. Do not
+restart owner-only probes or create more foundation increments to evade these
+decisions. Full-feature analysis awaits executable coverage of the remaining gates.

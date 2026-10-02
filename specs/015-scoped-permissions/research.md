@@ -208,6 +208,19 @@ acceptance remain to be reconciled before cutover.
   Decision: retain the full-feature gates and label provisional contracts instead
   of choosing whichever source grants more access. No runtime policy changes.
 
+### C05 documentation reconciliation — 2026-10-02
+
+- Decision: use current dedicated company-lock guides and the refreshed general
+  approval article for the deadline dependency. The existing parity instruction
+  selects newer web behavior; no additional user preference is needed.
+- Rationale: dedicated guidance explicitly distinguishes independent schedules,
+  and the general guide now agrees while acknowledging staged rollout. Captured
+  deadline-disabled controls are therefore not a universal implementation rule.
+- Alternative rejected: requiring a submission deadline for all modes, or
+  modifying live settings to re-probe an already explained rollout difference.
+- Target and remaining execution acceptance are in `contracts/company-locks.md`.
+  This resolves the product dependency, not temporal algorithms or runtime tests.
+
 ### Constitution reconciliation — 2026-10-01
 
 - Executed the checked-in `speckit-constitution` workflow against the user's

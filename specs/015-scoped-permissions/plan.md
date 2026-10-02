@@ -88,7 +88,7 @@ The 2026-10-02 user clarification now selects C01 deletion semantics: detach the
 template while preserving assignees' effective grants/scope as person-specific
 configurations. Apply it to US4 tests and persistence/audit design. This resolves
 that product choice only, not remaining template update/reapplication rules,
-reference conflicts C05–C07, migration mappings or full runtime readiness.
+reference conflicts C06/C07, migration mappings or full runtime readiness.
 
 The user also selected C02 option A: authorize financial report projections and
 their matching exports through the report grant, without adding ordinary rate
@@ -110,7 +110,16 @@ runtime policy; local integration and restricted-user reference checks differ.
 
 The [operation matrix](contracts/operation-matrix.md) maps all 80 inspected public
 async server-function symbols plus HTTP/authentication, worker and operator
-surfaces to target dimensions and remaining predicates. The
+surfaces to target dimensions and remaining predicates.
+
+C05's dependency is now documented by current Harvest guides, not a new product
+choice: implement the [company-lock contract](contracts/company-locks.md) under
+FR-023. T043–T046 refine calendar calculations, persistence/serialization,
+settings/banner UI and worker integration. Retain the existing infrastructure;
+configuration and due execution must share current organization state. Full
+implementation remains gated, including feature 016 for combined expense behavior.
+
+The
 [concrete lock inventory](contracts/permission-state.md#concrete-lock-inventory-t042-partial)
 records current ordering, trigger/FK effects and a candidate common hierarchy.
 It identifies READ ONLY transaction incompatibility and network-paced imports

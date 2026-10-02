@@ -86,7 +86,20 @@ gated on T006–T009; the proposal's existence does not make them executable yet
 Independent test: two projects/two approvers with overlapping people scope, filtered dates, empty cells and withdrawal; no unrelated changes.
 
 - [ ] T012 [US2] Add management-assignment and scoped approval/withdrawal/lock concurrency tests in `crates/horae/tests/integration.rs` (FR-005/006/009/019).
+
 - [ ] T013 [US2] Implement verified assignment storage, date/project approval coverage and transitions in `crates/horae/migrations/`, `crates/horae/src/server_fns/approvals.rs`, relevant project/person server functions and `crates/core/src/state.rs`; refresh `.sqlx/` (FR-005/006/009/017/019).
+
+- [ ] T043 [US2] Finalize the calendar/execution and correction cases in `specs/015-scoped-permissions/contracts/company-locks.md`; add failing injected-clock boundary tests in `crates/core/src/permissions/company_lock/tests.rs` for the finalized modes, timezone/week-start/month-end/DST rules and nondecreasing automatic cutoff (FR-019/023). T006–T009 gate code; this is not an independent permission foundation.
+
+- [ ] T044 [US2] Add failing production-transaction tests in `crates/horae/src/server_fns/approvals/company_lock_tests.rs` for configuration revocation, worker/manual races, replay, stopped timers, submission without notifications, separate approval/invoice locks and privileged correction. Include feature 016 expense fixtures before combined acceptance (FR-007/010/013/019/023).
+
+- [ ] T045 [US2] Implement the reviewed shared calculation in `crates/core/src/permissions/company_lock.rs`, persisted organization configuration/cutoff under `crates/horae/migrations/`, authorized commands under `crates/horae/src/server_fns/approvals/company_lock.rs` and due execution from `crates/horae/src/scheduler.rs`; reuse the existing transaction/audit/job infrastructure and regenerate `.sqlx/` (FR-019/023).
+
+- [ ] T046 [US2] Expose the same next-run/cutoff calculation and real settings/actions in `crates/horae/src/pages/approvals.rs`, `crates/horae/src/pages/settings.rs` and shared models; add browser checks under `crates/horae/tests/browser/` for authorized/forbidden actions, disable/clear/cancel states and errors using existing design tokens (FR-012/016/019/023).
+
+T043 → T044 → T045 → T046 refines T012/T013. No new scheduler is authorized
+before the existing policy/migration gates. T045 depends on the final T042
+hierarchy and audited transactions; combined expense behavior depends on 016.
 
 ## Phase 6: US3 — Enforcement on every delivery path (P1)
 
