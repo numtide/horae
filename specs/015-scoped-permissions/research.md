@@ -260,6 +260,25 @@ from current official documentation. [Rate-scope evidence](contracts/rate-scope-
 records the sources, limits and independent person/project probes required to
 settle it. No rate scope or prerequisite has been invented to close the gate.
 
+### Dependent-spec reconciliation — 2026-10-02
+
+- Decision: propagate accepted financial and designation contracts without
+  activating runtime policy or rewriting delivered legacy acceptance as
+  six-profile evidence. The source-revision and test-ownership register is
+  `contracts/dependent-spec-reconciliation.md`.
+- Rationale: the shared editor still grouped administrator-only costs with
+  private notes; approved FR-022 deliberately separates them. Its conditional
+  transition is now explicit. Latest dashboard/Clients/Settings/Workspace specs
+  already depend on feature 015, whereas the authorized Clients MVP intentionally
+  retains legacy authorization until the reviewed cutover.
+- Alternatives rejected: using the stale dashboard spec from this branch as
+  final acceptance, modifying other worktrees, inferring a client-default-rate
+  permission, silently promoting project managers or enabling grants piecemeal.
+- This is bounded Phase 0 integration research and partial T008 reconciliation.
+  FR-026 now settles project-editor delegation to compatible people. Creation,
+  person-management delegation, remaining lifecycle predicates and migration
+  remain open, so full planning/Analyze gates are not satisfied.
+
 ### Previous workflow record
 
 - Followed the checked-in `speckit-specify` skill, local template and constitution. No extension hooks or template preset overrides were found.

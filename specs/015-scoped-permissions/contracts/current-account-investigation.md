@@ -218,7 +218,7 @@ lock key does not establish denial or justify granting that operation implicitly
 | C04 | Person Rates page still describes cost visibility as administrator-only, but current Accounting/Executive defaults contain cost read. | Resolved for Horae by user decision, 2026-10-02, FR-022: explicit organization-wide cost read/write and new-model defaults; Accounting/Executive read-only, Administrator read/write, other built-ins neither. Custom effective grants control access, not Administrator identity. Validate local payloads/mutations/revocation and preserve FR-008 report separation; restricted-user Harvest enforcement remains unverified. |
 | C05 | Current Preferences disables auto-lock/submit until a submission deadline is configured; newer company-lock guidance describes custom schedules independent of deadlines. | Deadline dependency resolved from current dedicated guides and the refreshed general approval guide: use the newer documented modes under the existing parity mandate. FR-019/023 and `company-locks.md` define target and local verification; retained owner controls are rollout evidence, not a universal prerequisite. No account setting was changed. |
 | C06 | `aJ` gives approve-managed its managed/own time reads and approve-all its all read plus managed approval; it does not add time-write or expense grants. Withdrawal has no such edge, despite a hint recommending time visibility. | Approval visibility resolved for Horae by user decision, 2026-10-02 (FR-024): approval authority plus visibility of every selected time/expense record; otherwise deny atomically, never silently approve only time. No catalog dependency or ordinary expense-write grant added. Harvest enforcement, withdrawal and other lifecycle predicates remain unverified/open; see `approval-visibility.md`. |
-| C07 | Permission-loss preview uses POST; `a3` warns about lost project-manager assignments. Its keep-access option adds managed-project read and write. | Retention threshold resolved for Horae by user choice A, FR-025: project read suffices; removing edit does not remove the designation or restore editing. Losing project read requires preview/confirmation and atomic designation removal, preserving membership/history. New-assignment/promotion authority and explicit keep-access behavior remain open. Harvest enforcement and preview POST effects remain unverified. |
+| C07 | Permission-loss preview uses POST; `a3` warns about lost project-manager assignments. Its keep-access option adds managed-project read and write. | User-approved FR-025 retains with project read; confirmed read loss removes designations atomically, preserving membership/history. FR-026 permits project-editor delegation to compatible targets without global grant changes. Person-management delegation, creation and explicit keep-access behavior remain open. Harvest enforcement and preview POST effects remain unverified. |
 
 Source inspection also distinguishes initial template/profile selection (`dt`,
 built-in wins an equal-size tie) from non-admin automatic best-fit classification
@@ -333,17 +333,20 @@ approve-managed / no-withdraw default on that particular statement. Its Time
 catalog still omits the explicit approval grants seen in the delivered editor,
 and it does not resolve arbitrary custom eligibility or self-approval.
 
-Pending Horae choice: permit someone with current project-edit authority to add
+Accepted Horae choice A, FR-026: permit someone with current project-edit authority to add
 or remove manager designations within that project when the target already has
 compatible project-read grants. This is project delegation, not a global profile
 change. A read-only manager may retain a designation under FR-025 but cannot
 delegate merely because it is retained. If compatible grants are absent, an
 Administrator must explicitly change permissions; neither project editing nor
-ordinary membership may promote the target. The alternative is reserving all
-manager designation changes to Administrators. The question is pending, not a
-new requirement or an implemented endpoint.
+ordinary membership may promote the target. Reserving all manager designation
+changes to Administrators was not selected. This is a user-approved requirement,
+not a verified Harvest custom-profile predicate or implemented endpoint. Existing
+managed-project read grants qualify when the designation supplies project scope;
+do not require a pre-existing designation to create one. Removing a designation
+does not require the target still to have compatible grants.
 
-If accepted, reconcile OP10/11/16/20 and feature 011's existing no-silent-profile-
+Reconcile OP10/11/16/20 and feature 011's existing no-silent-profile-
 change requirement. Test actor authority on the actual project, target
 eligibility, active same-organization identities, direct/bulk requests and
 concurrent revocation. Adding scope can activate the target's already-granted

@@ -12,6 +12,16 @@ The reference is `design/project/app/13_New Project.dc.html` from the September 
 
 **Scope extension (2026-09-22)**: The user requested that Edit open the same designed editor with the existing project's values, that the old editor be removed, and that this ship in PR #207. US7 supersedes the original decision to retain the separate Projects edit form; it does not authorize rewriting historical financial records.
 
+**Permission transition (2026-10-02)**: Legacy role labels below describe this
+feature's existing authorization baseline, not an alternative to feature 015's
+confirmed effective-capability model. At its reviewed cutover, apply
+[feature 015](../015-scoped-permissions/spec.md) FR-008/021/022/025/026 to the shared
+editor: distinguish billable rates, costs, project operations and manager
+designations. Project editors may delegate to already-compatible people under
+FR-026, never change global privileges. Do not partially activate these grants
+through this page. Remaining creation/keep-access contracts and migration stay gated;
+administrator-only private notes remain independently protected.
+
 ## Clarifications
 
 ### Session 2026-09-23
@@ -136,7 +146,7 @@ An authorized manager or administrator edits an existing project using the same 
 1. Validation/network failures preserve entered values and offer recovery. A concurrent change cannot be silently overwritten; retrying an uncertain successful update neither duplicates associations/events nor reapplies an older edit after a later update.
 1. Existing projects without creation settings, including imported projects and retainers, preserve their actual billing semantics and currencies. Unsupported changes are explained, not silently converted or replaced with new-project defaults. Unchanged unavailable selections remain identifiable and do not prevent unrelated safe edits.
 1. Time entries, invoice lines, materialized fee identities and invoice snapshots remain intact. Removing referenced tasks/people or changing charged fee schedules is validated transactionally; rejection makes no partial changes. Existing association identities and project roles survive unrelated edits.
-1. Current organization/role authority is rechecked on load and save. Managers cannot receive or erase administrator-only notes/costs by saving a redacted form; cross-organization and inactive actors are denied.
+1. Current organization and operation/field authority is rechecked on load and save. A caller cannot receive or erase unauthorized private notes or costs by saving a redacted form; cross-organization and inactive actors are denied. Cost access follows the permission-transition contract, independently of administrator-only private notes.
 1. The shared editor remains accessible at 390/768/1440 and desktop 200% text. Creation, Projects selection/bulk actions and unrelated shared-screen styles retain their regression coverage.
 
 ### Edge Cases
@@ -211,9 +221,9 @@ An authorized manager or administrator edits an existing project using the same 
 - Scheduled fees describe billing availability; invoice preparation and issuing remain explicit user actions. Creating a project does not automatically issue invoices or email clients.
 - Budget email uses an optionally configured self-hosted delivery service, not an assumed third-party account. Tests must use an isolated delivery stub and must not send messages to real users. A lost acknowledgement after acceptance may cause a duplicate delivery on retry; exactly-once email receipt is not promised.
 - One resumable current creation draft per creator is sufficient; explicit discard starts a new one. A client created explicitly in the client dialog remains a real client even if the project draft is discarded.
-- Project-specific cost overrides are administrator-only and never change user profile costs. Managers can create projects without permission to edit confidential costs or notes.
+- Before feature 015's reviewed cutover, project-specific cost overrides retain the existing administrator-only boundary. After cutover they require its explicit cost permission and independent operation authority, not an Administrator role name. Overrides never change user profile costs; a caller without cost-write/private-note authority must still preserve those fields when saving otherwise permitted project changes.
 - Project-manager designation does not promote an organization member: project leads gain project progress access but not organization-wide financial reports or billing/cost rates. Existing self-profile financial fields are outside the new project visibility setting; project, task, progress and time-entry payloads must not leak new confidential settings through it.
-- Revoked task access prevents new tracking and ordinary edits; stopping an already-running own timer remains allowed to avoid trapping a running timer. Privileged approval/import workflows retain their existing authority.
+- Revoked task access prevents new tracking and ordinary edits; stopping an already-running own timer remains allowed to avoid trapping a running timer. Privileged approval/import workflows retain existing authority before feature 015's reviewed cutover. At cutover, approvals follow 015 FR-024's current authority and complete-selection time/expense visibility; the separate Administrator import boundary is unchanged.
 - One project-created event means one transactional event record; downstream plugin delivery retains its documented retry/availability semantics, not an exactly-once external side effect.
 - Dates and monthly budget periods follow the organization's existing date convention; introducing organization timezone management is outside this feature.
 - No external payment collection, tax-law determination or currency conversion is included. Rates and taxes are user-entered settings, not jurisdictional recommendations.

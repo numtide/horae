@@ -636,3 +636,58 @@ Next: integrate the assignment-authority answer when available and reconcile
 project creation/editing paths. While it is pending, continue independent
 withdrawal/coverage research; do not substitute another foundation increment
 for unresolved policy.
+
+## 2026-10-02 — Accept project-editor delegation and reconcile dependent specs
+
+- Continued from published `9c07d60`, preserving the existing branch/worktree
+  and draft PR #212. Initially advanced independent T008 reconciliation while
+  the assignment question was unanswered; the user's subsequent explicit `a`
+  selected option A. No automatic continuation was treated as acceptance.
+- Used Spec Kit Plan's existing-plan setup for bounded Phase 0 research, then
+  Spec Kit Clarify's paths-only prerequisite check to incorporate that answer.
+  Read the constitution; no extension hooks exist. Full Plan and Analyze remain
+  gated, not completed by these document changes.
+- Added one clarification, US2 acceptance cases and FR-026: project editors may
+  add/remove manager designations within authorized projects; adding requires
+  compatible existing target grants. Only Administrators change global grants.
+  Distinguish retention, assignment-derived scope and privilege expansion.
+  Reconciled OP10/11/16, evidence status, plan, data model, tasks and quickstart.
+- Added `contracts/dependent-spec-reconciliation.md` with inspected revisions
+  for Project Detail, Clients, Workspace and My Settings. Their spec worktrees
+  were clean and inspected read-only. Updated only this branch's shared-editor
+  spec: conditional cost/private-note separation, delegation and legacy approval
+  authority. Clients MVP remains explicitly legacy until reviewed cutover.
+- Independent adversarial review found three medium integration omissions:
+  Workspace settings versus Company grants, budget-alert payload authorization,
+  and the legacy approval assumption. Recorded unresolved settings policy and
+  delivery-time payload obligations; corrected the assumption. Follow-up review
+  found no high issue and one medium wording conflict: replaced a blanket
+  'no partial approval' phrase with no partial mutation of a denied selected set,
+  preserving legitimate project/date-scoped approvals.
+- Revalidated the quality checklist: 12/16 → 12/16, no changed markers. Complete
+  unambiguous requirements, all acceptance scenarios, criteria for every
+  requirement and achieved feature outcomes remain unchecked. One answer was
+  integrated; no additional product question was asked in this iteration.
+- No runtime code, schema, data, browser/account state, other worktree or merge
+  changed. Acceptance cases are test obligations, not executed runtime evidence.
+- Validation: `git diff --check` and final `nix fmt -- --ci` pass, with zero
+  formatter changes. No runtime tests were run for this documentation-only delta.
+
+Clarify coverage after this answer:
+
+| Category | Status |
+| --- | --- |
+| Functional scope and behavior | Resolved for project-editor delegation; remaining operation predicates deferred |
+| Domain and data model | Resolved for designation versus grants; creation and migration deferred |
+| Interaction and UX | Resolved for current authority, denial and atomic save; remaining flows deferred |
+| Non-functional quality | Clear for existing authorization/privacy requirements; validation pending |
+| Integrations and dependencies | Clear ownership recorded; T008 reconciliation still partial |
+| Edge cases and failure handling | Resolved for compatible targets, revocation, scope and atomicity |
+| Constraints and tradeoffs | Clear: no grant escalation or partial runtime activation |
+| Terminology and consistency | Clear: retention, delegation and privilege administration differ |
+| Completion signals | Deferred: full matrix, migration and runtime acceptance remain incomplete |
+| Miscellaneous placeholders | Clear: no new placeholder |
+
+Next: continue Spec Kit research/clarify on remaining operation predicates and
+creation/person-management boundaries before final plan/tasks and full Analyze.
+Do not reopen the accepted delegation choice or claim full permission readiness.

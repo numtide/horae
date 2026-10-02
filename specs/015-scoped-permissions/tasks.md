@@ -64,6 +64,13 @@ complete T006.
 
 - [ ] T007 Inventory role checks across `crates/horae/src/` and legacy core transitions; document migration grant/revocation differences and obtain review in `specs/015-scoped-permissions/contracts/migration.md` (FR-014/017).
 - [ ] T008 Amend the three-role constraint through `.specify/memory/constitution.md` governance and reconcile dependent specs; finalize persistence/revocation design in `specs/015-scoped-permissions/data-model.md`.
+
+Partial cross-feature reconciliation and test ownership are recorded in
+`contracts/dependent-spec-reconciliation.md`. Read the listed branch revisions
+before integration; the older Project Detail copy in this branch is not its
+latest acceptance contract. The shared editor has a conditional FR-022 transition
+note, but neither this nor the existing constitution amendment completes T008.
+
 - [ ] T009 Refine remaining work packages into executable file-level tasks in `specs/015-scoped-permissions/tasks.md`, complete requirement checks and repeat analysis before replacing runtime authorization.
 
 ## Phase 4: US1 — Six profiles and safe assignments (P1)
@@ -94,7 +101,12 @@ T012 also covers FR-025's acceptance table in
 editing removed or retained, confirmed removal versus cancel, direct-request
 bypass, stale-preview/revocation races, preserved membership/history and
 independent scope. T013 must pass these cases without automatic promotion or
-restoring grants; new-assignment authority remains gated.
+restoring grants. T012/T013 also cover FR-026 project-editor delegation:
+managed/all actor authority, read-only denial, compatible target grants evaluated
+with the proposed project scope, no automatic profile changes, removal without
+requiring target grants, same-organization active identities, atomic multi-person
+saves, revocation and negative permission payloads. Target grant changes remain
+Administrator-only. Project-creation and person-management authority stay separate.
 
 - [ ] T043 [US2] Finalize the calendar/execution and correction cases in `specs/015-scoped-permissions/contracts/company-locks.md`; add failing injected-clock boundary tests in `crates/core/src/permissions/company_lock/tests.rs` for the finalized modes, timezone/week-start/month-end/DST rules and nondecreasing automatic cutoff (FR-019/023). T006–T009 gate code; this is not an independent permission foundation.
 

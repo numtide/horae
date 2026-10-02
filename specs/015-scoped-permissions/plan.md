@@ -69,6 +69,13 @@ approve legacy mappings or waive the runtime cutover checks below.
 
 Steps 2–6 need detailed contracts before coding. Step 1 neither chooses role grants nor changes approval behavior. It does not satisfy any full user story by itself.
 
+The [dependent-spec reconciliation](contracts/dependent-spec-reconciliation.md)
+records current source revisions and accepted cross-feature obligations for
+T008. The shared editor's cost/notes contract is reconciled conditionally for
+the reviewed cutover; other feature worktrees remain untouched. Legacy Clients
+MVP acceptance is deliberately distinct from full six-profile acceptance.
+Remaining operation predicates and migration still prevent completing T008.
+
 The 2026-10-02 persistence proposal in [data-model.md](data-model.md) and
 [permission-state.md](contracts/permission-state.md) details canonical saved
 grants, explicit administrative identity, composite tenant references, revisions,
@@ -133,6 +140,13 @@ confirmed atomic read-loss removal, stale previews, cancellation, preserved
 membership/history and recomputed scope across delivery paths. Do not silently
 restore permissions or conflate retention with new assignment, promotion or
 the still-open explicit keep-access action. Use existing revision/audit mechanics.
+
+FR-026 separately resolves delegation: current project editors may add/remove
+manager designations within their authorized projects, without changing global
+grants. Adding evaluates existing target project-read grants against the proposed
+assignment; read-only actors cannot delegate. T012/T013 cover atomic scope-only
+changes, revocation, eligible-target checks and non-disclosing responses. Creation,
+person-management delegation and explicit keep-access remain separate gates.
 
 The
 [concrete lock inventory](contracts/permission-state.md#concrete-lock-inventory-t042-partial)
