@@ -72,3 +72,57 @@ open. This entry records progress, not completion of the investigation or PR.
 Next action remains the same live-account investigation, not a new feature:
 approve Playwright's connection in Chrome, then execute R01–R15 and attach dated,
 redacted outcomes. Do not repeatedly retry the browser without new evidence.
+
+## 2026-10-02 — Approved browser connection and fresh account inspection
+
+The earlier connection limitation is superseded. The same Playwright MCP client
+connected after user approval; a dedicated Harvest tab was used and the unrelated
+tab preserved. Continued Spec Kit plan Phase 0; setup preserved the existing plan,
+and no extension hooks are configured. This is not a completed full plan/analyze.
+
+- Revalidated one immutable owner, no archived people and a paid second-seat gate.
+  Owner profile selectors and save remain disabled. No bypass or invitation.
+- Retained a fresh 50-grant/11-category catalog and six profile defaults, plus the
+  current public editor asset with SHA-256 provenance. Unknown IDs stay unknown.
+- Inspected assigned projects/people, rates, project editing, approval status views,
+  preferences/modules, expenses/categories, detailed expense report, invoice draft
+  actions, retainer form, reports and saved reports. Account activity is plan-gated;
+  estimates are disabled. Captures stay in ignored scratch, not Git.
+- The project editor raised a leave-page dialog despite no field changes. Accepted
+  leaving without saving; the next Reports page loaded successfully. This is not
+  evidence of a business mutation. Expense editing was explicitly cancelled.
+- Added C01–C07 conflicts/discrimination cases. Most importantly, template deletion
+  help promises grant preservation while source warns of possible Member downgrade.
+  Marked the expectation provisional consistently in spec, model, tasks, quickstart
+  and evidence; neither alternative is approved for implementation from this alone.
+- Report-specific data access, managed rates, legacy cost help, deadline gating,
+  custom approval dependencies and project-manager loss preview remain distinct
+  questions. No owner success is promoted into non-owner enforcement evidence.
+- No saved profiles, assignment changes, lock/submission/approval actions, invoices,
+  payments, retainer funding, settings changes or migrations. No runtime/CSS edits.
+
+Full-feature checklist remains 12/16; T006–T009 and runtime acceptance remain open.
+Next: finish focused evidence review/formatting, publish this research increment
+to #212, then use the recorded discriminating cases when separately authorized
+editable non-owner reference access and disposable mutation fixtures are available.
+Do not repeat owner-only probes as substitutes or request a parity simplification.
+
+### Research increment validation
+
+- R01–R15 now have inspected outcomes or explicit current-account access limits.
+  Settled current-week/all-time approved views are empty; an actual detailed
+  expense report was run read-only. No empty view is treated as transition proof.
+- Independent adversarial review found one low-severity provenance omission:
+  owner Archive/Delete controls required the expanded-menu capture. Added the
+  existing capture path; no critical/high findings in the reviewed increment.
+  The final R09/R11 additions and progress entry were subsequently checked by the
+  primary reviewer against their raw captures, not claimed as part of that review.
+- The owner DOM contains hidden generic reset copy, not an observed deletion;
+  it was read without changing visibility. This strengthens C01's conflict record,
+  not either proposed persistence outcome.
+- Targeted `nix fmt --` and `git diff --check` passed for the Markdown increment.
+  No application tests/full flake run claimed for documentation-only changes.
+- Current-account read-only research is recorded; full-feature checklist remains
+  12/16. The next implementation gate is still T006's verified operation matrix,
+  followed by migration/dependency review and detailed tasks. PR remains draft;
+  no merge or runtime activation is authorized by these observations.

@@ -2,6 +2,11 @@
 
 Evidence date: 2026-09-30. Read-only inspection of `permissions-config-data-island` on the connected account's Permissions page. This is the configuration delivered by Harvest to its own editor, not an inferred hierarchy and not proof of server-side enforcement. No profile was applied or saved.
 
+Revalidated 2026-10-02: [current-account investigation](current-account-investigation.md)
+retains the current catalog, asset hashes and direct-default sizes. Its C01–C07
+register supersedes any assumption that template deletion, report-derived access,
+managed rates or custom approval enforcement has been settled by this source.
+
 The table records direct defaults for the supported catalog, with the documented immutable own-time floor made explicit. `O` = own, `M` = managed, `A` = organization, `—` = absent from that profile. Project `M` is managed projects; time `M` covers managed people/projects. Financial scope semantics must not be inferred from time scope. Profile order is not a privilege ladder.
 
 | Operation | Member | Project Manager | People Admin | Accounting | Executive Manager | Administrator |
@@ -63,6 +68,15 @@ The page loaded this [public permission-editor asset](https://cache.harvestapp.c
 - Template matching also considers the Member floor and selected permission set. Inspection showed create/save-as-new and delete behavior, not a verified in-place template update/rename contract. Do not invent propagation to assignees.
 
 The delivered source role order is Administrator, Executive Manager, Project Manager, Accounting, People Admin, Member. This is evidence for resolving ties, not authorization precedence.
+
+The replacement asset observed on 2026-10-02 additionally distinguishes initial
+template/profile selection (built-in wins a size tie) from automatic non-admin
+classification. Report grants describe access to displayed underlying data but
+do not add cross-resource rate grants in the client dependency traversal. Time
+approval adds time reads, not time writing or expense grants; withdrawal has no
+corresponding dependency edge. These are editor observations only. The deletion
+fallback warning conflicts with the help article's preservation promise; no
+deletion or permission-loss preview request was executed.
 
 ## API application evidence
 

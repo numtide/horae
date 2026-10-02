@@ -13,6 +13,6 @@ The server supplies current trusted facts for one capability evaluation. These t
 
 ## Pending persisted model
 
-The full design must cover capability grants, built-in/custom templates, person-specific grants, project/person assignments, revisioned access-change audit, migration mapping, submissions and approval coverage. Every persisted entity is organization-scoped. Template deletion preserves effective grants. Approval coverage must represent dates and projects without requiring a time-entry row, because approved empty cells can be locked.
+The full design must cover capability grants, built-in/custom templates, person-specific grants, project/person assignments, revisioned access-change audit, migration mapping, submissions and approval coverage. Every persisted entity is organization-scoped. Template-deletion grant preservation remains provisional pending resolution of [C01](contracts/current-account-investigation.md); no destructive alternative is approved. Approval coverage must represent dates and projects without requiring a time-entry row, because approved empty cells can be locked.
 
 Do not create schema or choose template propagation, custom-profile classification, approval prerequisites or coverage splitting until the reference evidence and operation matrix are complete.

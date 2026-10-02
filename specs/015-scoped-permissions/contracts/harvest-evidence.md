@@ -3,9 +3,9 @@
 Checked 2026-09-30. Status labels distinguish documentation from actual browser observations. This is not yet the complete allow/deny matrix required for runtime cutover.
 
 The [2026-10-02 current-account investigation](current-account-investigation.md)
-adds a read-only probe inventory, fresh documentation conflicts and company-cutoff
-lock evidence. Its connection status is recorded separately: the historical
-account observations below have not yet been revalidated in that session.
+records fresh browser outcomes, the current 50-grant catalog/public editor,
+documentation conflicts and company-cutoff evidence. It revalidates the owner
+and seat restrictions below without establishing non-owner enforcement.
 
 ## Current account observations
 
@@ -30,7 +30,7 @@ Both files are under the primary checkout, not this worktree. DOM inspection was
 | Owner cannot change own permissions | Observed | Preserve last-administrator safety; ownership is not a custom grant |
 | Only administrators assign/customize profiles | Documented | FR-011; deny direct forged requests |
 | Reusable templates and per-person differences | Documented, interaction unverified | FR-004/015; save/apply/delete and isolated adjustments |
-| Template deletion preserves current grants | Documented, persistence unverified | FR-015; retained assignees vs future applications |
+| Template deletion preserves current grants | Conflicting: documentation versus current editor warning; persistence unverified | FR-015 remains provisional; C01 in the current-account investigation |
 | Prerequisite closure/dependent removal | Documented; client-side rule traversal observed, persistence unverified | FR-015; verify every customizable grant dependency |
 | Built-in classification | Client-side selection rule observed; saved classification unverified | FR-015; classification must not grant additional access |
 | Template rename/update/propagation | Unverified; observed editor supports save-as-new | FR-015; do not invent propagation |

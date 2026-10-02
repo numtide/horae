@@ -21,10 +21,15 @@ different sensitive data access. Rejected: treating the most permissive union as
 safe, using API legacy role prose as proof of current UI enforcement, or inventing
 a managed-cost dimension absent from the observed catalog.
 
-The checked-in observation does not retain the raw new-editor rate grant keys.
-Do not invent those identifiers from English labels. Capture exact keys and their
-prerequisites when suitable reference access is available; Horae's eventual
-internal capability names need not copy undocumented external identifiers.
+The [2026-10-02 live capture](current-account-investigation.md) now retains exact
+keys: `billable_rates:read:managed` (20), `billable_rates:write:managed` (41),
+`billable_rates:read:all` (9), `billable_rates:write:all` (10),
+`cost_rates:read:all` (11) and `cost_rates:write:all` (12). Managed labels still
+refer to people; capturing identifiers does not resolve enforcement scope.
+Person Rates help also says costs are administrator-only despite the current
+Accounting/Executive defaults containing cost read. The owner has no rate history;
+project editing separately exposes billing modes and custom person-project costs.
+No rates were changed. Horae internal names need not copy external identifiers.
 
 ## Discriminating reference fixture
 

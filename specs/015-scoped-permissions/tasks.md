@@ -47,7 +47,7 @@ Independent test: replay forbidden direct reads/writes and downloads; revoke bet
 
 ## Phase 7: US4 — Custom profiles and permission explanations (P2)
 
-Independent test: template creation/application/deletion and person-specific adjustments; deletion preserves grants; both screens explain identical effective access.
+Independent test: template creation/application/deletion and person-specific adjustments; deletion-preservation expectation remains gated on resolving [C01](contracts/current-account-investigation.md) in T006; both screens explain identical effective access. Do not implement a destructive alternative from source warnings.
 
 - [ ] T016 [US4] Add custom dependency, unknown-grant, template lifecycle and audit tests in `crates/core/src/permissions/` and `crates/horae/tests/integration.rs` (FR-004/011/013/015).
 - [ ] T017 [US4] Implement verified custom-template lifecycle and audit in `crates/horae/src/server_fns/`, `models/` and migrations; refresh `.sqlx/` (FR-004/013/015).

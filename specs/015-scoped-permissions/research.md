@@ -87,8 +87,9 @@ acceptance remain to be reconciled before cutover.
   records the next action.
 - Rationale: current owner-visible configuration can narrow the unknown catalog,
   dependency and operation boundaries even when non-owner enforcement cannot be
-  exercised. The current browser still needs extension approval; no new account
-  observation is claimed yet.
+  exercised. Browser approval subsequently succeeded: one immutable owner and
+  no archived people were confirmed, along with 50 grants, six profiles and the
+  current delivered editor. Dated outcomes and limits are in the probe register.
 - Alternatives rejected: bypassing owner-disabled controls, treating legacy API
   restrictions as six-profile web policy, or saving an unchanged form as a
   supposedly read-only probe. Assignment controls may autosave, and eligible
@@ -98,6 +99,13 @@ acceptance remain to be reconciled before cutover.
   lock distinct from scoped approvals. The independent approval review's lock
   findings were checked directly in the linked official guides. T006 remains
   open; these are reference questions, not invitations to simplify confirmed parity.
+- Fresh browser/source evidence adds C01–C07: template-deletion preservation is
+  contradicted by a downgrade warning; report access and ordinary rate access
+  need distinct checks; managed-rate/cost help conflicts remain; deadline gating,
+  approval prerequisites and project-manager assignment-loss preview need
+  discrimination. No account writes or non-owner enforcement tests were performed.
+  Decision: retain the full-feature gates and label provisional contracts instead
+  of choosing whichever source grants more access. No runtime policy changes.
 
 ### Constitution reconciliation — 2026-10-01
 

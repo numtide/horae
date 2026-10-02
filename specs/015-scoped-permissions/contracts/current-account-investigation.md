@@ -22,8 +22,9 @@ operation-level authorization contract required by FR-002/020.
 
 ## Read-only probe inventory
 
-All rows initially await a fresh browser connection. Historical findings are
-linked separately; do not mark a row complete from those alone.
+The initial connection checkpoint was superseded by successful read-only browser
+inspection on 2026-10-02. Outcomes below distinguish inspected surfaces from
+access limitations; none constitutes non-owner authorization acceptance.
 
 | ID | Surface and evidence to capture | What the current owner can establish | What remains outside that observation |
 | --- | --- | --- | --- |
@@ -131,19 +132,108 @@ The read-only owner investigation may establish available controls or existing
 history, not every transition. A second actor and authorized disposable mutation
 fixtures remain necessary where no existing evidence distinguishes the outcomes.
 
-## Current session status
+## Fresh account evidence — 2026-10-02
 
-- Current account state is not yet revalidated: Playwright MCP handshake succeeded,
-  but both browser-list calls on the same client timed out after 240 seconds each.
-  The client remains available; no successful browser connection or fresh read-only
-  probe is claimed. Further browser retries await new connection evidence.
-- The historical public asset `permissions-MQ3TAOLU.js` returned HTTP 404 on
-  2026-10-02. Its previously recorded conclusions retain their historical date;
-  the current editor must supply a replacement asset URL.
-- No account writes have been attempted. No claim is made that the account still
-  has exactly one person until R01 is rechecked.
-- Next: connect the existing browser session, complete R01–R15 where accessible,
-  record dated evidence and explicitly classify inaccessible versus untested rows.
+Connection succeeded after the user approved Chrome. All filenames in this
+section are relative to the main checkout's ignored
+`.scratch/playwright-windows/`; prefix `permissions-20261002-` is abbreviated
+below. Captures containing account identity are not committed. Ordinary page
+loads can emit telemetry; no business mutation, form save or permission change
+was requested. Existing fixtures were inspected, not created in this iteration.
+
+| Probe | Outcome and local evidence | Remaining limit |
+| --- | --- | --- |
+| R01 | `team.yml`, `archived-people.yml`: one active owner, no archived people; invitation requests a second purchased seat; owner Archive/Delete disabled | No alternative actor in this account |
+| R02 | `owner-permissions.yml`, `owner-profile.yml`: six disabled profile choices, immutable owner, save disabled; descriptive roles are distinct | No editable permission panel or persisted profile test |
+| R03 | Fresh delivered configuration: 50 catalog grants in 11 categories, six profile defaults; exact keys below | Catalog labels are not lifecycle enforcement |
+| R04 | Current delivered public editor inspected without executing downloaded code; transitive prerequisites, Member floor and classification revalidated | Persisted validation, arbitrary custom combinations untested |
+| R05 | Source exposes save-as-new, apply, deletion and permission-loss preview; no verified rename/update flow | Owner cannot exercise it; deletion source conflicts with documentation (C01) |
+| R06 | `assigned-projects.yml`, `project-editor.yml`: all-project access is distinct from assignment needed to track; project management checkbox is separate from membership and custom rates | No toggles or saves; non-owner assignment/promotion authority unresolved |
+| R07 | `assigned-people.yml`: owner explanation grants all-person reporting/approval/editing without explicit assignments; no editable relationship controls shown | No non-owner relationship authority test |
+| R08 | `rates-settled.yml`, `project-editor.yml`: no owner rate history; new-rate controls; project/person/task/no billable-rate modes, custom person-project cost control; project billing currency distinct from account-currency costs | No financial values changed; managed scope unresolved (C03/C04) |
+| R09 | `approvals-settled.yml`, `approvals-unsubmitted.yml`: pending view empty, unsubmitted owner row available; date, status, grouping and project/client/person filters; company-lock banner and force-submit/reminder controls | No approval, withdrawal, submission, reminder or lock mutation; no existing transition history |
+| R10 | `preferences.yml`, `modules.yml`: manager self-approval off; timezone configured; deadline unset, auto-lock/submit disabled; notes visibility admin-only with managed-project alternative | Settings unchanged; deadline gating conflict (C05); estimates off and activity log plan-restricted |
+| R11 | `expenses.yml`, `expense-editor.yml`, `expense-categories.yml`: receipt download/edit/delete-receipt, billable/reimbursement and submission controls; category deletion disabled when expenses use it | Editor cancelled unchanged; no category, receipt, billing or approval write |
+| R12 | `invoices.yml`, `invoice-detail.yml`, `invoice-actions.yml`, `retainers.yml`, `retainer-form.yml`: draft invoice blocks payment until sent/marked sent; duplication/recurrence/preview/export/delete menu; empty retainers list and client/project creation form | No invoice/retainer created or saved; no funded fixture; estimates module disabled, not enabled for research |
+| R13 | `reports.yml`, `saved-reports.yml`: report-family navigation, own/shared saved-report tabs and three existing own reports | No inactive-owner fixture; grants and returned financial fields need separate testing (C02) |
+| R14 | `owner-profile.yml`, `preferences.yml`: own email managed through Harvest ID; ownership and private-note configuration controls | No identity, ownership or preference change; non-owner access unresolved |
+| R15 | `activity.yml`, `modules.yml`: activity history requires an unavailable plan/module | Existing permission/approval transitions cannot be reconstructed here; no upgrade |
+
+R01's owner action-menu evidence is the automatic snapshot
+`output/page-2026-10-02T08-47-53-388Z.yml` (Archive/Delete disabled); the team
+overview alone does not contain the expanded menu. R11 additionally has
+`expense-report.yml` and `expense-report-results.yml`: read-only report execution
+shows billable/invoiced filters, grouping, row selection, receipt links and
+Actions/Export controls. No bulk billing action, saved report or export was run.
+R09's `approvals-approved-settled.yml` confirms the approved current-week view is
+empty and shows a withdrawal control; that control was not activated.
+`approval-period-options.yml` exposes Day through Custom/All time periods;
+selecting All time produces `approvals-approved-all-time.yml`, also displaying
+no matching timesheets. This is an empty owner view, not audit-history evidence.
+
+### Current catalog and editor provenance
+
+`permissions-catalog-20261002.json` retains categories, roles and the disabled
+flag only, excluding person-specific requested/direct permissions and tokens.
+SHA-256: `419e57fafe966a2580dfab0388f600446b875bff0474b52ba794e918b9722f0b`.
+
+The owner page delivered
+[permissions-VNAENDKR.js](https://cache.harvestapp.com/static/people/permissions-VNAENDKR.js),
+saved as `permissions-editor-VNAENDKR-20261002.js` (1,009,752 bytes), SHA-256
+`0ff000944cad184dfead46ab92e3725d1c1cf4e401e15dd581d7d6535c02e32d`.
+The historical `permissions-MQ3TAOLU.js` now returns 404; its earlier observation
+remains historical. No third-party implementation is copied into Horae.
+
+Compact catalog notation: each brace expands into independent exact grant keys.
+Numbers identify this observed configuration only, not Horae database IDs.
+
+| Category | Exact keys (IDs in corresponding order) |
+| --- | --- |
+| Time | `timers:read:{own,managed,all}` (44,37,26); `timers:write:{own,managed,all}` (38,47,27); `timers:approve:{managed,all}` (57,58) |
+| Expenses | `expenses:read:{own,managed,all}` (24,15,3); `expenses:write:{own,managed,all}` (25,16,4) |
+| Projects | `projects:read:{managed,all}` (39,32); `projects:write:{managed,all}` (40,33); `projects:create:all` (19) |
+| Clients and tasks | `clients:{read,write}:all` (30,31); `tasks:{read,write}:all` (45,46) |
+| People | `users:read:{managed,all}` (17,5); `users:write:{managed,all}` (18,6) |
+| Rates | `billable_rates:read:{managed,all}` (20,9); `billable_rates:write:{managed,all}` (41,10); `cost_rates:{read,write}:all` (11,12) |
+| Invoices | `invoices:read:{managed,all}` (42,34); `invoices:write:{managed_drafts,managed,all}` (49,43,35) |
+| Estimates | `estimates:{read,write}:all` (48,36) |
+| Reports | `reports:read:{profitability,contractor,invoicing}` (54,55,56); `saved_reports:{read,write}:inactive` (52,51) |
+| Approvals | `approvals:withdraw:managed` (53) |
+| Account | `company:{read,write}:own` (7,8); `billing:{read,write}:own` (28,29) |
+
+Source-order profile direct-set sizes: Administrator 34, Executive Manager 26,
+Project Manager 16, Accounting 16, People Admin 10, Member 4. These are not
+effective-grant counts after dependency closure. Administrator's IDs 59/60 remain
+undefined in the catalog. The Member floor is own time/expense read and write
+(44,38,24,25). Absence of a separate receipt, retainer, payment, category or manual
+lock key does not establish denial or justify granting that operation implicitly.
+
+### Conflicts and discriminating checks
+
+| ID | Fresh evidence, not a selected policy | Contract and next discriminating check |
+| --- | --- | --- |
+| C01 | `_c` in the delivered editor fetches affected assignees; its failure warning says deletion may downgrade matching users to Member. `Ms` sends DELETE and reloads. Public permissions help instead promises preserved grants. | FR-015/US4 deletion expectation is provisional, not verified parity. With separately authorized disposable non-owner fixtures, compare assignee grants and saved classification before/after successful deletion, including individually adjusted assignees. Do not adopt a downgrade rule from fallback text. |
+| C02 | Report-category hint says report access exposes displayed underlying data; client prerequisite function `aJ` does not add cross-resource time/rate grants for report reads. | FR-008: distinguish authorization to report fields/aggregates from direct source-record/rate APIs. Test a report-only custom profile's payloads and exports; neither blanket redaction nor global rate access is established. |
+| C03 | Exact managed billable keys still label scope as managed people, whereas public help describes projects. | FR-005/008: execute the person/project cross-product in `rate-scope-evidence.md`; do not select a union by guesswork. |
+| C04 | Person Rates page still describes cost visibility as administrator-only, but current Accounting/Executive defaults contain cost read. | FR-008: classify this as contradictory help copy; validate finance-profile field/payload access, not just owner controls. |
+| C05 | Current Preferences disables auto-lock/submit until a submission deadline is configured; newer company-lock guidance describes custom schedules independent of deadlines. | FR-019: record current account rollout/configuration, then test the scheduling dependency only with authorized settings fixtures. Do not weaken independent lock preservation. |
+| C06 | `aJ` gives approve-managed its managed/own time reads and approve-all its all read plus managed approval; it does not add time-write or expense grants. Withdrawal has no such edge, despite a hint recommending time visibility. | FR-019/020: verify custom approve/withdraw eligibility and expense handling independently; no hidden expense mutation authority inferred from time approval. |
+| C07 | Permission-loss preview uses POST; `a3` warns about lost project-manager assignments. Its keep-access option adds managed-project read and write. | FR-005/015: preview/save/assignment-loss and cancellation need explicit persistence cases. Preview POST was not invoked; do not assume it is read-only or silently add privileges. |
+
+Source inspection also distinguishes initial template/profile selection (`dt`,
+built-in wins an equal-size tie) from non-admin automatic best-fit classification
+(`Ve`/`DL`). A chosen template is normalized with the Member floor. No observed
+source establishes template rename propagation or successful server persistence.
+
+Read-only owner DOM inspection (`deletion-dom.json`) additionally finds generic
+permission-reset copy in `.js-custom-profile-deleted-alert`, with `hidden=true`
+and computed `display=none`; the deletion dialog is absent. This supports the
+existence of contradictory delivered copy, not a deletion event or actual reset.
+No hidden element was displayed or enabled to bypass the immutable-owner view.
+
+Project editor help additionally exposes independent private-note visibility and
+project-report visibility choices. These remain feature 004/015 cross-surface
+checks, not justification to give all tracking members private notes or rates.
 
 ## Acceptance boundary
 
