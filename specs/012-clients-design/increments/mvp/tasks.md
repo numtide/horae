@@ -38,8 +38,8 @@ real related rows, no hidden fields and no mixed-currency totals.
 Independent check: create/reload/edit/cancel/errors with zero/unset rates,
 concurrent currency edits, unchanged history and preserved lifecycle behavior.
 
-- [ ] T013 [US3] Add failing core validation tests in crates/core/src/client.rs and persistence/history/rate-concurrency/no-op event tests in crates/horae/src/server_fns/clients/tests.rs (MVP-004, MVP-005, MVP-006).
-- [ ] T014 [US3] Implement/reuse core validation and atomic explicit-rate profile saves in crates/core/src/client.rs and crates/horae/src/server_fns/clients.rs; preserve existing picker/legacy callers (MVP-004, MVP-005).
+- [x] T013 [US3] Add failing core validation tests in crates/core/src/client.rs and persistence/history/rate-concurrency/no-op event tests in crates/horae/src/server_fns/clients/tests.rs (MVP-004, MVP-005, MVP-006).
+- [x] T014 [US3] Implement/reuse core validation and atomic explicit-rate profile saves in crates/core/src/client.rs and crates/horae/src/server_fns/clients.rs; preserve existing picker/legacy callers (MVP-004, MVP-005).
 - [ ] T015 [US3] Share labeled form in crates/horae/src/pages/clients/form.rs for list/detail, retaining entered data, pending guards, uncertain-create recovery and focus restoration (MVP-004, MVP-008, MVP-009).
 - [ ] T016 [US3] Verify existing activation/deactivation and import entry points in crates/horae/src/pages/clients.rs and server_fns/clients/tests.rs remain truthful and non-cascading (MVP-006).
 

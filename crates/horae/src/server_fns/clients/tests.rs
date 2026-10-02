@@ -1,8 +1,499 @@
 use super::*;
+use crate::models::client::ClientBillingSnapshot;
 use crate::plugin::event::ActiveTransition;
 use crate::server_fns::test_seed::{seed, wait_for_blocked};
 use sqlx::PgPool;
 use std::time::Duration;
+
+fn profile() -> ClientProfile {
+    ClientProfile {
+        name: "  Acme  ".into(),
+        currency: "EUR".into(),
+        address: Some("Street\nFloor 2".into()),
+        tax_id: Some("  ".into()),
+    }
+}
+
+fn profile_edit(detail: &ClientDetails, rate_change: ClientRateChange) -> ClientProfileEdit {
+    ClientProfileEdit {
+        profile: ClientProfile {
+            name: detail.client.name.clone(),
+            currency: detail.client.currency.clone(),
+            address: detail.client.address.clone(),
+            tax_id: detail.client.tax_id.clone(),
+        },
+        rate_change,
+        original: ClientBillingSnapshot {
+            currency: detail.client.currency.clone(),
+            default_rate_cents: detail.billing.as_ref().unwrap().default_rate_cents,
+        },
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn profile_create_persists_normalized_identity_and_exact_optional_rate(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    for (input, expected) in [("", None), ("0", Some(0)), ("123.45", Some(12345))] {
+        let created =
+            create_client_profile_record(&pool, ids.org_id, ids.user_id, &profile(), input)
+                .await
+                .unwrap();
+        assert_eq!(created.client.name, "Acme");
+        assert_eq!(created.client.address.as_deref(), Some("Street\nFloor 2"));
+        assert_eq!(created.client.tax_id, None);
+        assert_eq!(created.client.id.get_version_num(), 7);
+        let reloaded = client_details_for_viewer(&pool, ids.org_id, ids.user_id, created.client.id)
+            .await
+            .unwrap();
+        assert_eq!(reloaded, created);
+        assert_eq!(reloaded.billing.unwrap().default_rate_cents, expected);
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn profile_update_requires_explicit_rate_intent_for_currency_changes(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Admin).await;
+    for input in ["0", "120.50"] {
+        let before =
+            create_client_profile_record(&pool, ids.org_id, ids.user_id, &profile(), input)
+                .await
+                .unwrap();
+        let version = row_version(&pool, before.client.id).await;
+        let mut edit = profile_edit(&before, ClientRateChange::Keep);
+        edit.profile.currency = "USD".into();
+        let error =
+            update_client_profile_record(&pool, ids.org_id, ids.user_id, before.client.id, &edit)
+                .await
+                .unwrap_err();
+        assert!(matches!(
+            error,
+            ServerFnError::ServerError { code: CONFLICT, .. }
+        ));
+        assert_eq!(row_version(&pool, before.client.id).await, version);
+        edit.rate_change = ClientRateChange::Replace("99.99".into());
+        let (updated, changed) =
+            update_client_profile_record(&pool, ids.org_id, ids.user_id, before.client.id, &edit)
+                .await
+                .unwrap();
+        assert!(changed);
+        assert_eq!(updated.client.currency, "USD");
+        assert_eq!(
+            updated.billing.as_ref().unwrap().default_rate_cents,
+            Some(9999)
+        );
+        let mut clear = profile_edit(&updated, ClientRateChange::Clear);
+        clear.profile.currency = "GBP".into();
+        let (cleared, changed) =
+            update_client_profile_record(&pool, ids.org_id, ids.user_id, before.client.id, &clear)
+                .await
+                .unwrap();
+        assert!(changed);
+        assert_eq!(cleared.client.currency, "GBP");
+        assert_eq!(cleared.billing.unwrap().default_rate_cents, None);
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn profile_noop_preserves_row_and_returns_no_update_event_signal(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    let before = create_client_profile_record(&pool, ids.org_id, ids.user_id, &profile(), "0")
+        .await
+        .unwrap();
+    let version = row_version(&pool, before.client.id).await;
+    for change in [
+        ClientRateChange::Keep,
+        ClientRateChange::Replace("0.00".into()),
+    ] {
+        let (after, changed) = update_client_profile_record(
+            &pool,
+            ids.org_id,
+            ids.user_id,
+            before.client.id,
+            &profile_edit(&before, change),
+        )
+        .await
+        .unwrap();
+        assert!(!changed);
+        assert_eq!(after, before);
+        assert_eq!(row_version(&pool, before.client.id).await, version);
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn profile_saves_reject_invalid_input_without_partial_writes(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    let before = client_details_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
+        .await
+        .unwrap();
+    let version = row_version(&pool, ids.client_id).await;
+    for (name, currency, address, tax, rate) in [
+        (" ", "EUR", None, None, "0"),
+        ("Name", "JPY", None, None, "0"),
+        ("Name", "EUR", Some("a\0b"), None, "0"),
+        ("Name", "EUR", None, Some("a\0b"), "0"),
+        ("Name", "EUR", None, None, "-1"),
+        ("Name", "EUR", None, None, "1.001"),
+    ] {
+        let invalid = ClientProfile {
+            name: name.into(),
+            currency: currency.into(),
+            address: address.map(str::to_owned),
+            tax_id: tax.map(str::to_owned),
+        };
+        let error = create_client_profile_record(&pool, ids.org_id, ids.user_id, &invalid, rate)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            ServerFnError::ServerError {
+                code: BAD_REQUEST,
+                ..
+            }
+        ));
+        let mut edit = profile_edit(&before, ClientRateChange::Replace(rate.into()));
+        edit.profile = invalid;
+        let error =
+            update_client_profile_record(&pool, ids.org_id, ids.user_id, ids.client_id, &edit)
+                .await
+                .unwrap_err();
+        assert!(matches!(
+            error,
+            ServerFnError::ServerError {
+                code: BAD_REQUEST,
+                ..
+            }
+        ));
+    }
+    let error = update_client_profile_record(
+        &pool,
+        ids.org_id,
+        ids.user_id,
+        ids.client_id,
+        &profile_edit(&before, ClientRateChange::Replace(String::new())),
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(
+        error,
+        ServerFnError::ServerError {
+            code: BAD_REQUEST,
+            ..
+        }
+    ));
+    assert_eq!(row_version(&pool, ids.client_id).await, version);
+    assert_eq!(
+        sqlx::query_scalar!("SELECT count(*) FROM clients WHERE org_id = $1", ids.org_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        Some(1)
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn profile_saves_recheck_manager_org_and_active_actor(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    let foreign = seed(&pool, OrgRole::Admin).await;
+    let member = seed(&pool, OrgRole::Member).await;
+    let before = client_details_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
+        .await
+        .unwrap();
+    let edit = profile_edit(&before, ClientRateChange::Keep);
+    for (org, actor) in [
+        (ids.org_id, foreign.user_id),
+        (member.org_id, member.user_id),
+    ] {
+        let error = create_client_profile_record(&pool, org, actor, &profile(), "")
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            ServerFnError::ServerError {
+                code: FORBIDDEN,
+                ..
+            }
+        ));
+        let error = update_client_profile_record(&pool, org, actor, ids.client_id, &edit)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            ServerFnError::ServerError {
+                code: FORBIDDEN,
+                ..
+            }
+        ));
+    }
+    for id in [foreign.client_id, uuid::Uuid::now_v7()] {
+        let error = update_client_profile_record(&pool, ids.org_id, ids.user_id, id, &edit)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            ServerFnError::ServerError {
+                code: NOT_FOUND,
+                ..
+            }
+        ));
+    }
+    sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let error = create_client_profile_record(&pool, ids.org_id, ids.user_id, &profile(), "")
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        ServerFnError::ServerError {
+            code: FORBIDDEN,
+            ..
+        }
+    ));
+    let error = update_client_profile_record(&pool, ids.org_id, ids.user_id, ids.client_id, &edit)
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        ServerFnError::ServerError {
+            code: FORBIDDEN,
+            ..
+        }
+    ));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn profile_update_preserves_historical_rows_and_inactive_status(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    sqlx::query!(
+        "UPDATE clients SET active = false WHERE id = $1",
+        ids.client_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let invoice_id = uuid::Uuid::now_v7();
+    sqlx::query!("INSERT INTO invoices (id, org_id, client_id, number, status, issued_on, due_on, currency, total_cents) VALUES ($1,$2,$3,'HISTORY','paid','2026-09-01','2026-09-22','GBP',12345)", invoice_id, ids.org_id, ids.client_id).execute(&pool).await.unwrap();
+    let history = sqlx::query_scalar!(
+        "SELECT to_jsonb(p) FROM projects p WHERE id = $1",
+        ids.project_id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let invoice = sqlx::query_scalar!(
+        "SELECT to_jsonb(i) FROM invoices i WHERE id = $1",
+        invoice_id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let before = client_details_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
+        .await
+        .unwrap();
+    let mut edit = profile_edit(&before, ClientRateChange::Replace("200".into()));
+    edit.profile.name = "New name".into();
+    edit.profile.currency = "USD".into();
+    let (after, changed) =
+        update_client_profile_record(&pool, ids.org_id, ids.user_id, ids.client_id, &edit)
+            .await
+            .unwrap();
+    assert!(changed && !after.client.active);
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT to_jsonb(p) FROM projects p WHERE id = $1",
+            ids.project_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        history
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT to_jsonb(i) FROM invoices i WHERE id = $1",
+            invoice_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        invoice
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn profile_update_rejects_stale_rate_even_when_the_target_currency_is_unchanged(
+    pool: PgPool,
+) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    let before = client_details_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
+        .await
+        .unwrap();
+    sqlx::query!(
+        "UPDATE clients SET default_rate_cents = $2 WHERE id = $1",
+        ids.client_id,
+        0_i64
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    for change in [
+        ClientRateChange::Keep,
+        ClientRateChange::Clear,
+        ClientRateChange::Replace("100".into()),
+    ] {
+        let error = update_client_profile_record(
+            &pool,
+            ids.org_id,
+            ids.user_id,
+            ids.client_id,
+            &profile_edit(&before, change),
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            ServerFnError::ServerError { code: CONFLICT, .. }
+        ));
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn profile_currency_change_without_a_rate_keeps_it_unset(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    let before = client_details_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
+        .await
+        .unwrap();
+    let mut edit = profile_edit(&before, ClientRateChange::Keep);
+    edit.profile.currency = "CHF".into();
+    let (after, changed) =
+        update_client_profile_record(&pool, ids.org_id, ids.user_id, ids.client_id, &edit)
+            .await
+            .unwrap();
+    assert!(changed);
+    assert_eq!(after.client.currency, "CHF");
+    assert_eq!(after.billing.unwrap().default_rate_cents, None);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn profile_update_rejects_stale_currency_even_when_the_rate_is_still_unset(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    let before = client_details_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
+        .await
+        .unwrap();
+    sqlx::query!(
+        "UPDATE clients SET currency = 'USD' WHERE id = $1",
+        ids.client_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let version = row_version(&pool, ids.client_id).await;
+    let error = update_client_profile_record(
+        &pool,
+        ids.org_id,
+        ids.user_id,
+        ids.client_id,
+        &profile_edit(&before, ClientRateChange::Keep),
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(
+        error,
+        ServerFnError::ServerError { code: CONFLICT, .. }
+    ));
+    assert_eq!(row_version(&pool, ids.client_id).await, version);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn profile_update_rechecks_financial_snapshot_after_waiting_for_a_concurrent_edit(
+    pool: PgPool,
+) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    let before = client_details_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
+        .await
+        .unwrap();
+    let edit = profile_edit(&before, ClientRateChange::Replace("100".into()));
+    let mut first = pool.begin().await.unwrap();
+    let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
+        .fetch_one(&mut *first)
+        .await
+        .unwrap()
+        .unwrap();
+    sqlx::query!(
+        "UPDATE clients SET currency = 'USD', default_rate_cents = 0 WHERE id = $1",
+        ids.client_id
+    )
+    .execute(&mut *first)
+    .await
+    .unwrap();
+    let run_pool = pool.clone();
+    let mut run = tokio::task::JoinSet::new();
+    run.spawn(async move {
+        update_client_profile_record(&run_pool, ids.org_id, ids.user_id, ids.client_id, &edit).await
+    });
+    wait_for_blocked(&pool, blocker).await;
+    first.commit().await.unwrap();
+    let error = tokio::time::timeout(Duration::from_secs(5), run.join_next())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap()
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        ServerFnError::ServerError { code: CONFLICT, .. }
+    ));
+    let after = client_details_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
+        .await
+        .unwrap();
+    assert_eq!(after.client.currency, "USD");
+    assert_eq!(after.billing.unwrap().default_rate_cents, Some(0));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn profile_update_rechecks_authority_after_waiting_for_a_concurrent_demotion(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    let before = client_details_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
+        .await
+        .unwrap();
+    let edit = profile_edit(&before, ClientRateChange::Replace("100".into()));
+    let version = row_version(&pool, ids.client_id).await;
+    let mut first = pool.begin().await.unwrap();
+    let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
+        .fetch_one(&mut *first)
+        .await
+        .unwrap()
+        .unwrap();
+    sqlx::query!(
+        "UPDATE users SET org_role = 'member' WHERE id = $1",
+        ids.user_id
+    )
+    .execute(&mut *first)
+    .await
+    .unwrap();
+    let run_pool = pool.clone();
+    let mut run = tokio::task::JoinSet::new();
+    run.spawn(async move {
+        update_client_profile_record(&run_pool, ids.org_id, ids.user_id, ids.client_id, &edit).await
+    });
+    wait_for_blocked(&pool, blocker).await;
+    first.commit().await.unwrap();
+    let error = tokio::time::timeout(Duration::from_secs(5), run.join_next())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap()
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        ServerFnError::ServerError {
+            code: FORBIDDEN,
+            ..
+        }
+    ));
+    assert_eq!(row_version(&pool, ids.client_id).await, version);
+}
 
 async fn client(pool: &PgPool) -> Client {
     let ids = seed(pool, OrgRole::Admin).await;

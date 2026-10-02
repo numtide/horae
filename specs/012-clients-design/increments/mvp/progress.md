@@ -254,19 +254,23 @@ integration. No new PR, merge, real-data write or migration in this iteration.
 ## Iteration: shared client validation foundation
 
 - Saved the verified detail checkpoint as unsigned commit `6c08dae`.
+
 - Added six tests first for the core profile contract: Unicode character limits,
   blank/overlong/NUL names, supported currencies, NUL billing fields, absent/zero
   and exact large rates, negative/fractional-cent/overflow rejection, and optional
   text normalization without stripping legitimate nonempty address text.
+
 - All six failed against the unimplemented functions, then passed after adding
   validation using the existing currency set and exact `parse_cents` parser.
   Full `cargo test -p horae-core`: 121 passed; core all-target clippy with
   `--locked -- -D warnings`: passed. No dependency, float or I/O in core.
+
 - Existing project-client creation now calls this shared core validation instead
   of duplicating the name/currency/rate rules. Its transaction/authorization and
   SQL are unchanged. The dedicated DB regression passed against the previously
   created disposable cluster at `/tmp/horae-clients-mvp-pg.pSefis`, explicitly
   selected through DATABASE_URL; the cluster was verified accepting connections.
+
 - T013/T014 remain incomplete: transactional explicit-rate profile saves,
   concurrent financial edits, history preservation and event assertions are
   still required. The old list form is not yet replaced and this foundation is
@@ -280,3 +284,52 @@ integration. No new PR, merge, real-data write or migration in this iteration.
 Next: add failing profile-save persistence/concurrency tests and implement their
 transaction before T015 shared form. No new Harvest question required repeating
 the documented evidence, and no browser verification is claimed for this step.
+
+## Iteration: atomic profile saves and financial concurrency
+
+- Added typed profile, explicit keep/replace/clear rate intent and original
+  currency/rate snapshot contracts, rejecting unknown serialized fields.
+  New create/update server functions require manager authority from the session.
+- Each save locks and rechecks the active same-org manager. Updates then lock the
+  client and compare its current currency/rate with the editor's original values.
+  Stale financial state yields conflict; currency changes cannot reinterpret a
+  saved zero or positive rate through implicit keep. Explicit replacement/clear
+  is atomic with identity/address changes. No new schema, dependency or policy.
+- Seven initial DB tests failed against unimplemented save helpers, then passed.
+  Added four regression cases for unset-rate currency changes, independently
+  stale currency, a concurrent financial edit and concurrent actor demotion.
+  Concurrency tests wait for actual PostgreSQL lock dependencies, not sleeps.
+- Persistence checks cover normalized optional fields, exact absent/zero/positive
+  rates, UUID v7, invalid writes, active/org/role guards, missing/foreign clients,
+  unchanged inactive status, no-op row versions and the no-update-event signal.
+  Full JSON snapshots of linked project/invoice rows stay identical after a
+  profile update, including historical currency, totals and generated terms.
+  Event delivery itself is not simulated: the wrapper dispatches after commit
+  and only on the tested changed flag; HTTP/browser gates remain outstanding.
+- The legacy create signature delegates to the shared save and emits one event.
+  Legacy update validates at the public boundary and retains its existing
+  locked-row currency guard; picker signatures remain unchanged.
+- First fixture compilation caught that invoice `terms_days` is generated, not
+  insertable. Corrected the synthetic fixture to derive 21 days from its dates.
+  This compilation error is not counted as the tests-first failure above.
+- In Nix against the explicit disposable socket URL: `cargo test -p horae --features server --bin horae clients` passed 39 tests; the dedicated
+  project-client creation regression passed. Server all-target clippy with
+  `--locked -- -D warnings` passed. Web/WASM compilation passed with four dead-code
+  warnings for the new profile contracts, which T015 must consume; no suppression
+  or warning-free web claim. The shared modal is not wired yet.
+- SQLx prepare and prepare-check (`--workspace -- --features server --all-targets`)
+  passed after forcing the three SQL-bearing target roots before each command.
+  Audited cache diff: eight added entries for new saves/tests, one removed entry
+  for the superseded legacy create query; unrelated cached queries remain intact.
+
+Next: T015 shared modal form from list
+and detail with pending/error/uncertain-create recovery. Backend save tests do
+not prove the user journey, browser acceptance, independent review or PR/CI gates.
+
+Form integration notes from existing sources: both handoff dialogs use the same
+name, currency/rate row and billing-address composition. Keep existing Tax ID
+despite its omission from the prototype editor. Reuse the native Modal's pending
+dismissal guard and focus restoration; keep it mounted when closing. Existing
+`project-edit-navigation.js` already recognizes `data-editor-state`; extend only
+its client-facing copy if reusing it, preserving project/invoice recovery rules.
+Do not copy the prototype's cascading archive handler or hardcoded defaults.

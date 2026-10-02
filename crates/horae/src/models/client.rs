@@ -36,3 +36,41 @@ pub struct ClientDetails {
 pub struct ClientBilling {
     pub default_rate_cents: Option<i64>,
 }
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ClientProfile {
+    pub name: String,
+    pub currency: String,
+    pub address: Option<String>,
+    pub tax_id: Option<String>,
+}
+
+/// Currency and rate observed by the editor, checked against the locked row.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ClientBillingSnapshot {
+    pub currency: String,
+    pub default_rate_cents: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    content = "amount",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
+pub enum ClientRateChange {
+    Keep,
+    Replace(String),
+    Clear,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ClientProfileEdit {
+    pub profile: ClientProfile,
+    pub rate_change: ClientRateChange,
+    pub original: ClientBillingSnapshot,
+}

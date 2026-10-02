@@ -3,7 +3,209 @@
 use super::*;
 #[cfg(feature = "server")]
 use crate::models::client::ClientBilling;
-use crate::models::client::{ClientDetails, ClientSummary};
+#[cfg(feature = "server")]
+use crate::models::client::ClientRateChange;
+use crate::models::client::{ClientDetails, ClientProfile, ClientProfileEdit, ClientSummary};
+
+#[server]
+pub async fn create_client_profile(
+    profile: ClientProfile,
+    default_rate: String,
+) -> Result<ClientDetails, ServerFnError> {
+    let manager = require_manager().await?;
+    let state = crate::state::global_state().await;
+    let detail = create_client_profile_record(
+        &state.db,
+        manager.org_id,
+        manager.id,
+        &profile,
+        &default_rate,
+    )
+    .await?;
+    state
+        .plugins
+        .dispatch(crate::plugin::AppEvent::ClientCreated {
+            occurred_at: chrono::Utc::now(),
+            org_id: manager.org_id,
+            client: client_payload(&detail.client),
+        });
+    Ok(detail)
+}
+
+#[server]
+pub async fn update_client_profile(
+    client_id: String,
+    edit: ClientProfileEdit,
+) -> Result<ClientDetails, ServerFnError> {
+    let manager = require_manager().await?;
+    let client_id = client_id
+        .parse()
+        .map_err(|_| err(BAD_REQUEST, "Invalid client ID"))?;
+    let state = crate::state::global_state().await;
+    let (detail, changed) =
+        update_client_profile_record(&state.db, manager.org_id, manager.id, client_id, &edit)
+            .await?;
+    if changed {
+        state
+            .plugins
+            .dispatch(crate::plugin::AppEvent::ClientUpdated {
+                occurred_at: chrono::Utc::now(),
+                org_id: manager.org_id,
+                client: client_payload(&detail.client),
+            });
+    }
+    Ok(detail)
+}
+
+#[cfg(feature = "server")]
+async fn lock_client_manager(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
+) -> Result<(), ServerFnError> {
+    let role = sqlx::query_scalar!(
+        r#"SELECT org_role as "org_role: OrgRole" FROM users
+           WHERE id = $1 AND org_id = $2 AND active FOR SHARE"#,
+        actor_id,
+        org_id,
+    )
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(server_err)?;
+    if !role.is_some_and(OrgRole::is_manager_or_above) {
+        return Err(forbidden("Active manager access required"));
+    }
+    Ok(())
+}
+
+#[cfg(feature = "server")]
+async fn create_client_profile_record(
+    db: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
+    profile: &ClientProfile,
+    default_rate: &str,
+) -> Result<ClientDetails, ServerFnError> {
+    use horae_core::client::{optional_text, parse_default_rate, validate_profile};
+    validate_profile(
+        &profile.name,
+        &profile.currency,
+        profile.address.as_deref(),
+        profile.tax_id.as_deref(),
+    )
+    .map_err(|error| err(BAD_REQUEST, error))?;
+    let rate = parse_default_rate(default_rate).map_err(|error| err(BAD_REQUEST, error))?;
+    let mut tx = db.begin().await.map_err(server_err)?;
+    lock_client_manager(&mut tx, org_id, actor_id).await?;
+    let client = sqlx::query_as!(
+        Client,
+        r#"INSERT INTO clients (id, org_id, name, currency, address, tax_id, default_rate_cents)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)
+           RETURNING id, org_id, name, currency, address, tax_id, active,
+                     created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
+        uuid::Uuid::now_v7(),
+        org_id,
+        profile.name.trim(),
+        profile.currency,
+        profile.address.as_deref().and_then(optional_text),
+        profile.tax_id.as_deref().and_then(optional_text),
+        rate,
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(server_err)?;
+    tx.commit().await.map_err(server_err)?;
+    Ok(ClientDetails {
+        client,
+        billing: Some(ClientBilling {
+            default_rate_cents: rate,
+        }),
+    })
+}
+
+#[cfg(feature = "server")]
+async fn update_client_profile_record(
+    db: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
+    client_id: uuid::Uuid,
+    edit: &ClientProfileEdit,
+) -> Result<(ClientDetails, bool), ServerFnError> {
+    use horae_core::client::{optional_text, parse_default_rate, validate_profile};
+    let profile = &edit.profile;
+    validate_profile(
+        &profile.name,
+        &profile.currency,
+        profile.address.as_deref(),
+        profile.tax_id.as_deref(),
+    )
+    .map_err(|error| err(BAD_REQUEST, error))?;
+    let replacement = match &edit.rate_change {
+        ClientRateChange::Replace(amount) => Some(
+            parse_default_rate(amount)
+                .map_err(|error| err(BAD_REQUEST, error))?
+                .ok_or_else(|| {
+                    err(
+                        BAD_REQUEST,
+                        "Enter a replacement rate or explicitly clear the default rate",
+                    )
+                })?,
+        ),
+        _ => None,
+    };
+    let mut tx = db.begin().await.map_err(server_err)?;
+    lock_client_manager(&mut tx, org_id, actor_id).await?;
+    let before = lock_client(&mut tx, org_id, client_id).await?;
+    let current_rate = sqlx::query_scalar!(
+        "SELECT default_rate_cents FROM clients WHERE id = $1 AND org_id = $2",
+        client_id,
+        org_id,
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(server_err)?;
+    if edit.original.currency != before.currency || edit.original.default_rate_cents != current_rate
+    {
+        return Err(conflict(
+            "Client currency or default rate changed. Reload the client before saving.",
+        ));
+    }
+    let rate = match edit.rate_change {
+        ClientRateChange::Keep => {
+            if profile.currency != before.currency && current_rate.is_some() {
+                return Err(conflict(
+                    "Changing currency requires explicitly replacing or clearing the default rate.",
+                ));
+            }
+            current_rate
+        }
+        ClientRateChange::Replace(_) => replacement,
+        ClientRateChange::Clear => None,
+    };
+    let updated = sqlx::query_as!(
+        Client,
+        r#"UPDATE clients SET name = $3, currency = $4, address = $5, tax_id = $6, default_rate_cents = $7
+           WHERE id = $1 AND org_id = $2
+             AND (name, currency, address, tax_id, default_rate_cents)
+                 IS DISTINCT FROM ($3, $4, $5, $6, $7)
+           RETURNING id, org_id, name, currency, address, tax_id, active,
+                     created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
+        client_id, org_id, profile.name.trim(), profile.currency,
+        profile.address.as_deref().and_then(optional_text),
+        profile.tax_id.as_deref().and_then(optional_text), rate,
+    ).fetch_optional(&mut *tx).await.map_err(server_err)?;
+    let changed = updated.is_some();
+    tx.commit().await.map_err(server_err)?;
+    Ok((
+        ClientDetails {
+            client: updated.unwrap_or(before),
+            billing: Some(ClientBilling {
+                default_rate_cents: rate,
+            }),
+        },
+        changed,
+    ))
+}
 
 // ── Clients ──────────────────────────────────────────────────────────────────
 
@@ -206,34 +408,17 @@ pub async fn create_client(
     address: Option<String>,
     tax_id: Option<String>,
 ) -> Result<Client, ServerFnError> {
-    let manager = require_manager().await?;
-    let state = crate::state::global_state().await;
-    let id = uuid::Uuid::now_v7();
-    let client = sqlx::query_as!(
-        Client,
-        r#"INSERT INTO clients (id, org_id, name, currency, address, tax_id)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING id, org_id, name, currency, address, tax_id, active,
-                   created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
-        id,
-        manager.org_id,
-        name,
-        currency,
-        address.as_deref(),
-        tax_id.as_deref(),
+    create_client_profile(
+        ClientProfile {
+            name,
+            currency,
+            address,
+            tax_id,
+        },
+        String::new(),
     )
-    .fetch_one(&state.db)
     .await
-    .map_err(server_err)?;
-
-    state
-        .plugins
-        .dispatch(crate::plugin::AppEvent::ClientCreated {
-            occurred_at: chrono::Utc::now(),
-            org_id: manager.org_id,
-            client: client_payload(&client),
-        });
-    Ok(client)
+    .map(|detail| detail.client)
 }
 
 #[server]
@@ -245,13 +430,18 @@ pub async fn update_client(
     tax_id: Option<String>,
 ) -> Result<Client, ServerFnError> {
     let manager = require_manager().await?;
+    let currency = currency.trim().to_ascii_uppercase();
+    horae_core::client::validate_profile(&name, &currency, address.as_deref(), tax_id.as_deref())
+        .map_err(|error| err(BAD_REQUEST, error))?;
     let state = crate::state::global_state().await;
-    let client_id = parse_uuid(&client_id, "client_id")?;
+    let client_id = client_id
+        .parse()
+        .map_err(|_| err(BAD_REQUEST, "Invalid client ID"))?;
     let (client, changed) = update_client_record(
         &state.db,
         manager.org_id,
         client_id,
-        &name,
+        name.trim(),
         &currency,
         address.as_deref(),
         tax_id.as_deref(),
