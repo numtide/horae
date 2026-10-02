@@ -137,6 +137,16 @@ pub async fn list_invoices(status: Option<String>) -> Result<Vec<Invoice>, Serve
         .map(|s| parse_enum(s, "status"))
         .transpose()?;
 
+    fetch_invoices(&state.db, manager.org_id, status_filter, None).await
+}
+
+#[cfg(feature = "server")]
+pub(super) async fn fetch_invoices(
+    db: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    status_filter: Option<InvoiceStatus>,
+    client_id: Option<uuid::Uuid>,
+) -> Result<Vec<Invoice>, ServerFnError> {
     let invoices = sqlx::query_as!(
         Invoice,
         r#"SELECT id, org_id, client_id, number,
@@ -150,11 +160,13 @@ pub async fn list_invoices(status: Option<String>) -> Result<Vec<Invoice>, Serve
            FROM invoices
            WHERE org_id = $1
              AND ($2::invoice_status IS NULL OR status = $2)
-           ORDER BY created_at DESC"#,
-        manager.org_id,
+             AND ($3::uuid IS NULL OR client_id = $3)
+           ORDER BY created_at DESC, id DESC"#,
+        org_id,
         status_filter as Option<InvoiceStatus>,
+        client_id,
     )
-    .fetch_all(&state.db)
+    .fetch_all(db)
     .await
     .map_err(server_err)?;
 

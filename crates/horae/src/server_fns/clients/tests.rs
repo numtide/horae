@@ -26,6 +26,392 @@ async fn row_version(pool: &PgPool, id: uuid::Uuid) -> Option<String> {
 }
 
 #[sqlx::test(migrations = "./migrations")]
+async fn client_details_keep_catalog_identity_but_omit_member_billing(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Member).await;
+    sqlx::query!(
+        "UPDATE clients SET address = 'Test address', tax_id = 'TEST-VAT',
+         default_rate_cents = 12345, active = false WHERE id = $1",
+        ids.client_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let detail = client_details_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
+        .await
+        .unwrap();
+    assert_eq!(detail.client.id, ids.client_id);
+    assert_eq!(detail.client.address.as_deref(), Some("Test address"));
+    assert_eq!(detail.client.tax_id.as_deref(), Some("TEST-VAT"));
+    assert!(!detail.client.active);
+    assert!(detail.billing.is_none());
+    let payload = serde_json::to_string(&detail).unwrap();
+    for restricted in ["billing", "default_rate_cents", "12345"] {
+        assert!(
+            !payload.contains(restricted),
+            "unexpected {restricted}: {payload}"
+        );
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn client_details_distinguish_unset_zero_and_positive_manager_rates(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    for rate in [None, Some(0), Some(12345)] {
+        sqlx::query!(
+            "UPDATE clients SET default_rate_cents = $2 WHERE id = $1",
+            ids.client_id,
+            rate
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let detail = client_details_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
+            .await
+            .unwrap();
+        assert_eq!(detail.billing.unwrap().default_rate_cents, rate);
+    }
+    sqlx::query!(
+        "UPDATE users SET org_role = 'admin' WHERE id = $1",
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let detail = client_details_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
+        .await
+        .unwrap();
+    assert_eq!(detail.billing.unwrap().default_rate_cents, Some(12345));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn client_details_hide_foreign_missing_and_inactive_actor_records(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Admin).await;
+    let foreign = seed(&pool, OrgRole::Admin).await;
+    for (org, actor, client) in [
+        (ids.org_id, ids.user_id, foreign.client_id),
+        (ids.org_id, ids.user_id, uuid::Uuid::now_v7()),
+        (ids.org_id, foreign.user_id, ids.client_id),
+    ] {
+        let error = client_details_for_viewer(&pool, org, actor, client)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            ServerFnError::ServerError {
+                code: NOT_FOUND,
+                ..
+            }
+        ));
+    }
+    sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let error = client_details_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        ServerFnError::ServerError {
+            code: NOT_FOUND,
+            ..
+        }
+    ));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn client_invoices_require_manager_authority_even_without_invoices(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Member).await;
+    let error = client_invoices_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        ServerFnError::ServerError {
+            code: FORBIDDEN,
+            ..
+        }
+    ));
+    sqlx::query!(
+        "UPDATE users SET org_role = 'manager' WHERE id = $1",
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(
+        client_invoices_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let error = client_invoices_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        ServerFnError::ServerError {
+            code: NOT_FOUND,
+            ..
+        }
+    ));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn client_invoices_keep_exact_client_scope_statuses_and_currencies(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    let foreign = seed(&pool, OrgRole::Admin).await;
+    let other_client = uuid::Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO clients (id, org_id, name, currency) VALUES ($1,$2,'Other','EUR')",
+        other_client,
+        ids.org_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    for (index, (org_id, client_id, status, currency)) in [
+        (ids.org_id, ids.client_id, InvoiceStatus::Draft, "EUR"),
+        (ids.org_id, ids.client_id, InvoiceStatus::Sent, "USD"),
+        (ids.org_id, ids.client_id, InvoiceStatus::Paid, "GBP"),
+        (ids.org_id, ids.client_id, InvoiceStatus::Void, "CHF"),
+        (ids.org_id, other_client, InvoiceStatus::Draft, "EUR"),
+        (
+            foreign.org_id,
+            foreign.client_id,
+            InvoiceStatus::Draft,
+            "EUR",
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        sqlx::query!(
+            "INSERT INTO invoices (id,org_id,client_id,number,status,issued_on,due_on,currency,total_cents)
+             VALUES ($1,$2,$3,$4,$5,'2026-09-01','2026-09-15',$6,12345)",
+            uuid::Uuid::now_v7(), org_id, client_id, format!("TEST-{index}"),
+            status as InvoiceStatus, currency,
+        ).execute(&pool).await.unwrap();
+    }
+    sqlx::query!(
+        "UPDATE clients SET active = false WHERE id = $1",
+        ids.client_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let invoices = client_invoices_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
+        .await
+        .unwrap();
+    assert_eq!(invoices.len(), 4);
+    assert!(
+        invoices
+            .iter()
+            .all(|invoice| invoice.client_id == ids.client_id
+                && invoice.org_id == ids.org_id
+                && invoice.total_cents == 12345)
+    );
+    let mut currencies: Vec<_> = invoices
+        .iter()
+        .map(|invoice| invoice.currency.as_str())
+        .collect();
+    currencies.sort_unstable();
+    assert_eq!(currencies, ["CHF", "EUR", "GBP", "USD"]);
+    let all = super::super::invoices::fetch_invoices(&pool, ids.org_id, None, None)
+        .await
+        .unwrap();
+    assert_eq!(all.len(), 5);
+    let drafts =
+        super::super::invoices::fetch_invoices(&pool, ids.org_id, Some(InvoiceStatus::Draft), None)
+            .await
+            .unwrap();
+    assert_eq!(drafts.len(), 2);
+    assert!(
+        drafts
+            .iter()
+            .all(|invoice| invoice.status == InvoiceStatus::Draft)
+    );
+    let paid = super::super::invoices::fetch_invoices(
+        &pool,
+        ids.org_id,
+        Some(InvoiceStatus::Paid),
+        Some(ids.client_id),
+    )
+    .await
+    .unwrap();
+    assert_eq!(paid.len(), 1);
+    assert_eq!(paid[0].currency, "GBP");
+    let error = client_invoices_for_viewer(&pool, ids.org_id, ids.user_id, foreign.client_id)
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        ServerFnError::ServerError {
+            code: NOT_FOUND,
+            ..
+        }
+    ));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn client_summaries_exclude_foreign_clients_and_unreadable_project_currencies(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Member).await;
+    let foreign = seed(&pool, OrgRole::Admin).await;
+    sqlx::query!(
+        "UPDATE projects SET currency = 'GBP' WHERE id = $1",
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE clients SET default_rate_cents = 12345 WHERE id = $1",
+        ids.client_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    crate::server_fns::test_seed::time_entry(&pool, &ids, EntryState::Open).await;
+
+    let summaries = client_summaries_for_viewer(&pool, ids.org_id, ids.user_id)
+        .await
+        .unwrap();
+    assert_eq!(summaries.len(), 1);
+    let summary = &summaries[0];
+    assert_eq!(summary.client.id, ids.client_id);
+    assert_eq!((summary.active_projects, summary.total_projects), (0, 0));
+    assert!(summary.project_currencies.is_empty());
+    let payload = serde_json::to_string(summary).unwrap();
+    for restricted in [
+        "default_rate_cents",
+        "12345",
+        "GBP",
+        &foreign.client_id.to_string(),
+    ] {
+        assert!(
+            !payload.contains(restricted),
+            "unexpected value {restricted}: {payload}"
+        );
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn client_summaries_follow_existing_progress_visibility_and_revoke_inactive_users(
+    pool: PgPool,
+) {
+    let ids = seed(&pool, OrgRole::Member).await;
+    sqlx::query!(
+        "INSERT INTO assignments (id, project_id, user_id) VALUES ($1,$2,$3)",
+        uuid::Uuid::now_v7(),
+        ids.project_id,
+        ids.user_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE projects SET currency = 'GBP' WHERE id = $1",
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let summaries = client_summaries_for_viewer(&pool, ids.org_id, ids.user_id)
+        .await
+        .unwrap();
+    assert_eq!(summaries[0].project_currencies, ["GBP"]);
+    assert_eq!(
+        (summaries[0].active_projects, summaries[0].total_projects),
+        (1, 1)
+    );
+
+    sqlx::query!(
+        "INSERT INTO project_settings (id, org_id, project_id, creator_id, rate_mode, report_visibility)
+         VALUES ($1,$2,$3,$4,'project','managers')",
+        uuid::Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id,
+    ).execute(&pool).await.unwrap();
+    let hidden = client_summaries_for_viewer(&pool, ids.org_id, ids.user_id)
+        .await
+        .unwrap();
+    assert_eq!(
+        (
+            hidden[0].total_projects,
+            hidden[0].project_currencies.as_slice()
+        ),
+        (0, &[][..])
+    );
+
+    sqlx::query!(
+        "UPDATE assignments SET role = 'lead' WHERE user_id = $1",
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let lead = client_summaries_for_viewer(&pool, ids.org_id, ids.user_id)
+        .await
+        .unwrap();
+    assert_eq!(lead[0].total_projects, 1);
+
+    sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(
+        client_summaries_for_viewer(&pool, ids.org_id, ids.user_id)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn client_summaries_keep_catalog_without_projects_and_count_archived_projects(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    let empty_id = uuid::Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO clients (id, org_id, name, currency, active) VALUES ($1,$2,'Empty','USD',false)",
+        empty_id, ids.org_id,
+    ).execute(&pool).await.unwrap();
+    sqlx::query!(
+        "UPDATE projects SET active = false WHERE id = $1",
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let summaries = client_summaries_for_viewer(&pool, ids.org_id, ids.user_id)
+        .await
+        .unwrap();
+    assert_eq!(summaries.len(), 2);
+    assert_eq!(
+        (summaries[0].active_projects, summaries[0].total_projects),
+        (0, 1)
+    );
+    assert_eq!(summaries[0].project_currencies, ["EUR"]);
+    assert_eq!(summaries[1].client.id, empty_id);
+    assert!(!summaries[1].client.active);
+    assert_eq!(summaries[1].total_projects, 0);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn client_summaries_reject_a_foreign_actor_even_when_client_org_is_known(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Admin).await;
+    let other = seed(&pool, OrgRole::Admin).await;
+    assert!(
+        client_summaries_for_viewer(&pool, ids.org_id, other.user_id)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn unchanged_edit_preserves_the_row(pool: PgPool) {
     let client = client(&pool).await;
     let before = row_version(&pool, client.id).await;

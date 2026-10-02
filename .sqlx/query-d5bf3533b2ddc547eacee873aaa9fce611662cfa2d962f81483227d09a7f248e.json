@@ -1,0 +1,83 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.id, c.org_id, c.name, c.currency, c.address, c.tax_id, c.active,\n                  c.created_at as \"created_at: chrono::DateTime<chrono::Utc>\",\n                  COUNT(p.id) FILTER (WHERE p.active) as \"active_projects!\",\n                  COUNT(p.id) as \"total_projects!\",\n                  COALESCE(ARRAY_AGG(DISTINCT p.currency ORDER BY p.currency)\n                      FILTER (WHERE p.id IS NOT NULL), ARRAY[]::text[]) as \"project_currencies!\"\n           FROM clients c\n           JOIN users u ON u.org_id = c.org_id AND u.id = $2 AND u.active\n           LEFT JOIN projects p ON p.client_id = c.id AND p.org_id = c.org_id\n             AND EXISTS (\n               SELECT 1 FROM project_read_access a\n               WHERE a.project_id = p.id AND a.org_id = c.org_id\n                 AND a.user_id = u.id AND a.can_view_progress\n             )\n           WHERE c.org_id = $1\n           GROUP BY c.id\n           ORDER BY c.name, c.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "currency",
+        "type_info": "Bpchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "address",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "tax_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "active_projects!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "total_projects!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "project_currencies!",
+        "type_info": "BpcharArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "d5bf3533b2ddc547eacee873aaa9fce611662cfa2d962f81483227d09a7f248e"
+}

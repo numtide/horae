@@ -1,8 +1,145 @@
 //! Client server functions.
 
 use super::*;
+#[cfg(feature = "server")]
+use crate::models::client::ClientBilling;
+use crate::models::client::{ClientDetails, ClientSummary};
 
 // ── Clients ──────────────────────────────────────────────────────────────────
+
+#[server]
+pub async fn get_client_details(client_id: String) -> Result<ClientDetails, ServerFnError> {
+    let viewer = require_user().await?;
+    let client_id = client_id
+        .parse()
+        .map_err(|_| err(BAD_REQUEST, "Invalid client ID"))?;
+    let state = crate::state::global_state().await;
+    client_details_for_viewer(&state.db, viewer.org_id, viewer.id, client_id).await
+}
+
+#[cfg(feature = "server")]
+async fn client_details_for_viewer(
+    db: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    viewer_id: uuid::Uuid,
+    client_id: uuid::Uuid,
+) -> Result<ClientDetails, ServerFnError> {
+    let row = sqlx::query!(
+        r#"SELECT c.id, c.org_id, c.name, c.currency, c.address, c.tax_id, c.active,
+                  c.created_at as "created_at: chrono::DateTime<chrono::Utc>",
+                  u.org_role IN ('admin', 'manager') as "can_view_billing!",
+                  CASE WHEN u.org_role IN ('admin', 'manager')
+                       THEN c.default_rate_cents END as default_rate_cents
+           FROM clients c
+           JOIN users u ON u.org_id = c.org_id AND u.id = $2 AND u.active
+           WHERE c.org_id = $1 AND c.id = $3"#,
+        org_id,
+        viewer_id,
+        client_id,
+    )
+    .fetch_optional(db)
+    .await
+    .map_err(server_err)?
+    .ok_or_else(|| not_found("Client not found"))?;
+    Ok(ClientDetails {
+        client: Client {
+            id: row.id,
+            org_id: row.org_id,
+            name: row.name,
+            currency: row.currency,
+            address: row.address,
+            tax_id: row.tax_id,
+            active: row.active,
+            created_at: row.created_at,
+        },
+        billing: row.can_view_billing.then_some(ClientBilling {
+            default_rate_cents: row.default_rate_cents,
+        }),
+    })
+}
+
+#[server]
+pub async fn list_client_invoices(client_id: String) -> Result<Vec<Invoice>, ServerFnError> {
+    let viewer = require_manager().await?;
+    let client_id = client_id
+        .parse()
+        .map_err(|_| err(BAD_REQUEST, "Invalid client ID"))?;
+    let state = crate::state::global_state().await;
+    client_invoices_for_viewer(&state.db, viewer.org_id, viewer.id, client_id).await
+}
+
+#[cfg(feature = "server")]
+async fn client_invoices_for_viewer(
+    db: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    viewer_id: uuid::Uuid,
+    client_id: uuid::Uuid,
+) -> Result<Vec<Invoice>, ServerFnError> {
+    let detail = client_details_for_viewer(db, org_id, viewer_id, client_id).await?;
+    if detail.billing.is_none() {
+        return Err(forbidden("Manager access required"));
+    }
+    super::invoices::fetch_invoices(db, org_id, None, Some(client_id)).await
+}
+
+/// Project counts and currency filters use the same progress access as Projects.
+#[server]
+pub async fn list_client_summaries() -> Result<Vec<ClientSummary>, ServerFnError> {
+    let user = require_user().await?;
+    let state = crate::state::global_state().await;
+    client_summaries_for_viewer(&state.db, user.org_id, user.id).await
+}
+
+#[cfg(feature = "server")]
+async fn client_summaries_for_viewer(
+    db: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    user_id: uuid::Uuid,
+) -> Result<Vec<ClientSummary>, ServerFnError> {
+    let rows = sqlx::query!(
+        r#"SELECT c.id, c.org_id, c.name, c.currency, c.address, c.tax_id, c.active,
+                  c.created_at as "created_at: chrono::DateTime<chrono::Utc>",
+                  COUNT(p.id) FILTER (WHERE p.active) as "active_projects!",
+                  COUNT(p.id) as "total_projects!",
+                  COALESCE(ARRAY_AGG(DISTINCT p.currency ORDER BY p.currency)
+                      FILTER (WHERE p.id IS NOT NULL), ARRAY[]::text[]) as "project_currencies!"
+           FROM clients c
+           JOIN users u ON u.org_id = c.org_id AND u.id = $2 AND u.active
+           LEFT JOIN projects p ON p.client_id = c.id AND p.org_id = c.org_id
+             AND EXISTS (
+               SELECT 1 FROM project_read_access a
+               WHERE a.project_id = p.id AND a.org_id = c.org_id
+                 AND a.user_id = u.id AND a.can_view_progress
+             )
+           WHERE c.org_id = $1
+           GROUP BY c.id
+           ORDER BY c.name, c.id"#,
+        org_id,
+        user_id,
+    )
+    .fetch_all(db)
+    .await
+    .map_err(server_err)?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| ClientSummary {
+            client: Client {
+                id: row.id,
+                org_id: row.org_id,
+                name: row.name,
+                currency: row.currency,
+                address: row.address,
+                tax_id: row.tax_id,
+                active: row.active,
+                created_at: row.created_at,
+            },
+            active_projects: row.active_projects,
+            total_projects: row.total_projects,
+            project_currencies: row.project_currencies,
+        })
+        .collect())
+}
 
 /// Explicit client creation from the project form, including its default rate.
 #[server]

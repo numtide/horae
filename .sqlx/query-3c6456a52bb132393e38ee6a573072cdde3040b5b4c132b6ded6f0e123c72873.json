@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, org_id, client_id, number,\n                  status as \"status: InvoiceStatus\",\n                  issued_on as \"issued_on: chrono::NaiveDate\",\n                  due_on as \"due_on: chrono::NaiveDate\",\n                  currency, total_cents, notes, terms_days, po_number,\n                  discount_bps, tax1_bps, tax2_name, tax2_bps,\n                  subtotal_cents, discount_cents, tax1_cents, tax2_cents,\n                  created_at as \"created_at: chrono::DateTime<chrono::Utc>\"\n           FROM invoices\n           WHERE org_id = $1\n             AND ($2::invoice_status IS NULL OR status = $2)\n           ORDER BY created_at DESC",
+  "query": "SELECT id, org_id, client_id, number,\n                  status as \"status: InvoiceStatus\",\n                  issued_on as \"issued_on: chrono::NaiveDate\",\n                  due_on as \"due_on: chrono::NaiveDate\",\n                  currency, total_cents, notes, terms_days, po_number,\n                  discount_bps, tax1_bps, tax2_name, tax2_bps,\n                  subtotal_cents, discount_cents, tax1_cents, tax2_cents,\n                  created_at as \"created_at: chrono::DateTime<chrono::Utc>\"\n           FROM invoices\n           WHERE org_id = $1\n             AND ($2::invoice_status IS NULL OR status = $2)\n             AND ($3::uuid IS NULL OR client_id = $3)\n           ORDER BY created_at DESC, id DESC",
   "describe": {
     "columns": [
       {
@@ -136,7 +136,8 @@
               ]
             }
           }
-        }
+        },
+        "Uuid"
       ]
     },
     "nullable": [
@@ -163,5 +164,5 @@
       false
     ]
   },
-  "hash": "fca111ba0a4e91d3720318566265c199a1ce363e50608ada572a6a46eb3fd470"
+  "hash": "3c6456a52bb132393e38ee6a573072cdde3040b5b4c132b6ded6f0e123c72873"
 }
