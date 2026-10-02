@@ -78,6 +78,35 @@ acceptance remain to be reconciled before cutover.
 
 ## Workflow
 
+### Operation mapping and transaction inventory — 2026-10-02
+
+- Decision: map actual public symbols and non-server-function delivery paths in
+  [operation-matrix.md](contracts/operation-matrix.md), with unresolved predicates
+  explicit. Rationale: profile names and UI categories omit compound effects,
+  picker projections, mixed invoices and delegated execution. Rejected: treating
+  a catalog key or legacy Manager check as the complete operation policy.
+- The map covers 80 public async symbols at `b7e730c`. Independent review found
+  no high/critical draft contradiction, but identified omitted authentication
+  routes and one-sided wording about invoice-draft creation. Added those routes
+  and kept creation eligibility unresolved in both directions. This review is
+  not full T006, runtime acceptance or an evidence upgrade for C01–C07.
+- Source tracing now records concrete writer order and eleven project-child
+  revision triggers plus invoice-line parent writes in
+  [permission-state.md](contracts/permission-state.md). Reparenting and cascades
+  require existing parents prelocked in the strongest mode; a shared parent lock
+  can later upgrade implicitly. Remaining maintenance/identity/job edges and
+  the finalized policy still gate T042.
+- A local PostgreSQL 17.10 diagnostic rejected the proposed shared row lock in a
+  READ ONLY transaction. Three inspected read/preview paths use that mode.
+  Decision: retain consistent snapshots while adapting transaction mode and
+  testing the organization revision fence and fresh-transaction retry. Rejected:
+  adding a lock to a read-only transaction, retaining an old policy snapshot
+  after a wait, or weakening export totals/size consistency without analysis.
+- Inline import `streaming::apply` awaits entry pages inside its transaction.
+  Decision: reconcile bounded preparation/commit with existing import atomicity
+  before adding authorization gates; do not hold revocation behind network waits
+  or silently change an atomic import into partially committed batches.
+
 ### Persistence and concurrency design — 2026-10-02
 
 - Decision: persist canonical person grants separately from template provenance

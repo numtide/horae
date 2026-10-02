@@ -4,6 +4,10 @@ Baseline: `a7727f1`, reviewed 2026-09-30; approval and legacy assignment repairs
 
 ## Delivery paths
 
+The [operation matrix](operation-matrix.md) expands this current-state inventory
+into public-function and delivery-path mappings. It keeps unresolved target
+predicates explicit; symbol coverage is not six-profile enforcement evidence.
+
 | Surface / stable symbols | Current boundary | Required cutover concern |
 | --- | --- | --- |
 | `server_fns::{require_user,require_manager,require_admin}` | Active session user reloaded; Manager means Manager or Admin | Resolve current effective capabilities/scopes; revalidate mutations transactionally |

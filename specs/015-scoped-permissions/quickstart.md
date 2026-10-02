@@ -162,3 +162,32 @@ Evidence from 2026-10-02:
   successful commit. No unresolved high/critical finding in this increment.
   Durable audit, stale-form revisions, six-profile runtime enforcement and the
   complete operation matrix remain pending; this is not full SC-003 acceptance.
+
+## Operation/lock-contract checks — 2026-10-02
+
+At `b7e730c`, a source-to-document check found all 80 public async symbols under
+`crates/horae/src/server_fns/` (excluding test fixtures) in
+`contracts/operation-matrix.md`. Authentication, exports, the compatibility API,
+jobs, plugins and operator paths are separately listed. This checks inventory
+coverage, not whether an operation's target predicate is settled or enforced.
+
+The isolated development PostgreSQL on port 55415 was reachable. Through the
+Nix shell, this diagnostic against its existing organization table:
+
+```sh
+nix develop --command psql -X 'postgres://horae@127.0.0.1:55415/horae' \
+  -v ON_ERROR_STOP=1 \
+  -c 'BEGIN READ ONLY; SELECT 1 FROM organizations LIMIT 1 FOR SHARE; ROLLBACK;'
+```
+
+returned `cannot execute SELECT FOR SHARE in a read-only transaction` and
+nonzero exit status, as expected. The failed transaction was rolled back on
+connection close; no business record or schema was modified. This demonstrates
+why existing READ ONLY report/preview transactions cannot accept the proposed
+row gate unchanged. It is not a concurrency test of the future permission layer.
+
+The concrete inventory in `contracts/permission-state.md` also records the
+snapshot/revision-fence and network-paced import cases that T039 must test against
+the actual production helpers after T006–T009/T042 are settled. No Rust suite,
+browser acceptance or full-flake result is claimed for this documentation-only
+increment; the runtime results above remain those of the preceding code changes.

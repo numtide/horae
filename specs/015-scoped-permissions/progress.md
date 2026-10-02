@@ -231,3 +231,46 @@ operation-level matrix and cross-command lock inventory (T006/T042) needed to
 finalize the storage schema and activate T035–T038. Do not keep expanding unrelated
 legacy fixes in place of the requested six-profile implementation. Full goal stays
 active; this design increment alone does not deliver a user story.
+
+## 2026-10-02 — Operation matrix and concrete transaction constraints
+
+- Previous immediate turn was a clarification, not implementation progress.
+  Revalidated worktree `feat/scoped-permissions` at `b7e730c`; the unfinished
+  operation matrix was the only initial worktree change and was retained.
+- Ran Spec Kit plan setup, preserving the existing plan. Read the current
+  constitution and relevant Rust/async/Ponytail guidance. Full research gates
+  remain open; no complete planning/analyze or runtime acceptance is claimed.
+- Added `contracts/operation-matrix.md`: 45 concern rows covering 80 public async
+  server-function symbols, other delivery paths and future web-domain contracts.
+  A source check found no missing public symbol under the inspected modules.
+  Explicit C/U cells retain unresolved scope, lifecycle and financial predicates.
+- Independent matrix review found no high/critical draft contradiction. Corrected
+  an omitted authentication-route boundary and wording that could imply an
+  unverified prohibition on invoice-draft creation. Public health/static resources
+  and protected SSR data are distinguished too.
+- Integrated concrete writer order, parent-writing triggers/cascades and a
+  candidate common hierarchy into `contracts/permission-state.md`. T042 remains
+  open for final predicates and remaining maintenance/identity/job edges.
+- A second independent review found no high/critical contradiction in this
+  partial lock inventory. Clarified that unchanged child UPDATE rows do not
+  trigger parent revision writes. This review did not rerun the local diagnostic
+  or establish concurrency safety.
+- A fresh local PostgreSQL diagnostic confirmed that the proposed row gate fails
+  in READ ONLY transactions used by three current read/preview paths. Recorded
+  the required snapshot/revision fence and fresh retry. Also identified inline
+  import's network wait inside a transaction; a gate cannot safely be added
+  without reconciling existing atomicity. These findings change integration work,
+  not the requested final permission scope.
+- `git diff --check` and `nix fmt -- --ci` passed after formatting one Markdown
+  separator. Revalidated PR #212 as open/draft on `feat/scoped-permissions`
+  before publication. No full-flake or Rust regression run is claimed for these
+  documentation-only edits.
+- No Harvest account access, schema, application code, real data, UI/CSS changes
+  or merge. No answer to the earlier C01 clarification is assumed. Full five-story
+  implementation and SC-001–009 remain required; T006/T042 are not marked complete.
+
+Next: finish the remaining T042 writer edges and resolve the specific operation
+predicates in T006, then finalize migration mappings/persistence and execute the
+failing storage tests T035. Do not repeat owner-only browser probes or treat this
+inventory as permission to activate partially enforced profiles. The goal remains
+active; the new evidence is progress toward integration, not delivered permissions.

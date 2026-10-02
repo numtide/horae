@@ -84,6 +84,15 @@ repository framework or policy engine is proposed. Reuse tenant keys and
 transaction patterns after reconciling lock order across all writers. Saved
 template behavior is not selected by the storage representation.
 
+The [operation matrix](contracts/operation-matrix.md) maps all 80 inspected public
+async server-function symbols plus HTTP/authentication, worker and operator
+surfaces to target dimensions and remaining predicates. The
+[concrete lock inventory](contracts/permission-state.md#concrete-lock-inventory-t042-partial)
+records current ordering, trigger/FK effects and a candidate common hierarchy.
+It identifies READ ONLY transaction incompatibility and network-paced imports
+that cannot simply acquire the proposed gate. These are T006/T042 inputs, not
+completed operation predicates or verified concurrency integration.
+
 The [migration contract](contracts/migration.md) now defines the reviewable access
 diff, stale-preview/atomic-cutover acceptance and historical provenance gaps for
 step 2. Mappings and compatibility policy remain unapproved; the artifact's

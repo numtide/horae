@@ -1,10 +1,11 @@
 # Persisted permission state and access-change protocol
 
 Status: proposed Horae implementation mechanics for FR-010/011/013/014/017,
-reviewed against `b80f8ab` on 2026-10-02. This is not a claim about Harvest's
+reviewed against `b7e730c` on 2026-10-02. This is not a claim about Harvest's
 internal storage or an authorization to create schema before T006–T009 pass.
 Read with [data-model](../data-model.md), [migration](migration.md) and the
-[current entry-point inventory](current-access.md).
+[current entry-point inventory](current-access.md) and
+[operation matrix](operation-matrix.md).
 
 ## One authorization serialization boundary
 
@@ -52,6 +53,115 @@ then reauthorize before each durable commit or bounded authorized output page.
 Revocation affects the next authorization check; already delivered data cannot
 be recalled. Artifact download authorization checks the current caller and the
 artifact's complete recorded scope, not just its original generation permission.
+
+## Concrete lock inventory (T042, partial)
+
+Source inspection at `b7e730c`, not a successful concurrency test. Paths below
+are under `crates/horae/src/`; `S` means `FOR SHARE`, `U` means `FOR UPDATE`,
+and `W` includes implicit row locks from DML. `TS` is the existing per-person
+timesheet advisory barrier; `INV` is the per-organization invoice advisory lock.
+The right column classifies the proposed organization gate, not the caller's
+required permission. Existing transactions do not yet follow this protocol.
+
+| Current path | Observed lock order / important hidden edge | Required integration |
+| --- | --- | --- |
+| `server_fns/users::begin_user_access_change` | Organization U → actor S → subject W; last-admin count under organization lock | Exclusive; already supplies the common prefix, but has no new-policy revisions/audit |
+| `server_fns/projects::{insert_assignment,remove_assignment}` | Actor S → project/user S or assignment DELETE → child cascades → project W through revision triggers | Exclusive from entry; lock parent before child mutation and avoid upgrading a shared parent lock |
+| `server_fns/project_creation::save_draft_record` | Actor S → draft U/W | Shared for draft-only persistence; finalization is a separate authorization check |
+| `server_fns/project_creation/finalize::finalize_draft_record` | Actor S → draft U → client S → organization S → new project/settings → user/task S and child writes | Exclusive for membership/access effects; move organization first and pre-resolve referenced parents |
+| `server_fns/project_creation/editing/save::save` and `editing/associations::save` | Serializable; actor S → project U → client S → child settings → organization S → users/assignments/tasks/members/milestones | Exclusive from entry; changing isolation alone does not reconcile this inverse resource order |
+| Project/client/task activation and editing in `server_fns/{projects,clients}` | Resource U/W; project bulk IDs sorted; task links also write parent project through triggers | Exclusive when availability or tracking restrictions change; ordinary field-only writes follow their actual affected set |
+| `server_fns/organization::update_org_branding` | Organization U/W | Exclusive even though branding is not a permission edit; no shared-to-exclusive gate upgrade |
+| `server_fns/time_entries` | TS shared → task settings/membership S for insert; updates/reorders lock entries U before task-access rows; stop uses conditional entry W | Shared gate before TS; reconcile entry-before-access ordering; preserve stopping one's timer after tracking access is removed |
+| `server_fns/approvals::submit_user_week` | TS exclusive → approval U → entries W → approval upsert | Shared organization gate before TS; new coverage contract must preserve empty-cell serialization |
+| `server_fns/approvals::{approve_periods,reopen_period}` | Approval U/W → entries W; current approval paths do not take TS; bulk UPDATE order is not an explicit sorted lock order | Reconcile with submission/entry barriers under the final coverage contract, not a second independent lock order |
+| `server_fns/invoices::generate_invoice_with_request` | INV → optional actor S → projects S → entries U → fee parents/settings/milestones → occurrence insert/project W trigger → invoice/line writes | Shared gate before INV; prelock existing project parents in their strongest required mode before sources/children |
+| `server_fns/invoices/editing::save`, `invoices::transition_invoice` | INV → actor S → invoice U → line writes/invoice trigger or source-entry updates | Shared gate before INV; reconcile source, invoice and occurrence order with generation |
+| Budget notification enqueue | Project/settings S → sorted recipient S → notification/outbox inserts and FKs | Bounded service authority under shared gate; reconcile project-before-user ordering and recipient disclosure |
+| Local `main::Commands::User(Create)` | Organization lookup → pool INSERT, without the common transaction | Exclusive attributed operator transaction; do not fabricate a session actor |
+| Import apply and durable batches | Nonblocking session reservation → transaction → resolved parents/project-task inserts → TS shared → entries/provenance → job report/checkpoint | Exclusive when creating tracking relationships; resolve parent sets in deterministic order; gate each authorized durable batch before domain locks |
+| `importers/harvest/streaming::apply` | Opens one transaction after catalog receipt, then waits on `pages.recv()` inside the entry loop | Do not add a gate around this network-paced transaction; reconcile atomic import behavior with bounded preparation/commit first |
+| `importers/harvest/account_switch::{gate,change}` | Session reservation → generation U → credential/binding writes → generation W | Nonblocking reservation outside authorization transaction; organization gate before generation lock inside it |
+| Initialization/demo seed | Organization table `SHARE ROW EXCLUSIVE` → initial rows | Explicit empty-installation bootstrap exception only; not a runtime permission bypass |
+
+### Trigger and foreign-key closure
+
+Migration `0039_project_editing.sql` adds `invalidate_project_editor` after
+INSERT/UPDATE/DELETE on eleven relations: `project_settings`,
+`project_private_settings`, `project_tasks`, `assignments`,
+`project_member_costs`, `project_member_budgets`, `project_task_settings`,
+`project_task_members`, `project_tag_links`, `project_fee_milestones` and
+`project_fee_occurrences`. Each changed child row writes its parent project;
+unchanged UPDATE rows are skipped. Reparenting writes the
+old then new project, not sorted IDs. Migration `0041_invoice_editing.sql`
+similarly makes changed line rows write old/new invoices. The BEFORE UPDATE revision
+triggers modify the already-targeted parent, not another resource class.
+
+Prelock every affected existing old/new parent, sorted, in the strongest mode
+the child operation will require; acquiring S and later relying on a trigger's
+W can deadlock competing shared holders. Include cascades: assignment deletion
+removes member costs/budgets/task memberships; project-task deletion removes
+task settings/memberships. Those child triggers also write projects. Source
+entries, fee occurrences, invoice lines and edit receipts carry additional
+parent/actor FKs (`0001`, `0002`, `0030`, `0031`, `0039`–`0041`). A manually
+sorted explicit SELECT is insufficient if subsequent FK/trigger work adds an
+earlier resource lock. New transaction-owned rows are uncontended roots, but
+their references to existing parents still participate.
+
+### Candidate common hierarchy, not yet activation-ready
+
+1. Acquire any nonblocking import reservation outside the authorization
+   transaction. Never wait for external work while holding the organization gate.
+1. Acquire the organization gate in the final required mode.
+1. Acquire coordination barriers: INV before any affected TS keys; sort multiple
+   TS keys consistently. Submission/approval versus ordinary-entry barrier modes
+   remain part of the coverage contract.
+1. Resolve and lock existing authority/user rows, clients, tasks/tags, drafts,
+   then projects, with sorted IDs within each class and strongest modes known
+   before child writes. Reading trusted actor identity does not require taking
+   its row lock ahead of a lower-ID subject while the gate fences access changes.
+1. Project settings/assignments, dependent task/member rows, then milestones.
+1. Existing invoice/approval roots, then fee occurrences and time entries in
+   consistent class/ID order across all commands.
+1. Lines, provenance, notifications/outbox, receipts/audit and final job
+   checkpoint, with existing FK targets already resolved in their parent order.
+
+This is a candidate ordering to test, not a proof that all edges fit it. T042
+still requires the finalized operation matrix, remaining job-claim/lease/report/
+cleanup and credential/identity writers, and explicit bootstrap/maintenance
+participation or exceptions. T039 must exercise opposing production paths,
+including approval versus entry edits, invoice generation versus edits/voids,
+project changes versus invoicing, and access changes versus imports. A serial
+happy-path test or a test that duplicates SQL does not prove this hierarchy.
+
+### Snapshot and read-only incompatibilities
+
+`reports/limits::configure_transaction`,
+`server_fns/projects::fetch_project_fee_balances` and
+`server_fns/invoices/preview::prepare` use REPEATABLE READ, READ ONLY. A local
+PostgreSQL 17.10 diagnostic on the isolated port 55415 returned
+`cannot execute SELECT FOR SHARE in a read-only transaction`; no business rows
+were changed. The proposed row gate therefore cannot simply be inserted into
+those functions. Their transaction mode must permit the gate while their
+application operation remains read-only. Preserve snapshot-consistent totals,
+size checks and payload reads rather than removing their consistency guarantee.
+
+For REPEATABLE READ/SERIALIZABLE consumers, a snapshot taken before waiting for
+the gate can predate a committed access change. Every access change must update
+the organization access revision under its exclusive gate; locking a changed
+gate row against an older snapshot must fail and restart the entire transaction,
+not continue with the old policy. Merely locking the unchanged organization row
+while changing a user is not a revision fence. READ COMMITTED consumers must
+load policy after acquiring the gate. These are proposed integration requirements,
+not claims about current revision writes.
+
+PostgreSQL documents the
+[older-snapshot hazard](https://www.postgresql.org/docs/17/applevel-consistency.html)
+and [row-lock serialization failure](https://www.postgresql.org/docs/17/explicit-locking.html).
+Add production-transaction tests for a read-only-mode failure, a waiting
+snapshot-based reader, and a fresh retry observing revocation before accepting
+T039/T040. No query-cache, isolation-level or runtime change is made by this
+inventory.
 
 ## Commands and revisions
 
