@@ -377,6 +377,54 @@ mapping remains unverified, but the two projections must not share blanket
 administrator-only access or expose each other's private fields. OP46 tracks
 this contract; it does not activate a new report or infer withdrawal authority.
 
+### Person-management delegation follow-up — 2026-10-02
+
+Reopened the current [assignment guide](https://support.getharvest.com/hc/en-us/articles/4422314817677-Making-people-assignments-for-Managers)
+and [teammates API](https://help.getharvest.com/api-v2/users-api/users/teammates/).
+Both restrict relationship administration to Administrators. The API additionally
+adds `people_manager` on the first assignment and removes it when clearing the
+set; omitted IDs are unassigned. That legacy access-role side effect must not be
+copied into Horae's canonical grants. It is distinct from changing only relationship
+scope. This API is evidence, not a proposed Horae mutation surface.
+
+The [current permissions guide](https://support.getharvest.com/hc/en-us/articles/44171549176077-Permissions)
+allows People Admin/Executive Manager to invite, archive and manage people, but
+does not explicitly state who may redefine another manager's managed-person set.
+Its role summaries and legacy API subject label do not establish custom-profile
+eligibility. FR-026 decides project delegation, not this relation.
+
+Asked one product question: retain Administrator-only person-management
+assignment writes (recommended, matching the explicit relationship docs), or
+also allow current organization-wide people writers. No answer yet. Neither
+choice would authorize implicit global grant changes; subject eligibility,
+self-assignment and relationship retention still need distinct predicates.
+OP47 makes this non-implemented operation explicit instead of hiding it under
+ordinary person editing or project membership.
+
+### Project lifecycle inventory follow-up — 2026-10-02
+
+The [lifecycle guide](https://support.getharvest.com/hc/en-us/articles/360048686911-Archiving-restoring-and-deleting-projects)
+documents archive as retaining work and reporting/invoicing availability while
+preventing new time and project edits until restore. Analysis and duplication
+remain available subject to their own authority. Deletion is different: linked
+time, expenses and retainers are removed, while invoices survive with project
+links removed. Single/bulk deletion requires typed confirmation. No deletion,
+restore or other account mutation was executed. These are documented behaviors,
+not verified custom-grant predicates or authorization to delete existing data.
+
+The [creation guide](https://support.getharvest.com/hc/en-us/articles/360048686831-Create-and-duplicate-projects)
+separately permits copying active or archived projects and excludes certain
+project/person custom rate histories from that copy. It does not establish
+automatic creator management or a create-only custom profile's final access.
+
+Feature 010 deliberately delivered only archive/reactivate, and feature 009
+excluded deletion from its increment. Those historical delivery limits are not
+global exclusions from the confirmed web-parity goal. OP48 records duplication
+and deletion as unimplemented domain/permission obligations, without extending
+the completed increment or treating project-write as blanket destructive access.
+Full lifecycle ownership and source-retention/financial tests must be completed
+before those operations can be implemented; OP13 remains archive/restore only.
+
 ## Acceptance boundary
 
 This research increment is complete only when every read-only probe has an

@@ -101,6 +101,15 @@ called out instead of treating a family name as blanket authorization.
 | OP43 | `BillingRead`, `BillingWrite`; unknown reference IDs 59/60 | Harvest subscription billing is outside self-hosted client invoicing; do not expose these as working Horae grants or invent meanings for unknown IDs. Native apps, Forecast and new integrations remain excluded. |
 | OP46 | Approval activity history and CSV/XLSX export | [Documented](https://support.getharvest.com/hc/en-us/articles/34910294705037-Activity-log-Approvals) own / managed project-person / all history for Member / Manager / Administrator. Custom-grant mapping remains open. Distinct from FR-013 permission-change audit: preserve FR-009 attribution without exposing permission snapshots or unrelated event portions, actors, filter values or counts. T012/T014/T015 must cover scoped history, equivalent exports, revocation and mixed-scope events; viewing history does not grant approval/withdrawal. |
 
+## Additional target operations
+
+OP47 and OP48 below are newly inventoried target surfaces, not current endpoints:
+
+| ID | Domain | Required target mapping; not a functioning endpoint |
+| --- | --- | --- |
+| OP47 | Person-management relationship administration | Current assignment guide/API restrict writes to Administrators; newer PeopleWriteAll mapping awaits the explicit user choice in `current-account-investigation.md`. Separate reading one's effective scope, relationship writes and global grants. Legacy API full-set replacement and `people_manager` side effects cannot silently redefine Horae grants. Target eligibility, self-assignment and retention are separate open predicates. T012/T013 cover complete-set authorization, organization isolation, revision/revocation, audit and preservation of history; existing project delegation FR-026 does not settle this operation. |
+| OP48 | Project duplication and permanent deletion, including bulk delete | Separate domain obligations under full web parity, not feature 010's delivered archive/reactivate increment. The lifecycle guide distinguishes retained archived records from destructive removal; invoices survive deletion while losing project links. Duplication requires source projection and separately authorized creation/fields, not project read/write alone. Exact custom grants, dependent financial/expense/retainer effects and domain acceptance remain open. T006/T009/T014/T015 must bind owning-domain requirements and transactional tests before implementation; no data deletion is authorized by this inventory. |
+
 ## Completion rule
 
 T006 remains open until the C/U cells have verified operation predicates or an

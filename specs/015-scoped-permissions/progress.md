@@ -691,3 +691,39 @@ Clarify coverage after this answer:
 Next: continue Spec Kit research/clarify on remaining operation predicates and
 creation/person-management boundaries before final plan/tasks and full Analyze.
 Do not reopen the accepted delegation choice or claim full permission readiness.
+
+## 2026-10-02 — Separate person delegation and missing project lifecycle surfaces
+
+- Previous goal turn made progress: published `ab9b1a4` with accepted FR-026 and
+  dependent-spec reconciliation. Verified that commit and a clean worktree.
+- Continued Spec Kit Clarify: read the skill, repository guidance, constitution
+  and complete current spec; ran its paths-only prerequisite check. No extension
+  hooks exist. No unanswered choice was treated as acceptance.
+- Rechecked the dedicated people-assignment guide and API against the current
+  six-profile guide. Relationship writes are explicitly Administrator-only in
+  the former sources; ordinary PeopleWriteAll remains insufficient evidence of
+  the new mapping. Recorded the API's role-add/remove and whole-set replacement
+  semantics so they cannot become silent canonical grant changes in Horae.
+- Asked one focused question: Administrator-only person-management assignment
+  writes versus organization-wide people writers. Recommended the explicit
+  documented relationship boundary. The question remains unanswered; no new
+  FR or user decision was recorded. Project delegation A remains settled.
+- Added OP47 for person-management relationships and OP48 for project duplication
+  and permanent deletion. Fresh lifecycle/creation documentation distinguishes
+  these from archive/restore and their dependent records. Read the parity
+  worktree's delivered project specs without modifying it: previous increment
+  exclusions do not exclude those operations from full web parity.
+- Bound the new matrix obligations to T006/T009/T012–T015. This is inventory and
+  evidence progress, not final operation predicates, completed domain tasks or
+  permission to implement destructive behavior. No browser/account writes,
+  runtime/schema edits, migrations or merges were performed.
+- Self-review checked source versus inference, legacy API versus web/custom
+  rules, existing accepted decisions, and archive versus deletion. No independent
+  adversarial review or runtime tests ran for this research-only delta. The
+  specification and its 12/16 checklist are unchanged; full analysis stays open.
+- Validation: `git diff --check` and `nix fmt -- --ci` pass; zero formatter
+  changes. The new tests listed in the matrix are pending obligations.
+
+Next: integrate the person-assignment answer when supplied. Continue independent
+contract work without assuming that answer, purchasing account access or treating
+legacy role labels as the final capability matrix.

@@ -73,6 +73,14 @@ note, but neither this nor the existing constitution amendment completes T008.
 
 - [ ] T009 Refine remaining work packages into executable file-level tasks in `specs/015-scoped-permissions/tasks.md`, complete requirement checks and repeat analysis before replacing runtime authorization.
 
+T006/T009 must also resolve OP47 person-management administration separately
+from FR-026 project delegation, and bind OP48 project duplication/deletion to
+its owning domain requirements. Feature 010's archive-only increment does not
+remove those operations from full web parity. T012/T013 cover relationship
+authority and revisions; T014/T015 cover source projection, dependent resources,
+revocation and atomic denial. Do not infer destructive grants or copy legacy
+API access-role side effects into canonical permissions.
+
 ## Phase 4: US1 — Six profiles and safe assignments (P1)
 
 Independent test: all six profiles allow/deny correctly; concurrent demotions preserve an active administrator.
