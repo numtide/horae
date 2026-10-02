@@ -18,9 +18,9 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated, seeded test instance');
   page.on('pageerror', error => pageErrors.push(error.message));
   const cases = [
     {
-      name: 'client activation', path: '/clients', resource: 'list_clients',
-      endpoint: 'set_client_active', form: 'Add Client',
-      formEndpoint: 'create_client', submit: 'Create Client',
+      name: 'client activation', path: '/clients', resource: 'list_client_summaries',
+      endpoint: 'set_client_active', form: 'New client',
+      formEndpoint: 'create_client_profile', submit: 'Create client',
       action: async () => page.getByRole('button', { name: 'Deactivate', exact: true }).first().click(),
     },
     {
@@ -89,11 +89,14 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated, seeded test instance');
         // Opening and cancelling an unrelated form must not clear an action error.
         if (scenario.openForm) await scenario.openForm();
         else await page.getByRole('button', { name: scenario.form, exact: true }).click();
-        await expect(page.getByRole('alert')).toBeVisible();
+        await expect(page.locator('.alert-danger')).toBeVisible();
+        if (scenario.endpoint === 'set_client_active') {
+          await page.getByRole('dialog').getByLabel('Client name', { exact: true }).fill('Rejected client creation');
+        }
         const formRejected = page.waitForEvent('requestfailed', r => r.url().includes(`/api/${scenario.formEndpoint}`));
         await page.getByRole('button', { name: scenario.submit, exact: true }).click();
         await formRejected;
-        await expect(page.locator('.card .alert-danger')).toBeVisible();
+        await expect(page.locator(scenario.endpoint === 'set_client_active' ? 'dialog .alert-danger' : '.card .alert-danger')).toBeVisible();
         await expect(page.locator('.alert-danger')).toHaveCount(2);
         await page.getByRole('button', { name: 'Cancel', exact: true }).click();
         await expect(page.getByRole('alert')).toBeVisible();
@@ -103,14 +106,16 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated, seeded test instance');
           // Use a new test client for the real successful retry, leaving seed data alone.
           await page.unroute(formPattern);
           const name = `Action error browser ${Date.now()}`;
-          await page.getByRole('button', { name: 'Add Client', exact: true }).click();
-          await page.getByLabel('Name', { exact: true }).fill(name);
-          const created = page.waitForResponse(r => r.url().includes('/api/create_client'));
-          await page.getByRole('button', { name: 'Create Client', exact: true }).click();
+          await page.getByRole('button', { name: 'New client', exact: true }).click();
+          await page.getByLabel('Client name', { exact: true }).fill(name);
+          const created = page.waitForResponse(r => r.url().includes('/api/create_client_profile'));
+          await page.getByRole('button', { name: 'Create client', exact: true }).click();
           assert.equal((await created).status(), 200);
           const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name, exact: true }) });
           await expect(row).toBeVisible();
           await expect(page.getByRole('alert')).toBeVisible();
+          await page.locator('#client-scope-menu-trigger').click();
+          await page.getByRole('menuitem', { name: /^All clients/ }).click();
           await page.unroute(pattern);
           const changed = page.waitForResponse(r => r.url().includes('/api/set_client_active'));
           await row.getByRole('button', { name: 'Deactivate', exact: true }).click();

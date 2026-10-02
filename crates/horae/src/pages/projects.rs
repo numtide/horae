@@ -266,7 +266,36 @@ struct BulkProjectAction {
 }
 
 #[component]
-pub fn ProjectList() -> Element {
+pub fn ProjectsForClient(client: String) -> Element {
+    rsx! { for client in [client] { ClientProjectList { key: "{client}", client: client.clone() } } }
+}
+
+#[component]
+fn ClientProjectList(client: String) -> Element {
+    let mut context = use_resource(move || {
+        let client = client.clone();
+        async move {
+            let id = client
+                .parse::<Uuid>()
+                .map_err(|_| ServerFnError::new("Invalid client link."))?;
+            server_fns::get_client_details(id.to_string()).await?;
+            Ok::<_, ServerFnError>(id)
+        }
+    });
+    match &*context.read() {
+        Some(Ok(id)) => rsx! { ProjectList { initial_client: Some(*id) } },
+        Some(Err(error)) => rsx! {
+            h1 { class: "page-title", "Projects" }
+            div { class: "alert alert-danger", role: "alert", "Could not load this client's projects: {error}" }
+            button { class: "btn btn-secondary", onclick: move |_| context.restart(), "Retry" }
+            Link { to: Route::ProjectList {}, class: "btn btn-ghost", "Back to Projects" }
+        },
+        None => rsx! { p { role: "status", "Loading client…" } },
+    }
+}
+
+#[component]
+pub fn ProjectList(#[props(default)] initial_client: Option<Uuid>) -> Element {
     // Management view: `include_inactive = true` also lists deactivated projects
     // so managers can reactivate them; new-entry pickers pass `false`.
     let mut projects = use_resource(|| async move { server_fns::list_projects(None, true).await });
@@ -286,7 +315,8 @@ pub fn ProjectList() -> Element {
     let mut query = use_signal(String::new);
     // Status scope: "active" | "budgeted" (has a budget) | "archived" (inactive).
     let mut scope = use_signal(|| "active".to_string());
-    let mut client_filter = use_signal(String::new);
+    let mut client_filter =
+        use_signal(|| initial_client.map(|id| id.to_string()).unwrap_or_default());
     let mut tag_filter = use_signal(|| None::<Uuid>);
     let mut selected = use_signal(BTreeSet::<Uuid>::new);
     let mut bulk_action = use_signal(|| None::<BulkProjectAction>);

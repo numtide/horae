@@ -65,7 +65,7 @@ const sunday = new Date(monday.getTime() + 6 * 86400000).toISOString().slice(0, 
     await page.getByRole('button', { name: 'Sign in as Admin' }).click();
     await page.waitForURL(`${base}/`);
     for (const [path, resource] of [
-      ['/clients', 'list_clients'], ['/projects', 'list_projects'],
+      ['/clients', 'list_client_summaries'], ['/projects', 'list_projects'],
       ['/invoices', 'list_invoices'], ['/reports', 'report_time'],
       ['/admin/users', 'list_users'], ['/approvals', 'list_approvals'],
       ['/settings', 'get_me'], ['/admin/importers', 'get_me'],

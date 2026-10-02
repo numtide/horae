@@ -34,51 +34,83 @@ use tasks::Tasks;
 use team::{Team, Visibility};
 
 #[component]
-pub fn NewProject() -> Element {
-    let mut initial = use_resource(|| async {
-        let mut options = server_fns::project_creation_options(CreationSearch::default()).await?;
-        let draft = server_fns::load_project_draft().await?;
-        if let Some(id) = draft.as_ref().and_then(|draft| draft.form.client_id)
-            && !options.clients.iter().any(|client| client.id == id)
-            && let Some(client) = server_fns::project_creation_client(id).await?
-        {
-            options.clients.push(client);
-        }
-        if let Some(draft) = &draft {
-            let task_ids: Vec<_> = draft
-                .form
-                .tasks
-                .iter()
-                .filter_map(|task| match &task.source {
-                    TaskSource::Existing { task_id }
-                        if !options.tasks.iter().any(|task| task.id == *task_id) =>
-                    {
-                        Some(*task_id)
+pub fn NewProjectForClient(client: String) -> Element {
+    rsx! { for client in [client] { NewProject { key: "{client}", client_context: Some(client.clone()) } } }
+}
+
+#[component]
+pub fn NewProject(#[props(default)] client_context: Option<String>) -> Element {
+    let mut initial = use_resource(move || {
+        let client_context = client_context.clone();
+        async move {
+            let mut options =
+                server_fns::project_creation_options(CreationSearch::default()).await?;
+            let draft = server_fns::load_project_draft().await?;
+            // Restoring any saved draft takes precedence, even over an invalid link.
+            let client_context = if draft.is_none() {
+                if let Some(context) = client_context {
+                    let id = context
+                        .parse::<Uuid>()
+                        .map_err(|_| ServerFnError::new("Invalid client link."))?;
+                    let client = server_fns::project_creation_client(id)
+                        .await?
+                        .filter(|client| client.active)
+                        .ok_or_else(|| {
+                            ServerFnError::new("This client is unavailable for a new project.")
+                        })?;
+                    if !options.clients.iter().any(|item| item.id == id) {
+                        options.clients.push(client);
                     }
-                    _ => None,
-                })
-                .collect();
-            let user_ids: Vec<_> = draft
-                .form
-                .team
-                .iter()
-                .map(|member| member.user_id)
-                .filter(|id| !options.people.iter().any(|person| person.id == *id))
-                .collect();
-            if !task_ids.is_empty() || !user_ids.is_empty() {
-                let selected = server_fns::project_creation_selection(task_ids, user_ids).await?;
-                options.tasks.extend(selected.tasks);
-                options.people.extend(selected.people);
+                    Some(id)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            if let Some(id) = draft.as_ref().and_then(|draft| draft.form.client_id)
+                && !options.clients.iter().any(|client| client.id == id)
+                && let Some(client) = server_fns::project_creation_client(id).await?
+            {
+                options.clients.push(client);
             }
+            if let Some(draft) = &draft {
+                let task_ids: Vec<_> = draft
+                    .form
+                    .tasks
+                    .iter()
+                    .filter_map(|task| match &task.source {
+                        TaskSource::Existing { task_id }
+                            if !options.tasks.iter().any(|task| task.id == *task_id) =>
+                        {
+                            Some(*task_id)
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                let user_ids: Vec<_> = draft
+                    .form
+                    .team
+                    .iter()
+                    .map(|member| member.user_id)
+                    .filter(|id| !options.people.iter().any(|person| person.id == *id))
+                    .collect();
+                if !task_ids.is_empty() || !user_ids.is_empty() {
+                    let selected =
+                        server_fns::project_creation_selection(task_ids, user_ids).await?;
+                    options.tasks.extend(selected.tasks);
+                    options.people.extend(selected.people);
+                }
+            }
+            Ok::<_, ServerFnError>((options, draft, client_context))
         }
-        Ok::<_, ServerFnError>((options, draft))
     });
     if initial.state()() != UseResourceState::Ready {
         return rsx! { p { role: "status", "Loading project settings…" } };
     }
     match &*initial.read() {
-        Some(Ok((options, draft))) => rsx! {
-            ProjectEditor { options: options.clone(), draft: draft.clone(), on_reload: move |_| initial.restart() }
+        Some(Ok((options, draft, client_context))) => rsx! {
+            ProjectEditor { options: options.clone(), draft: draft.clone(), client_context: *client_context, on_reload: move |_| initial.restart() }
         },
         Some(Err(error)) => rsx! {
             h1 { class: "text-4xl font-semibold text-strong", "New project" }
@@ -142,6 +174,7 @@ enum Intent {
 fn ProjectEditor(
     options: CreationOptions,
     draft: Option<ProjectDraft>,
+    #[props(default)] client_context: Option<Uuid>,
     #[props(default)] existing: Option<EditableProject>,
     on_reload: EventHandler<()>,
 ) -> Element {
@@ -150,7 +183,7 @@ fn ProjectEditor(
     let mut state = use_signal(|| DraftState::new(draft));
     let form = use_signal(|| {
         existing.peek().as_ref().map_or_else(
-            || state.peek().saved.clone(),
+            || state.peek().initial_form(client_context),
             |project| project.form.clone(),
         )
     });

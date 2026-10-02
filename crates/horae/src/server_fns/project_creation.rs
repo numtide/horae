@@ -183,16 +183,10 @@ pub(super) async fn create_client_record(
     currency: &str,
     default_rate: &str,
 ) -> Result<CreationClient, ServerFnError> {
-    if !(1..=200).contains(&name.trim().chars().count()) || name.contains('\0') {
-        return Err(err(
-            BAD_REQUEST,
-            "Client name must contain 1–200 characters",
-        ));
-    }
-    if !horae_core::project::PROJECT_CURRENCIES.contains(&currency) {
-        return Err(err(BAD_REQUEST, "Choose a supported client currency"));
-    }
-    let rate = validation::optional_amount(default_rate, "Client default rate")?;
+    horae_core::client::validate_profile(name, currency, None, None)
+        .map_err(|error| err(BAD_REQUEST, error))?;
+    let rate = horae_core::client::parse_default_rate(default_rate)
+        .map_err(|error| err(BAD_REQUEST, error))?;
     let mut tx = pool.begin().await.map_err(storage_error)?;
     lock_creation_actor(&mut tx, actor_id, org_id).await?;
     let client = sqlx::query_as!(
