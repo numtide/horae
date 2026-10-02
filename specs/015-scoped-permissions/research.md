@@ -78,6 +78,40 @@ acceptance remain to be reconciled before cutover.
 
 ## Workflow
 
+### Persistence and concurrency design — 2026-10-02
+
+- Decision: persist canonical person grants separately from template provenance
+  and explicit administrative identity. Rationale: upgrades/display classification
+  must not silently grant authority; custom all-grants selection must not count as
+  Administrator. Alternatives rejected: live template-name lookup, rank ordering
+  and inferring administrative identity from a particular grant set. This storage
+  proposal does not decide pending template deletion/update/reapplication rules.
+- Decision: propose the organization row as one shared/exclusive authorization
+  gate, with current-state reload and revision checks. Rationale: it extends the
+  proven user-access serialization boundary without an extra locking service.
+  Alternatives rejected: admission-only checks and adding a new editor gate while
+  leaving existing writers outside it. Every organization-row update starts
+  exclusive, even when its permission is not administrative, to avoid upgrades.
+- Existing `(id, org_id)` keys in migration `0030_project_creation.sql` support
+  tenant-constrained references. The old `audit_log` in `0001_init.sql` lacks the
+  required FK/revision/receipt contract and has no inspected insertion path; do
+  not mistake its existence or plugin events for durable access-change auditing.
+- Decision: one transaction records state, revisions, attributed audit and request
+  outcome. User/operator actors are distinct; credentials/provider subjects are
+  excluded. Exact replay checks current disclosure authority and recorded scope
+  before returning a historical result, without requiring deleted references to
+  exist again. Alternatives rejected: replaying old mutations, fabricated admin
+  actors and logging denials in the transaction that will be rolled back.
+- Independent read-only review identified actor-before-organization ordering in
+  project finalization/editing and assignment paths, hidden project-revision
+  trigger locks, operator-attribution ambiguity and live-reference-before-replay
+  ordering. The proposed contract now addresses these; the exact cross-command
+  resource hierarchy remains an explicit T042 design gate, not implemented code.
+- The [state protocol](contracts/permission-state.md) and expanded data model are
+  partial planning under T008. C01–C07, approved migration mapping, dependent-spec
+  reconciliation and the operation matrix remain open. Neither complete Phase 1
+  nor the full `speckit-analyze` gate is claimed: full tasks are still incomplete.
+
 ### Current-account investigation — 2026-10-02
 
 - Decision: continue reference discovery using the existing account, as requested,

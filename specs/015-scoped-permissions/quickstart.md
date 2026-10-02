@@ -27,6 +27,23 @@ The foundation contract covers FR-006 record union, identity activation and orga
 
 ## Full-feature acceptance (pending implementation)
 
+### Planned persistence/transaction fixtures
+
+Cases in [permission-state.md](contracts/permission-state.md#executable-acceptance-cases-to-add-after-the-gates)
+map to T035–T041. They are not implemented or passed. After the gates and test
+modules exist, use isolated PostgreSQL and the Nix dev shell:
+
+```sh
+cargo test -p horae --features server --bin horae server_fns::permissions:: --locked
+cargo test -p horae --features server --test integration --locked
+```
+
+A filter matching zero tests is not success: check that storage, changes and
+audit cases ran. Verify two organizations, explicit administrative identity,
+grant-equivalent custom profiles, stale revisions, both revoke/write orders,
+rollback and replay disclosure. Full acceptance also requires the operation
+matrix, business regressions and Nix gate; these commands alone are insufficient.
+
 ### Confirmed grant catalog evidence (2026-10-02)
 
 Run `nix develop --command cargo test -p horae-core permissions::catalog --locked`

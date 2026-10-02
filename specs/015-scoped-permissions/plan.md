@@ -69,6 +69,21 @@ approve legacy mappings or waive the runtime cutover checks below.
 
 Steps 2–6 need detailed contracts before coding. Step 1 neither chooses role grants nor changes approval behavior. It does not satisfy any full user story by itself.
 
+The 2026-10-02 persistence proposal in [data-model.md](data-model.md) and
+[permission-state.md](contracts/permission-state.md) details canonical saved
+grants, explicit administrative identity, composite tenant references, revisions,
+atomic audit/outcome storage and one organization-first lock protocol. T033/T034
+review these mechanics; T035–T041 refine future tests and integration. This is
+partial planning while Phase 0 conflicts remain, not completed Spec Kit Phase 1
+or permission to create schema early. Full post-design constitution approval is
+still open; no policy, migration or cross-surface gate is waived.
+
+Storage stays in the existing app (`server_fns/permissions.rs` plus
+`permissions/`); shared DTOs live in `models/permissions.rs`. No new crate,
+repository framework or policy engine is proposed. Reuse tenant keys and
+transaction patterns after reconciling lock order across all writers. Saved
+template behavior is not selected by the storage representation.
+
 The [migration contract](contracts/migration.md) now defines the reviewable access
 diff, stale-preview/atomic-cutover acceptance and historical provenance gaps for
 step 2. Mappings and compatibility policy remain unapproved; the artifact's

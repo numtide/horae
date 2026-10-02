@@ -193,3 +193,41 @@ tasks for T008/T009, then add failing local persistence tests. Keep the operatio
 matrix and legacy mapping review explicit before runtime cutover; unresolved
 C01–C07 remain reference limitations, not invented defaults or a reason to repeat
 owner-only browser probes. Full five-story implementation remains active.
+
+## 2026-10-02 — Concrete persistence proposal and dependent tasks
+
+- Previous goal turn: progress, committed/pushed user-transaction reauthorization
+  as `b80f8ab`. Revalidated the clean existing worktree at that commit. No new
+  branch, feature restart or merge.
+- Executed the checked-in Spec Kit plan/task setup scripts with feature 015;
+  both preserved existing artifacts. No extension hooks or agent-context update
+  script exists. Full Phase 0 research is still incomplete, so the new mechanics
+  are explicitly a partial design proposal, not completed Phase 1/analyze or an
+  exemption from the existing schema/runtime gate.
+- Expanded `data-model.md` and added `contracts/permission-state.md`: canonical
+  grants versus provenance, explicit administrative identity, composite tenant
+  constraints, revisions, atomic state/audit/receipt changes, replay and service/
+  operator boundaries. No template lifecycle or legacy-role mapping was invented.
+- Spec Kit planning's independent read-only review found concrete lock-order
+  integration risks, organization-row upgrade risk, operator-audit ambiguity and
+  replay ordering. Corrected the proposal and made the remaining full resource/
+  trigger hierarchy an explicit pre-implementation task (T042).
+- Refined US1 storage/command tests (T035–T038), US3 lock integration (T039/T040)
+  and US4 audit disclosure (T041), retaining the full story acceptance packages.
+  These are planned tests, not runnable passing fixtures; T006–T009 remain open.
+- Asked one optional product clarification for C01: whether to authorize
+  preservation when deleting a template despite the contradictory Harvest editor
+  warning. No response is assumed and neither lifecycle is implemented.
+- No application code, schema, database, Harvest account or UI/CSS changes in
+  this planning iteration. The last executed runtime tests belong to `b80f8ab`;
+  they do not prove this proposed persistence layer.
+- Follow-up independent review found no remaining high/critical contradiction
+  within the corrected proposal and no task dependency cycle. T033/T034 are
+  complete; T042 and the full-feature gates remain open. No full analysis or
+  runtime acceptance is inferred from that scoped review.
+
+Next: incorporate the review outcome and any C01 response, then complete the
+operation-level matrix and cross-command lock inventory (T006/T042) needed to
+finalize the storage schema and activate T035–T038. Do not keep expanding unrelated
+legacy fixes in place of the requested six-profile implementation. Full goal stays
+active; this design increment alone does not deliver a user story.
