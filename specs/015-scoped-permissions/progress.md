@@ -880,3 +880,50 @@ Next: integrate the user's eligibility answer into FR-005/027 and the operation,
 data-model and acceptance contracts. Keep explicit Administrator identity and
 the already accepted writer rule unchanged. Do not repeat the same documentation
 lookup or fabricate a response on automatic continuation.
+
+## 2026-10-02 — Accept compatible grants before new person assignments
+
+- User answered A to the pending eligibility question. This resolves that blocker,
+  not all implementation gates. No assumption is made about self-assignment or
+  keeping previously saved relationships after later permission loss.
+- Followed Spec Kit Clarify, ran the paths-only prerequisite helper and read the
+  current spec/constitution. No before/after extension hooks exist. Integrated
+  one accepted answer in Clarifications, three US2 acceptance scenarios, FR-027
+  and new FR-028. No additional question was asked in this iteration.
+- New assignments require an existing grant applicable to managed people. This
+  is the receiving manager's eligibility, not the Administrator actor's authority
+  or the managed person's profile. Cover time, expenses, people, person billable
+  rates and withdrawal; the corresponding all-scope grants remain compatible.
+  Own/unrelated-only grants do not qualify. Do not add grants or require general
+  people-directory/edit access, and allow the first otherwise valid assignment.
+- Propagated to OP47, the current evidence register, data-model gates, plan,
+  T012/T013, dependent-screen obligations and quickstart acceptance. Newly added
+  edges in replacements share the same current-eligibility/atomicity check;
+  existing relationships and later retention are not silently redefined.
+- Checklist remains 12/16, with no new passes or regressions: full unambiguous
+  requirements, complete acceptance scenarios, criteria for every requirement
+  and achieved outcomes remain pending. T006–T009 and runtime/storage tasks are
+  not marked complete. This clarification does not yet unblock full integration.
+- Self-review checked actor/recipient distinctions, no circular first-assignment
+  prerequisite, read-only compatibility, revocation before commit and no automatic
+  promotion. No independent review, runtime test, schema/data/account change or
+  merge is claimed. Validation uses formatting and diff whitespace checks.
+
+Clarification coverage:
+
+| Category | Status |
+| --- | --- |
+| Functional scope and behavior | Resolved for new-assignment grant eligibility; other operations deferred |
+| Domain and data model | Eligibility distinguished from actor authority; self-assignment/retention deferred |
+| Interaction and UX | Clear denial rather than dormant assignment or automatic promotion |
+| Non-functional quality | Clear atomicity, current authorization and privacy requirements |
+| Integrations and dependencies | Clear T012/T013 and cross-screen ownership; full integration deferred |
+| Edge cases | Resolved first assignment, unrelated grants and eligibility loss before commit |
+| Constraints and tradeoffs | Clear: no privilege expansion or active-policy change |
+| Terminology | Clear Administrator actor, receiving manager and managed person distinctions |
+| Completion signals | Deferred full matrix, migration and runtime acceptance |
+| Miscellaneous placeholders | No new placeholder or inferred user choice |
+
+Next: finish the remaining relationship and saved-profile contracts through
+Spec Kit Clarify before final Plan/Tasks/Analyze and database integration.
+FR-028 must not be asked again or treated as an answer about later retention.

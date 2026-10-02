@@ -85,7 +85,7 @@ note, but neither this nor the existing constitution amendment completes T008.
 
 - [ ] T009 Refine remaining work packages into executable file-level tasks in `specs/015-scoped-permissions/tasks.md`, complete requirement checks and repeat analysis before replacing runtime authorization.
 
-T006/T009 must finish OP47 target eligibility/retention under FR-027's approved
+T006/T009 must finish OP47 self-assignment/retention under FR-027's approved
 Administrator-only writer boundary, separately from FR-026 project delegation, and bind OP48 project duplication/deletion to
 its owning domain requirements. Feature 010's archive-only increment does not
 remove those operations from full web parity. T012/T013 cover relationship
@@ -132,8 +132,13 @@ subjects, non-admin PeopleWriteAll/People Admin/Executive Manager/custom denial,
 own managed-set attempts, cross-org IDs, revocation/stale revisions, atomic batches
 and audit. Preserve profiles, global grants, project membership and history.
 T016–T018 distinguish assignment controls from independently authorized ordinary
-person editing and own-access explanations. Target eligibility/self-assignment/
-retention remain separate unresolved predicates, not waived by actor authority.
+person editing and own-access explanations. FR-028 now requires existing compatible
+grants for newly added person-management relationships. T012/T013 cover each
+compatible grant family, own/unrelated-only denial, proposed scope without prior
+assignments, revoked eligibility before commit, mixed valid/invalid replacement
+additions, and unchanged global grants/history. Include read-only compatible
+grants without requiring people-directory/edit access. Self-assignment and later
+retention remain separate unresolved predicates, not waived by eligibility.
 
 - [ ] T043 [US2] Finalize the calendar/execution and correction cases in `specs/015-scoped-permissions/contracts/company-locks.md`; add failing injected-clock boundary tests in `crates/core/src/permissions/company_lock/tests.rs` for the finalized modes, timezone/week-start/month-end/DST rules and nondecreasing automatic cutoff (FR-019/023). T006–T009 gate code; this is not an independent permission foundation.
 

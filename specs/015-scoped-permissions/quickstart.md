@@ -142,8 +142,15 @@ between preview and save and change relationship revisions concurrently; no stal
 or partially authorized batch may commit. Check scope-change audit and unchanged
 profiles, global grants, project membership and historical work. Ordinary permitted
 person editing and own-access explanations remain available to non-administrators.
-Target eligibility, self-assignment and retention cases need their own completed
-contract; this is a test obligation, not an executed test or Harvest parity proof.
+FR-028 now settles new-assignment grant eligibility. Test each compatible family
+(including read-only time/expense/people/billable access and scoped withdrawal),
+the corresponding organization-wide grants, and custom combinations without
+people-directory/edit access. Reject own-only and unrelated-only grants, including
+mixed replacement batches with invalid new relationships. Recheck after concurrent
+grant removal; do not add privileges or mutate history. The first assignment must
+not require a pre-existing managed-person set. Self-assignment and retention cases
+still need completed contracts; these are test obligations, not executed tests or
+Harvest parity proof.
 
 ## Independent assignment isolation and revocation repair
 
