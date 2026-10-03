@@ -26,6 +26,11 @@ user-approved trimmed, case-insensitive creation-name rule. Neither requires
 copying Harvest's private storage representation; see `permission-storage.md`.
 Horae's compatibility API remains read-only.
 
+The internal persistence command, including explicit administrative-identity
+transitions and unchanged-save receipts, is refined by
+[person-profile commands](person-profile-commands.md). Its local tests do not
+establish Harvest persistence or full runtime enforcement.
+
 ## Required behavior
 
 ### Classification is not assignment provenance

@@ -1,10 +1,12 @@
 //! Server-loaded facts, never a deserializable client authorization payload.
 
 use horae_core::permissions::catalog::{BuiltInProfile, PermissionSelection};
+use serde::Serialize;
 use uuid::Uuid;
 
 /// Explicit application provenance, independent of computed profile labels.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
 pub(crate) enum PermissionSource {
     BuiltIn(BuiltInProfile),
     Template { id: Uuid, applied_revision: i64 },
@@ -12,7 +14,7 @@ pub(crate) enum PermissionSource {
 }
 
 /// Canonical saved grants and independently recorded administrative identity.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Serialize)]
 pub(crate) struct PersonPermissions {
     pub grants: PermissionSelection,
     pub is_administrator: bool,

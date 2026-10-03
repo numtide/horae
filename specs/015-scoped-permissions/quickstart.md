@@ -401,3 +401,70 @@ this is not independent implementation review or full-feature security acceptanc
 No new dependency, generic service layer, public endpoint, UI/CSS change or real
 data operation was introduced. Full T042, profile application, permission editing
 UI, cross-surface enforcement, migration and full-feature acceptance remain open.
+
+## Internal person-profile commands (T056–T058)
+
+Use only an owned disposable PostgreSQL cluster with `CREATEDB`; the application
+database and Harvest accounts are not test targets. Migration 0044 is additive,
+has no legacy backfill and leaves the permission policy inactive. Fixtures alone
+explicitly enable version 1. The command and schema contract is
+`contracts/person-profile-commands.md`; no public endpoint is delivered here.
+
+```sh
+# Set DATABASE_URL to the disposable compilation DB, then enter the Nix shell.
+cargo sqlx migrate run --source crates/horae/migrations
+cargo test -p horae --features server --bin horae profile_tests --locked
+CARGO_INCREMENTAL=0 cargo sqlx prepare --workspace -- --features server --all-targets
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae --locked
+cargo test -p horae-core --locked
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+nix fmt -- --ci
+```
+
+| Contract boundary | Production-command regression |
+| --- | --- |
+| Confirmed adjusted grants and exact replay | `explicit_application_and_adjustments_preserve_confirmed_grants` |
+| Unchanged state, timestamps, provenance and no change event | `unchanged_edit_preserves_identity_source_timestamp_and_revisions` |
+| Independent identity, inactive targets and invalid Administrator proposals | `explicit_identity_changes_and_inactive_targets_do_not_change_activation`, `reduced_administrator_and_stale_person_proposals_are_rejected` |
+| Actual active explicit Administrator count, including concurrent demotions | `last_active_administrator_cannot_be_demoted_or_replaced_by_equivalent_grants`, `concurrent_self_demotions_leave_one_active_explicit_administrator` |
+| Exact joint loss confirmation, history/incoming preservation and no restoration | `simultaneous_losses_require_exact_confirmation_preserve_history_and_never_restore_links` |
+| Read-only retention and explicit final keep-access grants | `read_only_retention_and_explicit_keep_project_access_preserve_independent_person_losses` |
+| Template adjustment/reset, deletion replay and shared request namespace | `adjusted_template_reset_and_replay_after_deletion_use_explicit_intent`, `all_grant_template_cannot_confer_identity_and_cross_command_keys_conflict` |
+| Current authority after a real gate wait, including replay | `revocation_winning_gate_denies_new_and_replayed_changes` |
+| Atomic rollback and compatible legacy user locks | `audit_failure_rolls_back_profile_and_both_relationship_sets`, `existing_user_share_lock_does_not_block_profile_command` |
+| Tenant/self/duplicate schema boundaries and caller/target isolation | `management_schema_rejects_foreign_parents_self_links_and_duplicate_pairs`, `canonical_actor_policy_tenant_and_target_checks_precede_mutation` |
+| Strict saved/input validation, stale references and overflow | `malformed_person_or_remaining_administrator_state_fails_closed`, `invalid_confirmations_and_noncanonical_grants_are_not_silently_repaired`, `stale_template_and_org_revision_and_exhausted_revisions_roll_back` |
+| No accidental historical cleanup and remove/recreate fencing | `unchanged_and_unrelated_edits_do_not_clean_up_preexisting_incompatible_links`, `recreated_relationship_invalidates_waiting_confirmation_without_partial_removal` |
+
+Read-only independent contract-to-code review found no high/security defect in
+the bounded transaction. It requested the final two regressions above and clearer
+wording for the earlier generic organization-revision test; both were added.
+Relationship replacement in the fencing test is fixture SQL under the required
+gate, not an implemented assignment-addition endpoint. The pending profile save
+uses the actual production command. Full T042/mixed-policy safety is not proved.
+
+The initial SQLx-offline RED run also lacked new query entries; the corrected
+live-disposable-DB run failed solely on the absent command module. After
+implementation, 5, 13 and 18 focused tests passed; the final 20-test suite also
+passed with no failures or ignored cases. The full server binary regression
+suite passed (852 tests discovered, 11 pre-existing ignored), followed by all
+161 core tests. No separate integration-binary execution, browser run or full
+flake acceptance is claimed.
+
+SQLx preparation can omit unchanged integration-target metadata even with
+`CARGO_INCREMENTAL=0`: this run initially removed 91 integration query entries
+despite successful preparation and warm offline Clippy. A warm compilation is
+not proof of a complete cache. If this occurs, first finish other Cargo tasks,
+then clean **only this worktree's package build artifacts** with
+`cargo clean -p horae`, repeat the non-incremental all-targets preparation above,
+and verify deleted-cache count plus a fresh offline all-targets check. Do not
+delete source, database state or manually fabricate missing query descriptions.
+
+The clean-package regeneration recovered all 91 omitted entries: final cache
+adds 30 descriptions with zero changed or deleted existing entries. Fresh offline
+all-targets server Clippy then passed with warnings denied. No source/database
+data was removed; only regenerable package build artifacts were cleaned.
+Formatting CI and diff checks also passed. T056–T058 are complete for this
+internal boundary; full T037/T038, authenticated wrappers and runtime acceptance
+remain open. Rust/testing/async/simplicity guidance kept this in existing modules,
+dependencies and SQLx transactions, with no generic policy framework or UI change.

@@ -87,6 +87,14 @@ profile/application and assignment transactions in T037/T038 and reconcile their
 T042 lock dependencies. T042 and T008's broader integration gates remain open;
 only disposable fixtures enable version 1.
 
+T056–T058 now refine the next internal person-profile transaction under
+`contracts/person-profile-commands.md`. Explicit command intent determines
+Administrator transitions; inactive targets retain their activation state.
+Separate management relations avoid legacy membership cascades. This bounded
+post-design constitution check passes: existing dependencies, typed grants,
+tenant FKs, UUID v7, atomic audit and disposable PostgreSQL only. It does not
+close T042, replace legacy guards or authorize mixed-policy operation.
+
 ### Existing increments and remaining integration
 
 The renewed implementation request also permits T047–T049: strict restoration of

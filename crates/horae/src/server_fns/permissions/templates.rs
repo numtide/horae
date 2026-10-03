@@ -174,7 +174,7 @@ pub(crate) async fn execute(
         if receipt.format_version != 1 {
             return Err(TemplateCommandError::ReceiptVersion);
         }
-        if serde_json::from_value::<TemplateCommand>(receipt.intent)? != intent {
+        if receipt.intent != serde_json::to_value(&intent)? {
             return Err(TemplateCommandError::RequestConflict);
         }
         let result = serde_json::from_value(receipt.result)?;

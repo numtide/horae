@@ -1337,3 +1337,60 @@ profile application with last-administrator protection and confirmed relationshi
 effects, reconciling the affected T042 lock order before those writers. Preserve
 the full enforcement, UI, migration and end-to-end acceptance gates. The goal is
 active, not complete or blocked.
+
+## 2026-10-03 — Person-profile commands in progress
+
+- The previous user-facing turn answered the agency-MVP question; it made no
+  implementation progress and did not redefine the active permissions goal.
+  Revalidated clean `d50c979` and continued in the existing worktree/branch.
+- Executed Spec Kit Plan, Tasks and Implement helpers. Preserved existing task
+  history and added T056–T058. Full requirements remain 12/16; local readiness is
+  7/7 under the existing authorization for independent increments. No extension
+  hooks or agent-context updater are present.
+- Bounded read-only adversarial research and retained Harvest editor evidence
+  closed local identity transitions; inactive-target edits preserve existing
+  Horae behavior without claiming verified Harvest persistence. Recorded the
+  contract and no-activation lock limitations in `person-profile-commands.md`.
+- Added migration 0044 only to the owned disposable database, distinct management
+  relations, and internal profile commands with exact final grants, explicit
+  identity/provenance, current authorization, last-admin protection, confirmed
+  relationship losses, revision fencing and atomic audit/replay. Template requests
+  now reject cross-command request-key conflicts consistently.
+- The initial offline test compile lacked new query caches; reran with the live
+  disposable compilation DB and observed the missing module failure alone.
+  Implemented the command; five then thirteen production-command tests passed.
+  Five further tenancy/malformed/stale/overflow/input cases are under verification.
+
+Next: finish focused/regression checks and independent contract-to-code review,
+regenerate complete SQLx metadata, run offline Clippy/formatting and publish only
+verified changes. T056–T058 are not yet marked complete. Full runtime enforcement,
+UI, relationship-addition commands, T042 and migration remain open; no real-data
+operation, policy activation, merge or completed feature is claimed.
+
+## 2026-10-03 — Verify atomic person-profile changes
+
+- All 20 focused production-command tests pass. Full server binary regressions
+  passed (852 discovered, 11 pre-existing ignored), as did all 161 core tests.
+  Independent read-only contract-to-code review found no high/security defect;
+  its two coverage findings became historical-link-preservation and real gated
+  remove/recreate regressions, both passing. No full-policy security claim.
+
+- Recovered SQLx's omission of 91 warm integration-target entries by cleaning
+  only this worktree's Horae package build artifacts and repeating preparation.
+  Final cache adds 30 entries and deletes/changes none. Fresh non-incremental
+  offline all-targets Clippy passed with warnings denied. Full flake/browser and
+  separate integration-binary execution are not claimed.
+
+- PR #212 was verified open/draft at `d50c979`, on the expected branch. The
+  separate optional description read stalled and was cancelled; no PR mutation
+  followed from that read. No real data or runtime guards were changed.
+
+- Formatting CI and diff checks passed; T056–T058 are complete for the internal
+  boundary only. Kept Rust changes in existing modules/dependencies and used
+  actual PostgreSQL commands rather than mocked authorization outcomes.
+
+Next: publish this verified increment to #212, then continue
+the reviewed relationship-write and shared authorization integration work. Person
+profile application now has actual internal transactions; authenticated surfaces,
+management add/remove commands, full T042, UI and migration remain required.
+The full goal stays active, not complete or blocked.

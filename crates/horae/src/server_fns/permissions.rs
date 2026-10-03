@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use crate::models::permissions::{PermissionSource, PermissionTemplate, PersonPermissions};
 
+pub(crate) mod profiles;
 pub(crate) mod templates;
 
 #[derive(Debug, thiserror::Error)]
@@ -113,3 +114,7 @@ mod storage_tests;
 #[cfg(test)]
 #[path = "permissions/tests/templates.rs"]
 mod template_tests;
+
+#[cfg(test)]
+#[path = "permissions/tests/profiles.rs"]
+mod profile_tests;

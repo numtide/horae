@@ -332,6 +332,24 @@ settle it. No rate scope or prerequisite has been invented to close the gate.
   approval/lock work; migration and complete enforcement to activation. Existing
   unresolved questions remain recorded, without blocking unrelated pure checks.
 
+### Person-profile transaction review — 2026-10-03
+
+- Decision: implement the bounded command in `contracts/person-profile-commands.md`.
+  Explicit Administrator selection requires its full set; other selection and
+  changed individual grants produce non-admin identity. Unchanged saves preserve
+  independent stored facts. This derives draft intent from the current guide and
+  retained `Rt`/`gi`/`pe`/`Ze`/`Ve` handlers, not tested Harvest persistence.
+- Rationale: custom grant equivalence cannot promote a person; restricting an
+  Administrator must not leave unrestricted identity behind. Existing Horae role
+  changes support inactive targets without activation; preserve that behavior.
+- Read-only adversarial research closed local FK/trigger ordering. Reuse existing
+  project `(id, org_id)` uniqueness; do not add a redundant index. Keep independent
+  management tables free of legacy assignment cascades and project-write triggers.
+- Alternatives rejected: deriving identity from saved source, preserving admin
+  identity after a confirmed restricted proposal, refusing all inactive target
+  edits without evidence, or claiming legacy role-based deactivation is compatible
+  with the new canonical last-admin count. Full activation remains gated.
+
 ### Previous workflow record
 
 - Followed the checked-in `speckit-specify` skill, local template and constitution. No extension hooks or template preset overrides were found.

@@ -6,6 +6,12 @@ read models and strict loaders under T035/T036, exercised in disposable database
 The broader proposal below is not a completed T008 gate or active policy.
 Reference-dependent transitions and approval coverage remain open.
 
+Migration 0044 now separates canonical project/person management relationships
+from tracking membership for internal profile changes. The reviewed
+`contracts/person-profile-commands.md` specifies their tenant references, revision
+fencing and confirmed deletion snapshots. No legacy data is copied, no addition
+endpoint is exposed and legacy runtime authorization remains unchanged.
+
 ## Pure record-scope foundation
 
 - `AccessScope`: private flags for `NONE`, `OWN`, `MANAGED_PEOPLE`, `MANAGED_PROJECTS`, `ORGANIZATION`. Union is explicit and never infers a capability or a broader role.

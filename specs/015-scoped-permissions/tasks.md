@@ -115,6 +115,19 @@ proposal's existence is not approval to invent those decisions or run migrations
 - [ ] T037 [US1] Add failing command/replay/concurrency tests in `crates/horae/src/server_fns/permissions/tests/changes.rs`: stale revisions, request identity, revoke-vs-write in both orders, last-admin races and state/audit rollback (FR-010/011/013).
 - [ ] T038 [US1] Implement the reviewed typed access-change transaction and authorized outcome lookup in `crates/horae/src/server_fns/permissions/changes.rs`, authenticated wrappers in `crates/horae/src/server_fns/users.rs`, and regenerate `.sqlx/`; do not expose a partially enforced policy (FR-010/011/013/017).
 
+### Internal person-profile transaction
+
+The reviewed `contracts/person-profile-commands.md` closes the local identity,
+inactive-target and FK/trigger questions without claiming full T042 closure.
+T055 → T056 (RED) → T057 (GREEN) → T058 refines T037/T038 and the FR-025/029
+portion of T012/T013. No parallel code tasks: schema, commands and fixtures overlap.
+The shared request namespace also requires template commands to reject another
+command kind as conflicting intent rather than trying to decode its shape.
+
+- [x] T056 [US1] Add failing production-command tests in `crates/horae/src/server_fns/permissions/tests/profiles.rs` for every local acceptance case in `contracts/person-profile-commands.md`, including management-table tenant/self constraints (FR-004/010/011/013/015/025/029/030).
+- [x] T057 [US1] Add isolated management relations in `crates/horae/migrations/0044_permission_management_assignments.sql` and internal audited profile changes in `crates/horae/src/server_fns/permissions/profiles.rs`; wire the module, preserve strict loads and shared receipt conflicts in `permissions/templates.rs`, with no activation/backfill or authenticated wrapper (FR-004/010/011/013/015/025/029/030).
+- [x] T058 [US1] Verify focused and affected PostgreSQL regressions, regenerate `.sqlx/` without incremental compilation, run offline all-targets server Clippy and formatting, adversarially review command/rollback/concurrency behavior and record evidence in `specs/015-scoped-permissions/quickstart.md` and `progress.md`.
+
 ## Phase 5: US2 — Managed work and scoped approvals (P1)
 
 Independent test: two projects/two approvers with overlapping people scope, filtered dates, empty cells and withdrawal; no unrelated changes.
