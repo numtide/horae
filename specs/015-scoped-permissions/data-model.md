@@ -1,5 +1,10 @@
 # Permission data model
 
+Materialized project exports use a private captured UUID set under
+`contracts/project-exports.md`. IDs accompany the existing server-only export
+rows for current-scope revalidation after rendering; they are neither persisted
+nor added to spreadsheet columns. No new table, grant or public DTO is required.
+
 Status: foundation finalized; persistence proposal made concrete on 2026-10-02.
 The reviewed non-activating portion now has migration 0042, server-only typed
 read models and strict loaders under T035/T036, exercised in disposable databases.

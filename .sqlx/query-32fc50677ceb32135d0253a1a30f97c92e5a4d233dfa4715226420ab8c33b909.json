@@ -1,0 +1,122 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH bounded AS MATERIALIZED (\n             SELECT p.id, c.name client_name, p.code, p.name, p.project_type,\n                    p.currency, p.budget_kind, p.budget_amount_cents, p.budget_minutes, p.active\n             FROM projects p JOIN clients c ON c.id=p.client_id\n             JOIN project_read_access a ON a.project_id=p.id AND a.org_id=p.org_id\n             WHERE p.org_id=$1 AND a.user_id=$2 AND a.can_view_progress AND CASE $3\n               WHEN 'budgeted' THEN p.active AND p.budget_kind <> 'none'\n               WHEN 'archived' THEN NOT p.active ELSE p.active END\n             LIMIT $4::bigint + 1\n           ), stats AS (\n             SELECT COUNT(*) rows,\n                    COALESCE(SUM(octet_length(client_name)::bigint + COALESCE(octet_length(code),0)\n                      + octet_length(name) + octet_length(currency)),0)::bigint bytes,\n                    COALESCE(MAX(GREATEST(octet_length(client_name), COALESCE(octet_length(code),0),\n                      octet_length(name), octet_length(currency))),0) field_bytes\n             FROM bounded\n           )\n           SELECT s.rows AS \"rows!\", s.bytes AS \"bytes!\", s.field_bytes AS \"field_bytes!\",\n                  b.id AS \"id?\", b.client_name AS \"client_name?\", b.code, b.name AS \"name?\",\n                  b.project_type AS \"project_type?: horae_core::types::ProjectType\",\n                  b.currency AS \"currency?\", b.budget_kind AS \"budget_kind?: horae_core::types::BudgetKind\",\n                  b.budget_amount_cents, b.budget_minutes, b.active AS \"active?\"\n           FROM stats s LEFT JOIN bounded b ON s.rows <= $4 AND s.bytes <= $5 AND s.field_bytes <= $6\n           ORDER BY b.client_name, b.name, b.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "rows!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "bytes!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "field_bytes!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "client_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "project_type?: horae_core::types::ProjectType",
+        "type_info": {
+          "Custom": {
+            "name": "project_type",
+            "kind": {
+              "Enum": [
+                "time_and_materials",
+                "fixed_fee",
+                "non_billable",
+                "retainer"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "currency?",
+        "type_info": "Bpchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "budget_kind?: horae_core::types::BudgetKind",
+        "type_info": {
+          "Custom": {
+            "name": "budget_kind",
+            "kind": {
+              "Enum": [
+                "none",
+                "amount",
+                "hours"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "budget_amount_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "budget_minutes",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 12,
+        "name": "active?",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int8",
+        "Int8",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "32fc50677ceb32135d0253a1a30f97c92e5a4d233dfa4715226420ab8c33b909"
+}

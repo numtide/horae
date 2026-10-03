@@ -5,6 +5,8 @@ use crate::server_fns::test_seed::{seed, time_entry, wait_for_blocked};
 use horae_core::types::EntryState;
 use std::io::{Cursor, Read};
 
+mod projects;
+
 async fn download(api: &Api, path: &str, cookie: Option<&str>) -> reqwest::Response {
     let mut request = api.client.get(format!("{}{path}", api.base));
     if let Some(cookie) = cookie {
@@ -27,6 +29,7 @@ async fn denied(response: reqwest::Response, status: StatusCode) {
 }
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
+    projects::check(pool, api).await;
     let ids = seed(pool, OrgRole::Manager).await;
     let foreign = seed(pool, OrgRole::Admin).await;
     let own_entry = time_entry(pool, &ids, EntryState::Open).await;

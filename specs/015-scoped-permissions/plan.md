@@ -97,13 +97,22 @@ close T042, replace legacy guards or authorize mixed-policy operation.
 
 ### Existing increments and remaining integration
 
+T107–T109 integrate project XLSX under `contracts/project-exports.md`: explicit
+READ COMMITTED organization/actor gates, one bounded size/payload statement,
+then fresh captured-project authorization after rendering. Reuse the current
+project-read predicate and parent revision triggers; no writer, schema,
+dependency, arithmetic, UI or canonical activation change. Independent design
+review confirms the separate post-parent-wait access query is required. Local
+constitution check passes; CSV and full policy integration remain open.
+
 T104–T106 integrate manager-only materialized entries/invoice XLSX and invoice
 PDF exports under `contracts/manager-snapshots.md`. Preserve existing deadlines
 and size limits, commit before rendering, and recheck the original trusted actor
 before response release. The three handlers share one rendering/release helper;
 no database lock follows the body or blocking worker. No model, dependency,
 schema or arithmetic change is needed. Local constitution check passes; full
-policy, CSV streaming and Member project-export integration remain open.
+policy and CSV streaming remain open; materialized Member project scope is
+covered separately by T107–T109 above.
 
 T101–T103 extend the reviewed manager-snapshot contract to invoice editor
 load/review. Reuse the same prelude; retain all business queries, evaluation,

@@ -311,6 +311,7 @@ pub struct ProjectsExportParams {
 }
 
 struct ProjectExportRow {
+    id: uuid::Uuid,
     client_name: String,
     code: Option<String>,
     name: String,
@@ -331,6 +332,7 @@ fn budget_cell(r: &ProjectExportRow) -> String {
     )
 }
 
+#[cfg(test)]
 async fn fetch_projects_export<'e>(
     executor: impl sqlx::PgExecutor<'e> + 'e,
     org_id: uuid::Uuid,
@@ -350,7 +352,7 @@ fn stream_projects_export<'e>(
 ) -> impl Stream<Item = Result<ProjectExportRow, sqlx::Error>> + 'e {
     sqlx::query_as!(
         ProjectExportRow,
-        r#"SELECT c.name as client_name, p.code, p.name,
+        r#"SELECT p.id, c.name as client_name, p.code, p.name,
                   p.project_type as "project_type: horae_core::types::ProjectType",
                   p.currency,
                   p.budget_kind as "budget_kind: horae_core::types::BudgetKind",
@@ -394,7 +396,16 @@ pub async fn export_projects_xlsx(
     let state = crate::state::global_state().await;
     let rows = limits::projects(&state.db, org_id, viewer_id, scope).await?;
 
-    let data = permit.render(move || projects_xlsx(&rows)).await?;
+    let project_ids = rows.iter().map(|row| row.id).collect();
+    let data = render_project_export(
+        permit,
+        &state.db,
+        org_id,
+        viewer_id,
+        project_ids,
+        move || projects_xlsx(&rows),
+    )
+    .await?;
 
     Ok((
         [
@@ -409,6 +420,21 @@ pub async fn export_projects_xlsx(
         ],
         data,
     ))
+}
+
+async fn render_project_export(
+    permit: bounded::ExportPermit,
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
+    mut project_ids: Vec<uuid::Uuid>,
+    render: impl FnOnce() -> Result<Vec<u8>, StatusCode> + Send + 'static,
+) -> Result<axum::body::Body, StatusCode> {
+    project_ids.sort_unstable();
+    project_ids.dedup();
+    let body = permit.render(render).await?;
+    limits::authorize_projects(pool, org_id, actor_id, &project_ids).await?;
+    Ok(body)
 }
 
 fn projects_xlsx(rows: &[ProjectExportRow]) -> Result<Vec<u8>, StatusCode> {

@@ -1,5 +1,67 @@
 # Permissions discovery
 
+## CSV cursor transport feasibility (2026-10-04)
+
+- Decision: continue the single-connection READ COMMITTED cursor design rather
+  than holding authority locks across browser backpressure or borrowing a second
+  connection. This is a validated transport candidate, not CSV authorization
+  acceptance or permission to activate canonical policy.
+- Evidence: SQLx 0.8.6's `Executor::describe` prepares/describes but does not
+  execute `DECLARE`. A temporary checked `FETCH NEXT` probe produced `PgRow`,
+  not the requested struct (E0609 on its field). A checked `DECLARE` plus a
+  SECURITY INVOKER `SETOF record` fetch helper and static caller column list
+  passed the runtime proof: exact i64 extremes, UUID/date/enum/bool/null/text,
+  cursor survival after savepoint rollback, released row locks, frozen source
+  rows across a concurrent edit and a fresh subsequent READ COMMITTED read.
+  The helper needs a reviewed migration before production use; none was added.
+- Caveat: both SQL statements are checked, but the anonymous cursor row layout
+  is matched against the helper's caller column list at runtime. Each actual
+  export needs projection/decoding tests; this is not compile-time proof that
+  arbitrary cursor projections match that list.
+- Rationale: PostgreSQL documents [cursor survival and position](https://www.postgresql.org/docs/17/sql-rollback-to.html)
+  and [release of post-savepoint locks](https://www.postgresql.org/docs/17/explicit-locking.html).
+  Declare the source outside later rolled-back authorization savepoints. Reserve
+  channel capacity before each current-authority check, release its locks and
+  enqueue synchronously. Capture invoice metadata/lines in one cursor query.
+- Alternatives: two connections break size-one pools and risk pool deadlock;
+  [WITH HOLD materializes at commit](https://www.postgresql.org/docs/17/sql-declare.html).
+  A fetch helper buffers its complete invocation ([PL/pgSQL returns](https://www.postgresql.org/docs/17/plpgsql-control-structures.html)),
+  so its first call must return at most one row. `FETCH 1` is the simplest
+  baseline; batching must have a decoded-byte bound as well as a row cap.
+- Independent review rejects `pg_column_size(record)` as that bound: storage
+  [reflects compression](https://www.postgresql.org/docs/17/functions-admin.html),
+  and [expanded records can retain compressed fields](https://github.com/postgres/postgres/blob/REL_17_STABLE/src/backend/utils/adt/expandedrecord.c).
+  A candidate private `export_bytes` projection sums logical `octet_length`
+  for every variable-width returned field plus fixed overhead, using bigint
+  operands before addition. Reject invalid weights; return the threshold-crossing
+  row before stopping, retaining the existing one-oversized-record allowance.
+  No JSON conversion or added library is necessary. This batching contract and
+  its compressed/oversized/threshold/first-row tests remain to implement.
+- Next: refine the streaming contract/tasks, including both revocation orders,
+  empty/header/totals-tail authorization, exact existing CSV bytes, cancellation,
+  one-connection reuse and real-cookie checks. The five-second statement timeout
+  would apply per fetch, not to the complete source query; retain the outer
+  sixty-second download bound and test/document that distinction.
+
+## Fresh materialized project exports (2026-10-04)
+
+- Decision: READ COMMITTED organization/actor gates followed by one bounded
+  statement for project size and payload, then captured-parent locks and a
+  separate current-scope statement after rendering. See `contracts/project-exports.md`.
+- Rationale: source inspection and independent review confirm legacy assignment,
+  editor and finalization writes lock the organization without changing its
+  revision. Snapshot-visible parent locks miss winning scope expansion and new
+  projects. Migration 0039 supplies the final parent fence for direct child writes.
+- Alternatives rejected: RR with only existing/candidate parent locks misses
+  new scope; separate RC size/payload queries mix snapshots; an organization
+  revision trigger would broaden writer changes and risk late lock upgrades;
+  combining final parent locks and access joins can use pre-wait relationships.
+- Sources: PostgreSQL [READ COMMITTED](https://www.postgresql.org/docs/17/transaction-iso.html#XACT-READ-COMMITTED)
+  supplies a fresh snapshot per statement; [CTE materialization](https://www.postgresql.org/docs/17/queries-with.html#QUERIES-WITH-CTE-MATERIALIZATION)
+  supports reusing one bounded result. Inspected migrations 0035/0039,
+  `db::lock_organization`, project writers and report loaders. No reference
+  account writes or new Harvest grant assumptions are needed.
+
 ## Materialized export authority (2026-10-04)
 
 - Decision: reuse the manager prelude for entries/invoice/PDF materialization,

@@ -104,8 +104,8 @@ Retain existing limit, deadline, rendering, admission and streaming regressions.
 
 Do not change `reports::limits::configure_transaction`: CSV workers reuse it and
 await browser-paced channel sends inside the transaction. Holding authority locks
-there would delay revocation through client backpressure. Member project export scope and full canonical grants
-remain separate integration tasks. In particular, legacy membership writers can
-change scope without updating the organization row or actor; this prelude alone
-does not fence those changes. It is safe for these existing manager-only
-readers, not proof of all-surface permission enforcement.
+there would delay revocation through client backpressure. Materialized project
+scope instead follows `project-exports.md` (T107–T109). Legacy membership writers
+can change scope without updating the organization row or actor; this manager
+prelude alone does not fence those changes. CSV and full canonical grants remain
+open, not inferred from these materialized-reader integrations.

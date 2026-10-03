@@ -1,5 +1,36 @@
 # Permission verification
 
+## Materialized project exports (T107–T109)
+
+Use disposable PostgreSQL and the Nix shell. Run the `project_exports` subset
+of the server-binary tests, the registered HTTP matrix
+`job_endpoints_enforce_session_role_and_organization`, and then the full server
+suite. The required cases in `contracts/project-exports.md` map to FR-006/007
+(tenant/actor/current project scope), FR-010 (both race orders and scope gains),
+FR-017 (unchanged exact payload) and FR-018 / SC-006 (limits, cleanup and HTTP).
+Record actual outcomes below or in `progress.md`; planning is not a test pass.
+
+| Requirement subset | Executable evidence |
+| --- | --- |
+| FR-006/007: current tenant-bound actor and project scope | `project_exports_require_current_tenant_bound_actor`, `project_exports_preserve_membership_visibility_and_history_rules`, `project_exports_reject_missing_foreign_and_unreadable_captured_ids` |
+| FR-010: fresh scope after either authority wait | `project_exports_refresh_scope_after_winning_relationship_changes`, `project_exports_deny_actor_revoked_during_either_authority_wait`, real finalize/editor HTTP races in `exports::projects::check` |
+| FR-010: current captured scope and both parent-lock race orders | `project_exports_refresh_release_scope_after_parent_wait`, `project_exports_retain_parent_authority_until_release_check_finishes`, `project_exports_release_every_captured_project_without_render_locks` |
+| FR-017/018: coherent bounded payload and preservation | `project_exports_bound_rows_and_text_after_scope_filtering`, `project_exports_share_one_size_and_payload_snapshot`, existing privacy/format/filter/export regressions |
+| FR-018 / SC-006 subset: cancellation, settings and real delivery | `project_exports_release_cancelled_and_timed_out_checks`, `project_exports_cancel_loading_without_retaining_authority`, registered real-cookie HTTP matrix and server suite |
+
+RED reproduced invalid-actor acceptance. The corrected HTTP matrix passes
+(12.71s), including actual finalize/editor writers; report regression passes
+68 tests with zero failures and two existing manual exclusions (50.80s),
+including all twelve project cases. Full server-binary regression passes:
+964 passed, zero failed and 11 existing exclusions (327.07s). All four
+adversarial findings were corrected and re-reviewed; scoped analysis has no
+unmapped task or local consistency/constitution finding. Final verification and
+publication are recorded in `progress.md`. Complete SQLx preparation passes
+(1,281 descriptors, 33 new/two obsolete), as do corrected offline Clippy (2m12s),
+WASM (21.70s), the twelve affected tests (12.64s), and formatting. Clippy's initial
+failure was confined to redundant test dereferences and was fixed, not silenced.
+This is not canonical policy, CSV or full-feature acceptance.
+
 ## Materialized export authorization (T104–T106)
 
 Use the pinned Nix shell and disposable PostgreSQL only:

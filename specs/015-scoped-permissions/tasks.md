@@ -380,6 +380,17 @@ not complete canonical US3 enforcement. No new grant predicate is inferred.
 - [x] T105 [US3] Integrate the shared snapshot prelude and retained actor IDs in `crates/horae/src/reports.rs`, `reports/limits.rs`, `server_fns.rs` and `server_fns/snapshot.rs`; recheck after bounded rendering, preserve deadlines and keep CSV/Member paths unchanged (FR-006/007/010/017).
 - [x] T106 [US3] Verify real export routes in `crates/horae/src/server_fns/importers/authorization_tests/exports.rs` and its existing harness; run full server/export regressions, SQLx/offline/lint/format gates, adversarial review and analysis; record evidence in `specs/015-scoped-permissions/quickstart.md` and `progress.md` (FR-018, SC-006 subset).
 
+### Materialized project export authorization
+
+T106 → T107 → T108 → T109 implements `contracts/project-exports.md`. Work is
+sequential because the private row type, bounded query and HTTP fixtures overlap.
+Scope gains/losses and final parent-wait freshness are mandatory, not just actor
+revocation. This does not close CSV, canonical US3 or T039/T040/T042.
+
+- [x] T107 [US3] Add failing actor/scope/freshness/size/render-release tests in `crates/horae/src/reports/limits/tests/project_authorization.rs`, reusing disposable fixtures and real writer boundaries (FR-006/007/010/017/018).
+- [x] T108 [US3] Implement bounded fresh project materialization and captured-ID release authorization in `crates/horae/src/reports/limits/project.rs`, wired through `reports/limits.rs` and `reports.rs`; preserve existing CSV, columns and limits (FR-006/007/010/017).
+- [x] T109 [US3] Extend real-cookie project XLSX checks in `crates/horae/src/server_fns/importers/authorization_tests/exports.rs` and its `exports/projects.rs` submodule, including a real finalize/editor writer winning the organization gate; update only the inactive-actor expectation in `crates/horae/src/reports/privacy_tests.rs`; run focused/full regressions, cache/offline/lint/format checks, adversarial review and analysis, recording evidence in `specs/015-scoped-permissions/quickstart.md` and `progress.md` (FR-018, SC-006 subset).
+
 ## Phase 7: US4 — Custom profiles and permission explanations (P2)
 
 ### Isolated create/delete command implementation

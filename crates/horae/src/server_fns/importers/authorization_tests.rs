@@ -209,6 +209,10 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
         .register_server_functions()
         .route("/api/reports/export/xlsx", get(crate::reports::export_xlsx))
         .route(
+            "/api/projects/export/xlsx",
+            get(crate::reports::export_projects_xlsx),
+        )
+        .route(
             "/api/invoices/{id}/export/xlsx",
             get(crate::reports::export_invoice_xlsx),
         )

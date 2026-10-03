@@ -6,6 +6,9 @@ use crate::models::{DetailedReportRow, Invoice, InvoiceLine, OrgBranding};
 
 use super::{ExportParams, ProjectExportRow};
 
+mod project;
+pub(super) use project::{authorize_projects, projects};
+
 const MAX_FIELD_BYTES: i32 = 32_767;
 
 #[derive(Clone, Copy)]
@@ -42,6 +45,7 @@ pub(super) fn database_error(error: sqlx::Error) -> StatusCode {
     }
 }
 
+#[cfg(test)]
 async fn begin(pool: &PgPool) -> Result<Transaction<'_, Postgres>, StatusCode> {
     let mut tx = pool.begin().await.map_err(database_error)?;
     configure_transaction(&mut tx).await?;
@@ -120,42 +124,6 @@ pub(super) async fn entries(
     ).fetch_one(&mut *tx).await.map_err(database_error)?;
     check(size.rows, size.bytes, size.field_bytes, XLSX)?;
     let rows = super::fetch_entries(&mut *tx, org_id, (from, to), params.filters())
-        .await
-        .map_err(database_error)?;
-    tx.commit().await.map_err(database_error)?;
-    Ok(rows)
-}
-
-pub(super) async fn projects(
-    pool: &PgPool,
-    org_id: Uuid,
-    viewer_id: Uuid,
-    scope: &str,
-) -> Result<Vec<ProjectExportRow>, StatusCode> {
-    let mut tx = begin(pool).await?;
-    let size = sqlx::query!(
-        r#"SELECT COUNT(*) as "rows!",
-                  COALESCE(SUM(octet_length(client_name)::bigint + COALESCE(octet_length(code), 0)
-                    + octet_length(name) + octet_length(currency)), 0)::bigint as "bytes!",
-                  COALESCE(MAX(GREATEST(octet_length(client_name), COALESCE(octet_length(code), 0),
-                    octet_length(name), octet_length(currency))), 0) as "field_bytes!"
-           FROM (SELECT c.name client_name, p.code, p.name, p.currency
-                 FROM projects p JOIN clients c ON c.id = p.client_id
-                 JOIN project_read_access access ON access.project_id = p.id AND access.org_id = p.org_id
-                 WHERE p.org_id = $1 AND access.user_id = $4 AND access.can_view_progress AND CASE $2
-                   WHEN 'budgeted' THEN p.active AND p.budget_kind <> 'none'
-                   WHEN 'archived' THEN NOT p.active ELSE p.active END
-                 LIMIT $3) bounded"#,
-        org_id,
-        scope,
-        XLSX.rows + 1,
-        viewer_id,
-    )
-    .fetch_one(&mut *tx)
-    .await
-    .map_err(database_error)?;
-    check(size.rows, size.bytes, size.field_bytes, XLSX)?;
-    let rows = super::fetch_projects_export(&mut *tx, org_id, viewer_id, scope)
         .await
         .map_err(database_error)?;
     tx.commit().await.map_err(database_error)?;
@@ -273,6 +241,7 @@ mod tests {
     use std::io::{Cursor, Read};
 
     mod authorization;
+    mod project_authorization;
 
     fn xlsx_part(bytes: &[u8], path: &str) -> String {
         let mut zip = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();

@@ -1,5 +1,101 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Materialized project exports
+
+- Previous goal turn made progress: T104–T106 verified and published unsigned
+  as `dc822a0` to draft #212. Revalidated clean worktree and matching origin;
+  all previous command handles are terminal and disposable PostgreSQL stopped.
+- Spec Kit Plan/Tasks reused existing artifacts and added T107–T109 and
+  `contracts/project-exports.md`. Independent design review confirms the
+  READ COMMITTED/single-statement approach and separately refreshed final
+  relationship check. No new product predicate, writer or schema change.
+- Local constitution check passes. Seven local checklists remain complete;
+  general requirements remain 12/16 with prior independent-increment authority.
+  No extension hooks or context generator apply. Rust/async/testing conventions
+  require real transaction tests before implementation and no new dependency.
+- Confirmed stopped disposable PostgreSQL (pg_ctl status 3), then restarted
+  only that cluster. Session 42461 compiles the initial actor-rejection RED test.
+  Follow-up research identified the existing registered HTTP harness as the
+  real finalization/editor race path, avoiding new test-only production hooks.
+- RED reproduces invalid-actor acceptance (0.73s after 3m49s compilation).
+  Added the READ COMMITTED actor boundary, bounded single-statement loader,
+  private captured IDs and fresh release check after sorted parent locks.
+- The first GREEN build stopped on fixture role names (`freelancer`, not
+  `member`), an unqualified response-body type and an inferred SQL integer width.
+  Corrected all three and added scope/size/snapshot/cancellation cases plus the
+  real finalized-project and editor visibility HTTP races. No passing execution
+  is claimed from that failed compilation.
+- Adversarial review found no authority-order defect, but identified an
+  unnecessary pre-limit sort, duplicate visibility fixtures, an obsolete
+  inactive-actor expectation and missing reader-first parent-lock coverage.
+  Removed the inner sort (the final sort retains output order), distinguished
+  UPDATE from INSERT, changed only the inactive privacy assertion to 403, and
+  added parent-retention and loading-cancellation tests with a private test view.
+  Session 22988 was already compiling its earlier snapshot; its results will
+  not certify these later review changes. No parallel build was started.
+- Initial GREEN passes all ten then-present project tests (10.47s after 3m43s
+  compilation). The same command detected the review edits and is recompiling
+  them before the real HTTP matrix and complete report suite. Twelve focused
+  tests are now present. Follow-up adversarial review confirms all four findings
+  resolved and no remaining material gap; it did not execute tests.
+- Corrected real HTTP matrix passes (12.71s after 3m27s recompilation), including
+  newly finalized assignment and editor visibility expansion while the export
+  waits on their actual writer. Report regression passes: 68 passed, zero failed,
+  two existing manual exclusions (50.80s), including all twelve project tests.
+  Session 22988 is terminal. Full server regression and complete cache/offline
+  gates follow before publication; no partial result certifies the full feature.
+- Scoped Analyze maps five FR subsets and SC-006's regression subset to all
+  three tasks, with no unmapped task, ambiguity, duplication or constitutional
+  conflict. Full-feature analysis and activation remain separate open gates.
+- Full server-binary regression passes: 964 passed, zero failed, 11 existing
+  exclusions, 975 discovered (327.07s). T107/T108 are complete. Formatting changed
+  only the newly added test layout while the compiled suite ran; no functional
+  change followed the reviewed passing tests. Session 34644 continues with
+  complete SQLx regeneration and offline lint/WASM after cleaning only the
+  app's rebuildable artifacts (1.6 GiB); the baseline cache has 1,250 descriptors.
+- The intervening MVP-status answer made no implementation progress. Resumed
+  the existing command handle instead of restarting it: session 34644 terminated
+  at Clippy with fourteen redundant test-only dereferences; WASM did not run.
+  Removed only those dereferences without suppressing the lint. Session 38923
+  reruns offline Clippy/WASM and the twelve affected project tests.
+- Complete SQLx preparation had passed in 2m03s: 33 new, two obsolete and zero
+  modified descriptors, 1,281 total. Inspected both removed descriptors: the
+  former separate project size query and the project stream projection before
+  its private ID field. No migration, dependency or runtime policy change.
+- Corrected gates pass: offline all-target server Clippy with denied warnings
+  (2m12s), denied-warning WASM check (21.70s), and all twelve focused project
+  tests (12.64s after 3m44s compilation). Session 38923 is terminal. The earlier
+  full 964-test run remains the full regression evidence; only test borrowing
+  syntax changed afterward. Formatting check passes with zero changes (3.913s).
+- GitHub confirms #212 remains open/draft at `dc822a0`. A temporary cursor
+  transport example is being used only for the next CSV research dependency;
+  it must be removed from crate discovery before final publication checks.
+- The isolated CSV transport probe confirms direct `query_as!(FETCH ...)`
+  yields an untyped `PgRow` at compile time. Checked DECLARE plus a native-record
+  helper passes online (2.18s compilation, 0.05s test) and offline (2.11s,
+  0.06s), preserving exact types, source snapshot and fresh subsequent reads.
+  The first helper build needed the repository's explicit chrono override and
+  an unambiguous transaction trait call. The initial scratch-cache lookup failed:
+  pinned SQLx reads its offline-directory override from dotenv metadata, unlike
+  its live cache-output environment setting. A temporary crate-local cache
+  proved the standard offline lookup without modifying workspace descriptors.
+- Removed the prototype from crate discovery and its nine temporary local-cache
+  descriptors; sources and generated metadata remain recoverable under
+  `.scratch/cursor-probe/`. Only the disposable `permission_cursor_probe` schema
+  was created. No production migration was added or real data changed. Research
+  records the remaining batching, authorization, cancellation and HTTP gates.
+- T109 is complete for this materialized project-export increment. The scoped
+  requirement mapping remains five FR subsets plus SC-006 across three tasks;
+  no local critical/high finding remains. Full-feature gates remain open.
+- Final formatting passes with zero changes (4.45s); workspace SQLx cache remains
+  1,281 descriptors and no probe files remain in application discovery. Stopped
+  only the owned disposable PostgreSQL, preserving its data and scratch evidence.
+
+Next: publish this verified increment to draft #212 without merging. Then
+refine the CSV streaming contract/tasks from the validated
+transport candidate and implement its current-authority integration.
+Full policy/approval/UI/CSV/transition remains open.
+
 ## 2026-10-04 — Materialized export integration
 
 - Previous goal turn made progress: T101–T103 published unsigned as `15c82ef`

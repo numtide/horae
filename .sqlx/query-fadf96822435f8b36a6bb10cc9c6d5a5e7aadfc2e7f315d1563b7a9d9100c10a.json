@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE assignments SET role='freelancer' WHERE project_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fadf96822435f8b36a6bb10cc9c6d5a5e7aadfc2e7f315d1563b7a9d9100c10a"
+}

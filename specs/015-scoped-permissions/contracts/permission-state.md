@@ -505,10 +505,16 @@ exports, preserving query deadlines and size/payload snapshots. Commit before
 rendering and recheck the original actor before response release, without locks
 through rendering or body consumption. See the same contract for that boundary.
 
+T107–T109 integrate materialized project exports under
+[project-exports.md](project-exports.md): READ COMMITTED organization/actor gates,
+a single bounded size/payload statement, then sorted captured-parent locks and
+a separate fresh relationship check before release. This preserves winning
+scope expansion as well as revocation without changing legacy access writers.
+
 This does not complete T039/T040. Other reports/exports and canonical policy
 enforcement remain open. CSV streaming cannot retain these locks
-across client-paced sends. Member export scope also needs a relationship fence;
-the manager-only prelude does not protect legacy membership changes.
+across client-paced sends. Its Member scope also needs a relationship fence;
+the manager-only prelude is not a substitute for project-scope authorization.
 
 ## Commands and revisions
 
