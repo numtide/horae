@@ -97,6 +97,14 @@ close T042, replace legacy guards or authorize mixed-policy operation.
 
 ### Existing increments and remaining integration
 
+T068–T070 implement the reviewed project-family prefix in
+`contracts/permission-state.md`: shared organization gates for drafts/reads,
+NO KEY UPDATE for project/assignment/task-link changes, then current actor
+reauthorization. Preserve editor isolation and its existing project UPDATE;
+new revision-only parent prelocks use NO KEY UPDATE for FK compatibility.
+The local constitution check passes without a schema, dependency, grant or
+real-data change. This closes a named integration boundary, not full T042.
+
 T065–T067 repair the concrete legacy-report conversion inversion documented in
 `contracts/permission-state.md`. Discover without a row lock, acquire organization
 SHARE, then recheck and lock the exact tenant/job under explicit READ COMMITTED.

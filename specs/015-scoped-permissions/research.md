@@ -420,7 +420,31 @@ ungated invoice/budget FK writers. NO KEY UPDATE is a candidate staging mode,
 not an implemented or globally verified solution. Preserve editor isolation and
 review both task-linking callers and revision triggers before changing it.
 
-### Previous workflow record
+### Project-family gate integration — 2026-10-03
+
+The subsequent source review closed a bounded prefix covering every caller of
+`lock_creation_actor` and both production callers of `enable_project_task`.
+No product policy is inferred: existing role checks remain, and the task creation/
+linking wrappers now pass trusted identity for transaction-level revalidation.
+The local contract and test mapping are in `permission-state.md` and T068–T070.
+
+Organization NO KEY UPDATE is required for access-changing project operations:
+an in-flight invoice can hold project SHARE before acquiring organization FK
+KEY SHARE. Organization UPDATE would add a reverse edge. Similarly, newly added
+project prelocks for assignment/task-link child revision writes use NO KEY UPDATE
+so entry insertion can finish its project FK while retaining task-member SHARE.
+The existing editor project UPDATE is different: preserve its historical-data
+exclusion, SERIALIZABLE isolation and reload-on-conflict behavior. Editor loading
+retains REPEATABLE READ and actor SHARE after the gate for stale-snapshot denial.
+
+Independent read-only research supplied these two counterexamples and reviewed
+the caller closure. Implementation self-review also checked tenant-safe assignment
+discovery/recheck, post-commit events, task-rate/idempotency behavior and absence
+of late organization locks. Production-path tests, not duplicate lock SQL, cover
+the actual opposing operations. Full T042, revised access fencing, credentials/
+imports and other historical writers remain required before activation.
+
+### Earlier workflow record
 
 - Followed the checked-in `speckit-specify` skill, local template and constitution. No extension hooks or template preset overrides were found.
 - Feature 015 follows the independent 012/013/014 design drafts. The branch/worktree starts from fetched `origin/master`, not an unmerged application branch.

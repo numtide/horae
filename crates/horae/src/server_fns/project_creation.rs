@@ -2,6 +2,8 @@
 
 use super::*;
 #[cfg(feature = "server")]
+use crate::db::{OrganizationLock, lock_organization};
+#[cfg(feature = "server")]
 use crate::models::project_creation::TaskAccess;
 use crate::models::project_creation::{
     CreationClient, CreationOptions, CreationSearch, CreationSelection, DraftSaved,
@@ -28,6 +30,9 @@ mod assignment_tests;
 
 #[cfg(all(test, feature = "server"))]
 mod import_tests;
+
+#[cfg(all(test, feature = "server"))]
+mod locking_tests;
 
 /// Load the existing project into the same form used for creation.
 #[server]
@@ -194,7 +199,7 @@ pub(super) async fn create_client_record(
     }
     let rate = validation::optional_amount(default_rate, "Client default rate")?;
     let mut tx = pool.begin().await.map_err(storage_error)?;
-    lock_creation_actor(&mut tx, actor_id, org_id).await?;
+    lock_creation_actor(&mut tx, actor_id, org_id, OrganizationLock::Shared).await?;
     let client = sqlx::query_as!(
         CreationClient,
         "INSERT INTO clients (id, org_id, name, currency, default_rate_cents)
@@ -219,7 +224,7 @@ async fn load_draft_record(
     org_id: uuid::Uuid,
 ) -> Result<Option<ProjectDraft>, ServerFnError> {
     let mut tx = pool.begin().await.map_err(storage_error)?;
-    let role = lock_creation_actor(&mut tx, actor_id, org_id).await?;
+    let role = lock_creation_actor(&mut tx, actor_id, org_id, OrganizationLock::Shared).await?;
     let row = sqlx::query!(
         r#"SELECT id, revision, updated_at as "updated_at: chrono::DateTime<chrono::Utc>", payload FROM project_drafts
          WHERE org_id = $1 AND creator_id = $2
@@ -262,7 +267,7 @@ async fn save_draft_record(
         return Err(err(BAD_REQUEST, "Invalid draft identity or revision"));
     }
     let mut tx = pool.begin().await.map_err(storage_error)?;
-    let role = lock_creation_actor(&mut tx, actor_id, org_id).await?;
+    let role = lock_creation_actor(&mut tx, actor_id, org_id, OrganizationLock::Shared).await?;
     let payload = validate_draft_form(form, role == OrgRole::Admin)?;
     if expected_revision == 0 {
         // Both a repeated request ID and competing initial tabs are safe: the
@@ -327,7 +332,7 @@ async fn discard_draft_record(
     expected_revision: i64,
 ) -> Result<(), ServerFnError> {
     let mut tx = pool.begin().await.map_err(storage_error)?;
-    lock_creation_actor(&mut tx, actor_id, org_id).await?;
+    lock_creation_actor(&mut tx, actor_id, org_id, OrganizationLock::Shared).await?;
     let affected = sqlx::query!(
         "UPDATE project_drafts SET discarded_at = now(), updated_at = now()
          WHERE id = $1 AND org_id = $2 AND creator_id = $3 AND revision = $4
@@ -406,11 +411,15 @@ fn validate_draft_form(
 }
 
 #[cfg(feature = "server")]
-async fn lock_creation_actor(
+pub(super) async fn lock_creation_actor(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     actor_id: uuid::Uuid,
     org_id: uuid::Uuid,
+    gate: OrganizationLock,
 ) -> Result<OrgRole, ServerFnError> {
+    lock_organization(tx, org_id, gate)
+        .await
+        .map_err(storage_error)?;
     let role = sqlx::query_scalar!(
         r#"SELECT org_role as "org_role: OrgRole" FROM users
            WHERE id = $1 AND org_id = $2 AND active FOR SHARE"#,

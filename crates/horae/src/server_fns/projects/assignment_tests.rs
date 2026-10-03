@@ -27,6 +27,128 @@ async fn assignment_count(pool: &PgPool) -> i64 {
 
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]
+async fn project_membership_and_task_callers_wait_before_authorizing(pool: PgPool) {
+    for operation in ["assign", "remove", "link", "create_link", "create_task"] {
+        let ids = seed(&pool, OrgRole::Admin).await;
+        let actor = admin(&ids);
+        let assignment = insert_assignment(
+            &pool,
+            &actor,
+            ids.project_id,
+            ids.user_id,
+            ProjectRole::Lead,
+        )
+        .await
+        .unwrap();
+        let mut revocation = pool.begin().await.unwrap();
+        let pid = sqlx::query_scalar!("SELECT pg_backend_pid() AS \"pid!\"")
+            .fetch_one(&mut *revocation)
+            .await
+            .unwrap();
+        if operation == "create_task" {
+            sqlx::query!(
+                "SELECT id FROM organizations WHERE id=$1 FOR NO KEY UPDATE",
+                ids.org_id
+            )
+            .fetch_one(&mut *revocation)
+            .await
+            .unwrap();
+        } else {
+            // Mutations of project access must exclude existing SHARE readers.
+            sqlx::query!(
+                "SELECT id FROM organizations WHERE id=$1 FOR SHARE",
+                ids.org_id
+            )
+            .fetch_one(&mut *revocation)
+            .await
+            .unwrap();
+        }
+        let db = pool.clone();
+        let actor_id = actor.id;
+        let mut requests = tokio::task::JoinSet::new();
+        requests.spawn(async move {
+            match operation {
+                "assign" => {
+                    insert_assignment(&db, &actor, ids.project_id, ids.user_id, ProjectRole::Lead)
+                        .await
+                        .map(|_| ())
+                }
+                "remove" => remove_assignment(&db, &actor, assignment.id)
+                    .await
+                    .map(|_| ()),
+                "link" => {
+                    link_project_task_record(
+                        &db,
+                        ids.org_id,
+                        actor.id,
+                        ids.project_id,
+                        ids.task_id,
+                        None,
+                    )
+                    .await
+                }
+                "create_link" => create_task_for_project(
+                    &db,
+                    ids.org_id,
+                    actor.id,
+                    "Blocked task",
+                    true,
+                    Some(ids.project_id),
+                )
+                .await
+                .map(|_| ()),
+                "create_task" => {
+                    create_task_for_project(&db, ids.org_id, actor.id, "Blocked task", true, None)
+                        .await
+                        .map(|_| ())
+                }
+                _ => unreachable!(),
+            }
+        });
+        wait_for_blocked(&pool, pid).await;
+        sqlx::query!(
+            "SELECT id FROM users WHERE id=$1 FOR UPDATE NOWAIT",
+            actor_id
+        )
+        .fetch_one(&mut *revocation)
+        .await
+        .expect("gate must precede actor");
+        sqlx::query!("UPDATE users SET active=false WHERE id=$1", actor_id)
+            .execute(&mut *revocation)
+            .await
+            .unwrap();
+        revocation.commit().await.unwrap();
+        let result = requests.join_next().await.unwrap().unwrap();
+        assert!(
+            matches!(
+                result,
+                Err(ServerFnError::ServerError {
+                    code: FORBIDDEN,
+                    ..
+                })
+            ),
+            "{operation}: {result:?}"
+        );
+        let counts = sqlx::query!(
+            "SELECT (SELECT count(*) FROM assignments WHERE project_id=$1) AS assignments,
+                    (SELECT count(*) FROM project_tasks WHERE project_id=$1) AS links,
+                    (SELECT count(*) FROM tasks WHERE org_id=$2) AS tasks",
+            ids.project_id,
+            ids.org_id,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            (counts.assignments, counts.links, counts.tasks),
+            (Some(1), Some(0), Some(1)),
+            "{operation}"
+        );
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
 async fn creation_rejects_foreign_and_unknown_project_or_person(pool: PgPool) {
     let local = seed(&pool, OrgRole::Admin).await;
     let foreign = seed(&pool, OrgRole::Admin).await;

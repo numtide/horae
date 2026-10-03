@@ -18,7 +18,7 @@ Use the existing organization row as the first lock for protected operations:
 | Operation | First lock | Required subsequent checks |
 | --- | --- | --- |
 | Business mutation under existing permissions, not updating the gate row | Organization `FOR SHARE` | Reload active actor and effective policy; lock selected resources; authorize the entire set and independent business state before writing |
-| Access-affecting mutation, policy activation or any update to the organization gate row | Organization `FOR UPDATE` | Reload current actor; check command authority and expected revisions; lock affected people/templates/projects deterministically; protect last active administrator |
+| Access-affecting mutation, policy activation or any update to the organization gate row | Exclusive organization gate; existing commands use `FOR UPDATE`, the reviewed project-family increment uses `FOR NO KEY UPDATE` for FK compatibility | Reload current actor; check command authority and expected revisions; lock affected people/templates/projects deterministically; protect last active administrator |
 | Read/list/aggregate or bounded export page | Organization `FOR SHARE` in its authorization/data transaction | Load current trusted policy and assignments; scope rows, counts and sensitive fields under that boundary before serialization |
 
 Every mutation that can change effective authorization must use the exclusive
@@ -218,7 +218,51 @@ project changes versus invoicing, access changes versus imports, and legacy
 report conversion versus gated import completion. A serial
 happy-path test or a test that duplicates SQL does not prove this hierarchy.
 
-### Snapshot and read-only incompatibilities
+### Project-family organization-first integration
+
+The reviewed T068–T070 increment moves all three remaining late organization
+SHARE acquisitions in the project family (`finalize_draft_record`,
+`editing/associations::save`, `enable_project_task`) to transaction entry.
+This is an integration prerequisite for FR-007/010/017/018, not policy activation.
+
+Use organization SHARE for draft save/load/discard, inline client creation,
+creation options/selected catalogs/client and editor loading. Use organization
+NO KEY UPDATE for finalization, editor saving, assignment add/remove and task
+linking. Task creation takes SHARE without a project and NO KEY UPDATE when
+linking, before inserting the task. Both task endpoints revalidate the active
+same-organization Manager/Administrator inside that transaction. Preserve all
+existing role predicates, tenant checks, rate validation and post-commit events.
+
+NO KEY UPDATE is the exclusive gate for this bounded family: it conflicts with
+SHARE readers and existing UPDATE access-change gates but permits organization
+FK KEY SHARE acquisitions by existing invoice writers. UPDATE would introduce
+an organization → project / project → organization-FK cycle. Do not change the
+existing canonical/user command modes merely for uniformity in this increment.
+
+Prelock existing project parents NO KEY UPDATE before new assignment/task-link
+child writes. Their revision triggers only change non-key columns. UPDATE would
+introduce a project → task-member cascade / member SHARE → project-FK cycle
+with time-entry insertion. Assignment deletion first discovers a tenant-valid
+parent without locks, then prelocks it and rechecks the exact assignment and
+tenant before deleting; missing/foreign/malformed links remain unchanged.
+Retain the editor's existing project UPDATE: its no-history checks need their
+existing exclusion against concurrent FK insertion.
+
+Retain editor-load REPEATABLE READ, editor-save SERIALIZABLE, and actor SHARE
+after the organization gate. Legacy user mutations do not yet advance the gate
+revision, so the actor locking read must still reject stale snapshots after a
+wait. Serialization failure rolls back the whole request; a fresh attempt
+reloads authority. Do not add a shared gate followed by an exclusive upgrade.
+
+Acceptance uses actual production transactions and observed PostgreSQL blockers:
+project-first and revocation-first races, both task callers, snapshot rejection
+with fresh retry, assignment removal versus entry insertion, and assignment
+creation versus invoice generation. Preserve current foreign/malformed link,
+draft replay, editor conflict, rate and archive regressions. Full T042 still
+includes invoice/import/budget ordering, editor child-lock inversions, historical
+writers and complete access-revision fencing; this increment does not close it.
+
+### Snapshot consumers outside the project-family increment
 
 `reports/limits::configure_transaction`,
 `server_fns/projects::fetch_project_fee_balances` and

@@ -221,6 +221,16 @@ hierarchy and audited transactions; combined expense behavior depends on 016.
 
 ## Phase 6: US3 — Enforcement on every delivery path (P1)
 
+### Project-family lock integration
+
+T068 → T069 → T070 refines the reviewed project-family boundary in
+`contracts/permission-state.md`. These overlapping files run sequentially;
+full T039/T040/T042 and policy activation remain open.
+
+- [x] T068 [US3] Add failing production-path gate/revocation tests in `crates/horae/src/server_fns/project_creation/locking_tests.rs`, `projects/assignment_tests.rs` and `users/tests/authority.rs`; cover task callers, editor snapshots, invoice FK compatibility in `invoices/tests.rs` and time-entry/member cascades in `time_entries/update_tests.rs` (FR-007/010/017/018).
+- [x] T069 [US3] Establish organization-first SHARE/NO KEY UPDATE gates in `crates/horae/src/db.rs`, `server_fns/project_creation.rs`, its options/finalize/editing modules and `projects.rs`; reauthorize task callers and prelock assignment/task-link parents without weakening editor isolation or legacy policy.
+- [x] T070 [US3] Run affected and full server regressions, regenerate `.sqlx/`, verify offline all-targets Clippy and formatting; review production caller/trigger coverage and record actual results in `quickstart.md` and `progress.md`.
+
 ### Legacy report conversion lock integration
 
 - [x] T065 [US3] Reproduce the converter versus actual archive/checkpoint writer deadlock in `crates/horae/src/jobs/report/tests.rs`; cover competing converters, changed/deleted candidates, exact archive preservation and current lease retention (FR-010/017/018; `contracts/permission-state.md`).

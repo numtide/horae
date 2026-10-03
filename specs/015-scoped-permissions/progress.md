@@ -1,5 +1,58 @@
 # Scoped permissions investigation progress
 
+## 2026-10-03 — Project-family integration resumed
+
+- The preceding user-facing MVP assessment made no implementation progress.
+  Revalidated the clean branch at published `c3d17cb`; the converter repair is
+  committed and synchronized. No implementation scope was removed by that answer.
+- Spec Kit Implement/Tasks prerequisites resolve feature 015 and preserve the
+  existing artifacts. Requirements remain 12/16; seven local checklists pass
+  7/7. Existing user authorization permits independent closed increments.
+- Read-only lock research closed the project-family prefix and identified the
+  required NO KEY UPDATE modes for organization and new parent prelocks. Keep
+  the editor's existing UPDATE/history exclusion and snapshot actor checks.
+  T068–T070 record production tests before implementation; none pass yet.
+- No activation, real-data migration, UI/CSS change or merge is authorized by
+  this increment. Person-management lifecycle clarification remains separate.
+
+Next: reproduce the project-family gate failures using disposable PostgreSQL,
+implement all listed callers coherently, then verify FK/cascade compatibility.
+
+- RED: the production inline-client request held actor SHARE while waiting for
+  the organization FK. The explicit NOWAIT actor assertion failed with 55P03,
+  demonstrating the inverse ordering before implementation.
+
+- Added the shared final-mode organization helper, updated all ten creation/
+  editor callers, both task callers and legacy assignment mutations. Removed
+  the late organization locks; retained editor isolation and its project UPDATE.
+  Additional production-race tests are compiling. One fixture compilation error
+  (nullable `pg_stat_activity.pid`) was corrected with an explicit non-null alias.
+
+- GREEN: the focused gate filter passed 12/12. Full server binary regressions
+  passed 883 tests, zero failures and 11 pre-existing ignored cases in 168.58
+  seconds, including all five new tests and the stronger SHARE-reader assertion.
+  T068/T069 are checked; T070 awaits cache/offline/final formatting verification.
+  GitHub confirms existing #212 open/draft at `c3d17cb`; no merge is requested.
+
+- Final verification: 161 core tests pass; clean-package SQLx preparation adds
+  26 descriptions and removes only five replaced queries. Fresh offline
+  all-targets Clippy passes with warnings denied. Formatting CI inserted one
+  missing Markdown blank line, corrected before the final rerun. The owned
+  disposable PostgreSQL is stopped. Package cleaning removed 1.5 GiB of
+  regenerable artifacts only. No real data, schema, UI/CSS or policy activation
+  changed; no browser/full-flake/separate integration-binary result is claimed.
+
+- T068–T070 close the named family, with the caller/trigger review and production
+  test mapping in `quickstart.md`. Existing role predicates, historical values,
+  tenant behavior, editor isolation and post-commit events are preserved. The
+  independent review was source/contract research; implementation review was
+  adversarial self-review, not independent full-feature acceptance.
+
+Next: publish this verified increment to existing draft #212 without merging,
+then continue T006/T042 across the remaining access-affecting writers and
+approval contracts. Keep the unanswered person-management lifecycle choice
+separate. The full implementation goal remains active and incomplete.
+
 ## 2026-10-03 — Legacy report lock integration resumed
 
 - The preceding MVP status turn made no implementation progress. Revalidated

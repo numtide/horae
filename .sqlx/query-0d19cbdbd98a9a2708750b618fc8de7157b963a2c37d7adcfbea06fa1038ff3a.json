@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT p.id FROM projects p JOIN users u ON u.org_id = p.org_id\n         WHERE p.id = $1 AND u.id = $2 AND p.org_id = $3 FOR SHARE OF u",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "0d19cbdbd98a9a2708750b618fc8de7157b963a2c37d7adcfbea06fa1038ff3a"
+}

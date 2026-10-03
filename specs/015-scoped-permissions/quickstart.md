@@ -617,3 +617,51 @@ reader-first revocation, inactive authors and actual removed/detached snapshots
 were closed with production-reader tests. No critical/high defect was identified
 in this bounded review; this is not an independent full-feature review or proof
 of runtime activation, HTTP authentication, audit browsing or UI acceptance.
+
+## Project-family organization-first integration (T068–T070)
+
+Reuse the owned disposable PostgreSQL on 55416. No real database, permission
+activation, UI/CSS, external service or migration is changed by this increment.
+All commands run in the Nix shell with the disposable `DATABASE_URL` above.
+
+```sh
+cargo test -p horae --features server --bin horae gate --locked
+cargo test -p horae --features server --bin horae --locked
+# After all test/build processes have finished:
+cargo clean -p horae
+CARGO_INCREMENTAL=0 cargo sqlx prepare --workspace -- --features server --all-targets
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+nix fmt -- --ci
+```
+
+| Requirement / boundary | Production-path acceptance |
+| --- | --- |
+| FR-007/010: all ten draft/editor entry points gate before actor/resource locks; no writes after revocation | `every_project_entry_gates_before_actor_and_rechecks_revocation`, including fresh retries and unchanged draft/client/project/receipt counts |
+| FR-010: editor-first commits before revocation; revocation-first rejects the stale snapshot and fresh retry | `project_editor_and_user_revocation_commit_in_gate_order`, calling actual editor and user-change transactions |
+| FR-007/010: assignment add/remove, task link and creation with/without a project reload active authority | `project_membership_and_task_callers_wait_before_authorizing`, preserving assignment/task/link counts on denial |
+| FR-017: assignment cascade permits an already-authorized entry FK to finish and denies the next entry | `assignment_cascade_allows_an_inflight_entry_project_fk_to_finish` |
+| FR-017: exclusive organization gate permits an in-flight invoice's FK writes | `assignment_gate_allows_inflight_invoice_organization_fks_to_finish` |
+| FR-018: legacy tenant, malformed-link, archived-task, rate, draft replay and editor concurrency behavior remains | Existing assignment/project/creation, invoice, entry and user regressions |
+
+RED reproduced the inverse actor/organization order in actual inline-client
+creation: the actor NOWAIT assertion failed with PostgreSQL 55P03. After the
+implementation, the focused `gate` filter passed 12 tests, including both actual
+editor/revocation orders and invoice FK compatibility. A subsequent strengthening
+checks that finalization/editor changes exclude SHARE readers. The complete
+server binary regression, including the strengthened gate assertion and all five
+new tests, passed: 883 passed, zero failed and 11 pre-existing ignored cases
+(168.58 seconds). All 161 core tests passed. Fresh complete SQLx preparation
+adds 26 query descriptions and removes the five replaced queries; no unrelated
+cache descriptions change. Offline all-targets server Clippy passed with warnings
+denied. The first formatting CI check inserted one missing Markdown blank line;
+the corrected files are checked again before publication. The package-local
+clean removed 1.5 GiB of regenerable build artifacts, not source or data. The owned
+PostgreSQL cluster is stopped. No separate integration-binary, browser or full
+flake execution is claimed.
+
+The bounded review covers all callers of the changed helpers, tenant rechecks,
+gate modes, actor snapshot checks, revision triggers and the two FK counterexamples.
+No new dependency or grant rule is introduced. This is not full-feature analysis,
+browser acceptance, a deadlock-free proof of all writers or completed T042.
+T068–T070 close this named integration boundary only. The remaining policy,
+authenticated surfaces, approvals, UI, migration and full acceptance work remains.
