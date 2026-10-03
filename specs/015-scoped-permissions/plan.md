@@ -69,15 +69,17 @@ passing full-feature runtime outcomes. Unrelated open predicates remain open.
 
 | Work | Entry gate | Exit gate / what it does not authorize |
 | --- | --- | --- |
-| Next: pure person-management validation, T050–T052 | Completed catalog/restoration, FR-027/028/029/031 and `contracts/person-management-validation.md`; no unresolved local predicate | Red/green tests, core regressions, Clippy, formatting and focused review; no server consumer, schema, assignment write or complete US2 acceptance |
+| Completed: pure person-management validation, T050–T052 | Completed catalog/restoration, FR-027/028/029/031 and `contracts/person-management-validation.md`; no unresolved local predicate | Red/green tests, core regressions, Clippy, formatting and focused review; no server consumer, schema, assignment write or complete US2 acceptance |
 | Additional isolated model/storage increments | Closed contract for the exact affected data/operations, local tests and explicit task dependencies; storage also requires reviewed tenant/schema/loader design | Evidence for that increment only; no inferred mappings or automatic runtime consumers. T035/T036 remain pending their storage-specific gates |
 | Replacing guards / activating policy | T006–T009, T042, reviewed migration and concurrency/recovery design, complete cross-surface integration | Full allowed/denied, revocation, migration and browser acceptance plus Nix gates; no endpoint-by-endpoint fallback to old roles |
 
-Implement T050 → T051 → T052 next. Its validation uses the existing catalog and
+T050 → T051 → T052 is implemented and verified. Its validation uses the existing catalog and
 trusted facts, not saved-profile classification or approval execution rules.
 The requirements checklist measures specification coverage; T020 measures actual
 runtime outcomes. Neither local readiness nor an incomplete full checklist marks
 the entire feature ready. See `checklists/person-management-validation.md`.
+Next resolve T008's saved classification and creation-name equivalence for the
+storage-specific gate, without reopening approved person-management decisions.
 
 ### Existing increments and remaining integration
 

@@ -1,6 +1,6 @@
 # Pure person-management prerequisites
 
-Status: confirmed local contract for T050–T052, not runtime authorization or
+Status: implemented and unit-tested under T050–T052, not runtime authorization or
 complete US2. It refines user-approved FR-028/029/031 using the existing catalog.
 FR-027 remains the independent Administrator-only writer boundary.
 

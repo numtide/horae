@@ -7,6 +7,7 @@
 use uuid::Uuid;
 
 pub mod catalog;
+pub mod person_management;
 
 /// Explicitly granted record scopes; management assignments alone grant nothing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

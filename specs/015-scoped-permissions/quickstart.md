@@ -27,10 +27,10 @@ The foundation contract covers FR-006 record union, identity activation and orga
 
 ## Full-feature acceptance (pending implementation)
 
-### Next increment: person-management prerequisites (not yet implemented)
+### Person-management prerequisites — verified 2026-10-03
 
-Follow T050–T052 and `contracts/person-management-validation.md`. Once the tests
-exist, run from this worktree:
+T050–T052 implement `contracts/person-management-validation.md`. Run from this
+worktree:
 
 ```sh
 nix develop --command cargo test -p horae-core permissions::person_management --locked
@@ -39,13 +39,26 @@ nix develop --command cargo clippy -p horae-core --all-targets -- -D warnings
 nix fmt -- --ci
 ```
 
-Observe RED before implementation, then GREEN with a nonzero focused test count.
-Verify the complete catalog, grant-loss transitions, self-link rejection and
-unchanged inputs from the contract's acceptance table. Inspect the diff for no
-runtime consumer, schema, account mutation or role conversion. Record the results
-and focused adversarial review here; the commands have not been executed for this
-future increment. No database or Harvest interaction is required. These checks
-do not prove Administrator/tenant enforcement, atomic persistence or complete US2.
+- RED: focused command failed with unresolved new functions/error (exit 101).
+- GREEN: seven new tests pass; all 159 core tests pass. The fixtures enumerate
+  all 50 grants and 2,500 ordered pairs against an independent 19-grant expected
+  set; the own-work floor and combined unrelated grants do not qualify.
+- Loss/restoration uses the real selection edit methods; a remaining read-only
+  grant suffices. Self-links fail alone or at any position in a mixed proposal.
+  Empty removals and other-person sets pass the identity prerequisite. Borrowed
+  selections and ID lists remain unchanged; no relationship is implicitly changed.
+- Mutation checks: excluding `ApprovalWithdrawManaged` caused three failures;
+  checking only the first proposed person caused the self-link test to fail.
+  Both mutations were restored before the final successful suite.
+- Core/all-targets Clippy with warnings denied and Nix formatting pass. Focused
+  adversarial self-review checked false authority inference, caller/manager
+  identity confusion, removal eligibility, full-batch rejection and the complete
+  grant classification. Renamed the identity helper to
+  `validate_no_self_management` so its name does not imply complete validation.
+  An exhaustive match forces new catalog variants to be classified explicitly.
+- No new dependencies, schema, server consumer, legacy guard or real data changed.
+  No PostgreSQL/browser/full-flake or complete US2 result is claimed. Current
+  authority, tenancy, revision, confirmation and atomic audit remain server work.
 
 ### Planned persistence/transaction fixtures
 

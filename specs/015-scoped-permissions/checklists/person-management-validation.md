@@ -11,6 +11,6 @@ of the full feature's requirements checklist.
 - [x] No new schema, runtime consumer, real data mutation, activation or migration mapping is included.
 - [x] Local tests need no Harvest account, PostgreSQL, saved-profile classification or approval-execution decision.
 
-Implementation results remain pending: T050–T052 must record red/green tests,
-core regression and review evidence before being checked off. A passing local
+T050–T052 are complete; red/green tests, core regressions, mutation checks and
+focused self-review are recorded in `../quickstart.md`. Passing this local
 increment does not complete US2, T006–T009 or T020.

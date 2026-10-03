@@ -118,7 +118,7 @@ proposal's existence is not approval to invent those decisions or run migrations
 
 Independent test: two projects/two approvers with overlapping people scope, filtered dates, empty cells and withdrawal; no unrelated changes.
 
-### Next executable increment: pure relationship prerequisites
+### Completed increment: pure relationship prerequisites
 
 The user authorized removing unnecessary planning dependencies on 2026-10-03.
 Local readiness is in `checklists/person-management-validation.md`; its closed
@@ -126,11 +126,11 @@ contract is `contracts/person-management-validation.md`. This is the pure portio
 of T012/T013, not the complete story or a new assignment mutation endpoint.
 Preserve existing task IDs and completion history; new IDs extend the sequence.
 
-- [ ] T050 [US2] Add failing exhaustive compatibility and self-link tests in `crates/core/src/permissions/person_management/tests.rs`, following the independent acceptance table in `specs/015-scoped-permissions/contracts/person-management-validation.md`; cover all catalog grants, mixed sets, last-grant loss, self-link batches and immutable inputs (FR-028/029/031).
-- [ ] T051 [US2] Implement the pure compatible-grant predicate and fallible proposed-set self-link check in `crates/core/src/permissions/person_management.rs`, exposed from `crates/core/src/permissions.rs`; reuse `PermissionSelection`, add no runtime consumers or I/O and keep writer authority separate (FR-027/028/029/031).
-- [ ] T052 [US2] Run focused and full core tests, core Clippy and formatting; adversarially review against `specs/015-scoped-permissions/contracts/person-management-validation.md` and record actual results/limits in `specs/015-scoped-permissions/quickstart.md` and `progress.md`. Confirm no server guard, schema or account data changed.
+- [x] T050 [US2] Add failing exhaustive compatibility and self-link tests in `crates/core/src/permissions/person_management/tests.rs`, following the independent acceptance table in `specs/015-scoped-permissions/contracts/person-management-validation.md`; cover all catalog grants, mixed sets, last-grant loss, self-link batches and immutable inputs (FR-028/029/031).
+- [x] T051 [US2] Implement the pure compatible-grant predicate and fallible proposed-set self-link check in `crates/core/src/permissions/person_management.rs`, exposed from `crates/core/src/permissions.rs`; reuse `PermissionSelection`, add no runtime consumers or I/O and keep writer authority separate (FR-027/028/029/031).
+- [x] T052 [US2] Run focused and full core tests, core Clippy and formatting; adversarially review against `specs/015-scoped-permissions/contracts/person-management-validation.md` and record actual results/limits in `specs/015-scoped-permissions/quickstart.md` and `progress.md`. Confirm no server guard, schema or account data changed.
 
-T049 → T050 (RED) → T051 (GREEN) → T052 is executable without T006–T009.
+T049 → T050 (RED) → T051 (GREEN) → T052 completed without T006–T009.
 No full-story marker or runtime acceptance follows from it. The transactional
 work below retains its command/storage/concurrency dependencies.
 
@@ -280,7 +280,7 @@ T021–T023 repair an existing tenant boundary without introducing new policy; t
 
 T024–T026 close the existing assignment boundary identified in `contracts/current-access.md`. They neither introduce new assignment authority nor activate any part of the six-profile policy. Profile, migration and approval gates remain mandatory.
 
-T001 → T002 → T003 (RED) → T004 (GREEN) → T005. T006–T009 are mandatory before replacing legacy authorization and full-feature acceptance, not before every confirmed pure subtask of T010–T020. They must not be marked complete using foundation-only tests. Each increment needs a closed local contract and tests before implementation. Next is T049 → T050 → T051 → T052. US3 depends on the permission/assignment model; UI depends on shared effective grants; cutover requires every delivery path and migration acceptance. No parallel code tasks are designated because the shared model and integration fixture overlap. Reference/migration documentation can proceed independently of T050–T052; no independent full-story acceptance is implied.
+T001 → T002 → T003 (RED) → T004 (GREEN) → T005. T006–T009 are mandatory before replacing legacy authorization and full-feature acceptance, not before every confirmed pure subtask of T010–T020. They must not be marked complete using foundation-only tests. Each increment needs a closed local contract and tests before implementation. T049 → T050 → T051 → T052 is complete; next resolve T008's storage-specific identity/classification and creation-name contracts before T035/T036. US3 depends on the permission/assignment model; UI depends on shared effective grants; cutover requires every delivery path and migration acceptance. No parallel code tasks are designated because the shared model and integration fixture overlap. Reference/migration documentation can proceed independently of pure model work; no independent full-story acceptance is implied.
 
 Persistence refinement: T033 → T034 informs T008/T009. After the storage-specific
 gates above pass, T035 → T036; resolved command predicates and T042 additionally

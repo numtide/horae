@@ -1203,3 +1203,36 @@ approval predicates, and do not activate server consumers. Storage remains
 pending its own design gates; full-policy activation retains T006–T009/T042 and
 all migration/security acceptance. No further product approval is needed for
 this already-authorized pure increment.
+
+## 2026-10-03 — Implement person-management prerequisites
+
+- Previous goal turn made progress: `804b1d8` repaired authoritative dependencies.
+  Revalidated clean worktree and executed Spec Kit Implement's prerequisites.
+  Local checklist 7/7 passes; full checklist 12/16 remains incomplete. Proceeded
+  under the explicit continuation authorization, without asking again or claiming
+  full-policy readiness. No extension hooks apply; existing ignored build/scratch
+  locations suffice for this increment.
+- Used Rust best-practice/testing and simplicity skills: reused the typed catalog,
+  UUID and existing error dependency, borrowed inputs and standard iteration;
+  no service abstraction, assignment planner or new dependency.
+- Completed T050–T052: seven new tests and pure grant-compatibility/self-link
+  functions in `permissions/person_management.rs`. RED failed for missing API;
+  GREEN passes all 159 core tests and all-targets Clippy. Mutation checks detect
+  lost withdrawal compatibility and a first-element-only self-link check; both
+  deliberate faults were removed. Detailed evidence is in `quickstart.md`.
+- Focused adversarial self-review found an overly broad helper name and replaced
+  it with `validate_no_self_management`. Verified no mutation, role promotion,
+  authority inference or new runtime consumer. Input grants do not identify an
+  Administrator, and the receiving manager is not confused with the acting user.
+  No unresolved high/critical finding in this pure increment; no independent
+  review or full-feature security acceptance is claimed.
+- No schema, SQLx cache, real data, UI or active authorization changed. Do not
+  call the goal complete: full US2, storage/command integration, other operation
+  predicates, migration and cross-surface acceptance remain pending. PR #212
+  remains draft and no merge is authorized by this work.
+
+Next: resolve the storage-specific saved classification/name-equivalence gates
+in T008 using retained/current Harvest evidence, then refine/execute T035/T036
+only with a closed non-activating storage contract. Preserve all confirmed
+decisions; independent company-lock contract work remains available if reference
+verification of template creation cannot progress safely.
