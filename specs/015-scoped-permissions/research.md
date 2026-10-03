@@ -13,6 +13,19 @@ deletion result remains unverified, while Horae's behavior is now approved.
 
 ## Current Horae boundaries
 
+Current storage clarification, 2026-10-03: the user selected trimmed,
+case-insensitive organization-local template-name uniqueness (FR-032). Harvest's
+creation comparison remains unverified; its Users API describes name lookup and
+current matching labels, not immutable application provenance. The retained
+editor's `vi` handler supplies observed trimming/blank rejection. The bounded
+storage design in `contracts/permission-storage.md` therefore stores canonical
+grants, explicit administrative identity and source separately, without a saved
+computed-label column. Unknown Harvest internal storage does not block it.
+The adversarial review rejected coupling administrative identity to source shape
+or full-grant equality. Corrected: identity survives C01 detachment and only
+authorized transitions may change it. No remaining high/critical finding in that
+bounded design review; this is not full feature analysis or runtime verification.
+
 The expanded [entry-point inventory](contracts/current-access.md) now records current checks, redaction differences, jobs/plugin trust boundaries and migration deltas. The [reference evidence register](contracts/harvest-evidence.md) separates confirmed browser observations from documentation and unverified custom behavior.
 
 - `crates/core/src/types.rs`: organization roles are Admin/Manager/Member. `OrgRole::is_manager_or_above` describes organization-wide billing and approvals. ProjectRole is a separate legacy concept.

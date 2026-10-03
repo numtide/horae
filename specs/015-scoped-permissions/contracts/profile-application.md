@@ -21,8 +21,10 @@ This refines FR-004/011/013/015, not template renaming or bulk propagation.
   [asset provenance](current-account-investigation.md#current-catalog-and-editor-provenance).
 
 These observations establish draft intent, not successful Harvest persistence.
-The exact saved classification and template-creation name equivalence remain
-open. Horae's compatibility API remains read-only.
+The exact saved classification remains unverified. FR-032 now supplies the
+user-approved trimmed, case-insensitive creation-name rule. Neither requires
+copying Harvest's private storage representation; see `permission-storage.md`.
+Horae's compatibility API remains read-only.
 
 ## Required behavior
 
@@ -95,8 +97,8 @@ both permission screens. Use disposable users and production commands.
 | Add a more specific matching template, then load an unchanged person | Any changed display classification leaves canonical grants and explicit provenance untouched; no access-change event |
 | Equal-grant templates change display order | No persisted reassignment or access change from the display tie; explicit same-grant source changes remain separately auditable |
 
-Saved classification and creation-name equivalence still require contracts for
-the affected persistence work. The permission guide, rechecked on 2026-10-03,
+The non-activating storage contract separates saved provenance from computed
+classification; FR-032 settles creation-name equivalence. The permission guide, rechecked on 2026-10-03,
 describes saving adjustments as a new role or for one person, not in-place
 template update/rename or propagation. Absence from that guide is not proof of
 absence from Harvest. Track those hypotheses for new evidence; they are not

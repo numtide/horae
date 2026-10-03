@@ -1236,3 +1236,39 @@ in T008 using retained/current Harvest evidence, then refine/execute T035/T036
 only with a closed non-activating storage contract. Preserve all confirmed
 decisions; independent company-lock contract work remains available if reference
 verification of template creation cannot progress safely.
+
+## 2026-10-03 — Confirm template names and implement isolated storage
+
+- Previous turn made progress with T050–T052; reused `feat/scoped-permissions`
+  and verified PR #212 remains open/draft at the expected prior head. No merge.
+- Executed Spec Kit Plan prerequisites and incorporated the user's one naming
+  answer with Clarify: `Equipo` and trimmed `equipo` conflict within one
+  organization (FR-032). Propagated acceptance and task ownership; do not ask again.
+  The help/API and retained editor evidence do not establish Harvest's backend
+  name-creation comparison or original template identity. Current matching labels
+  are presentation, not permission authority or provenance.
+- Closed the bounded storage contract and local checklist, with adversarial
+  design review. Fixed its high finding: administrative identity is independent
+  of source shape and grant equality, and survives C01 template detachment.
+  Follow-up review found no remaining high/critical issue in this contract.
+- Executed Spec Kit Implement prerequisites. Full requirements remain 12/16;
+  storage readiness is 7/7. Used the already-authorized independent increment,
+  not an additional permission request or a claim of full-feature Analyze.
+  No extension hooks apply. The broader task breakdown and integration gates
+  remain incomplete; no full Spec Kit Analyze completion is reported.
+- Added migration 0042, server-only typed state and strict loaders, pure name
+  validation and nine PostgreSQL tests plus two core tests. Used Rust/testing/
+  async/simplicity skills: existing catalog, serde, SQLx macros, constraints and
+  direct borrowed reads; no dependency, service layer or new mutation endpoint.
+- Only a newly created disposable database was migrated. Existing roles and
+  permissions remain in force. Tests do not authenticate or expose this policy.
+  RED, focused GREEN, 161 core tests, core/server offline Clippy and complete
+  SQLx regeneration passed. Full server binary regression passed 804 tests with
+  zero failures and 11 pre-existing ignored checks; formatting/diff checks passed.
+  T035/T036 are complete for this non-activating scope. No browser, full flake or
+  separate integration-binary execution is claimed. Details are in quickstart.md.
+
+Next: publish this increment to #212, then resolve T042's cross-command hierarchy and command-specific contracts
+before T037/T038 (authorized changes, replay and audit). Preserve the closed
+naming/provenance decisions; full T006–T009, migration review and cross-surface
+acceptance still gate activation. The goal is active, not complete or blocked.

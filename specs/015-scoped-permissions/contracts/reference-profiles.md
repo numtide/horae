@@ -85,11 +85,23 @@ The [Users API](https://help.getharvest.com/api-v2/users-api/users/users/#custom
 
 - Repeating `permissions_profile` preserves individual grants; switching profiles replaces them.
 - Returned `access_roles` omits custom identity; writing it back can remove custom grants.
-- Profile lookup ignores case/surrounding whitespace. Unknown or ambiguous names fail with 422. Sending both fields is rejected.
+- Profile lookup ignores case/surrounding whitespace. Unknown names and custom names colliding with an access-role name fail with 422. The documented collision case does not establish ambiguity between multiple custom profiles. Sending both fields is rejected.
 - Losing project access removes project-manager designations.
 - Descriptive `roles` do not grant permissions.
 
 These are documented API semantics, not observed UI persistence. Lookup normalization does not prove template-creation uniqueness rules. Browser acceptance must distinguish an unchanged save from explicit profile replacement. Horae's read-only compatibility API does not acquire write endpoints through this research.
+
+On 2026-10-03 the user approved case-insensitive, surrounding-whitespace-trimmed
+creation uniqueness for Horae (FR-032). The retained current editor's `vi` handler
+trims the name and rejects blank input before POST; duplicate checking is left to
+the server. That source observation does not prove Harvest's case comparison.
+
+The current API defines `permissions_profile` as a name matching the person's
+current permissions, and explains its lossy `access_roles` representation. It
+does not define an immutable applied-template ID. Horae therefore stores explicit
+application provenance separately from computed labels; it need not reproduce
+Harvest's private schema to preserve canonical grants. Exact presentation and
+save/reload parity still need acceptance tests, not a storage-schema guess.
 
 ## Remaining acceptance gaps
 

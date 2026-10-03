@@ -22,8 +22,10 @@ This is an incremental plan. The independent record-scope foundation is executab
 The [profile-application contract](contracts/profile-application.md) refines
 FR-004's explicit command intent and T010/T011/T016–T018 acceptance. Preserve
 canonical grants on unchanged saves and commit reviewed individual edits even
-when the selected profile identity is unchanged. Saved classification and
-template creation-name equivalence remain gated for the affected persistence work.
+when the selected profile identity is unchanged. FR-032 settles creation-name
+equivalence. The reviewed [storage contract](contracts/permission-storage.md)
+separates authoritative grants/identity/provenance from computed presentation;
+unverified Harvest backend classification does not block this additive storage.
 
 | Gate | Foundation | Runtime cutover |
 | --- | --- | --- |
@@ -70,7 +72,7 @@ passing full-feature runtime outcomes. Unrelated open predicates remain open.
 | Work | Entry gate | Exit gate / what it does not authorize |
 | --- | --- | --- |
 | Completed: pure person-management validation, T050–T052 | Completed catalog/restoration, FR-027/028/029/031 and `contracts/person-management-validation.md`; no unresolved local predicate | Red/green tests, core regressions, Clippy, formatting and focused review; no server consumer, schema, assignment write or complete US2 acceptance |
-| Additional isolated model/storage increments | Closed contract for the exact affected data/operations, local tests and explicit task dependencies; storage also requires reviewed tenant/schema/loader design | Evidence for that increment only; no inferred mappings or automatic runtime consumers. T035/T036 remain pending their storage-specific gates |
+| Non-activating storage, T035/T036 | FR-032 and reviewed `contracts/permission-storage.md`; schema/tenant/loader checks and isolated PostgreSQL tests | Evidence for storage only; no inferred mappings, authenticated command acceptance or automatic runtime consumers |
 | Replacing guards / activating policy | T006–T009, T042, reviewed migration and concurrency/recovery design, complete cross-surface integration | Full allowed/denied, revocation, migration and browser acceptance plus Nix gates; no endpoint-by-endpoint fallback to old roles |
 
 T050 → T051 → T052 is implemented and verified. Its validation uses the existing catalog and
@@ -78,8 +80,8 @@ trusted facts, not saved-profile classification or approval execution rules.
 The requirements checklist measures specification coverage; T020 measures actual
 runtime outcomes. Neither local readiness nor an incomplete full checklist marks
 the entire feature ready. See `checklists/person-management-validation.md`.
-Next resolve T008's saved classification and creation-name equivalence for the
-storage-specific gate, without reopening approved person-management decisions.
+Next execute T035/T036 under the reviewed non-activating storage contract, using
+only isolated test databases. T008's full integration gate remains open.
 
 ### Existing increments and remaining integration
 
@@ -116,13 +118,14 @@ The 2026-10-02 persistence proposal in [data-model.md](data-model.md) and
 [permission-state.md](contracts/permission-state.md) details canonical saved
 grants, explicit administrative identity, composite tenant references, revisions,
 atomic audit/outcome storage and one organization-first lock protocol. T033/T034
-review these mechanics; T035–T041 refine future tests and integration. This is
-partial planning while Phase 0 conflicts remain, not completed Spec Kit Phase 1
-or permission to create schema early. Full post-design constitution approval is
-still open; no policy, migration or cross-surface gate is waived.
+review these mechanics; T035–T041 refine storage and integration. The separately
+reviewed 2026-10-03 storage contract permits additive T035/T036 work in disposable
+databases. It does not complete Spec Kit Phase 1 or the full post-design check;
+no policy activation, existing-data mapping or cross-surface gate is waived.
 
 Storage stays in the existing app (`server_fns/permissions.rs` plus
-`permissions/`); shared DTOs live in `models/permissions.rs`. No new crate,
+`permissions/`); typed read models live in `models/permissions.rs` and remain
+server-only until separately reviewed UI projections are needed. No new crate,
 repository framework or policy engine is proposed. Reuse tenant keys and
 transaction patterns after reconciling lock order across all writers. Saved
 template behavior is not selected by the storage representation.
@@ -130,8 +133,10 @@ template behavior is not selected by the storage representation.
 The 2026-10-02 user clarification now selects C01 deletion semantics: detach the
 template while preserving assignees' effective grants/scope as person-specific
 configurations. Apply it to US4 tests and persistence/audit design. This resolves
-that product choice only, not template creation-name equivalence or saved classification,
-reference conflicts C06/C07, migration mappings or full runtime readiness.
+that product choice only; FR-032 subsequently settles creation-name equivalence.
+Unverified saved classification remains a presentation acceptance limitation,
+not a requirement to mirror Harvest's private schema. Other open work includes
+remaining approval/withdrawal predicates, migration mappings and full runtime readiness.
 
 The user also selected C02 option A: authorize financial report projections and
 their matching exports through the report grant, without adding ordinary rate

@@ -103,14 +103,15 @@ Independent test: all six profiles allow/deny correctly; concurrent demotions pr
 - [ ] T011 [US1] Implement verified grants, revisioned persistence and atomic assignment mutations in `crates/core/src/permissions.rs`, `crates/horae/migrations/`, `crates/horae/src/models/` and `crates/horae/src/server_fns/users.rs`; refresh `.sqlx/` (FR-001/010/011/013).
 
 T010/T011 are acceptance work packages refined below. Runtime activation remains
-gated on T006–T009. T035/T036 require closed contracts for template creation-name
-equivalence, saved identity/classification, tenant constraints and trusted loading,
-plus reviewed non-activating schema/tests before they are executable. T037/T038
+gated on T006–T009. T035/T036 now follow the reviewed non-activating
+`contracts/permission-storage.md`: FR-032 closes creation-name equivalence;
+canonical grants, independent administrative identity and provenance are stored
+without treating presentation as authority. Use disposable PostgreSQL only. T037/T038
 also require resolved command predicates and T042's transaction hierarchy. A
 proposal's existence is not approval to invent those decisions or run migrations.
 
-- [ ] T035 [US1] Add failing persisted-state tests in `crates/horae/src/server_fns/permissions/tests/storage.rs`: tenant constraints, six profile selections, explicit Administrator identity, unknown grants and no silent normalization on load (FR-001/006/011/015).
-- [ ] T036 [US1] Add reviewed additive schema in `crates/horae/migrations/0042_scoped_permission_state.sql`, DTOs in `crates/horae/src/models/permissions.rs` and trusted storage helpers in `crates/horae/src/server_fns/permissions.rs`; keep legacy mode unchanged with no automatic mapping (FR-001/010/014/017). Recheck migration numbering against the implementation base before creating the file.
+- [x] T035 [US1] Add failing persisted-state tests in `crates/horae/src/server_fns/permissions/tests/storage.rs`: tenant constraints, six profile selections, independent Administrator identity/provenance, unknown grants, no silent normalization, legacy preservation and FR-032 name conflicts/bounds (FR-001/006/011/014/015/032).
+- [x] T036 [US1] Add reviewed additive schema in `crates/horae/migrations/0042_scoped_permission_state.sql`, server-only typed read models in `crates/horae/src/models/permissions.rs` and trusted storage helpers in `crates/horae/src/server_fns/permissions.rs`; keep legacy mode unchanged with no automatic mapping (FR-001/010/014/017/032). Recheck migration numbering against the implementation base before creating the file.
 - [ ] T037 [US1] Add failing command/replay/concurrency tests in `crates/horae/src/server_fns/permissions/tests/changes.rs`: stale revisions, request identity, revoke-vs-write in both orders, last-admin races and state/audit rollback (FR-010/011/013).
 - [ ] T038 [US1] Implement the reviewed typed access-change transaction and authorized outcome lookup in `crates/horae/src/server_fns/permissions/changes.rs`, authenticated wrappers in `crates/horae/src/server_fns/users.rs`, and regenerate `.sqlx/`; do not expose a partially enforced policy (FR-010/011/013/017).
 
@@ -227,16 +228,17 @@ plugin authorization. Exercise production transactions rather than duplicate SQL
 
 Independent test: template creation/application/deletion and person-specific adjustments; C01 is resolved by the 2026-10-02 user decision: deleting a template preserves all assignees' effective grants/scope as person-specific configurations, including individually adjusted assignees. Test confirmation/cancellation, unavailable deleted templates and separate explicit revocation; both screens explain identical effective access. Remaining T006 predicates are still open.
 
-- [ ] T016 [US4] Add custom dependency, unknown-grant, template lifecycle and audit tests in `crates/core/src/permissions/` and `crates/horae/tests/integration.rs` (FR-004/011/013/015).
-- [ ] T017 [US4] Implement verified custom-template lifecycle and audit in `crates/horae/src/server_fns/`, `models/` and migrations; refresh `.sqlx/` (FR-004/013/015).
+- [ ] T016 [US4] Add custom dependency, unknown-grant, template lifecycle and audit tests in `crates/core/src/permissions/` and `crates/horae/tests/integration.rs` (FR-004/011/013/015/032).
+- [ ] T017 [US4] Implement verified custom-template lifecycle and audit in `crates/horae/src/server_fns/`, `models/` and migrations; refresh `.sqlx/` (FR-004/013/015/032).
 
 T010/T011/T016/T017/T018 share the ten
 [profile-application cases](contracts/profile-application.md): distinguish load,
 unchanged save, explicit selection/reset and final individual edits; use current
 template/person revisions and confirmed relationship effects. Verify exact grants
 after reload and unchanged other assignees. No profile-ID shortcut may discard
-explicit edits or normalize stored grants. Remaining saved classification and
-template creation-name rules still gate the affected persistence work. In-place
+explicit edits or normalize stored grants. FR-032 and `permission-storage.md`
+now close the storage-specific name/provenance gate. T016/T017 still test the
+50-template limit and concurrent creation via authenticated commands. In-place
 template update/rename is not an evidenced mandatory lifecycle operation.
 
 Classification acceptance also varies available templates and equal-grant source
@@ -280,11 +282,11 @@ T021–T023 repair an existing tenant boundary without introducing new policy; t
 
 T024–T026 close the existing assignment boundary identified in `contracts/current-access.md`. They neither introduce new assignment authority nor activate any part of the six-profile policy. Profile, migration and approval gates remain mandatory.
 
-T001 → T002 → T003 (RED) → T004 (GREEN) → T005. T006–T009 are mandatory before replacing legacy authorization and full-feature acceptance, not before every confirmed pure subtask of T010–T020. They must not be marked complete using foundation-only tests. Each increment needs a closed local contract and tests before implementation. T049 → T050 → T051 → T052 is complete; next resolve T008's storage-specific identity/classification and creation-name contracts before T035/T036. US3 depends on the permission/assignment model; UI depends on shared effective grants; cutover requires every delivery path and migration acceptance. No parallel code tasks are designated because the shared model and integration fixture overlap. Reference/migration documentation can proceed independently of pure model work; no independent full-story acceptance is implied.
+T001 → T002 → T003 (RED) → T004 (GREEN) → T005. T006–T009 are mandatory before replacing legacy authorization and full-feature acceptance, not before every confirmed pure subtask of T010–T020. They must not be marked complete using foundation-only tests. Each increment needs a closed local contract and tests before implementation. T049 → T050 → T051 → T052 is complete; T035/T036 now follow the reviewed storage-specific contract and FR-032. US3 depends on the permission/assignment model; UI depends on shared effective grants; cutover requires every delivery path and migration acceptance. No parallel code tasks are designated because the shared model and integration fixture overlap. Reference/migration documentation can proceed independently of pure model work; no independent full-story acceptance is implied.
 
 Persistence refinement: T033 → T034 informs T008/T009. After the storage-specific
 gates above pass, T035 → T036; resolved command predicates and T042 additionally
-gate T037 → T038. This defines dependencies, not authorization for schema changes
-in this documentation increment. T042 informs T009; T042 → T039 → T040.
+gate T037 → T038. Storage is tested only in isolated databases; this does not
+authorize real-data migration or activation. T042 informs T009; T042 → T039 → T040.
 T041 follows audited mutations before
 exposing audit reads. File-level subtasks do not replace story acceptance gates.

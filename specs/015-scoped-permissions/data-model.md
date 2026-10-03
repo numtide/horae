@@ -1,8 +1,10 @@
 # Permission data model
 
 Status: foundation finalized; persistence proposal made concrete on 2026-10-02.
-The proposal below is reviewable design, not an installed schema or a completed
-T008 gate. Reference-dependent transitions and approval coverage remain open.
+The reviewed non-activating portion now has migration 0042, server-only typed
+read models and strict loaders under T035/T036, exercised in disposable databases.
+The broader proposal below is not a completed T008 gate or active policy.
+Reference-dependent transitions and approval coverage remain open.
 
 ## Pure record-scope foundation
 
@@ -43,7 +45,7 @@ These fixtures refine preservation, not the unapproved legacy role mapping.
 | Proposed entity | Stored facts | Constraints and consumers |
 | --- | --- | --- |
 | Person permission state | User ID, canonical normalized grant set, explicit administrative identity, selected profile/template provenance, catalog version, person revision | One row per organization/user; active status and sign-in identity remain on `users`. Custom grants/display classification cannot create administrative identity. Trusted loaders, both permission screens and audit use this same state. |
-| Custom permission profile | Organization-local ID, name, normalized grant set, template revision, creator and timestamps | No cross-org lookup; Member floor and prerequisites enforced; unsupported/unknown grants rejected. Deletion preserves assignees' current grants/scope as person-specific configurations. Creation-name equivalence remains gated below; in-place updates are not assumed. |
+| Custom permission profile | Organization-local ID, name, normalized grant set, template revision and timestamps; creator attribution belongs to the audited creation command | No cross-org lookup; Member floor and prerequisites enforced; unsupported/unknown grants rejected. Deletion preserves assignees' current grants/scope as person-specific configurations. FR-032 defines trimmed case-insensitive names; in-place updates are not assumed. |
 | Project management assignment | Manager user ID, project ID, revision/provenance | Unique organization/manager/project relationship; distinct from ordinary tracking membership. Migration of legacy Lead/Admin labels is reviewed, not inferred at request time. |
 | Person management assignment | Manager user ID, managed user ID, revision/provenance | Unique organization/manager/person relationship; no inference from shared projects or transitive management. FR-031 forbids equal manager/managed IDs. FR-027/028 govern writes and additions; FR-029 governs confirmed removal on grant loss. |
 | Access change and request receipt | Explicit user/operator actor variant, typed action, organization-local subject IDs, request identity, canonical intent, before/after revisions and permission/scope state, timestamp and outcome | One committed receipt per organization/principal/request identity; changed state and durable audit commit together. Administrator-only user-facing audit reads; operator attribution is not a fabricated user FK. No session credentials, OIDC subjects or unrelated financial data in snapshots. |
@@ -81,18 +83,21 @@ provenance remains available to authorized readers, without keeping a deleted
 template applicable. Confirmation explains preservation; cancellation writes
 nothing. Revocation is a separate confirmed command, not a deletion side effect.
 
-This approved Horae behavior does not establish Harvest's actual deletion result
-or settle creation-name equivalence. In-place update/rename is an evidence watch,
+This approved Horae behavior does not establish Harvest's actual deletion result.
+FR-032 separately settles trimmed, case-insensitive creation-name equivalence.
+In-place update/rename is an evidence watch,
 not a prerequisite for the documented create/apply/adjust/delete lifecycle.
 [Profile application](contracts/profile-application.md) now distinguishes unchanged
 saves, explicit baseline selection/reset and final individual grant edits.
-Saved classification and the other remaining contracts still need evidence/decision.
+Saved Harvest classification remains unverified; computed presentation is not an
+authoritative storage field. `contracts/permission-storage.md` defines the reviewed
+non-activating storage boundary without requiring Harvest's private schema.
 
 Administrative identity is persisted separately from ordinary grant membership:
 only an explicit authorized Administrator assignment can set it. A custom profile
-containing every known grant is not an Administrator. The exact profile-source
-discriminator and consistency checks must be finalized with the editor's saved
-classification contract; do not infer them from an ordered enum or legacy role.
+containing every known grant is not an Administrator. The storage contract uses
+closed built-in/template/individual source shapes independently of that identity;
+do not infer either from display classification, an ordered enum or legacy role.
 The last-administrator count uses active users plus that explicit identity in the
 same organization, never a count of users possessing a particular ordinary grant.
 
@@ -132,16 +137,16 @@ revisions supply mechanics, not approval of any mapping or a permanent legacy mo
 
 | Gate | Decision/evidence still required | Why storage mechanics do not settle it |
 | --- | --- | --- |
-| Saved template application (C01 deletion resolved) | Creation-name equivalence and saved classification | These gate the affected template/person storage design, not independent grant/relationship validation. Explicit selection/reset versus unchanged saves follows `contracts/profile-application.md` |
+| Saved template application (C01 and FR-032 resolved) | Saved reference presentation and full command lifecycle acceptance | `contracts/permission-storage.md` separates grants, explicit identity and provenance; backend classification is not a prerequisite for additive storage. Explicit selection/reset versus unchanged saves follows `contracts/profile-application.md` |
 | C02–C04 resolved; enforcement pending | Approved report projections, resource-specific billable scope and explicit organization-wide cost read/write | Keep report and ordinary rate authorization separate; general person billable rates use person management, project billable rates use project management, costs use independent read/write grants |
 | C05 schedule modes documented; C06 approval visibility resolved | Company lock execution/calendar details and remaining custom approval/withdrawal predicates | Keep cutoff/configuration separate from coverage and invoice protection. FR-024 requires authority and visibility across the actual approval set, not a new grant prerequisite or withdrawal rule; see `contracts/company-locks.md` and `contracts/approval-visibility.md` |
 | C07 retention/delegation resolved by FR-025/026 | Project creation | Project editors can change manager designations for compatible people, never global grants. Evaluate target managed-read eligibility with the proposed relationship; retention requires read, not editing. Confirmed read loss removes designations atomically, not membership/history. FR-027 reserves person-management writes to explicit Administrators; FR-028 requires compatible existing grants for new assignments without adding privileges. FR-029 retains relationships while any compatible grant remains and requires preview/confirmation for atomic removal on last-grant loss, preserving incoming relationships/history with no automatic restoration. FR-030 explicitly adds managed-project read/write only on confirmed keep-access, then recalculates both relationship rules. FR-031 forbids equal responsible/managed person identities, independently of actor identity and own/all grants. Other transitions still need predicates |
 | T007 / US5 | Approved existing-data mapping and historical job/approval transition | Needed before any policy activation, including imported/development data |
 
 Each schema increment needs a reviewed contract for its own entities, tenant
-constraints, trusted loading and lifecycle before implementation. T035/T036 remain
-unready while their identity/classification design is open; this repair does not
-authorize running migrations. Do not guess classification, approval prerequisites
+constraints, trusted loading and lifecycle before implementation. The reviewed
+non-activating storage contract now supplies those local T035/T036 prerequisites;
+implementation uses isolated test databases, not real data. Do not guess classification, approval prerequisites
 or coverage splitting. The complete matrix and migration/activation review still
 gate replacing legacy authorization, not the pure relationship-validation
 increment in `contracts/person-management-validation.md`. No new persisted entity

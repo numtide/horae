@@ -291,3 +291,51 @@ snapshot/revision-fence and network-paced import cases that T039 must test again
 the actual production helpers after T006–T009/T042 are settled. No Rust suite,
 browser acceptance or full-flake result is claimed for this documentation-only
 increment; the runtime results above remain those of the preceding code changes.
+
+## Non-activating permission storage — 2026-10-03
+
+Use a disposable PostgreSQL cluster, not the user's application database.
+The run below used a newly initialized UTF-8 cluster on port 55416, a fresh
+`horae_storage` compilation database and SQLx-created per-test databases.
+The migration was not applied to any existing application database.
+
+```sh
+nix develop
+export DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage
+sqlx migrate run --source crates/horae/migrations
+cargo test -p horae --features server --bin horae server_fns::permissions:: --locked
+cargo test -p horae-core --locked
+cargo sqlx prepare --workspace -- --features server --all-targets
+SQLX_OFFLINE=true cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+SQLX_OFFLINE=true cargo test -p horae --features server --bin horae --locked
+nix fmt -- --ci
+```
+
+- RED: the new tests failed compilation because permission tables, policy columns,
+  typed loaders and name validation did not exist. No passing placeholder API.
+- GREEN: nine real PostgreSQL storage tests passed. They cover empty state/legacy
+  mode, installation over populated legacy records, six built-ins and adjusted
+  selections, independent identity/provenance, strict malformed-grant rejection,
+  tenant constraints/lookups, invalid source shapes/revisions, direct-delete
+  protection and unchanged grants/identity on fixture detachment.
+- FR-032: ASCII and accented case collisions are tested against PostgreSQL's
+  single `lower(name)` comparison, including concurrent inserts. Other tenants
+  may reuse names. Two pure core tests cover outside Unicode whitespace,
+  preserved display/internal spacing, blank input and 100/101 Unicode scalars.
+  All 161 core tests and core/all-targets Clippy passed.
+- SQLx regeneration added 18 cache files and removed none. Server/all-targets
+  offline Clippy passed with warnings denied, checking the complete cached query
+  set. Full server binary regression passed: 804 tests passed, zero failed and
+  11 pre-existing manual checks remained ignored (815 total). Formatting and
+  `git diff --check` passed. The separate integration binary and full Nix flake
+  suite were not run; compilation of all targets is not execution of all tests.
+- Bounded adversarial design review corrected an unsupported coupling of
+  administrative identity to provenance and complete Administrator grants.
+  Focused implementation self-review checked SQL NULL/source-shape constraints,
+  restrictive composite tenant FKs, current catalog decoding, case-index atomicity
+  and every loader caller. Only tests call these helpers; no guard is replaced.
+  The typed read models are server-only and not deserializable authority inputs.
+- Template detachment and arbitrary identity/source combinations are storage
+  fixtures, not successful authenticated commands. Command authority, 50-profile
+  races, revisions/audit/replay, runtime activation, browser parity and the full
+  flake gate remain pending. No UI, CSS, external account or real data changed.
