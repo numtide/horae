@@ -23,7 +23,7 @@ The [profile-application contract](contracts/profile-application.md) refines
 FR-004's explicit command intent and T010/T011/T016–T018 acceptance. Preserve
 canonical grants on unchanged saves and commit reviewed individual edits even
 when the selected profile identity is unchanged. Saved classification and
-template name/update rules remain gated.
+template creation-name equivalence remain gated for the affected persistence work.
 
 | Gate | Foundation | Runtime cutover |
 | --- | --- | --- |
@@ -60,6 +60,27 @@ crates/horae/tests/integration.rs
 
 ## Execution and Dependencies
 
+### Increment readiness versus activation
+
+The 2026-10-03 user authorization repairs planning dependencies without reducing
+parity. A confirmed increment needs its own closed contract, requirement-to-test
+mapping, dependency review and adversarial review. It does not require already
+passing full-feature runtime outcomes. Unrelated open predicates remain open.
+
+| Work | Entry gate | Exit gate / what it does not authorize |
+| --- | --- | --- |
+| Next: pure person-management validation, T050–T052 | Completed catalog/restoration, FR-027/028/029/031 and `contracts/person-management-validation.md`; no unresolved local predicate | Red/green tests, core regressions, Clippy, formatting and focused review; no server consumer, schema, assignment write or complete US2 acceptance |
+| Additional isolated model/storage increments | Closed contract for the exact affected data/operations, local tests and explicit task dependencies; storage also requires reviewed tenant/schema/loader design | Evidence for that increment only; no inferred mappings or automatic runtime consumers. T035/T036 remain pending their storage-specific gates |
+| Replacing guards / activating policy | T006–T009, T042, reviewed migration and concurrency/recovery design, complete cross-surface integration | Full allowed/denied, revocation, migration and browser acceptance plus Nix gates; no endpoint-by-endpoint fallback to old roles |
+
+Implement T050 → T051 → T052 next. Its validation uses the existing catalog and
+trusted facts, not saved-profile classification or approval execution rules.
+The requirements checklist measures specification coverage; T020 measures actual
+runtime outcomes. Neither local readiness nor an incomplete full checklist marks
+the entire feature ready. See `checklists/person-management-validation.md`.
+
+### Existing increments and remaining integration
+
 The renewed implementation request also permits T047–T049: strict restoration of
 the confirmed saved grant selection in the pure core. Validate catalog version,
 duplicates, Member floor and prerequisite closure without adding grants on load.
@@ -80,7 +101,7 @@ approve legacy mappings or waive the runtime cutover checks below.
 1. Replace whole-week-only approval storage with verified date/project coverage, including empty-cell locks, submission editing and independent locks.
 1. Implement Settings/Workspace permissions with shared descriptions, then verify full parity and migration fixtures. Keep the PR draft until all acceptance gates pass.
 
-Steps 2–6 need detailed contracts before coding. Step 1 neither chooses role grants nor changes approval behavior. It does not satisfy any full user story by itself.
+Steps 2–6 need detailed contracts for the affected work before coding. The local gates above allow confirmed pure increments without waiting for unrelated decisions. Replacing guards still requires the complete matrix, migration and concurrent activation/recovery review. Step 1 does not satisfy any full user story by itself.
 
 The [dependent-spec reconciliation](contracts/dependent-spec-reconciliation.md)
 records current source revisions and accepted cross-feature obligations for
@@ -107,7 +128,7 @@ template behavior is not selected by the storage representation.
 The 2026-10-02 user clarification now selects C01 deletion semantics: detach the
 template while preserving assignees' effective grants/scope as person-specific
 configurations. Apply it to US4 tests and persistence/audit design. This resolves
-that product choice only, not remaining template update/reapplication rules,
+that product choice only, not template creation-name equivalence or saved classification,
 reference conflicts C06/C07, migration mappings or full runtime readiness.
 
 The user also selected C02 option A: authorize financial report projections and
@@ -210,4 +231,4 @@ it does not replace profile persistence, revisions or durable audit.
 
 ## Workflow Notes
 
-The checked-in `setup-plan.sh --json` was executed. This repository does not contain `update-agent-context.sh`; no agent-context generation is claimed. Requirements checklist remains 12/16; the user requested continuation despite the remaining full-feature gaps.
+The checked-in `setup-plan.sh --json` and `setup-tasks.sh --json` were executed again for the authorized dependency repair, preserving existing artifacts. Their feature identifier is `015-scoped-permissions`; the actual Git branch remains `feat/scoped-permissions`. No extension hooks or `update-agent-context.sh` exist here; no agent-context generation is claimed. Requirements checklist remains 12/16; local readiness is evaluated separately, without claiming complete Phase 0/1 or full-feature Analyze.

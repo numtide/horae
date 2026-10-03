@@ -95,6 +95,10 @@ both permission screens. Use disposable users and production commands.
 | Add a more specific matching template, then load an unchanged person | Any changed display classification leaves canonical grants and explicit provenance untouched; no access-change event |
 | Equal-grant templates change display order | No persisted reassignment or access change from the display tie; explicit same-grant source changes remain separately auditable |
 
-Classification on reload, creation-name equivalence and in-place template
-update/rename behavior require their own remaining contracts. This increment
-does not mark T006–T009 complete or claim passing runtime tests.
+Saved classification and creation-name equivalence still require contracts for
+the affected persistence work. The permission guide, rechecked on 2026-10-03,
+describes saving adjustments as a new role or for one person, not in-place
+template update/rename or propagation. Absence from that guide is not proof of
+absence from Harvest. Track those hypotheses for new evidence; they are not
+mandatory blockers for the evidenced lifecycle and must not be implemented by
+guess. This increment does not mark T006–T009 complete or claim runtime tests.

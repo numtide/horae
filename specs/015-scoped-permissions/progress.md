@@ -1154,3 +1154,52 @@ the client fallback must not be used to invent them or bypass the full-policy ga
 Next: continue remaining saved-profile and operation contracts before final
 Plan/Tasks/Analyze and runtime integration. Do not ask FR-031 again or interpret
 this answer as approval to bypass the remaining full-policy gates.
+
+## 2026-10-03 — Authorized repair of planning dependencies
+
+- The user explicitly authorized correcting unnecessary planning dependencies.
+  Started at clean `cf5d635` in the existing `feat/scoped-permissions` worktree;
+  reused PR #212. No implementation, migration, activation or merge is claimed.
+
+- Used Spec Kit Plan and Tasks and ran both setup scripts, preserving completed
+  artifacts and task IDs. No extension hooks or agent-context update script are
+  present. This is scoped remediation, not completed full-feature Plan/Analyze.
+
+- Reconciled FR-002 with the constitution's pre-cutover gate. Removed hypothetical
+  in-place template rename/update as a mandatory FR-015 prerequisite after
+  checking current Harvest help; unknown behavior remains an evidence watch,
+  not an assertion of absence or an authorized implementation.
+
+- Corrected the spec checklist's outcome interpretation without checking off
+  missing acceptance coverage: still 12/16. Actual runtime outcomes remain T020.
+
+- Added a closed contract, local readiness checklist and T050–T052 for pure
+  person-management compatibility/self-link prerequisites. Exact existing grant
+  variants, negative cases, requirement traceability, paths and test commands
+  are defined. The approved person-management decisions are not reopened.
+
+- Focused adversarial self-review found and corrected the stale self-assignment
+  statement in the data model, the blanket FR-002/task gates, and the risk of
+  checking compatibility on removals rather than additions. The new contract
+  separates addition eligibility from whole-proposal self-link validation and
+  explicitly rejects using either as complete authorization. Full transaction,
+  migration and cross-surface findings remain open; no independent review or
+  passing runtime test is claimed.
+
+- Validation: both Spec Kit setup scripts succeeded; Nix formatting and whitespace
+  checks passed. Task inventory has 52 unique IDs, 22 complete and 30 pending:
+  US1 6, US2 9, US3 4, US4 4, US5 1 and 28 foundation/cross-cutting tasks. Existing
+  IDs/completion are preserved. Story tasks carry labels and all tasks name paths;
+  no parallel code work is designated. The three new tasks are US2's next
+  increment, not a reduced replacement for any story's acceptance above.
+
+- Verified PR #212 is open/draft with the expected branch and prior HEAD; no
+  merge is requested. No Rust, PostgreSQL, browser or full-flake suite was run
+  for this documentation-only change.
+
+Next: execute T050 (RED) → T051 (GREEN) → T052 (regressions/review) using the local
+readiness checklist. Do not wait for saved-profile classification or unrelated
+approval predicates, and do not activate server consumers. Storage remains
+pending its own design gates; full-policy activation retains T006–T009/T042 and
+all migration/security acceptance. No further product approval is needed for
+this already-authorized pure increment.

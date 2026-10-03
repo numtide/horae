@@ -27,6 +27,26 @@ The foundation contract covers FR-006 record union, identity activation and orga
 
 ## Full-feature acceptance (pending implementation)
 
+### Next increment: person-management prerequisites (not yet implemented)
+
+Follow T050–T052 and `contracts/person-management-validation.md`. Once the tests
+exist, run from this worktree:
+
+```sh
+nix develop --command cargo test -p horae-core permissions::person_management --locked
+nix develop --command cargo test -p horae-core --locked
+nix develop --command cargo clippy -p horae-core --all-targets -- -D warnings
+nix fmt -- --ci
+```
+
+Observe RED before implementation, then GREEN with a nonzero focused test count.
+Verify the complete catalog, grant-loss transitions, self-link rejection and
+unchanged inputs from the contract's acceptance table. Inspect the diff for no
+runtime consumer, schema, account mutation or role conversion. Record the results
+and focused adversarial review here; the commands have not been executed for this
+future increment. No database or Harvest interaction is required. These checks
+do not prove Administrator/tenant enforcement, atomic persistence or complete US2.
+
 ### Planned persistence/transaction fixtures
 
 Cases in [permission-state.md](contracts/permission-state.md#executable-acceptance-cases-to-add-after-the-gates)

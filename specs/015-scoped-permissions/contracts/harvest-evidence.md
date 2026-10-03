@@ -33,7 +33,7 @@ Both files are under the primary checkout, not this worktree. DOM inspection was
 | Template deletion preserves current grants | Reference conflict remains: documentation versus editor warning; Harvest persistence unverified | C01 resolved for Horae by user decision on 2026-10-02: preserve existing grants/scope as person-specific configurations; local acceptance required, not observed Harvest parity |
 | Prerequisite closure/dependent removal | Documented; client-side rule traversal observed, persistence unverified | FR-015; verify every customizable grant dependency |
 | Built-in classification | Client-side selection rule observed; saved classification unverified | FR-015; classification must not grant additional access |
-| Template rename/update/propagation | Unverified; observed editor supports save-as-new | FR-015; do not invent propagation |
+| Template rename/update/propagation | Unverified hypothesis; observed editor and current guide support save-as-new | FR-015 evidence watch, not a prerequisite for confirmed create/apply/adjust/delete; no invented propagation or assertion of absence |
 | Profile reapplication and replacement | API-documented; UI persistence unverified | FR-015; [application evidence](reference-profiles.md#api-application-evidence) |
 | Profile lookup and lossy role projection | API-documented | FR-014/017; keep import identity resolution separate from local authorization |
 | Management assignment authority and promotion | Partially documented; current-profile interaction unverified | FR-005; no unintended privilege escalation |

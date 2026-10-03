@@ -60,8 +60,11 @@ about Harvest's internal design:
 
 ## Acceptance and remaining verification
 
-T043–T046 refine the required work, after T006–T009 and the complete execution
-contract. Use disposable fixtures and production helpers with an injected clock.
+T043 needs the complete local calendar/execution and correction contract before
+pure calculation tests/code; unrelated matrix rows are not a prerequisite.
+T044–T046 additionally need reviewed storage/command contracts and T042 before
+integration. T006–T009 still gate policy cutover and full-feature acceptance.
+Use disposable fixtures and production helpers with an injected clock.
 
 | Case | Required check |
 | --- | --- |

@@ -2,7 +2,10 @@
 
 Status: proposed Horae implementation mechanics for FR-010/011/013/014/017,
 reviewed against `b7e730c` on 2026-10-02. This is not a claim about Harvest's
-internal storage or an authorization to create schema before T006–T009 pass.
+internal storage or authorization to create/run schema. T035/T036 need the
+storage-specific gates in `../tasks.md`; T037/T038 additionally need resolved
+command predicates and T042. T006–T009 remain mandatory before replacing legacy
+authorization and full-feature acceptance, not before unrelated pure increments.
 Read with [data-model](../data-model.md), [migration](migration.md) and the
 [current entry-point inventory](current-access.md) and
 [operation matrix](operation-matrix.md).

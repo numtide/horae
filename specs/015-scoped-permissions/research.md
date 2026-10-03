@@ -295,6 +295,30 @@ settle it. No rate scope or prerequisite has been invented to close the gate.
   operation predicates and migration mappings still gate full planning, Analyze
   and runtime activation.
 
+### Increment readiness dependency repair — 2026-10-03
+
+- Decision: apply the user's explicit authorization to separate confirmed local
+  implementation prerequisites from full-policy activation and acceptance gates.
+  Next is T050–T052, the pure FR-028/029/031 relationship prerequisites; no new
+  product decision, dependency, schema or runtime policy is introduced.
+- Rationale: Constitution 1.1.0 requires matrix/migration/concurrent activation
+  review before replacing legacy guards, not before every pure unit-tested
+  contract. A spec-readiness checklist asks for defined acceptance coverage,
+  while achieved runtime outcomes belong to T020. Full readiness remains 12/16.
+- Rechecked the current [Harvest permission guide](https://support.getharvest.com/hc/en-us/articles/44171549176077-Permissions):
+  custom-role creation, application, person-specific adjustment/save-as-new and
+  deletion are documented. It does not establish in-place rename/update or bulk
+  propagation. This is a limit of the evidence, not proof those features cannot
+  exist; retain them as evidence watches rather than invented blocking features.
+- Alternatives rejected: wait for hypothetical lifecycle operations; infer their
+  absence as a permanent parity exclusion; treat canonical grants as explicit
+  Administrator identity; expose a partial policy; or equate pure tests with
+  data-preserving migration and cross-surface acceptance.
+- Remaining gates are attached to their consumers: saved classification and
+  name equivalence to affected persistence; withdrawal/calendar predicates to
+  approval/lock work; migration and complete enforcement to activation. Existing
+  unresolved questions remain recorded, without blocking unrelated pure checks.
+
 ### Previous workflow record
 
 - Followed the checked-in `speckit-specify` skill, local template and constitution. No extension hooks or template preset overrides were found.

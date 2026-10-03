@@ -15,7 +15,7 @@ Status: executable foundation tasks; later phases are required work packages to 
 - [x] T004 Implement allocation-free scope union and coverage in `crates/core/src/permissions.rs`, without changing existing role types, schema or runtime guards.
 - [x] T005 Run focused/core tests, core Clippy and formatting; record results and limitations in `specs/015-scoped-permissions/quickstart.md`.
 
-## Phase 3: Full-policy gate (blocks all subsequent runtime work)
+## Phase 3: Independent increments and full-policy integration gate
 
 ### Confirmed catalog implementation (independent of runtime cutover)
 
@@ -34,8 +34,8 @@ still need their own tests and cannot be inferred from a selected grant set.
 ### Current administrator mutation boundary (FR-010/011)
 
 - [x] T030 Pass authenticated actor IDs into user role/activation/create transaction helpers in `crates/horae/src/server_fns/users.rs`; add failing stale/revoked/foreign actor and concurrent-revocation tests in `users/tests/authority.rs`, retaining existing last-admin tests.
-- [x] T031 Reauthorize and lock the active same-organization administrator inside the access-change transaction, after the organization lock; keep user creation and post-commit events on the same boundary.
-- [x] T032 Run real PostgreSQL user/concurrency and affected regressions, regenerate the complete SQLx cache, check server/core builds and formatting, and record evidence.
+- [x] T031 Reauthorize and lock the active same-organization administrator inside the access-change transaction in `crates/horae/src/server_fns/users.rs`, after the organization lock; keep user creation and post-commit events on the same boundary.
+- [x] T032 Run real PostgreSQL user/concurrency and affected regressions, regenerate `.sqlx/`, check server/core builds and formatting, and record evidence in `specs/015-scoped-permissions/quickstart.md`.
 
 These tasks close a current access-change race required by the eventual six-profile
 mutations. They do not replace T010/T011's profile persistence or revision/audit tests.
@@ -52,7 +52,8 @@ saved grants without choosing schema, profile provenance or unresolved policy.
 
 T029 → T047 → T048 → T049 is the pure portion of T035's loading validation.
 It does not complete T035/T036: tenant constraints, trusted database loading,
-explicit administrative identity and schema remain gated on T006–T009.
+explicit administrative identity and schema require the storage-specific design
+review described under T035/T036; no database work is unlocked by these pure tests.
 
 - [x] T033 Define proposed stored entities, tenant constraints, explicit administrative identity, revisions/receipts/audit and cross-surface lock ordering in `specs/015-scoped-permissions/data-model.md` and `contracts/permission-state.md` (FR-005/007/010/011/013/014/017).
 - [x] T034 Adversarially review the proposal against current writers, record findings/gates in `specs/015-scoped-permissions/research.md` and `progress.md`, and refine dependent tests without marking T006–T009 complete.
@@ -101,8 +102,12 @@ Independent test: all six profiles allow/deny correctly; concurrent demotions pr
 - [ ] T010 [US1] Add failing profile, stale-edit and concurrent administrator tests in `crates/horae/tests/integration.rs` and pure grant tests under `crates/core/src/permissions/` (FR-001/003/010/011).
 - [ ] T011 [US1] Implement verified grants, revisioned persistence and atomic assignment mutations in `crates/core/src/permissions.rs`, `crates/horae/migrations/`, `crates/horae/src/models/` and `crates/horae/src/server_fns/users.rs`; refresh `.sqlx/` (FR-001/010/011/013).
 
-T010/T011 are acceptance work packages refined below. Schema/runtime steps remain
-gated on T006–T009; the proposal's existence does not make them executable yet.
+T010/T011 are acceptance work packages refined below. Runtime activation remains
+gated on T006–T009. T035/T036 require closed contracts for template creation-name
+equivalence, saved identity/classification, tenant constraints and trusted loading,
+plus reviewed non-activating schema/tests before they are executable. T037/T038
+also require resolved command predicates and T042's transaction hierarchy. A
+proposal's existence is not approval to invent those decisions or run migrations.
 
 - [ ] T035 [US1] Add failing persisted-state tests in `crates/horae/src/server_fns/permissions/tests/storage.rs`: tenant constraints, six profile selections, explicit Administrator identity, unknown grants and no silent normalization on load (FR-001/006/011/015).
 - [ ] T036 [US1] Add reviewed additive schema in `crates/horae/migrations/0042_scoped_permission_state.sql`, DTOs in `crates/horae/src/models/permissions.rs` and trusted storage helpers in `crates/horae/src/server_fns/permissions.rs`; keep legacy mode unchanged with no automatic mapping (FR-001/010/014/017). Recheck migration numbering against the implementation base before creating the file.
@@ -112,6 +117,24 @@ gated on T006–T009; the proposal's existence does not make them executable yet
 ## Phase 5: US2 — Managed work and scoped approvals (P1)
 
 Independent test: two projects/two approvers with overlapping people scope, filtered dates, empty cells and withdrawal; no unrelated changes.
+
+### Next executable increment: pure relationship prerequisites
+
+The user authorized removing unnecessary planning dependencies on 2026-10-03.
+Local readiness is in `checklists/person-management-validation.md`; its closed
+contract is `contracts/person-management-validation.md`. This is the pure portion
+of T012/T013, not the complete story or a new assignment mutation endpoint.
+Preserve existing task IDs and completion history; new IDs extend the sequence.
+
+- [ ] T050 [US2] Add failing exhaustive compatibility and self-link tests in `crates/core/src/permissions/person_management/tests.rs`, following the independent acceptance table in `specs/015-scoped-permissions/contracts/person-management-validation.md`; cover all catalog grants, mixed sets, last-grant loss, self-link batches and immutable inputs (FR-028/029/031).
+- [ ] T051 [US2] Implement the pure compatible-grant predicate and fallible proposed-set self-link check in `crates/core/src/permissions/person_management.rs`, exposed from `crates/core/src/permissions.rs`; reuse `PermissionSelection`, add no runtime consumers or I/O and keep writer authority separate (FR-027/028/029/031).
+- [ ] T052 [US2] Run focused and full core tests, core Clippy and formatting; adversarially review against `specs/015-scoped-permissions/contracts/person-management-validation.md` and record actual results/limits in `specs/015-scoped-permissions/quickstart.md` and `progress.md`. Confirm no server guard, schema or account data changed.
+
+T049 → T050 (RED) → T051 (GREEN) → T052 is executable without T006–T009.
+No full-story marker or runtime acceptance follows from it. The transactional
+work below retains its command/storage/concurrency dependencies.
+
+### Remaining transaction and approval work
 
 - [ ] T012 [US2] Add management-assignment and scoped approval/withdrawal/lock concurrency tests in `crates/horae/tests/integration.rs`. Cover every FR-024 case in `contracts/approval-visibility.md`: readable/unreadable time and expenses, missing approval authority, truly expense-free selections, revocation/new-record races, non-disclosing errors, direct requests and atomic full-selection effects. Combined acceptance requires feature 016 expense fixtures, not mocks alone (FR-005/006/009/010/019/024).
 
@@ -159,7 +182,7 @@ retention without opt-in, combined person losses, cancellation, failed/stale
 previews, revocation, rollback and no automatic reassignment. Reuse the shared
 editor and existing grant/revision/audit mechanics; no new grant or bypass.
 
-- [ ] T043 [US2] Finalize the calendar/execution and correction cases in `specs/015-scoped-permissions/contracts/company-locks.md`; add failing injected-clock boundary tests in `crates/core/src/permissions/company_lock/tests.rs` for the finalized modes, timezone/week-start/month-end/DST rules and nondecreasing automatic cutoff (FR-019/023). T006–T009 gate code; this is not an independent permission foundation.
+- [ ] T043 [US2] Finalize the calendar/execution and correction cases in `specs/015-scoped-permissions/contracts/company-locks.md`; add failing injected-clock boundary tests in `crates/core/src/permissions/company_lock/tests.rs` for the finalized modes, timezone/week-start/month-end/DST rules and nondecreasing automatic cutoff (FR-019/023). Pure calculation code needs this local contract closed first; unrelated full-matrix rows are not prerequisites. T044–T046 remain gated on storage/command review and T042 before integration.
 
 - [ ] T044 [US2] Add failing production-transaction tests in `crates/horae/src/server_fns/approvals/company_lock_tests.rs` for configuration revocation, worker/manual races, replay, stopped timers, submission without notifications, separate approval/invoice locks and privileged correction. Include feature 016 expense fixtures before combined acceptance (FR-007/010/013/019/023).
 
@@ -213,7 +236,8 @@ unchanged save, explicit selection/reset and final individual edits; use current
 template/person revisions and confirmed relationship effects. Verify exact grants
 after reload and unchanged other assignees. No profile-ID shortcut may discard
 explicit edits or normalize stored grants. Remaining saved classification and
-template name/update rules still gate full implementation.
+template creation-name rules still gate the affected persistence work. In-place
+template update/rename is not an evidenced mandatory lifecycle operation.
 
 Classification acceptance also varies available templates and equal-grant source
 order without changing the person. Loading must not reinterpret presentation as
@@ -256,9 +280,11 @@ T021–T023 repair an existing tenant boundary without introducing new policy; t
 
 T024–T026 close the existing assignment boundary identified in `contracts/current-access.md`. They neither introduce new assignment authority nor activate any part of the six-profile policy. Profile, migration and approval gates remain mandatory.
 
-T001 → T002 → T003 (RED) → T004 (GREEN) → T005. T006–T009 are mandatory before T010–T020 and must not be marked complete using foundation-only tests. Each story's tests precede its implementation. US3 depends on the permission/assignment model; UI depends on shared effective grants; cutover requires every delivery path and migration acceptance. No parallel code tasks are designated because the shared model and integration fixture are overlapping. Evidence gathering may run independently; no independent feature acceptance is implied.
+T001 → T002 → T003 (RED) → T004 (GREEN) → T005. T006–T009 are mandatory before replacing legacy authorization and full-feature acceptance, not before every confirmed pure subtask of T010–T020. They must not be marked complete using foundation-only tests. Each increment needs a closed local contract and tests before implementation. Next is T049 → T050 → T051 → T052. US3 depends on the permission/assignment model; UI depends on shared effective grants; cutover requires every delivery path and migration acceptance. No parallel code tasks are designated because the shared model and integration fixture overlap. Reference/migration documentation can proceed independently of T050–T052; no independent full-story acceptance is implied.
 
-Persistence refinement: T033 → T034 informs T008/T009. After T006–T009 pass,
-T035 → T036 → T037 → T038. T042 informs T009; T042 → T039 → T040.
+Persistence refinement: T033 → T034 informs T008/T009. After the storage-specific
+gates above pass, T035 → T036; resolved command predicates and T042 additionally
+gate T037 → T038. This defines dependencies, not authorization for schema changes
+in this documentation increment. T042 informs T009; T042 → T039 → T040.
 T041 follows audited mutations before
 exposing audit reads. File-level subtasks do not replace story acceptance gates.
