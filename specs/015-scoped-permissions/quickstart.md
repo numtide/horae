@@ -157,6 +157,13 @@ confirm both affected sets and commit all changes atomically, preserving trackin
 membership and history. Self-assignment still needs its
 contract. These are test obligations, not executed tests or Harvest parity proof.
 
+## Planned keep-project-access acceptance
+
+Before accepting the permission editor, run every FR-030 case in
+[keep-project-access](contracts/keep-project-access.md) against production
+permission and assignment commands and the shared browser flow. These are pending
+tests, not proof of Harvest persistence or of implemented Horae behavior.
+
 ## Independent assignment isolation and revocation repair
 
 Using the same isolated PostgreSQL stack:

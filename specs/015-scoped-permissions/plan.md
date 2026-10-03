@@ -146,15 +146,16 @@ read retains existing designations without project editing. T012/T013 must cover
 confirmed atomic read-loss removal, stale previews, cancellation, preserved
 membership/history and recomputed scope across delivery paths. Do not silently
 restore permissions or conflate retention with new assignment, promotion or
-the still-open explicit keep-access action. Use existing revision/audit mechanics.
+the explicit keep-access action, now specified by FR-030 and
+[its contract](contracts/keep-project-access.md). Use existing revision/audit mechanics.
 
 FR-026 separately resolves delegation: current project editors may add/remove
 manager designations within their authorized projects, without changing global
 grants. Adding evaluates existing target project-read grants against the proposed
 assignment; read-only actors cannot delegate. T012/T013 cover atomic scope-only
-changes, revocation, eligible-target checks and non-disclosing responses. Creation,
-person-management self-assignment and explicit keep-access remain
-separate gates. FR-027 now reserves person-management relationship writes to
+changes, revocation, eligible-target checks and non-disclosing responses. Creation
+and person-management self-assignment remain separate gates. FR-027 now reserves
+person-management relationship writes to
 active same-organization Administrators, independently of PeopleWriteAll and
 FR-026 project delegation. T012/T013 must cover add/remove/replace, direct and
 self-set requests, revoked authority, stale revisions, atomic audit and preservation

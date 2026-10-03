@@ -147,6 +147,13 @@ removal; test combined FR-025/029 losses with confirmation of both affected sets
 and all-or-nothing commit.
 Self-assignment remains a separate unresolved predicate, not waived by eligibility.
 
+FR-030's [keep-project-access cases](contracts/keep-project-access.md) extend
+T010/T011 permission transactions, T012/T013 relationship tests and T016/T018
+editor tests. Cover unchecked removal, explicit read/write opt-in, read-only
+retention without opt-in, combined person losses, cancellation, failed/stale
+previews, revocation, rollback and no automatic reassignment. Reuse the shared
+editor and existing grant/revision/audit mechanics; no new grant or bypass.
+
 - [ ] T043 [US2] Finalize the calendar/execution and correction cases in `specs/015-scoped-permissions/contracts/company-locks.md`; add failing injected-clock boundary tests in `crates/core/src/permissions/company_lock/tests.rs` for the finalized modes, timezone/week-start/month-end/DST rules and nondecreasing automatic cutoff (FR-019/023). T006–T009 gate code; this is not an independent permission foundation.
 
 - [ ] T044 [US2] Add failing production-transaction tests in `crates/horae/src/server_fns/approvals/company_lock_tests.rs` for configuration revocation, worker/manual races, replay, stopped timers, submission without notifications, separate approval/invoice locks and privileged correction. Include feature 016 expense fixtures before combined acceptance (FR-007/010/013/019/023).

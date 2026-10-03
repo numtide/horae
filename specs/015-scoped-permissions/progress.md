@@ -995,3 +995,45 @@ Clarification coverage:
 Next: continue Spec Kit Clarify for remaining relationship and saved-profile
 contracts before final Plan/Tasks/Analyze and database integration. Do not reopen
 FR-027/028/029 or treat this clarification as completed runtime implementation.
+
+## 2026-10-03 — Specify explicit keep-project-access from editor evidence
+
+- Previous turn made progress: commit `6474382` recorded the user's retention
+  decision. Revalidated that HEAD and a clean worktree before continuing.
+- Used Spec Kit Clarify and its paths-only prerequisite helper; no extension
+  hooks exist. No user answer was inferred. Rechecked the official
+  permissions/API guides and inspected the retained editor confirmation handler,
+  verifying its SHA-256 against the evidence register.
+- Closed the explicit keep-access contract as FR-030 under the existing parity
+  mandate: initially unchecked, explicit managed-project read/write additions,
+  cancellation without persistence and no implicit editing on read-only retention.
+  Client behavior is observed; Harvest backend persistence remains unverified.
+- Added `contracts/keep-project-access.md` with seven acceptance cases and task
+  ownership; reconciled spec, plan, data model, matrix, dependent screens,
+  evidence and quickstart. No runtime task was marked complete.
+- Self-review checked administrator versus project-editor authority, project-only
+  grants versus FR-028 eligibility, combined FR-025/029 effects, stale previews,
+  cancellation, audit rollback and no restoration of historical designations.
+  This is not an independent review or an executed acceptance test.
+- The design handoff's Workspace section still describes three fixed roles;
+  the approved six-profile/custom-permission scope supersedes that description.
+  No design asset or application code was changed. No account was mutated.
+- Checklist remains 12/16 with no changed markers: full unambiguous requirements,
+  all acceptance scenarios, criteria for every requirement and achieved outcomes
+  remain open. Formatting and whitespace checks passed for this docs-only change.
+
+| Clarification coverage | Status |
+| --- | --- |
+| Functional behavior; interaction; edge cases | Resolved for explicit keep-project-access |
+| Data model; integrations | Clear reuse of existing grants and atomic protocol; full feature deferred |
+| Non-functional quality; constraints; terminology | Clear current authority, no implicit expansion and distinct retention/opt-in |
+| Completion signals; remaining placeholders | Deferred full operation matrix, saved-profile lifecycle, migration and runtime tests |
+
+Next question: may an Administrator assign a person as their own managed person?
+The targeted official documentation check does not specify that identity case;
+the retained owner view cannot demonstrate an editable picker. Recommend A:
+reject self-relationships, preserving independent own/all access. B would allow
+an explicit Administrator-created self-relationship under existing grants;
+neither option settles self-approval. One question pending, none answered here.
+Saved-profile contracts remain independent work before final Plan/Tasks/Analyze.
+Do not re-ask FR-025/029 or treat observed client behavior as verified persistence.
