@@ -1,4 +1,4 @@
-//! Strict internal storage reads, not authorization checks or mutation endpoints.
+//! Strict storage reads and internal template commands; no active-policy endpoints.
 
 use horae_core::permissions::catalog::{Permission, PermissionSelection, StoredPermissionError};
 use serde::{Deserialize, de::IntoDeserializer};
@@ -6,6 +6,8 @@ use sqlx::PgConnection;
 use uuid::Uuid;
 
 use crate::models::permissions::{PermissionSource, PermissionTemplate, PersonPermissions};
+
+pub(crate) mod templates;
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum PermissionStorageError {
@@ -107,3 +109,7 @@ pub(crate) async fn load_permission_template(
 #[cfg(test)]
 #[path = "permissions/tests/storage.rs"]
 mod storage_tests;
+
+#[cfg(test)]
+#[path = "permissions/tests/templates.rs"]
+mod template_tests;

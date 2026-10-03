@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE organizations SET permission_policy_version = 1 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3da2a6ee73ebd445ff6eadef4c65ad24eac3f6a0ae8f3da1da12c5abfd14ad34"
+}

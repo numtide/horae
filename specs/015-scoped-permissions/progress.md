@@ -1272,3 +1272,68 @@ Next: publish this increment to #212, then resolve T042's cross-command hierarch
 before T037/T038 (authorized changes, replay and audit). Preserve the closed
 naming/provenance decisions; full T006–T009, migration review and cross-surface
 acceptance still gate activation. The goal is active, not complete or blocked.
+
+## 2026-10-03 — Reusable-template commands in progress
+
+- Confirmed the stored naming answer; FR-032 already records case-insensitive
+  organization uniqueness after trimming. No repeated product question.
+- Refined T053–T055 and the local command contract following lock-order research
+  and adversarial contract review. Full requirements remain 12/16; local command
+  readiness is 7/7. Re-ran Spec Kit Implement prerequisites and continued under
+  the existing authorization for independent increments.
+- Added internal create/delete operations with fresh canonical authority,
+  explicit READ COMMITTED isolation, organization-first locking, revision checks,
+  canonical replay and transactional receipt/audit storage. Additive migration
+  0043 has been applied only to the owned disposable compilation database.
+  Runtime routes, legacy roles, real data and policy activation are untouched.
+- The first test build failed for the missing command module and an incorrect
+  test enum variant (corrected). The initial five command tests then passed.
+  Added further preservation, limit, revocation, rollback and malformed-state
+  cases; the expanded run passed all 12 tests with zero failures or ignored
+  cases. Do not infer full T053–T055 completion from this focused result.
+- User requested an agency-MVP assessment during implementation. Existing
+  tracking/import/project work is a starting point, not an end-to-end agency
+  acceptance certificate. Separate a daily-use release from full Harvest parity;
+  no scope removal or new MVP definition was authorized by this status question.
+
+Next: cover remaining principal constraints
+and affected-person validation; review code, regenerate SQLx cache, run offline
+Clippy/regressions/formatting and publish only after verification. Changes remain
+uncommitted on the existing feature worktree. Full authorization integration,
+permission editing UI, reviewed migration and cross-surface acceptance still
+remain; the implementation goal is active.
+
+## 2026-10-03 — Verify audited create/delete commands
+
+- Previous goal turn was progress: it added actual command/schema code and 12
+  passing tests. Revalidated the existing worktree and the owned running test
+  PostgreSQL rather than restarting or using application data. PR #212 remains
+  open/draft on `feat/scoped-permissions`; no merge.
+- Re-executed Spec Kit Implement prerequisites. Local readiness remains 7/7;
+  full requirements remain 12/16, with existing authorization to continue closed
+  increments. No extension hooks apply. The agency-MVP discussion did not replace
+  or reduce the full permissions objective.
+- Finished T053–T055 with 17 command tests, including affected-person validation,
+  exact concurrent retries, full creation audit, principal constraints/isolation
+  and receipt versions. Mutation testing demonstrated that removing assignee
+  validation fails the dedicated test; restored the strict implementation.
+- Used the Rust/testing/async and simplicity skills to reuse the catalog,
+  serialization, SQLx macros and database constraints. No dependency, policy
+  framework or public mutation surface was added. Focused adversarial self-review
+  and coverage corrections are recorded in `quickstart.md`; no unresolved
+  high/critical finding in this increment, not full security acceptance.
+- Recovered the incomplete incremental SQLx output by preparing without
+  incremental compilation: 36 new cache files, no deletions. Offline all-targets
+  server Clippy passed with warnings denied, as did 161 core tests and 821 server
+  tests (11 pre-existing ignored). Formatting/diff checks passed. Separate
+  integration-binary, browser and full flake execution are not claimed.
+- Only disposable databases applied migration 0043 or enabled policy version 1.
+  Current application permissions and data remain unchanged. Reusable templates
+  now have real internal create/delete/replay/audit behavior, but are not yet a
+  delivered UI feature. Full T016/T017/T037/T038/T042 remain open.
+
+Next: publish the verified increment to #212, then refine and implement person
+profile application with last-administrator protection and confirmed relationship
+effects, reconciling the affected T042 lock order before those writers. Preserve
+the full enforcement, UI, migration and end-to-end acceptance gates. The goal is
+active, not complete or blocked.

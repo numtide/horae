@@ -226,6 +226,20 @@ plugin authorization. Exercise production transactions rather than duplicate SQL
 
 ## Phase 7: US4 — Custom profiles and permission explanations (P2)
 
+### Isolated create/delete command implementation
+
+T035/T036 → T053 → T054 → T055 implements the reviewed local boundary in
+`contracts/template-commands.md`, without a public endpoint or activation.
+Its organization/template/person-state lock set does not include legacy business
+writers or user-row updates. T042 and full T037/T038 remain open for broader
+commands and runtime integration; this subset does not declare them complete.
+
+- [x] T053 [US4] Add failing command tests in `crates/horae/src/server_fns/permissions/tests/templates.rs` for every case in `contracts/template-commands.md`, using actual helpers and disposable PostgreSQL (FR-004/010/011/013/015/032).
+- [x] T054 [US4] Implement typed internal create/delete commands and replay in `crates/horae/src/server_fns/permissions/templates.rs`, with additive org/principal-scoped receipt/audit storage in `crates/horae/migrations/0043_permission_change_receipts.sql`; keep runtime consumers and legacy data untouched, and regenerate `.sqlx/` (FR-004/010/011/013/015/032).
+- [x] T055 [US4] Run permission and affected user/project regressions, offline server Clippy, formatting and focused adversarial review; record actual evidence and limits in `specs/015-scoped-permissions/quickstart.md` and `progress.md`. No full-story, T042 or activation completion follows from this subset.
+
+### Remaining complete-story acceptance
+
 Independent test: template creation/application/deletion and person-specific adjustments; C01 is resolved by the 2026-10-02 user decision: deleting a template preserves all assignees' effective grants/scope as person-specific configurations, including individually adjusted assignees. Test confirmation/cancellation, unavailable deleted templates and separate explicit revocation; both screens explain identical effective access. Remaining T006 predicates are still open.
 
 - [ ] T016 [US4] Add custom dependency, unknown-grant, template lifecycle and audit tests in `crates/core/src/permissions/` and `crates/horae/tests/integration.rs` (FR-004/011/013/015/032).

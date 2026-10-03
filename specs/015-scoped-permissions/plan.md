@@ -80,8 +80,12 @@ trusted facts, not saved-profile classification or approval execution rules.
 The requirements checklist measures specification coverage; T020 measures actual
 runtime outcomes. Neither local readiness nor an incomplete full checklist marks
 the entire feature ready. See `checklists/person-management-validation.md`.
-Next execute T035/T036 under the reviewed non-activating storage contract, using
-only isolated test databases. T008's full integration gate remains open.
+T035/T036 and T053–T055 are complete for isolated storage and reusable-template
+create/delete commands under `contracts/template-commands.md`. Real command,
+replay and audit tests pass without exposing a new policy. Next refine the person
+profile/application and assignment transactions in T037/T038 and reconcile their
+T042 lock dependencies. T042 and T008's broader integration gates remain open;
+only disposable fixtures enable version 1.
 
 ### Existing increments and remaining integration
 

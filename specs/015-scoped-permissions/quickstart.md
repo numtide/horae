@@ -339,3 +339,65 @@ nix fmt -- --ci
   fixtures, not successful authenticated commands. Command authority, 50-profile
   races, revisions/audit/replay, runtime activation, browser parity and the full
   flake gate remain pending. No UI, CSS, external account or real data changed.
+
+## Internal template commands — 2026-10-03
+
+T053–T055 implement the create/delete subset of US4 under
+`contracts/template-commands.md`, not a publicly accessible permissions editor.
+Only disposable PostgreSQL fixtures enable policy version 1. The compile database
+on port 55416 is likewise disposable; no application database was migrated.
+
+```sh
+cargo test -p horae --features server --bin horae template_tests --locked
+CARGO_INCREMENTAL=0 cargo sqlx prepare --workspace -- --features server --all-targets
+SQLX_OFFLINE=true cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+cargo test -p horae-core --locked
+SQLX_OFFLINE=true cargo test -p horae --features server --bin horae --locked
+nix fmt -- --ci
+```
+
+Observed focused evidence:
+
+- The initial tests failed compilation for the missing command API and an
+  incorrect test enum variant, which was corrected. The first five tests passed
+  after implementation. Expanded coverage then passed all 17 command tests.
+- A deliberate mutation replaced affected-person validation with template grants.
+  `malformed_assignee_aborts_all_detachments` failed, proving it detects this
+  unsafe shortcut. The original strict validation was restored immediately.
+- Production helpers, not duplicated test SQL, perform create/delete/replay.
+  Schema fixtures separately verify tenant FKs, mutually exclusive user/operator
+  attribution and principal-scoped unique request identities. No operator command
+  endpoint is provided.
+
+| Contract boundary | Executable evidence |
+| --- | --- |
+| Canonical creation and exact historical replay | `create_canonical_retry_returns_one_historical_change`, `concurrent_exact_retry_creates_one_receipt_without_changing_people` |
+| Current explicit administrator, tenant and policy checks | `legacy_future_missing_foreign_and_non_admin_authority_deny`, `invalid_stored_authority_and_template_grants_fail_closed` |
+| Confirmed grants, prerequisite closure and FR-032 names | `equivalent_names_and_invalid_confirmed_selections_roll_back`, `unknown_grants_and_authority_fields_cannot_deserialize_as_commands`; storage tests also cover concurrent case collisions |
+| Limit under concurrent creation | `concurrent_creators_never_exceed_fifty_profiles` |
+| Exact grant/identity preservation, revisions and audit | `delete_preserves_adjusted_grants_identity_and_business_rows`, `malformed_assignee_aborts_all_detachments` |
+| Deleted-source retries and same-name replacements | `delete_replay_does_not_touch_a_same_name_replacement` |
+| Stale/foreign/exhausted revisions | `stale_foreign_and_exhausted_revisions_never_partially_delete` |
+| Fresh authority after waiting, including replay | `revocation_winning_org_gate_denies_pending_replay_and_new_command` |
+| Atomic audit failure and compatible user locks | `failed_audit_insert_rolls_back_creation_and_detachment`, `actor_share_lock_does_not_block_template_command` |
+| Tenant/principal/version-scoped history | `receipts_enforce_tenant_exclusive_principal_and_request_uniqueness`, `command_receipts_are_not_shared_between_administrators`, `unsupported_receipt_version_fails_without_repeating_the_change` |
+
+The first incremental SQLx preparation omitted 91 existing cache entries despite
+`--all-targets`. Non-incremental preparation recovered them: the final cache adds
+36 entries and deletes none. Offline all-targets server Clippy passed with
+incremental compilation disabled and warnings denied. All 161 core tests passed;
+the restored-code server binary suite passed 821 tests with zero failures and
+11 pre-existing ignored checks in 152.48 seconds. Formatting and diff checks
+passed; the separate integration binary, browser and full flake suite were not run.
+
+Focused adversarial self-review checked authorization before replay, historical
+outcomes after deletion, canonical request equivalence, complete affected-set
+validation before writes, revision overflow, tenant/principal constraints,
+rollback and the local lock order including FK locks. Expanded the initial
+coverage to test malformed assignees (not only templates), full-floor duplicate
+and missing-prerequisite selections, receipt principal isolation and unsupported
+receipt versions. No high/critical finding remains in this bounded implementation;
+this is not independent implementation review or full-feature security acceptance.
+No new dependency, generic service layer, public endpoint, UI/CSS change or real
+data operation was introduced. Full T042, profile application, permission editing
+UI, cross-surface enforcement, migration and full-feature acceptance remain open.
