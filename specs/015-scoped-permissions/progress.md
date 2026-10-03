@@ -1074,3 +1074,25 @@ Next: retain the one pending self-assignment question; investigate saved
 classification and template-name/lifecycle contracts independently where evidence
 can settle them. Do not reopen accepted retention decisions or mark full
 Plan/Tasks/Analyze ready from this increment.
+
+## 2026-10-03 — Guard display classification against stored-state changes
+
+- Previous turn made progress in `91f7cc3`; revalidated HEAD and clean worktree.
+  The same self-assignment question remains unanswered; no option is inferred.
+- Checked Spec Kit Implement prerequisites: requirements checklist is still
+  12/16, so no new implementation task begins without the required confirmation.
+  No extension hooks exist. Continued independent source/contract work only.
+- Inspected the complete initialization around `dt(L)`: non-admin display choice
+  is derived from available templates, not just explicit prior selection.
+  This yields a new adversarial fixture: add a matching template or change an
+  equal-grant tie order without changing the person's grants.
+- Extended the existing profile-application contract, data-model distinction and
+  task acceptance to prohibit read-time provenance/grant/revision/audit changes.
+  Ten profile-application cases are now specified, not executed. Do not assume
+  template ordering or saved backend classification from client initialization.
+- No code, schema, account data, checklist marker or completed-task changes.
+  Formatting and whitespace checks are required before publication.
+
+Next: retain the pending self-assignment decision. Saved classification and
+template lifecycle still require discriminating evidence or explicit decisions;
+the client fallback must not be used to invent them or bypass the full-policy gate.

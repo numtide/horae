@@ -61,6 +61,10 @@ Persist the canonical selected grants rather than recomputing saved access from 
 mutable display name or whichever defaults happen to ship in a later build. The
 selected built-in/custom profile, applied template revision and descriptive
 classification explain origin/differences; they are not an alternate grant source.
+The display classifier can select a different matching template after the
+available template set changes, even with identical person grants. Therefore it
+must not overwrite explicit application provenance or manufacture access-change
+revisions/audit on read; see `contracts/profile-application.md`.
 Applying a profile is an explicit command. A template change, application or
 removal that affects existing people must update their canonical states, revisions
 and audit in the same authorized operation once that behavior is verified.

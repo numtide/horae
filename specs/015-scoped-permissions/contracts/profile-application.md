@@ -26,6 +26,32 @@ open. Horae's compatibility API remains read-only.
 
 ## Required behavior
 
+### Classification is not assignment provenance
+
+The retained editor's initialization calls `dt(L)` for non-Administrators,
+choosing among contained built-in and Member-normalized custom profiles by
+largest permission count. Built-ins win equal-size cross-kind ties; within a kind,
+source order is retained. The fallback `Ve`/`DL` excludes Administrator and
+selects a contained built-in, or the built-in with the fewest missing grants.
+This computation changes the displayed selection, not `L`.
+
+Consequently, adding a more specific matching template can change which label
+the next editor load displays without changing the person's grants. Two distinct
+templates with equal grants can also have order-dependent displayed selection.
+This is a deduction from the inspected client algorithm, not an observed saved
+template-assignment transition. Do not assume alphabetical order: the handler
+sorts newly created templates, but that does not establish server ordering.
+
+Keep three concepts distinct in acceptance: canonical grants, explicitly applied
+source/template revision, and computed presentation. A changed presentation cannot
+replace provenance, increment access revisions, emit an access-change audit or
+authorize an operation. Conversely, an explicit source change may require audit
+even when grants are equal, as specified by the permission-state protocol.
+The exact saved classification remains unverified; do not use the client fallback
+to repair unknown/malformed stored state or infer an Administrator.
+
+### Commands
+
 1. Loading or saving an unchanged permission editor preserves the canonical
    person grants. A displayed best-fit profile is descriptive: rendering or
    serializing its label cannot replace those grants.
@@ -66,6 +92,8 @@ both permission screens. Use disposable users and production commands.
 | Template deleted/changed or person revised after preview | Conflict without partial mutation, same-name substitution or stale restoration |
 | Non-admin, revoked actor, foreign target, last-admin violation or audit failure | No unauthorized or partial permission change |
 | Final grants remove management eligibility | Apply confirmed FR-025/029 effects atomically; FR-030 remains an explicit option |
+| Add a more specific matching template, then load an unchanged person | Any changed display classification leaves canonical grants and explicit provenance untouched; no access-change event |
+| Equal-grant templates change display order | No persisted reassignment or access change from the display tie; explicit same-grant source changes remain separately auditable |
 
 Classification on reload, creation-name equivalence and in-place template
 update/rename behavior require their own remaining contracts. This increment
