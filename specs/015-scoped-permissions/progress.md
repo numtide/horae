@@ -1037,3 +1037,40 @@ an explicit Administrator-created self-relationship under existing grants;
 neither option settles self-approval. One question pending, none answered here.
 Saved-profile contracts remain independent work before final Plan/Tasks/Analyze.
 Do not re-ask FR-025/029 or treat observed client behavior as verified persistence.
+
+## 2026-10-03 — Separate profile selection from unchanged saves
+
+- Previous turn made progress in `3a19a26`; confirmed clean worktree and that
+  revision. The self-assignment question is still unanswered. This continuation
+  does not select an option or add another product question.
+- Followed Spec Kit Clarify, checked its feature prerequisite and constitution;
+  no extension hooks exist. Revalidated the requirements checklist: 12/16 remains
+  unchanged, with no new passes or regressions. Complete requirements/acceptance
+  and achieved outcomes remain pending.
+- New source evidence: the selected custom-profile radio uses a click handler
+  calling `gi`, replacing the draft baseline even when the template ID is the
+  same. The retained extra set is Forecast-only. Reset and built-in selection
+  are separate draft actions. This distinguishes them from the documented API
+  repeat-profile preservation, rather than declaring an unsupported contradiction.
+- Refined FR-004 and US4, added `contracts/profile-application.md` with eight
+  acceptance rows and traced T010/T011/T016–T018. Updated plan/data-model gates
+  and the evidence register. No new user clarification was fabricated.
+- Self-review covered no-op versus explicit intent, adjustments after selection,
+  reset restoring previously removed grants, deleted/same-name template races,
+  Administrator identity, last-admin protection, rollback and relationship loss.
+  Saved classification, creation-name equivalence and in-place template lifecycle
+  are not settled by this evidence. No runtime test or independent review claimed.
+- No app/schema/data changes or Harvest mutations. Formatting and whitespace
+  checks are required before publishing this documentation increment.
+
+| Clarification coverage | Status |
+| --- | --- |
+| Functional behavior; interaction; edge cases | Resolved selection/reset/unchanged-save distinction |
+| Data model; integrations | Clear explicit intent and revisions; saved classification deferred |
+| Non-functional quality; constraints; terminology | Clear canonical grants, atomicity and source/projection distinction |
+| Completion signals; other placeholders | Deferred full matrix, migration, lifecycle and runtime acceptance |
+
+Next: retain the one pending self-assignment question; investigate saved
+classification and template-name/lifecycle contracts independently where evidence
+can settle them. Do not reopen accepted retention decisions or mark full
+Plan/Tasks/Analyze ready from this increment.

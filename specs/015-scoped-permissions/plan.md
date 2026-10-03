@@ -19,6 +19,12 @@ This is an incremental plan. The independent record-scope foundation is executab
 
 ## Constitution Check
 
+The [profile-application contract](contracts/profile-application.md) refines
+FR-004's explicit command intent and T010/T011/T016–T018 acceptance. Preserve
+canonical grants on unchanged saves and commit reviewed individual edits even
+when the selected profile identity is unchanged. Saved classification and
+template name/update rules remain gated.
+
 | Gate | Foundation | Runtime cutover |
 | --- | --- | --- |
 | Exact integer time/money | No arithmetic changes | Preserve totals and historical values |

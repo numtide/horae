@@ -201,6 +201,15 @@ Independent test: template creation/application/deletion and person-specific adj
 
 - [ ] T016 [US4] Add custom dependency, unknown-grant, template lifecycle and audit tests in `crates/core/src/permissions/` and `crates/horae/tests/integration.rs` (FR-004/011/013/015).
 - [ ] T017 [US4] Implement verified custom-template lifecycle and audit in `crates/horae/src/server_fns/`, `models/` and migrations; refresh `.sqlx/` (FR-004/013/015).
+
+T010/T011/T016/T017/T018 share the eight
+[profile-application cases](contracts/profile-application.md): distinguish load,
+unchanged save, explicit selection/reset and final individual edits; use current
+template/person revisions and confirmed relationship effects. Verify exact grants
+after reload and unchanged other assignees. No profile-ID shortcut may discard
+explicit edits or normalize stored grants. Remaining saved classification and
+template name/update rules still gate full implementation.
+
 - [ ] T041 [US4] Add and pass audit/receipt disclosure tests in `crates/horae/src/server_fns/permissions/tests/audit.rs`: current Administrator reads, revoked/non-admin/foreign denial, distinct operator attribution, sanitized outcomes and no false success audit after rollback (FR-011/013).
 - [ ] T018 [US4] Align permission controls/descriptions in `crates/horae/src/pages/` Settings and Workspace using existing components and `design/project/app/08_Settings.dc.html` / `09_Workspace.dc.html`; apply design skills and browser viewport/theme/keyboard checks (FR-012/016).
 

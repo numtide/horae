@@ -77,8 +77,10 @@ template applicable. Confirmation explains preservation; cancellation writes
 nothing. Revocation is a separate confirmed command, not a deletion side effect.
 
 This approved Horae behavior does not establish Harvest's actual deletion result
-or decide template rename/update propagation, name equivalence or reapplication.
-Those remaining contracts still need their own evidence/decision.
+or decide template rename/update propagation or name equivalence.
+[Profile application](contracts/profile-application.md) now distinguishes unchanged
+saves, explicit baseline selection/reset and final individual grant edits.
+Saved classification and the other remaining contracts still need evidence/decision.
 
 Administrative identity is persisted separately from ordinary grant membership:
 only an explicit authorized Administrator assignment can set it. A custom profile
@@ -124,7 +126,7 @@ revisions supply mechanics, not approval of any mapping or a permanent legacy mo
 
 | Gate | Decision/evidence still required | Why storage mechanics do not settle it |
 | --- | --- | --- |
-| Saved template application (C01 deletion resolved) | Update/reapply outcomes, name equivalence and saved classification outside the approved deletion flow | Determines remaining person/template changes and uniqueness/transition constraints |
+| Saved template application (C01 deletion resolved) | In-place update/rename, creation-name equivalence and saved classification | Explicit selection/reset versus unchanged saves follows `contracts/profile-application.md`; remaining identity/classification rules still gate persistence |
 | C02–C04 resolved; enforcement pending | Approved report projections, resource-specific billable scope and explicit organization-wide cost read/write | Keep report and ordinary rate authorization separate; general person billable rates use person management, project billable rates use project management, costs use independent read/write grants |
 | C05 schedule modes documented; C06 approval visibility resolved | Company lock execution/calendar details and remaining custom approval/withdrawal predicates | Keep cutoff/configuration separate from coverage and invoice protection. FR-024 requires authority and visibility across the actual approval set, not a new grant prerequisite or withdrawal rule; see `contracts/company-locks.md` and `contracts/approval-visibility.md` |
 | C07 retention/delegation resolved by FR-025/026 | Creation and person-management self-assignment | Project editors can change manager designations for compatible people, never global grants. Evaluate target managed-read eligibility with the proposed relationship; retention requires read, not editing. Confirmed read loss removes designations atomically, not membership/history. FR-027 reserves person-management writes to explicit Administrators; FR-028 requires compatible existing grants for new assignments without adding privileges. FR-029 retains relationships while any compatible grant remains and requires preview/confirmation for atomic removal on last-grant loss, preserving incoming relationships/history with no automatic restoration. FR-030 explicitly adds managed-project read/write only on confirmed keep-access, then recalculates both relationship rules. Other transitions still need predicates |

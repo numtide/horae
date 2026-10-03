@@ -451,6 +451,23 @@ retention. This is an approved Horae contract, not verified custom-profile Harve
 web behavior. Self-assignment and non-permission lifecycle rules remain separate.
 FR-028's accepted new-assignment rule is unchanged.
 
+### Explicit profile reapplication evidence — 2026-10-03
+
+The previously retained API behavior does not settle an explicit web-editor
+reset. Targeted source inspection now distinguishes them: custom radios use
+`click`, not only `change`, and call `gi(template_id)` even for the selected
+template. That handler replaces the draft with template grants plus the Member
+floor. Its retained `k()` set contains only Forecast grants, not arbitrary prior
+Horae-scope adjustments. Built-in changes call `Rt`; reset calls `bt`.
+None of these handlers submits the person form.
+
+The [profile-application contract](profile-application.md) specifies that explicit
+draft intent separately from unchanged saves and final individual edits, under
+the existing parity mandate. Do not treat an unchanged profile ID as permission
+to ignore submitted individual edits, or a displayed best-fit label as an
+implicit reset. Actual saved Harvest results, name equivalence and classification
+remain unverified; no mutation was made. No new user answer was inferred.
+
 ### Person self-assignment clarification — 2026-10-03
 
 The [teammates API](https://help.getharvest.com/api-v2/users-api/users/teammates/)
