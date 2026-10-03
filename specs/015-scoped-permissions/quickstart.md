@@ -514,3 +514,55 @@ removed 5.7 GiB of regenerable package artifacts only, not source or database da
 No separate integration-binary execution, browser or full flake run is claimed.
 T059–T061 are complete for this internal command; full user-story and activation
 gates remain open. No new crate, dependency, schema migration or UI/CSS change.
+
+## Internal historical audit lookup (T062–T064)
+
+Reuse the owned disposable PostgreSQL cluster and compilation database above.
+Fixtures alone enable policy 1; no current application database is migrated or
+activated. `contracts/audit-lookup.md` owns this receipt-ID read boundary.
+
+```sh
+cargo test -p horae --features server --bin horae audit_tests --locked
+cargo test -p horae --features server --bin horae --locked
+cargo test -p horae-core --locked
+# After all test/build processes have finished:
+cargo clean -p horae
+CARGO_INCREMENTAL=0 cargo sqlx prepare --workspace -- --features server --all-targets
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+nix fmt -- --ci
+```
+
+| Contract | Reader/decoder regression |
+| --- | --- |
+| Current explicit Administrator, not legacy role or grant equivalence | `legacy_admin_and_all_grants_without_explicit_identity_cannot_read_audit` |
+| Tenant, activity, policy and strict authority precede receipt decoding | `tenant_activity_and_policy_checks_precede_receipt_existence_and_decode` |
+| Other authors, later inactivity and missing current permission state | `current_administrator_reads_inactive_authors_history_without_live_state` |
+| Deleted templates and exact historic projection without private request data | `administrator_reads_historical_template_without_intent_or_replay_result`, `template_detachment_history_preserves_exact_grants_and_provenance` |
+| Real profile/project changes, no-ops and removed scopes survive later changes | `profile_and_project_history_decode_exact_changes_and_noops`, `profile_history_keeps_removed_relationships_after_grants_change_again` |
+| Distinct operator attribution, no intent or private replay outcome | `operator_attribution_is_not_a_user_and_excludes_private_replay_payload` |
+| Failed command has no successful receipt; reads do not mutate | `failed_mutation_has_no_success_audit_and_reads_do_not_write` |
+| Real lock waits in both revocation orders | `revocation_winning_gate_denies_waiting_historical_reader`, `reader_winning_gate_finishes_before_revocation_and_later_reads_fail` |
+| Required nullable fields, supported formats, strict grants/provenance and revisions | The four `historical_*` decoder tests in `permissions/tests/audit.rs` |
+
+Initial RED compilation failed on the missing reader module. Implementation
+compilation caught the timestamp type inference and additional fixture schema/PID
+mismatches; these were corrected without changing schema or weakening assertions.
+The first focused GREEN run passed all 15 tests. A subsequent real stored malformed
+document check was added before the full regression run, which passed 873 tests
+with zero failures and 11 pre-existing ignored cases (172.11 seconds). All 161
+core tests passed. Clean-package, non-incremental SQLx preparation added 14 query
+descriptions and changed/deleted no existing entries. Fresh offline all-targets
+Clippy passed with warnings denied; formatting CI passed with zero changes.
+Cleaning removed 5.8 GiB of regenerable package build artifacts only. T062–T064
+are complete for the internal lookup; T041 remains open for authenticated history
+delivery and integration. No separate integration-binary, browser or full flake
+execution is claimed.
+
+Adversarial self-review traced all three production writers to the projected
+historical shapes, verified authorization precedes receipt lookup/decoding, and
+checked that the organization gate remains held until projection and commit.
+Historical reads perform no FK inserts or later row locks. Coverage gaps for
+reader-first revocation, inactive authors and actual removed/detached snapshots
+were closed with production-reader tests. No critical/high defect was identified
+in this bounded review; this is not an independent full-feature review or proof
+of runtime activation, HTTP authentication, audit browsing or UI acceptance.

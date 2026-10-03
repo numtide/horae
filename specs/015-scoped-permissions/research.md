@@ -382,6 +382,23 @@ settle it. No rate scope or prerequisite has been invented to close the gate.
 - Continue independent project-delegation verification. Do not copy FR-026's
   active-project-manager rule into FR-028 without resolving this distinction.
 
+### Administrator audit lookup review — 2026-10-03
+
+- Decision: implement `contracts/audit-lookup.md` with a single-receipt lookup and
+  closed version-1 historical DTOs. Do not expose raw intent or replay results.
+- Rationale: 0043's JSON-object constraint does not prove a valid audit shape.
+  Ordinary optional-field decoding can mistake a missing change for an explicit
+  no-op. Validate required nullable fields, supported catalogs/provenance and
+  revision transitions without weakening trusted runtime models.
+- Independent read-only review closes the local order: organization SHARE under
+  READ COMMITTED, then plain active-actor/state/receipt reads. No project/user row
+  locks, writes, FK acquisition or external waits are added. Test both revocation
+  orders; this does not prove the full cross-surface hierarchy.
+- Alternatives rejected: returning arbitrary stored JSON, normalizing historical
+  grants, requiring deleted sources to exist, fabricating user attribution for
+  operators, or inventing an operator command registry. The recorded command is
+  an audit label, never execution authority. UI/listing remains separate.
+
 ### Previous workflow record
 
 - Followed the checked-in `speckit-specify` skill, local template and constitution. No extension hooks or template preset overrides were found.

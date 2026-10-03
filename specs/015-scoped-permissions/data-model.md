@@ -18,6 +18,14 @@ organization access revision once per real set change. Parent project KEY SHARE
 NOWAIT prevents a lock cycle with the legacy editor; it does not synchronize that
 editor's membership-based manager flags or replace its form revision contract.
 
+The internal audit reader follows `contracts/audit-lookup.md`. It reads existing
+0043 receipts by tenant and receipt UUID under organization SHARE, using current
+explicit Administrator identity. Its separate historical DTOs retain recorded
+grants, provenance and removed relationships without joining current subjects.
+Required nullable fields distinguish an explicit no-op from an incomplete
+document. No intent, request ID or private replay result is projected; these
+historical values cannot be loaded as current authorization state.
+
 ## Pure record-scope foundation
 
 - `AccessScope`: private flags for `NONE`, `OWN`, `MANAGED_PEOPLE`, `MANAGED_PROJECTS`, `ORGANIZATION`. Union is explicit and never infers a capability or a broader role.

@@ -284,6 +284,18 @@ order without changing the person. Loading must not reinterpret presentation as
 stored assignment provenance, mutate grants or emit an access-change audit.
 
 - [ ] T041 [US4] Add and pass audit/receipt disclosure tests in `crates/horae/src/server_fns/permissions/tests/audit.rs`: current Administrator reads, revoked/non-admin/foreign denial, distinct operator attribution, sanitized outcomes and no false success audit after rollback (FR-011/013).
+
+T061 → T062 → T063 → T064 follows `contracts/audit-lookup.md` and refines the
+internal record-lookup portion of T041. No parallel code tasks: the reader, wire
+contract and fixtures overlap. Full T041 remains open for authenticated history
+delivery and integration, rather than claiming an internal helper completes it.
+
+- [x] T062 [US4] Add failing production-reader and historical-decoder tests in `crates/horae/src/server_fns/permissions/tests/audit.rs`, using actual template/profile/delegation receipts and the allowed/denied, malformed, operator, rollback and revocation cases in `contracts/audit-lookup.md` (FR-010/011/013).
+
+- [x] T063 [US4] Implement bounded Administrator-only receipt-ID audit lookup and strict historical wire projection in `crates/horae/src/server_fns/permissions/audit.rs`; wire it from `permissions.rs`, preserve trusted models and avoid raw intent/result disclosure or policy activation (FR-010/011/013).
+
+- [x] T064 [US4] Run focused/affected PostgreSQL and decoder regressions, regenerate complete `.sqlx/`, verify offline server Clippy/formatting, adversarially review and record evidence in `specs/015-scoped-permissions/quickstart.md` and `progress.md`.
+
 - [ ] T018 [US4] Align permission controls/descriptions in `crates/horae/src/pages/` Settings and Workspace using existing components and `design/project/app/08_Settings.dc.html` / `09_Workspace.dc.html`; apply design skills and browser viewport/theme/keyboard checks (FR-012/016).
 
 ## Phase 8: US5 — Data-preserving transition (P1)

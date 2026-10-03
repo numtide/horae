@@ -1456,3 +1456,76 @@ commands after the pending lifecycle clarification; continue independent
 operation/lock integration work while that answer is pending. Editor integration,
 authenticated surfaces, full T042, approvals, migration and end-to-end gates remain
 required. The goal remains active, neither complete nor blocked.
+
+## 2026-10-03 — Internal audit reads
+
+- Previous goal turn was progress: project delegation, 17 new tests and verified
+  regressions were published as unsigned `9a7e05d` on #212. Revalidated the clean,
+  synchronized existing worktree. The prior publication next-action is complete.
+- Person-management active-target clarification remains unanswered; do not repeat
+  it or invent a default. Continued the independent FR-013/T041 read boundary.
+- Executed Spec Kit Plan/Tasks/Implement helpers, preserved artifacts and added
+  T062–T064. Full requirements remain 12/16 under existing authorization for closed
+  increments. No extension hooks or context updater are present.
+- Independent design research calls for strict historical DTOs, required nullable
+  fields and organization SHARE before plain reads. Raw intent/results and trusted
+  authorization models must not leak into the historical projection.
+
+Next: write failing reader/decoder tests, implement and verify this contract,
+then publish only verified changes. Full audit UI, enforcement, person-management
+commands, T042, migration and complete-story acceptance remain open.
+
+### Audit implementation resumed
+
+- The intervening MVP status answer made no implementation progress. Revalidated
+  the uncommitted audit work, reused this branch and the running owned disposable
+  PostgreSQL cluster. The prior test handle was missing, so started a fresh focused
+  test run rather than assuming its outcome.
+- Re-ran Spec Kit prerequisites. Requirements remain 12/16; all six local
+  readiness checklists are 7/7 under the existing closed-increment authorization.
+  No extension hooks exist. The pending person-management question is unchanged.
+- Added strict historical decoding and the current-Administrator lookup. The
+  compiler caught the SQLx timestamp default (`OffsetDateTime`); the query now
+  explicitly decodes the existing application `DateTime<Utc>` type. Additional
+  tests initially used incorrect relationship table names and an optional backend
+  PID; corrected those fixtures against migration 0044 and SQLx's inferred type.
+- Added production-reader coverage for both revocation lock orders, inactive
+  historical authors, missing current authority, detached template assignees and
+  removed relationship snapshots after later grant changes. No production timing
+  hooks, new dependencies, schema changes or active endpoints were needed.
+
+Next: obtain the focused test result, review the actual writer/reader contract,
+then run regressions and complete SQLx/offline/format validation before publishing.
+Full-feature acceptance and runtime cutover remain open.
+
+- Focused audit tests passed 15/15. Full server binary regressions then passed
+  873 tests with zero failures and 11 pre-existing ignored cases in 172.11 seconds;
+  all 161 core tests passed. T062/T063 are checked; T064 awaits cache/offline/final
+  formatting completion. The added malformed stored-document assertion passed in
+  the full suite. Local adversarial review and requirement/test mapping are in
+  `quickstart.md`, explicitly separate from full-feature acceptance.
+- GitHub confirms #212 is open/draft at `9a7e05d`; publication is not yet done.
+  The complete cache regeneration is running after a worktree-local package clean.
+
+### Verified audit lookup increment
+
+- Complete non-incremental SQLx preparation adds 14 query descriptions and
+  changes/deletes none. Fresh offline all-targets Clippy passed with warnings
+  denied. Formatting CI passed with zero changes; diff checks passed.
+- T062–T064 are complete. The three actual writer shapes round-trip through
+  historical projections with current tenant/Administrator authorization; no
+  trusted permission model gained unchecked deserialization. Both real lock
+  orders, inactive authors and preserved removed/detached snapshots are covered.
+- Spec Kit implementation, Rust/testing/async guidance and the simplicity skill
+  kept the change within existing receipts, SQLx transactions and dependencies.
+  Only regenerable worktree package artifacts (5.8 GiB) were cleaned. No real
+  data, Harvest account, schema, active endpoint, UI or CSS was changed.
+
+Next: publish the verified audit increment to existing draft #212 with an unsigned
+commit, without merging. The next implementation work must address the remaining
+T006 operation predicates and T042 cross-command lock integration prerequisites,
+not infer that the internal commands activate a complete permission policy.
+Person-management additions still await the existing active-responsible-person
+clarification; continue independent integration analysis without guessing it or
+asking it again. Authenticated surfaces, scoped approvals, UI, reviewed migration
+and full acceptance remain required. The goal stays active.

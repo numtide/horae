@@ -97,6 +97,13 @@ close T042, replace legacy guards or authorize mixed-policy operation.
 
 ### Existing increments and remaining integration
 
+T062–T064 implement the internal audit-read contract in `contracts/audit-lookup.md`
+using receipt-ID lookup, organization SHARE and strict historical projections.
+The bounded constitution check passes: no mutations, new storage, dependency or
+active endpoint; canonical current Administrator authority precedes disclosure.
+Historical wire DTOs do not become trusted authorization facts. Independent
+review closes the local lock path, not full T042 or the history UI.
+
 T059–T061 implement internal project delegation under
 `contracts/project-management-commands.md`. The bounded post-design check passes:
 reuse 0044, canonical grants, organization revisions and atomic receipts; no new
