@@ -1,5 +1,79 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Materialized export integration
+
+- Previous goal turn made progress: T101–T103 published unsigned as `15c82ef`
+  to draft #212. Revalidated clean worktree and matching origin; all previous
+  test/check/publication commands are terminal. No merge occurred.
+- Spec Kit Plan/Tasks retain existing artifacts and add T104–T106. Independent
+  research confirms three manager-only materialized consumers and a second
+  authorization boundary after rendering; no locks may follow rendering/body
+  lifetime. Extended the existing contract without a new product predicate.
+- Local constitution check passes. Requirements remain 12/16 with the existing
+  independent-increment authorization; no hooks or context generator exist.
+  No deployment database, reference-account mutation or schema change is needed.
+- Confirmed the disposable server was stopped, then restarted its existing
+  cluster on port 55416 with the recorded socket. RED reproduced revoked-manager
+  disclosure (0.58s after 2m58s compilation), not a compilation/setup failure.
+- Integrated only the three manager materializers and post-render release;
+  retained trusted actor IDs, existing limits/deadlines and all CSV/Member
+  behavior. Eight local tests and the real-cookie export matrix are implemented.
+  Focused and HTTP checks are running in session 46239; adversarial review is
+  inspecting the same working tree. No verification completion is claimed yet.
+- Initial focused GREEN passes all eight export tests (13.52s after 4m25s
+  compilation). The HTTP harness then failed on the fixture source constraint,
+  independently identified in review: an invoice line lacked a time/fee source.
+  Corrected it to reference its own time entry, without relaxing the constraint.
+- Added the review's suggested final-check interruption test: a rendered body
+  waiting for authorization must release both admission permits and its single
+  pool connection after cancellation or timeout. No production change followed
+  focused GREEN. The corrected HTTP and nine-test verification remain pending.
+- Follow-up adversarial review confirms both findings are addressed, with no
+  remaining blocker or material test gap. Scoped Spec Kit analysis maps five FR
+  subsets and SC-006's regression subset to all three sequential tasks, with
+  zero unmapped tasks, ambiguity, duplication or constitutional conflict. This
+  does not close full-feature analysis or runtime cutover readiness.
+- Session 44742 runs the corrected nine-test subset, real HTTP matrix and full
+  server-binary regression sequentially; no new build was started while its
+  predecessor remained active. PostgreSQL is still the disposable instance.
+- The intervening MVP-status turn was a verified wait on session 44742, not an
+  implementation increment. Resumed that live handle without restarting it.
+  All nine focused tests pass (14.96s), as does the registered HTTP matrix
+  (12.66s); the 963-test server-binary regression is still running.
+- Revalidated Implement/Analyze prerequisites and constitution 1.1.0. The seven
+  local checklists remain complete; general requirements remain 12/16 under the
+  existing independent-increment authorization. No extension hooks apply.
+- Session 44742 is terminal: full server-binary regression passes, 952 passed,
+  zero failed and 11 existing exclusions, 963 discovered (333.10s). T104/T105
+  are complete. No production/test change followed the passing run.
+- Session 78435 runs complete SQLx regeneration after cleaning only the app's
+  local build artifacts, followed by offline all-targets Clippy and web/WASM
+  checks with warnings denied. The baseline cache contains 1,235 descriptors.
+- Session 78435 is terminal: SQLx regeneration passes (1m52s), adding 15
+  descriptors with none modified/deleted, 1,250 total. Offline all-targets
+  Clippy (2m13s) and web/WASM check (22.21s) pass with warnings denied.
+  GitHub confirms #212 remains open/draft on the same branch at `15c82ef`.
+- Next-consumer research, independently checked against migrations 0035/0039,
+  `projects::{insert_assignment,remove_assignment}`, project editor save/finalize,
+  `db::lock_organization` and the project export readers: the existing manager
+  prelude cannot certify Member scope. Relationship changes advance the parent
+  project revision, not the organization revision. Locking only snapshot-visible
+  projects misses winning scope expansion; locking all existing projects still
+  misses a newly finalized assigned project. The next contract must cover both
+  gains and losses, plus current access to every captured ID after rendering.
+  `ProjectExportRow` currently carries no IDs. CSV remains separate because
+  its transaction spans browser-paced sends. No new implementation or runtime
+  policy decision is inferred from this research.
+- Formatting passes with zero changes (4.274s); whitespace checks pass. The
+  disposable PostgreSQL server stopped cleanly, preserving its data. T104–T106
+  are complete; no full flake/browser, canonical activation or merge readiness
+  is claimed. Only the app's rebuildable artifacts were removed during checks.
+
+Next: publish this verified increment unsigned to draft #212 without merging,
+then refine Member project-export freshness and response-release checks using
+the recorded scope-expansion evidence before implementation.
+CSV, Member scope and full canonical policy/approval/UI/transition remain open.
+
 ## 2026-10-04 — Invoice editor verification
 
 - The intervening status turn was a verified wait: session 83018 confirmed all

@@ -97,6 +97,14 @@ close T042, replace legacy guards or authorize mixed-policy operation.
 
 ### Existing increments and remaining integration
 
+T104–T106 integrate manager-only materialized entries/invoice XLSX and invoice
+PDF exports under `contracts/manager-snapshots.md`. Preserve existing deadlines
+and size limits, commit before rendering, and recheck the original trusted actor
+before response release. The three handlers share one rendering/release helper;
+no database lock follows the body or blocking worker. No model, dependency,
+schema or arithmetic change is needed. Local constitution check passes; full
+policy, CSV streaming and Member project-export integration remain open.
+
 T101–T103 extend the reviewed manager-snapshot contract to invoice editor
 load/review. Reuse the same prelude; retain all business queries, evaluation,
 revision checks and mutation paths. Independent code research found no added

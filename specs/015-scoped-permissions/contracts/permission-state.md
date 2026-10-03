@@ -500,8 +500,13 @@ T101–T103 reuse that prelude for invoice editor load/review, preserving draft
 checks, exact revisions and business values. Mutation-only actor locks and
 invoice save/generation/status transactions are unchanged.
 
-This does not complete T039/T040. Reports/exports and canonical policy enforcement
-remain open. CSV streaming cannot retain these locks
+T104–T106 extend the same prelude to manager-only materialized report/invoice
+exports, preserving query deadlines and size/payload snapshots. Commit before
+rendering and recheck the original actor before response release, without locks
+through rendering or body consumption. See the same contract for that boundary.
+
+This does not complete T039/T040. Other reports/exports and canonical policy
+enforcement remain open. CSV streaming cannot retain these locks
 across client-paced sends. Member export scope also needs a relationship fence;
 the manager-only prelude does not protect legacy membership changes.
 

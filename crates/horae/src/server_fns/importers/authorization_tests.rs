@@ -24,6 +24,7 @@ use uuid::Uuid;
 use super::*;
 
 mod cli;
+mod exports;
 mod financial_snapshots;
 mod own_permissions;
 
@@ -206,6 +207,15 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     let upload_pool = pool.clone();
     let router = Router::new()
         .register_server_functions()
+        .route("/api/reports/export/xlsx", get(crate::reports::export_xlsx))
+        .route(
+            "/api/invoices/{id}/export/xlsx",
+            get(crate::reports::export_invoice_xlsx),
+        )
+        .route(
+            "/api/invoices/{id}/export/pdf",
+            get(crate::reports::export_invoice_pdf),
+        )
         .route(
             "/api/import/harvest/jobs/{job_id}/errors",
             get(crate::jobs::report::download),
@@ -319,6 +329,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     server.spawn(async move { axum::serve(listener, router).await.unwrap() });
     own_permissions::check(&pool, &api).await;
     financial_snapshots::check(&pool, &api).await;
+    exports::check(&pool, &api).await;
     let admin = api.cookie(owner.user_id).await;
     let expired = api.cookie(owner.user_id).await;
     assert_eq!(

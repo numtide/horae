@@ -1,5 +1,25 @@
 # Permissions discovery
 
+## Materialized export authority (2026-10-04)
+
+- Decision: reuse the manager prelude for entries/invoice/PDF materialization,
+  retain session actor and organization IDs, and check again after bounded
+  rendering before response release. Preserve all size/query/render limits.
+- Rationale: current `require_manager` discards actor identity, while
+  `limits::{entries,invoice,pdf}` accept organization alone. Independent code
+  research confirms these are the three manager-only materialized consumers.
+  The renderer may run for 30 seconds after reading; a fresh final check prevents
+  a revocation during that work from releasing an already-generated file.
+- Alternatives rejected: authorization only before rendering misses that window;
+  holding locks through rendering/client delivery delays revocation; configuring
+  READ ONLY after the locking helper or changing isolation after its queries is
+  incompatible with the prelude. Keep the streaming configurator's behavior and
+  Member project exports separate. Share only existing deadline setup.
+- Evidence: inspected `reports.rs`, `reports/{limits,bounded,streaming}.rs` and
+  `server_fns/snapshot.rs`; reuse the verified PostgreSQL snapshot/retry sources
+  below. No new Harvest operation or product policy is assumed. The final check
+  defines release authorization, not a guarantee after bytes have been released.
+
 ## Invoice editor snapshot boundary (2026-10-03)
 
 - Decision: reuse `server_fns::snapshot::manager` for editor load/review, retaining

@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT current_setting('transaction_isolation') AS \"isolation!\", current_setting('transaction_read_only') AS \"read_only!\", current_setting('statement_timeout') AS \"statement!\", current_setting('idle_in_transaction_session_timeout') AS \"idle!\", current_setting('lock_timeout') AS \"lock!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "isolation!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "read_only!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "statement!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "idle!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "lock!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "c2fc63f1e5633dab713800edab87e81382833138862012dd13c7db6d902931ca"
+}

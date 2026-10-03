@@ -41,9 +41,8 @@ async fn require_session(session: &Session) -> Result<(uuid::Uuid, uuid::Uuid), 
 }
 
 /// Every invoice server function gates on `require_manager`, so exporting one
-/// has to as well. Returns the manager's org id so the invoice fetches below
-/// can be org-scoped exactly like their server-fn counterparts.
-async fn require_manager(session: &Session) -> Result<uuid::Uuid, StatusCode> {
+/// has to as well. Retain both actor and tenant for transaction reauthorization.
+async fn require_manager(session: &Session) -> Result<(uuid::Uuid, uuid::Uuid), StatusCode> {
     let (user_id, _) = require_session(session).await?;
     let state = crate::state::global_state().await;
     let row = sqlx::query!(
@@ -58,8 +57,25 @@ async fn require_manager(session: &Session) -> Result<uuid::Uuid, StatusCode> {
 
     row.org_role
         .is_manager_or_above()
-        .then_some(row.org_id)
+        .then_some((user_id, row.org_id))
         .ok_or(StatusCode::FORBIDDEN)
+}
+
+async fn render_manager_export(
+    permit: bounded::ExportPermit,
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
+    render: impl FnOnce() -> Result<Vec<u8>, StatusCode> + Send + 'static,
+) -> Result<axum::body::Body, StatusCode> {
+    let body = permit.render(render).await?;
+    // Rendering holds no authority locks. Recheck before releasing its result.
+    limits::begin_manager(pool, org_id, actor_id)
+        .await?
+        .commit()
+        .await
+        .map_err(limits::database_error)?;
+    Ok(body)
 }
 
 /// Mirrors the Reports page filters, so a download matches what is on screen.
@@ -154,7 +170,7 @@ pub async fn export_csv(
 ) -> Result<impl IntoResponse, StatusCode> {
     // Same rows as the manager-only `report_detailed` server fn (every user's
     // hours and notes), so the same gate applies.
-    let org_id = require_manager(&session).await?;
+    let (_, org_id) = require_manager(&session).await?;
 
     let state = crate::state::global_state().await;
     streaming::entries(state.db.clone(), org_id, params).await
@@ -209,13 +225,16 @@ pub async fn export_xlsx(
 ) -> Result<impl IntoResponse, StatusCode> {
     // Same rows as the manager-only `report_detailed` server fn (every user's
     // hours and notes), so the same gate applies.
-    let org_id = require_manager(&session).await?;
+    let (actor_id, org_id) = require_manager(&session).await?;
     let permit = bounded::ExportPermit::acquire()?;
 
     let state = crate::state::global_state().await;
-    let entries = limits::entries(&state.db, org_id, &params).await?;
+    let entries = limits::entries(&state.db, org_id, actor_id, &params).await?;
 
-    let data = permit.render(move || entries_xlsx(&entries)).await?;
+    let data = render_manager_export(permit, &state.db, org_id, actor_id, move || {
+        entries_xlsx(&entries)
+    })
+    .await?;
 
     Ok((
         [
@@ -518,7 +537,7 @@ pub async fn export_invoice_csv(
     session: Session,
     Path(invoice_id): Path<uuid::Uuid>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let org_id = require_manager(&session).await?;
+    let (_, org_id) = require_manager(&session).await?;
 
     let state = crate::state::global_state().await;
     streaming::invoice(state.db.clone(), org_id, invoice_id).await
@@ -528,16 +547,17 @@ pub async fn export_invoice_xlsx(
     session: Session,
     Path(invoice_id): Path<uuid::Uuid>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let org_id = require_manager(&session).await?;
+    let (actor_id, org_id) = require_manager(&session).await?;
     let permit = bounded::ExportPermit::acquire()?;
 
     let state = crate::state::global_state().await;
-    let (invoice, lines) = limits::invoice(&state.db, org_id, invoice_id).await?;
+    let (invoice, lines) = limits::invoice(&state.db, org_id, actor_id, invoice_id).await?;
 
     let filename = format!("invoice-{}.xlsx", invoice.number);
-    let data = permit
-        .render(move || invoice_xlsx(&invoice, &lines))
-        .await?;
+    let data = render_manager_export(permit, &state.db, org_id, actor_id, move || {
+        invoice_xlsx(&invoice, &lines)
+    })
+    .await?;
 
     Ok((
         [
@@ -646,29 +666,28 @@ pub async fn export_invoice_pdf(
     session: Session,
     Path(invoice_id): Path<uuid::Uuid>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let org_id = require_manager(&session).await?;
+    let (actor_id, org_id) = require_manager(&session).await?;
     let permit = bounded::ExportPermit::acquire()?;
 
     let state = crate::state::global_state().await;
-    let document = limits::pdf(&state.db, org_id, invoice_id).await?;
+    let document = limits::pdf(&state.db, org_id, actor_id, invoice_id).await?;
 
     let filename = format!("invoice-{}.pdf", document.invoice.number);
-    let pdf_bytes = permit
-        .render(move || {
-            crate::render::render_invoice_pdf(
-                &document.invoice,
-                &document.lines,
-                &document.client_name,
-                document.client_address.as_deref(),
-                document.client_tax_id.as_deref(),
-                &document.branding,
-            )
-            .map_err(|e| {
-                tracing::error!("PDF rendering failed: {e}");
-                StatusCode::INTERNAL_SERVER_ERROR
-            })
+    let pdf_bytes = render_manager_export(permit, &state.db, org_id, actor_id, move || {
+        crate::render::render_invoice_pdf(
+            &document.invoice,
+            &document.lines,
+            &document.client_name,
+            document.client_address.as_deref(),
+            document.client_tax_id.as_deref(),
+            &document.branding,
+        )
+        .map_err(|e| {
+            tracing::error!("PDF rendering failed: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
         })
-        .await?;
+    })
+    .await?;
     Ok((
         [
             (

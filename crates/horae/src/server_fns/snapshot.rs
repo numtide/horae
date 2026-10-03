@@ -32,7 +32,7 @@ async fn authorize(
 
 /// Use session-derived IDs. Materialize and commit before external/client waits.
 /// This preserves the legacy manager boundary, not canonical grant enforcement.
-pub(super) async fn manager(
+pub(crate) async fn manager(
     pool: &PgPool,
     org_id: Uuid,
     actor_id: Uuid,

@@ -48,12 +48,33 @@ async fn begin(pool: &PgPool) -> Result<Transaction<'_, Postgres>, StatusCode> {
     Ok(tx)
 }
 
+pub(super) async fn begin_manager(
+    pool: &PgPool,
+    org_id: Uuid,
+    actor_id: Uuid,
+) -> Result<Transaction<'_, Postgres>, StatusCode> {
+    let mut tx = crate::server_fns::snapshot::manager(pool, org_id, actor_id)
+        .await
+        .map_err(|error| match error {
+            dioxus::prelude::ServerFnError::ServerError { code, .. } => {
+                StatusCode::from_u16(code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        })?;
+    configure_deadlines(&mut tx).await?;
+    Ok(tx)
+}
+
 pub(super) async fn configure_transaction(connection: &mut PgConnection) -> Result<(), StatusCode> {
     // Size checks and payload reads must see exactly the same rows and text.
     sqlx::query!("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
         .execute(&mut *connection)
         .await
         .map_err(database_error)?;
+    configure_deadlines(connection).await
+}
+
+async fn configure_deadlines(connection: &mut PgConnection) -> Result<(), StatusCode> {
     sqlx::query!("SET LOCAL statement_timeout = '5s'")
         .execute(&mut *connection)
         .await
@@ -68,11 +89,12 @@ pub(super) async fn configure_transaction(connection: &mut PgConnection) -> Resu
 pub(super) async fn entries(
     pool: &PgPool,
     org_id: Uuid,
+    actor_id: Uuid,
     params: &ExportParams,
 ) -> Result<Vec<DetailedReportRow>, StatusCode> {
     let from: chrono::NaiveDate = params.from.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
     let to: chrono::NaiveDate = params.to.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
-    let mut tx = begin(pool).await?;
+    let mut tx = begin_manager(pool, org_id, actor_id).await?;
     let size = sqlx::query!(
         r#"SELECT COUNT(*) as "rows!",
                   COALESCE(SUM(octet_length(project_name)::bigint + octet_length(task_name)
@@ -175,9 +197,10 @@ async fn read_invoice(
 pub(super) async fn invoice(
     pool: &PgPool,
     org_id: Uuid,
+    actor_id: Uuid,
     invoice_id: Uuid,
 ) -> Result<(Invoice, Vec<InvoiceLine>), StatusCode> {
-    let mut tx = begin(pool).await?;
+    let mut tx = begin_manager(pool, org_id, actor_id).await?;
     let result = read_invoice(&mut tx, org_id, invoice_id, XLSX).await?;
     tx.commit().await.map_err(database_error)?;
     Ok(result)
@@ -195,9 +218,10 @@ pub(super) struct PdfInvoice {
 pub(super) async fn pdf(
     pool: &PgPool,
     org_id: Uuid,
+    actor_id: Uuid,
     invoice_id: Uuid,
 ) -> Result<PdfInvoice, StatusCode> {
-    let mut tx = begin(pool).await?;
+    let mut tx = begin_manager(pool, org_id, actor_id).await?;
     let size = sqlx::query!(
         r#"SELECT COALESCE(SUM(octet_length(value)::bigint), 0)::bigint as "bytes!",
                   COALESCE(MAX(octet_length(value)), 0) as "field_bytes!"
@@ -248,6 +272,8 @@ mod tests {
     use horae_core::types::OrgRole;
     use std::io::{Cursor, Read};
 
+    mod authorization;
+
     fn xlsx_part(bytes: &[u8], path: &str) -> String {
         let mut zip = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
         let mut content = String::new();
@@ -297,7 +323,7 @@ mod tests {
     async fn invoice_exports_show_saved_adjustments_and_exact_large_amounts(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Manager).await;
         let (id, _) = add_invoice(&pool, &ids, 1).await;
-        let mut document = pdf(&pool, ids.org_id, id).await.unwrap();
+        let mut document = pdf(&pool, ids.org_id, ids.user_id, id).await.unwrap();
         let inv = &mut document.invoice;
         inv.subtotal_cents = 10001;
         inv.discount_bps = 1250;
@@ -442,12 +468,13 @@ mod tests {
         .await
         .unwrap();
         assert!(matches!(
-            entries(&pool, ids.org_id, &params()).await,
+            entries(&pool, ids.org_id, ids.user_id, &params()).await,
             Err(StatusCode::PAYLOAD_TOO_LARGE)
         ));
         let rows = entries(
             &pool,
             ids.org_id,
+            ids.user_id,
             &ExportParams {
                 tag_id: Some(tag),
                 ..params()
@@ -476,12 +503,15 @@ mod tests {
         add_entries(&pool, &other, 1).await;
         add_entries(&pool, &ids, XLSX.rows as usize).await;
         assert_eq!(
-            entries(&pool, ids.org_id, &params()).await.unwrap().len(),
+            entries(&pool, ids.org_id, ids.user_id, &params())
+                .await
+                .unwrap()
+                .len(),
             XLSX.rows as usize
         );
         add_entries(&pool, &ids, 1).await;
         assert!(matches!(
-            entries(&pool, ids.org_id, &params()).await,
+            entries(&pool, ids.org_id, ids.user_id, &params()).await,
             Err(StatusCode::PAYLOAD_TOO_LARGE)
         ));
         for filter in [
@@ -508,7 +538,7 @@ mod tests {
             },
         ] {
             assert!(
-                entries(&pool, ids.org_id, &filter)
+                entries(&pool, ids.org_id, ids.user_id, &filter)
                     .await
                     .unwrap()
                     .is_empty()
@@ -529,7 +559,7 @@ mod tests {
         .await
         .unwrap();
         assert!(matches!(
-            entries(&pool, ids.org_id, &params()).await,
+            entries(&pool, ids.org_id, ids.user_id, &params()).await,
             Err(StatusCode::PAYLOAD_TOO_LARGE)
         ));
         sqlx::query!(
@@ -540,7 +570,9 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(
-            entries(&pool, ids.org_id, &params()).await.unwrap()[0]
+            entries(&pool, ids.org_id, ids.user_id, &params())
+                .await
+                .unwrap()[0]
                 .notes
                 .as_ref()
                 .unwrap()
@@ -556,7 +588,7 @@ mod tests {
         .await
         .unwrap();
         assert!(matches!(
-            entries(&pool, ids.org_id, &params()).await,
+            entries(&pool, ids.org_id, ids.user_id, &params()).await,
             Err(StatusCode::PAYLOAD_TOO_LARGE)
         ));
     }
@@ -619,11 +651,15 @@ mod tests {
         let other = seed(&pool, OrgRole::Manager).await;
         let (id, lines) = add_invoice(&pool, &ids, PDF.rows as usize + 1).await;
         assert_eq!(
-            invoice(&pool, ids.org_id, id).await.unwrap().1.len(),
+            invoice(&pool, ids.org_id, ids.user_id, id)
+                .await
+                .unwrap()
+                .1
+                .len(),
             PDF.rows as usize + 1
         );
         assert!(matches!(
-            pdf(&pool, ids.org_id, id).await,
+            pdf(&pool, ids.org_id, ids.user_id, id).await,
             Err(StatusCode::PAYLOAD_TOO_LARGE)
         ));
         sqlx::query!("DELETE FROM invoice_line_items WHERE id = $1", lines[0])
@@ -631,15 +667,19 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(
-            pdf(&pool, ids.org_id, id).await.unwrap().lines.len(),
+            pdf(&pool, ids.org_id, ids.user_id, id)
+                .await
+                .unwrap()
+                .lines
+                .len(),
             PDF.rows as usize
         );
         assert!(matches!(
-            invoice(&pool, other.org_id, id).await,
+            invoice(&pool, other.org_id, other.user_id, id).await,
             Err(StatusCode::NOT_FOUND)
         ));
         assert!(matches!(
-            pdf(&pool, other.org_id, id).await,
+            pdf(&pool, other.org_id, other.user_id, id).await,
             Err(StatusCode::NOT_FOUND)
         ));
         sqlx::query!(
@@ -650,10 +690,10 @@ mod tests {
         .await
         .unwrap();
         assert!(matches!(
-            pdf(&pool, ids.org_id, id).await,
+            pdf(&pool, ids.org_id, ids.user_id, id).await,
             Err(StatusCode::PAYLOAD_TOO_LARGE)
         ));
-        assert!(invoice(&pool, ids.org_id, id).await.is_ok());
+        assert!(invoice(&pool, ids.org_id, ids.user_id, id).await.is_ok());
     }
 
     #[sqlx::test(migrations = "./migrations")]
@@ -674,7 +714,7 @@ mod tests {
         assert_eq!(before, during);
         tx.commit().await.unwrap();
         assert!(matches!(
-            invoice(&pool, ids.org_id, id).await,
+            invoice(&pool, ids.org_id, ids.user_id, id).await,
             Err(StatusCode::PAYLOAD_TOO_LARGE)
         ));
     }
@@ -716,7 +756,7 @@ mod tests {
             .unwrap();
         sqlx::query!("INSERT INTO project_fee_occurrences (id,org_id,project_id,period_key,due_on,description,amount_cents,currency) VALUES ($1,$2,$3,'single','2026-09-01','Fixed fee',12500,'EUR')", fee_id, ids.org_id, ids.project_id).execute(&pool).await.unwrap();
         sqlx::query!("INSERT INTO invoice_line_items (id,invoice_id,fee_occurrence_id,description,amount_cents) VALUES ($1,$2,$3,'Fixed fee',12500)", uuid::Uuid::now_v7(), id, fee_id).execute(&pool).await.unwrap();
-        let (invoice, lines) = invoice(&pool, ids.org_id, id).await.unwrap();
+        let (invoice, lines) = invoice(&pool, ids.org_id, ids.user_id, id).await.unwrap();
         let workbook = super::super::invoice_xlsx(&invoice, &lines).unwrap();
         let xml = xlsx_part(&workbook, "xl/worksheets/sheet1.xml");
         assert!(!xml.contains("r=\"B2\""));
@@ -724,7 +764,7 @@ mod tests {
         assert_cell(&xml, "D2", "125");
         assert_cell(&xml, "D3", "125");
         assert_cell(&xml, "D4", "125");
-        let document = pdf(&pool, ids.org_id, id).await.unwrap();
+        let document = pdf(&pool, ids.org_id, ids.user_id, id).await.unwrap();
         tokio::task::spawn_blocking(move || {
             let render = || {
                 crate::render::render_invoice_pdf(
@@ -757,7 +797,9 @@ mod tests {
         .execute(&pool)
         .await
         .unwrap();
-        let rows = entries(&pool, ids.org_id, &params()).await.unwrap();
+        let rows = entries(&pool, ids.org_id, ids.user_id, &params())
+            .await
+            .unwrap();
         let sheet = super::super::entries_xlsx(&rows).unwrap();
         let xml = xlsx_part(&sheet, "xl/worksheets/sheet1.xml");
         assert_cell(&xml, "E2", "1");
@@ -768,14 +810,14 @@ mod tests {
             .unwrap();
         let sheet = super::super::projects_xlsx(&rows).unwrap();
         assert!(xlsx_part(&sheet, "xl/sharedStrings.xml").contains("Widget"));
-        let (invoice, lines) = invoice(&pool, ids.org_id, id).await.unwrap();
+        let (invoice, lines) = invoice(&pool, ids.org_id, ids.user_id, id).await.unwrap();
         let sheet = super::super::invoice_xlsx(&invoice, &lines).unwrap();
         let xml = xlsx_part(&sheet, "xl/worksheets/sheet1.xml");
         assert_cell(&xml, "C2", "12.34");
         assert_cell(&xml, "D2", "12.34");
         assert_cell(&xml, "D3", "12.34");
         assert_cell(&xml, "D4", "12.34");
-        let document = pdf(&pool, ids.org_id, id).await.unwrap();
+        let document = pdf(&pool, ids.org_id, ids.user_id, id).await.unwrap();
         tokio::task::spawn_blocking(move || {
             let render = || {
                 crate::render::render_invoice_pdf(
@@ -804,7 +846,9 @@ mod tests {
         let (id, _) = add_invoice(&pool, &ids, PDF.rows as usize).await;
         add_entries(&pool, &ids, (XLSX.rows - PDF.rows) as usize).await;
         let start = std::time::Instant::now();
-        let rows = entries(&pool, ids.org_id, &params()).await.unwrap();
+        let rows = entries(&pool, ids.org_id, ids.user_id, &params())
+            .await
+            .unwrap();
         assert_eq!(rows.len(), XLSX.rows as usize);
         let loaded = start.elapsed();
         let bytes = tokio::task::spawn_blocking(move || super::super::entries_xlsx(&rows).unwrap())
@@ -825,7 +869,7 @@ mod tests {
         }
         drop(bytes);
         let start = std::time::Instant::now();
-        let document = pdf(&pool, ids.org_id, id).await.unwrap();
+        let document = pdf(&pool, ids.org_id, ids.user_id, id).await.unwrap();
         let loaded = start.elapsed();
         let bytes = tokio::task::spawn_blocking(move || {
             crate::render::render_invoice_pdf(

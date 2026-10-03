@@ -1,5 +1,40 @@
 # Permission verification
 
+## Materialized export authorization (T104–T106)
+
+Use the pinned Nix shell and disposable PostgreSQL only:
+
+```sh
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae materialized_exports --locked
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization --locked
+```
+
+| Requirement subset | Executable check |
+| --- | --- |
+| FR-006/007: trusted, current same-tenant actor | `materialized_exports_deny_revoked_managers`, `materialized_exports_require_same_tenant_active_actor`, real export HTTP sessions |
+| FR-010: winning revocation and revision refresh | `materialized_exports_deny_winning_legacy_revocations`, `materialized_exports_refresh_after_access_revision_change` |
+| FR-010/018: reader-first authority, cancellation and pool reuse | `materialized_exports_retain_authority_and_release_cancelled_reads`, `materialized_exports_release_rendered_body_when_final_check_is_interrupted` |
+| FR-017/018: exact coherent checked payload, existing limits/deadlines | `materialized_exports_preserve_checked_snapshots`, `materialized_exports_keep_deadlines_and_restore_pool_defaults`, existing bounded exports and streaming regressions |
+| FR-007/010: current authority after rendering, no locks during rendering | `materialized_exports_recheck_after_render_without_retaining_authority` |
+| FR-018 / SC-006 subset: real delivery, non-disclosure and preservation | `authorization_tests::exports::check` plus full server-binary regressions |
+
+RED reproduced entries still being returned after the fixture Manager was
+demoted. Both authorization boundaries preserve the current Manager/Admin rule;
+this is not canonical policy activation or complete CSV/Member-scope acceptance.
+The final check authorizes response release, not continuous revocation while the
+browser consumes bytes. Focused GREEN passes all nine tests (14.96s), and the
+real-cookie HTTP matrix passes (12.66s). Full server-binary regression passes:
+952 passed, zero failed and 11 existing exclusions (333.10s). Independent
+adversarial review's fixture-source correction and final-check interruption
+coverage are included in that passing run; no remaining local blocker was found.
+Scoped analysis maps the five FR subsets and SC-006 regression subset to all
+three tasks, with no unmapped task or local consistency/constitution finding.
+Complete SQLx regeneration passes (1m52s), adding 15 descriptors with none
+modified/deleted, 1,250 total. Offline all-targets Clippy (2m13s) and web/WASM
+check (22.21s) pass with warnings denied. Final formatting, cleanup and
+publication are recorded in `progress.md`. Full flake/browser and feature
+acceptance remain open.
+
 ## Invoice editor snapshots (T101–T103)
 
 Run in the pinned Nix shell against disposable PostgreSQL:

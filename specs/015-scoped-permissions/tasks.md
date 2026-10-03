@@ -369,6 +369,17 @@ policy activation is introduced; full US3/T039/T040 acceptance stays separate.
 - [x] T102 [US3] Reuse the manager prelude in `crates/horae/src/server_fns/invoices/editing.rs` load/review only; preserve business validation, DTOs and mutation guards (FR-006/007/010/017).
 - [x] T103 [US3] Extend registered HTTP coverage in `crates/horae/src/server_fns/importers/authorization_tests/financial_snapshots.rs`, run reader/financial/server regressions and cache/offline/lint/format gates, adversarial review and analysis; record evidence in `specs/015-scoped-permissions/quickstart.md` and `progress.md` (FR-018, SC-006 subset).
 
+### Materialized export authorization
+
+T103 → T104 → T105 → T106 extends the same snapshot contract. These tasks are
+sequential: signatures, shared fixtures and real-route harness overlap. The
+independent check is current authority at materialization and response release,
+not complete canonical US3 enforcement. No new grant predicate is inferred.
+
+- [x] T104 [US3] Reproduce revoked-manager disclosure and add reader/race/timeout/cancellation/render-release tests in `crates/horae/src/reports/limits/tests/authorization.rs`, reusing existing limit fixtures (FR-006/007/010/017/018).
+- [x] T105 [US3] Integrate the shared snapshot prelude and retained actor IDs in `crates/horae/src/reports.rs`, `reports/limits.rs`, `server_fns.rs` and `server_fns/snapshot.rs`; recheck after bounded rendering, preserve deadlines and keep CSV/Member paths unchanged (FR-006/007/010/017).
+- [x] T106 [US3] Verify real export routes in `crates/horae/src/server_fns/importers/authorization_tests/exports.rs` and its existing harness; run full server/export regressions, SQLx/offline/lint/format gates, adversarial review and analysis; record evidence in `specs/015-scoped-permissions/quickstart.md` and `progress.md` (FR-018, SC-006 subset).
+
 ## Phase 7: US4 — Custom profiles and permission explanations (P2)
 
 ### Isolated create/delete command implementation
