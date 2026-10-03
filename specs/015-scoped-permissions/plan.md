@@ -97,6 +97,14 @@ close T042, replace legacy guards or authorize mixed-policy operation.
 
 ### Existing increments and remaining integration
 
+T095–T097 provide FR-012's authenticated own-permission projection under
+`contracts/own-permissions.md`, using the existing strict loader and assignment
+tables. The local constitution check passes: no schema, dependency, mutation or
+guard replacement; only disposable fixtures enable policy 1. Policy 0 exposes no
+staged grants. A separate shared DTO cannot become trusted authorization input.
+Settings/Workspace rendering, other-person administration and full activation
+remain outside this read-only slice.
+
 T092–T094 implement approved FR-021/022's pure rate-field gate under
 `contracts/rate-scope-evidence.md`. Typed owners prevent using person scope for
 project overrides or project scope for general person history. Existing catalog,

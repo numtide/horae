@@ -398,6 +398,16 @@ delivery and integration, rather than claiming an internal helper completes it.
 
 - [ ] T018 [US4] Align permission controls/descriptions in `crates/horae/src/pages/` Settings and Workspace using existing components and `design/project/app/08_Settings.dc.html` / `09_Workspace.dc.html`; apply design skills and browser viewport/theme/keyboard checks (FR-012/016).
 
+### Authenticated own-permission projection
+
+T035/T036/T057 → T095 → T096 → T097 implements `contracts/own-permissions.md`.
+Sequential work: the reader, DTO and existing HTTP matrix share the test boundary.
+No full US4 or activation completion follows from this read-only slice.
+
+- [x] T095 [US4] Add failing strict/legacy/own-scope/revocation reader tests in `crates/horae/src/server_fns/permissions/tests/own.rs` and real-cookie route cases in `server_fns/importers/authorization_tests/own_permissions.rs` (FR-006/007/010/012/017/018).
+- [x] T096 [US4] Implement `server_fns/permissions/own.rs`, a separate shared `models/own_permissions.rs` DTO and no-argument `get_my_permissions` wrapper in `server_fns/auth.rs`; update module wiring and operation inventory without policy activation or changing existing guards (FR-012).
+- [x] T097 [US4] Verify production-reader and registered-route tests, affected regressions, complete SQLx cache, offline server/web builds, lint/format and adversarial review; record results in `specs/015-scoped-permissions/quickstart.md` and `progress.md`.
+
 ## Phase 8: US5 — Data-preserving transition (P1)
 
 Independent test: populated migration fixture, reviewed access differences, safe retry and no import-driven privilege overwrite.

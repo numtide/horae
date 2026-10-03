@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT permission_policy_version, access_revision FROM organizations WHERE id = $1 FOR SHARE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "permission_policy_version",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "access_revision",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "32e5119e6824900fd06e31f0853f4110f556c55f249d4da41db6bb2a366bce70"
+}

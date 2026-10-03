@@ -1,4 +1,4 @@
-//! Strict storage reads and internal template commands; no active-policy endpoints.
+//! Strict permission storage, internal commands and the own-access snapshot reader.
 
 use horae_core::permissions::catalog::{Permission, PermissionSelection, StoredPermissionError};
 use serde::{Deserialize, de::IntoDeserializer};
@@ -8,6 +8,7 @@ use uuid::Uuid;
 use crate::models::permissions::{PermissionSource, PermissionTemplate, PersonPermissions};
 
 pub(crate) mod audit;
+pub(crate) mod own;
 pub(crate) mod profiles;
 pub(crate) mod project_management;
 pub(crate) mod templates;
@@ -128,3 +129,7 @@ mod project_management_tests;
 #[cfg(test)]
 #[path = "permissions/tests/audit.rs"]
 mod audit_tests;
+
+#[cfg(test)]
+#[path = "permissions/tests/own.rs"]
+mod own_tests;

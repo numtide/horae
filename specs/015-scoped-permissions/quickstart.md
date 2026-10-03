@@ -1,5 +1,44 @@
 # Permission verification
 
+## Authenticated own-access explanation (T095–T097)
+
+Use the pinned Nix shell and the owned disposable PostgreSQL database; only
+fixtures enable policy 1. No reference-account or deployment mutation is needed.
+
+```sh
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae own_permissions --locked
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization --locked
+```
+
+| Requirement subset | Executable evidence |
+| --- | --- |
+| FR-006/012: exact own grants and relationships, no implied directory access | `own_permissions_preserve_exact_grants_and_independent_identity`, `own_permissions_scope_is_sorted_and_excludes_membership_and_other_managers` |
+| FR-007/017: preserve legacy policy, tenant/activity boundary and state | `own_permissions_legacy_mode_never_discloses_staging`, `own_permissions_deny_invalid_identity_policy_and_state`, unchanged-state snapshot in the scope test |
+| FR-010: current authority across both race orders | `own_permissions_wait_for_current_actor_deactivation`, `own_permissions_reload_after_winning_gate_under_repeatable_read_defaults`, `own_permissions_reader_retains_actor_activity_until_snapshot_is_loaded` |
+| FR-018: registered delivery, session-only selection and non-disclosing errors | `authorization_tests::own_permissions::check` within the existing HTTP matrix; absent/expired/inactive cookies, forged selectors, unsupported catalog and malformed grants |
+
+RED: the legacy-mode test failed against the unavailable stub. Initial GREEN:
+seven reader tests passed in 3.71s and the HTTP matrix passed in 9.11s. Independent
+adversarial review found no blocker; its two-project ordering and HTTP catalog
+error coverage suggestions were added before final regression.
+
+Scoped Spec Kit analysis: six FRs above map to T095–T097, with no unmapped task,
+local ambiguity, duplication or constitutional conflict. SC-002/003/006 gain
+reader/HTTP evidence only; SC-005 and full US4 acceptance still need rendering
+and browser checks. The general requirements checklist remains 12/16, and full
+operation/migration/activation analysis is not declared complete. Final build,
+regression, cache and formatting results belong in the progress register.
+
+Final verification: all 929 server-binary tests passed, zero failed, 11
+pre-existing exclusions (202.37s). Complete SQLx regeneration added 26 descriptors
+without changing/deleting existing ones (51.20s); fresh offline all-targets server
+Clippy with warnings denied passed (59.74s). The offline WASM build with warnings
+denied passed (41.00s). Only the shared DTO carries a non-server dead-code
+expectation for the pending T018 consumer; no global warning suppression exists.
+
+This endpoint supplies display facts, never later request authority. It neither
+replaces legacy guards nor completes other-person administration or the UI.
+
 ## Pure rate-field policy (T092–T094)
 
 Run in the pinned Nix shell; no database or reference account is required:

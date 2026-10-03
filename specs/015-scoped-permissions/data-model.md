@@ -32,6 +32,16 @@ Original import requester storage is specified in
 only on new authorized insertion. Historical NULL is preserved. It is provenance,
 not effective worker authority, and is absent from existing external job DTOs.
 
+## Own-access display
+
+`models::own_permissions::OwnPermissions` is a separate shared display DTO under
+`contracts/own-permissions.md`: exact grants, catalog version, independent
+administrator identity, organization/person revisions and sorted own management
+IDs. `auth::get_my_permissions` accepts no selectors and derives identity from
+the session. Trusted storage models remain server-only and non-deserializable.
+Legacy policy yields None, never staged grants or a synthesized profile. The DTO
+does not carry authority for subsequent requests or imply resource access.
+
 ## Pure record-scope foundation
 
 - `AccessScope`: private flags for `NONE`, `OWN`, `MANAGED_PEOPLE`, `MANAGED_PROJECTS`, `ORGANIZATION`. Union is explicit and never infers a capability or a broader role.

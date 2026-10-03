@@ -1,5 +1,63 @@
 # Scoped permissions investigation progress
 
+## 2026-10-03 — Authenticated own-permission explanation
+
+- The intervening MVP-status turn added no implementation; its collection of
+  terminal test output confirmed seven reader tests and the registered HTTP
+  matrix passed. Revalidated the existing dirty worktree at published `c0cfb8f`;
+  resumed the same T095–T097 increment, without restarting completed tests.
+- Spec Kit Plan/Tasks reuse the strict loader and existing relations under
+  `contracts/own-permissions.md`. Requirement readiness remains 12/16; the seven
+  independent checklists pass. Prior authorization permits closed increments,
+  not full cutover. No extension hooks are present.
+- Added a no-argument session-owned endpoint and separate shared display DTO.
+  READ COMMITTED plus organization SHARE then active actor SHARE prevents stale
+  reads across winning revocation. Legacy mode does not inspect staged grants;
+  unsupported/malformed state gets a fixed HTTP error. No schema, dependency,
+  UI/CSS, legacy guard or real-data change is included.
+- RED failed on the legacy None behavior against the unavailable stub. Initial
+  GREEN: seven reader tests passed in 3.71s; registered HTTP matrix passed in
+  9.11s. Independent adversarial review found no blocker. Added its suggested
+  two-project ordering and unsupported-catalog HTTP error cases before full
+  regression, cache and offline checks.
+
+Next: finish regression, SQLx regeneration, offline server/web and lint/format
+checks, then publish unsigned to draft #212 without merging. Full runtime
+enforcement, UI, approvals, migration review and acceptance remain open.
+
+- Full server-binary regression after review additions: 929 passed, zero failed,
+  11 pre-existing exclusions, 940 discovered, 202.37s. The registered HTTP matrix
+  includes the unsupported catalog and valid-restored-state checks. T095/T096
+  are complete; T097 verification remains in progress.
+
+- Initial WASM build passed in 48.66s with one dead-code warning for the pending
+  UI consumer. Added a non-server-only `expect(dead_code)` on that DTO, linked
+  to T018, rather than suppressing warnings globally or inventing a UI consumer.
+  The final web build treats warnings as errors. First Nix format adjusted four
+  Rust files; no unrelated file changed.
+
+- Scoped Spec Kit analysis maps all six local FRs to T095–T097 and their test
+  scenarios with no ambiguity, duplication, unmapped task or constitutional
+  conflict. Full SC-001–009 acceptance remains open. GitHub confirms #212 remains
+  open/draft at the expected published branch head.
+
+- Complete SQLx regeneration passes in 51.20s: 26 added descriptors, zero
+  existing descriptors modified/deleted, 1,206 total. Fresh offline all-targets
+  server Clippy passes with warnings denied in 59.74s. Offline WASM build with
+  warnings denied passes in 41.00s. PostgreSQL has stopped cleanly; no data was
+  removed. Full flake/browser acceptance is not claimed for this read-only slice.
+
+- Nix formatting passes with zero changes (3.224s). T095–T097 are complete and
+  ready for unsigned publication to the existing draft; no critical/high local
+  review finding remains. The full implementation goal remains active.
+
+Next after publication: resume T006/T042's operation integration gates, including
+snapshot-based report/fee/invoice readers in `contracts/permission-state.md`.
+Their read-only REPEATABLE READ transactions cannot accept a row-lock gate
+unchanged; preserve snapshot consistency and verify winning revocation/retry
+against production helpers before guard replacement. Do not infer pending
+historical-job, inactive-manager or lifecycle answers from this increment.
+
 ## 2026-10-03 — Approved rate-field policy
 
 - The preceding turn was a status report, not implementation progress. Rechecked
