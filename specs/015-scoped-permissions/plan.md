@@ -97,6 +97,15 @@ close T042, replace legacy guards or authorize mixed-policy operation.
 
 ### Existing increments and remaining integration
 
+T065–T067 repair the concrete legacy-report conversion inversion documented in
+`contracts/permission-state.md`. Discover without a row lock, acquire organization
+SHARE, then recheck and lock the exact tenant/job under explicit READ COMMITTED.
+Keep discovery and conversion on one connection and commit before rediscovery.
+Preserve bounded chunks, rollback and lease fencing; a job already bounded by a
+worker must retain its lease. Independent lock research reviewed this local path.
+The constitution check passes without new schema, dependencies, policy activation
+or real-data operations. Full T042 and gated import authorization remain open.
+
 T062–T064 implement the internal audit-read contract in `contracts/audit-lookup.md`
 using receipt-ID lookup, organization SHARE and strict historical projections.
 The bounded constitution check passes: no mutations, new storage, dependency or

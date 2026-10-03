@@ -1,5 +1,56 @@
 # Permission verification
 
+## Legacy report lock integration (T065–T067)
+
+Run in the Nix shell against the owned disposable PostgreSQL compilation DB:
+
+```sh
+CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae jobs::report:: --locked
+CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae --locked
+```
+
+New production-path concurrency coverage in `jobs/report/tests.rs`:
+
+- `legacy_upgrade_preserves_a_concurrently_archived_workers_lease`: organization-first
+  worker versus converter; preserve the exact saved checkpoint, claim and archive.
+- `concurrent_legacy_converters_archive_each_error_once`: both discover before
+  the organization gate opens; job recheck prevents duplicate conversion/chunks.
+- `legacy_converter_rediscovers_after_candidate_deletion`: remove the discovered
+  job while waiting and continue with another organization's oversized report.
+- `legacy_converter_uses_replaced_payload_after_waiting`: convert the current
+  replacement with a connection default of REPEATABLE READ and a size-one pool.
+- `legacy_converter_gate_allows_a_job_locked_workers_chunk_foreign_keys`: an
+  ungated worker holding the job can obtain organization FK KEY SHARE and finish
+  while the converter holds SHARE and waits; its bounded checkpoint keeps its claim.
+
+Existing migration fixtures cover bounded paging, oversized Unicode errors,
+rollback of chunk inserts, lease invalidation for actual conversions, all job
+states, existing archive prefixes, size-one pools and repeated startup. These
+tests do not prove the full permission hierarchy or authorize policy activation.
+
+RED: the first test failed with PostgreSQL `deadlock detected` before the repair.
+The first focused run after repair passed that case and the simultaneous/replaced
+cases; one deletion assertion incorrectly used a current-schema status reader on
+the pre-0028 fixture. Replaced that assertion with a tenant-scoped existence query,
+without changing production behavior or weakening archive checks.
+
+Focused verification now passes 11/11, including all five new races. Local
+adversarial review traced the one-connection lifetime, exact tenant/predicate
+recheck, compatible chunk FK mode and commit-before-rediscovery paths. Tests use
+observed PostgreSQL blockers, not sleeps; JoinSet aborts remaining test tasks on
+failure. Existing malformed/archive rollback and lease-fencing cases still pass.
+No critical/high finding remains in this bounded repair. This is self-review
+supported by earlier independent design research, not independent code review or
+complete T042 acceptance. No browser, separate integration binary or full flake
+run is claimed by these results.
+
+Final verification: 878 server binary tests passed, zero failed and 11 pre-existing
+ignored (185.13 seconds); all 161 core tests passed. Complete non-incremental SQLx
+preparation added 11 descriptions and replaced only the obsolete discovery query
+(one deletion). Fresh offline all-targets Clippy passed with warnings denied.
+Formatting passed with zero changes. The package clean removed only 1.4 GiB of
+regenerable worktree artifacts. No schema or real data was changed.
+
 ## Foundation (no database)
 
 From this worktree:

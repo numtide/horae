@@ -177,6 +177,18 @@ an enforced deployment fence, not a comment asserting startup is exclusive.
 `db::run_migrations` calls this converter after the SQLx migration call returns;
 that order does not establish exclusion from other running application instances.
 
+The reviewed T065–T067 repair uses explicit READ COMMITTED and one connection
+through discovery and conversion. Organization SHARE precedes job UPDATE; SHARE
+coordinates with access-changing UPDATE gates while remaining compatible with
+an ungated worker's chunk-insert organization KEY SHARE. Recheck both IDs and the
+oversized predicate after waiting. If the organization/job disappeared or the
+report became bounded, commit before rediscovering; never invalidate that live
+worker's claim or append duplicate chunks. Two converters must serialize on the
+job and recheck eligibility. A still-oversized replacement is converted from its
+current payload, not discovery-time data. Keep existing bounded paging, archive
+validation, atomic rollback and single-connection-pool acceptance. Database errors
+abort the whole conversion transaction; no statement-only retry is introduced.
+
 ### Candidate common hierarchy, not yet activation-ready
 
 1. Acquire any nonblocking import reservation outside the authorization

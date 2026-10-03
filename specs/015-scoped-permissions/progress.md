@@ -1,5 +1,44 @@
 # Scoped permissions investigation progress
 
+## 2026-10-03 — Legacy report lock integration resumed
+
+- The preceding MVP status turn made no implementation progress. Revalidated
+  the clean worktree at published `fc85231`; the previous audit publication is
+  complete. The root's untracked browser artifacts are unrelated and untouched.
+- Spec Kit prerequisites resolve feature 015. Requirements remain 12/16, all
+  six prior local checklists 7/7; existing authorization permits closed increments.
+  Added T065–T067 for the independently reviewed converter lock repair, not full
+  T042 or policy activation. No extension hooks are present.
+- Project-editor research found that an organization UPDATE prefix would add
+  cycles with ungated invoice/budget FK writers. A NO KEY UPDATE alternative
+  needs separate caller/trigger coverage; it is not implemented or accepted here.
+- The converter repair is independent of unanswered person-management lifecycle
+  predicates. Only the owned disposable PostgreSQL cluster on 55416 is started.
+
+Next: reproduce the actual converter/checkpoint race, implement the reviewed
+organization-first recheck, then verify concurrency, regression and SQLx gates.
+
+- RED reproduced the intended production race: the actual converter failed with
+  PostgreSQL `deadlock detected` while an organization-gated worker archived and
+  saved its checkpoint. No mocked lock sequence was substituted.
+
+- Implemented the organization-first recheck and added four concurrency tests:
+  worker lease preservation, simultaneous converters, deleted candidate with
+  cross-organization rediscovery, and changed payload with a REPEATABLE READ
+  connection default. The focused suite is compiling; success is not yet claimed.
+
+- The corrected focused suite passes 11/11, including a fifth new test for an
+  ungated job-owning worker's organization FK compatibility. All 161 core tests
+  pass. Full server regressions are running; T065/T066 are checked, T067 remains
+  open until cache/offline verification. Formatting made zero changes.
+
+- GitHub confirms #212 remains open/draft at `fc85231`; no merge or policy
+  activation is requested. The bounded implementation uses no new dependencies.
+
+- Full server binary regressions passed: 878 passed, zero failed, 11 pre-existing
+  ignored (185.13 seconds). Complete SQLx regeneration and fresh offline Clippy
+  follow the package-local artifact clean; no source or data is removed.
+
 ## 2026-10-02 — Resume PR #212 with the current Harvest account
 
 - Objective: extract all available permission evidence from the existing account;
@@ -1529,3 +1568,31 @@ Person-management additions still await the existing active-responsible-person
 clarification; continue independent integration analysis without guessing it or
 asking it again. Authenticated surfaces, scoped approvals, UI, reviewed migration
 and full acceptance remain required. The goal stays active.
+
+## 2026-10-03 — Verified legacy report conversion repair
+
+- T065–T067 are complete. The original production race failed with a real
+  PostgreSQL deadlock before the organization-first repair. All 11 report tests,
+  including five new concurrency cases, now pass. Full server regressions passed
+  878 tests, zero failures and 11 pre-existing ignored; all 161 core tests passed.
+- Complete SQLx preparation adds 11 descriptions and removes only the old locking
+  discovery query. Fresh offline all-targets Clippy passed with warnings denied;
+  formatting passed with zero changes and diff checks passed. The local package
+  clean removed 1.4 GiB of regenerable artifacts, no source or data.
+- Earlier independent design research and this turn's adversarial self-review
+  cover this local edge, not full T042. Spec Kit and Rust/testing guidance kept
+  production changes inside the existing converter and used real PostgreSQL
+  blockers, lease/archive functions and bounded rollback fixtures. No dependency,
+  schema, UI, CSS, authenticated endpoint or new policy activation was introduced.
+- Requirements remain 12/16; seven local readiness checklists pass 7/7. GitHub
+  confirmed existing #212 open/draft before publication. Publish unsigned on the
+  existing branch without merging; no live-data migration or Harvest writes.
+
+Next: continue the remaining T006/T042 integration prerequisites, particularly
+project/editor and task-assignment writers against invoice/budget/import paths.
+Review the proposed organization NO KEY UPDATE staging mode before implementing
+it; preserve existing editor isolation and test both task-linking callers and
+revision triggers. Person-management additions still await the existing
+active-responsible-person clarification, which is not answered by this repair.
+Full authenticated enforcement, approvals, UI, migration and acceptance remain
+required. The goal remains active, not complete or blocked.

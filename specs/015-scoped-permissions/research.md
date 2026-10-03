@@ -399,6 +399,27 @@ settle it. No rate scope or prerequisite has been invented to close the gate.
   operators, or inventing an operator command registry. The recorded command is
   an audit label, never execution authority. UI/listing remains separate.
 
+### Legacy converter lock repair — 2026-10-03
+
+Independent source review traced the converter, chunk foreign keys, worker lease
+publication and queue maintenance. Organization SHARE before job UPDATE avoids
+the reverse organization-FK edge while allowing an existing worker's KEY SHARE.
+One transaction connection retains size-one-pool support; commit before choosing
+another candidate avoids retaining locks across organizations. Discovery is not
+authority to mutate: recheck the exact tenant/job and oversized predicate.
+
+PostgreSQL documents compatible SHARE/KEY SHARE modes and READ COMMITTED's fresh
+statement snapshots and predicate re-evaluation after concurrent updates. These
+support the selected mechanism, not proof that every application writer follows
+the full hierarchy. Sources checked 2026-10-03:
+[row locks](https://www.postgresql.org/docs/17/explicit-locking.html#LOCKING-ROWS),
+[READ COMMITTED](https://www.postgresql.org/docs/17/transaction-iso.html#XACT-READ-COMMITTED).
+
+The project-editor investigation is separate: UPDATE-first can deadlock with
+ungated invoice/budget FK writers. NO KEY UPDATE is a candidate staging mode,
+not an implemented or globally verified solution. Preserve editor isolation and
+review both task-linking callers and revision triggers before changing it.
+
 ### Previous workflow record
 
 - Followed the checked-in `speckit-specify` skill, local template and constitution. No extension hooks or template preset overrides were found.

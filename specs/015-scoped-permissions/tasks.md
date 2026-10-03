@@ -221,6 +221,12 @@ hierarchy and audited transactions; combined expense behavior depends on 016.
 
 ## Phase 6: US3 — Enforcement on every delivery path (P1)
 
+### Legacy report conversion lock integration
+
+- [x] T065 [US3] Reproduce the converter versus actual archive/checkpoint writer deadlock in `crates/horae/src/jobs/report/tests.rs`; cover competing converters, changed/deleted candidates, exact archive preservation and current lease retention (FR-010/017/018; `contracts/permission-state.md`).
+- [x] T066 [US3] Reorder `crates/horae/src/jobs/report/legacy.rs` to nonlocking discovery, organization SHARE and exact tenant/job oversized recheck under explicit READ COMMITTED on one connection; preserve atomic conversion and commit before rediscovery.
+- [x] T067 [US3] Run converter/worker and affected regressions, regenerate `.sqlx/`, check offline all-targets Clippy and formatting; review lock compatibility, rollback and lease preservation and record results in `quickstart.md` and `progress.md`. This does not close full T039/T040/T042 or activate policy.
+
 Independent test: replay forbidden direct reads/writes and downloads; revoke between preview/execution/download; inspect returned payloads.
 
 - [ ] T014 [US3] Add cross-surface negative payload, aggregation and revocation tests in `crates/horae/tests/integration.rs` and surface-specific test modules. Include approved C02: report-only grants allow defined financial report fields and matching exports, but not ordinary rate reads/history/edits or unrelated reports; rate-only grants do not authorize financial reports. Cover neither grant, out-of-scope/foreign records, forged report-family selection and revocation before generation/download (FR-007/008/010/018).

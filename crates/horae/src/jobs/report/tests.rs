@@ -416,3 +416,402 @@ async fn legacy_job_metadata(pool: &sqlx::PgPool, id: Uuid) -> serde_json::Value
          FROM horae_jobs j WHERE id = $1", id,
     ).fetch_one(pool).await.unwrap()
 }
+
+#[sqlx::test(migrations = false)]
+#[serial_test::serial]
+async fn legacy_upgrade_preserves_a_concurrently_archived_workers_lease(pool: sqlx::PgPool) {
+    use serde_json::json;
+    use std::time::Duration;
+
+    legacy_pool(pool.clone()).await.close().await;
+    let org = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO organizations (id, name) VALUES ($1, 'Converter race')",
+        org
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let id = legacy_csv_job(&pool, org).await;
+    let (lease, _stop) = jobs::claim_lease_for_test(&pool).await;
+    let mut report = ImportReport::new(SourceKind::Csv, ImportMode::Commit);
+    report.record(
+        EntityType::TimeEntry,
+        &RowOutcome::Errored {
+            source_location: "legacy row".into(),
+            reason: "invalid date ".repeat(2_000),
+        },
+    );
+    let expected_errors = report.row_errors.clone();
+    let metadata = serde_json::to_value(&report).unwrap();
+    let mut tx = pool.begin().await.unwrap();
+    lease
+        .save_checkpoint(
+            &mut tx,
+            &json!({"version": 1, "report": metadata}),
+            &metadata,
+            "time_entries",
+            1,
+        )
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+
+    // The domain writer owns the organization before publishing its checkpoint.
+    let mut writer = pool.begin().await.unwrap();
+    sqlx::query!("SELECT id FROM organizations WHERE id = $1 FOR UPDATE", org)
+        .fetch_one(&mut *writer)
+        .await
+        .unwrap();
+    let pid = sqlx::query_scalar!("SELECT pg_backend_pid() AS \"pid!\"")
+        .fetch_one(&mut *writer)
+        .await
+        .unwrap();
+    let converter_pool = pool.clone();
+    let mut converters = tokio::task::JoinSet::new();
+    converters.spawn(async move { super::upgrade_legacy_reports(&converter_pool).await });
+    crate::server_fns::test_seed::wait_for_blocked(&pool, pid).await;
+
+    let written = tokio::time::timeout(Duration::from_secs(10), async {
+        lease.archive_report(&mut writer, &mut report).await?;
+        let metadata = serde_json::to_value(&report)?;
+        let checkpoint = json!({"version": 2, "report": metadata, "cursor": 2});
+        lease
+            .save_checkpoint(&mut writer, &checkpoint, &metadata, "time_entries", 2)
+            .await?;
+        Ok::<_, anyhow::Error>(checkpoint)
+    })
+    .await;
+    if matches!(&written, Ok(Ok(_))) {
+        writer.commit().await.unwrap();
+    } else {
+        writer.rollback().await.unwrap();
+    }
+    let converted = tokio::time::timeout(Duration::from_secs(10), converters.join_next()).await;
+    let checkpoint = written
+        .expect("writer must finish")
+        .expect("writer must not deadlock");
+    converted
+        .expect("converter must finish")
+        .unwrap()
+        .unwrap()
+        .expect("converter must not deadlock");
+    assert_eq!(
+        lease
+            .load_checkpoint(&mut pool.acquire().await.unwrap())
+            .await
+            .unwrap(),
+        Some(checkpoint),
+        "an already-bounded checkpoint must keep its live claim"
+    );
+    let end = i64::try_from(report.archived_error_chunks()).unwrap();
+    let bytes = super::chunks(&pool, org, id, 0, end)
+        .await
+        .unwrap()
+        .concat();
+    let errors = serde_json::Deserializer::from_slice(&bytes)
+        .into_iter::<RowError>()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    assert_eq!(errors, expected_errors);
+    let count = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM horae_job_report_error_chunks WHERE job_id = $1",
+        id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(
+        count, end,
+        "conversion must not duplicate the worker's archive"
+    );
+}
+
+async fn oversized_legacy_job(pool: &sqlx::PgPool, org: Uuid) -> (Uuid, ImportReport) {
+    sqlx::query!(
+        "INSERT INTO organizations (id, name) VALUES ($1, 'Converter race')",
+        org
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    let id = legacy_csv_job(pool, org).await;
+    let mut report = ImportReport::new(SourceKind::Csv, ImportMode::Commit);
+    report.record(
+        EntityType::TimeEntry,
+        &RowOutcome::Errored {
+            source_location: "legacy row".into(),
+            reason: "invalid date ".repeat(2_000),
+        },
+    );
+    let metadata = serde_json::to_value(&report).unwrap();
+    assert!(serde_json::to_vec(&metadata).unwrap().len() > super::REPORT_BYTES);
+    sqlx::query!(
+        "UPDATE horae_jobs SET report = $2 WHERE id = $1",
+        id,
+        metadata
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    (id, report)
+}
+
+async fn assert_converted_errors(
+    pool: &sqlx::PgPool,
+    org: Uuid,
+    id: Uuid,
+    expected: &ImportReport,
+) {
+    let stored = sqlx::query_scalar!(
+        "SELECT report FROM horae_jobs WHERE id = $1 AND org_id = $2",
+        id,
+        org
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
+    .unwrap();
+    assert!(serde_json::to_vec(&stored).unwrap().len() <= super::REPORT_BYTES);
+    let report: ImportReport = serde_json::from_value(stored).unwrap();
+    assert!(report.reconciles());
+    assert!(report.row_errors.is_empty());
+    assert_eq!(report.error_count(), expected.error_count());
+    let end = i64::try_from(report.archived_error_chunks()).unwrap();
+    let bytes = super::chunks(pool, org, id, 0, end).await.unwrap().concat();
+    let errors = serde_json::Deserializer::from_slice(&bytes)
+        .into_iter::<RowError>()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    assert_eq!(errors, expected.row_errors);
+    let count = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM horae_job_report_error_chunks WHERE job_id = $1",
+        id
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(count, end);
+}
+
+#[sqlx::test(migrations = false)]
+#[serial_test::serial]
+async fn concurrent_legacy_converters_archive_each_error_once(pool: sqlx::PgPool) {
+    use std::time::Duration;
+
+    legacy_pool(pool.clone()).await.close().await;
+    let org = Uuid::now_v7();
+    let (id, report) = oversized_legacy_job(&pool, org).await;
+    let mut gate = pool.begin().await.unwrap();
+    sqlx::query!("SELECT id FROM organizations WHERE id = $1 FOR UPDATE", org)
+        .fetch_one(&mut *gate)
+        .await
+        .unwrap();
+    let pid = sqlx::query_scalar!("SELECT pg_backend_pid() AS \"pid!\"")
+        .fetch_one(&mut *gate)
+        .await
+        .unwrap();
+    let mut converters = tokio::task::JoinSet::new();
+    for _ in 0..2 {
+        let pool = pool.clone();
+        converters.spawn(async move { super::upgrade_legacy_reports(&pool).await });
+    }
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let waiting = sqlx::query_scalar!(
+                "SELECT COUNT(*) FROM pg_stat_activity WHERE datname = current_database() AND $1 = ANY(pg_blocking_pids(pid))", pid,
+            ).fetch_one(&pool).await.unwrap().unwrap();
+            if waiting == 2 { break; }
+            tokio::task::yield_now().await;
+        }
+    }).await.expect("both converters must discover before the organization gate opens");
+    gate.commit().await.unwrap();
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while let Some(result) = converters.join_next().await {
+            result.unwrap().unwrap();
+        }
+    })
+    .await
+    .expect("both converters must finish");
+    assert_converted_errors(&pool, org, id, &report).await;
+}
+
+#[sqlx::test(migrations = false)]
+#[serial_test::serial]
+async fn legacy_converter_rediscovers_after_candidate_deletion(pool: sqlx::PgPool) {
+    use std::time::Duration;
+
+    legacy_pool(pool.clone()).await.close().await;
+    let org = Uuid::now_v7();
+    let (id, _) = oversized_legacy_job(&pool, org).await;
+    let mut gate = pool.begin().await.unwrap();
+    sqlx::query!("SET LOCAL statement_timeout = '5s'")
+        .execute(&mut *gate)
+        .await
+        .unwrap();
+    sqlx::query!("SELECT id FROM organizations WHERE id = $1 FOR UPDATE", org)
+        .fetch_one(&mut *gate)
+        .await
+        .unwrap();
+    let pid = sqlx::query_scalar!("SELECT pg_backend_pid() AS \"pid!\"")
+        .fetch_one(&mut *gate)
+        .await
+        .unwrap();
+    let mut converters = tokio::task::JoinSet::new();
+    let converter_pool = pool.clone();
+    converters.spawn(async move { super::upgrade_legacy_reports(&converter_pool).await });
+    crate::server_fns::test_seed::wait_for_blocked(&pool, pid).await;
+    let other_org = Uuid::now_v7();
+    let (other_id, report) = oversized_legacy_job(&pool, other_org).await;
+    sqlx::query!(
+        "DELETE FROM horae_jobs WHERE id = $1 AND org_id = $2",
+        id,
+        org
+    )
+    .execute(&mut *gate)
+    .await
+    .unwrap();
+    gate.commit().await.unwrap();
+    tokio::time::timeout(Duration::from_secs(10), converters.join_next())
+        .await
+        .expect("converter must rediscover")
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert!(
+        sqlx::query_scalar!(
+            "SELECT id FROM horae_jobs WHERE id = $1 AND org_id = $2",
+            id,
+            org
+        )
+        .fetch_optional(&pool)
+        .await
+        .unwrap()
+        .is_none()
+    );
+    assert_converted_errors(&pool, other_org, other_id, &report).await;
+}
+
+#[sqlx::test(migrations = false)]
+#[serial_test::serial]
+async fn legacy_converter_uses_replaced_payload_after_waiting(pool: sqlx::PgPool) {
+    use std::time::Duration;
+
+    legacy_pool(pool.clone()).await.close().await;
+    let org = Uuid::now_v7();
+    let (id, mut report) = oversized_legacy_job(&pool, org).await;
+    let mut gate = pool.begin().await.unwrap();
+    sqlx::query!("SET LOCAL statement_timeout = '5s'")
+        .execute(&mut *gate)
+        .await
+        .unwrap();
+    sqlx::query!("SELECT id FROM organizations WHERE id = $1 FOR UPDATE", org)
+        .fetch_one(&mut *gate)
+        .await
+        .unwrap();
+    let pid = sqlx::query_scalar!("SELECT pg_backend_pid() AS \"pid!\"")
+        .fetch_one(&mut *gate)
+        .await
+        .unwrap();
+    // A deployment may override the default isolation. Conversion still needs
+    // fresh snapshots after candidate discovery and organization-lock waits.
+    let converter_pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .after_connect(|connection, _| {
+            Box::pin(async move {
+                sqlx::query!(
+                    "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL REPEATABLE READ"
+                )
+                .execute(connection)
+                .await?;
+                Ok(())
+            })
+        })
+        .connect_with((*pool.connect_options()).clone())
+        .await
+        .unwrap();
+    let mut converters = tokio::task::JoinSet::new();
+    converters.spawn(async move { super::upgrade_legacy_reports(&converter_pool).await });
+    crate::server_fns::test_seed::wait_for_blocked(&pool, pid).await;
+    report.row_errors[0].source_location = "replacement, not discovered payload".into();
+    let metadata = serde_json::to_value(&report).unwrap();
+    sqlx::query!(
+        "UPDATE horae_jobs SET report = $2 WHERE id = $1",
+        id,
+        metadata
+    )
+    .execute(&mut *gate)
+    .await
+    .unwrap();
+    gate.commit().await.unwrap();
+    tokio::time::timeout(Duration::from_secs(10), converters.join_next())
+        .await
+        .expect("converter must use the current payload")
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert_converted_errors(&pool, org, id, &report).await;
+}
+
+#[sqlx::test(migrations = false)]
+#[serial_test::serial]
+async fn legacy_converter_gate_allows_a_job_locked_workers_chunk_foreign_keys(pool: sqlx::PgPool) {
+    use serde_json::json;
+    use std::time::Duration;
+
+    legacy_pool(pool.clone()).await.close().await;
+    let org = Uuid::now_v7();
+    let (id, mut report) = oversized_legacy_job(&pool, org).await;
+    let expected = report.clone();
+    let (lease, _stop) = jobs::claim_lease_for_test(&pool).await;
+    let mut writer = pool.begin().await.unwrap();
+    sqlx::query!("SELECT id FROM horae_jobs WHERE id = $1 FOR UPDATE", id)
+        .fetch_one(&mut *writer)
+        .await
+        .unwrap();
+    let pid = sqlx::query_scalar!("SELECT pg_backend_pid() AS \"pid!\"")
+        .fetch_one(&mut *writer)
+        .await
+        .unwrap();
+    let mut converters = tokio::task::JoinSet::new();
+    let converter_pool = pool.clone();
+    converters.spawn(async move { super::upgrade_legacy_reports(&converter_pool).await });
+    crate::server_fns::test_seed::wait_for_blocked(&pool, pid).await;
+
+    // Conversion already holds organization SHARE while waiting for this job.
+    // An ungated worker's FK KEY SHARE must still be able to publish and commit.
+    let written = tokio::time::timeout(Duration::from_secs(10), async {
+        lease.archive_report(&mut writer, &mut report).await?;
+        let metadata = serde_json::to_value(&report)?;
+        let checkpoint = json!({"version": 2, "report": metadata, "cursor": 1});
+        lease
+            .save_checkpoint(&mut writer, &checkpoint, &metadata, "time_entries", 1)
+            .await?;
+        Ok::<_, anyhow::Error>(checkpoint)
+    })
+    .await;
+    if matches!(&written, Ok(Ok(_))) {
+        writer.commit().await.unwrap();
+    } else {
+        writer.rollback().await.unwrap();
+    }
+    let converted = tokio::time::timeout(Duration::from_secs(10), converters.join_next()).await;
+    let checkpoint = written
+        .expect("worker must finish")
+        .expect("chunk FK must not deadlock");
+    converted
+        .expect("converter must finish")
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        lease
+            .load_checkpoint(&mut pool.acquire().await.unwrap())
+            .await
+            .unwrap(),
+        Some(checkpoint)
+    );
+    assert_converted_errors(&pool, org, id, &expected).await;
+}
