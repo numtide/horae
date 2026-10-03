@@ -153,7 +153,7 @@ manager designations within their authorized projects, without changing global
 grants. Adding evaluates existing target project-read grants against the proposed
 assignment; read-only actors cannot delegate. T012/T013 cover atomic scope-only
 changes, revocation, eligible-target checks and non-disclosing responses. Creation,
-person-management self-assignment/retention and explicit keep-access remain
+person-management self-assignment and explicit keep-access remain
 separate gates. FR-027 now reserves person-management relationship writes to
 active same-organization Administrators, independently of PeopleWriteAll and
 FR-026 project delegation. T012/T013 must cover add/remove/replace, direct and
@@ -166,7 +166,11 @@ grants applicable to managed people, evaluating scope with the proposed assignme
 without adding permissions. T012/T013 must check every compatible grant family,
 unrelated-only denial and revocation before commit. This permits read-only
 compatible grants and does not require people-directory/edit access. It does not
-choose later relationship retention or make the complete operation matrix ready.
+make the complete operation matrix ready. FR-029 now supplies retention: keep
+relationships while any compatible grant remains, otherwise preview and confirm
+atomic permission/assignment/revision/audit changes. T012/T013 cover rollback,
+stale confirmations, preserved incoming relationships and history, and no automatic
+restoration of removed assignments. Self-assignment remains separate.
 
 The
 [concrete lock inventory](contracts/permission-state.md#concrete-lock-inventory-t042-partial)

@@ -148,9 +148,14 @@ the corresponding organization-wide grants, and custom combinations without
 people-directory/edit access. Reject own-only and unrelated-only grants, including
 mixed replacement batches with invalid new relationships. Recheck after concurrent
 grant removal; do not add privileges or mutate history. The first assignment must
-not require a pre-existing managed-person set. Self-assignment and retention cases
-still need completed contracts; these are test obligations, not executed tests or
-Harvest parity proof.
+not require a pre-existing managed-person set. For FR-029 test retention with any
+compatible grant; last-grant loss with confirmed atomic removal; cancel, missing
+confirmation, stale/changed affected sets, revoked actor and audit/write failure;
+preserved people, incoming relationships, project memberships and history; and
+no automatic restoration when grants return. Test simultaneous FR-025/029 losses:
+confirm both affected sets and commit all changes atomically, preserving tracking
+membership and history. Self-assignment still needs its
+contract. These are test obligations, not executed tests or Harvest parity proof.
 
 ## Independent assignment isolation and revocation repair
 

@@ -951,3 +951,47 @@ FR-028 must not be asked again or treated as an answer about later retention.
 Next: integrate the retention answer once received, preserving audit, atomicity,
 current authorization, unchanged business history and the separate project rules.
 Do not repeat these reference lookups as new progress while awaiting the answer.
+
+## 2026-10-03 — Confirm person-management retention on permission loss
+
+- The user answered A to the pending retention question. Spec Kit Clarify
+  integrates one accepted answer; no new question is asked. Ran the paths-only
+  prerequisite helper and checked extension hooks (none configured).
+- Added FR-029, a dated clarification and US2 acceptance scenarios. Existing
+  assignments remain while any FR-028-compatible grant remains; loss of the last
+  grant requires a current preview and explicit confirmation of atomic removal.
+  Cancellation, missing/stale confirmation, revoked Administrator authority or
+  write/audit failure must leave permissions and assignments unchanged.
+- Updated OP47, plan, data model, T012/T013, quickstart, dependent-screen contracts
+  and the evidence register. Remove outgoing person-management relationships only;
+  preserve people, incoming relationships, membership and history. Test combined
+  FR-025/029 losses with both affected sets confirmed and one atomic commit.
+  Returning grants do not recreate removed assignments.
+- This is an approved Horae rule, not newly observed Harvest enforcement. No new
+  browser session, application code, schema, migration or real-data change occurred.
+  Runtime tests were not rerun for this documentation-only clarification.
+- Validation: the first formatting check normalized the specification's list
+  spacing; rerun the formatter and whitespace check before publishing.
+- Checklist remains 12/16 → 12/16, with no newly passing items or regressions.
+  Unambiguous/testable requirements, complete acceptance scenarios, acceptance
+  criteria for every requirement and measurable outcomes still need attention.
+  T006–T009 and runtime/storage tasks remain open.
+
+Clarification coverage:
+
+| Category | Status |
+| --- | --- |
+| Functional scope and behavior | Resolved for retention; other operation contracts deferred |
+| Domain and data model | Resolved outgoing relationship lifecycle; self-assignment deferred |
+| Interaction and UX | Resolved preview, confirmation and cancellation |
+| Non-functional quality | Clear current authorization, atomicity and durable audit |
+| Integrations and dependencies | Clear independent FR-025/029 effects; full integration deferred |
+| Edge cases | Resolved stale state, failure and no automatic restoration |
+| Constraints and tradeoffs | Clear no dormant retention or implicit privilege restoration |
+| Terminology | Clear outgoing/incoming relationships and separate project membership |
+| Completion signals | Deferred complete matrix, migration and runtime acceptance |
+| Miscellaneous placeholders | No new placeholder or inferred choice |
+
+Next: continue Spec Kit Clarify for remaining relationship and saved-profile
+contracts before final Plan/Tasks/Analyze and database integration. Do not reopen
+FR-027/028/029 or treat this clarification as completed runtime implementation.
