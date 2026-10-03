@@ -114,3 +114,42 @@ new-model guide/catalog, not an observed restricted-user enforcement test.
 Local acceptance must cover ordinary cost fields/history and supported project
 overrides, independent resource constraints, custom grants, read-only mutation
 denial, revocation, foreign organizations and FR-008 report-only separation.
+
+## Executable field-gate contract (T092–T094)
+
+Implement the approved financial permission dimension in the pure core, using
+the existing catalog and record-scope evaluator. This does not authorize a whole
+resource operation: callers must separately enforce resource access, state locks,
+current authenticated facts and transactional revocation. No endpoint or stored
+policy is activated by this increment.
+
+`rates.rs` accepts a canonical selection, explicit Read/Write action and trusted
+active actor. Billable checks additionally take a tenant-bound typed owner:
+Person (general default/history), Project (project rate, person/task override or
+effective inherited project projection), or GlobalTask (global task defaults).
+The server must choose the owner from the actual field, never a request-supplied
+scope. A project projection does not authorize loading general person history.
+For each action, an all-billable grant covers all three owner types; a managed
+grant covers only the matching managed person or managed project. GlobalTask
+never matches managed scope. Own identity alone is not a financial grant.
+Reuse `AccessScope::covers` for active/tenant/assignment-provenance checks.
+
+Cost checks use only the action's all-cost grant and active same-tenant actor;
+there is no managed-cost scope. Do not require Administrator identity or derive
+cost access from billable, report, project, people or invoice grants. Canonical
+write selections already contain read prerequisites; do not normalize or mutate
+selections in either check. Current/history values and overrides use the same
+financial gate, with independent resource constraints retained by consumers.
+
+| Pure acceptance | Requirement / task |
+| --- | --- |
+| Managed/unmanaged person and project, Read/Write crossed independently; all scope and global task defaults | FR-021 / T092–T093 |
+| Removing either grant or relevant relationship denies; unrelated relationship cannot replace it | FR-010/021 / T092–T093 |
+| Own identity, management-only, report-only and unrelated grants do not disclose ordinary rates/costs | FR-008/021/022 / T092–T093 |
+| All six profile defaults and custom cost read/write selections, including read-only write denial | FR-001/022 / T092–T093 |
+| Inactive actor, foreign tenant, wrong billable assignment actor/tenant deny even all scope | FR-006/010 / T092–T093 |
+| Borrowed inputs unchanged; no I/O, financial calculation or new dependency | FR-017 / T094 |
+
+Endpoint payloads, inherited-rate loading, override preservation, report outputs,
+concurrent revocation and full policy activation remain T014/T015. Pure test
+results are not Harvest enforcement observations or full-story acceptance.

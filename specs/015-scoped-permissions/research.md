@@ -13,6 +13,28 @@ deletion result remains unverified, while Horae's behavior is now approved.
 
 ## Current Horae boundaries
 
+### Approved financial field gates, 2026-10-03
+
+- Decision: implement FR-021/022 with typed Person/Project/GlobalTask ownership,
+  action-specific billable scope and independent organization-wide cost checks
+  in the pure core. Reuse canonical selections and `AccessScope::covers`.
+- Rationale: the user already resolved C03/C04. No further reference observation
+  is needed to implement those approved local rules. An all-read grant must not
+  widen a managed-write grant; project authority must not leak person defaults.
+- Alternatives rejected: a generic person-or-project scope union, profile-name
+  checks, Administrator-only costs, report grants opening ordinary financial
+  fields, a new policy dependency, or premature runtime activation.
+- Independent adversarial design/code review found no blocker and recommended
+  explicit read-prerequisite revocation coverage; the new test covers denial of
+  both actions after removing billable/cost read prerequisites. Producer-side
+  field classification and concurrent consumer enforcement remain T014/T015.
+- Fresh official documentation still does not establish the exact custom-grant
+  mapping for project archive/restore. The [archived-resource guide](https://support.getharvest.com/hc/en-us/articles/4408222060301-Unlocking-time-and-expenses-if-the-project-task-or-person-is-archived)
+  does establish that restoring a project requires restoring its archived client
+  first; client restoration is not an implicit side effect. Independent locks
+  can remain after restoration. Record this OP13 state prerequisite without
+  inventing lifecycle authority or claiming a restricted-user browser test.
+
 ### Import disposal after nested transaction cancellation, 2026-10-03
 
 - Decision: drain existing responses in shared `release_import`, tolerating only

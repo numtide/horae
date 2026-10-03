@@ -1,5 +1,36 @@
 # Permission verification
 
+## Pure rate-field policy (T092–T094)
+
+Run in the pinned Nix shell; no database or reference account is required:
+
+```sh
+cargo test -p horae-core permissions::rates --locked
+cargo test -p horae-core --locked
+cargo clippy -p horae-core --all-targets --locked -- -D warnings
+```
+
+`permissions::rates::tests` maps FR-021 to the action/owner table, cross-dimension
+and grant-removal tests; FR-022 to independent costs and six-profile defaults;
+FR-006/010 to foreign/inactive/provenance denial and changed grants/relationships;
+FR-008 to every unrelated catalog grant, including combined report permissions.
+The mixed all-read/managed-write case must allow unrelated reads but deny writes.
+Read-prerequisite removal must deny both actions. These borrowed, I/O-free
+checks preserve FR-017 by making no data or permission changes.
+
+RED: five positive-behavior tests failed against deny-all stubs; two negative
+tests passed. GREEN before the review addition: all 168 core tests passed, zero
+failed/ignored; core all-targets Clippy passed with warnings denied. Independent
+review found no blocker and requested the added prerequisite-revocation case.
+After adding that case, all 169 core tests pass, zero failed/ignored (0.02s),
+and all-targets core Clippy passes with warnings denied (0.62s). Final formatting
+and publication results are recorded in the progress register.
+
+This covers the financial dimension only. T014/T015 still require authenticated
+consumer projections, independent resource checks, actual overrides/history and
+transactional revocation; no endpoint or UI enforcement is claimed here. No SQL
+or schema changed, so cache regeneration is unnecessary for this increment.
+
 ## Interrupted import cleanup (T089–T091)
 
 Run against the owned disposable PostgreSQL instance in the Nix shell:

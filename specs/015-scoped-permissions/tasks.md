@@ -337,6 +337,17 @@ from ordinary cost access; neither profile names nor billable grants authorize c
 T039/T040 refine T014/T015's serialization prerequisite, not all report/export/job/
 plugin authorization. Exercise production transactions rather than duplicate SQL.
 
+### Approved rate-field policy
+
+T005/T029/T049 → T092 → T093 → T094 implements the pure financial gate in
+`contracts/rate-scope-evidence.md`, not complete T014/T015. No parallel code work:
+tests and implementation share the interface. Existing FR-021/022 decisions close
+the local rule; no new Harvest account mutation or product choice is needed.
+
+- [x] T092 [US3] Add failing action/owner/scope, profile-default, unrelated-grant, revocation and isolation tests in `crates/core/src/permissions/rates/tests.rs` (FR-006/008/010/021/022).
+- [x] T093 [US3] Implement borrowed pure rate-field checks in `crates/core/src/permissions/rates.rs`, exposed from `permissions.rs`; reuse the catalog and scope checks, distinguish person/project/global owners, and keep cost grants independent without activating consumers (FR-021/022).
+- [x] T094 [US3] Run focused/full core tests and core Clippy, check formatting, adversarially review the action/owner matrix and record evidence in `specs/015-scoped-permissions/quickstart.md` and `progress.md`; retain full consumer and migration gates.
+
 ## Phase 7: US4 — Custom profiles and permission explanations (P2)
 
 ### Isolated create/delete command implementation

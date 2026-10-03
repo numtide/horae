@@ -97,6 +97,13 @@ close T042, replace legacy guards or authorize mixed-policy operation.
 
 ### Existing increments and remaining integration
 
+T092–T094 implement approved FR-021/022's pure rate-field gate under
+`contracts/rate-scope-evidence.md`. Typed owners prevent using person scope for
+project overrides or project scope for general person history. Existing catalog,
+scope checks and borrowed facts suffice; no dependency, schema, I/O or runtime
+activation is needed. The local constitution check passes. Production consumers,
+payload/transaction tests and reviewed migration remain T014/T015/T019.
+
 T089–T091 repair shared import session disposal before worker-authority
 integration. Reuse SQLx's pending-response drain, recover only a missing
 savepoint during disposal, explicitly roll back and then unlock/close. The

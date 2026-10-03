@@ -1,5 +1,50 @@
 # Scoped permissions investigation progress
 
+## 2026-10-03 — Approved rate-field policy
+
+- The preceding turn was a status report, not implementation progress. Rechecked
+  clean worktree at published `e949e4c` and resumed existing feature/branch.
+- Spec Kit Plan/Tasks preserve existing artifacts and add sequential T092–T094
+  for approved FR-021/022, with no new product decision. Requirements checklist
+  remains 12/16; existing authorization permits this closed pure increment, not
+  full activation. No extension hooks are present.
+- New pure financial gates distinguish person, project and global task fields;
+  costs use separate explicit grants. Reuse the catalog and record-scope checks,
+  add no dependency, schema, runtime guard, UI/CSS or real-data change.
+- RED produced five expected behavioral failures. Initial GREEN passed all 168
+  core tests and warnings-denied Clippy. Independent adversarial design and code
+  review found no blocker; added its suggested read-prerequisite revocation test.
+- Scoped cross-artifact analysis maps all three tasks to FR-006/008/010/017/021/022
+  and profile defaults to FR-001, with no local ambiguity, duplication, unmapped
+  task or constitutional conflict. Full T006/T014/T015/T019/SC acceptance remains
+  open; test coverage of a financial gate is not complete operation authorization.
+- Fresh Harvest research identifies the archived-client prerequisite for project
+  restoration, recorded in research; custom lifecycle grants remain unresolved.
+  No account mutation or browser test was performed.
+
+Next: final core tests/lint/format, then publish unsigned to existing draft #212
+without merging. Continue the unresolved operation/consumer integration gates;
+do not repeat pending historical-job or inactive-manager questions or infer
+answers from this independent financial policy. The goal remains active.
+
+- Final core regression after the review addition: 169 passed, zero failed or
+  ignored, 0.02 seconds. All-targets core Clippy passed with warnings denied in
+  0.62 seconds. T092/T093 are complete. Nix formatting adjusted only the two new
+  Rust files; final zero-change check remains for T094. GitHub confirms #212 is
+  still open/draft at the prior published commit on the expected branch.
+
+- Final Nix formatting passes with zero changes in 2.515 seconds; staged and
+  unstaged whitespace checks pass. T092–T094 are complete and ready for unsigned
+  publication on the existing draft. No critical/high local review finding
+  remains. Full server/browser/flake acceptance is not claimed for this pure
+  increment; no SQL changes require cache regeneration and no database ran.
+
+Next after publication: resolve the remaining operation predicates and connect
+the approved field gates through the reviewed consumer/cutover contract. Keep
+the person/project distinction when selecting actual payloads; do not classify
+raw person history as an inherited project projection. Full six-profile runtime,
+scoped approvals, UI, reviewed migration and cross-surface acceptance remain open.
+
 ## 2026-10-03 — Interrupted import session disposal
 
 - Previous goal turn made concrete progress: T086–T088 published unsigned as
