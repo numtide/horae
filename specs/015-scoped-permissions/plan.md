@@ -97,6 +97,14 @@ close T042, replace legacy guards or authorize mixed-policy operation.
 
 ### Existing increments and remaining integration
 
+T080–T082 implement the bounded error-download contract in
+`contracts/permission-state.md`. Share the existing importer authority guard,
+authorize metadata and each archive page in short transactions, and reauthorize
+the captured inline tail before release. Preserve snapshot bytes and bounded
+buffering without locks across client consumption. The local constitution check
+needs no schema, dependency, grant mapping or real-data change. Full policy
+activation and worker effect authorization remain separate gates.
+
 T077–T079 close the current importer job-control/status boundary under
 `contracts/permission-state.md`. Extract pool-injected server helpers; authorize
 under READ COMMITTED organization SHARE then current Administrator SHARE, mutate

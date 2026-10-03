@@ -1,5 +1,73 @@
 # Scoped permissions investigation progress
 
+## 2026-10-03 — Bounded import result downloads
+
+- Previous goal turn made concrete progress: `4fac6af` published T077–T079 to
+  draft #212. Revalidated a clean worktree synchronized with origin; no merge.
+
+- Spec Kit Tasks/Implement reuse feature 015 and its existing read protocol.
+  Requirements remain 12/16 and seven local checklists pass 7/7. The existing
+  authorization permits this closed independent increment, not full cutover.
+
+- Traced the production route and all fragment/body callers. HTTP admission
+  checks the Administrator once; subsequent pages and captured tail have no
+  actor identity. Preserve the 16-fragment boundary and snapshot/retention tests
+  while sharing the current importer transaction guard.
+
+- T080–T082 define the closed local contract and ordered tests/implementation
+  work. No schema, real-data, worker identity or new-profile activation change.
+
+- RED reproduced two actual failures: revoked preparation returned 200 and a
+  revoked body released its captured tail. Shared short authorization transactions
+  now protect preparation, every archive page and the inline/empty tail.
+
+- The intervening TLDR/MVP answers made no implementation progress. Revalidated
+  the existing worktree at `4fac6af` and polled the original test handle to its
+  terminal result: eight passed, one failed. No duplicate run was started while
+  that handle was live.
+
+- The remaining failure was a fixture error: job status prefers the checkpoint
+  report, so changing only the final report did not exercise malformed-report
+  rollback. Clear the disposable checkpoint in that case; do not weaken parsing.
+
+- Added registered HTTP revocation after successful response preparation and
+  before body consumption. Require interrupted transfer rather than successful
+  truncated EOF, subsequent 403 for that session, and unchanged bytes for a
+  different authorized reader. Preserve the existing CLI exercise and headers.
+
+Next: finish the full server-binary run, review requirement coverage, regenerate
+SQLx, run offline all-targets Clippy/formatting, then publish without merging.
+
+- Scoped Spec Kit Analyze completed read-only for T080–T082: four functional
+  requirements (FR-007/010/017/018) and the local download portions of
+  SC-002/003/006 have task coverage; three tasks, none unmapped, no duplication,
+  ambiguity or constitutional conflict found in this closed increment. This
+  does not satisfy those outcomes across the whole feature. No hooks exist.
+
+- GitHub confirms #212 remains open/draft on `feat/scoped-permissions` at the
+  published baseline `4fac6af`; do not merge it.
+
+- Full server-binary verification passes: 912 passed, zero failed, 11 pre-existing
+  exclusions, 923 discovered, 176.57 seconds. T080/T081 are complete; T082 still
+  needs cache, offline lint and final formatting. Initial formatting changed
+  four Rust files and Markdown spacing only; rerun after final evidence edits.
+
+- Complete SQLx regeneration passes in 43.26 seconds: three added test-query
+  descriptions, no existing cache changes/deletions. Fresh offline all-targets
+  Clippy passes with warnings denied in 52.05 seconds. Package cleaning removed
+  165 regenerable build files (1.5 GiB), not source or data. Final formatting and
+  unsigned publication remain next; full feature acceptance remains open.
+
+- Nix formatting passes with zero changes in 2.139 seconds after applying the
+  formatter's Rust/Markdown changes. The owned disposable PostgreSQL cluster is
+  stopped. T080–T082 are complete; publish this verified increment unsigned to
+  existing draft #212 without merging.
+
+Next after publication: resume T042's bounded worker-execution/service-authority
+inventory and bind remaining operations to the final matrix before policy
+activation. Download protection does not close worker execution, full T006–T009,
+six-profile integration, scoped approvals, permission UI or migration acceptance.
+
 ## 2026-10-03 — Import job command authority
 
 - The intervening agency-MVP answer made no implementation progress. Revalidated

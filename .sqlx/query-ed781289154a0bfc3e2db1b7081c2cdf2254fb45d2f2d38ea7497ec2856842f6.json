@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO users (id, org_id, email, name, org_role) VALUES ($1, $2, $3, 'Report reader', 'admin')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ed781289154a0bfc3e2db1b7081c2cdf2254fb45d2f2d38ea7497ec2856842f6"
+}

@@ -15,6 +15,7 @@ use crate::{config::JobPolicy, state::AppState};
 const LEASE: Duration = Duration::from_secs(300);
 const POLL: Duration = Duration::from_secs(2);
 
+pub(crate) mod access;
 mod lease;
 pub(crate) mod outbox;
 pub(crate) mod report;

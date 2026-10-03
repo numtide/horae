@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "LOCK TABLE horae_job_report_error_chunks IN ACCESS EXCLUSIVE MODE",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "2d9e3195dd5416a18fbd5b41953e74744b48964237f31b43e51dbb77c034be0b"
+}

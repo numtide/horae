@@ -1,5 +1,42 @@
 # Permission verification
 
+## Bounded import error downloads (T080–T082)
+
+Use the Nix shell and owned disposable PostgreSQL instance. No real account or
+Harvest data is changed. The focused stream tests call the production response
+builder/body; the importer matrix uses registered HTTP and remote CLI paths.
+
+```sh
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae jobs::report::stream_tests:: --locked
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae server_fns::importers:: --locked
+```
+
+| Requirement / boundary | Regression |
+| --- | --- |
+| FR-007/010: current authority before report preparation | `download_preparation_denies_revoked_authority` |
+| FR-010: recheck before first page, captured tail and empty EOF | `download_denies_revocation_before_first_page_and_inline_tail` |
+| FR-010: only the already authorized bounded page may drain | `download_rechecks_after_buffered_pages_and_before_the_captured_tail` |
+| FR-007/018: tenant-bound actor/job, malformed metadata and single-connection rollback | `download_preparation_is_tenant_bound_and_releases_failed_transactions` |
+| FR-010: current authority after organization/actor waits under inherited REPEATABLE READ | `download_boundaries_recheck_after_organization_and_actor_waits` |
+| FR-010: reader retains authority until the bounded read completes | `download_readers_retain_authority_through_their_bounded_reads` |
+| FR-017: append-only worker progress cannot alter the captured response | `download_keeps_its_snapshot_when_later_progress_archives_the_inline_tail` |
+| FR-017/018: missing retained fragments fail instead of truncated success | `download_reports_missing_fragments_after_its_buffered_page` |
+| FR-017: lazy 16-fragment buffering with no connection held for client consumption | `download_reads_only_when_consumed_and_releases_its_connection` |
+| FR-007/010/018: registered HTTP abort after preparation-time revocation; headers and CLI preserved | `job_endpoints_enforce_session_role_and_organization` |
+
+Initial RED reproduced preparation/tail disclosure. Expanded verification found
+one malformed-report fixture targeting the wrong source: status prefers the
+checkpoint. The fixture now clears that checkpoint before corrupting the final
+report. The full post-fix server-binary run passes: 912 passed, zero failed,
+11 pre-existing exclusions, 923 discovered, 176.57 seconds. It includes all nine
+stream tests, the HTTP abort case and existing importer/CLI checks. Complete SQLx
+regeneration passes in 43.26 seconds: three new test-query descriptions, no
+existing cache changes/deletions. Fresh offline all-targets Clippy passes with
+warnings denied in 52.05 seconds. Nix formatting passes with zero changes in
+2.139 seconds after Rust/Markdown formatting. The owned test cluster is stopped.
+No worker authority, canonical policy activation, browser, full flake or complete
+feature acceptance is claimed.
+
 ## Import job control and status authority (T077–T079)
 
 Run in the Nix shell with the owned disposable PostgreSQL instance. The tests

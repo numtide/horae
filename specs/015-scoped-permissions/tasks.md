@@ -221,6 +221,16 @@ hierarchy and audited transactions; combined expense behavior depends on 016.
 
 ## Phase 6: US3 — Enforcement on every delivery path (P1)
 
+### Bounded import error downloads
+
+T080 → T081 → T082 follows the closed download contract in
+`contracts/permission-state.md` (FR-007/010/017/018). Shared files require
+sequential execution; no full policy cutover is implied.
+
+- [x] T080 [US3] Extract the production response builder and add failing preparation/stream revocation tests in `crates/horae/src/jobs/report/stream_tests.rs`, covering page and inline/empty-tail boundaries without changing snapshot or retention semantics.
+- [x] T081 [US3] Share importer authorization in `crates/horae/src/jobs/access.rs` and wire `server_fns/importers/commands.rs` plus `jobs/report.rs` to short metadata/page/tail transactions; carry only session-trusted actor identity and abort denied bodies without private context.
+- [x] T082 [US3] Verify both wait orders, reader-first locks, tenant isolation, single-connection/lazy bounded streaming and HTTP/CLI regressions in `jobs/report/stream_tests.rs` and `server_fns/importers/authorization_tests.rs`; run server tests, regenerate `.sqlx/`, run offline Clippy/formatting and record review/evidence in feature 015.
+
 ### Import job command and status authority
 
 T077 → T078 → T079 follows the closed job-control contract in

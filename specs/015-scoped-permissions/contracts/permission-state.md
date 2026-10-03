@@ -60,6 +60,37 @@ artifact's complete recorded scope, not just its original generation permission.
 
 ## Concrete lock inventory (T042, partial)
 
+### Import error download contract (T080–T082)
+
+Carry the session's trusted actor and organization through report preparation and
+every bounded archive-page read. Reuse the import command's current active
+same-tenant Administrator guard: READ COMMITTED, organization SHARE, actor SHARE.
+Read the initial job/report under that transaction and commit before returning
+the response. Reauthorize and read each existing page of at most 16 archive
+fragments in a short transaction; separately reauthorize before releasing the
+captured inline tail, including an empty report. No transaction or connection
+may remain held while the client consumes the buffered output.
+
+Preserve the captured archive end and inline tail when later checkpoints append
+errors. A page already authorized and copied into the response buffer can drain;
+the next page and tail must use current authority. This is the existing bounded
+page boundary, not a promise to recall bytes already authorized or sent. A
+mid-stream denial aborts the body without private error context, never reports
+successful truncated EOF. Before headers, preserve unauthenticated admission,
+forbidden authority, tenant-safe not-found and internal-error HTTP statuses.
+
+Missing archive fragments still fail, and no later checkpoint is spliced into
+the captured snapshot. Preserve content type, disposition and no-store/nosniff
+headers. Worker archival, retention and effect authority remain separate; no
+schema, role mapping or policy activation is part of this read-only boundary.
+
+Acceptance covers denied preparation, revocation before first consumption,
+between pages and before the inline/empty tail; organization and actor wait
+races under inherited REPEATABLE READ; reader-first authority retention;
+foreign/missing jobs; exact snapshot bytes; missing fragments; lazy bounded reads
+with a single-connection pool; and registered HTTP/remote CLI regression. Share
+the guard with importer commands without changing their tested semantics.
+
 ### Import job control/status contract (T077–T079)
 
 The API/CSV enqueue, cancel and retry server functions are the only production

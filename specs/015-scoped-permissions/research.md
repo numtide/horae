@@ -514,6 +514,36 @@ of late organization locks. Production-path tests, not duplicate lock SQL, cover
 the actual opposing operations. Full T042, revised access fencing, credentials/
 imports and other historical writers remain required before activation.
 
+### Bounded report-download review — 2026-10-03
+
+Scoped implementation self-review, not an independent or full-feature review:
+
+- Traced every production body/chunk caller. The registered route is the only
+  production body constructor; archive-fragment reads now use the same
+  transaction as current actor authorization. Other pool-based fragment callers
+  are fixtures. No client-supplied actor/organization is trusted.
+- Reuse the existing import guard rather than duplicate its query: explicit READ
+  COMMITTED, organization SHARE, active same-tenant Administrator SHARE. Both
+  importer commands and result readers retain their existing policies/errors.
+- Metadata serialization and each bounded page commit before output. Only the
+  already authorized 16-fragment buffer can drain after revocation; the next
+  page and separately captured tail recheck. Empty reports do not bypass that
+  check. No lock spans a client-paced yield or an external request.
+- Captured archive end/tail remain immutable when workers append. Missing chunks,
+  failed authorization or transaction failure abort the stream with safe errors;
+  none is converted to successful EOF or a private database error message.
+- Fixed the malformed-report fixture, not production parsing: status chooses
+  checkpoint report before final report. The test must remove that checkpoint
+  to exercise the final-report error and rollback with a size-one pool.
+- Registered HTTP testing revokes after preparation but before body polling;
+  it requires a non-timeout transfer failure, subsequent session denial and
+  healthy exact-byte output for another Administrator. Existing CLI checks remain.
+
+The requirement-to-test map is in `quickstart.md`. All 912 non-excluded
+server-binary tests, complete cache regeneration and fresh offline all-targets
+Clippy pass. No schema, historical data, profile mapping or worker authority
+changes are included; full T042 and runtime-policy gates remain open.
+
 ### Earlier workflow record
 
 - Followed the checked-in `speckit-specify` skill, local template and constitution. No extension hooks or template preset overrides were found.

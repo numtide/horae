@@ -104,8 +104,8 @@ async fn append_report_chunk(
 }
 
 /// A fixed-size read at a captured report boundary, never the archive's live end.
-pub(crate) async fn chunks(
-    pool: &sqlx::PgPool,
+pub(crate) async fn chunks<'e, E: sqlx::PgExecutor<'e>>(
+    exec: E,
     org_id: Uuid,
     job_id: Uuid,
     next: i64,
@@ -121,7 +121,7 @@ pub(crate) async fn chunks(
         next,
         end,
     )
-    .fetch_all(pool)
+    .fetch_all(exec)
     .await?;
     anyhow::ensure!(
         rows.len() as i64 == (end - next).min(16),
@@ -145,10 +145,7 @@ pub(crate) async fn download(
     session: tower_sessions::Session,
     axum::extract::Path(job_id): axum::extract::Path<Uuid>,
 ) -> Result<axum::response::Response, axum::http::StatusCode> {
-    use axum::{
-        http::{StatusCode, header},
-        response::IntoResponse,
-    };
+    use axum::http::StatusCode;
 
     let user_id = crate::auth::session::get_session_user_id(&session)
         .await
@@ -166,7 +163,21 @@ pub(crate) async fn download(
     if user.org_role != horae_core::types::OrgRole::Admin {
         return Err(StatusCode::FORBIDDEN);
     }
-    let job = super::status(&state.db, user.org_id, job_id)
+    download_response(&state.db, user.org_id, user_id, job_id).await
+}
+
+async fn download_response(
+    pool: &sqlx::PgPool,
+    org_id: Uuid,
+    actor_id: Uuid,
+    job_id: Uuid,
+) -> Result<axum::response::Response, axum::http::StatusCode> {
+    use axum::{
+        http::{StatusCode, header},
+        response::IntoResponse,
+    };
+    let mut tx = download_access(pool, org_id, actor_id).await?;
+    let job = super::status(&mut *tx, org_id, job_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::NOT_FOUND)?;
@@ -179,6 +190,9 @@ pub(crate) async fn download(
         serde_json::to_writer(&mut tail, &error).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         tail.push(b'\n');
     }
+    tx.commit()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok((
         [
             (header::CONTENT_TYPE, "application/x-ndjson".to_owned()),
@@ -189,14 +203,30 @@ pub(crate) async fn download(
             (header::CACHE_CONTROL, "no-store".to_owned()),
             (header::X_CONTENT_TYPE_OPTIONS, "nosniff".to_owned()),
         ],
-        download_body(state.db.clone(), user.org_id, job_id, end, tail),
+        download_body(pool.clone(), org_id, actor_id, job_id, end, tail),
     )
         .into_response())
+}
+
+async fn download_access(
+    pool: &sqlx::PgPool,
+    org_id: Uuid,
+    actor_id: Uuid,
+) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, axum::http::StatusCode> {
+    super::access::begin_admin_access(pool, org_id, actor_id)
+        .await
+        .map_err(|error| match error {
+            super::access::AccessError::Forbidden => axum::http::StatusCode::FORBIDDEN,
+            super::access::AccessError::Database(_) => {
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR
+            }
+        })
 }
 
 fn download_body(
     pool: sqlx::PgPool,
     org_id: Uuid,
+    actor_id: Uuid,
     job_id: Uuid,
     end: i64,
     tail: Vec<u8>,
@@ -208,16 +238,25 @@ fn download_body(
         move |(mut next, mut pending, mut tail)| {
             let pool = pool.clone();
             async move {
-                if pending.is_empty() && next < end {
-                    let page = chunks(&pool, org_id, job_id, next, end)
+                if pending.is_empty() && (next < end || tail.is_some()) {
+                    let mut tx = download_access(&pool, org_id, actor_id)
                         .await
-                        .map_err(std::io::Error::other)?;
-                    next += page.len() as i64;
-                    pending.extend(page);
+                        .map_err(|status| std::io::Error::other(status.to_string()))?;
+                    if next < end {
+                        let page = chunks(&mut *tx, org_id, job_id, next, end)
+                            .await
+                            .map_err(|_| std::io::Error::other("report archive is incomplete"))?;
+                        next += page.len() as i64;
+                        pending.extend(page);
+                    } else if let Some(bytes) = tail.take().filter(|bytes| !bytes.is_empty()) {
+                        pending.push_back(bytes);
+                    }
+                    // Release authority and the connection before client-paced output.
+                    tx.commit()
+                        .await
+                        .map_err(|_| std::io::Error::other("report download failed"))?;
                 }
-                let chunk = pending
-                    .pop_front()
-                    .or_else(|| tail.take().filter(|bytes| !bytes.is_empty()));
+                let chunk = pending.pop_front();
                 Ok::<_, std::io::Error>(chunk.map(|chunk| (chunk, (next, pending, tail))))
             }
         },

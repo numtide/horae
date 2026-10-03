@@ -131,29 +131,14 @@ async fn begin_access(
     org_id: Uuid,
     actor_id: Uuid,
 ) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, ServerFnError> {
-    let mut tx = pool.begin().await.map_err(server_err)?;
-    sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
-        .execute(&mut *tx)
-        .await
-        .map_err(server_err)?;
-    crate::db::lock_organization(&mut tx, org_id, crate::db::OrganizationLock::Shared)
+    jobs::access::begin_admin_access(pool, org_id, actor_id)
         .await
         .map_err(|error| match error {
-            sqlx::Error::RowNotFound => forbidden("Active administrator access required"),
-            other => server_err(other),
-        })?;
-    sqlx::query_scalar!(
-        "SELECT id FROM users WHERE id = $1 AND org_id = $2
-           AND active AND org_role = $3 FOR SHARE",
-        actor_id,
-        org_id,
-        OrgRole::Admin as OrgRole,
-    )
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(server_err)?
-    .ok_or_else(|| forbidden("Active administrator access required"))?;
-    Ok(tx)
+            jobs::access::AccessError::Forbidden => {
+                forbidden("Active administrator access required")
+            }
+            jobs::access::AccessError::Database(error) => server_err(error),
+        })
 }
 
 #[cfg(test)]

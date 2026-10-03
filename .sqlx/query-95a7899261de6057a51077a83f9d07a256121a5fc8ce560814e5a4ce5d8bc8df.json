@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE horae_jobs SET checkpoint = NULL, report = '{}' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "95a7899261de6057a51077a83f9d07a256121a5fc8ce560814e5a4ce5d8bc8df"
+}
