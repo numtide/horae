@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT jsonb_build_array(\n        (SELECT to_jsonb(c) FROM harvest_credentials c WHERE org_id = $1),\n        (SELECT to_jsonb(b) FROM harvest_account_bindings b WHERE org_id = $1),\n        (SELECT to_jsonb(g) FROM harvest_connection_generations g WHERE org_id = $1)\n    ) AS \"snapshot!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "snapshot!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "48763b003724e9f2c0b4fac993aaa334c1e944029ffcd59ce9d3520fb45763bd"
+}

@@ -100,6 +100,31 @@ acceptance remain to be reconciled before cutover.
 
 ## Workflow
 
+### Harvest connection authority review — 2026-10-03
+
+Reviewed the complete human connection family, not only the disconnect endpoint:
+`complete_connect`/`store_for_attempt`, `harvest_disconnect`/`disconnect`, and
+`harvest_change_account`/`account_switch::change`. Wrappers keep admission checks;
+trusted actor identity now reaches the final transaction. A shared guard checks
+active same-tenant Administrator authority after organization SHARE, then holds
+user SHARE through the unchanged generation/binding/credential writes. Explicit
+READ COMMITTED prevents a pool's older snapshot from hiding committed revocation.
+
+Lock review: import reservation is nonblocking and precedes the transaction;
+token exchange and account lookup finish before that reservation. No gate spans
+HTTP or another pool acquisition. Generation insertion's organization KEY SHARE
+is compatible with SHARE; existing queue/retry generation holders need no
+conflicting organization write to release it. Import token/watermark writers
+remain excluded by the same reservation, with their separate service-authority
+work still open. No credential-management helper bypass was added for fixtures:
+each fixture supplies a concrete Administrator, and production writers run in tests.
+
+The tests cover completed revocation, both wait locations, writer-first retention,
+first-connect/no-op denial and late-write rollback. Typed forbidden mappings
+strip private error context. This is a focused self-review, not an independent
+full-feature adversarial review or proof of complete runtime parity. No public
+Harvest behavior was inferred or changed by this local invariant repair.
+
 ### Locked-entry corrections and branding revocation — 2026-10-03
 
 - Fresh dedicated time/expense editing documentation distinguishes privileged

@@ -372,6 +372,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     crate::importers::harvest::credentials::store(
         &pool,
         owner.org_id,
+        owner.user_id,
         &"11".repeat(32),
         "test-account",
         "test-access",
@@ -450,6 +451,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     crate::importers::harvest::credentials::store(
         &pool,
         owner.org_id,
+        owner.user_id,
         &"11".repeat(32),
         "test-account",
         "test-access",
@@ -464,6 +466,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     crate::importers::harvest::credentials::store(
         &pool,
         foreign.org_id,
+        foreign.user_id,
         &"11".repeat(32),
         "foreign-account",
         "foreign-access",

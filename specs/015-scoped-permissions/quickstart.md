@@ -1,5 +1,47 @@
 # Permission verification
 
+## Harvest connection transaction authority (T074–T076)
+
+Use the Nix shell and owned disposable database; SQLx creates an isolated database
+per test. No external Harvest mutation or real-data migration is required.
+
+```sh
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false cargo test -p horae --features server --bin horae credentials::authority_tests --locked
+```
+
+| Boundary | Production-writer regression |
+| --- | --- |
+| Active same-org Administrator; Member/Manager/inactive/foreign/missing denial for all three writers | `connection_changes_require_current_tenant_bound_administrator` |
+| Repeated disconnect still needs authority; no generation side effect | `disconnected_noop_still_requires_authority` |
+| Denied first connect and missing organization produce no connection state | `denied_first_connection_creates_no_binding_credentials_or_generation` |
+| Fresh authority after organization wait with an inherited REPEATABLE READ default | `connection_changes_recheck_authority_after_organization_wait` |
+| Demotion/deactivation during actor-only wait | `connection_changes_recheck_authority_after_actor_only_wait` |
+| Authorized writer finishes before concurrent revocation; next request denied | `connection_changes_hold_authority_until_commit` |
+| Late revision-write failure rolls back secrets/binding/generation and releases locks/reservation for retry | `failed_connection_changes_roll_back_and_release_authority_and_reservation` |
+| Safe forbidden response without private error context | `revoked_callback_authority_returns_only_a_safe_forbidden_message`, `revoked_connection_authority_maps_to_forbidden_without_private_context` |
+
+RED reproduced successful connect/disconnect by an unauthorized Member. The first
+focused run passed 20/21; the failing test was its temporary rollback constraint
+validating earlier fixture rows. NOT VALID restricts only subsequent writes.
+After correction, the Harvest-filtered suite passes: 204 passed, zero failed,
+8 existing scale-test exclusions, 34.52 seconds. After Rust formatting the full
+server binary suite passes: 897 passed, zero failed, 11 pre-existing exclusions,
+908 discovered, 164.51 seconds. This includes the server-function forbidden-error
+mapping and authenticated importer-route tests. Complete nonincremental SQLx
+regeneration adds eight test-query descriptions and removes only the obsolete
+post-HTTP authority query (`3e9078ea…`); no other existing description changes.
+Fresh offline all-targets Clippy passes with warnings denied in 50.24 seconds.
+Nix formatting initially inserted a blank line in the progress log; the repeated
+CI check passes with zero changes in 2.214 seconds. The owned test cluster is
+stopped. No separate integration binary, browser or full-flake result is claimed.
+
+The session actor comes from existing authenticated server wrappers or the
+validated OAuth attempt. The guard reuses organization SHARE, explicit READ
+COMMITTED and actor SHARE before generation locks, retaining authority through
+commit. Reservation and HTTP ordering remain unchanged. Legacy Administrator
+semantics remain active; this does not activate the six-profile system or finish
+service import/refresh authorization, full OP28/T042, browser or full-flake gates.
+
 ## Branding transaction authority (T071–T073)
 
 Run through the Nix shell against the owned disposable compilation database;

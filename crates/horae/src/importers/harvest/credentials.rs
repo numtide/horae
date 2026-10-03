@@ -11,12 +11,15 @@ use chacha20poly1305::aead::{Aead, AeadCore, KeyInit, OsRng};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
 use chrono::{DateTime, Utc};
 use horae_core::importers::harvest::types::EntityType;
+use horae_core::types::OrgRole;
 use sqlx::Acquire;
 use uuid::Uuid;
 
 /// Connection policy failures that are safe to display to an administrator.
 #[derive(Debug, thiserror::Error)]
 pub enum ConnectionError {
+    #[error("Active administrator access required to change the Harvest connection")]
+    Unauthorized,
     #[error(
         "This organization is bound to another Harvest account. Reconnect the original account, or use Change account in the importer to review whether switching is safe."
     )]
@@ -118,12 +121,13 @@ where
 }
 
 /// Upsert the org's Harvest connection, encrypting the tokens. One row per org
-/// (v1); reconnecting the same account overwrites only its credentials. The
-/// parameters mirror the persisted columns one-to-one, hence the count.
+/// (v1); reconnecting the same account overwrites only its credentials. The actor
+/// must come from the validated OAuth attempt; authority is rechecked at commit.
 #[allow(clippy::too_many_arguments)]
 pub async fn store_for_attempt(
     pool: &sqlx::PgPool,
     org_id: Uuid,
+    actor_id: Uuid,
     key_hex: &str,
     account_id: &str,
     access_token: &str,
@@ -137,6 +141,7 @@ pub async fn store_for_attempt(
     let mut connection = super::lock_import(pool, org_id).await?;
     let result = async {
         let mut tx = connection.begin().await?;
+        authorize_change(&mut tx, org_id, actor_id).await?;
         let current = super::account_switch::gate(&mut tx, org_id).await?;
         anyhow::ensure!(current == expected, super::account_switch::ChangeError::Stale);
         let bound_account = sqlx::query_scalar!(
@@ -208,6 +213,7 @@ pub async fn store_for_attempt(
 pub async fn store(
     pool: &sqlx::PgPool,
     org_id: Uuid,
+    actor_id: Uuid,
     key_hex: &str,
     account_id: &str,
     access_token: &str,
@@ -219,6 +225,7 @@ pub async fn store(
     store_for_attempt(
         pool,
         org_id,
+        actor_id,
         key_hex,
         account_id,
         access_token,
@@ -235,10 +242,15 @@ pub async fn store(
 
 /// Remove OAuth secrets, retaining account identity and all imported records.
 /// Like connecting, this must not race with import or token refresh.
-pub async fn disconnect(pool: &sqlx::PgPool, org_id: Uuid) -> Result<(), super::ApiImportError> {
+pub async fn disconnect(
+    pool: &sqlx::PgPool,
+    org_id: Uuid,
+    actor_id: Uuid,
+) -> Result<(), super::ApiImportError> {
     let mut connection = super::lock_import(pool, org_id).await?;
     let result: anyhow::Result<()> = async {
         let mut tx = connection.begin().await?;
+        authorize_change(&mut tx, org_id, actor_id).await?;
         super::account_switch::gate(&mut tx, org_id).await?;
         sqlx::query!("DELETE FROM harvest_credentials WHERE org_id = $1", org_id)
             .execute(&mut *tx).await?;
@@ -249,6 +261,37 @@ pub async fn disconnect(pool: &sqlx::PgPool, org_id: Uuid) -> Result<(), super::
     }.await;
     super::release_import(connection).await?;
     result?;
+    Ok(())
+}
+
+/// Recheck the session actor after any wait, retaining authority through commit.
+/// Call first in the transaction, after the nonblocking import reservation.
+pub(super) async fn authorize_change(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    org_id: Uuid,
+    actor_id: Uuid,
+) -> anyhow::Result<()> {
+    sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
+        .execute(&mut **tx)
+        .await?;
+    crate::db::lock_organization(tx, org_id, crate::db::OrganizationLock::Shared)
+        .await
+        .map_err(|error| -> anyhow::Error {
+            match error {
+                sqlx::Error::RowNotFound => ConnectionError::Unauthorized.into(),
+                other => other.into(),
+            }
+        })?;
+    sqlx::query_scalar!(
+        "SELECT id FROM users WHERE id = $1 AND org_id = $2
+           AND active AND org_role = $3 FOR SHARE",
+        actor_id,
+        org_id,
+        OrgRole::Admin as OrgRole,
+    )
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or(ConnectionError::Unauthorized)?;
     Ok(())
 }
 
@@ -331,6 +374,9 @@ fn decode_hex(s: &str) -> anyhow::Result<Vec<u8>> {
 }
 
 #[cfg(test)]
+mod authority_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -343,11 +389,18 @@ mod tests {
         .execute(pool)
         .await
         .unwrap();
+        sqlx::query!(
+            "INSERT INTO users (id, org_id, email, name, org_role) VALUES ($1, $1, $2, 'Connection admin', 'admin')",
+            org, format!("{org}@test.com"),
+        ).execute(pool).await.unwrap();
         org
     }
 
     async fn connect(pool: &sqlx::PgPool, org: Uuid, account: &str) -> anyhow::Result<()> {
-        store(pool, org, KEY, account, "access", "refresh", None, None).await
+        store(
+            pool, org, org, KEY, account, "access", "refresh", None, None,
+        )
+        .await
     }
 
     #[sqlx::test(migrations = "./migrations")]
@@ -401,8 +454,8 @@ mod tests {
         super::super::provenance::upsert(&pool, org, EntityType::Client, 1, mapped, None)
             .await
             .unwrap();
-        disconnect(&pool, org).await.unwrap();
-        disconnect(&pool, org).await.unwrap();
+        disconnect(&pool, org, org).await.unwrap();
+        disconnect(&pool, org, org).await.unwrap();
         assert!(load(&pool, org, KEY).await.unwrap().is_none());
         let error = connect(&pool, org, "different").await.unwrap_err();
         assert!(matches!(
@@ -431,6 +484,7 @@ mod tests {
         let new_key = "ff0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
         store(
             &pool,
+            org,
             org,
             new_key,
             "original",
@@ -463,7 +517,7 @@ mod tests {
             Some(super::super::ApiImportError::Busy)
         ));
         assert!(matches!(
-            disconnect(&pool, org).await,
+            disconnect(&pool, org, org).await,
             Err(super::super::ApiImportError::Busy)
         ));
         let other = organization(&pool).await;
@@ -473,7 +527,7 @@ mod tests {
             "original"
         );
         super::super::release_import(held).await.unwrap();
-        disconnect(&pool, org).await.unwrap();
+        disconnect(&pool, org, org).await.unwrap();
     }
 
     #[sqlx::test(migrations = "./migrations")]
@@ -481,7 +535,7 @@ mod tests {
         let org = organization(&pool).await;
         for _ in 0..64 {
             connect(&pool, org, "original").await.unwrap();
-            disconnect(&pool, org).await.unwrap();
+            disconnect(&pool, org, org).await.unwrap();
         }
     }
 
@@ -497,6 +551,7 @@ mod tests {
         assert!(
             store(
                 &pool,
+                org,
                 org,
                 KEY,
                 "failed",
@@ -540,7 +595,7 @@ mod tests {
             .unwrap();
         tokio::time::timeout(std::time::Duration::from_secs(5), async {
             connect(&single, org, "original").await.unwrap();
-            disconnect(&single, org).await.unwrap();
+            disconnect(&single, org, org).await.unwrap();
             connect(&single, org, "original").await.unwrap();
         })
         .await
@@ -579,7 +634,7 @@ mod tests {
         );
         assert_eq!(stored.watermark_for(EntityType::TimeEntry), Some(mark));
         assert!(connect(&pool, org, "different").await.is_err());
-        disconnect(&pool, org).await.unwrap();
+        disconnect(&pool, org, org).await.unwrap();
         assert!(connect(&pool, org, "different").await.is_err());
         connect(&pool, org, "legacy").await.unwrap();
     }

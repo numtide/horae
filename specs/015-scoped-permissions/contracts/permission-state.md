@@ -127,9 +127,36 @@ organization gate after already locking a later resource.
 | `credentials::update_tokens` from API import | Import reservation held across refresh HTTP; credential UPDATE follows on the reserved connection, outside domain transaction. | Keep transport refresh distinct from local permission administration. Revalidate bounded execution authority before using refreshed credentials; no gate across HTTP, no token/identity data in permission audit. |
 | `credentials::advance_watermark` | Credential row W near the end of inline or durable import's data/report completion transaction. | Include this credential lock before job report/checkpoint finalization in the common hierarchy; preserve atomic watermark/data outcome and never treat it as a user grant. |
 
-Existing wrappers and credential helpers therefore do not yet establish FR-010
-for connect/disconnect/account change. This inventory identifies the required
-integration; it is not a regression test or a claim those races were repaired.
+Those source observations identified the admission-to-write gap subsequently
+repaired by T074–T076 below. They remain historical inventory, not evidence that
+service refresh/import execution or complete OP28/T042 are now integrated.
+
+#### Connection-management transaction contract (T074–T076)
+
+The three human-initiated connection writers retain their current Administrator
+policy. A trusted actor UUID must be passed from the authenticated server wrapper
+or validated OAuth attempt; never accept an actor from the browser payload.
+After the existing nonblocking import reservation, start a READ COMMITTED
+transaction, lock the exact organization SHARE, then reload the active same-org
+Administrator under user SHARE before generation/binding/credential access.
+Retain both locks through commit, including repeated disconnects. Missing, foreign,
+inactive and non-Administrator actors get the same secret-free forbidden error.
+OAuth preparation stays outside the transaction; the final check replaces the
+unprotected post-HTTP check. Callback and server-function errors must not leak
+tokens, account IDs or database diagnostics when authority is denied.
+
+Generation comparison, first-account binding, provenance blockers, import
+reservation, credential encryption, watermarks and account-switch rollback remain
+unchanged. The reservation remains nonblocking and outside the organization gate;
+no HTTP or new pool acquisition occurs inside the transaction. Service refresh and
+watermark writes are not human connection-management calls and keep their separate
+bounded-execution integration requirements. No synthetic actor is introduced in
+production. Test fixtures must explicitly create/pass their administrative actor.
+
+Acceptance uses actual writers for completed and concurrent revocation, including
+an inherited REPEATABLE READ pool, actor-only waits, writer-first retention and
+rollback/retry. Existing connection/switch/import/route tests must still pass;
+passing this family does not close full T042 or activate the six-profile policy.
 
 `scheduler::sweep` also writes `time_entries.notified_long_running_at` and returns
 entry notes for a plugin event. It is bounded service work, not a delegated user

@@ -1,5 +1,83 @@
 # Scoped permissions investigation progress
 
+## 2026-10-03 — Harvest connection transaction authority
+
+- The preceding MVP-status turn made no implementation progress. Revalidated
+  clean `feat/scoped-permissions` synchronized at published `907bc88`; no merge.
+- Spec Kit Tasks/Implement reuse feature 015 and the existing T042 credential
+  inventory. Requirements remain 12/16; seven local checklists pass 7/7 each.
+  Prior authorization permits closed independent increments, not policy cutover.
+- Traced all three writers: OAuth completion checks the actor after HTTP but
+  outside storage; disconnect/change receive no actor. All reserve an import
+  connection nonblockingly before generation/credential writes. Add current
+  tenant-bound Administrator checks inside those transactions, before generation.
+
+Next: T074 reproduces revoked authority against production credential commands
+in disposable PostgreSQL; T075 wires the shared transaction check and safe error
+mapping, then T076 verifies regression/cache/lint/format results. No real accounts,
+schema, grant mapping or runtime policy activation changes are authorized here.
+
+- RED: both initial production-writer tests failed behaviorally: a Member could
+  replace credentials and a disconnected Member could advance the connection
+  revision. Actor parameters were wired before adding the transaction guard.
+- The guard now reuses the organization SHARE helper and locks the current
+  active Administrator before generation access. Callback/server-function error
+  mappings return only the safe forbidden message, including contextual errors.
+- First focused run: 20/21 passed, including all revocation/writer-first cases.
+  The rollback fixture failed when adding its temporary constraint on a later
+  iteration because an earlier successful revision already exceeded the bound.
+  Added NOT VALID so the fixture constrains new writes without rejecting prior
+  rows. The expanded Harvest suite is running; no final GREEN claim yet.
+
+Next: confirm the corrected rollback, first-connect and error-projection cases,
+run full affected regressions and complete SQLx/offline lint/format verification.
+
+- Corrected Harvest-filtered suite passes: 204 passed, zero failed, 8 existing
+  scale-test exclusions in 34.52 seconds. All seven new database authority cases
+  pass alongside the existing switch/version/history/import/refresh regressions.
+  Full server-binary tests are running after Rust formatting. No merge or real
+  account mutation occurred; full feature activation remains pending.
+
+- Full server binary regressions pass after formatting: 897 passed, zero failed,
+  11 pre-existing exclusions, 908 discovered, 164.51 seconds. Complete SQLx
+  regeneration/fresh offline Clippy are running after cleaning only this package's
+  regenerable build artifacts. The removed post-HTTP EXISTS query has one obsolete
+  description (`3e9078ea…`); verify that no other cache entries disappear.
+
+- Scoped Spec Kit consistency analysis maps all four relevant FRs to T074–T076;
+  no unmapped local task, conflicting policy or constitutional exception found.
+  This is not complete-feature Analyze; T006–T009/T042 remain open. Focused
+  self-review records lock/FK compatibility and separate service authority in
+  `research.md`; no independent full-feature review is claimed.
+
+Next: inspect regenerated metadata, finish offline Clippy and Nix formatting,
+stop the owned test cluster and publish the unsigned commit to #212 without merge.
+
+- Complete nonincremental SQLx regeneration passes: eight new test-query
+  descriptions; only the expected obsolete `3e9078ea…` description is removed,
+  with no other existing cache changes. Fresh offline all-targets Clippy passes
+  with warnings denied in 50.24 seconds. Cleaning removed 699 regenerable build
+  files (6.1 GiB), not source or data. Initial Nix formatting inserted one blank
+  line in this log; repeat the final check after this update.
+- GitHub confirms #212 open/draft on `feat/scoped-permissions` at `907bc88`
+  before publication. All seven database authority cases, two safe error-mapping
+  tests and existing affected regressions pass. No unresolved critical/high
+  finding remains in the focused self-review. This does not establish independent
+  full-feature review, policy activation, browser acceptance or complete T042.
+
+Next: finish final formatting, commit unsigned and publish this verified family.
+Then continue T006/T042 for actor-aware import submission/cancellation/retry and
+bounded execution: current `jobs::{enqueue_api,enqueue_csv,cancel,retry}` still
+receive organization but no authenticated actor. Reconcile their service callers
+and generation/job/FK ordering before changing the shared helpers. The pending
+person-management lifecycle clarification remains separate; do not ask it again
+or treat this implementation as approval to infer the answer.
+
+- Final Nix formatting passes with zero changes in 2.214 seconds; staged and
+  unstaged whitespace checks pass. The owned PostgreSQL cluster is confirmed
+  stopped. T074–T076 are complete for this family only. Publish after one final
+  format check of these completion markers; keep #212 draft and do not merge.
+
 ## 2026-10-03 — Branding transaction authority resumed
 
 - The preceding MVP-status turn made no implementation progress. Revalidated

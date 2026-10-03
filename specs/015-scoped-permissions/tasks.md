@@ -221,6 +221,16 @@ hierarchy and audited transactions; combined expense behavior depends on 016.
 
 ## Phase 6: US3 — Enforcement on every delivery path (P1)
 
+### Harvest connection transaction authority
+
+T074 → T075 → T076 refines FR-007/010/017/018 under the connection contract in
+`contracts/permission-state.md`. Sequential shared-file work; preserve current
+Administrator policy and account identity/version/history protections.
+
+- [x] T074 [US3] Add failing production-writer tests in `crates/horae/src/importers/harvest/credentials/authority_tests.rs` for connect/disconnect/change: inactive/non-admin/foreign/missing actors, revocation during organization/actor waits, write-first authority retention, rollback and no-op denial. Retain reservation, generation and history regressions.
+- [x] T075 [US3] Pass trusted actor identity from `server_fns/importers.rs` and OAuth completion in `importers/harvest.rs` into `credentials.rs` and `account_switch.rs`; share a READ COMMITTED organization-first transaction check, retain existing locks/version checks, and map revocation to secret-free forbidden errors.
+- [x] T076 [US3] Verify focused/full affected server tests, regenerate complete `.sqlx/`, run offline all-targets Clippy and formatting, review callers/lock ordering/error projections and record actual results in `specs/015-scoped-permissions/quickstart.md` and `progress.md`.
+
 ### Branding transaction authority
 
 T071 → T072 → T073 refines FR-007/010/018 and the bounded branding contract in

@@ -97,6 +97,14 @@ close T042, replace legacy guards or authorize mixed-policy operation.
 
 ### Existing increments and remaining integration
 
+T074–T076 implement the current connection-management authority contract in
+`contracts/permission-state.md`: nonblocking import reservation, explicit READ
+COMMITTED, organization SHARE, current active same-tenant Administrator under
+user SHARE, then existing generation/credential writes. Actor IDs come only from
+the authenticated wrapper or validated OAuth attempt. This local constitution
+check passes without schema, dependency, grant mapping or real-data changes.
+Service token refresh/import execution and full OP28/T042 remain separate gates.
+
 T071–T073 close the current branding writer's admission-to-commit gap under
 `contracts/permission-state.md`. Preserve Manager/Admin policy, organization
 UPDATE first and post-commit change events; reload the active tenant-bound actor
