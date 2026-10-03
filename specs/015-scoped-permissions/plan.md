@@ -97,6 +97,14 @@ close T042, replace legacy guards or authorize mixed-policy operation.
 
 ### Existing increments and remaining integration
 
+T086–T088 retain original import requester provenance under
+`contracts/permission-state.md`. The additive nullable field preserves unknown
+historical authors; updated commands persist the current session actor only on
+insert. It uses the existing tenant key and authority transaction, changes no
+payload/DTO/worker policy, and introduces no dependencies. Local constitution
+review passes with disposable migration fixtures; full migration policy and
+worker permission activation remain separate unresolved gates.
+
 T083–T085 isolate durable CSV parser waits from SQL transactions under
 `contracts/permission-state.md`, preparing bounded worker authorization without
 selecting historical-job or retry policy. Reuse the parser's one-row channel,

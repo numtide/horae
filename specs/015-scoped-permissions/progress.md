@@ -1,5 +1,76 @@
 # Scoped permissions investigation progress
 
+## 2026-10-03 — Original import requester provenance
+
+- Previous goal turn made concrete progress: `e5fcc5a` published T083–T085 to
+  existing draft #212; revalidated the clean worktree. No live test handles remain
+  from that increment and its disposable PostgreSQL cluster is stopped.
+
+- Spec Kit Plan/Tasks reused the existing artifacts. Read-only independent
+  research confirms only the two authorized session commands enqueue production
+  imports; the pool helpers are test-only. No production user deletion exists.
+  Tenant-bound NO ACTION matches existing audit references without cascading jobs
+  or erasing provenance. No historical actor can be reconstructed safely.
+
+- T086–T088 define a closed, non-authorizing storage increment: record the original
+  actor on insertion only, retain attribution across duplicates and retries,
+  preserve unknown NULL and external DTOs. Historical authorization/retry policy
+  remains pending, not silently resolved by storing a UUID. No real-data migration
+  or new grant activation is authorized by this work.
+
+- RED reproduced missing attribution through the real API command before schema
+  or insertion changes. Migration 0045 now adds only the nullable composite FK;
+  production enqueue functions require the current actor, with optional private
+  helpers reserved for historical test fixtures. Applied only to the owned
+  disposable database. Retry, claim, lease, worker and DTOs remain unchanged.
+
+- Initial focused verification passes: 22 tests, zero failed, one existing stress
+  exclusion, 17.46 seconds. Independent review found no critical/high code issue,
+  but the CSV HTTP fixture had discarded forged actor fields. It now sends them
+  as query parameters; API sends them in JSON. Added a real blocked concurrent
+  duplicate check and retained complete-row rollback/conflict assertions.
+
+Next: finish full server verification, scoped analysis, SQLx/offline Clippy and
+formatting; publish without merging. Historical execution/retry policy is pending.
+
+- Continuation audit: the intervening status turn yielded new terminal evidence
+  from the original test handle (not a restarted run): 918 passed, one failed,
+  11 existing exclusions in 188.89 seconds. The old report-upgrade snapshot
+  included the newly added NULL field only after migration. Its comparison now
+  retains every old metadata assertion and checks unknown requester provenance
+  separately. No production behavior or migration is relaxed. Re-running the
+  full server suite is the next verification step.
+
+- After the preservation assertion correction, the full server-binary run passes:
+  919 passed, zero failed, 11 pre-existing exclusions, 930 discovered, 195.85
+  seconds. T086/T087 are verified; T088 still needs regenerated SQLx, offline
+  all-targets Clippy and formatting. PR #212 is confirmed OPEN/DRAFT at the
+  existing published head; no merge.
+
+- Scoped Spec Kit Analyze maps FR-007/010 provenance prerequisites, FR-017/018
+  preservation/verification and the import subset of SC-006 to all three tasks.
+  No local ambiguity, duplication or constitutional conflict; no unmapped task.
+  Full-feature requirements remain 12/16 and existing approval permits only
+  closed independent increments. No extension hooks are configured.
+
+- Complete SQLx regeneration passes in 57.02 seconds; four changed-query
+  descriptors replace their predecessors and nine test queries are added. No
+  unrelated descriptor is removed. Fresh offline all-targets Clippy passes with
+  warnings denied in 66 seconds. The initial formatting pass changed only
+  Markdown spacing in this log; the zero-change verification follows.
+
+- Final formatting passes with zero changes in 2.908 seconds, and the owned
+  disposable PostgreSQL cluster is stopped. T086–T088 are complete. Publish the
+  verified increment unsigned to the existing draft PR; no browser/full-flake
+  or full-feature acceptance is claimed.
+
+Next after publication: resume T042's worker authority contract and integration,
+including the recorded cancellation/savepoint observation. Unknown historical
+requesters, retry delegation and permission restoration still need their explicit
+execution contract; provenance alone grants nothing. Preserve the six-profile,
+scoped approval, permission UI and cross-surface scope. Do not mark the feature
+or the MVP complete from this increment, merge #212 or migrate real data.
+
 ## 2026-10-03 — Worker authority and bounded CSV preparation
 
 - Previous goal turn made concrete progress: `b4672a4` published T080–T082 to

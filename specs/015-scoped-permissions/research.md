@@ -13,6 +13,34 @@ deletion result remains unverified, while Horae's behavior is now approved.
 
 ## Current Horae boundaries
 
+### Original import requester, 2026-10-03
+
+- Decision: retain `original_requester_id` only on insertion by the updated
+  session commands. Its nullable tenant FK preserves unknown historical authors
+  without selecting execution authority. Use ordinary NO ACTION references.
+- Rationale: `start_api`/`start_csv` are the only production enqueue callers and
+  already hold current actor authority in the insertion transaction. Storing
+  that fact does not depend on deciding who may reauthorize old work. Production
+  enqueue functions require a UUID; private helpers preserve test-only legacy
+  insertion with NULL. No DTO or payload changes are necessary.
+- Alternatives rejected: infer an administrator for historical rows, add the
+  requester to idempotency identity, replace original authors on retry, cascade
+  job deletion with a person, or erase known attribution with SET NULL. These
+  would change history or lifecycle semantics rather than preserve provenance.
+- Evidence: `jobs.rs` enqueue/conflict/retry/claim/retention paths;
+  `server_fns/importers/commands.rs`; current user lifecycle; tenant key in 0042
+  and comparable audit references in 0043. The RED command test returns NULL
+  instead of its authorized actor. No claim is made about Harvest's internal
+  schema. Mixed old/new binaries may continue inserting NULL until all writers
+  are upgraded; worker activation still needs its reviewed deployment fence.
+- Review: production inserts derive the actor from the existing session-bound
+  transaction; conflict updates never assign it. The new FK checks the already
+  locked current actor, so adds no reversed acquisition. Historical report
+  conversion must compare its old fields separately from new NULL provenance.
+  Both the direct-command and registered-HTTP tests check that client-supplied
+  authors cannot override the session. This review does not establish worker
+  execution authorization or resolve legacy-job policy.
+
 ### Durable CSV preparation, 2026-10-03
 
 Source inspection for T042 finds no retained initiating actor in the current job

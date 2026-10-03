@@ -60,6 +60,42 @@ artifact's complete recorded scope, not just its original generation permission.
 
 ## Concrete lock inventory (T042, partial)
 
+### Original import requester (T086–T088)
+
+Persist `horae_jobs.original_requester_id` as nullable UUID provenance with a
+composite `(org_id, original_requester_id)` foreign key to `users(org_id, id)`.
+Use ordinary NO ACTION deletion semantics, consistent with existing audit
+references: neither cascade job/artifact deletion nor erase a known requester.
+NULL means unrecorded provenance, never authorized service work. Add no default
+or historical backfill. The migration must preserve all old row values and
+artifacts, leaving the new field NULL in every existing job state.
+
+The updated API and CSV commands pass their session-derived, revalidated actor
+to insertion inside the existing authority transaction. No client-supplied actor,
+payload field or new external parameter is added. Production enqueue entry points
+require that actor; only internal fixture helpers may omit it. The original
+requester is write-once in application paths, not a SQL-level immutability claim.
+
+Identical submissions retain the first job's attribution, including NULL, even
+when another authorized administrator submits the same request. Do not include
+the requester in payload equality/idempotency, replace an existing upload or
+alter generation/lease checks. Conflicts and failed upload insertion roll back
+without attribution changes. Retry, claim, cancel, completion and retention
+preserve existing lifecycle behavior; permission/activation changes do not erase
+historical attribution. Status/list/export DTOs do not expose the new field.
+
+The same organization gate and current-actor lock precede the new FK check, so
+this adds no lower-to-higher lock acquisition. Existing writers can still insert
+NULL until all binaries are updated; do not claim a deployment-wide guarantee.
+This storage increment neither authorizes execution on behalf of the original
+requester nor selects historical-job/retry/restoration policy. Those gates remain
+open before worker authorization activation.
+
+Acceptance covers session-bound API/CSV creation, second-administrator duplicate
+submissions, historical NULL replay, lifecycle preservation, failed/conflicting
+commands, tenant/missing-user FK rejection, unchanged external DTOs and a populated
+pre-migration fixture. Use only disposable PostgreSQL databases.
+
 ### Durable CSV input boundary (T083–T085)
 
 Before adding worker authorization, collect each durable CSV batch outside a SQL

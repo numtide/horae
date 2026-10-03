@@ -221,6 +221,17 @@ hierarchy and audited transactions; combined expense behavior depends on 016.
 
 ## Phase 6: US3 — Enforcement on every delivery path (P1)
 
+### Original import requester provenance
+
+T086 → T087 → T088 follows the independent storage contract in
+`contracts/permission-state.md` (FR-007/010 prerequisite, FR-017/018 preservation
+and verification). Shared files require sequential execution. No worker authority,
+legacy backfill, retry delegation or full policy activation is implied.
+
+- [x] T086 [US3] Add failing session-command requester assertions and duplicate/lifecycle checks in `crates/horae/src/server_fns/importers/commands/tests/requester.rs`; cover registered HTTP actor provenance in `crates/horae/src/server_fns/importers/authorization_tests.rs`.
+- [x] T087 [US3] Add nullable tenant-bound requester storage in `crates/horae/migrations/0045_import_job_requester.sql`, pass trusted actors through `crates/horae/src/server_fns/importers/commands.rs` into `crates/horae/src/jobs.rs` inserts, and preserve historical fixtures and all conflict/retry paths.
+- [x] T088 [US3] Add populated upgrade/FK/rollback preservation tests in `crates/horae/src/server_fns/importers/commands/tests/requester.rs` and extend the historical report preservation assertions in `crates/horae/src/jobs/report/tests.rs`, run importer and server regressions, regenerate `.sqlx/`, verify offline Clippy/formatting, and record analysis/review in feature 015 `quickstart.md`, `research.md` and `progress.md`.
+
 ### Durable CSV preparation outside authorization transactions
 
 T083 → T084 → T085 implements the closed input-boundary contract in

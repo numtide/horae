@@ -1,5 +1,51 @@
 # Permission verification
 
+## Original import requester (T086–T088)
+
+Run in the Nix shell against the owned disposable PostgreSQL instance with
+migrations through 0045. No real deployment migration or Harvest mutation is
+needed. The upgrade fixture creates its own pre-0045 database.
+
+```sh
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae server_fns::importers:: --locked
+```
+
+| Requirement / boundary | Regression |
+| --- | --- |
+| FR-007/010 prerequisite: retain trusted original identity, not client authority | `new_import_jobs_record_the_authorized_original_requester` and HTTP `job_endpoints_enforce_session_role_and_organization` |
+| FR-017: concurrent duplicate cannot replace the first actor | `waiting_duplicate_keeps_the_first_committed_requester` uses a real blocked enqueue |
+| FR-017/018: preserve known or unknown attribution, independent of current actor activity | `duplicates_and_job_lifecycle_never_replace_or_invent_the_original_requester` covers second-admin replay, cancel/retry and claim/completion |
+| FR-007/017: tenant-bound identity and no cascade/erasure | `original_requester_foreign_key_preserves_tenant_and_known_identity` |
+| FR-017: populated old states, payload/checkpoint/report/lease and artifacts unchanged | `requester_migration_preserves_unknown_authors_in_all_job_states` checks upgrade and repeated migration |
+| FR-017: earlier report conversion preserves metadata and cannot invent a requester | `legacy_upgrade_preserves_job_states_and_existing_archives` compares old fields and separately asserts NULL provenance |
+| FR-017/018: conflicts, failed upload insertion and revocation remain atomic | Existing complete-row snapshot tests in `commands/tests.rs` |
+
+The RED command test observed missing attribution before the column/insertion
+change. Initial importer verification passes 22 tests with one existing stress
+exclusion, 17.46 seconds. The HTTP fixture now actually sends forged CSV metadata
+as query parameters, as well as forged JSON on the API path; SQL must still record
+the session actor. Full server verification initially exposed an old metadata
+comparison that included the new NULL field only after upgrade. It now compares
+all old fields and explicitly checks NULL provenance. After correction, the full
+server-binary suite passes: 919 passed, zero failed, 11 existing exclusions,
+930 discovered, 195.85 seconds. This includes the concurrent duplicate case and
+corrected HTTP fixture. The historical fixture checks storage preservation,
+not execution of its intentionally synthetic payloads.
+
+Complete SQLx regeneration passes in 57.02 seconds (four replaced descriptors,
+nine additional test queries, no unrelated removal). Fresh offline all-targets
+Clippy passes with warnings denied in 66 seconds. Scoped analysis maps all three
+tasks to the stated requirement subsets; adversarial review finds no remaining
+critical/high issue in this increment. Full-flake and browser acceptance are
+not claimed for this storage-only change.
+
+Nix formatting passes with zero changes in 2.908 seconds; the owned disposable
+PostgreSQL cluster is stopped. T086–T088 are complete.
+
+This increment does not activate current-authority worker checks, choose retry
+delegation or resolve unknown historical requesters. Original identity is not a
+stored authorization grant and remains absent from external job DTOs.
+
 ## Durable CSV preparation (T083–T085)
 
 Run in the Nix shell against the owned disposable PostgreSQL instance:

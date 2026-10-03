@@ -10,6 +10,12 @@ profile's display name as an access-preserving mapping. No migration was run.
 
 ## Verified source facts
 
+T086–T088 add original-requester provenance for newly inserted jobs through the
+updated commands, under `permission-state.md`. Migration 0045 leaves historical
+NULL unchanged and is tested only on disposable databases. It does not resolve
+M08 execution/retry policy, select an author for legacy work or authorize runtime
+cutover. The source facts below retain their pre-cutover context.
+
 Read with the broader [access inventory](current-access.md) and the distinct
 [Harvest profile evidence](reference-profiles.md). These facts concern current
 Horae, not an assertion that its access should be preserved unchanged:

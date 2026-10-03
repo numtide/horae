@@ -26,6 +26,12 @@ Required nullable fields distinguish an explicit no-op from an incomplete
 document. No intent, request ID or private replay result is projected; these
 historical values cannot be loaded as current authorization state.
 
+Original import requester storage is specified in
+`contracts/permission-state.md` under T086–T088: nullable
+`horae_jobs.original_requester_id`, tenant-bound to an existing user, recorded
+only on new authorized insertion. Historical NULL is preserved. It is provenance,
+not effective worker authority, and is absent from existing external job DTOs.
+
 ## Pure record-scope foundation
 
 - `AccessScope`: private flags for `NONE`, `OWN`, `MANAGED_PEOPLE`, `MANAGED_PROJECTS`, `ORGANIZATION`. Union is explicit and never infers a capability or a broader role.

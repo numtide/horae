@@ -2,6 +2,8 @@ use super::*;
 use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
 use std::time::Duration;
 
+mod requester;
+
 const CSV: &[u8] = b"Date,Client,Project,Task,Hours,Email\n";
 
 #[derive(Clone, Copy, Debug)]
