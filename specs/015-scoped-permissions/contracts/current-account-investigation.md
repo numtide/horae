@@ -417,6 +417,33 @@ grants, and recheck current eligibility before atomically saving the full batch.
 This is an approved Horae rule, not newly observed Harvest enforcement. It does
 not settle self-assignment, later retention or removal predicates.
 
+### Person-management retention evidence — 2026-10-03
+
+The current [Users API access-role documentation](https://help.getharvest.com/api-v2/users-api/users/users/#access-roles)
+explicitly says that downgrading a People Manager to Member removes their assigned
+teammates. This is documented evidence for that named transition, not an observed
+web save or proof of the threshold for arbitrary new-model custom grants. The
+same page's custom-profile section documents project-manager removal on loss of
+project access; that separate rule does not settle person-management retention.
+
+The retained `permissions-20261002-assigned-people.yml` snapshot contains only the
+Administrator explanatory state, with no editable assignment picker. It cannot
+prove self-assignment eligibility or a removal confirmation flow. The current
+[person-profile guide](https://support.getharvest.com/hc/en-us/articles/360048687291-Person-profiles)
+describes explicit assignment removal, but does not answer either custom-grant
+retention or self-assignment. No new browser connection or account mutation was
+performed for this follow-up.
+
+Pending clarification, not accepted policy: when a saved responsible person loses
+the last grant compatible with FR-028, should Horae (A) preview their affected
+person-management relationships and require confirmation to remove them atomically
+with the permission change, or (B) retain dormant relationships that become usable
+if compatible grants are restored? A is recommended as consistent with the named
+Harvest downgrade and the already approved project-retention workflow, but that
+analogy does not authorize extending FR-025 to people without a user decision.
+Neither choice deletes people, project memberships or business history, and
+neither restores grants. FR-028's accepted new-assignment rule remains unchanged.
+
 ### Project lifecycle inventory follow-up — 2026-10-02
 
 The [lifecycle guide](https://support.getharvest.com/hc/en-us/articles/360048686911-Archiving-restoring-and-deleting-projects)

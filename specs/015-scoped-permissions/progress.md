@@ -927,3 +927,27 @@ Clarification coverage:
 Next: finish the remaining relationship and saved-profile contracts through
 Spec Kit Clarify before final Plan/Tasks/Analyze and database integration.
 FR-028 must not be asked again or treated as an answer about later retention.
+
+## 2026-10-03 — Narrow person-management retention from reference evidence
+
+- Previous user turn made progress: `d965718` integrates the accepted eligibility
+  rule. Revalidated that HEAD and a clean worktree; do not reopen FR-027/028.
+- Targeted research found an explicit Users API statement missing from the local
+  retention register: a People Manager downgraded to Member loses their assigned
+  teammates. Recorded its scope and source in the current-account investigation.
+  It does not establish arbitrary custom-grant thresholds or a web confirmation.
+- Inspected the retained assignment snapshot: it shows the owner explanatory
+  state, not a picker that could prove self-assignment. No new interactive browser
+  session, permission save or paid/company-account access was attempted.
+- Followed Spec Kit Clarify and ran its paths-only prerequisite helper; no
+  extension hooks exist. One new question is pending: remove relationships with
+  confirmation when the last compatible grant is revoked (recommended A), or
+  preserve dormant relationships (B). The prior A settled creation eligibility,
+  not this lifecycle transition. No answer is inferred from goal continuation.
+- No runtime changes or test pass claimed. Spec/checklist and tasks remain open;
+  this evidence narrows the next decision, not feature completion. Formatting
+  and diff checks are the applicable validation for the documentation increment.
+
+Next: integrate the retention answer once received, preserving audit, atomicity,
+current authorization, unchanged business history and the separate project rules.
+Do not repeat these reference lookups as new progress while awaiting the answer.
