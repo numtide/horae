@@ -221,6 +221,16 @@ hierarchy and audited transactions; combined expense behavior depends on 016.
 
 ## Phase 6: US3 — Enforcement on every delivery path (P1)
 
+### Import job command and status authority
+
+T077 → T078 → T079 follows the closed job-control contract in
+`contracts/permission-state.md` (FR-007/010/017/018). Shared files require
+sequential execution. This preserves current Administrator policy, not cutover.
+
+- [x] T077 [US3] Extract production importer helpers and add failing authority tests in `crates/horae/src/server_fns/importers/commands/tests.rs`: API/CSV submission, cancel/retry, status/history, completed/waiting revocation, idempotent/no-op denial, foreign records, retained payloads, writer-first authority, rollback and single-connection pools.
+- [x] T078 [US3] Wire `server_fns/importers.rs` to `server_fns/importers/commands.rs` with trusted actor IDs, organization SHARE/current actor SHARE under READ COMMITTED; refactor `crates/horae/src/jobs.rs` mutations to caller-owned transactions and reads to executor parameters, preserving queue semantics and returning status within the authorization transaction. Keep uploads outside locks and worker authority separate.
+- [x] T079 [US3] Run focused command, importer HTTP/CLI and affected server regressions; regenerate complete `.sqlx/`, verify offline all-targets Clippy and formatting, review all production callers/lock/FK/error paths and record evidence in `specs/015-scoped-permissions/quickstart.md` and `progress.md`.
+
 ### Harvest connection transaction authority
 
 T074 → T075 → T076 refines FR-007/010/017/018 under the connection contract in

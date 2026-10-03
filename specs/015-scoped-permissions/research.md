@@ -100,6 +100,31 @@ acceptance remain to be reconciled before cutover.
 
 ## Workflow
 
+### Import job command authority review — 2026-10-03
+
+Traced all production enqueue/cancel/retry/status/history callers. Authenticated
+wrappers supply the actor from the session; no public actor parameter is added.
+Queue SQL now participates in the caller-owned authorization transaction, and
+the returned status is read on that same connection before commit. Pool-level
+enqueue/retry adapters are test-only and share the production SQL.
+
+Adversarial self-review covers replay and no-op authorization, actor-only and
+organization wait races, foreign IDs, malformed CSV, partial insert failure and
+single-connection exhaustion. The real HTTP fixture revokes the Administrator
+when the upload body is first read: admission alone cannot authorize acceptance,
+and holding an actor lock across body reading would prevent this fixture from
+completing. No test-only hook is present in production code.
+
+Organization SHARE precedes actor SHARE and the existing generation/job/upload
+order. Foreign-key KEY SHARE remains compatible; none of these operations
+upgrades the organization lock or holds it across external HTTP or client-paced
+upload consumption. A dedicated test retains the import reservation while both
+authorized submissions execute, guarding against accidentally serializing queue
+acceptance behind worker execution. The worker does not inherit the caller's
+identity. Worker effect authorization and bounded report downloads remain open;
+this review is not an independent full-feature review or proof of T042 closure.
+No new Harvest product behavior is inferred by this repair.
+
 ### Harvest connection authority review — 2026-10-03
 
 Reviewed the complete human connection family, not only the disconnect endpoint:

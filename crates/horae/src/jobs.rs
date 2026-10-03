@@ -214,8 +214,8 @@ impl JobPayload {
 #[error("Idempotency key conflicts with another import request")]
 pub struct RequestConflict;
 
-pub async fn request_exists(
-    pool: &sqlx::PgPool,
+pub async fn request_exists<'e, E: sqlx::PgExecutor<'e>>(
+    exec: E,
     org_id: Uuid,
     kind: &str,
     key: &str,
@@ -227,7 +227,7 @@ pub async fn request_exists(
         kind,
         key,
     )
-    .fetch_one(pool)
+    .fetch_one(exec)
     .await?)
 }
 
@@ -250,6 +250,7 @@ pub async fn enqueue(
     Ok(id)
 }
 
+#[cfg(test)]
 pub async fn enqueue_api(
     pool: &sqlx::PgPool,
     org_id: Uuid,
@@ -258,20 +259,8 @@ pub async fn enqueue_api(
     policy: JobPolicy,
     generation: i64,
 ) -> anyhow::Result<Uuid> {
-    use crate::importers::harvest::account_switch::{self, ChangeError};
     let mut tx = pool.begin().await?;
-    let current = account_switch::gate(&mut tx, org_id).await?;
-    anyhow::ensure!(
-        generation == current.account_generation,
-        ChangeError::OldImport
-    );
-    let existing = sqlx::query_scalar!("SELECT id FROM horae_jobs WHERE org_id = $1 AND kind = 'harvest_api_import' AND idempotency_key = $2", org_id, idempotency_key)
-        .fetch_optional(&mut *tx).await?;
-    if existing.is_none() {
-        let connection = account_switch::status(&mut *tx, org_id, true).await?;
-        anyhow::ensure!(connection.connected, ChangeError::NotConnected);
-    }
-    let id = enqueue_in(
+    let id = enqueue_api_in(
         &mut tx,
         org_id,
         payload,
@@ -281,6 +270,31 @@ pub async fn enqueue_api(
     )
     .await?;
     tx.commit().await?;
+    Ok(id)
+}
+
+/// Enqueue within the caller's authorized transaction; never acquire a worker reservation.
+pub async fn enqueue_api_in(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    org_id: Uuid,
+    payload: &JobPayload,
+    idempotency_key: &str,
+    policy: JobPolicy,
+    generation: i64,
+) -> anyhow::Result<Uuid> {
+    use crate::importers::harvest::account_switch::{self, ChangeError};
+    let current = account_switch::gate(tx, org_id).await?;
+    anyhow::ensure!(
+        generation == current.account_generation,
+        ChangeError::OldImport
+    );
+    let existing = sqlx::query_scalar!("SELECT id FROM horae_jobs WHERE org_id = $1 AND kind = 'harvest_api_import' AND idempotency_key = $2", org_id, idempotency_key)
+        .fetch_optional(&mut **tx).await?;
+    if existing.is_none() {
+        let connection = account_switch::status(&mut **tx, org_id, true).await?;
+        anyhow::ensure!(connection.connected, ChangeError::NotConnected);
+    }
+    let id = enqueue_in(tx, org_id, payload, idempotency_key, policy, generation).await?;
     Ok(id)
 }
 
@@ -318,8 +332,24 @@ async fn enqueue_in(
     Ok(row.id)
 }
 
+#[cfg(test)]
 pub async fn enqueue_csv(
     pool: &sqlx::PgPool,
+    org_id: Uuid,
+    mode: ImportMode,
+    body: Vec<u8>,
+    idempotency_key: &str,
+    policy: JobPolicy,
+) -> anyhow::Result<Uuid> {
+    let mut tx = pool.begin().await?;
+    let id = enqueue_csv_in(&mut tx, org_id, mode, body, idempotency_key, policy).await?;
+    tx.commit().await?;
+    Ok(id)
+}
+
+/// Persist the accepted upload and job atomically in the authorization transaction.
+pub async fn enqueue_csv_in(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     org_id: Uuid,
     mode: ImportMode,
     body: Vec<u8>,
@@ -331,8 +361,7 @@ pub async fn enqueue_csv(
     let payload = JobPayload::HarvestCsv { mode };
     let report = payload.initial_report()?;
     let payload = encode_payload(&payload)?;
-    let mut tx = pool.begin().await?;
-    crate::importers::harvest::account_switch::gate(&mut tx, org_id).await?;
+    crate::importers::harvest::account_switch::gate(tx, org_id).await?;
     let row = sqlx::query!(
         r#"INSERT INTO horae_jobs (id, org_id, kind, payload, idempotency_key, max_attempts, report)
            VALUES ($1, $2, 'harvest_csv_import',
@@ -350,7 +379,7 @@ pub async fn enqueue_csv(
         report,
         &body,
     )
-    .fetch_optional(&mut *tx)
+    .fetch_optional(&mut **tx)
     .await?
     .ok_or(RequestConflict)?;
     // An identical resubmission must not restore an upload already removed by
@@ -364,10 +393,9 @@ pub async fn enqueue_csv(
             org_id,
             body,
         )
-        .execute(&mut *tx)
+        .execute(&mut **tx)
         .await?;
     }
-    tx.commit().await?;
     Ok(row.id)
 }
 
@@ -398,8 +426,8 @@ fn retry_availability(
     }
 }
 
-pub async fn status(
-    pool: &sqlx::PgPool,
+pub async fn status<'e, E: sqlx::PgExecutor<'e>>(
+    exec: E,
     org_id: Uuid,
     id: Uuid,
 ) -> anyhow::Result<Option<crate::models::JobStatus>> {
@@ -418,7 +446,7 @@ pub async fn status(
         id,
         org_id,
     )
-    .fetch_optional(pool)
+    .fetch_optional(exec)
     .await?;
     Ok(row.map(|r| crate::models::JobStatus {
         retry_availability: retry_availability(
@@ -442,8 +470,8 @@ pub async fn status(
     }))
 }
 
-pub async fn list(
-    pool: &sqlx::PgPool,
+pub async fn list<'e, E: sqlx::PgExecutor<'e>>(
+    exec: E,
     org_id: Uuid,
     limit: i64,
     before: Option<Uuid>,
@@ -469,7 +497,7 @@ pub async fn list(
         limit.clamp(1, 100),
         before,
     )
-    .fetch_all(pool)
+    .fetch_all(exec)
     .await?;
     Ok(rows
         .into_iter()
@@ -496,7 +524,11 @@ pub async fn list(
         .collect())
 }
 
-pub async fn cancel(pool: &sqlx::PgPool, org_id: Uuid, id: Uuid) -> anyhow::Result<bool> {
+pub async fn cancel<'e, E: sqlx::PgExecutor<'e>>(
+    exec: E,
+    org_id: Uuid,
+    id: Uuid,
+) -> anyhow::Result<bool> {
     let result = sqlx::query!(
         r#"UPDATE horae_jobs
               SET cancellation_requested = true,
@@ -509,16 +541,28 @@ pub async fn cancel(pool: &sqlx::PgPool, org_id: Uuid, id: Uuid) -> anyhow::Resu
         id,
         org_id,
     )
-    .execute(pool)
+    .execute(exec)
     .await?;
     Ok(result.rows_affected() == 1)
 }
 
+#[cfg(test)]
 pub async fn retry(pool: &sqlx::PgPool, org_id: Uuid, id: Uuid) -> anyhow::Result<bool> {
     let mut tx = pool.begin().await?;
-    let current = crate::importers::harvest::account_switch::gate(&mut tx, org_id).await?;
+    let retried = retry_in(&mut tx, org_id, id).await?;
+    tx.commit().await?;
+    Ok(retried)
+}
+
+/// Retry within the caller's authorization transaction, retaining generation fencing.
+pub async fn retry_in(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    org_id: Uuid,
+    id: Uuid,
+) -> anyhow::Result<bool> {
+    let current = crate::importers::harvest::account_switch::gate(tx, org_id).await?;
     let generation = sqlx::query_scalar!("SELECT account_generation FROM horae_jobs WHERE id = $1 AND org_id = $2 AND kind = 'harvest_api_import'", id, org_id)
-        .fetch_optional(&mut *tx).await?;
+        .fetch_optional(&mut **tx).await?;
     anyhow::ensure!(
         generation.is_none_or(|generation| generation == current.account_generation),
         crate::importers::harvest::account_switch::ChangeError::OldImport
@@ -536,9 +580,8 @@ pub async fn retry(pool: &sqlx::PgPool, org_id: Uuid, id: Uuid) -> anyhow::Resul
         id,
         org_id,
     )
-    .execute(&mut *tx)
+    .execute(&mut **tx)
     .await?;
-    tx.commit().await?;
     Ok(result.rows_affected() == 1)
 }
 

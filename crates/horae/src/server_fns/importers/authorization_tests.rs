@@ -196,6 +196,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
         None,
     )
     .await;
+    let upload_pool = pool.clone();
     let router = Router::new()
         .register_server_functions()
         .route(
@@ -241,21 +242,41 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
             }),
         )
         .layer(middleware::from_fn(
-            |request: Request, next: middleware::Next| async move {
-                let request = if request.headers().contains_key("X-Test-Unread-Upload") {
-                    request.map(|_| {
-                        Body::from_stream(futures_util::stream::poll_fn(
-                            |_| -> std::task::Poll<
-                                Option<Result<axum::body::Bytes, std::io::Error>>,
-                            > {
-                                panic!("unauthorized CSV job read its upload");
-                            },
-                        ))
-                    })
-                } else {
-                    request
-                };
-                next.run(request).await
+            move |request: Request, next: middleware::Next| {
+                let pool = upload_pool.clone();
+                async move {
+                    let request = if request.headers().contains_key("X-Test-Unread-Upload") {
+                        request.map(|_| {
+                            Body::from_stream(futures_util::stream::poll_fn(
+                                |_| -> std::task::Poll<
+                                    Option<Result<axum::body::Bytes, std::io::Error>>,
+                                > {
+                                    panic!("unauthorized CSV job read its upload");
+                                },
+                            ))
+                        })
+                    } else if let Some(actor) = request.headers().get("X-Test-Revoke-Upload") {
+                        let actor = Uuid::parse_str(actor.to_str().unwrap()).unwrap();
+                        request.map(|_| {
+                            Body::from_stream(futures_util::stream::once(async move {
+                                // Body polling follows endpoint admission, before durable acceptance.
+                                sqlx::query!(
+                                    "UPDATE users SET org_role = 'member' WHERE id = $1",
+                                    actor
+                                )
+                                .execute(&pool)
+                                .await
+                                .unwrap();
+                                Ok::<_, std::io::Error>(axum::body::Bytes::from_static(
+                                    b"Date,Client,Project,Task,Hours,Email\n",
+                                ))
+                            }))
+                        })
+                    } else {
+                        request
+                    };
+                    next.run(request).await
+                }
             },
         ))
         .layer(
@@ -288,6 +309,25 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
         StatusCode::NO_CONTENT
     );
     let outsider = api.cookie(foreign.user_id).await;
+    let upload_actor = user(&pool, owner.org_id, OrgRole::Admin).await;
+    let upload_cookie = api.cookie(upload_actor).await;
+    let revoked_upload = api
+        .client
+        .post(format!("{}/api/import/harvest/csv-job/DryRun", api.base))
+        .header("cookie", upload_cookie)
+        .header("X-Horae-Import", "csv")
+        .header("X-Test-Revoke-Upload", upload_actor.to_string())
+        .body("replaced by the paused-body fixture")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(revoked_upload.status(), StatusCode::FORBIDDEN);
+    assert!(
+        crate::jobs::list(&pool, owner.org_id, 100, None)
+            .await
+            .unwrap()
+            .is_empty()
+    );
     let member = api
         .cookie(user(&pool, owner.org_id, OrgRole::Member).await)
         .await;

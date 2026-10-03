@@ -1,5 +1,40 @@
 # Permission verification
 
+## Import job control and status authority (T077–T079)
+
+Run in the Nix shell with the owned disposable PostgreSQL instance. The tests
+invoke the production helpers and registered HTTP/remote CLI surface, not a copy
+of the authorization SQL. No live Harvest mutation is required.
+
+```sh
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae server_fns::importers:: --locked
+```
+
+| Requirement / boundary | Regression |
+| --- | --- |
+| FR-007/010: active tenant-bound Administrator on all six operations | `commands_and_status_require_current_active_tenant_administrator` |
+| FR-010: replay, malformed upload and no-op paths cannot bypass revocation | `duplicate_submission_and_noop_cancellation_do_not_bypass_revocation` |
+| FR-010: fresh checks after organization/actor waits, including inherited REPEATABLE READ | `import_access_rechecks_revocation_after_organization_and_actor_waits` |
+| FR-010: command and result remain authorized through commit | `import_commands_and_results_hold_actor_authority_until_commit` |
+| FR-007/018: no foreign/missing-record disclosure or writes | `foreign_and_missing_jobs_never_reveal_or_change_another_tenant` |
+| FR-017: retained state, idempotency and single-connection operation | `authorized_job_lifecycle_and_duplicate_retention_work_with_one_connection` |
+| FR-017: late failure rolls back job/upload and releases locks | `failed_upload_insert_rolls_back_the_job_and_releases_authority` |
+| FR-017: payload conflicts and connection-generation fencing | `conflicting_and_stale_commands_preserve_payload_policy_and_retained_state` |
+| FR-017: submission can queue while an import owns its reservation | `authorized_submissions_do_not_wait_for_the_running_import_reservation` |
+| FR-007/010/018: registered HTTP rejects revocation during body reading; existing CLI remains covered | `job_endpoints_enforce_session_role_and_organization` |
+
+The initial RED reproduced API and duplicate-CSV acceptance after demotion.
+Initial importer verification passed 11 tests with one existing stress exclusion;
+the expanded run passed 17 with the same exclusion. Final server-binary regressions
+after the reservation and malformed-CSV additions pass: 906 passed, zero failed,
+11 pre-existing exclusions, 917 discovered, 172.52 seconds. Complete SQLx
+regeneration passes in 43.97 seconds: four new test-query descriptions, no existing
+cache changes or deletions. Fresh offline all-targets Clippy passes with warnings
+denied in 51.89 seconds. Nix formatting passes with zero changes in 2.076 seconds
+after applying Markdown spacing. The owned test cluster is stopped. No full-feature acceptance,
+worker execution authority, report-download reauthorization, browser or flake
+result follows from this increment.
+
 ## Harvest connection transaction authority (T074–T076)
 
 Use the Nix shell and owned disposable database; SQLx creates an isolated database

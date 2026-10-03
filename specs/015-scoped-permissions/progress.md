@@ -1,5 +1,92 @@
 # Scoped permissions investigation progress
 
+## 2026-10-03 — Import job command authority
+
+- The intervening agency-MVP answer made no implementation progress. Revalidated
+  the existing uncommitted importer changes at `d7a5a21`; the prior formatter
+  handle is terminal/missing, and the owned PostgreSQL instance is running.
+  Continued verification without restarting or duplicating live work.
+- Previous goal turn made concrete progress: `d7a5a21` is published and the
+  current worktree is clean/synchronized. Connection-management authority tests
+  pass; full permissions and service execution remain incomplete.
+- Spec Kit Tasks/Implement reuse feature 015. Requirements remain 12/16; seven
+  local checklists pass 7/7. Prior authorization permits independent closed
+  increments without claiming full policy activation or full-feature Analyze.
+- Traced four production mutation callers, all in authenticated importer server
+  functions. Other queue mutation calls are fixtures, not worker impersonation.
+  Extract transaction-accepting queue operations and keep test-only pool adapters;
+  production server helpers must authorize, mutate and load the returned status
+  on the same connection. Include standalone status/history in this boundary.
+- CSV body buffering remains outside locks; duplicate-request lookup and header
+  validation follow fresh authorization. Preserve cancellation semantics,
+  idempotency, generation fencing, retention and queue acceptance during imports.
+
+Next: T077 reproduces revoked mutation/status access against extracted production
+helpers; T078 applies organization/actor locking and transactional queue helpers;
+T079 verifies races, HTTP/CLI regressions, SQLx, offline Clippy and formatting.
+No schema, real-data, worker identity or new-profile activation change is included.
+
+- RED: both initial production-helper tests failed with successful API/duplicate
+  CSV acceptance after demotion. The extracted helpers were wired to the actual
+  registered server functions before the guard was implemented.
+
+- GREEN initial importer suite: 11 passed, zero failed, one pre-existing stress
+  exclusion in 10.78 seconds. Includes the HTTP fixture that demotes the actor
+  when the CSV body is polled after admission; the final request is forbidden and
+  queues nothing. Existing HTTP/remote CLI flows still pass.
+
+- Refactored the same queue SQL into caller-owned transactions; legacy pool
+  enqueue/retry adapters are now test-only. Status/history use executor reads
+  within the shared organization/current actor authorization transaction. New
+  concurrency/rollback/foreign/single-connection cases are running next.
+
+- Expanded importer verification passed 17 tests, zero failures, one existing
+  stress exclusion in 14.28 seconds. Added malformed-CSV denial and a ninth
+  command test for queue acceptance while the import reservation is held. Full
+  server-binary regressions are running against disposable databases. The
+  requirement/test map and scoped adversarial self-review are recorded in
+  `quickstart.md` and `research.md`; no complete-feature review is claimed.
+
+Next: finish server regressions, regenerate the complete SQLx cache, run offline
+all-targets Clippy and formatting, then publish the verified increment without
+merging. Execution-time authority and report-download authorization remain open.
+
+- Full server-binary regressions pass: 906 passed, zero failed, 11 pre-existing
+  exclusions, 917 discovered, 172.52 seconds. This includes all nine command
+  tests and the registered HTTP/CLI regression. T077/T078 are complete.
+
+- Scoped Spec Kit Analyze maps FR-007/010/017/018 to T077–T079: four requirements
+  with tasks, no unmapped local tasks, ambiguity, duplication or constitutional
+  conflict found. This is not a complete-feature analysis; T006–T009/T042 remain
+  open. No extension hooks are configured.
+
+- Regenerating the complete SQLx cache after clearing only package build outputs;
+  offline all-targets Clippy and final formatting remain to be verified.
+
+- Complete SQLx regeneration passes in 43.97 seconds, with four new test-query
+  descriptions and no existing cache changes/deletions. Fresh offline all-targets
+  Clippy passes with warnings denied in 51.89 seconds. Package cleaning removed
+  165 regenerable build files (1.5 GiB), not source or data.
+
+- The first formatting run overlapped SQLx cache regeneration and warned about
+  temporarily absent descriptions; it also inserted two Markdown blank lines.
+  The cache is now complete. Repeat formatting only after regeneration and the
+  final evidence edits, rather than interpreting this run as a final gate.
+
+- GitHub confirms #212 is open/draft on this branch at `d7a5a21`. No unresolved
+  critical/high finding remains in the scoped self-review. Full policy activation,
+  independent full-feature review, browser and full-flake acceptance remain open.
+
+Next: finish formatting, stop the owned test cluster and publish this verified
+increment. The next traced boundary is `jobs::report::{download,download_body}`:
+admission checks the Administrator once, but subsequent archive pages and the
+captured inline tail carry no actor identity. Refine its bounded-read contract
+and tests without retaining a transaction across client-paced streaming.
+
+- Nix formatting passes with zero changes in 2.076 seconds after applying
+  Markdown spacing. The owned test cluster is stopped; T077–T079 are complete.
+  Publish the unsigned increment to existing draft #212 without merging.
+
 ## 2026-10-03 — Harvest connection transaction authority
 
 - The preceding MVP-status turn made no implementation progress. Revalidated

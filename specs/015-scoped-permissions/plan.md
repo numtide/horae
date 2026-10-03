@@ -97,6 +97,15 @@ close T042, replace legacy guards or authorize mixed-policy operation.
 
 ### Existing increments and remaining integration
 
+T077–T079 close the current importer job-control/status boundary under
+`contracts/permission-state.md`. Extract pool-injected server helpers; authorize
+under READ COMMITTED organization SHARE then current Administrator SHARE, mutate
+through caller-owned queue transactions and project status before commit. Queue
+primitives remain separate from user authority; no worker receives an invented
+actor. Buffer CSV outside locks. The local constitution check passes without new
+schema, dependency, grant mapping or real-data change. Execution-time authority,
+report downloads and full T042/cutover remain separate gates.
+
 T074–T076 implement the current connection-management authority contract in
 `contracts/permission-state.md`: nonblocking import reservation, explicit READ
 COMMITTED, organization SHARE, current active same-tenant Administrator under

@@ -60,6 +60,42 @@ artifact's complete recorded scope, not just its original generation permission.
 
 ## Concrete lock inventory (T042, partial)
 
+### Import job control/status contract (T077–T079)
+
+The API/CSV enqueue, cancel and retry server functions are the only production
+callers of the corresponding pool-level queue mutations at `d7a5a21`; other
+callers are test fixtures. Keep their current active same-org Administrator
+policy. Extract session-independent production helpers receiving only trusted
+organization/actor IDs. Begin READ COMMITTED, acquire organization SHARE, reload
+and retain current actor SHARE, then run the existing generation/job/upload
+operations on that transaction. Return the job projection from the same
+transaction, not an unguarded pool read after commit. Status/history helpers use
+the same authorization boundary, including empty/foreign/missing selections.
+
+Retain initial endpoint admission checks, input limits, CSRF/header checks and
+typed conflict/not-found behavior. Buffer client-paced CSV before acquiring any
+gate; fresh authorization precedes duplicate lookup and bounded header validation.
+An exact resubmission cannot restore a removed upload, change payload/policy or
+bypass revocation. Cancel remains idempotent, reports actual retained state and
+does not authorize worker execution. Retry preserves generation/upload fencing.
+Do not take the running-import reservation: authorized submissions can still queue
+behind an import. Unknown, foreign, inactive and non-Administrator actors receive
+the same safe forbidden error, without job/report/upload metadata or writes.
+
+Refactor queue SQL into caller-owned transactions without duplicating it. Existing
+test fixture adapters may open transactions without user authorization, but must
+be test-only; new authority tests invoke the production server helpers. Worker
+lease/claim/report/cleanup and outbox logic retain their separate bounded service
+authority. Do not invent requester provenance or imply this repairs future
+execution, report downloads, canonical policy activation or complete OP28/T042.
+
+Acceptance: all six helpers deny completed/revoked authority; both organization
+and actor wait orders recheck fresh state, including REPEATABLE READ defaults;
+writer-first operations retain authority until result/commit. Test duplicate/no-op
+paths, foreign/missing jobs, cancelled/completed states, changed generations,
+late upload-write rollback, immediate retry and a single-connection pool. Existing
+HTTP/CLI registration, admission, import/cancellation and retention tests must pass.
+
 Source inspection at `b7e730c`, not a successful concurrency test. Paths below
 are under `crates/horae/src/`; `S` means `FOR SHARE`, `U` means `FOR UPDATE`,
 and `W` includes implicit row locks from DML. `TS` is the existing per-person
