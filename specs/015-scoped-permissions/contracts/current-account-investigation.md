@@ -218,7 +218,7 @@ lock key does not establish denial or justify granting that operation implicitly
 | C04 | Person Rates page still describes cost visibility as administrator-only, but current Accounting/Executive defaults contain cost read. | Resolved for Horae by user decision, 2026-10-02, FR-022: explicit organization-wide cost read/write and new-model defaults; Accounting/Executive read-only, Administrator read/write, other built-ins neither. Custom effective grants control access, not Administrator identity. Validate local payloads/mutations/revocation and preserve FR-008 report separation; restricted-user Harvest enforcement remains unverified. |
 | C05 | Current Preferences disables auto-lock/submit until a submission deadline is configured; newer company-lock guidance describes custom schedules independent of deadlines. | Deadline dependency resolved from current dedicated guides and the refreshed general approval guide: use the newer documented modes under the existing parity mandate. FR-019/023 and `company-locks.md` define target and local verification; retained owner controls are rollout evidence, not a universal prerequisite. No account setting was changed. |
 | C06 | `aJ` gives approve-managed its managed/own time reads and approve-all its all read plus managed approval; it does not add time-write or expense grants. Withdrawal has no such edge, despite a hint recommending time visibility. | Approval visibility resolved for Horae by user decision, 2026-10-02 (FR-024): approval authority plus visibility of every selected time/expense record; otherwise deny atomically, never silently approve only time. No catalog dependency or ordinary expense-write grant added. Harvest enforcement, withdrawal and other lifecycle predicates remain unverified/open; see `approval-visibility.md`. |
-| C07 | Permission-loss preview uses POST; `a3` warns about lost project-manager assignments. Its keep-access option adds managed-project read and write. | User-approved FR-025 retains with project read; confirmed read loss removes designations atomically, preserving membership/history. FR-026 permits project-editor delegation to compatible targets without global grant changes. Person-management writer authority, new-assignment grant eligibility and retention are resolved by FR-027/028/029; FR-030 specifies the observed explicit keep-project-access choice; self-assignment and creation remain open. Harvest enforcement and preview POST effects remain unverified. |
+| C07 | Permission-loss preview uses POST; `a3` warns about lost project-manager assignments. Its keep-access option adds managed-project read and write. | User-approved FR-025 retains with project read; confirmed read loss removes designations atomically, preserving membership/history. FR-026 permits project-editor delegation to compatible targets without global grant changes. Person-management writer authority, new-assignment grant eligibility and retention are resolved by FR-027/028/029; FR-030 specifies the observed explicit keep-project-access choice; FR-031 rejects self-relationships by user decision; creation remains open. Harvest enforcement and preview POST effects remain unverified. |
 
 Source inspection also distinguishes initial template/profile selection (`dt`,
 built-in wins an equal-size tie) from non-admin automatic best-fit classification
@@ -403,7 +403,7 @@ Horae's boundary, not verified new-model Harvest enforcement. Preserve current
 transactional authority, revisions, atomic audit and non-disclosing denial;
 never copy the legacy API's role-promotion side effect. FR-028 now resolves the
 receiving manager's grant eligibility as described below; FR-029 resolves retention
-on permission changes. Self-assignment still needs its distinct predicate.
+on permission changes. FR-031 now rejects self-relationships.
 OP47 makes this non-implemented operation explicit instead of hiding it under
 ordinary person editing or project membership.
 
@@ -417,8 +417,8 @@ proposed relationship as scope so the first assignment is possible; do not deman
 an existing managed-person set. Reject new dormant assignments without adding
 grants, and recheck current eligibility before atomically saving the full batch.
 This is an approved Horae rule, not newly observed Harvest enforcement. It does
-not settle self-assignment or standalone removal predicates. Later retention is
-now resolved separately by FR-029 below.
+not alone settle self-assignment or standalone removal predicates. FR-031 now
+rejects self-relationships; later retention follows FR-029 below.
 
 ### Person-management retention evidence — 2026-10-03
 
@@ -448,7 +448,7 @@ independently required FR-025 project effects in the same atomic command. Do not
 restore grants, retain dormant outgoing relationships after removal, or recreate
 assignments automatically when grants return. The rejected alternative was dormant
 retention. This is an approved Horae contract, not verified custom-profile Harvest
-web behavior. Self-assignment and non-permission lifecycle rules remain separate.
+web behavior. Self-assignment follows FR-031; non-permission lifecycle rules remain separate.
 FR-028's accepted new-assignment rule is unchanged.
 
 ### Explicit profile reapplication evidence — 2026-10-03
@@ -477,13 +477,15 @@ the managed-person set may contain the manager's own ID. The current
 does not settle that identity case either. Neither omission proves acceptance
 or denial, and the retained owner-only view is not a discriminating picker.
 
-Pending user choice: A rejects a person-management relationship whose two endpoints
-are the same person, without removing independently granted own/all access.
-B permits an explicit Administrator-created self-relationship with existing
-compatible grants under FR-027/028. Neither option alone permits self-approval,
-waives operation-specific restrictions or makes management transitive. A is
-recommended to avoid turning a self-link into extra person-scoped rate or editing
-authority. This recommendation is not asserted as Harvest behavior.
+Accepted user choice A, FR-031 (2026-10-03): reject person-management relationships
+whose responsible and managed people are the same identity, even when an
+Administrator requests them and the grant eligibility check passes. Reject a
+mixed add/replace batch atomically rather than silently filtering invalid links.
+Preserve independently authorized own/all access. Distinguish the acting
+Administrator from the relationship endpoints: editing their own set of other
+people is not a self-link. This does not decide self-approval, add transitive
+management or authorize cleanup of historical data. The permissive alternative B
+was not selected. This is an approved Horae rule, not verified Harvest behavior.
 
 ### Project lifecycle inventory follow-up — 2026-10-02
 

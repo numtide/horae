@@ -1116,3 +1116,41 @@ the client fallback must not be used to invent them or bypass the full-policy ga
   assignment), preserving other unresolved gates. That answer alone will not
   make the full feature ready. No further product choice is inferred or queued
   to the user ahead of it; no runtime, schema or account data changed.
+
+## 2026-10-03 — Reject person-management self-relationships
+
+- The user explicitly answered A to the pending self-assignment question.
+  Revalidated clean HEAD `1105b75`; the preceding blocked audit did not select an
+  answer. This decision resolves that blocker, not the whole permission feature.
+- Followed Spec Kit Clarify, ran its paths-only prerequisite helper and read the
+  constitution/checklist. No before/after extension hooks exist. Integrated one
+  answer; no further question was asked.
+- Added FR-031, one dated clarification and three US2 acceptance scenarios.
+  Reject equal responsible/managed person identities even for Administrators
+  with compatible grants. An invalid add/replacement batch fails atomically.
+  Preserve independent own/all access and distinguish the actor from the two
+  relationship endpoints: an Administrator's own set may contain other people.
+- Reconciled FR-027/028, OP47, plan, data-model gate, T012/T013, quickstart,
+  dependent screens and the evidence register. Self-approval, distinct-person
+  relationship rules and historical cleanup are not inferred from this choice.
+  This is user-approved Horae behavior, not newly verified Harvest enforcement.
+- Self-review covered direct requests, mixed batches, administrator bypass,
+  actor/endpoint confusion and unintended loss of independently granted access.
+  No code, schema, migration or account data was changed; no runtime test or
+  independent review is claimed.
+- Checklist remains 12/16 → 12/16 with no newly passing items or regressions.
+  Full unambiguous requirements, complete scenarios, acceptance criteria for
+  every requirement and achieved measurable outcomes remain open.
+  Documentation formatting and whitespace checks are required before publishing.
+
+| Clarification coverage | Status |
+| --- | --- |
+| Functional scope; domain identities | Resolved self-relationship validity |
+| Interaction; edge cases | Resolved direct/batch denial and actor distinction |
+| Non-functional quality; constraints; terminology | Clear atomicity, independent access and no implicit cleanup |
+| Integrations and dependencies | Clear OP47/task ownership; broader integration deferred |
+| Completion signals; remaining placeholders | Deferred saved-profile, other operation and migration contracts |
+
+Next: continue remaining saved-profile and operation contracts before final
+Plan/Tasks/Analyze and runtime integration. Do not ask FR-031 again or interpret
+this answer as approval to bypass the remaining full-policy gates.

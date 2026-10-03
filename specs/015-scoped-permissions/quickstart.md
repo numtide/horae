@@ -154,8 +154,11 @@ confirmation, stale/changed affected sets, revoked actor and audit/write failure
 preserved people, incoming relationships, project memberships and history; and
 no automatic restoration when grants return. Test simultaneous FR-025/029 losses:
 confirm both affected sets and commit all changes atomically, preserving tracking
-membership and history. Self-assignment still needs its
-contract. These are test obligations, not executed tests or Harvest parity proof.
+membership and history. For FR-031 reject direct and mixed-batch self-links even
+for Administrators with compatible grants; preserve own/all access and allow
+otherwise valid edits to an Administrator's own set of other people. Do not infer
+self-approval or delete historical data. These are test obligations, not executed
+tests or Harvest parity proof.
 
 ## Planned keep-project-access acceptance
 

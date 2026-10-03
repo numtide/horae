@@ -159,9 +159,10 @@ FR-026 separately resolves delegation: current project editors may add/remove
 manager designations within their authorized projects, without changing global
 grants. Adding evaluates existing target project-read grants against the proposed
 assignment; read-only actors cannot delegate. T012/T013 cover atomic scope-only
-changes, revocation, eligible-target checks and non-disclosing responses. Creation
-and person-management self-assignment remain separate gates. FR-027 now reserves
-person-management relationship writes to
+changes, revocation, eligible-target checks and non-disclosing responses. Project
+creation remains a separate gate. FR-031 now forbids person-management self-links
+even for Administrators, while preserving independent own/all access.
+FR-027 now reserves person-management relationship writes to
 active same-organization Administrators, independently of PeopleWriteAll and
 FR-026 project delegation. T012/T013 must cover add/remove/replace, direct and
 self-set requests, revoked authority, stale revisions, atomic audit and preservation
@@ -177,7 +178,9 @@ make the complete operation matrix ready. FR-029 now supplies retention: keep
 relationships while any compatible grant remains, otherwise preview and confirm
 atomic permission/assignment/revision/audit changes. T012/T013 cover rollback,
 stale confirmations, preserved incoming relationships and history, and no automatic
-restoration of removed assignments. Self-assignment remains separate.
+restoration of removed assignments. FR-031's identity restriction is separate from
+self-approval and applies to add/replace commands without excluding an
+Administrator's own set of other people.
 
 The
 [concrete lock inventory](contracts/permission-state.md#concrete-lock-inventory-t042-partial)

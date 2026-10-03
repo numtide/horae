@@ -85,10 +85,11 @@ note, but neither this nor the existing constitution amendment completes T008.
 
 - [ ] T009 Refine remaining work packages into executable file-level tasks in `specs/015-scoped-permissions/tasks.md`, complete requirement checks and repeat analysis before replacing runtime authorization.
 
-T006/T009 must finish OP47 self-assignment under FR-027's approved
-Administrator-only writer boundary, separately from FR-026 project delegation, and bind OP48 project duplication/deletion to
-its owning domain requirements. Feature 010's archive-only increment does not
-remove those operations from full web parity. T012/T013 cover relationship
+T006/T009 must bind OP48 project duplication/deletion to its owning domain
+requirements. OP47 now follows FR-027/028/029/031 for writer authority, eligibility,
+retention and self-relationship rejection, separately from FR-026 project
+delegation. Feature 010's archive-only increment does not remove those operations
+from full web parity. T012/T013 cover relationship
 authority and revisions; T014/T015 cover source projection, dependent resources,
 revocation and atomic denial. Do not infer destructive grants or copy legacy
 API access-role side effects into canonical permissions.
@@ -145,7 +146,11 @@ relationships and history, and no automatic reassignment after grants return.
 Project-manager designations remain unchanged unless FR-025 independently requires
 removal; test combined FR-025/029 losses with confirmation of both affected sets
 and all-or-nothing commit.
-Self-assignment remains a separate unresolved predicate, not waived by eligibility.
+FR-031 adds T012/T013 cases for direct and mixed-batch self-link rejection, even
+with Administrator authority and compatible grants; unchanged own/all access;
+and valid changes to the Administrator's own set of other people. Reject the
+complete invalid batch without silently filtering it or recording a success audit.
+This does not decide self-approval or authorize historical data cleanup.
 
 FR-030's [keep-project-access cases](contracts/keep-project-access.md) extend
 T010/T011 permission transactions, T012/T013 relationship tests and T016/T018

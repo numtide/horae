@@ -47,12 +47,15 @@ with those features.
   A redacted read is not permission to overwrite unseen data with defaults.
 - Keep feature-local requirement numbers qualified: 015 FR-024 is combined
   approval visibility; older features use the same number for unrelated rules.
-- Person-management self-assignment, creation behavior, Workspace settings,
+- Creation behavior, Workspace settings,
   invoice/contact/lifecycle scope, activity-history
   grants and reviewed migration still prevent closing T008/T009 or full Analyze.
   This register does not choose them or reopen accepted FR-021/022/024/025/026/027/028/029.
   FR-028 requires assignment controls to reject new relationships for recipients
   without compatible existing grants, not silently offer or save dormant scope.
+  FR-031 requires assignment controls and server commands to reject self-links;
+  do not confuse this with editing the Administrator's own set of other people or
+  with ordinary own-access and self-approval rules.
   FR-030's explicit keep-project-access option must disclose managed-project read
   and write, remain unchecked initially and preserve independent person-removal
   confirmation; see [the shared contract](keep-project-access.md).
