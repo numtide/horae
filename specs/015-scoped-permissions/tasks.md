@@ -221,6 +221,16 @@ hierarchy and audited transactions; combined expense behavior depends on 016.
 
 ## Phase 6: US3 — Enforcement on every delivery path (P1)
 
+### Branding transaction authority
+
+T071 → T072 → T073 refines FR-007/010/018 and the bounded branding contract in
+`contracts/permission-state.md`. These tasks share files and run sequentially;
+they preserve current role semantics rather than activating OP27's target policy.
+
+- [x] T071 [US3] Add failing production-helper authority and lock-wait tests in `crates/horae/src/server_fns/organization/tests.rs`; cover denied changed/unchanged saves, tenant/activity/role checks, revocation after organization/actor waits, lock lifetime and rollback, retaining all field/idempotency regressions.
+- [x] T072 [US3] Pass authenticated actor identity into `update_org_branding_record` in `crates/horae/src/server_fns/organization.rs`, use explicit READ COMMITTED and reload active same-org Manager/Admin after organization UPDATE with actor SHARE; preserve event dispatch and no-op behavior.
+- [x] T073 [US3] Run focused/affected server tests, regenerate complete `.sqlx/`, verify offline all-targets Clippy and formatting, review caller/lock/error paths and record results in `specs/015-scoped-permissions/quickstart.md` and `progress.md`.
+
 ### Project-family lock integration
 
 T068 → T069 → T070 refines the reviewed project-family boundary in

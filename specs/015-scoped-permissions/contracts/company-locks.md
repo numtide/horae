@@ -37,8 +37,10 @@ about Harvest's internal design:
 
 - Keep schedule configuration, company cutoff, submission coverage, approval
   coverage and invoice protection distinct. Clearing one protection cannot clear
-  another. Administrator correction of a company-locked record still requires
-  the applicable write action and must not bypass invoice/approval locks.
+  another. Ordinary write permission cannot bypass a lock. Explicit privileged
+  correction is a separate operation: preserve the lock facts rather than
+  denying every correction merely because approval or invoicing is present.
+  Apply the field/surface limits and unresolved boundaries below.
 - Save configuration through authenticated server functions with current
   authority and revision checks. Keep audit facts for configuration changes,
   manual cutoff changes and effective automated execution; do not manufacture
@@ -59,6 +61,24 @@ about Harvest's internal design:
   016; absence of its runtime is not proof that combined behavior passes.
 
 ## Acceptance and remaining verification
+
+The dedicated [time editing guide](https://support.getharvest.com/hc/en-us/articles/26885299659405-Editing-and-deleting-time-entries),
+checked 2026-10-03, documents Administrator correction of notes, duration or
+start/end time and confirmed deletion of approved, invoiced or archived time
+from Day view. It excludes project/task reassignment and locked Week-view
+editing/deletion. The [expense editing guide](https://support.getharvest.com/hc/en-us/articles/4406054281101-How-to-edit-expenses)
+documents Administrator notes/amount correction and deletion, not project/category
+changes. These specific exceptions refine the general unlocking guide; correction
+and unlocking must not be treated as the same command.
+
+These are documentation findings, not restricted-user browser tests. The newer
+permission catalog does not establish a custom-grant equivalent to these
+Administrator exceptions. Nor do these articles settle company-lock combinations,
+date/billability/receipt changes, interval effects after deletion or invoice-source
+snapshot effects. Keep those cases open; do not implement a generic admin bypass
+or silently change ordinary time/expense-write grants. T006 and T043/T044 must
+bind the resolved cases to their final command and preservation tests before
+runtime integration. Feature 016 owns the expense implementation.
 
 T043 needs the complete local calendar/execution and correction contract before
 pure calculation tests/code; unrelated matrix rows are not a prerequisite.

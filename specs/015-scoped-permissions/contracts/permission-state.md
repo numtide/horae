@@ -262,6 +262,23 @@ draft replay, editor conflict, rate and archive regressions. Full T042 still
 includes invoice/import/budget ordering, editor child-lock inversions, historical
 writers and complete access-revision fencing; this increment does not close it.
 
+### Branding transaction reauthorization
+
+The bounded branding repair T071–T073 retains organization UPDATE as its first
+row lock, then reloads the active same-organization Manager/Administrator with
+actor SHARE. Pass the actor ID from the authenticated wrapper; organization ID
+alone is not authority. Use explicit READ COMMITTED so a waiting no-op cannot
+return private branding from an old snapshot after revocation. No other resource
+locks or external work are added. The existing event remains after successful
+commit and only for a real branding change. This is current-role reauthorization,
+not OP27's eventual CompanyWrite mapping or new-policy activation.
+
+Acceptance: Manager/Admin changed and unchanged saves, Member/inactive/foreign/
+missing actor denials without values, organization-first and actor-only revocation
+waits, held-lock lifetime, failed-write rollback and existing concurrent branding
+no-op checks. Observe actual blockers, including a REPEATABLE READ connection
+default; rejected saves preserve every branding field and the row version.
+
 ### Snapshot consumers outside the project-family increment
 
 `reports/limits::configure_transaction`,

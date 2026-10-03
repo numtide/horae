@@ -43,7 +43,7 @@ Do not infer scope from a role-name hierarchy or from time editing.
 | --- | --- | --- |
 | Ordinary expense read/log/edit | Six grants and profile defaults above | Managed-person versus managed-project overlap; authoritative allow/deny tests |
 | Expense deletion | Own unlocked deletion is documented | Other-owner/custom-grant and locked deletion mapping |
-| Locked correction | Legacy web documentation permits Administrator notes/amount changes | New-model custom-grant boundary; receipt/date/billability changes are not established by broader API wording |
+| Locked correction | Dedicated web guide, rechecked 2026-10-03, permits Administrator notes/amount changes and permanent deletion of invoiced, approved or archived entries, not project/category changes | New-model custom-grant boundary, company-lock combinations and deletion's financial/interval effects; receipt/date/billability changes are not established by broader API wording |
 | Categories | Legacy documentation identifies Administrator management | Whether any custom capability permits administration, separately from expense writing |
 | Receipt view/download/change | Expense relationship documented | Current-grant mapping; direct download, report inclusion and revocation enforcement |
 | Mark billed/unbilled | Billable-only expense marking documented | New-model authority and independent lock effects |

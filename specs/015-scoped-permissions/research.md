@@ -100,6 +100,26 @@ acceptance remain to be reconciled before cutover.
 
 ## Workflow
 
+### Locked-entry corrections and branding revocation — 2026-10-03
+
+- Fresh dedicated time/expense editing documentation distinguishes privileged
+  correction/deletion from unlocking. Corrected the overly broad denial in
+  `contracts/company-locks.md`; source links, field/surface limits and remaining
+  new-model/company-lock/financial questions are recorded there. No account
+  mutation or runtime correction policy is inferred from this discovery.
+- Source tracing of `organization::update_org_branding_record` found a separate
+  concrete FR-010 gap: the helper receives no actor, so the wrapper's Manager
+  check can become stale while waiting for organization UPDATE. Retain existing
+  roles and post-commit events; pass identity and recheck active same-tenant
+  authority inside the transaction after its first lock.
+- The bounded path touches only organization and actor rows, in that order;
+  branding columns have no child-write trigger. Existing organization UPDATE is
+  retained, not upgraded after actor/resource locks. Explicit READ COMMITTED
+  prevents a connection's older snapshot default from preserving stale authority.
+  T071–T073 require production-helper denial, actual lock waits, no-op/privacy,
+  rollback and existing field/idempotency regressions before publication. This
+  self-review is not independent full T042 approval or six-profile activation.
+
 ### Operation mapping and transaction inventory — 2026-10-02
 
 - Follow-up at `412035d`: fresh reading of the public permissions guide explicitly

@@ -1,5 +1,49 @@
 # Permission verification
 
+## Branding transaction authority (T071–T073)
+
+Run through the Nix shell against the owned disposable compilation database;
+SQLx creates a separate database for each test. No real account or schema change
+is required. The existing Manager/Admin policy remains active.
+
+```sh
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae server_fns::organization::tests:: --locked
+```
+
+| Boundary | Production-helper regression |
+| --- | --- |
+| Active same-tenant authority before both change and no-op disclosure | `branding_requires_current_tenant_bound_authority_even_for_noops` |
+| Revocation after organization wait, even with a REPEATABLE READ connection default | `branding_rechecks_authority_after_the_organization_wait` |
+| Demotion/deactivation committed during actor-row wait | `branding_rechecks_authority_after_an_actor_only_wait` |
+| Writer retains authority until commit; later request denied | `branding_holds_actor_authority_until_its_write_commits` |
+| Failed UPDATE preserves row, releases locks and permits a later valid change/no-op | `failed_branding_write_rolls_back_and_releases_authority` |
+| Every branding field, NULL/empty values and competing no-op behavior | Five existing organization tests |
+
+RED: the first two tests returned successful branding to unauthorized callers,
+including after observed concurrent demotion. GREEN: all ten organization tests
+passed. The final rollback probe uses a bounded wait, not a scheduling-dependent
+NOWAIT assertion, because SQLx transaction drop queues the rollback.
+
+Focused self-review traced the sole authenticated wrapper, organization-first
+UPDATE, current actor SHARE, explicit READ COMMITTED, all commit/error paths and
+post-commit event dispatch. No public signature, CSS, dependency, profile mapping,
+business state or new-policy activation changed. These tests use real helper SQL
+and observed PostgreSQL blockers, not a duplicate implementation or timed sleeps.
+Revocation fixtures update the actor directly; this is not an end-to-end browser
+or complete cross-command acceptance claim. Full regression/cache/Clippy/formatting
+results are recorded after execution below; full T042 and OP27 remain open.
+
+Full server binary verification after the rollback-test hardening: 888 passed,
+zero failed and 11 pre-existing ignored in 180.24 seconds. All 161 core tests
+pass; formatting CI passes with zero changes. No separate integration-binary,
+browser or full-flake run is claimed for this bounded repair.
+
+Complete non-incremental SQLx preparation adds three test-query descriptions and
+changes/deletes no existing cache entry. Fresh offline all-targets Clippy passes
+with warnings denied (50.43 seconds). Cleaning removed only 1.5 GiB of regenerable
+package artifacts. Bounded adversarial self-review found no remaining critical/
+high defect in this repair; it is not independent full-feature acceptance.
+
 ## Legacy report lock integration (T065–T067)
 
 Run in the Nix shell against the owned disposable PostgreSQL compilation DB:

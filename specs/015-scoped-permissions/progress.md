@@ -1,5 +1,60 @@
 # Scoped permissions investigation progress
 
+## 2026-10-03 — Branding transaction authority resumed
+
+- The preceding MVP-status turn made no implementation progress. Revalidated
+  clean `feat/scoped-permissions` synchronized at published `3ae8e08`; no merge.
+- Spec Kit Clarify found a concrete contract overrestriction: dedicated Harvest
+  time/expense guides permit named Administrator corrections and deletion without
+  general unlocking. Corrected `company-locks.md`, preserving unverified custom
+  grants, company-lock combinations and financial/deletion effects as open.
+  No new user decision is inferred; the prior person-management question remains
+  unanswered. Requirements remain 12/16, with no changed checklist markers.
+- Spec Kit Tasks/Implement reused feature 015. T071–T073 define a closed branding
+  reauthorization repair: current code takes only an organization ID after the
+  wrapper's admission check. No-op responses can also disclose stale-authority
+  branding. Rust/testing/async/simplicity guidance keeps the fix in its existing
+  transaction, without new dependencies, UI or policy activation.
+
+Next: reproduce the branding revocation failure against disposable PostgreSQL,
+then reauthorize after the organization lock and verify both change/no-op paths.
+
+- RED: both new tests failed against the original helper: a Member and a Manager
+  demoted while waiting each received a successful unchanged-branding response.
+- GREEN: all ten organization tests pass, including five new authority/race/
+  rollback cases. READ COMMITTED is explicit; the waiting-client fixture defaults
+  to REPEATABLE READ. Actor-only waits and a writer-first table-lock barrier verify
+  rechecking and retention through commit without sleeps. Focused review replaced
+  a NOWAIT rollback probe with a bounded wait because SQLx drop queues rollback.
+
+Next: run full server regressions after that test hardening, regenerate complete
+SQLx metadata, check offline Clippy/formatting, then publish without merging.
+
+- The full server binary suite passes after rollback-test hardening: 888 passed,
+  zero failed, 11 pre-existing ignored in 180.24 seconds. All 161 core tests pass.
+  Formatting CI passes with zero changes. Complete SQLx regeneration and fresh
+  offline all-targets Clippy are running; no separate integration binary, browser
+  or full-flake result is claimed.
+
+- Complete SQLx regeneration adds three test-query descriptions with no existing
+  changes/deletions. Fresh offline all-targets Clippy passes with warnings denied
+  in 50.43 seconds. Cleaning removed 1.5 GiB of regenerable package artifacts only.
+  GitHub confirms #212 open/draft at `3ae8e08` before this publication. No merge,
+  schema, real-data, UI or policy activation change is included.
+
+- T071–T073 close the branding writer's current-authority boundary, not complete
+  OP27 or T042. The sole wrapper, role equivalence, error/no-op disclosure, lock
+  lifetime, rollback and event ordering were self-reviewed; no critical/high
+  local finding remains. No independent full-feature review is claimed. The owned
+  test cluster is stopped. Final formatting inserted one missing Markdown blank
+  line in this log; the corrected document is checked again before committing.
+
+Next: publish the verified repair to #212 without merging, then continue the
+remaining T006 operation contracts and T042 credential/
+import/entry integration. The person-management lifecycle answer remains pending;
+do not repeat or infer it from automatic continuation. Full implementation remains
+active and incomplete.
+
 ## 2026-10-03 — Project-family integration resumed
 
 - The preceding user-facing MVP assessment made no implementation progress.

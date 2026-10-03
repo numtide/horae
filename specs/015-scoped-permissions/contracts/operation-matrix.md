@@ -18,7 +18,11 @@ Grant names are `horae_core::permissions::catalog::Permission` variants. A famil
 such as `TimeRead{Own,Managed,All}` denotes those three explicit grants, not a new
 permission or profile rank. The six built-in/custom selections supply grants;
 they do not themselves answer record scope, sensitive-field access or business
-state. A displayed grant is not proof of backend enforcement.
+state. A displayed grant is not proof of backend enforcement. The
+[locked-entry correction evidence](company-locks.md#acceptance-and-remaining-verification)
+refines OP04/OP38: named administrative correction/deletion is distinct from
+ordinary editing and unlocking. Do not interpret independent locks as a blanket
+ban on those documented operations or infer their custom-grant mapping.
 
 - **D/O**: documented capability with observed editor configuration; saved
   non-owner enforcement is not yet observed.

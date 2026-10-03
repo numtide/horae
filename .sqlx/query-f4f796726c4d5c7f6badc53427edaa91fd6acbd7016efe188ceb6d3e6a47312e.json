@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "ALTER TABLE organizations ADD CONSTRAINT reject_branding_write CHECK (false) NOT VALID",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "f4f796726c4d5c7f6badc53427edaa91fd6acbd7016efe188ceb6d3e6a47312e"
+}

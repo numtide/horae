@@ -97,6 +97,14 @@ close T042, replace legacy guards or authorize mixed-policy operation.
 
 ### Existing increments and remaining integration
 
+T071–T073 close the current branding writer's admission-to-commit gap under
+`contracts/permission-state.md`. Preserve Manager/Admin policy, organization
+UPDATE first and post-commit change events; reload the active tenant-bound actor
+under SHARE and explicit READ COMMITTED before any result or write. This bounded
+constitution check needs no schema, dependency, mapping or real-data change.
+Tests cover revocation waits and denied no-op disclosure as well as actual writes.
+Full OP27, T042 and runtime cutover remain open.
+
 T068–T070 implement the reviewed project-family prefix in
 `contracts/permission-state.md`: shared organization gates for drafts/reads,
 NO KEY UPDATE for project/assignment/task-link changes, then current actor
