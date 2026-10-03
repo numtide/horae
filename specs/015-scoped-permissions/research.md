@@ -13,6 +13,29 @@ deletion result remains unverified, while Horae's behavior is now approved.
 
 ## Current Horae boundaries
 
+### Import disposal after nested transaction cancellation, 2026-10-03
+
+- Decision: drain existing responses in shared `release_import`, tolerating only
+  invalid-savepoint errors during disposal, then full ROLLBACK, advisory unlock
+  and close. Do not continue import work on that session.
+- Evidence: pinned `sqlx-postgres-0.8.6/src/transaction.rs` decrements depth only
+  after awaiting RELEASE; its drop rollback can therefore target a savepoint
+  the server already released. `connection/mod.rs::wait_until_ready` consumes
+  one ErrorResponse before returning; another flush continues draining without
+  submitting another command. A dropped BEGIN at depth zero is another reason
+  to explicitly roll back server state before releasing the reservation.
+- Rationale: CSV row savepoints, API parent/row savepoints and API preview
+  transactions share the same cleanup boundary. The recorded cancellation
+  failure is not evidence that all driver failures can be ignored.
+- Alternatives rejected: suppress all cleanup errors, unlock before rollback,
+  rely on eventual socket closure for immediate retry, or stop cancelling SQL
+  consumers while they wait on locks. A library upgrade or protocol proxy is
+  unnecessary for this disposal fix. The deterministic fixture constructs the
+  driver divergence; it does not claim a timed reproduction of the driver race.
+- Independent read-only review confirms the finite response-drain approach and
+  recommends full ROLLBACK even without a missing-savepoint response. Execution
+  authority, legacy requesters and retry delegation remain separate contracts.
+
 ### Original import requester, 2026-10-03
 
 - Decision: retain `original_requester_id` only on insertion by the updated

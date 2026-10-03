@@ -1,5 +1,48 @@
 # Permission verification
 
+## Interrupted import cleanup (T089–T091)
+
+Run against the owned disposable PostgreSQL instance in the Nix shell:
+
+```sh
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae import_cleanup --locked
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae --locked -- --quiet
+```
+
+The focused fixture deliberately releases a server-side savepoint while keeping
+SQLx's transaction objects alive, then drops the objects. This constructs the
+pending rollback failure at depths two and three without depending on scheduler
+timing. Require successful cleanup, unchanged previously committed content,
+rolled-back current writes and immediate reservation acquisition with a
+one-connection pool. Also exercise untracked server transactions and propagate
+nonrecoverable backend errors. Full regressions must retain API/CSV producer
+joins, cancellation, lease fencing, resume and preview guarantees.
+
+| Requirement subset | Executable evidence |
+| --- | --- |
+| FR-007/010 cleanup prerequisite, FR-017 preservation | `import_cleanup_recovers_unacknowledged_savepoint_release` and `import_cleanup_rolls_back_an_untracked_server_transaction` |
+| FR-018 explicit failure, no success on broken transport | `import_cleanup_does_not_hide_a_backend_failure` |
+| SC-006 import subset: actual API producer join and committed pages | `durable_api_cancel_waits_for_the_producer_before_acknowledging`, `durable_api_cancellation_preserves_confirmed_pages_for_manual_retry` and the corresponding preview case |
+| SC-006 import subset: actual CSV producer join and committed batches | `durable_csv_cancel_joins_parser_and_preserves_committed_rows`, `durable_csv_cancel_preserves_its_completed_batches_for_manual_retry` and the corresponding preview case |
+
+RED reproduced the exact missing-savepoint cleanup error in 0.34 seconds.
+After the shared correction, the three focused tests pass in 1.07 seconds.
+Independent review found no critical/high production issue and corrected a
+backend-termination fixture race: its timeout overload now confirms actual
+termination before cleanup. Full server-binary verification after that correction
+passes: 922 passed, zero failed, 11 pre-existing exclusions, 933 discovered,
+189.83 seconds. This includes the actual adapter cancellation and preservation
+regressions above, not just the constructed savepoint state.
+
+Complete SQLx regeneration passes in 51.47 seconds with seven added descriptors
+and no existing cache changes/deletions. Fresh offline all-targets Clippy passes
+with warnings denied in 59.11 seconds. The disposable PostgreSQL instance is
+stopped. Final Nix formatting passes with zero changes in 2.092 seconds;
+T089–T091 are complete. No full-flake/browser acceptance is claimed.
+
+This is disposal verification, not a timed driver-race reproduction, worker
+permission activation, a library upgrade or permission to change real data.
+
 ## Original import requester (T086–T088)
 
 Run in the Nix shell against the owned disposable PostgreSQL instance with

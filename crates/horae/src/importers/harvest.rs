@@ -33,7 +33,7 @@ use horae_core::importers::harvest::types::SourceKind;
 use horae_core::importers::harvest::types::{EntityType, ImportMode, SourceRow, SyncScope};
 #[cfg(test)]
 use sqlx::Acquire;
-use sqlx::PgPool;
+use sqlx::{Connection, PgPool};
 use uuid::Uuid;
 
 #[cfg(test)]
@@ -194,9 +194,22 @@ async fn lock_import(
 async fn release_import(
     mut connection: sqlx::pool::PoolConnection<sqlx::Postgres>,
 ) -> anyhow::Result<()> {
+    loop {
+        match connection.flush().await {
+            Ok(()) => break,
+            // A cancelled RELEASE can reach PostgreSQL before SQLx updates its
+            // depth. Drain the resulting stale rollback, never reuse this session.
+            Err(sqlx::Error::Database(error)) if error.code().as_deref() == Some("3B001") => {
+                tracing::debug!("draining an interrupted import savepoint rollback");
+            }
+            Err(error) => return Err(error.into()),
+        }
+    }
+    // A cancelled BEGIN may likewise precede SQLx's transaction bookkeeping.
+    // Roll back server state before releasing the run reservation.
+    sqlx::query!("ROLLBACK").execute(&mut *connection).await?;
     // Closing the socket does not wait for PostgreSQL to release session locks.
     // Await the unlock so an immediate retry cannot see a completed import as busy.
-    // SQLx flushes any rollback queued by a dropped transaction before this query.
     sqlx::query!("SELECT pg_advisory_unlock_all()")
         .execute(&mut *connection)
         .await?;

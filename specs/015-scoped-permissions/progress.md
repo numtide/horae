@@ -1,5 +1,67 @@
 # Scoped permissions investigation progress
 
+## 2026-10-03 — Interrupted import session disposal
+
+- Previous goal turn made concrete progress: T086–T088 published unsigned as
+  `482b7c5` to draft #212. HEAD and origin match and the worktree is clean; all
+  prior process handles are terminal and the owned test database is stopped.
+- Spec Kit Plan/Tasks reuse the current feature and existing authorization for
+  closed increments. Independent read-only research traced the recorded missing
+  savepoint to pinned SQLx's server-response/bookkeeping cancellation window.
+  API and CSV both use the same disposal path; no separate policy is selected.
+- T089–T091 specify a deterministic divergent-savepoint fixture, narrow pending
+  error recovery, explicit full rollback before unlock, and preserved failures.
+  No schema or data model changes are needed. No extension hooks or agent-context
+  generator are present; full readiness remains incomplete, not waived.
+
+Next: run the cleanup fixture RED, implement shared disposal, verify real adapter
+cancellation/regression and offline gates, then publish without merging. Worker
+execution/retry/unknown-requester policy and full scope remain open.
+
+- RED reproduces the exact missing `_sqlx_savepoint_1` error at shared cleanup
+  (one failed test, 0.34 seconds). The controlled fixture constructs lost
+  acknowledgement, not scheduler timing. Shared cleanup now drains only stale
+  savepoint rollback errors, explicitly rolls back and then unlocks/closes.
+
+- Added untracked-BEGIN and backend-failure fixtures. Focused verification and
+  independent adversarial review are in progress. Analysis maps all three tasks
+  to the stated FR-007/010 prerequisites, FR-017/018 preservation and SC-006
+  import subset, with no local ambiguity, duplication or constitutional conflict.
+
+- Focused cleanup tests pass: three passed, zero failed, 1.07 seconds.
+  Adversarial review finds no critical/high production issue; it identifies a
+  fixture race because backend termination without a timeout confirms only
+  signaling. The fixture now waits up to five seconds for actual termination
+  and bounds cleanup separately. Corrected documentation distinguishes its
+  precommitted organization data from actual batches in adapter regressions.
+  Full server verification includes these corrections.
+
+- Full server-binary verification passes after the fixture correction: 922
+  passed, zero failed, 11 pre-existing exclusions, 933 discovered, 189.83 seconds.
+  Actual API/CSV cancellation, committed-page/batch preservation, preview and
+  producer-join regressions pass. T089/T090 are complete; SQLx/offline Clippy and
+  final formatting remain for T091. The pending policy questions are unchanged.
+
+- Complete SQLx regeneration passes in 51.47 seconds: seven added descriptors,
+  no existing cache changes or deletions. Fresh offline all-targets Clippy passes
+  with warnings denied in 59.11 seconds. Initial Nix formatting changes Rust
+  layout and Markdown spacing only; final zero-change verification follows.
+  The owned disposable PostgreSQL cluster is stopped. PR #212 remains OPEN/DRAFT
+  on the authorized branch; no merge or live-data operation was performed.
+
+- Final Nix formatting passes with zero changes in 2.092 seconds. T089–T091 are
+  complete, with the review's fixture race corrected and no critical/high
+  finding outstanding in this increment. Publish unsigned to the existing draft.
+  No full-flake, browser or complete permission-feature acceptance is claimed.
+
+Next after publication: resume T042's worker authority/execution contract. The
+recorded missing-savepoint cleanup issue is now reproduced and repaired, not
+an open blocker. Historical unknown-author handling, retry delegation and
+permission-restoration behavior still require the explicit execution contract.
+Do not repeat pending questions or infer answers; continue independent full-scope
+work where safe. Full six-profile integration, scoped approvals, permission UI,
+migration review and cross-surface acceptance remain required.
+
 ## 2026-10-03 — Original import requester provenance
 
 - Previous goal turn made concrete progress: `e5fcc5a` published T083–T085 to

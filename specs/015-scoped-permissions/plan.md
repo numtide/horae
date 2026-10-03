@@ -97,6 +97,14 @@ close T042, replace legacy guards or authorize mixed-policy operation.
 
 ### Existing increments and remaining integration
 
+T089–T091 repair shared import session disposal before worker-authority
+integration. Reuse SQLx's pending-response drain, recover only a missing
+savepoint during disposal, explicitly roll back and then unlock/close. The
+local contract in `permission-state.md` preserves existing committed batches,
+source-worker joins and one-connection retry. Constitution review passes:
+no dependency, schema, grant mapping, real-data or authorization-surface change.
+This is not full T042 closure or permission activation.
+
 T086–T088 retain original import requester provenance under
 `contracts/permission-state.md`. The additive nullable field preserves unknown
 historical authors; updated commands persist the current session actor only on

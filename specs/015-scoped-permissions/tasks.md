@@ -221,6 +221,17 @@ hierarchy and audited transactions; combined expense behavior depends on 016.
 
 ## Phase 6: US3 — Enforcement on every delivery path (P1)
 
+### Interrupted import session disposal
+
+T089 → T090 → T091 implements the closed cleanup contract in
+`contracts/permission-state.md`, a T042 worker prerequisite (FR-007/010,
+FR-017/018 preservation and SC-006 import regression). Shared source and
+fixtures require sequential execution; no new execution policy is selected.
+
+- [x] T089 [US3] Reproduce pending missing-savepoint cleanup failure with real PostgreSQL fixtures in `crates/horae/src/importers/harvest/engine_tests.rs`, checking precommitted-data preservation, incomplete rollback and immediate one-connection retry.
+- [x] T090 [US3] Drain interrupted rollback responses in shared `crates/horae/src/importers/harvest.rs::release_import`, recover only the defined savepoint condition, roll back before unlocking and preserve error propagation and connection disposal.
+- [x] T091 [US3] Cover untracked transaction cleanup and nonrecoverable connection errors in `crates/horae/src/importers/harvest/engine_tests.rs`, run actual API/CSV cancellation and server regressions, regenerate `.sqlx/`, verify offline Clippy/formatting and record analysis/review in feature 015 artifacts.
+
 ### Original import requester provenance
 
 T086 → T087 → T088 follows the independent storage contract in

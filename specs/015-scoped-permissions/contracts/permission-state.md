@@ -60,6 +60,34 @@ artifact's complete recorded scope, not just its original generation permission.
 
 ## Concrete lock inventory (T042, partial)
 
+### Import session cleanup (T089–T091)
+
+Before acknowledging interrupted execution, both API and CSV must join their
+source worker, drain the abandoned SQL work and roll back any remaining outer
+transaction before releasing the import session reservation. Already committed
+checkpoints are preserved; the incomplete batch must not become visible. No
+discarded connection may return to the pool. Immediate retry must work with a
+one-connection pool after successful cleanup.
+
+Pinned SQLx 0.8.6 can queue a rollback to a savepoint already released by the
+server when its commit future is dropped before transaction-depth bookkeeping.
+Drain the existing queue using `Connection::flush`; recover only PostgreSQL
+`3B001` (invalid savepoint specification) during this disposal phase. Each flush
+consumes a pending error and queues no new work. Propagate other database,
+transport and protocol errors. After draining, issue an unconditional full
+ROLLBACK before advisory unlock and close: a cancelled BEGIN may have reached
+PostgreSQL before SQLx recorded a transaction depth. Never resume domain work on
+this connection or use this recovery for ordinary row failures.
+
+Tests construct the exact backend/client savepoint divergence at two nesting
+depths, check rollback of uncommitted rows, retain previously committed data,
+and acquire the reservation immediately through a one-connection pool. This
+deterministic fixture demonstrates cleanup, not the probability of cancellation
+inside a driver poll. Actual API/CSV cancellation regressions remain required,
+including committed-batch preservation, as do checks that unrelated connection
+errors are not turned into success.
+No new schema, grant, historical-requester choice or worker activation is implied.
+
 ### Original import requester (T086–T088)
 
 Persist `horae_jobs.original_requester_id` as nullable UUID provenance with a
