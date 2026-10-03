@@ -1394,3 +1394,65 @@ the reviewed relationship-write and shared authorization integration work. Perso
 profile application now has actual internal transactions; authenticated surfaces,
 management add/remove commands, full T042, UI and migration remain required.
 The full goal stays active, not complete or blocked.
+
+## 2026-10-03 — Project delegation implementation
+
+- Previous user-facing turn was an MVP status answer: no implementation progress
+  and no scope reduction. Revalidated clean, published `f5e0dde` in the existing
+  worktree/branch; the preceding person-profile increment is already on #212.
+- Executed Spec Kit Plan/Tasks/Implement helpers, preserving existing artifacts.
+  Full requirements remain 12/16; existing authorization permits confirmed local
+  increments, not activation. No extension hooks or context updater are present.
+- Independent read-only research exposed the project INSERT FK/editor lock cycle.
+  The reviewed project-only contract and T059–T061 close that local design with
+  nonblocking parent acquisition and whole-transaction rollback. Person-management
+  inactive-target rules and all full-feature gates remain open.
+
+Next: run failing production-command tests, implement project replacement, verify
+atomicity/replay/concurrency and publish only verified code. No real-data mutation,
+runtime activation, merge or complete-story acceptance is claimed.
+
+### Focused verification checkpoint
+
+- Initial RED compilation failed on the missing command module. After adding the
+  implementation, the first run found a fixture missing the required explicit
+  `is_administrator = false`; fixed it without weakening schema constraints.
+
+- All 17 project-management production-command tests now pass, including active
+  authority, exact audit/preservation, historical replay, atomic denial, real
+  organization/project lock contention, retry after Busy and compatible user locks.
+
+- Independent read-only implementation review found no high/security defect in
+  the command; its fixture finding and four coverage requests were addressed.
+
+- Verified #212 remains open/draft at published `f5e0dde`. Current changes are
+  not yet published. Full server/core regressions are running next, followed by
+  SQLx metadata regeneration and offline Clippy/formatting. Full T042, UI and
+  policy activation remain open.
+
+- Full server binary regressions passed: 858 passed, zero failed, 11 pre-existing
+  ignored; all 161 core tests passed. Formatting CI passed with zero changes.
+  T059/T060 are complete locally; T061 awaits the running cache/offline checks.
+
+- One new Spec Kit Clarify question is pending about active receiving managers for
+  person-management additions. Official documentation does not settle that write
+  predicate; no answer or lifecycle rule has been invented. Project delegation is
+  independent. Full requirements remain 12/16; its local readiness checklist is 7/7.
+
+### Verified project-delegation increment
+
+- Complete SQLx preparation adds 28 entries, changes/deletes none. Fresh offline
+  all-targets Clippy passed with warnings denied. Cleaning removed only 5.7 GiB
+  of regenerable package artifacts in this worktree; no source or data deletion.
+- T059–T061 are complete: 36 of 61 listed tasks are checked, not a percentage of
+  feature completion. Full requirements remain 12/16 and runtime policy remains
+  inactive. Spec Kit and Rust/testing/async guidance kept the change in existing
+  storage and transaction mechanisms with no new abstraction, dependency or UI.
+- Only the owned disposable PostgreSQL cluster was used. No Harvest mutation,
+  real-data migration, endpoint activation, merge or full-policy claim.
+
+Next: publish this verified increment on #212, then implement person-management
+commands after the pending lifecycle clarification; continue independent
+operation/lock integration work while that answer is pending. Editor integration,
+authenticated surfaces, full T042, approvals, migration and end-to-end gates remain
+required. The goal remains active, neither complete nor blocked.

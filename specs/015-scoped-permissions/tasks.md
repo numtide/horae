@@ -130,6 +130,17 @@ command kind as conflicting intent rather than trying to decode its shape.
 
 ## Phase 5: US2 — Managed work and scoped approvals (P1)
 
+### Internal project delegation
+
+T058 → T059 → T060 → T061 implements the closed local contract in
+`contracts/project-management-commands.md`. These sequential tasks share fixtures
+and commands; no parallel code work. Person-management lifecycle, editor wiring,
+full T042 and runtime activation remain separate gates.
+
+- [x] T059 [US2] Add failing production-command tests in `crates/horae/src/server_fns/permissions/tests/project_management.rs` for the authority, eligibility, preservation, replay, rollback and concurrency cases in `contracts/project-management-commands.md` (FR-005/010/011/013/017/026).
+- [x] T060 [US2] Implement internal atomic manager-set replacement in `crates/horae/src/server_fns/permissions/project_management.rs`, using existing canonical loaders, 0044 relations and receipts; prevent the legacy project-parent lock cycle without policy activation or membership changes (FR-005/010/011/013/017/026).
+- [x] T061 [US2] Verify focused and affected PostgreSQL regressions, complete `.sqlx/` regeneration, offline all-targets server Clippy and formatting; adversarially review the implementation and record actual evidence in `specs/015-scoped-permissions/quickstart.md` and `progress.md`.
+
 Independent test: two projects/two approvers with overlapping people scope, filtered dates, empty cells and withdrawal; no unrelated changes.
 
 ### Completed increment: pure relationship prerequisites

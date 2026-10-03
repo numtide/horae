@@ -468,3 +468,49 @@ Formatting CI and diff checks also passed. T056–T058 are complete for this
 internal boundary; full T037/T038, authenticated wrappers and runtime acceptance
 remain open. Rust/testing/async/simplicity guidance kept this in existing modules,
 dependencies and SQLx transactions, with no generic policy framework or UI change.
+
+## Internal project delegation (T059–T061)
+
+Use the same owned disposable PostgreSQL compilation database and test role with
+CREATEDB as above. No new migration is introduced; fixtures alone enable policy 1.
+The internal command is not wired to the existing project editor or a public
+endpoint. See `contracts/project-management-commands.md` for its closed boundary.
+
+```sh
+cargo test -p horae --features server --bin horae project_management_tests --locked
+cargo test -p horae --features server --bin horae --locked
+cargo test -p horae-core --locked
+# Finish other Cargo processes before refreshing the complete cache.
+cargo clean -p horae
+CARGO_INCREMENTAL=0 cargo sqlx prepare --workspace -- --features server --all-targets
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+nix fmt -- --ci
+```
+
+| Contract | Production-command regression |
+| --- | --- |
+| Project editing grants, current managed designation, no legacy membership or identity bypass | `project_editor_delegates_existing_read_grants_without_promotion`, `canonical_actor_grants_activity_tenant_and_policy_are_required`, `managed_scope_never_uses_another_project_or_legacy_membership` |
+| Entire-set eligibility and strict tenant/target validation | `mixed_invalid_addition_preserves_entire_previous_set`, `foreign_missing_inactive_and_malformed_additions_fail_without_disclosure` |
+| Retained identities, no-op audit, archived projects and eligible removal | `retained_ineligible_managers_and_archived_projects_allow_noop_and_removal` |
+| Exact audit delta; preserve membership, cost override, hours and unrelated scopes | `replacement_audits_exact_delta_and_preserves_membership_history_and_other_scopes` |
+| Reordered/historical replay, cross-command intent, version rejection and self-removal | `historical_replay_does_not_reapply_removed_or_now_ineligible_designations`, `receipt_conflicts_precede_decoding_and_replay_requires_current_authority`, `actual_template_command_receipt_cannot_be_reused_for_project_delegation`, `designation_is_required_before_managed_editor_can_delegate` |
+| Stale/duplicate/overflow denial and concurrent replacements | `stale_duplicate_and_exhausted_revisions_never_replace_the_set`, `concurrent_replacements_commit_only_one_current_revision` |
+| Revocation after an actual gate wait | `revocation_winning_gate_denies_waiting_delegation` |
+| Legacy project-parent lock conflict, whole rollback and identical retry | `legacy_project_lock_returns_busy_instead_of_forming_an_org_fk_cycle` |
+| Actor/target FK compatibility and audit failure rollback | `legacy_user_share_locks_allow_manager_and_receipt_foreign_keys`, `audit_failure_rolls_back_removal_addition_and_revision` |
+
+Initial RED compilation failed because the command module did not exist. The
+first implementation run failed in fixture setup because its INSERT omitted
+non-null administrative identity; fixed the fixture to insert explicit false.
+All 17 focused tests then passed. Independent read-only review found no high
+security defect in the production command and requested four additional coverage
+cases; all are included in the passing suite above. This does not prove T042 or
+mixed-policy safety. Full server binary regressions passed with 858 passing tests,
+zero failures and 11 pre-existing ignored cases; all 161 core tests passed.
+Formatting CI passed with zero changes. Clean-package, non-incremental SQLx
+preparation adds 28 query descriptions and changes/deletes no existing entries.
+Fresh offline all-targets server Clippy passed with warnings denied. Cleaning
+removed 5.7 GiB of regenerable package artifacts only, not source or database data.
+No separate integration-binary execution, browser or full flake run is claimed.
+T059–T061 are complete for this internal command; full user-story and activation
+gates remain open. No new crate, dependency, schema migration or UI/CSS change.

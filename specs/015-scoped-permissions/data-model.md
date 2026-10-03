@@ -12,6 +12,12 @@ from tracking membership for internal profile changes. The reviewed
 fencing and confirmed deletion snapshots. No legacy data is copied, no addition
 endpoint is exposed and legacy runtime authorization remains unchanged.
 
+Internal project replacement follows `contracts/project-management-commands.md`:
+retain existing edge identities/revisions, audit additions/removals and advance the
+organization access revision once per real set change. Parent project KEY SHARE
+NOWAIT prevents a lock cycle with the legacy editor; it does not synchronize that
+editor's membership-based manager flags or replace its form revision contract.
+
 ## Pure record-scope foundation
 
 - `AccessScope`: private flags for `NONE`, `OWN`, `MANAGED_PEOPLE`, `MANAGED_PROJECTS`, `ORGANIZATION`. Union is explicit and never infers a capability or a broader role.

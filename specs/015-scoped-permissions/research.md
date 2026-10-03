@@ -350,6 +350,38 @@ settle it. No rate scope or prerequisite has been invented to close the gate.
   edits without evidence, or claiming legacy role-based deactivation is compatible
   with the new canonical last-admin count. Full activation remains gated.
 
+### Project designation insert lock review — 2026-10-03
+
+- Decision: use the reviewed `contracts/project-management-commands.md` for
+  T059–T061, retaining full integration gates. Project delegation has confirmed
+  predicates independently of person-management inactive-target questions.
+- Rationale: migration 0044 child INSERT still acquires a project FK KEY SHARE.
+  `editing/save.rs` takes project UPDATE before `editing/associations.rs` asks
+  organization SHARE. Ordinary parent waiting under organization UPDATE would
+  create a cycle. Acquire parent KEY SHARE NOWAIT and roll back on contention.
+- Alternatives rejected: deferred FK checks, a parent revision-writing trigger,
+  treating separate tables as proof of no FK lock, automatically promoting
+  managers, rechecking addition eligibility on removals, or bypassing grants by
+  administrative identity. Preserve current archived-project edit availability.
+- Bounded independent read-only review found no unresolved high contract finding.
+  Verify the actual command with database contention tests; source review alone
+  neither completes T042 nor reconciles the legacy editor's manager representation.
+
+### Person-management lifecycle clarification — 2026-10-03
+
+- Rechecked Harvest's [people-assignment guide](https://support.getharvest.com/hc/en-us/articles/4422314817677-Making-people-assignments-for-Managers),
+  [archiving guide](https://support.getharvest.com/hc/en-us/articles/360048687311-Archiving-deleting-and-restoring-people)
+  and [teammates API](https://help.getharvest.com/api-v2/users-api/users/teammates/).
+  Archived people cannot sign in and historical reporting remains available;
+  these sources do not establish whether an inactive responsible person may
+  receive new managed-person relationships. Login denial is not a write predicate.
+- Executed Spec Kit Clarify prerequisites and asked one question: require an active
+  receiving responsible person for new relationships, or allow preconfiguration
+  while inactive. No answer has been accepted at this checkpoint. This does not
+  decide retention on deactivation, restoration or inactive managed subjects.
+- Continue independent project-delegation verification. Do not copy FR-026's
+  active-project-manager rule into FR-028 without resolving this distinction.
+
 ### Previous workflow record
 
 - Followed the checked-in `speckit-specify` skill, local template and constitution. No extension hooks or template preset overrides were found.

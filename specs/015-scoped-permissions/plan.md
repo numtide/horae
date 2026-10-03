@@ -97,6 +97,15 @@ close T042, replace legacy guards or authorize mixed-policy operation.
 
 ### Existing increments and remaining integration
 
+T059–T061 implement internal project delegation under
+`contracts/project-management-commands.md`. The bounded post-design check passes:
+reuse 0044, canonical grants, organization revisions and atomic receipts; no new
+dependency, public endpoint or legacy data change. Independent lock research found
+an INSERT FK cycle with the existing editor; parent KEY SHARE NOWAIT and complete
+rollback on contention close this local edge. Editor reconciliation and full T042
+remain mandatory before activation. Person-management inactive-target predicates
+are not silently inferred from the separate FR-026 project rule.
+
 The renewed implementation request also permits T047–T049: strict restoration of
 the confirmed saved grant selection in the pure core. Validate catalog version,
 duplicates, Member floor and prerequisite closure without adding grants on load.
