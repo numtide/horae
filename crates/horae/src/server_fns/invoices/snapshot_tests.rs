@@ -4,6 +4,7 @@ use crate::server_fns::test_seed::{SeedIds, seed};
 use sqlx::PgPool;
 use uuid::Uuid;
 
+mod editor;
 mod races;
 mod settings;
 

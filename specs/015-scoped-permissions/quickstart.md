@@ -1,5 +1,37 @@
 # Permission verification
 
+## Invoice editor snapshots (T101–T103)
+
+Run in the pinned Nix shell against disposable PostgreSQL:
+
+```sh
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae snapshot_tests --locked
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae --locked -- --quiet
+```
+
+| Requirement subset | Executable evidence |
+| --- | --- |
+| FR-006/007: current same-tenant active actor and session-derived identity | `editor_snapshots_preserve_rows_and_override_inherited_read_only` and editor cases in registered-route `authorization_tests::financial_snapshots::check` |
+| FR-010: revocation wins or reader retains authority until materialization | `editor_snapshots_deny_winning_legacy_revocation`, `editor_snapshots_retain_authority_and_release_cancelled_reads` |
+| FR-010/017: consistent metadata/revision/lines and no stale-edit rebasing | `editor_snapshots_refresh_after_revision_change_without_rebasing_edits`, `editor_snapshots_keep_invoice_metadata_revision_and_lines_together` |
+| FR-017/018: unchanged business rows, inherited settings and pool reuse | Full-row preservation, inherited READ ONLY/SERIALIZABLE and single-connection assertions in the editor tests; existing shared-prelude retry/timeout tests |
+| FR-018 / SC-006 subset: non-disclosing HTTP errors and financial regression | Registered HTTP checks for missing/foreign invoices, inactive/member sessions, forged identity, stale edits and non-draft conflicts; full server-binary suite |
+
+RED reproduced `cannot execute SELECT FOR SHARE in a read-only transaction`.
+The implementation replaces only the two reader preludes with the existing
+helper; save/generation/status mutation guards and arithmetic are unchanged.
+Focused GREEN passes all 14 snapshot tests (12.63s). Independent adversarial
+review found no blocker or missing discriminating case. Cancellation proves
+eventual rollback after the blocked query is released, not immediate query
+cancellation. Full server-binary regression passes: 943 passed, zero failed,
+11 existing exclusions (271.23s). Complete SQLx regeneration added seven
+descriptors, with none modified/deleted (1m41s); offline all-targets Clippy
+(1m52s) and web/WASM check (21s) pass with warnings denied. Formatting passes
+with zero changes (3.668s). Scoped analysis maps all five FR subsets to the
+three tasks with no unmapped task or local consistency/constitution finding.
+Publication and cleanup results are recorded in `progress.md`.
+This is not canonical policy activation or whole-feature acceptance.
+
 ## Materialized financial snapshots (T098–T100)
 
 Run inside the Nix shell against the disposable PostgreSQL instance. No browser,

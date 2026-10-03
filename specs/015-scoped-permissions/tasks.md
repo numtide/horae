@@ -359,6 +359,16 @@ No complete T039/T040 or US3 acceptance follows from this pair of consumers.
 - [x] T099 [US3] Add the shared prelude in `crates/horae/src/server_fns/snapshot.rs`, wire it from `server_fns.rs`, `projects.rs` and `invoices/preview.rs`, and retain the session actor through `invoices.rs` and test adapters; preserve existing snapshot queries and streaming behavior (FR-006/007/010/017).
 - [x] T100 [US3] Verify reader/HTTP/financial regressions, bounded retry and cancellation, regenerate `.sqlx/`, run offline checks/lint/format, review adversarially and record evidence in `specs/015-scoped-permissions/quickstart.md` and `progress.md` (FR-018, SC-006 subset).
 
+### Invoice editor snapshot integration
+
+T100 → T101 → T102 → T103 extends `contracts/manager-snapshots.md`. Sequential
+work shares the editor and financial fixtures. No new product predicate or
+policy activation is introduced; full US3/T039/T040 acceptance stays separate.
+
+- [x] T101 [US3] Add failing inherited-settings, revocation, revision/snapshot, cancellation and preservation tests for both editor readers in `crates/horae/src/server_fns/invoices/snapshot_tests/editor.rs` (FR-006/007/010/017/018).
+- [x] T102 [US3] Reuse the manager prelude in `crates/horae/src/server_fns/invoices/editing.rs` load/review only; preserve business validation, DTOs and mutation guards (FR-006/007/010/017).
+- [x] T103 [US3] Extend registered HTTP coverage in `crates/horae/src/server_fns/importers/authorization_tests/financial_snapshots.rs`, run reader/financial/server regressions and cache/offline/lint/format gates, adversarial review and analysis; record evidence in `specs/015-scoped-permissions/quickstart.md` and `progress.md` (FR-018, SC-006 subset).
+
 ## Phase 7: US4 — Custom profiles and permission explanations (P2)
 
 ### Isolated create/delete command implementation

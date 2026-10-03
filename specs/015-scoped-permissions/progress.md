@@ -1,5 +1,63 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Invoice editor verification
+
+- The intervening status turn was a verified wait: session 83018 confirmed all
+  14 snapshot tests passed (12.63s) and the full server-binary regression was
+  still running. Resumed that same live command without restarting tests.
+- Revalidated published `22ffdab` and the existing scoped dirty worktree.
+  Spec Kit Implement/Analyze prerequisites resolve the same feature; no hooks
+  exist. Requirements remain 12/16; all seven local checklists remain 7/7.
+  Prior authorization permits this closed increment, not full policy activation.
+- RED reproduced the inherited READ ONLY editor failure. Both reader preludes
+  now reuse the shared manager helper; mutation locking, DTOs, revision checks
+  and financial calculations are untouched. Five new real-reader tests and the
+  existing HTTP harness cover the editor boundary without production test hooks.
+- Independent adversarial review found no blocker: both race orders, coherent
+  metadata/revision/lines, stale reviews, cancellation/pool reuse, business-row
+  preservation and real-cookie authorization are covered.
+- Full server-binary regression passes: 943 passed, zero failed, 11 existing
+  exclusions, 954 discovered (271.23s). It includes the extended HTTP matrix and
+  existing invoice arithmetic/state fixtures. T101/T102 are complete.
+- Scoped Spec Kit analysis maps five FR subsets (006/007/010/017/018) and the
+  SC-006 regression subset to T101–T103: no unmapped task, ambiguity, duplication
+  or constitutional conflict. Full feature analysis/readiness remains open.
+- Complete SQLx regeneration passes (1m41s): seven new descriptors, none
+  modified/deleted, 1,235 total. Offline all-targets Clippy (1m52s) and web/WASM
+  check (21s) pass with warnings denied. Session 83691 is terminal. No production
+  or test change followed the passing regression.
+- Formatting passes with zero changes (3.668s); whitespace checks pass. The
+  disposable PostgreSQL server stopped cleanly without deleting data. Nix
+  commands used sandbox escalation, not a deployment database or Harvest data.
+  T101–T103 are complete; full flake/browser and feature acceptance remain open.
+
+Next: publish this verified increment unsigned to draft #212, then refine the
+materialized-export integration. Source inspection confirms `reports::limits`
+still discards current actor authority for manager-only entries/invoice/PDF
+materialization. Preserve existing size/query deadlines, separate CSV streaming
+and Member project-scope fencing, and retain session identity through the actual
+Axum delivery paths. Full policy/UI/approval/transition gates remain open; no
+merge or real-data mutation is authorized.
+
+## 2026-10-03 — Invoice editor snapshot integration
+
+- Previous goal turn made progress: T098–T100 published unsigned as `22ffdab`
+  to open draft #212. Revalidated clean worktree and matching origin; all prior
+  commands are terminal and the disposable PostgreSQL server is stopped.
+- Spec Kit Plan/Tasks retain the existing artifacts and add sequential
+  T101–T103. Independent read-only research confirms the same manager prelude
+  fits editor load/review without changing their business checks or mutation
+  callers. Extended the existing contract, not the policy or product scope.
+- Local constitution check passes; the full checklist remains 12/16, with
+  existing authorization to implement closed independent increments. Extension
+  hooks and an agent-context generator are absent. No real-data change is needed.
+
+Next: reproduce the editor's inherited READ ONLY failure, integrate the shared
+prelude, prove both reader race orders/preservation/HTTP behavior and complete
+cache/offline/lint/format/review gates before publishing to the same draft.
+Full scoped policy, approvals, UI, migration and cross-surface acceptance remain
+open; no merge or canonical activation is authorized by this increment.
+
 ## 2026-10-03 — Financial snapshot verification
 
 - The intervening MVP response was status-only (no implementation progress).

@@ -1,5 +1,23 @@
 # Permissions discovery
 
+## Invoice editor snapshot boundary (2026-10-03)
+
+- Decision: reuse `server_fns::snapshot::manager` for editor load/review, retaining
+  their session-derived identities, queries, exact revision check and evaluation.
+- Rationale: independent code research confirms only plain invoice/revision/line
+  reads follow authorization. No invoice advisory or row lock is requested, so
+  the new organization→actor order adds no cycle with mutation actor SHARE or
+  organization FK KEY SHARE. Existing `editing::lock_actor` also serves save,
+  generation and status mutations and must not be replaced globally.
+- Alternatives rejected: retaining inherited READ ONLY can fail at actor SHARE;
+  retrying only the actor query cannot refresh an old snapshot; changing save or
+  financial logic is unnecessary. Reuse the PostgreSQL sources and tested retry
+  reasoning below; no new Harvest behavior or product exception is inferred.
+- Evidence/limits: inspected `invoices.rs`, `invoices/editing.rs`,
+  `invoices/balances.rs` and existing draft-edit tests. New editor-specific
+  fixtures must not consume the fees used by preparation/balance fixtures.
+  Full canonical policy, mutation integration and report streaming remain open.
+
 Status: incremental planning; independent scope foundation specified, full policy research incomplete. Baseline `9301112`; inspected 2026-09-30.
 
 Current decision update, 2026-10-02: the user explicitly resolved C01 for Horae.

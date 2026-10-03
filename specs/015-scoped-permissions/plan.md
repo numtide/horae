@@ -97,13 +97,21 @@ close T042, replace legacy guards or authorize mixed-policy operation.
 
 ### Existing increments and remaining integration
 
+T101–T103 extend the reviewed manager-snapshot contract to invoice editor
+load/review. Reuse the same prelude; retain all business queries, evaluation,
+revision checks and mutation paths. Independent code research found no added
+lock cycle: these readers acquire no invoice advisory/row lock. Local
+constitution check passes (no new model, dependency, schema, arithmetic, UI or
+policy activation); full T006–T009/T039/T040/T042 gates remain open.
+
 T098–T100 integrate `contracts/manager-snapshots.md` into project fee balances and
 invoice preparation. Reuse the organization gate, keep typed SQL errors until
 bounded prelude retry, and retain the existing manager predicate. No data model,
 dependency, schema or UI change is required. The local constitution check passes:
 authorization is tightened without inventing canonical operation predicates or
-weakening exact snapshot totals. CSV, Member-scope exports and editor reads are
-explicitly separate; the shared streaming configurator must not acquire locks.
+weakening exact snapshot totals. Editor reads follow in T101–T103. CSV and
+Member-scope exports remain separate; the shared streaming configurator must not
+acquire locks.
 
 T095–T097 provide FR-012's authenticated own-permission projection under
 `contracts/own-permissions.md`, using the existing strict loader and assignment

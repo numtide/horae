@@ -67,4 +67,97 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             .await
             .unwrap();
     }
+    let invoice = crate::server_fns::invoices::generate_invoice_for_period(
+        pool,
+        ids.org_id,
+        ids.client_id,
+        "2026-09-01".parse().unwrap(),
+        "2026-09-30".parse().unwrap(),
+    )
+    .await
+    .unwrap();
+    let invoice_id = invoice.invoice.id;
+    let editor = api
+        .json(
+            "get_invoice_editor",
+            json!({"invoice_id": invoice_id}),
+            &cookie,
+        )
+        .await;
+    let foreign_cookie = api.cookie(foreign.user_id).await;
+    for name in ["get_invoice_editor", "review_invoice_edit"] {
+        let body = json!({
+            "invoice_id": invoice_id, "edit": editor["edit"],
+            "org_id": foreign.org_id, "actor_id": foreign.user_id, "org_role": "admin"
+        });
+        let expected = if name == "get_invoice_editor" {
+            &editor
+        } else {
+            &editor["review"]
+        };
+        assert_eq!(&api.json(name, body.clone(), &cookie).await, expected);
+        assert_eq!(
+            api.call(name, body.clone(), None, false).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            api.call(name, body.clone(), Some(&member), false)
+                .await
+                .status(),
+            StatusCode::FORBIDDEN
+        );
+        for (request, session) in [
+            (body.clone(), &foreign_cookie),
+            (
+                json!({"invoice_id": Uuid::now_v7(), "edit": editor["edit"]}),
+                &cookie,
+            ),
+        ] {
+            let response = api.call(name, request, Some(session), false).await;
+            assert_eq!(response.status(), StatusCode::NOT_FOUND);
+            let error = response.text().await.unwrap();
+            for field in ["total_cents", "agreed_cents", "amount_cents", "po_number"] {
+                assert!(!error.contains(field), "{name}: {error}");
+            }
+        }
+        sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
+            .execute(pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            api.call(name, body.clone(), Some(&cookie), false)
+                .await
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
+        sqlx::query!("UPDATE users SET active=true WHERE id=$1", ids.user_id)
+            .execute(pool)
+            .await
+            .unwrap();
+        if name == "review_invoice_edit" {
+            let mut stale = body;
+            stale["edit"]["revision"] = json!(editor["edit"]["revision"].as_i64().unwrap() + 1);
+            assert_eq!(
+                api.call(name, stale, Some(&cookie), false).await.status(),
+                StatusCode::CONFLICT
+            );
+        }
+    }
+    sqlx::query!("UPDATE invoices SET status='sent' WHERE id=$1", invoice_id)
+        .execute(pool)
+        .await
+        .unwrap();
+    for name in ["get_invoice_editor", "review_invoice_edit"] {
+        assert_eq!(
+            api.call(
+                name,
+                json!({"invoice_id": invoice_id, "edit": editor["edit"]}),
+                Some(&cookie),
+                false
+            )
+            .await
+            .status(),
+            StatusCode::CONFLICT
+        );
+    }
 }
