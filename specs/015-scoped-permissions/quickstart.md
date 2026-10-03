@@ -1,5 +1,39 @@
 # Permission verification
 
+## Durable CSV preparation (T083–T085)
+
+Run in the Nix shell against the owned disposable PostgreSQL instance:
+
+```sh
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae importers::harvest::engine_tests::csv_streaming:: --locked
+```
+
+| Requirement / boundary | Regression |
+| --- | --- |
+| FR-007/010 prerequisite: no transaction across durable input waits | `durable_csv_waits_for_input_without_an_open_transaction`: first/subsequent batch, Commit/DryRun, exact reserved backend PID |
+| FR-017: incomplete prepared input cannot advance domain or checkpoint state | `durable_csv_discards_incomplete_preparation_and_resumes_its_checkpoint`: transport failure before/after checkpoint, both modes, exact resumed counts |
+| FR-017/018: cancellation and expired lease cannot publish an applied batch | `durable_csv_cancel_joins_parser_and_preserves_committed_rows`, `durable_csv_stale_commit_is_fenced_without_a_heartbeat`: SQL job-row barriers before publication |
+| FR-017/018: absolute offsets, row-error boundaries and preview recovery | Existing six `interrupted_csv_batches` cases and single-connection preview tests |
+| FR-017/018 and SC-006 import subset: reports, legacy adapter and SQL backpressure | Existing report-size, whole-run rollback and backpressure regressions |
+
+The initial RED observed a live transaction during a parser wait. The bounded
+preparation collects at most 500 normalized rows, not a fixed-byte memory budget.
+It neither changes accepted upload size nor collects the whole source. The first
+post-change run exposed a duplicate-email fixture and two old tests waiting for
+one-row application before EOF. Unique emails and explicit publication barriers
+retain their original denial/rollback assertions under the prepared-batch flow.
+The focused suite passed 18 tests with four existing stress exclusions. The
+adversarial follow-up found a possible fixture-only SKIP LOCKED reclaim race;
+wait for the expired attempt's cleanup before reclaiming. Separate token-reclaim
+tests retain concurrent coverage. The full server-binary run after this correction
+passes: 914 passed, zero failed, 11 pre-existing exclusions, 925 discovered,
+174.14 seconds. Complete SQLx regeneration passes in 44.08 seconds with one added
+test query and no existing cache changes/deletions. Fresh offline all-targets
+Clippy passes with warnings denied in 51.62 seconds. Nix formatting passes with
+zero changes in 2.752 seconds; the owned PostgreSQL cluster is stopped. No
+critical/high review finding remains in this increment. This is not worker
+permission activation, browser/full-flake verification or full feature acceptance.
+
 ## Bounded import error downloads (T080–T082)
 
 Use the Nix shell and owned disposable PostgreSQL instance. No real account or

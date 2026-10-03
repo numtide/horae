@@ -97,6 +97,14 @@ close T042, replace legacy guards or authorize mixed-policy operation.
 
 ### Existing increments and remaining integration
 
+T083–T085 isolate durable CSV parser waits from SQL transactions under
+`contracts/permission-state.md`, preparing bounded worker authorization without
+selecting historical-job or retry policy. Reuse the parser's one-row channel,
+500-record checkpoints, reserved connection and existing cancellation/preview
+logic. Local constitution review requires no schema, dependency, grant mapping or
+real-data change. Do not infer that this implements execution-time permission
+checks; requester provenance and reviewed activation remain separate.
+
 T080–T082 implement the bounded error-download contract in
 `contracts/permission-state.md`. Share the existing importer authority guard,
 authorize metadata and each archive page in short transactions, and reauthorize

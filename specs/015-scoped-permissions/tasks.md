@@ -221,6 +221,17 @@ hierarchy and audited transactions; combined expense behavior depends on 016.
 
 ## Phase 6: US3 — Enforcement on every delivery path (P1)
 
+### Durable CSV preparation outside authorization transactions
+
+T083 → T084 → T085 implements the closed input-boundary contract in
+`contracts/permission-state.md` (FR-007/010 transaction prerequisite, FR-017/018
+preservation/verification). Execute sequentially; worker provenance, historical
+jobs and full permission activation remain separately gated.
+
+- [x] T083 [US3] Add a failing real-parser/SQL transaction observation in `crates/horae/src/importers/harvest/engine_tests/csv_streaming.rs`, covering partial first/subsequent durable batches and Commit/DryRun without sleeps or production hooks.
+- [x] T084 [US3] Buffer only the next existing checkpoint batch before beginning SQL in `crates/horae/src/importers/harvest/csv_source/upload.rs`; preserve resumed offsets, single-connection exclusion, preview rollback, cancellation and the test-only unleased contract.
+- [x] T085 [US3] Verify CSV recovery/cancellation/lease/report regressions and server tests; refresh `.sqlx/`, run offline all-targets Clippy/formatting and record scoped review/analysis in `specs/015-scoped-permissions/quickstart.md`, `research.md` and `progress.md`.
+
 ### Bounded import error downloads
 
 T080 → T081 → T082 follows the closed download contract in

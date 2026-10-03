@@ -60,6 +60,31 @@ artifact's complete recorded scope, not just its original generation permission.
 
 ## Concrete lock inventory (T042, partial)
 
+### Durable CSV input boundary (T083–T085)
+
+Before adding worker authorization, collect each durable CSV batch outside a SQL
+transaction. Keep the existing one-row parser channel and absolute 500-record
+checkpoint boundaries, including resumed cursors. Buffer no more than the next
+boundary (at most 500 normalized rows), stopping at normal completion; never
+collect the entire import. The existing accepted-upload limit stays unchanged.
+
+Open the SQL transaction only after that batch is ready. After checkpoint commit,
+receive the next batch before opening another transaction or restoring preview
+parents. Keep the reserved import connection/session exclusion across parsing;
+it is not the authorization gate and needs no second pool connection. Preserve
+cancel/join/release cleanup, lease fencing, report counts, resume offsets, preview
+rollback and previously committed batches after parser failure. The test-only
+unleased adapter retains its whole-run rollback and incremental-apply contract.
+
+Acceptance uses the real body/parser/SQL bridge: after the parser consumes three
+rows of an incomplete batch and requests more input, inspect the reserved
+connection for absence of an open transaction. Cover the first batch and the
+batch after 500 committed rows, in Commit and DryRun modes. A one-row channel
+ensures this observation follows consumer progress rather than a timer guess.
+Retain existing interrupted/reclaimed/cancelled/resumed/single-connection and
+report-size regressions. This prerequisite does not supply requester identity,
+choose historical-job handling or activate worker permissions.
+
 ### Import error download contract (T080–T082)
 
 Carry the session's trusted actor and organization through report preparation and

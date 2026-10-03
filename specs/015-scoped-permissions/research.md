@@ -13,6 +13,25 @@ deletion result remains unverified, while Horae's behavior is now approved.
 
 ## Current Horae boundaries
 
+### Durable CSV preparation, 2026-10-03
+
+Source inspection for T042 finds no retained initiating actor in the current job
+row, claimed job, lease or import checkpoint. Enqueue/retry receive trusted actor
+identity but do not persist it. A lease token or Harvest connection generation
+is not user authority. Historical-job policy remains an explicit pending choice;
+this prerequisite does not choose it or infer an actor.
+
+API input pages are prepared before their write transactions; durable CSV used
+to await its parser inside each 500-record transaction. T083–T085 move only CSV
+preparation outside SQL while preserving absolute checkpoint offsets and its
+reserved import connection. The real-parser/backend-PID regression reproduced
+that open transaction before the change. Additional buffering is bounded by
+500 normalized records, not by a measured RSS ceiling; existing source admission
+limits remain unchanged. The independent review found no correctness issue in
+the production diff; runtime regression verification remains required.
+
+### Permission storage
+
 Current storage clarification, 2026-10-03: the user selected trimmed,
 case-insensitive organization-local template-name uniqueness (FR-032). Harvest's
 creation comparison remains unverified; its Users API describes name lookup and

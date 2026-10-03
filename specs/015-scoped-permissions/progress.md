@@ -1,5 +1,84 @@
 # Scoped permissions investigation progress
 
+## 2026-10-03 — Worker authority and bounded CSV preparation
+
+- Previous goal turn made concrete progress: `b4672a4` published T080–T082 to
+  draft #212. Revalidated the clean existing worktree; no merge.
+
+- Ran Spec Kit Plan/Clarify/Tasks setup against feature 015 without replacing
+  existing artifacts. No hooks or agent-context generator are configured.
+  Requirements remain 12/16, seven local checklists remain 7/7. Existing approval
+  permits independent closed increments, not full runtime activation.
+
+- Independent read-only research confirms requester identity is discarded by
+  enqueue/retry; lease ownership and connection generation cannot replace it.
+  Late authorization at checkpoint would invert organization/project order.
+  All production import execution is durable; API batches are already prepared
+  before SQL, while CSV still waits on its parser inside the batch transaction.
+
+- Asked one unresolved migration question: retain/hold unknown-requester jobs for
+  explicit new Administrator authorization (recommended), or require the old
+  pending queue drained/cancelled before activation. No answer is assumed and
+  no historical identity, state or data is changed. Different-person retry and
+  permission-restoration behavior also need an explicit execution contract.
+
+- T083–T085 are the independent CSV transaction prerequisite. Keep the same
+  checkpoint boundaries and test-only whole-run adapter. No worker authority,
+  requester schema, legacy transition or six-profile cutover is implemented here.
+
+- The intervening MVP status answer made no implementation progress. Revalidated
+  the existing worktree and polled the original test handle to completion rather
+  than restarting it. The first run failed during cancellation with a missing
+  SQLx savepoint; retain that observation for worker cancellation review. Moving
+  the unchanged cancellation assertion after the transaction assertion exposes
+  the intended RED: Commit after zero checkpointed rows spans a parser wait.
+
+- T084 now prepares the first and subsequent durable batches before opening SQL;
+  it stops immediately at absolute record 500 multiples or Complete. No partial
+  prepared batch is applied after parser failure. The unleased test adapter still
+  reads incrementally inside its whole-run transaction.
+
+- Independent read-only review found no critical/high/medium correctness issue
+  in this local diff. Verification is still running; no full-feature claim.
+
+- First post-change CSV run: 14 passed, three failed, four existing exclusions.
+  Fixed a globally unique email collision in the new fixture. Two existing
+  tests depended on one-row SQL before EOF; job-row publication barriers now
+  preserve applied-write cancellation/expiry checks with prepared batches.
+  Added incomplete-input recovery in both modes before/after a checkpoint.
+
+- Expanded CSV verification passes: 18 passed, zero failed, four existing
+  exclusions, 9.30 seconds. Follow-up review identified a fixture race between
+  old rollback and SKIP LOCKED reclaim; wait for old execution cleanup before
+  claiming replacement. Separate token-reclaim tests retain concurrent coverage.
+
+- Scoped Spec Kit Analyze: four FRs and the import portion of SC-006 map to all
+  three tasks; no unmapped task, local ambiguity, duplication or constitutional
+  conflict. No hooks configured. Full feature gates remain open.
+
+- Full server-binary regression after the fixture-order correction passes:
+  914 passed, zero failed, 11 pre-existing exclusions, 925 discovered, 174.14
+  seconds. This includes both new tests and the adapted cancellation/expiry
+  cases. Initial Nix formatting changed the test's layout and Markdown only.
+
+- Complete SQLx regeneration passes in 44.08 seconds: one added test query,
+  no existing cache changes/deletions. Fresh offline all-targets Clippy passes
+  with warnings denied in 51.62 seconds. Package cleaning removed only 165
+  regenerable build files (1.5 GiB), not source or business data. GitHub confirms
+  #212 remains open/draft on the existing branch at the published baseline.
+
+- Nix formatting passes with zero changes in 2.752 seconds, and the owned
+  PostgreSQL cluster is stopped. T083–T085 are complete; publish unsigned to
+  existing draft #212 without merging. The reviewed fixture race is corrected;
+  no critical/high finding remains in this bounded increment. No full Nix,
+  browser or full-feature acceptance is claimed.
+
+Next after publication: resume worker provenance and current-authority contracts
+under T042. The historical-requester decision remains pending; do not infer it or
+repeat the question. Preserve the full six-profile, scoped-approval, cross-surface,
+permission UI and migration scope. The earlier cancellation/savepoint observation
+also remains evidence to investigate during worker cleanup review.
+
 ## 2026-10-03 — Bounded import result downloads
 
 - Previous goal turn made concrete progress: `4fac6af` published T077–T079 to
