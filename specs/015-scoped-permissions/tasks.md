@@ -348,6 +348,17 @@ the local rule; no new Harvest account mutation or product choice is needed.
 - [x] T093 [US3] Implement borrowed pure rate-field checks in `crates/core/src/permissions/rates.rs`, exposed from `permissions.rs`; reuse the catalog and scope checks, distinguish person/project/global owners, and keep cost grants independent without activating consumers (FR-021/022).
 - [x] T094 [US3] Run focused/full core tests and core Clippy, check formatting, adversarially review the action/owner matrix and record evidence in `specs/015-scoped-permissions/quickstart.md` and `progress.md`; retain full consumer and migration gates.
 
+### Materialized manager snapshot integration
+
+T098 → T099 → T100 implements `contracts/manager-snapshots.md`, following the
+existing organization-first gate and reviewed snapshot research. Work is
+sequential because shared reader signatures and financial fixtures overlap.
+No complete T039/T040 or US3 acceptance follows from this pair of consumers.
+
+- [x] T098 [US3] Reproduce stale-authority reads and add transaction/race/preservation tests in `crates/horae/src/server_fns/invoices/snapshot_tests.rs`, exercising production preview and fee-balance helpers (FR-006/007/010/017/018).
+- [x] T099 [US3] Add the shared prelude in `crates/horae/src/server_fns/snapshot.rs`, wire it from `server_fns.rs`, `projects.rs` and `invoices/preview.rs`, and retain the session actor through `invoices.rs` and test adapters; preserve existing snapshot queries and streaming behavior (FR-006/007/010/017).
+- [x] T100 [US3] Verify reader/HTTP/financial regressions, bounded retry and cancellation, regenerate `.sqlx/`, run offline checks/lint/format, review adversarially and record evidence in `specs/015-scoped-permissions/quickstart.md` and `progress.md` (FR-018, SC-006 subset).
+
 ## Phase 7: US4 — Custom profiles and permission explanations (P2)
 
 ### Isolated create/delete command implementation

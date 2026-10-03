@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "CREATE SEQUENCE snapshot_fault.attempts",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "caec2de87eb263a0e64ca5e656d1c76e572b778b42094ae92e85e4701380a242"
+}

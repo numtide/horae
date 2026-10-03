@@ -13,6 +13,30 @@ deletion result remains unverified, while Horae's behavior is now approved.
 
 ## Current Horae boundaries
 
+### Materialized snapshot reauthorization, 2026-10-03
+
+- Decision: start REPEATABLE READ READ WRITE, organization SHARE then actor
+  SHARE, and retry the whole prelude on 40001 before any business read. Preserve
+  current Manager/Admin boundaries for fee balances and invoice preparation.
+- Rationale: legacy user role/activity writers lock but do not update the
+  organization tuple. The actor lock detects that committed change even when
+  its snapshot predates the wait. Canonical revision updates instead conflict
+  at the organization row. One connection suffices; no generic replay callback
+  or new dependency is needed. See `contracts/manager-snapshots.md`.
+- Sources: PostgreSQL [Repeatable Read](https://www.postgresql.org/docs/17/transaction-iso.html#XACT-REPEATABLE-READ)
+  requires a transaction restart when a locked row changed after the snapshot;
+  [SET TRANSACTION](https://www.postgresql.org/docs/17/sql-set-transaction.html)
+  disallows these locks in READ ONLY and changing isolation after a query.
+  Source inspection traced current readers, user writers and export consumers.
+- Independent research identified a separate CSV hazard: the shared transaction
+  configurator serves browser-paced streams. Do not insert authority locks into
+  it. Member project exports also need a scope fence because legacy membership
+  changes do not update the actor/organization tuple. Editor load/review already
+  lock the actor but still need organization-first integration separately.
+- Alternatives rejected: dropping snapshot isolation, acquiring READ COMMITTED
+  locks then switching isolation, a second authorization connection, retrying
+  within an aborted transaction, or broad changes to the shared export setup.
+
 ### Approved financial field gates, 2026-10-03
 
 - Decision: implement FR-021/022 with typed Person/Project/GlobalTask ownership,

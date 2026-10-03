@@ -1,5 +1,49 @@
 # Permission verification
 
+## Materialized financial snapshots (T098–T100)
+
+Run inside the Nix shell against the disposable PostgreSQL instance. No browser,
+reference-account mutation, schema change or policy activation is required.
+
+```sh
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae financial_snapshots --locked
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization --locked
+```
+
+| Requirement subset | Executable evidence |
+| --- | --- |
+| FR-006/007: same-tenant active Manager/Admin, no request-supplied authority | `financial_snapshots_require_current_same_tenant_manager` and registered-route `authorization_tests::financial_snapshots::check` |
+| FR-010: revocation before reading, including legacy writes without revision changes | `financial_snapshots_deny_winning_actor_revocation_without_revision_change`, both reader types and organization-gated/direct actor updates |
+| FR-010/017: reader-first authority retention and consistent financial values | `financial_snapshots_hold_authority_until_materialization`, `financial_snapshots_keep_fee_values_from_their_initial_snapshot`, `financial_snapshots_retry_revision_change_and_refresh_amounts` |
+| FR-018: bounded retry, non-disclosing errors and connection cleanup | `financial_snapshots_retry_only_serialization_failures_and_stop_after_three`, `financial_snapshots_override_isolation_but_restore_connection_settings`, `financial_snapshots_honor_stricter_lock_timeout_during_authorization`, `financial_snapshots_release_cancelled_reads_for_one_connection` |
+
+RED reproduced an absent actor accepted by invoice preparation. Initial GREEN:
+all eight snapshot tests passed (5.45s). The retry fixture uses a test-only view
+and non-transactional sequence to count real attempts; production has no injected
+test hook. Cancellation verifies eventual rollback and pool reuse after releasing
+the blocked query, not instantaneous cancellation of PostgreSQL execution.
+
+Independent adversarial review found no blocker; both suggested timeout checks
+were added. The settings matrix includes all three inherited isolation levels
+and 0/250ms/10s timeouts. Holding the actual organization gate verifies that the
+stricter timeout applies during authorization, not only after it. Scoped Spec Kit
+analysis maps all five FR subsets to T098–T100 with no unmapped task, ambiguity,
+duplication or constitutional conflict. Full feature analysis remains open.
+
+The existing invoice-transition test now checks the revoked actor's preview is
+denied, then uses a separate same-tenant administrator to verify the reserved
+balance is unchanged. Its focused rerun passed (1.15s). Final server-binary
+regression passes: 938 passed, zero failed, 11 pre-existing exclusions (258.34s),
+including the nine snapshot cases, HTTP matrix and existing financial fixtures.
+The offline WASM check with warnings denied passed (43.95s). Complete SQLx
+regeneration added 22 descriptors without modifying/deleting existing ones
+(1m18s). Offline all-targets Clippy passes with warnings denied (1m41s). After
+Clippy's equivalent boolean simplification, all nine snapshot tests passed
+again using the offline cache (8.19s). Final formatting/publication results are
+recorded in the progress register.
+This increment preserves legacy Manager/Admin authority; it is not full scoped
+policy, report streaming, Member export or invoice-editor acceptance.
+
 ## Authenticated own-access explanation (T095–T097)
 
 Use the pinned Nix shell and the owned disposable PostgreSQL database; only

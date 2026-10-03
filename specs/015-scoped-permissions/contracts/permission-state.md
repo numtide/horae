@@ -464,9 +464,8 @@ default; rejected saves preserve every branding field and the row version.
 
 ### Snapshot consumers outside the project-family increment
 
-`reports/limits::configure_transaction`,
-`server_fns/projects::fetch_project_fee_balances` and
-`server_fns/invoices/preview::prepare` use REPEATABLE READ, READ ONLY. A local
+`reports/limits::configure_transaction` uses REPEATABLE READ, READ ONLY;
+project fee balances and invoice preparation originally used the same mode. A local
 PostgreSQL 17.10 diagnostic on the isolated port 55415 returned
 `cannot execute SELECT FOR SHARE in a read-only transaction`; no business rows
 were changed. The proposed row gate therefore cannot simply be inserted into
@@ -488,8 +487,19 @@ PostgreSQL documents the
 and [row-lock serialization failure](https://www.postgresql.org/docs/17/explicit-locking.html).
 Add production-transaction tests for a read-only-mode failure, a waiting
 snapshot-based reader, and a fresh retry observing revocation before accepting
-T039/T040. No query-cache, isolation-level or runtime change is made by this
-inventory.
+T039/T040.
+
+T098–T100 integrate the two materialized manager-only readers under
+[manager-snapshots.md](manager-snapshots.md): explicit REPEATABLE READ, READ WRITE,
+organization then active actor SHARE, and up to three fresh-prelude retries on
+serialization failure. The actor lock fences legacy role/activity writes that
+do not advance the organization revision. Existing financial queries and payload
+checks remain unchanged; the transaction commits before delivery.
+
+This does not complete T039/T040. Reports/exports, invoice editor load/review and
+canonical policy enforcement remain open. CSV streaming cannot retain these locks
+across client-paced sends. Member export scope also needs a relationship fence;
+the manager-only prelude does not protect legacy membership changes.
 
 ## Commands and revisions
 

@@ -24,6 +24,7 @@ use uuid::Uuid;
 use super::*;
 
 mod cli;
+mod financial_snapshots;
 mod own_permissions;
 
 #[cfg(target_os = "linux")]
@@ -317,6 +318,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     let mut server = tokio::task::JoinSet::new();
     server.spawn(async move { axum::serve(listener, router).await.unwrap() });
     own_permissions::check(&pool, &api).await;
+    financial_snapshots::check(&pool, &api).await;
     let admin = api.cookie(owner.user_id).await;
     let expired = api.cookie(owner.user_id).await;
     assert_eq!(

@@ -1,5 +1,98 @@
 # Scoped permissions investigation progress
 
+## 2026-10-03 — Financial snapshot verification
+
+- The intervening MVP response was status-only (no implementation progress).
+  Revalidated the same dirty worktree at `5d51b0e` and the live disposable
+  PostgreSQL instance on 55416; did not restart any build or database.
+- Resumed T098–T100 with Spec Kit Implement and the existing authorization for
+  independent closed increments. General readiness remains 12/16; the other
+  seven local checklists pass. No extension hooks are present.
+- The prior RED run reproduced invoice preparation accepting an absent actor.
+  Fixed the subsequent compilation error: SQLx SELECT maps use `fetch_one`, not
+  `execute`. Connected the pending settings/retry tests.
+- Focused GREEN passes all eight financial snapshot tests (5.45s after 2m34s
+  compilation). Both actual readers cover current same-tenant actors, both
+  revocation orders, legacy updates without revision changes, fresh-revision
+  retries, consistent fee values, cancellation/pool reuse, inherited settings,
+  exactly three serialization attempts and no retry for unrelated errors.
+- Added registered-route HTTP coverage for session-derived identity, forged
+  actor/organization fields, missing/member/inactive sessions and foreign
+  resources. This new HTTP coverage has not yet been run.
+- Independent adversarial review found no blocker and suggested timeout
+  restoration/enforcement coverage. Added all three inherited isolation levels
+  crossed with 0/250ms/10s timeouts, plus held-gate timeout and pool reuse through
+  both readers. The follow-up review finds both suggestions addressed.
+- The first full-regression compile caught duplicate SQL output names in the new
+  settings fixture. Added explicit distinct aliases and reran only after the
+  failed command terminated. Final regression is in progress.
+- Scoped Spec Kit analysis covers five FR subsets (006/007/010/017/018), three
+  sequential tasks and their executable scenarios: 100% local task mapping,
+  zero unmapped tasks, ambiguities, duplications or constitutional conflicts.
+  This does not close full SC-001–009 or the general readiness checklist.
+- First full run: 937 passed, one failed, 11 existing exclusions (252.73s).
+  All nine new snapshot tests and the HTTP matrix passed. The failing existing
+  invoice-transition fixture attempted its preservation read with the actor it
+  had just revoked. It now asserts that denial and uses a separate active
+  same-tenant administrator to prove the invoice balance remains reserved,
+  without restoring the revoked actor. Focused and full reruns are in progress.
+- Offline web/WASM check with warnings denied passed (43.95s). Nix formatting
+  adjusted only new/changed Rust tests; final zero-change gate remains required
+  after the fixture correction. T098/T099 are complete; T100 remains open.
+- The corrected invoice-transition test passes (1.15s). Final full server-binary
+  regression passes: 938 passed, zero failed, 11 pre-existing exclusions, 949
+  discovered (258.34s). This includes all nine snapshot cases, registered HTTP
+  delivery and existing financial/import/export regressions. Complete SQLx
+  regeneration and fresh offline all-targets Clippy are now running.
+- Complete SQLx regeneration passed (1m18s): 22 new descriptors, zero existing
+  modifications/deletions, 1,228 total. Offline Clippy requested the equivalent
+  `is_none_or` predicate for non-serialization errors; applied its simplification
+  without warning suppression. Rerunning offline Clippy and the nine focused
+  snapshot tests after this final boolean refactor. SQL text/cache is unchanged.
+- Final offline all-targets Clippy passes with warnings denied (1m41s); all nine
+  snapshot tests pass after the boolean simplification (8.19s after 2m53s
+  compilation). Full regression/HTTP passed before that equivalent refactor;
+  no further production or SQL change followed. T098–T100 are complete. Full
+  flake/browser acceptance and complete canonical policy remain open.
+- Disposable PostgreSQL stopped cleanly; no data was removed. Nix formatting
+  passes with zero changes (3.373s), and staged/unstaged whitespace checks pass.
+  This increment is ready for unsigned publication to existing draft #212;
+  no critical/high local review finding remains.
+
+Next after publication: refine and integrate the same current-authority boundary
+in invoice editor load/review.
+Materialized exports follow; CSV needs a separate non-client-blocking contract,
+and Member exports need a legacy relationship fence. No merge, canonical
+activation, real-data mutation or full-feature acceptance is authorized by this
+increment. The full implementation goal remains active.
+
+## 2026-10-03 — Financial snapshot reauthorization
+
+- Previous goal turn made concrete progress: T095–T097 published unsigned as
+  `5d51b0e` to draft #212. Revalidated clean worktree and matching origin; all
+  preceding commands are terminal. No merge or policy activation occurred.
+- Spec Kit Plan/Tasks refine T098–T100 for production fee balances and invoice
+  preparation. Independent research found that organization locking alone does
+  not refresh a snapshot after legacy actor changes; actor SHARE and complete
+  prelude retry are also required. Official PostgreSQL sources and rejected
+  alternatives are recorded in research and the new manager-snapshot contract.
+- Shared CSV configuration is deliberately unchanged: streaming waits on client
+  backpressure and cannot retain these revocation locks. Member scope changes
+  and editor load/review are distinct integration obligations, not waived.
+- Local contract review found no blocker; retain prior/stricter lock timeouts,
+  map missing organizations to non-disclosing denial and stop on rollback
+  failure. General readiness remains 12/16; authorized independent increments
+  proceed without declaring full implementation readiness. No hooks or
+  agent-context generator exist.
+- The disposable database's first restart terminated because it omitted its
+  custom socket/port options. Confirmed the log and terminal process, then
+  restarted the same cluster with its recorded port 55416/socket; it is running.
+  No data reset or other server interruption occurred.
+
+Next: reproduce denial failure, implement the shared snapshot prelude, exercise
+both production consumers and races, then verify SQLx/offline/format/review before
+publishing. Full scoped policy, approvals, UI and migration remain open.
+
 ## 2026-10-03 — Authenticated own-permission explanation
 
 - The intervening MVP-status turn added no implementation; its collection of
