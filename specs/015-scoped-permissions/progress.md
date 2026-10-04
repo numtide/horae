@@ -1,5 +1,32 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Corrected full Nix gate passes
+
+- Previous goal turn: verified wait. Revalidated the unchanged published code at
+  `3308926` and resumed the same session, `18654`. It is now terminal, exit 0:
+  `all checks passed!` for x86_64-linux. Other architectures were explicitly
+  omitted by Nix and have not been verified. Do not poll or restart this session.
+- The corrected release, Clippy, browser, SQLx, core/server/integration tests,
+  formatting and both NixOS deployment checks completed successfully. Exact
+  derivations, outputs and counts are recorded below. T174–T177 are complete.
+- This closes the browser-fixture/input and Unicode-name regressions only.
+  T020 and the full permission goal remain open: operation contracts, canonical
+  cross-surface integration, combined approval/expense coverage and reviewed
+  preserved-data activation are not supplied by a passing regression suite.
+- No real database was migrated; fixtures and deployment VMs were disposable.
+  PR #212 remains OPEN/DRAFT. GitHub has not reported checks for `3308926`; local
+  Nix success must not be represented as a successful GitHub Actions run.
+- Revalidated both deployment outputs with `nix path-info`:
+  `/nix/store/i1haiysdw61vxygjz266ca0w04nidk79-vm-test-run-horae-e2e` and
+  `/nix/store/xwvz4fijkby56xk20yks7g3da78gmndy-vm-test-run-horae-e2e-oidc`.
+  The evidence-only formatting check passes with zero changes after formatting
+  the progress record; no code changed after the successful full gate.
+
+Next: format and publish this evidence-only update, reusing cached Nix outputs;
+then resume the integrated permission work. Resolve the already-pending Timesheet
+candidate predicate before its implementation; do not assume an answer, activate
+partially enforced policy or merge the draft.
+
 ## 2026-10-04 — Unicode storage regression completion
 
 - Previous goal turn: progress. Revalidated local `4294aa3`, the seven pending
@@ -24,11 +51,73 @@
 - The filesystem has about 19 GiB free with 17 GiB in this worktree's regenerable
   Cargo target; avoid parallel Nix builders and monitor free space during the
   corrected full gate. No build cache was deleted in this iteration.
+- Published unsigned commits `4294aa3` (browser isolation/assets) and `3308926`
+  (Unicode uniqueness and preservation). GitHub confirms #212 OPEN/DRAFT at
+  `330892610dd102c1ec559441ab2cddd37cb5c1df`; no merge or activation occurred.
+- A fresh format check passes and `nix flake check --keep-going --max-jobs 1 --cores 4 --print-build-logs --log-format raw` is running against clean
+  `3308926` in terminal session `18654`. Evaluation succeeded. Resume this exact
+  process; the old full-check session is terminal and must not be polled.
+- New immutable derivations: package `3dylpw8qxrhwd37c2qrb5kc232p47can`, tests
+  `xdijnvgpnacsh4208r0l2i44xczxc0a3`, browser `x5vd822zcyj18rnmm3czqh3mxipw8s0f`,
+  Clippy `bvfga48y1rl4bnl1ffq3xb0a5rks48yp`, SQLx
+  `psyxix2bs95nik0nic6lpx0mkp16zrv3`, e2e `2r96lz5gl9ig5p01fji8w6g5z931vlk6`,
+  OIDC `jbrzkhq03r1jckmq0mz0045wlyv2fwb3` and treefmt
+  `cl5rh1fgk96y70cwd44c3dky4dn9hsbx`. No corrected full-gate result yet.
+- Following continuation: verified wait. Resumed `18654` repeatedly without
+  restarting it; the release derivation is still active. A host process check
+  confirms `rustc` using a CPU after five minutes in that compile, with the Nix
+  process at eight minutes. Free space is stable around 13 GiB. No additional
+  code change, new failure or successful full-gate result is claimed.
+- Next continuation: verified wait; the same session has advanced from the
+  release package to Nix Clippy. The corrected release output is valid at
+  `/nix/store/s1r5p6z1qprakrcgd9sy9vwk3hrfazka-horae-0.1.0`; about 15 GiB is free.
+  The remaining corrected full-gate results are still pending. No build restart,
+  policy activation or merge occurred.
+- The same run has now advanced past Nix Clippy to the corrected browser
+  derivation; its Clippy output is valid at
+  `/nix/store/0czsm1f49yfz79fsv8hj125036kggzlg-horae-clippy-0.1.0` and about
+  18 GiB is free. The browser check remains live after the latest bounded waits.
+  GitHub's current #212 head/base are `3308926`/`master`, OPEN/DRAFT,
+  but `gh pr checks` reports no checks on this revision. The three latest CI
+  runs returned for the branch belong to older heads, not this change. Their
+  success is not current evidence; do not cancel the live local verification or
+  claim green CI. The cause of missing current checks is not established.
+- Latest continuation: verified wait completed the corrected Nix browser gate.
+  Output `/nix/store/5j5piwghj60djpvl93lrwsmvqkr6jm2x-horae-browser-checks` is
+  valid, and its log ends with all permission-recovery scenarios passing in
+  Chromium 148.0.7778.96. The full 19-suite runner now passes inside Nix with
+  the corrected release, source layout, login fixture and viewport sequencing.
+  T175 is complete. This is browser regression evidence, not full permissions
+  integration. Session `18654` remains live and has started SQLx verification;
+  about 15 GiB is free. No duplicate build was started.
+- Further continuation: verified wait. Session `18654` advanced from SQLx to
+  `xdijnvgpnacsh4208r0l2i44xczxc0a3-horae-tests-0.1.0`. The full test and
+  deployment outcomes remain pending; do not substitute the earlier 11 storage
+  tests or pre-correction runs for this gate. About 14 GiB is free.
+- Corrected Nix SQLx output is valid at
+  `/nix/store/pfp1skk71p4i817w2izmhsdl1f6bd0gi-horae-sqlx-prepare-0.1.0`;
+  its log confirms successful preparation checking and shutdown of its own
+  PostgreSQL. Compilation took 1m48s; the phase finished in 1m50s.
+- During test compilation free space fell to 8.6 GiB. Revalidated both realpath
+  and Cargo metadata as this worktree's exact `target` and ran
+  `cargo clean -p horae --target-dir /home/aldo/Dev/aldoborrero/horae/.worktrees/scoped-permissions/target`.
+  It removed 3,368 regenerable package artifacts (12.6 GiB), preserving dependency
+  artifacts, sources, scratch evidence and every database. About 20 GiB is free;
+  the immutable Nix test build continues independently. The user was informed.
+- Corrected full Nix tests pass: output
+  `/nix/store/5q9irw4j4arq8ilsp9s5slcrmv3ln74w-horae-tests-0.1.0` is valid.
+  The log reports 180/180 core tests; 1,089 server-binary tests passed with the
+  existing 11 ignored, zero failed (102.64s); all 221 tests across the twelve
+  additional integration binaries passed. Both migration-preservation tests and
+  the non-ASCII uniqueness regression pass. Compilation took 3m43s; the whole
+  phase took 5m43s. Do not double-count the child-process rerun summaries.
+- Session `18654` is now running the deployment VM checks. Free space returned
+  to about 29 GiB after Nix cleaned its test build scratch. Full-command exit and
+  the new deployment outputs remain to be confirmed.
 
-Next: publish the two scoped unsigned commits to draft #212 and run the corrected
-Nix checks. Keep T175/T177/T020 open
-until their exact gates pass. Resume the integrated contracts afterward; no merge
-or runtime policy activation is authorized by this correction.
+Outcome: session `18654` completed successfully; see the final gate record above.
+T177 is now complete and T020 remains open. Resume the integrated contracts;
+no merge or runtime policy activation is authorized by this correction.
 
 ## 2026-10-04 — Full-gate failures and corrective verification
 
