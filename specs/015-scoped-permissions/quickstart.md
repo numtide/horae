@@ -1,5 +1,42 @@
 # Permission verification
 
+## Ordinary detailed time-report reader (T201–T202)
+
+`list_visible_time_report_entries` is a canonical-policy session endpoint for
+nonfinancial report facts. Query lists narrow already authorized rows and do not
+grant candidate-discovery authority. Pages carry at most 500 rows and a bound
+requester; exhaust them before presenting complete-period data. Report rounding
+and billability are not the raw Timesheet fields. See `contracts/time-reports.md`.
+
+Against a disposable, fully migrated PostgreSQL database in the Nix dev shell:
+
+```sh
+cargo test -p horae --features server --bin horae time_reports_tests:: --config 'profile.dev.package.horae.strip="debuginfo"'
+cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization --config 'profile.dev.package.horae.strip="debuginfo"'
+cargo test -p horae --features server --bin horae time_entries_tests:: --config 'profile.dev.package.horae.strip="debuginfo"'
+cargo sqlx prepare --workspace -- --features server --all-targets
+```
+
+RED `82050` reproduces the absent reader with both initial behavior tests.
+`98511` passes ten report tests, the registered-session HTTP suite (including the
+new endpoint) and eight shared time-reader regressions. These cover six-profile
+and custom scope, union deduplication, multi-ID narrowing, archived history,
+malformed tenant parents, frozen zero and current rounding, retained invoice
+billability, cursor ties, policy/requester rejection, revocation, direct actor
+deactivation, cancellation and one-connection reuse. The HTTP test checks exact
+fields against populated private data, forgery, missing/unsupported state and
+same-cookie deactivation. No browser result is claimed for this new endpoint.
+
+Independent static review found no material production defect; its cancellation
+test recommendation was applied before final execution. Full SQLx preparation
+passes after forcing fresh integration targets; offline all-target server and
+WASM Clippy pass with warnings denied. Formatting checks 546 files with no changes.
+The query/page DTOs carry temporary WASM-only dead-code expectations until T203.
+T203 remains required: connect the
+ordinary Reports consumer and corresponding CSV/XLSX delivery, resolve full
+picker candidates, and preserve separate financial-report requirements. The
+current legacy screen and downloads have not been replaced or certified here.
+
 ## Canonical People consumer (T198–T200)
 
 The People route and sidebar now use supported own People-read grants. Only an

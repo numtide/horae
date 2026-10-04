@@ -6,6 +6,14 @@ Status: executable foundation tasks; later phases are required work packages to 
 
 ## Phase 1: Setup
 
+Ordinary detailed Reports integration follows `contracts/time-reports.md`:
+
+- [x] T201 Reproduce and implement scoped detailed report reads with historical labels, exact report rounding, narrowing multi-ID filters, requester binding and bounded keyset pages.
+- [x] T202 Verify registered-session payloads, scope/revocation races and query boundaries; refresh SQLx, run native/WASM checks and review independently.
+- [ ] T203 Connect the canonical ordinary Reports consumer and equivalent CSV/XLSX delivery, preserving bounded transports and current authority over recorded scope; resolve candidate discovery before wiring full pickers. Financial-family reports retain separate requirements.
+
+These tasks do not close T014/T015 or the full Reports parity surface alone.
+
 - [x] T001 Record confirmed parity scope and independent foundation boundaries in `specs/015-scoped-permissions/plan.md` and `contracts/record-scope.md`.
 - [x] T002 Analyze foundation consistency and report unresolved full-feature gates against `specs/015-scoped-permissions/spec.md`, `plan.md` and `tasks.md` before code changes.
 

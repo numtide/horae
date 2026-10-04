@@ -1,5 +1,53 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Ordinary detailed report reader
+
+- The previous turn only reconfirmed the already implemented FR-033/B decision;
+  it was no implementation progress. Revalidated clean `1b41033` and successful
+  Spec Kit prerequisites. Its command skills remain unavailable locally.
+- Reopened the official detailed-report, Member-report and archiving guides.
+  They confirm retained historical results and scoped ordinary time reporting,
+  but do not resolve all custom-scope picker candidates. A new read-only Windows
+  MCP connection initialized, then `browser_tabs` timed out; closed that client.
+  No new authenticated Harvest observation or mutation is claimed.
+- Traced `report_time`, `report_detailed`, shared SQL, CSV authorization/buffering
+  and XLSX snapshot/release checks. Independent review confirms a nonfinancial
+  detailed-reader boundary can proceed separately from picker discovery and C02.
+  Recorded it in `contracts/time-reports.md`, including mandatory consumer/export
+  follow-through and recorded-scope authorization for retained source snapshots.
+- Added explicit query/page/entry projections and a canonical session endpoint.
+  Reused the time reader's authority fence, not the financial legacy snapshot.
+  SQL filters before pagination, qualifies tenant parents, retains historical
+  labels and report rounding/billability, and never selects rates or invoice IDs.
+- RED `82050`: both initial behavior tests fail on the denied placeholder.
+  GREEN `62902`: all seven initial scope/history/filter/cursor/policy tests pass.
+  The production placeholder is removed. No schema, CSS or dependency changes.
+- Independent static review found no production defect; tightened cancellation
+  testing to prove one-connection pool reuse after rollback. Added tenant-parent,
+  billed/frozen-zero and direct-deactivation cases plus registered HTTP coverage.
+  `98511` is verifying that final source and preparing SQLx; it is not yet a
+  completed verification result. No full-feature or browser acceptance is claimed.
+- `98511` now passes all ten final report tests, the real-session HTTP suite with
+  the new endpoint and eight shared time-reader regressions. SQLx preparation is
+  still running in the same disposable database; no live application was migrated.
+- SQLx's first pass omitted fresh integration targets. Forced their metadata
+  emission without changing test content; `75780` completes the full cache with
+  13 added files and no removed entries. No schema/business data was changed.
+- Offline all-target server Clippy passes (`71355`, 73s). WASM first identified
+  the DTOs awaiting the T203 consumer; retain narrowly scoped expectations only
+  on the unused query/page roots, consistent with the existing picker pattern.
+  Removed redundant child expectations; final WASM `8425` passes in 14s.
+  Formatting `15562` checks 546 files with no changes. T201/T202 are complete
+  for this backend increment; T203 and full-feature acceptance remain open.
+
+Next: publish this verified increment to existing draft #212 without merging,
+then implement T203's recorded-scope CSV/XLSX authorization and connected
+ordinary Reports consumer. Keep financial
+report families, full picker semantics, remaining people/approval/project writes
+and policy migration gates open. Do not replace picker authority with directory
+grants or derive its candidates solely from report rows. The unrelated pending
+person-management activity question is not reopened.
+
 ## 2026-10-04 — Canonical People consumer integration
 
 - The previous clarification response was no implementation progress: FR-033/B

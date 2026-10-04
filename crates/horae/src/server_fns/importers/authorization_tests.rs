@@ -37,6 +37,7 @@ mod project_managers;
 mod project_people;
 mod scoped_time;
 mod session_identity;
+mod time_reports;
 mod user_directory;
 
 #[cfg(target_os = "linux")]
@@ -356,6 +357,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     project_people::check(&pool, &api).await;
     project_managers::check(&pool, &api).await;
     scoped_time::check(&pool, &api).await;
+    time_reports::check(&pool, &api).await;
     delegated_time::check(&pool, &api).await;
     own_submission::check(&pool, &api).await;
     approval_labels::check(&pool, &api).await;

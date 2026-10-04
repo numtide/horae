@@ -21,6 +21,9 @@ mod project_people_tests;
 #[path = "time_entries.rs"]
 mod time_entries_tests;
 
+#[path = "time_reports.rs"]
+mod time_reports_tests;
+
 #[path = "timesheet_people.rs"]
 mod timesheet_people_tests;
 
