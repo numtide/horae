@@ -58,6 +58,17 @@ persist assignments, resolve financial projections or activate policy.
 - [x] T156 Implement the context-bound canonical search/selected-ID readers under `server_fns/permissions/project_people.rs`, minimal shared models under `models/project_people.rs` and authenticated wrappers in `server_fns/project_creation.rs`; reuse current storage/transaction conventions without legacy fallback.
 - [x] T157 Verify focused/affected tests, SQLx completeness, offline server/WASM lint and formatting; review authority, field projection, lock order and form-integration dependencies before publication.
 
+### Project form financial integration (OP10/11/12)
+
+Continue from T157 using `contracts/project-form-permissions.md`. FR-021/022 are
+confirmed; initial designation authority, create-time managed financial scope
+and non-rate fields remain explicit entry gates, not invented defaults.
+
+- [x] T158 Trace project form load, catalogs, draft/finalization, full-form saves, association effects and replay; recheck official Harvest sources and record field ownership, preservation hazards and the initial-designation question.
+- [ ] T159 Close remaining field/effect predicates and add failing existing-project tests for withheld/read-only/unchanged/reset/zero input, inherited rates and scoped current authority; reuse the pure rate evaluator.
+- [ ] T160 Integrate typed protected-field intent and authorized projections into the real form/read/save transaction together, preserving legacy mode, revisions, complete-set validation, financial history and replay; never treat a missing client field as authority to clear storage.
+- [ ] T161 Verify the real form, registered session paths, concurrent revocation and browser behavior, SQLx completeness, server/WASM checks and adversarial cross-surface review; retain full activation and Nix gates.
+
 ### Confirmed catalog implementation (independent of runtime cutover)
 
 The user requested implementation without paying for or modifying Harvest on

@@ -1,5 +1,40 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Project form preservation integration review
+
+- The preceding benefits-only answer was no progress. Revalidated `6b5dbae` and
+  the retained three-document inventory rather than restarting it. Removed a
+  duplicate task heading and preserved the existing branch/worktree and draft PR.
+- Added source-backed budget and note distinctions to the field/effect inventory.
+  Existing Administrator-only private notes remain protected independently of
+  cost grants; Harvest's configurable shared-note preference is not implemented
+  by that existing field. Initial creation/designation authority remains the
+  already-asked, unanswered product question; no default was inferred.
+- Mapped existing editor regressions to the integration contract so that private
+  cost preservation, indirect removal, redaction and nullable budgets are reused.
+  Started the full existing editor test group against the owned disposable
+  PostgreSQL on 55416. No new production code or test is claimed in this iteration.
+- Simplicity and Rust testing guidance favor reusing these real transaction tests
+  over a new unconsumed protected-field abstraction. Spec Kit prerequisites pass;
+  its skill suite is unavailable. No real data, UI/CSS, schema or policy is changed.
+- The full existing editor group passes: 16 tests, zero failures, in 2.13s after
+  2m07s compilation. Command: `nix develop --command env DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae server_fns::project_creation::editing::tests::`. These are legacy baselines,
+  not the still-unimplemented canonical form acceptance. No SQL query changed,
+  so no SQLx cache regeneration is required. Formatting normalized one new table;
+  the following CI formatting check passes with 511 files and zero changes.
+- GitHub confirms #212 open/draft on `feat/scoped-permissions` at `6b5dbae`
+  before publication. The local contract review keeps note preferences, monetary
+  budgets and initial creation grants distinct rather than claiming those open
+  rules have been resolved. No new independent review or browser test is claimed.
+
+Delivery: publish this inventory with an unsigned commit to draft #212, no merge.
+Next: close the remaining non-rate field/effect rules for T159 and integrate the
+actual projected form and explicit unchanged/reset/zero intent together (T160),
+using the existing rate evaluator. Creation-only questions must not block safe
+existing-project work. T159–T161 and full operation/approval/person-management,
+preserved-data activation, browser and Nix acceptance remain open. The full goal
+is neither complete nor blocked.
+
 ## 2026-10-04 — Context-bound project people reader
 
 - The preceding explanation of permission benefits was no progress. Resumed the

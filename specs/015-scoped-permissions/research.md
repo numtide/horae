@@ -1,5 +1,35 @@
 # Permissions discovery
 
+## Project form field and effect inventory (2026-10-04)
+
+- Traced the real full-form load/save, selected catalogs, draft finalization,
+  association writes and idempotent receipt payloads at `6b5dbae`. The financial
+  evaluator already exists; the missing integration is explicit preservation
+  intent and per-field projection, including indirect mode/removal effects.
+  See `contracts/project-form-permissions.md` and T158–T161.
+- Reopened the current official permission and creation references. Existing
+  FR-021/022 settle billable and cost dimensions, not creator self-designation.
+  The outstanding question concerns initial explicit selection of already-
+  eligible managers under creation authority; no response is recorded here.
+- The official [budget guide](https://support.getharvest.com/hc/en-us/articles/360048686811-How-to-set-project-budgets)
+  distinguishes limited hour-based progress from financially gated fee budgets,
+  and missing budgets from zero limits. It describes historical effects different
+  from effective-dated rates. Its legacy-role language does not close the new
+  custom-grant write matrix; do not extrapolate all monetary fields from rates.
+- The [invoice context guide](https://support.getharvest.com/hc/en-us/articles/360048686671-Getting-project-context-when-invoicing-Fixed-Fee-projects)
+  keeps note visibility behind an independent account preference. Horae's accepted
+  Administrator-only `admin_notes` is not that shared-note preference. Preserve
+  the existing field boundary and track the parity gap rather than coupling notes
+  to cost or invoice grants.
+- Existing editor tests already cover legacy hidden-cost preservation, forbidden
+  cascade removal, post-demotion redaction and nullable budget recovery. Those
+  tests permit legacy billable edits and cannot prove canonical read-only grants.
+  Reuse their fixtures and add the actual canonical cross-product at integration,
+  instead of introducing an unused generic patch abstraction or duplicate tests.
+- No new browser observation, permission activation, schema change or Harvest
+  write. Spec Kit prerequisites pass; the named skills are absent from this
+  worktree, so this is artifact maintenance, not a claimed execution of its suite.
+
 ## Workflow identity evidence (2026-10-04)
 
 - Successful fresh Chrome/MCP connection using the existing stdio client; opened
