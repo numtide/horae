@@ -31,9 +31,15 @@ check or legacy fallback satisfies these tasks.
 T014/T015 read-context progress: `load_timesheet_page` resolves requester, active
 selected subject, policy and authorized rows under one transaction, reusing the
 candidate/entry SQL. Six transaction tests and registered-session coverage pass;
-the legacy own path is explicit, not an error fallback. The actual connected
-consumer and delegated command work remain open, so this does not close a user
-story or create a separate completed reader milestone.
+the legacy own path is explicit, not an error fallback. The current own-sheet
+Day/Week/Calendar consumer now uses that paginated projection with historical
+labels, current-week checks and retained grid drafts. Selected-person navigation
+and delegated commands remain open, so this does not close a user story.
+
+The next connected OP04 work must include FR-033's confirmed B rule: terminal
+recovery after tracking-eligibility loss is owner-only. Verify delegate denial,
+restoration, actor/owner separation and revocation; do not reopen the decision
+or mistake time-read visibility for permission to stop a timer.
 
 ## Phase 2: Independent foundation (FR-006)
 

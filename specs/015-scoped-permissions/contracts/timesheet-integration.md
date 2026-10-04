@@ -84,6 +84,29 @@ it does not satisfy selected-person UI or delegated-write acceptance by itself.
 
 ## Actual consumers to integrate together
 
+### Tracking eligibility and terminal recovery — 2026-10-04
+
+The official [tracking troubleshooting guide](https://support.getharvest.com/hc/en-us/articles/27133087832205-Why-can-t-I-track-time)
+and [project setup guide](https://support.getharvest.com/hc/en-us/articles/360048686831-Create-and-duplicate-projects)
+require project assignment and a task added to that project. Treat time-write
+grants as independent from the selected owner's tracking context; they do not
+themselves assign a person or remove FR-006 task restrictions. This is an
+implementation interpretation of documented prerequisites, not an observed
+custom-grant bypass test. Do not copy the legacy SQL view's role-name bypass
+into the canonical predicate or silently change policy-0 behavior.
+
+The user selected **B** for the undocumented recovery edge: if the owner loses
+tracking eligibility while their timer runs, the terminal stop exception remains
+**owner-only** (FR-033). A delegate must first have an eligible owner/context again
+and still hold current scoped write authority. This never waives other locks or
+permits creation, restart, reassignment or general editing. Record it as Horae's
+decision, not verified Harvest enforcement; do not ask the same question again.
+
+The next delegated transaction tests must contrast actor and owner, eligible and
+removed/restored membership or task access, read-only versus write scopes, and
+both revocation orders. Keep own terminal recovery separate from delegated stop.
+Approval coverage and privileged correction questions remain independent.
+
 | Consumer | Required change and acceptance |
 | --- | --- |
 | `TimesheetContent` resource and navigation | Bind selected person, date range and requester to the load. Exhaust scoped pages before totals; discard stale responses after person/session changes. Preserve own-sheet navigation and report historical access. |
@@ -215,3 +238,28 @@ scope, identity/policy changes, inaccessible subjects, 501-entry continuation,
 invalid query/state, target-archive ordering and cancellation. Existing candidate
 and scoped-reader suites remain unchanged and pass. Native/WASM lint and full
 SQLx verification are recorded separately in the progress log.
+
+### Connected own-sheet consumer
+
+Day, Week and Calendar now consume `VisibleTimeEntry` through the complete-page
+loader, not `list_time_entries` or fabricated internal entry records. The loader
+pins requester, selected subject and policy across continuations and rejects
+identity changes, out-of-window/other-owner rows, duplicates and non-decreasing
+cursors. A failed continuation returns no partial period totals.
+
+The resource tags successes and errors with the requested week. Only a Ready
+result for the current week supplies rows, totals or enabled entry creation;
+pending/refused loads have explicit status and retry. Historical project, task
+and client labels come from authorized entries, without `list_clients(true)` or
+currency metadata. Existing own tracking choices remain separate.
+
+Week-cell drafts live outside the refreshable grid, keyed by project/task/date;
+refreshing after another cell's save must not destroy typed input. Restored
+drafts save on blur, including retries without retyping. Row discard clears only
+the captured week's drafts, and pending cell writes cannot race row removal.
+
+This connects the current own-sheet route only. Selected-person navigation,
+captured-requester mutation checks, target tracking contexts, delegated actions,
+dirty/pending navigation, atomic row deletion and full submission remain open.
+The existing own action endpoints are not evidence of canonical delegated write
+enforcement. No policy is activated by this UI integration.

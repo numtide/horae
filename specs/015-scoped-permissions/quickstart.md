@@ -1,5 +1,35 @@
 # Permission verification
 
+## Connected own Timesheet (T014/T015 in progress)
+
+No database is needed for these consumer regressions; compile with the committed
+SQLx cache inside the Nix shell:
+
+```sh
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae pages::timesheet::
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features server --all-targets -- -D warnings
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features web --target wasm32-unknown-unknown -- -D warnings
+```
+
+The five original loader tests fail against the one-page stub, then pass with
+complete pagination. Coverage adds exact combined rows/minutes, continuation
+failure, requester/subject/policy changes, duplicate and out-of-window rows,
+non-decreasing cursors, empty sheets and old-week successes/errors before restart.
+
+Independent review identified grid-draft loss during refresh and the resource's
+old-week Ready window. A Dioxus VDOM regression fails before draft retention and
+passes after it; it drives the real Week renderer's input/blur listeners, hides
+and remounts the grid, and checks that the restored second-cell draft can still
+be committed without retyping. A focused test checks row discard does not remove
+drafts from other weeks/tasks. This is a component test, not a browser or network
+end-to-end test. Native browser focus/keyboard behavior remains to be exercised.
+
+The final run passes all 36 Timesheet tests. Offline server/all-target and WASM
+Clippy pass with warnings denied. The consumer changes no SQL, schema, shared CSS,
+shell timer ownership or legacy
+mutation authority. Selected-person navigation/commands and FR-033's delegated
+denial tests remain next; this is not full Timesheet or feature acceptance.
+
 ## Selected Timesheet page context (T014/T015 in progress)
 
 In the same isolated Nix/PostgreSQL setup below, also run:
@@ -18,8 +48,9 @@ cancellation. Exact HTTP payload assertions exclude financial/internal data.
 
 Complete SQLx generation preserves all 1,465 descriptors unchanged. Offline server
 all-target and WASM Clippy pass with warnings denied. A bounded self-review found
-no high/critical defect in this read boundary. The screen still uses its existing
-reader; this is not selected-person UI, delegated-write or full-feature acceptance.
+no high/critical defect in this read boundary. The later connected own-sheet
+consumer above replaces the screen's old reader; this is not selected-person UI,
+delegated-write or full-feature acceptance.
 
 ## Timesheet candidate discovery (T179–T181)
 

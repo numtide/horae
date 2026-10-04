@@ -79,6 +79,8 @@ confirmed contracts; local tests alone cannot settle contradictory reference fac
 
 ### Session 2026-10-04
 
+- Q: If a timer's owner loses tracking eligibility, may an editor who still has authority over the entry use the terminal recovery exception to stop it? → A: B. No. Keep that exception owner-only; delegated stop requires restored tracking eligibility as well as current scoped write authority and independent locks. This is an explicit Horae decision, not verified Harvest behavior. It does not permit the owner to restart, reassign or otherwise edit through the terminal exception.
+
 - Q: May a responsible person select active participants of their managed projects in Timesheet before those participants have recorded time? → A: Yes (A). Include them while keeping visible time limited to authorized projects. Candidate discovery does not grant access to the person's other time, financial data or editing. This resolves Horae's zero-entry candidate choice, not verified Harvest custom-grant behavior.
 
 ## User Scenarios & Testing
@@ -283,6 +285,8 @@ An administrator can review how existing roles and project assignments translate
 - **FR-031**: A person MUST NOT be assigned as their own managed person, including through an Administrator's direct or bulk request. Reject an add or replacement containing that self-relationship atomically, without silently filtering it, changing other assignments or granting privileges. Compare the responsible person's identity with the managed person's identity, not with the acting Administrator: an Administrator may still manage their own set of other people under FR-027/028. Preserve independently authorized own/all access and existing business history. This rule neither grants nor denies self-approval, which follows its separate operation contract, and does not authorize automatic data cleanup or new restrictions on relationships between distinct people.
 
 - **FR-032**: Custom-profile names MUST be nonempty after removing surrounding whitespace, at most 100 characters and unique within the organization without distinguishing letter case. Preserve the chosen display casing. Concurrent equivalent-name creation MUST leave at most one template; return a conflict without changing existing templates or person permissions. Different organizations may use the same name. Enforce the reference limit of 50 reusable profiles per organization. Names are labels, never administrative identity or a substitute for template IDs; do not reserve built-in names without a separate evidenced requirement.
+
+- **FR-033**: The terminal timer-stop recovery exception after loss of tracking eligibility MUST remain limited to the timer owner. A delegated editor MUST retain current write scope over the entry and the selected owner's tracking eligibility; restoring eligibility does not waive organization, activity, task or independent business-state constraints. Neither read nor approval access grants timer-stop authority. The owner-only exception MUST NOT permit creation, restart, reassignment or other edits. Test loss and restoration of eligibility with separate actor/owner identities and both revocation lock orders.
 
 ### Proposed Built-in Boundaries
 

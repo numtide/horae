@@ -1,5 +1,60 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Actual Timesheet consumer and terminal recovery decision
+
+- Revalidated `5faed76` on the existing worktree/branch; the preceding delegation
+  status answer was no implementation progress. The page-context commit was
+  already pushed to draft #212; its SQLx/native/WASM gates were complete, not
+  work to repeat. No new worktree or replacement feature was created.
+- Connected the existing own-sheet Day/Week/Calendar to `load_timesheet_page`,
+  consuming `VisibleTimeEntry` directly. Continuations retain requester, subject
+  and policy and cannot publish partial totals. Historical labels no longer
+  depend on the general client directory or currency data. Own tracking choices
+  and mutation endpoints remain separate pending delegated integration.
+- RED loader run `30030` exited 101: all five tests failed against a one-page
+  stub. Initial consumer run `44419` passed 33 tests. Independent review found
+  two P2 regressions: a Ready value could belong to the old week, and refreshing
+  one cell could unmount another cell's uncommitted DOM input.
+- Fixed date context by tagging both results and errors with their requested
+  week. Added a real Dioxus Week-renderer input/remount test: the first attempt
+  had a Rust pattern mismatch (`39352`), corrected before the meaningful RED
+  `68384` failed on lost input. Parent-owned dated drafts fixed retention; the
+  intermediate `2743` passed 35 tests. Follow-up static review caught restored
+  drafts needing blur-based save and explicit row discard; both were corrected,
+  with pending-write guards and captured-week draft removal.
+- Final consumer tests in `56864` pass 36/36, including restored input/blur
+  dispatch and cross-week/task discard preservation. The same process completed
+  with exit 0: offline server/all-target Clippy (1m22s) and WASM Clippy (16.54s),
+  both with warnings denied. No SQL or migration changed, so cache regeneration
+  is unnecessary.
+- Format and format-CI run `61224` completed with exit 0: 524 files checked,
+  zero formatting changes; `git diff --check` passed. Publication stays on the
+  existing unsigned-commit workflow for draft #212, without merge.
+- The authorized parallel specialist published unsigned `dd141c5` in draft
+  [#217](https://github.com/numtide/horae/pull/217), based on `5faed76` against
+  `feat/scoped-permissions`. It reports 1,331 passing server tests, 11 existing
+  ignored, 1,473 SQLx descriptors and passing offline server/WASM Clippy/format.
+  Parent reviewed its bounded production/transaction/HTTP change; no merge.
+- Investigated delegated tracking prerequisites using current official Harvest
+  help. Existing FR-006 restrictions are not overridden by time-write grants.
+  The remaining terminal-stop exception was asked once; the user selected **B**:
+  only the owner may recover after losing tracking eligibility. Recorded FR-033
+  and propagated it to the plan, integration contract and tasks. This is Horae's
+  explicit rule, not an observed Harvest custom-permission result.
+- Rust/testing/async and simplicity guidance kept the consumer within existing
+  types, controls and dependencies. Impeccable hardening guidance focused on
+  loading/error/stale-input states; no shared CSS or design-system change.
+  Browser/MCP tools remain absent; VDOM evidence is not browser acceptance.
+  No Spec Kit command execution is claimed in this environment.
+
+Next: implement the **selected-person vertical flow**:
+route/picker, target tracking contexts, captured actor/owner commands and all
+Day/Week/Calendar/timer consumers together, with FR-033 denial/restoration tests.
+Do not ship another disconnected reader as that flow. Dirty/pending navigation,
+atomic row removal, submitted editing, real expenses/approval coverage, privileged
+corrections, migration/cutover and complete acceptance remain open. The full goal
+remains active. No real data, runtime policy or external Harvest state changed.
+
 ## 2026-10-04 — Bound selected-person page reads
 
 - Revalidated existing `60f60f9` worktree and active goal after the delegation

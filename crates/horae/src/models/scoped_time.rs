@@ -19,13 +19,6 @@ pub enum TimesheetPolicy {
 /// The selected subject is distinct from the authenticated requester.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(
-    not(feature = "server"),
-    expect(
-        dead_code,
-        reason = "Connected Timesheet consumer is being integrated."
-    )
-)]
 pub struct TimesheetQuery {
     pub subject_id: Option<Uuid>,
     pub date_from: NaiveDate,
@@ -38,13 +31,6 @@ pub struct TimesheetQuery {
 /// A subject, its labels and entries admitted under one current authority fence.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(
-    not(feature = "server"),
-    expect(
-        dead_code,
-        reason = "Connected Timesheet consumer is being integrated."
-    )
-)]
 pub struct TimesheetPage {
     pub requester: PermissionRequester,
     pub subject: TimesheetPerson,
