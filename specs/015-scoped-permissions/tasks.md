@@ -505,6 +505,12 @@ delivery and integration, rather than claiming an internal helper completes it.
 
 - [ ] T018 [US4] Align permission controls/descriptions in `crates/horae/src/pages/` Settings and Workspace using existing components and `design/project/app/08_Settings.dc.html` / `09_Workspace.dc.html`; apply design skills and browser viewport/theme/keyboard checks (FR-012/016).
 
+- [x] T139 [US4] Add failing permission-subject discovery transaction cases in `crates/horae/src/server_fns/permissions/tests/subjects.rs`, reusing profile fixtures. Cover the closed discovery contract in `contracts/permission-editor.md` (FR-006/010/011/012).
+
+- [x] T140 [US4] Implement the minimal paged subject projection in shared editor models, `permissions/editor.rs` and authenticated `permission_editor.rs`; extend registered HTTP tests, without replacing `list_users`, shell guards or activating policy.
+
+- [x] T141 [US4] Run subject/editor/permission and real-session regressions, refresh SQLx cache, verify offline server/WASM lint and formatting, and record adversarial review. This does not complete general directory or browser integration.
+
 T018's person editor consumes T126–T129 on the existing AdminUsers surface. Its
 local draft uses the core prerequisite graph, keeps explicit profile intent and
 invalidates confirmation on every edit. Test malformed loads, joint losses,

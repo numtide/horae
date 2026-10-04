@@ -1,5 +1,37 @@
 # Permission verification
 
+## Permission-editor subject discovery (T139–T141)
+
+Run in the Nix shell against the owned disposable PostgreSQL:
+
+```sh
+CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae permissions:: -- --nocapture
+CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization -- --nocapture
+```
+
+The final selected run passes 134 tests, including six new subject-discovery
+cases, in 56.28s after compilation. The registered HTTP matrix passes in 11.67s.
+The first compilation failed for the absent reader; the first implemented run
+exposed a disposable-fixture FK assumption, not an authorization failure.
+
+Cases cover 53 local people across two pages, exact 50-row termination, inactive
+people without canonical state, duplicate names, missing/deleted/foreign cursors,
+empty pages, explicit Administrator versus all grants/legacy Admin, invalid
+policy/storage, concurrent revocation/deactivation and cancellation with immediate
+single-connection reuse. Inherited connection defaults remain unchanged. HTTP
+checks exercise the registered server function, session-derived identity,
+missing authentication, forged authority, policy denial, exact minimal fields
+and sanitized malformed-storage responses. No general-directory, UI/browser or
+activation acceptance is implied. Shared authority/transaction code is reused.
+
+Full SQLx preparation after package-only artifact cleanup preserves the cache
+and adds three descriptors (1,408 total, 54.24s). Offline all-targets server
+Clippy passes in 1m04s; final WASM Clippy passes in 12.69s. The new page response
+has one web-only `expect(dead_code)` because its picker is not connected yet;
+connecting the consumer must remove that now-unfulfilled expectation. No broad
+lint exemption or runtime fallback is added. No new full-flake, full server-suite
+or browser result is claimed, and the owned disposable PostgreSQL is stopped.
+
 ## Combined-approval record guard (T136–T138)
 
 Pure FR-006/024 checks use existing canonical selections and record coverage.

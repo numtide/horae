@@ -46,6 +46,34 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     let loaded = api
         .json("load_permission_editor", lookup.clone(), &cookie)
         .await;
+    let subjects = api
+        .json("list_permission_subjects", json!({"after":null}), &cookie)
+        .await;
+    assert_eq!(subjects["requester"], expected_requester);
+    assert_eq!(subjects["next_after"], Value::Null);
+    let rows = subjects["subjects"].as_array().unwrap();
+    assert_eq!(rows.len(), 2);
+    assert!(rows.iter().any(|row| row["id"] == json!(target)));
+    assert!(rows.iter().any(|row| row["id"] == json!(ids.user_id)));
+    for row in rows {
+        let mut keys: Vec<_> = row
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        keys.sort();
+        assert_eq!(keys, ["active", "id", "name"]);
+    }
+    assert_eq!(
+        api.json(
+            "list_permission_subjects",
+            json!({"after":Uuid::max()}),
+            &cookie
+        )
+        .await["subjects"],
+        json!([])
+    );
     check_authentication_failure(pool, api, target, &cookie).await;
     assert_eq!(loaded["user_id"], json!(target));
     assert_eq!(loaded["permissions"]["is_administrator"], false);
@@ -221,6 +249,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     );
 
     for (name, body) in [
+        ("list_permission_subjects", json!({"after":null})),
         ("preview_person_permissions", json!({"draft":draft})),
         (
             "save_person_permissions",
@@ -263,6 +292,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         .await
         .unwrap();
         for (name, body) in [
+            ("list_permission_subjects", json!({"after":null})),
             ("load_permission_editor", lookup.clone()),
             ("preview_person_permissions", json!({"draft":draft})),
             (
@@ -336,6 +366,18 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     sqlx::query!("UPDATE person_permission_states SET grants=ARRAY['private-invalid-grant'] WHERE user_id=$1", ids.user_id).execute(pool).await.unwrap();
     let unavailable = api
         .call("load_permission_editor", lookup, Some(&cookie), false)
+        .await;
+    assert_eq!(unavailable.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    let message = unavailable.text().await.unwrap();
+    assert!(message.contains("Permission editor is unavailable"));
+    assert!(!message.contains("private-invalid-grant"));
+    let unavailable = api
+        .call(
+            "list_permission_subjects",
+            json!({"after":null}),
+            Some(&cookie),
+            false,
+        )
         .await;
     assert_eq!(unavailable.status(), StatusCode::INTERNAL_SERVER_ERROR);
     let message = unavailable.text().await.unwrap();

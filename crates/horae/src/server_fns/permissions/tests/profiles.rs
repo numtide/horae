@@ -9,6 +9,9 @@ use std::time::Duration;
 #[path = "editor.rs"]
 mod editor_tests;
 
+#[path = "subjects.rs"]
+mod subjects_tests;
+
 async fn save_state(
     pool: &PgPool,
     org: Uuid,

@@ -12,6 +12,28 @@ pub struct PermissionRequester {
     pub user_id: Uuid,
 }
 
+/// Minimal person label for permission administration, not a general directory row.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PermissionSubject {
+    pub id: Uuid,
+    pub name: String,
+    pub active: bool,
+}
+
+/// Independently authorized page; a cursor does not preserve access or a snapshot.
+#[cfg_attr(
+    feature = "web",
+    expect(dead_code, reason = "Subject discovery has no web picker consumer yet")
+)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PermissionSubjectPage {
+    pub requester: PermissionRequester,
+    pub subjects: Vec<PermissionSubject>,
+    pub next_after: Option<Uuid>,
+}
+
 /// Confirmed intent; actor identity is supplied separately by the server.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

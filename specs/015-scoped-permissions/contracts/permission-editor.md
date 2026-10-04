@@ -28,6 +28,38 @@ canonical state without this gate is not an authorized writer protocol.
 
 ## Editor flow
 
+### Subject discovery (T139–T141)
+
+Add `list_permission_subjects(after)` as a read-only companion to the editor,
+not a replacement for the general people directory or its open lifecycle rules.
+Reuse exactly the editor's policy-1/current explicit Administrator boundary and
+error mapping. A legacy Member who is a canonical Administrator may use it;
+all grants without administrative identity cannot. Policy 0 must not reveal
+staged people through this endpoint. No legacy fallback or activation occurs.
+
+Return only subject ID, name and active status, plus session-derived requester
+identity and `next_after`. Include local inactive people and people without
+canonical state: discovery must not silently hide a migration anomaly or create
+permissions. Loading/saving a selected person still independently validates its
+current state. Never include email, legacy role, grants, rates, costs or totals.
+
+Use a fixed 50-row page ordered by immutable user ID, selecting one extra row to
+determine continuation. The optional UUID cursor is an exclusive ordering bound,
+not a resource lookup or authority token. Missing/deleted/foreign cursor values
+cannot expose foreign data or their existence. Reauthorize every page; no locks
+span user interaction and no cross-page snapshot is promised. Name/activity
+changes do not change cursor order. The consumer must discard pages on requester
+change, and the editor's existing requester binding still governs mutations.
+
+Verify exact projection, multiple pages with duplicate names and inactive/missing
+state, absent/foreign/inactive/non-administrative requesters, policy and malformed
+state denial, revocation after a gate wait and between pages, deactivation,
+inherited transaction defaults, cancellation/reuse and registered HTTP delivery.
+This closed FR-006/010/011/012 boundary needs no new schema or product predicate.
+General directory, shell and visual integration remain separately gated.
+
+### Selected person
+
 - Load the local target (including inactive people), exact grants, independent
   identity, provenance, person/access revisions and current template IDs, names,
   grants and revisions. Display DTOs are not trusted deserializable authority.

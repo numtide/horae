@@ -2,8 +2,8 @@
 
 use super::*;
 use crate::models::permission_editor::{
-    PermissionEditor, PermissionRequester, ProfileCommand, ProfileDraft, ProfileOutcome,
-    ProfilePreview, TemplateCommand, TemplateDeletionPreview, TemplateOutcome,
+    PermissionEditor, PermissionRequester, PermissionSubjectPage, ProfileCommand, ProfileDraft,
+    ProfileOutcome, ProfilePreview, TemplateCommand, TemplateDeletionPreview, TemplateOutcome,
 };
 
 #[cfg(feature = "server")]
@@ -63,6 +63,18 @@ fn template_error(error: permissions::templates::TemplateCommandError) -> Server
             server_err("Permission editor is unavailable")
         }
     }
+}
+
+/// Discover local permission-editor subjects under current Administrator authority.
+#[server]
+pub async fn list_permission_subjects(
+    after: Option<uuid::Uuid>,
+) -> Result<PermissionSubjectPage, ServerFnError> {
+    let user = editor_user().await?;
+    let state = crate::state::global_state().await;
+    permissions::editor::subjects(&state.db, user.org_id, user.id, after)
+        .await
+        .map_err(profile_error)
 }
 
 /// Load current person permissions and reusable choices without inferring a profile.

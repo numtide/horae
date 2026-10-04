@@ -7,8 +7,9 @@ use uuid::Uuid;
 use super::profiles::{self, ProfileCommandError};
 use super::{load_permission_template, load_person_permissions, restore_grants};
 use crate::models::permission_editor::{
-    PermissionEditor, PermissionRequester, PermissionSnapshot, ProfileDraft, ProfilePreview,
-    ProfileSource, RelationshipRemoval, TemplateAssignee, TemplateChoice, TemplateDeletionPreview,
+    PermissionEditor, PermissionRequester, PermissionSnapshot, PermissionSubject,
+    PermissionSubjectPage, ProfileDraft, ProfilePreview, ProfileSource, RelationshipRemoval,
+    TemplateAssignee, TemplateChoice, TemplateDeletionPreview,
 };
 use crate::models::permissions::{PermissionSource, PersonPermissions};
 
@@ -62,6 +63,42 @@ async fn begin(
         return Err(ProfileCommandError::Forbidden);
     }
     Ok((tx, organization.access_revision))
+}
+
+pub(crate) async fn subjects(
+    pool: &PgPool,
+    org: Uuid,
+    actor: Uuid,
+    after: Option<Uuid>,
+) -> Result<PermissionSubjectPage, ProfileCommandError> {
+    const PAGE_SIZE: usize = 50;
+    let (mut tx, _) = begin(pool, org, actor).await?;
+    let mut subjects = sqlx::query_as!(
+        PermissionSubject,
+        "SELECT id, name, active FROM users
+         WHERE org_id=$1 AND ($2::uuid IS NULL OR id>$2)
+         ORDER BY id LIMIT $3",
+        org,
+        after,
+        (PAGE_SIZE + 1) as i64
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+    let next_after = if subjects.len() > PAGE_SIZE {
+        subjects.truncate(PAGE_SIZE);
+        subjects.last().map(|subject| subject.id)
+    } else {
+        None
+    };
+    tx.commit().await?;
+    Ok(PermissionSubjectPage {
+        requester: PermissionRequester {
+            org_id: org,
+            user_id: actor,
+        },
+        subjects,
+        next_after,
+    })
 }
 
 pub(crate) async fn load(

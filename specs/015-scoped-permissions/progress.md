@@ -1,5 +1,43 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Permission-editor subject discovery
+
+- Previous turn made progress: published approval-boundary contract `eb56af3`.
+  Revalidated its clean synchronized worktree and continued independent editor
+  integration. Spec Kit prerequisites pass; its skills remain absent locally.
+- Refined the closed current-Administrator discovery contract as T139–T141.
+  Reused the editor transaction and sanitized session/error boundary, adding
+  only ID/name/activity pages and requester identity. No legacy-role fallback,
+  general directory replacement, grants, schema, UI or activation change.
+- Tests first failed for the missing reader. The initial implementation passed
+  five cases; the deleted-cursor fixture incorrectly assumed a cascading user
+  deletion. Removed that disposable subject's permission row first. The final
+  134 selected permission tests pass (56.28s), including six new cases; the
+  registered real-session HTTP matrix also passes (11.67s).
+- Coverage includes inactive/missing-state people, duplicate names, exact/full
+  pages, deleted/foreign/arbitrary cursors, minimal JSON fields, legacy Admin
+  versus explicit identity, invalid policy/storage, gate-wait and next-page
+  revocation, direct deactivation, cancellation and one-connection reuse under
+  inherited READ ONLY/REPEATABLE READ defaults. No fixture used real data.
+- Focused adversarial self-review checked authorization before empty-page
+  success, tenant predicates, cursor non-authority, activity retention, absence
+  of sensitive fields and use of the shared transaction/error implementation.
+  No independent agent, visual or full-policy acceptance is claimed.
+- Clean SQLx regeneration completes in 54.24s, preserving all previous queries
+  and adding three descriptors (1,408 total). Only 1.6 GiB of rebuildable Horae
+  artifacts were cleaned. The owned disposable PostgreSQL has been stopped.
+- Offline all-targets server Clippy passes (1m04s). WASM initially reports the
+  unconsumed discovery DTOs; a single web-only `expect(dead_code)` on the page
+  response records the missing picker and will require removal when connected.
+  An unnecessary second expectation was removed. Final WASM Clippy passes
+  (12.69s); no global lint suppression or UI placeholder was introduced.
+
+Next: connect subject discovery under the reviewed editor/shell integration
+contract, including requester changes and pagination, without activating mixed
+policy or bypassing ordinary-directory guards. General directory predicates,
+scoped approvals, person-management writes and preserved-data cutover remain open.
+Delivery remains existing draft #212 without merge; general requirements 12/16.
+
 ## 2026-10-04 — Approval production-boundary review
 
 - The preceding MVP response was status-only, not implementation progress.
