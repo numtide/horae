@@ -2,6 +2,30 @@
 
 use super::*;
 
+#[cfg(feature = "server")]
+mod commands;
+
+/// Eligible, writable tracking choices for one explicitly selected person.
+#[server]
+pub async fn load_timesheet_tracking(
+    context: crate::models::scoped_time::TimesheetWriteContext,
+) -> Result<Vec<crate::models::scoped_time::TimesheetTrackingOption>, ServerFnError> {
+    let actor = require_user().await?;
+    let state = crate::state::global_state().await;
+    commands::tracking(&state.db, actor.org_id, actor.id, &context).await
+}
+
+/// Apply one person-bound operation; client expectations never grant authority.
+#[server]
+pub async fn apply_timesheet_command(
+    context: crate::models::scoped_time::TimesheetWriteContext,
+    command: crate::models::scoped_time::TimesheetCommand,
+) -> Result<(), ServerFnError> {
+    let actor = require_user().await?;
+    let state = crate::state::global_state().await;
+    commands::apply(&state.db, actor.org_id, actor.id, &context, command).await
+}
+
 /// Resolve a Timesheet subject and its rows without a separate identity bootstrap.
 #[server]
 pub async fn load_timesheet_page(
