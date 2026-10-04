@@ -202,6 +202,9 @@ delivered permission reader:
    them. Reuse existing dirty/pending navigation conventions instead of silently
    dropping unsaved inputs. Server mutations independently check the expected
    requester and selected subject against current authenticated authority.
+   The route-specific component must be a keyed dynamic fragment: an inline
+   singleton key does not remount it in the pinned Dioxus version. Keep requester
+   identity in the parent; ordinary resource refreshes must not reset drafts.
 1. **Replace the data dependency, not the facts.** Day/week/calendar currently
    consume `TimeEntry`, own tracking project/task lists and `list_clients(true)`.
    The canonical path must consume the safe scoped entry projection and its

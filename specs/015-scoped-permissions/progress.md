@@ -1,5 +1,51 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Scoped Timesheet browser navigation and recovery
+
+- Reused published `68bbaae`, the existing worktree and draft #212. Added a
+  runner-only scoped-policy fixture with distinct requester/subject sessions;
+  no real policy, account or data was changed.
+- Initial fixture executions rejected a missing explicit billable value and a
+  timed entry extending past midnight. Corrected the fixture, retaining its
+  hidden 1,200-minute entry as untimed; neither failure tested application behavior.
+- Browser `36981` reproduces a real navigation defect: selecting the teammate
+  changes the URL but retains Admin User's sheet and sends no replacement read.
+  Independent review traced it to singleton component keys not remounting in
+  Dioxus 0.7.9. The existing key now lives in a keyed dynamic fragment; the parent
+  still pins the requester across navigation. No CSS or authorization change.
+- Upstream context: [Dioxus issue #4688](https://github.com/DioxusLabs/dioxus/issues/4688)
+  reports the same inline-key behavior; the local reproduction, not issue status,
+  is the acceptance basis. Browser history and zero-entry-person checks retain
+  this regression. T187 remains open until the complete new suite passes.
+- Independent test review strengthened shell-timer identity verification and
+  draining of second-session reads before navigation/closure. The fixture also
+  exercises the confirmed FR-033/B owner-only recovery rule.
+- Client `83179` completed in 68.34s after correcting RSX key syntax; interrupted
+  only the redundant native profile. Separate native build and browser acceptance
+  followed. Native `40249` failed during linking with signal 7 at under 1 GiB free.
+  Verified all compilers stopped and removed only the two regenerable redundant
+  native caches (2.8 GiB). Native retry `46585` passes in 56.64s; asset processing
+  `39860` passes. Sources, client assets and all databases were preserved.
+- Browser `2345` passes navigation/history, Day/Week writes and gated revocation,
+  then reveals an incorrect test expectation: loss of tracking eligibility is
+  the existing explicit 409 conflict, not 403. Confirmed `eligible` and retained
+  an exact error-message assertion together with unchanged running state.
+- Final combined browser `83994` passes all seven scoped scenarios, all modal
+  and mutation-error cases, and the complete permission recovery/history suite.
+  The latter starts after scoped-fixture cleanup in the same disposable database.
+  No JavaScript page errors; distinct real owner session proves FR-033/B.
+- Independent review approves the minimal keyed-fragment fix; strengthened
+  history checks also assert previous rows disappear for the empty teammate.
+  Server Clippy `27895` passes with warnings denied; WASM check `11713` passes.
+  T187 is complete and the new suite joins the default runner (22 scripts).
+  This is four-suite Chromium acceptance, not a fresh complete Nix/full-browser
+  gate or every delegated Calendar/create/delete flow.
+
+Next: publish this verified repair on draft #212 without merge, then continue
+remaining connected permission work. New-relationship activity and the separate
+approval decision remain unanswered; no inferred product decisions. Full-feature
+enforcement, reviewed activation and MVP acceptance remain open.
+
 ## 2026-10-04 — Timesheet mutation browser acceptance
 
 - Previous turn only reconfirmed FR-033/B; no implementation progress. Revalidated

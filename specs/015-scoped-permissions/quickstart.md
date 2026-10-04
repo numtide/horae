@@ -1,5 +1,31 @@
 # Permission verification
 
+## Selected-person Timesheet browser acceptance (T187)
+
+`run-design-checks.sh timesheet-permissions` uses the same built client/server and
+pinned Playwright environment as the existing disposable runner. It refuses
+non-runner database targets. Only its disposable organization enables policy 1;
+the legacy-admin login identity is deliberately not a canonical Administrator.
+
+Real Chromium checks cover project-scoped person selection, active teammates
+without hours, hidden unrelated work, back/forward navigation, Day/Week writes,
+revocation between click and commit with preserved draft/data, and relationship
+revocation without fallback to another person's sheet. The test exposed a
+singleton-key lifecycle defect: the URL changed while the old sheet remained.
+A keyed dynamic fragment now resets the route-specific resources and drafts;
+the parent still retains the admitted requester.
+
+Concurrent requester/delegate timers retain separate identities. After the
+subject loses project membership, a delegate's stop is disabled and a direct
+authenticated command returns the existing eligibility conflict (409), not an
+authority failure (403). Restoring membership permits delegated stop; a second
+real owner session can stop without restored membership under FR-033/B. SQL
+assertions verify the running states and unchanged unrelated time.
+
+This seven-scenario suite is registered in the default browser gate. It does
+not cover every delegated Calendar/create/delete interaction, Windows Chrome,
+submitted-entry parity, scoped approvals, real activation or full acceptance.
+
 ## Timesheet modal and mutation regressions (T186)
 
 The default disposable browser runner includes `modals` and `timesheet-errors`.

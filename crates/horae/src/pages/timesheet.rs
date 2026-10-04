@@ -251,7 +251,13 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan, user: String) -> E
         else {
             return rsx! { div { class: "alert alert-danger", "This week is outside the supported date range." } };
         };
-        rsx! { TimesheetContent { key: "{view}:{date}:{span}:{user}", view, date, span, start, subject, requester } }
+        // Keys reset component state only inside a dynamic fragment. A route
+        // change must discard the previous person's resources and drafts.
+        rsx! {
+            for key in [format!("{view}:{date}:{span}:{user}")] {
+                TimesheetContent { key: "{key}", view, date, span, start, subject, requester }
+            }
+        }
     })
 }
 
