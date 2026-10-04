@@ -1,5 +1,42 @@
 # Permission verification
 
+## Browsable permission history (T182–T184)
+
+`/admin/audit` connects authenticated `list_permission_audit` to Workspace Data
+and Administrator Settings. It requires an active canonical Administrator;
+existing legacy People/Importers access is unchanged. Every page reauthorizes
+and remains bound to the first admitted requester. It presents only recorded
+permission changes and explicit no-op receipts, with native details for grants,
+provenance, Administrator identity and relationship changes. No raw command/replay
+payloads, fabricated names/events/counts or retention promises are shown.
+
+The production paging test first failed with `Forbidden` against the placeholder;
+the UI test first failed because no read was issued. The integrated server binary
+and affected shell/history/Settings/editor UI suites now pass (`94206`, exit 0).
+Tests cover stable timestamp ties, tenant-first bounds, all historical types,
+requester mismatch, empty/end states, refresh/retry, sanitized failures, malformed
+history, HTML escaping, revocation in both gate orders and cancellation cleanup.
+The independent review's shell-error disclosure finding has a passing regression.
+The same finding was then reproduced at the HTTP boundary: cancellation of the
+own-permission authentication query returned PostgreSQL diagnostics. Its wrapper
+now sanitizes that failure while retaining 401; the final registered-session
+matrix passes, injecting and recovering from authentication-query failure in
+all three readers.
+
+Run through Nix against disposable PostgreSQL only:
+
+```sh
+cargo test -p horae --features server --bin horae
+cargo test -p horae --features server --test permission_audit_ui --test admin_shell --test own_permissions_ui --test permission_editor_ui
+```
+
+Complete SQLx preparation preserves all existing descriptors and adds five.
+Final offline native/all-target and WASM Clippy pass with warnings denied;
+formatting and publication evidence are tracked in `progress.md`. These
+are production-code/controlled-DOM checks, not browser acceptance. Browser/MCP is
+not loaded; no visual, keyboard or mobile browser pass is claimed. No real-data
+migration, runtime activation or full permission-feature completion follows.
+
 ## Captured own-week submission (T014/T015 in progress)
 
 `submit_week` now requires the page's `TimesheetWriteContext`. Registered-session

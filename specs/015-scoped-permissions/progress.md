@@ -1,5 +1,77 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Connected permission history
+
+- The prior clarification response was not implementation progress: FR-033/B was
+  already recorded. Revalidated published `b8b1c60` and the existing draft #212,
+  then continued the independent FR-013 history flow. The future-project approval
+  question remains unanswered; no approval behavior or activation is inferred.
+
+- Reused the existing authorized specialist for backend/DTO/session tests in this
+  worktree. Main owns the consumer, route/shell, UI tests and documentation; all
+  builds are serialized. No new agent, branch reset, schema change or real-data
+  operation. The complete feature and existing high-level acceptance remain open.
+
+- Extended the audit contract, plan, operation matrix and T182–T184. Source-read
+  the Workspace Audit log, shared subnavigation, design-system/table references
+  and production shell. Its example events, names, counts and contradictory
+  retention copy are not runtime requirements. The consumer displays actual
+  permission receipts only, with recorded UUID/operator attribution and UTC.
+
+- Backend RED `84646` failed the production paging assertion with `Forbidden`
+  from the intentional placeholder. An earlier attempt `42695` only exposed a
+  test-module path error and is not behavioral evidence. Backend now reuses the
+  existing transaction gates and strict decoder for tenant-first 25+1 paging.
+
+- UI RED `23494` showed no initial history request from the placeholder. Added
+  the connected `/admin/audit` consumer, captured requester, replacement paging,
+  stale-content suppression, empty/error/retry/end states and native historical
+  details. Workspace Data and canonical Administrator Settings expose the route.
+  Only this route uses the canonical shell gate; legacy People/Importers gates
+  remain intact. Shared grant/profile descriptions are reused; no shared CSS
+  defaults, dependencies or prototype controls changed.
+
+- Independent static review found a P2: the new shell authorization path could
+  render an internal authentication error. Replaced that path's error copy and
+  added a passing sentinel regression. Intermediate runs verified shell/Settings
+  and requester/paging behavior. The detail test initially expected named HTML
+  entities; inspection proved Dioxus correctly emits decimal entities, and the
+  assertion now checks the actual escaped literal rather than weakening safety.
+
+- Full server plus affected UI regression `94206` completed with exit 0: the
+  complete 1,154-case server binary (including its existing ignored probes),
+  seven shell tests, eleven own-permission UI tests, five history UI tests and
+  fifty editor UI tests. Registered HTTP and new PostgreSQL concurrency tests
+  pass. Formatting
+  `82785` passed (535 files; eight changed). Complete SQLx preparation `15682`
+  passed in 1m27s, adding five descriptors and preserving every existing one.
+  Offline all-target Clippy `66983` flagged one nested conditional; corrected it
+  without an allowance. `88926` then passed native/all-target Clippy (1m28s),
+  WASM Clippy (16.85s) and all five history UI tests. No browser/MCP tools
+  are loaded. The checked-in Spec Kit command skills are absent from this
+  worktree; no fresh specify/clarify/analyze invocation is claimed.
+
+- Followed the disclosure finding to its origin: `get_my_permissions`, now used
+  by the audit shell gate, still propagates `require_user` storage diagnostics in
+  its HTTP response. Extended the real-session cancellation probe to the lookup,
+  paged history and own-permission gate. RED `54837` reproduced a 500 containing
+  PostgreSQL's cancellation diagnostic from `get_my_permissions`. Sanitized that
+  wrapper's authentication failure while preserving 401; the final HTTP matrix
+  in `25607` passes (10.98s), including all three injected failures and recovery.
+  Final offline all-target native/WASM Clippy also passed in `25607` (1m21s and
+  17.14s), with warnings denied. No SQL/schema change was needed
+  for this fix. Formatting `8154` passed (535 files; three changed).
+- Final formatting and format-CI `82090` passed (535 files, zero changes), and
+  whitespace checks pass. GitHub confirms the existing open draft #212 on this
+  branch; publication preserves the draft and documents the design deviations.
+
+T182–T184 are verified within their documented scope. Publish unsigned on draft
+#212 without merge. Next: browser acceptance on an isolated fixture when available,
+then continue the approved person-management/permission consumers while the
+whole-timesheet/future-project approval decision remains outstanding. Full
+T018/T041, cross-surface enforcement, reviewed activation and the implementation
+goal remain open; this is not MVP readiness.
+
 ## 2026-10-04 — Captured own-week submission and approval discriminator
 
 - Previous response only acknowledged the already-recorded FR-033/B decision;

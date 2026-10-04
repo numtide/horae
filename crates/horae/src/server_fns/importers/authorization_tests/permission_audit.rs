@@ -68,6 +68,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         assert!(historical.get(private).is_none());
     }
     check_historical_shapes(pool, api, &ids, &cookie).await;
+    check_browsing(pool, api, &ids, &foreign, &cookie).await;
     check_auth_lookup_error(pool, api, stored.id, &cookie).await;
     assert_eq!(api.json(name, missing, &cookie).await, Value::Null);
     let foreign_cookie = api.cookie(foreign.user_id).await;
@@ -122,12 +123,33 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     .await
     .unwrap();
     assert_unavailable(api.call(name, body.clone(), Some(&cookie), false).await).await;
+    assert_unavailable(
+        api.call(
+            "list_permission_audit",
+            json!({"after":null,"expected_requester":null}),
+            Some(&cookie),
+            false,
+        )
+        .await,
+    )
+    .await;
     sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
         .execute(pool)
         .await
         .unwrap();
     assert_eq!(
         api.call(name, body, Some(&cookie), false).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        api.call(
+            "list_permission_audit",
+            json!({"after":null,"expected_requester":null}),
+            Some(&cookie),
+            false
+        )
+        .await
+        .status(),
         StatusCode::UNAUTHORIZED
     );
     api.client
@@ -140,6 +162,17 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         api.call(
             name,
             json!({"receipt_id":stored.id}),
+            Some(&foreign_cookie),
+            false
+        )
+        .await
+        .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        api.call(
+            "list_permission_audit",
+            json!({"after":null,"expected_requester":null}),
             Some(&foreign_cookie),
             false
         )
@@ -220,6 +253,137 @@ async fn check_historical_shapes(
     }
 }
 
+async fn check_browsing(
+    pool: &PgPool,
+    api: &Api,
+    ids: &crate::server_fns::test_seed::SeedIds,
+    foreign: &crate::server_fns::test_seed::SeedIds,
+    cookie: &str,
+) {
+    use crate::models::permission_audit::AuditPage;
+    // The existing shape checks created template/profile/project-manager and
+    // explicit unchanged/operator history. Extend it past one transport page.
+    for index in 0..24 {
+        let command = TemplateCommand {
+            request_id: Uuid::now_v7(),
+            expected_access_revision: 2 + index,
+            action: TemplateAction::Create {
+                name: format!("Browsable history {index}"),
+                grants: BuiltInProfile::Member.selection().iter().collect(),
+            },
+        };
+        templates::execute(pool, ids.org_id, ids.user_id, &command)
+            .await
+            .unwrap();
+    }
+    sqlx::query!(
+        "UPDATE permission_change_receipts SET created_at='2026-09-07 12:00:00+00' WHERE org_id=$1",
+        ids.org_id
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    let body = json!({"after":null,"expected_requester":null});
+    let name = "list_permission_audit";
+    assert_eq!(
+        api.call(name, body.clone(), None, false).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let first: AuditPage =
+        serde_json::from_value(api.json(name, body.clone(), cookie).await).unwrap();
+    assert_eq!(first.entries.len(), 25);
+    assert_eq!(
+        (first.requester.org_id, first.requester.user_id),
+        (ids.org_id, ids.user_id)
+    );
+    let next = json!({"after":first.next_after,"expected_requester":first.requester});
+    let second: AuditPage =
+        serde_json::from_value(api.json(name, next.clone(), cookie).await).unwrap();
+    assert_eq!(second.entries.len(), 3);
+    assert!(second.next_after.is_none());
+    let stored=sqlx::query_scalar!("SELECT id FROM permission_change_receipts WHERE org_id=$1 ORDER BY created_at DESC,id DESC",ids.org_id).fetch_all(pool).await.unwrap();
+    assert_eq!(
+        first
+            .entries
+            .iter()
+            .chain(&second.entries)
+            .map(|entry| entry.id)
+            .collect::<Vec<_>>(),
+        stored
+    );
+    for entry in first.entries.iter().chain(&second.entries) {
+        let wire = serde_json::to_value(entry).unwrap();
+        assert_eq!(
+            api.json(
+                "get_permission_audit",
+                json!({"receipt_id":entry.id}),
+                cookie
+            )
+            .await,
+            wire
+        );
+        for secret in [
+            "private_input",
+            "private_result",
+            "sentinel",
+            "request_id",
+            "intent",
+        ] {
+            assert!(!wire.to_string().contains(secret));
+        }
+    }
+    let foreign_cookie = api.cookie(foreign.user_id).await;
+    assert_eq!(
+        api.call(name, next.clone(), Some(&foreign_cookie), false)
+            .await
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+    let forged=api.json(name,json!({"after":first.next_after,"expected_requester":null,"org_id":ids.org_id,"user_id":ids.user_id}),&foreign_cookie).await;
+    assert_eq!(forged["entries"], json!([]));
+    assert_eq!(forged["requester"]["org_id"], json!(foreign.org_id));
+    sqlx::query!(
+        "UPDATE person_permission_states SET is_administrator=false WHERE user_id=$1",
+        ids.user_id
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    let denied = api.call(name, next, Some(cookie), false).await;
+    assert_eq!(denied.status(), StatusCode::FORBIDDEN);
+    assert!(!denied.text().await.unwrap().contains("Browsable history"));
+    sqlx::query!(
+        "UPDATE person_permission_states SET is_administrator=true WHERE user_id=$1",
+        ids.user_id
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    let broken = first.entries[2].id;
+    sqlx::query!(
+        "UPDATE permission_change_receipts SET format_version=99 WHERE id=$1",
+        broken
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    assert_unavailable(api.call(name, body.clone(), Some(cookie), false).await).await;
+    sqlx::query!(
+        "UPDATE permission_change_receipts SET format_version=1 WHERE id=$1",
+        broken
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    let legacy = crate::server_fns::test_seed::seed(pool, OrgRole::Admin).await;
+    assert_eq!(
+        api.call(name, body, Some(&api.cookie(legacy.user_id).await), false)
+            .await
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+}
+
 async fn assert_unavailable(response: reqwest::Response) {
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     let text = response.text().await.unwrap();
@@ -238,32 +402,47 @@ async fn assert_unavailable(response: reqwest::Response) {
 }
 
 async fn check_auth_lookup_error(pool: &PgPool, api: &Api, receipt: Uuid, cookie: &str) {
-    let mut hold = pool.begin().await.unwrap();
-    sqlx::query!("LOCK TABLE users IN ACCESS EXCLUSIVE MODE")
-        .execute(&mut *hold)
-        .await
-        .unwrap();
-    let holder = sqlx::query_scalar!("SELECT pg_backend_pid()")
-        .fetch_one(&mut *hold)
-        .await
-        .unwrap()
-        .unwrap();
-    let cancel = async {
-        crate::server_fns::test_seed::wait_for_blocked(pool, holder).await;
-        let cancelled = sqlx::query_scalar!("SELECT pg_cancel_backend(pid) FROM pg_stat_activity WHERE datname=current_database() AND $1 = ANY(pg_blocking_pids(pid))", holder).fetch_all(pool).await.unwrap();
-        assert_eq!(cancelled, vec![Some(true)]);
-        hold.rollback().await.unwrap();
-    };
-    let (response, ()) = tokio::join!(
-        api.call(
+    for (name, body, expected) in [
+        (
             "get_permission_audit",
             json!({"receipt_id":receipt}),
-            Some(cookie),
-            false
+            "Permission history is unavailable",
         ),
-        cancel
-    );
-    assert_unavailable(response).await;
+        (
+            "list_permission_audit",
+            json!({"after":null,"expected_requester":null}),
+            "Permission history is unavailable",
+        ),
+        (
+            "get_my_permissions",
+            json!({}),
+            "Permission state is unavailable",
+        ),
+    ] {
+        let mut hold = pool.begin().await.unwrap();
+        sqlx::query!("LOCK TABLE users IN ACCESS EXCLUSIVE MODE")
+            .execute(&mut *hold)
+            .await
+            .unwrap();
+        let holder = sqlx::query_scalar!("SELECT pg_backend_pid()")
+            .fetch_one(&mut *hold)
+            .await
+            .unwrap()
+            .unwrap();
+        let cancel = async {
+            crate::server_fns::test_seed::wait_for_blocked(pool, holder).await;
+            let cancelled = sqlx::query_scalar!("SELECT pg_cancel_backend(pid) FROM pg_stat_activity WHERE datname=current_database() AND $1 = ANY(pg_blocking_pids(pid))", holder).fetch_all(pool).await.unwrap();
+            assert_eq!(cancelled, vec![Some(true)]);
+            hold.rollback().await.unwrap();
+        };
+        let (response, ()) = tokio::join!(api.call(name, body, Some(cookie), false), cancel);
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        let text = response.text().await.unwrap();
+        assert!(text.contains(expected), "{name}: {text}");
+        for private in ["canceling statement", "SELECT", "sqlx", "users"] {
+            assert!(!text.contains(private), "{name}: {text}");
+        }
+    }
     assert_eq!(
         api.json(
             "get_permission_audit",

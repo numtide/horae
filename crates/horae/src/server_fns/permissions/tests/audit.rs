@@ -8,6 +8,9 @@ use serde_json::json;
 use sqlx::PgPool;
 use std::time::Duration;
 
+#[path = "audit/browsing.rs"]
+mod browsing;
+
 async fn fixture(pool: &PgPool, administrator: bool) -> SeedIds {
     let ids = seed(pool, OrgRole::Admin).await;
     let grants: Vec<String> = serde_json::from_value(

@@ -11,6 +11,7 @@ use crate::pages::{
     importers::HarvestImport,
     invoices::{InvoiceDetail, InvoiceList},
     new_project::{EditProject, NewProject},
+    permission_audit::PermissionAudit,
     projects::{ProjectDetail, ProjectList},
     reports::Reports,
     settings::Settings,
@@ -78,6 +79,8 @@ pub enum Route {
     AdminUsers {},
     #[route("/admin/importers")]
     HarvestImport {},
+    #[route("/admin/audit")]
+    PermissionAudit {},
     #[end_layout]
     #[route("/settings")]
     Settings {},

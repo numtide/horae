@@ -69,6 +69,7 @@ fn permission_content(
         }
         if own.is_administrator {
             p { class: "text-sm font-semibold mb-4", "Administrator access" }
+            a { class: "inline-flex mb-4", href: "/admin/audit", "View permission audit log" }
         }
         h3 { class: "text-lg mb-2", "Configured permissions" }
         p { class: "text-sm text-secondary mb-4",

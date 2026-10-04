@@ -5,7 +5,7 @@ use uuid::Uuid;
 use crate::components::controls::Checkbox;
 use crate::components::form::FormGroup;
 use crate::components::modal::Modal;
-use crate::components::permission_description::permission_description;
+use crate::components::permission_description::{permission_description, profile_label};
 use crate::models::permission_editor::{
     PermissionRequester, ProfileAction, ProfilePreview, ProfileSource,
 };
@@ -487,17 +487,6 @@ fn PermissionForm(
                 onclick: move |_| { if !locked() { on_cancel.call(()); } }, "Cancel"
             }
         }
-    }
-}
-
-fn profile_label(profile: BuiltInProfile) -> &'static str {
-    match profile {
-        BuiltInProfile::Member => "Member",
-        BuiltInProfile::ProjectManager => "Project Manager",
-        BuiltInProfile::PeopleAdmin => "People Admin",
-        BuiltInProfile::Accounting => "Accounting",
-        BuiltInProfile::ExecutiveManager => "Executive Manager",
-        BuiltInProfile::Administrator => "Administrator",
     }
 }
 

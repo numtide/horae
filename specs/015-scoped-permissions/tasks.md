@@ -722,6 +722,18 @@ No history browser, privilege mutation or policy activation is included.
 - [x] T124 [US4] Move historical wire types to `crates/horae/src/models/permission_audit.rs`, retain strict server decoding, fence current requester reads in `server_fns/permissions/audit.rs` and expose the session-derived single-receipt wrapper in `server_fns/auth.rs`; update module wiring and operation inventory (FR-010/011/013).
 - [x] T125 [US4] Verify real HTTP, permission/decoder regressions, complete SQLx cache, offline server/WASM lint and formatting; perform adversarial review and scoped analysis, recording evidence in feature 015 `quickstart.md` and `progress.md` (FR-018).
 
+### Browsable permission history
+
+T182–T184 connect the existing receipt store to the Workspace Audit log under
+`contracts/audit-lookup.md` (FR-010/011/013/018). They refine T018/T041 without
+marking either complete or activating policy. Backend/DTO files belong to the
+existing authorized specialist; the main worker owns UI/router/tests/docs and
+serializes builds and SQLx preparation in the same isolated feature worktree.
+
+- [x] T182 [US4] Add failing PostgreSQL/registered-session paging, tenant/requester, strict decoding and revocation tests plus controlled UI paging, stale/error and historical-rendering tests.
+- [x] T183 [US4] Implement bounded authenticated history and connect `/admin/audit`, canonical route gate, existing Workspace/Settings navigation and all historical detail types without changing other shell gates or shared CSS.
+- [x] T184 [US4] Verify existing audit/editor/Settings regressions, all affected server/session tests, SQLx cache, native/WASM lint and formatting; conduct adversarial review and record browser evidence or explicit limitations.
+
 ### Own-permission Settings integration
 
 T097 → T120 → T121 → T122 follows the Settings consumer contract in

@@ -2,12 +2,99 @@
 
 use chrono::{DateTime, Utc};
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use super::{PermissionStorageError, load_person_permissions};
-use crate::models::permission_audit::{AuditEntry, HistoricalSource, PersonSnapshot};
+use crate::models::permission_audit::{
+    AuditCursor, AuditEntry, AuditPage, HistoricalSource, PersonSnapshot,
+};
 pub(super) use crate::models::permission_audit::{AuditPrincipal, HistoricalAudit};
+use crate::models::permission_editor::PermissionRequester;
+
+pub(crate) async fn page(
+    pool: &PgPool,
+    org_id: Uuid,
+    requester_id: Uuid,
+    after: Option<&AuditCursor>,
+    expected_requester: Option<PermissionRequester>,
+) -> Result<AuditPage, AuditReadError> {
+    let requester = PermissionRequester {
+        org_id,
+        user_id: requester_id,
+    };
+    if expected_requester.is_some_and(|expected| expected != requester) {
+        return Err(AuditReadError::Forbidden);
+    }
+    let mut tx = begin_read(pool, org_id, requester_id).await?;
+    let mut rows = sqlx::query_as!(
+        StoredAudit,
+        r#"SELECT id,actor_user_id,operator_id,operator_command,format_version,audit,
+                  created_at AS "created_at: DateTime<Utc>"
+           FROM permission_change_receipts
+           WHERE org_id=$1
+             AND ($2::timestamptz IS NULL OR (created_at,id)<($2,$3))
+           ORDER BY created_at DESC,id DESC LIMIT 26"#,
+        org_id,
+        after.map(|cursor| cursor.created_at) as Option<DateTime<Utc>>,
+        after.map(|cursor| cursor.id)
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+    let has_more = rows.len() > 25;
+    rows.truncate(25);
+    let entries = rows
+        .into_iter()
+        .map(StoredAudit::project)
+        .collect::<Result<Vec<_>, _>>()?;
+    let next_after = if has_more {
+        entries.last().map(|entry| AuditCursor {
+            created_at: entry.created_at,
+            id: entry.id,
+        })
+    } else {
+        None
+    };
+    tx.commit().await?;
+    Ok(AuditPage {
+        requester,
+        entries,
+        next_after,
+    })
+}
+
+struct StoredAudit {
+    id: Uuid,
+    actor_user_id: Option<Uuid>,
+    operator_id: Option<String>,
+    operator_command: Option<String>,
+    format_version: i32,
+    audit: serde_json::Value,
+    created_at: DateTime<Utc>,
+}
+
+impl StoredAudit {
+    fn project(self) -> Result<AuditEntry, AuditReadError> {
+        let actor = match (self.actor_user_id, self.operator_id, self.operator_command) {
+            (Some(user_id), None, None) => AuditPrincipal::User { user_id },
+            (None, Some(invocation_id), Some(command))
+                if !invocation_id.trim().is_empty() && !command.trim().is_empty() =>
+            {
+                AuditPrincipal::Operator {
+                    invocation_id,
+                    command,
+                }
+            }
+            _ => return Err(AuditReadError::InvalidDocument),
+        };
+        Ok(AuditEntry {
+            id: self.id,
+            actor,
+            created_at: self.created_at,
+            audit: decode(self.format_version, self.audit)?,
+        })
+    }
+}
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum AuditReadError {
@@ -124,14 +211,12 @@ pub(super) fn decode(
     Ok(decoded)
 }
 
-/// Reads one historical record using authenticated requester/tenant IDs.
-/// No receipt lookup or snapshot decoding occurs before current authorization.
-pub(crate) async fn read(
+/// Hold the same current authority through either historical projection.
+async fn begin_read(
     pool: &PgPool,
     org_id: Uuid,
     requester: Uuid,
-    receipt_id: Uuid,
-) -> Result<Option<AuditEntry>, AuditReadError> {
+) -> Result<Transaction<'_, Postgres>, AuditReadError> {
     let mut tx = pool.begin().await?;
     sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED, READ WRITE")
         .execute(&mut *tx)
@@ -169,7 +254,20 @@ pub(crate) async fn read(
     {
         return Err(AuditReadError::Forbidden);
     }
-    let row = sqlx::query!(
+    Ok(tx)
+}
+
+/// Reads one historical record using authenticated requester/tenant IDs.
+/// No receipt lookup or snapshot decoding occurs before current authorization.
+pub(crate) async fn read(
+    pool: &PgPool,
+    org_id: Uuid,
+    requester: Uuid,
+    receipt_id: Uuid,
+) -> Result<Option<AuditEntry>, AuditReadError> {
+    let mut tx = begin_read(pool, org_id, requester).await?;
+    let row = sqlx::query_as!(
+        StoredAudit,
         "SELECT id, actor_user_id, operator_id, operator_command, format_version, audit,
                 created_at as \"created_at: DateTime<Utc>\"
         FROM permission_change_receipts WHERE org_id = $1 AND id = $2",
@@ -178,28 +276,7 @@ pub(crate) async fn read(
     )
     .fetch_optional(&mut *tx)
     .await?;
-    let record = row
-        .map(|row| {
-            let actor = match (row.actor_user_id, row.operator_id, row.operator_command) {
-                (Some(user_id), None, None) => AuditPrincipal::User { user_id },
-                (None, Some(invocation_id), Some(command))
-                    if !invocation_id.trim().is_empty() && !command.trim().is_empty() =>
-                {
-                    AuditPrincipal::Operator {
-                        invocation_id,
-                        command,
-                    }
-                }
-                _ => return Err(AuditReadError::InvalidDocument),
-            };
-            Ok(AuditEntry {
-                id: row.id,
-                actor,
-                created_at: row.created_at,
-                audit: decode(row.format_version, row.audit)?,
-            })
-        })
-        .transpose()?;
+    let record = row.map(StoredAudit::project).transpose()?;
     tx.commit().await?;
     Ok(record)
 }

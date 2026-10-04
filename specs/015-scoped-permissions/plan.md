@@ -169,6 +169,19 @@ connection settings. The local constitution check requires no new dependency,
 schema, product predicate, mutation, UI or policy activation. Full T041 remains
 open for the complete history experience.
 
+T182–T184 now connect that projection to the Workspace Audit log under the
+browsable-history section of `contracts/audit-lookup.md`. Reuse its transaction
+fence and strict decoder for one tenant-scoped 25+1 query; never loop over
+separately authorized lookups. The UI binds the first admitted requester, replaces
+pages, hides stale content during refresh, and uses native disclosure elements
+for historical before/after values. Reuse the Workspace shell and utility/table
+styles from `design/project/app/09_Workspace.dc.html`; show only actual permission
+events and recorded identities, not prototype names or retention promises.
+Canonical Administrator gating applies only to the new route; legacy People and
+Importers retain their existing gates. No dependency, migration, data mutation,
+financial representation or policy activation is introduced. Local constitution
+review passes; database/session/UI tests and final shared gates remain required.
+
 T120–T122 consume the existing own-permission projection in Settings under
 `contracts/own-permissions.md`. Preserve General/Plugins, reuse utility/banner
 classes and share exhaustive grant descriptions with the future Workspace

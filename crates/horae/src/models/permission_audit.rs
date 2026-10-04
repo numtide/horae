@@ -5,6 +5,25 @@ use horae_core::permissions::catalog::{BuiltInProfile, Permission};
 use serde::{Deserialize, Deserializer, Serialize};
 use uuid::Uuid;
 
+use super::permission_editor::PermissionRequester;
+
+/// An exclusive descending ordering bound, not a receipt lookup or authority.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AuditCursor {
+    pub created_at: DateTime<Utc>,
+    pub id: Uuid,
+}
+
+/// A bounded historical page admitted under the requester's current authority.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AuditPage {
+    pub requester: PermissionRequester,
+    pub entries: Vec<AuditEntry>,
+    pub next_after: Option<AuditCursor>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum AuditPrincipal {
@@ -18,13 +37,6 @@ pub enum AuditPrincipal {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(
-    not(feature = "server"),
-    expect(
-        dead_code,
-        reason = "Shared audit response; the history UI is not connected yet"
-    )
-)]
 pub struct AuditEntry {
     pub id: Uuid,
     pub actor: AuditPrincipal,
