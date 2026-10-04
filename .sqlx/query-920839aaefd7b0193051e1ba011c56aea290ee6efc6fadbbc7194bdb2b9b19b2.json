@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE time_entries SET is_running=true,started_at=now()-interval '15 minutes' WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "920839aaefd7b0193051e1ba011c56aea290ee6efc6fadbbc7194bdb2b9b19b2"
+}

@@ -109,13 +109,6 @@ pub struct TimesheetTrackingOption {
 /// Narrow authorized Timesheet identities, independently of the displayed dates.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(
-    not(feature = "server"),
-    expect(
-        dead_code,
-        reason = "Timesheet selected-person integration is pending."
-    )
-)]
 pub struct TimesheetPeopleQuery {
     pub search: String,
     pub user_id: Option<Uuid>,
@@ -133,13 +126,6 @@ pub struct TimesheetPerson {
 /// Each page is reauthorized; these identities are not write capabilities.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(
-    not(feature = "server"),
-    expect(
-        dead_code,
-        reason = "Timesheet selected-person integration is pending."
-    )
-)]
 pub struct TimesheetPeoplePage {
     pub requester: PermissionRequester,
     pub people: Vec<TimesheetPerson>,

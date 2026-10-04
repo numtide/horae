@@ -25,6 +25,8 @@ use super::*;
 
 mod approval_labels;
 mod cli;
+#[path = "../time_entries/commands/tests/http.rs"]
+mod delegated_time;
 mod exports;
 mod financial_snapshots;
 mod own_permissions;
@@ -351,6 +353,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     user_directory::check(&pool, &api).await;
     project_people::check(&pool, &api).await;
     scoped_time::check(&pool, &api).await;
+    delegated_time::check(&pool, &api).await;
     approval_labels::check(&pool, &api).await;
     own_permissions::check(&pool, &api).await;
     permission_audit::check(&pool, &api).await;

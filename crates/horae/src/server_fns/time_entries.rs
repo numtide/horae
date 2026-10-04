@@ -10,9 +10,11 @@ mod commands;
 pub async fn load_timesheet_tracking(
     context: crate::models::scoped_time::TimesheetWriteContext,
 ) -> Result<Vec<crate::models::scoped_time::TimesheetTrackingOption>, ServerFnError> {
-    let actor = require_user().await?;
+    let actor = require_user().await.map_err(commands::public_error)?;
     let state = crate::state::global_state().await;
-    commands::tracking(&state.db, actor.org_id, actor.id, &context).await
+    commands::tracking(&state.db, actor.org_id, actor.id, &context)
+        .await
+        .map_err(commands::public_error)
 }
 
 /// Apply one person-bound operation; client expectations never grant authority.
@@ -21,9 +23,18 @@ pub async fn apply_timesheet_command(
     context: crate::models::scoped_time::TimesheetWriteContext,
     command: crate::models::scoped_time::TimesheetCommand,
 ) -> Result<(), ServerFnError> {
-    let actor = require_user().await?;
+    let actor = require_user().await.map_err(commands::public_error)?;
     let state = crate::state::global_state().await;
-    commands::apply(&state.db, actor.org_id, actor.id, &context, command).await
+    let effects = commands::apply(&state.db, actor.org_id, actor.id, &context, command)
+        .await
+        .map_err(commands::public_error)?;
+    for (entry, event) in effects.entries {
+        dispatch_time_entry_event(&entry, event).await;
+    }
+    for project in effects.projects {
+        tokio::spawn(check_project_budget(state, project));
+    }
+    Ok(())
 }
 
 /// Resolve a Timesheet subject and its rows without a separate identity bootstrap.
