@@ -47,6 +47,17 @@ changing approval transitions. Reports and project pickers stay separate.
 - [x] T152 Join submitter identity within the approval's organization, add `ApprovalSummary.user_name` and use it directly in `pages/approvals.rs`; preserve controls and CSS.
 - [x] T153 Verify HTTP/UI and affected approval regressions, SQLx cache, server/WASM lint and formatting; review scope, names, aggregates and unchanged actions, recording remaining parity limits.
 
+### Project team identity selection (OP12/16/19)
+
+T153 → T154 → T155 → T156 → T157 follows
+`contracts/project-people-picker.md`. These reads do not replace editor guards,
+persist assignments, resolve financial projections or activate policy.
+
+- [x] T154 Contrast project-team and report identity consumers with current Harvest documentation, the design and read-only browser evidence; close the project identity-only read contract and record report-filter limits.
+- [x] T155 Add failing transaction and registered-session tests for creation versus exact-project editing contexts, no people-grant prerequisite, minimal payload, candidate filtering/search/pagination/selected-ID bounds and revocation.
+- [x] T156 Implement the context-bound canonical search/selected-ID readers under `server_fns/permissions/project_people.rs`, minimal shared models under `models/project_people.rs` and authenticated wrappers in `server_fns/project_creation.rs`; reuse current storage/transaction conventions without legacy fallback.
+- [x] T157 Verify focused/affected tests, SQLx completeness, offline server/WASM lint and formatting; review authority, field projection, lock order and form-integration dependencies before publication.
+
 ### Confirmed catalog implementation (independent of runtime cutover)
 
 The user requested implementation without paying for or modifying Harvest on

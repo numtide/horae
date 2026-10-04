@@ -1,5 +1,25 @@
 # Permissions discovery
 
+## Workflow identity evidence (2026-10-04)
+
+- Successful fresh Chrome/MCP connection using the existing stdio client; opened
+  a dedicated Harvest tab without disturbing the unrelated existing tab. Current
+  server reports `1.64.0-alpha-1789764292000`; its click tool uses `target`, not
+  the older `ref` argument. The rejected initial click performed no action.
+- An empty current-week report still has a teammate available in its detailed
+  filter. Archived choices have a separate toggle. This rules out deriving
+  every candidate from result rows; it does not prove custom-grant scope.
+- Reopened current project/report help and inspected an existing project editor
+  without changing fields or saving. The only person is already assigned; the
+  account cannot demonstrate additional candidate or non-owner access behavior.
+- `contracts/project-people-picker.md` separates confirmed active-person
+  assignment eligibility from exact-project authority, rates, general directory
+  access and manager designation. The canonical capability mapping is a stated
+  inference from the sources and approved catalog, not a Harvest server probe.
+- `contracts/people-directory.md` records report-specific open discriminators
+  rather than silently substituting current entries or the people directory.
+  No new product decision, migration, policy activation or account write occurred.
+
 ## Relationship transaction follow-up (2026-10-04)
 
 - Before extending person-management commands, inspected the existing project

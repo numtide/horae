@@ -90,6 +90,39 @@ derive the complete choice set from the currently displayed rows. Custom report
 scope, zero-record candidates and project assignment eligibility remain separate
 contracts. This source does not prove new-model approval enforcement.
 
+Project creation/editing choices now have an identity-only contract in
+[project-people-picker.md](project-people-picker.md). It separates operation
+authority, active candidate identities, manager eligibility and financial fields;
+it does not complete project saving, report choices or shell cutover.
+
+### Report result identities versus candidate filters
+
+Read-only Chrome evidence on 2026-10-04 shows an empty current-week Time report,
+then a Detailed time filter with a selectable teammate for that same week.
+The filter also exposes an initially unchecked archived-items control. Captures:
+`.scratch/playwright-windows/output/page-2026-10-04T08-58-11-365Z.yml`,
+`page-2026-10-04T08-59-56-184Z.yml` and
+`page-2026-10-04T09-00-38-305Z.yml` in the main checkout. No report was saved,
+permission changed or business record added to obtain that observation.
+This disproves deriving all filter candidates from current report rows, but the
+owner-only, one-person fixture does not establish restricted candidate scope.
+
+The [detailed report guide](https://support.getharvest.com/hc/en-us/articles/360048687171-Detailed-time-and-detailed-expense-reports)
+documents multi-selection and separates archived filter choices from retained
+results. [Member reports](https://support.getharvest.com/hc/en-us/articles/360048181592-Members-Reports)
+include own-time reporting. Both were reopened on 2026-10-04. The design's
+`07_Reports.dc.html` teammate selector is not permission to list every person.
+
+Before wiring the canonical picker, resolve which zero-record participants of
+managed projects appear, whether past contributors with no current membership
+remain candidates, and how client/project/date selection narrows those choices.
+Names already present in authorized detailed rows need no directory grant.
+Do not use `PeopleRead*` or financial report grants as a substitute for ordinary
+time-report scope, or treat an "all teammates" filter as organization authority.
+The new permission guide's broad role summaries do not settle these custom
+picker rules; the old role-based reports guide is not a restricted-actor test.
+These remaining questions do not block the separate project-team identity read.
+
 ### Scoped directory reader
 
 The [person-profile guide](https://support.getharvest.com/hc/en-us/articles/360048687291-Person-profiles)

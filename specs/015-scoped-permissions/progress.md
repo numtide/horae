@@ -1,5 +1,85 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Context-bound project people reader
+
+- The preceding explanation of permission benefits was no progress. Resumed the
+  retained test process; it ended with missing modules and missing offline query
+  descriptions. Repeated against the owned disposable database on 55416 and
+  confirmed only the two missing implementation imports remained (exit 101).
+
+- Implemented the identity-only model, transactional search/selected-ID reader
+  and authenticated `project_people` server function. Creation and exact-project
+  editing use different grants; no directory grant, financial projection, legacy
+  role fallback or permission promotion is introduced. Existing UI/editor guards
+  and real data remain unchanged.
+
+- The first five database tests pass (3.52s after 2m04s compilation), including
+  context isolation, minimal fields, pagination, input limits, invalid authority
+  and designation revocation after a lock wait. Added further tests for both
+  revocation orders, cancellation/pool defaults, exact pages/unconfigured targets
+  and registered-session HTTP boundaries; those are not yet accepted as passing.
+
+- Rust/testing/async and simplicity guidance led to reusing the existing cursor,
+  transaction settings and HTTP harness without a new dependency or abstraction.
+
+- The expanded run initially reports two invalid-fixture revocations (and the
+  HTTP equivalent): empty stored grants violate the member floor. Replaced those
+  fixtures with normalized Member grants; malformed-state coverage is retained.
+  The complete server permission suite now passes all 141 tests in 82.89s,
+  including all nine new reader tests. The registered HTTP matrix passes in
+  14.21s. WASM Clippy passes with warnings denied after three localized non-server
+  dead-code expectations for DTO roots awaiting the real UI consumer.
+
+- Initial SQLx preparation completes but omits 91 unchanged integration-test
+  descriptions. Confirmed a missing descriptor's query still exists in
+  `tests/integration.rs`; cleaned 1.7 GiB of regenerable package build artifacts
+  and restarted complete preparation. Source and database records are preserved.
+
+- Complete preparation passes in 1m16s with 1,437 descriptors: ten additions,
+  no deletions or changes to existing descriptions. Each addition maps to the
+  project reader or its fixtures. Draft #212 remains open on the same branch.
+
+- Offline all-targets server Clippy passes in 1m14s with warnings denied. The
+  formatting CI check passes with 510 files and zero changes; whitespace checks
+  pass. The owned disposable PostgreSQL is stopped. No real service is stopped.
+
+- Review checks current grants, tenant-qualified project designation, minimal
+  projection, lock order and sanitized errors; no new material issue is identified
+  in this bounded self-review. T155–T157 close for the reader only.
+
+Delivery: unsigned commit to the existing draft #212, without merge. Next:
+resolve the remaining project-editor financial projections and report-filter
+identity rules, then integrate canonical consumers/shell under the reviewed
+full-policy gates. The complete operation matrix, actual expense/time approvals,
+person-management writes, preserved-data activation, browser and full Nix gates
+remain required. No full-feature completion or MVP readiness is claimed.
+
+## 2026-10-04 — Project and report identity contracts
+
+- Published approval labels as `981d0e3` on draft #212, then revalidated the clean
+  worktree and reused it. The latest explanatory reply made no code progress.
+- Traced Reports, ProjectDetail and both project-editor catalog paths, including
+  selected-ID resolution. Read current Harvest documentation and the Reports/
+  New Project design handoffs. Spec Kit prerequisites pass; its skills remain
+  absent, so no skill execution is claimed.
+- Fresh Chrome connection succeeds through the existing stdio client. Opened a
+  dedicated Harvest tab, observed an empty week and an available teammate filter,
+  then inspected an existing project editor without toggling or saving anything.
+  Cancel returned to Projects. The single already-assigned owner cannot prove
+  restricted candidate behavior. Raw evidence remains in ignored scratch; only
+  redacted findings are committed. No account or business-data writes occurred.
+- Closed the project identity-only search/resolution contract with explicit
+  create/exact-project edit contexts, active same-organization candidates, minimal
+  fields, bounded requests, revocation and separate finance/designation writes.
+  Added T154–T157 and requirement-to-test cases. Report-filter scope remains
+  explicitly unresolved; deriving choices from result rows is contradicted by
+  the browser observation.
+
+Next: T155 red tests for the context-bound project people reader, followed by
+T156 implementation and T157 validation. Do not add another general directory
+lookup, infer rate access from selection or activate policy. Full operation,
+approval/expense, person-management, migration and cross-surface gates stay open.
+
 ## 2026-10-04 — Approval labels without directory access
 
 - The preceding status reply was no progress. Resumed the retained UI test

@@ -15,6 +15,9 @@ mod subjects_tests;
 #[path = "directory.rs"]
 mod directory_tests;
 
+#[path = "project_people.rs"]
+mod project_people_tests;
+
 async fn save_state(
     pool: &PgPool,
     org: Uuid,

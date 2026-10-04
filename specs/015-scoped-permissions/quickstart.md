@@ -1,5 +1,52 @@
 # Permission verification
 
+## Project-team identity choices (T154–T157)
+
+Run in the Nix shell against disposable PostgreSQL, never the agency database:
+
+```sh
+cargo test -p horae --features server --bin horae project_people_tests --locked
+cargo test -p horae --features server --bin horae server_fns::permissions:: --locked
+cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization --locked
+cargo sqlx prepare --workspace -- --features server --all-targets
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features web --target wasm32-unknown-unknown --locked -- -D warnings
+nix fmt -- --ci
+```
+
+The initial online RED build reports only the absent model/reader imports. The
+first five tests pass after implementation. The expanded run exposes invalid
+test revocations: an empty stored grant array violates the canonical member
+floor, so it produces an unavailable-state error rather than an ordinary denial.
+The fixtures now revoke to a normalized Member selection; malformed-state tests
+remain separate. This correction does not weaken the production validator.
+
+Database coverage targets create/exact-project edit grants, legacy-role denial,
+active tenant filtering, identity-only rows with populated sensitive fields,
+literal substring/Unicode/search limits, 50/51 keyset boundaries, missing/foreign
+cursors, selected-ID resolution and missing target permission states. Concurrent
+cases cover designation/grant removal, direct actor deactivation, reader-first
+authority retention, cancellation and one-connection pool defaults. Registered
+HTTP coverage uses session cookies, verifies exact payloads, ignores forged
+requester fields and checks same-session revocation plus sanitized failures.
+
+All 141 server permission tests pass (82.89s), including the nine new reader
+tests. The expanded registered HTTP matrix passes in 14.21s. WASM Clippy passes
+with warnings denied; three localized non-server dead-code expectations on DTO
+roots document the pending UI consumer and must leave with that integration.
+Bounded self-review checks grants rather than labels, exact project/tenant
+predicates, SQL scope before limits, organization/actor lock order and error
+sanitization. No new material issue is identified; this is not independent review.
+
+Complete SQLx preparation passes in 1m16s: 1,437 descriptions, ten additions and
+no removals. The initial cached preparation omitted 91 unchanged integration-test
+queries; cleaning 1.7 GiB of regenerable package artifacts corrected the result.
+Offline all-targets server Clippy passes in 1m14s with warnings denied.
+Formatting CI passes (510 files, zero changes) and whitespace checks pass. The
+owned disposable PostgreSQL is stopped; T154–T157 close only this reader. UI
+integration, financial preservation, assignment writes, browser acceptance and
+full-policy/full-flake gates are not established by these reader tests.
+
 ## Approval label projection (T151–T153)
 
 Run in the Nix shell with `DATABASE_URL` pointing to disposable PostgreSQL:

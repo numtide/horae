@@ -14,6 +14,7 @@ pub(crate) mod own;
 pub(crate) mod preflight;
 pub(crate) mod profiles;
 pub(crate) mod project_management;
+pub(crate) mod project_people;
 pub(crate) mod templates;
 
 /// Bound permission administration independently of pooled connection defaults.
