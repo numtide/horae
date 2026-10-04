@@ -1,5 +1,44 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Person permission editor controls
+
+- Prior turn made progress: backend and publication record were committed and
+  pushed. Revalidated clean synchronized `7f7fd1c`; continued in the same worktree
+  and draft #212. Ran Spec Kit implementation prerequisites for feature 015.
+  Full requirements remain 12/16 under the existing independent-work authorization.
+- Implemented T018's first person editor consumer in `pages/admin/permission_editor.rs`
+  with a tested local draft. The existing user page offers entry only for the
+  supported own-permission projection's explicit Administrator identity. The
+  canonical load/preview/save endpoints independently authorize every operation.
+- Reused the core grant graph, shared descriptions, Modal, Checkbox and utility
+  classes. No CSS, schema, SQL query, dependency, legacy guard or active policy
+  changed. Removed only unused-consumer lint expectations that are now obsolete;
+  template-create/delete transport expectations remain applicable.
+- RED reproduced the missing draft implementation. First GREEN passed six tests;
+  expanded native state/SSR tests passed 12. Interaction harness initially failed
+  because Rust path-included modules needed explicit sibling paths; corrected
+  those paths. The first interaction run passed 15 tests, including actual Dioxus
+  double-click, identical-command retry and revocation/form-hiding scenarios.
+- Added a further control-level test for explicit keep-project access, a fresh
+  preview, independent person-loss confirmation and stale-save recovery. Selected
+  UI regressions passed 32 tests (editor 16, Settings 11, admin shell five).
+  Clippy requested one equivalent boolean simplification; corrected it. The
+  post-fix editor run passed all 16 tests, followed by offline all-targets server
+  Clippy (1m01s) and WASM Clippy (12.60s), with warnings denied.
+- The intervening MVP reply collected the existing verification handle rather
+  than restarting it. Its successful completion is evidence for publication,
+  not completion of the full feature. No code changed after that verification.
+- Final formatting CI passed (490 files, zero changes), and whitespace checks
+  passed. GitHub confirmed #212 is still OPEN/DRAFT on the expected branch.
+  This UI increment has no new independent visual review or browser evidence.
+
+Next: publish this verified person-editor increment on draft #212 after final
+formatting and whitespace checks. Complete template create/delete controls,
+browser keyboard/viewport/theme acceptance, readable management-loss labels and
+navigation/uncertain-save recovery. Preserve the separate canonical shell/directory,
+full enforcement/approval and reviewed migration gates; T018 and the goal remain
+open. No Chrome/Harvest observation or real-data change occurred in this iteration.
+
 ## 2026-10-04 — Editor backend publication and UI entry-point check
 
 - The preceding MVP response was status-only. Resumed the actual retained final

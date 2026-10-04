@@ -531,10 +531,6 @@ pub use invoices::*;
 // Org-branding endpoints exist but no page consumes them yet.
 #[allow(unused_imports)]
 pub use organization::*;
-#[expect(
-    unused_imports,
-    reason = "Registered editor endpoints; the Workspace consumer is not connected yet"
-)]
 pub use permission_editor::*;
 pub use plugins::*;
 pub use project_creation::*;

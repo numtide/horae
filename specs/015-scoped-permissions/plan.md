@@ -97,6 +97,14 @@ close T042, replace legacy guards or authorize mixed-policy operation.
 
 ### Existing increments and remaining integration
 
+T018 now consumes the person editor backend from AdminUsers through the existing
+Modal and shared grant descriptions. Keep its local draft/confirmation/retry
+state separate from server authority; use the core prerequisite graph rather
+than duplicated permission rules. The consumer contract is in
+`contracts/permission-editor.md`. No schema, dependency, CSS or activation is
+needed. Canonical shell/directory enforcement, template-management controls and
+browser acceptance remain unfinished, not implicitly supplied by this consumer.
+
 T126–T129 connect authenticated editor load/preview and profile/template commands
 under `contracts/permission-editor.md`. Reuse grant logic and receipt shapes;
 display DTOs are not trusted authority. Local prerequisites are activity locks,

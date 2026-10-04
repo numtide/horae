@@ -6,10 +6,18 @@ use crate::components::form::{FormCard, FormGroup, Input, Select};
 use crate::components::table::DataTable;
 use crate::server_fns;
 
+mod permission_editor;
+
 #[component]
 pub fn AdminUsers() -> Element {
     let mut users = use_resource(|| async move { server_fns::list_users(true).await });
     let tasks = use_resource(|| async move { server_fns::list_tasks().await });
+    let mut own_permissions = use_resource(server_fns::get_my_permissions);
+    let mut editing_permissions = use_signal(|| None::<uuid::Uuid>);
+    let mut permission_notice = use_signal(|| None::<String>);
+    let can_edit_permissions = own_permissions.state()() == UseResourceState::Ready
+        && matches!(&*own_permissions.read(), Some(Ok(Some(own)))
+            if own.is_administrator && own.catalog_version == horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION);
 
     let mut show_user_form = use_signal(|| false);
     let mut user_email = use_signal(String::new);
@@ -41,6 +49,9 @@ pub fn AdminUsers() -> Element {
             // only banner, so their refusals need one of their own.
             if let Some(err) = row_error() {
                 div { class: "alert alert-danger", "{err}" }
+            }
+            if let Some(message) = permission_notice() {
+                p { class: "text-sm text-secondary mb-4", role: "status", "{message}" }
             }
 
             if show_user_form() {
@@ -150,6 +161,17 @@ pub fn AdminUsers() -> Element {
                                                         }
                                                     }
                                                     td {
+                                                        if can_edit_permissions {
+                                                            button {
+                                                                r#type: "button", class: "btn btn-secondary btn-sm mr-2",
+                                                                aria_label: "Edit permissions for {user.name}",
+                                                                onclick: {
+                                                                    let id = user.id;
+                                                                    move |_| { permission_notice.set(None); editing_permissions.set(Some(id)); }
+                                                                },
+                                                                "Permissions"
+                                                            }
+                                                        }
                                                         button {
                                                             class: if is_active { "btn btn-secondary btn-sm" } else { "btn btn-primary btn-sm" },
                                                             onclick: {
@@ -271,6 +293,14 @@ pub fn AdminUsers() -> Element {
                         }
                     })}
                 }
+            }
+            permission_editor::PermissionEditorDialog {
+                person: editing_permissions,
+                on_saved: move |changed| {
+                    permission_notice.set(Some(if changed { "Permissions saved." } else { "Permissions are unchanged." }.into()));
+                    own_permissions.restart();
+                    users.restart();
+                },
             }
         }
     }

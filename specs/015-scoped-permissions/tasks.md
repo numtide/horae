@@ -474,6 +474,14 @@ delivery and integration, rather than claiming an internal helper completes it.
 
 - [ ] T018 [US4] Align permission controls/descriptions in `crates/horae/src/pages/` Settings and Workspace using existing components and `design/project/app/08_Settings.dc.html` / `09_Workspace.dc.html`; apply design skills and browser viewport/theme/keyboard checks (FR-012/016).
 
+T018's person editor consumes T126–T129 on the existing AdminUsers surface. Its
+local draft uses the core prerequisite graph, keeps explicit profile intent and
+invalidates confirmation on every edit. Test malformed loads, joint losses,
+explicit keep-project access and identical-command retry. Reuse Modal, Checkbox,
+form utilities and shared descriptions; no global CSS or active-policy change.
+Legacy shell/directory replacement, template create/delete controls and full
+browser acceptance remain separate unfinished parts of T015/T017/T018.
+
 ### Authenticated own-permission projection
 
 T035/T036/T057 → T095 → T096 → T097 implements `contracts/own-permissions.md`.

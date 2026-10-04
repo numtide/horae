@@ -50,13 +50,6 @@ pub struct TemplateOutcome {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(
-    not(feature = "server"),
-    expect(
-        dead_code,
-        reason = "Editor transport; the Workspace consumer is not connected yet"
-    )
-)]
 pub struct ProfileCommand {
     pub request_id: Uuid,
     pub expected_access_revision: i64,
@@ -78,13 +71,6 @@ pub enum ProfileAction {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(
-    not(feature = "server"),
-    expect(
-        dead_code,
-        reason = "Editor transport; the Workspace consumer is not connected yet"
-    )
-)]
 pub struct ProfileOutcome {
     pub user_id: Uuid,
     pub access_revision: i64,
@@ -95,13 +81,6 @@ pub struct ProfileOutcome {
 /// Unsaved explicit proposal; revisions fence confirmation, not authority.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(
-    not(feature = "server"),
-    expect(
-        dead_code,
-        reason = "Editor transport; the Workspace consumer is not connected yet"
-    )
-)]
 pub struct ProfileDraft {
     pub user_id: Uuid,
     pub expected_access_revision: i64,
@@ -144,13 +123,6 @@ pub struct TemplateChoice {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(
-    not(feature = "server"),
-    expect(
-        dead_code,
-        reason = "Editor transport; the Workspace consumer is not connected yet"
-    )
-)]
 pub struct PermissionEditor {
     pub user_id: Uuid,
     pub name: String,
@@ -170,13 +142,6 @@ pub struct RelationshipRemoval {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(
-    not(feature = "server"),
-    expect(
-        dead_code,
-        reason = "Editor transport; the Workspace consumer is not connected yet"
-    )
-)]
 pub struct ProfilePreview {
     pub user_id: Uuid,
     pub access_revision: i64,

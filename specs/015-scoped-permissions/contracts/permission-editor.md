@@ -57,3 +57,51 @@ preview writes, replay/no-op, forged authority, policy denial, stale effects,
 actor/target/survivor deactivation, inherited settings, timeout/cancellation rollback
 and sanitized authentication errors. Full enforcement/migration/browser gates stay
 open; no new product decision or schema is needed.
+
+## Person editor consumer (T018, in progress)
+
+Extend the existing AdminUsers surface without changing its legacy shell or
+directory authorization. Show the entry action only after the own-permission
+projection returns the supported catalog and explicit Administrator identity.
+The dialog independently loads its target through the canonical endpoint; UI
+visibility is not authority. Legacy mode exposes no staged editing controls.
+Canonical Administrators with a non-admin legacy role still need the separately
+gated shell/directory integration before full acceptance.
+
+Load exact grants with strict restoration, not normalization or profile matching.
+The initial proposal is an ordinary edit; applying/resetting a built-in or
+template is explicit. Custom edits use the existing prerequisite graph and
+immutable Member floor. Administrator customization requires choosing another
+profile. Any edit invalidates the preview and removal confirmation.
+
+Review sends no mutation. Show added/removed grants, identity changes and both
+exact management-loss sets. Confirm losses explicitly. Keep-project-access is
+initially unchecked, adds managed project read/write to the draft and requires a
+new preview before saving. Back to editing preserves the draft; cancelling the
+editor sends no save. Unavailable/failed previews cannot authorize a save.
+
+Disable controls and dismissal while a request is pending. After an uncertain
+save response, retain the identical command and request ID and offer retry,
+without permitting edits or reporting success. A known rejection requires reload;
+authentication/authority/not-found denial also hides the person's form. Distinguish
+an unchanged successful receipt from a real change. No request is persisted in
+browser storage by this consumer; navigation/reload recovery remains an acceptance
+case to resolve before declaring the full editor complete.
+
+### Direction contract
+
+- Thesis: review an actual person's access before changing it, without presenting
+  the prototype's obsolete three-role matrix as the six-profile policy.
+- Own-world: inherit DESIGN.md and the Workspace handoff; reuse Modal, Checkbox,
+  labelled fields, shared permission copy and token utilities. No global CSS.
+- Story: choose a profile, inspect individual grants, review exact effects, then
+  confirm or return to editing. No fake people, seats, timestamps or audit rows.
+- First viewport: protected-focus editor with the person's name, saved source,
+  profile selector and permission controls; review/save actions follow the form.
+  The shared dialog owns scrolling, inertness and focus restoration.
+- Form: local extension of AdminUsers in Operate mode, not a new visual identity
+  or a concept-selection exercise. Template create/delete controls remain open.
+- Finish: browser, keyboard, viewport/theme and independent visual review remain
+  mandatory. Current loss DTOs contain subject IDs, not names; improve this
+  presentation before full acceptance instead of inventing labels from unrelated
+  or stale directory data. No full T018 completion follows from source/SSR tests.

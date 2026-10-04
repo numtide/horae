@@ -1,5 +1,42 @@
 # Permission verification
 
+## Person permission editor UI (T018, in progress)
+
+These checks need no running database. Run in the pinned Nix shell with the
+committed SQLx cache:
+
+```sh
+SQLX_OFFLINE=true cargo test -p horae --features server --test permission_editor_ui --test own_permissions_ui --test admin_shell --locked
+SQLX_OFFLINE=true cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+SQLX_OFFLINE=true cargo clippy -p horae --no-default-features --features web --target wasm32-unknown-unknown --locked -- -D warnings
+nix fmt -- --ci
+```
+
+The editor suite includes eight local draft tests, four SSR/error-state tests,
+the shared description test and three controlled-response VirtualDom tests. The
+latter mount the production dialog and invoke its actual event handlers, rather
+than a duplicate state machine. They verify double-click suppression, no writes
+during review, identical-command retry after a lost response, revocation hiding,
+explicit keep-project grants followed by a new review, independent confirmation
+of person losses and stale-save recovery. Controlled server replies complement
+the backend's registered HTTP/PostgreSQL tests; they are not browser evidence.
+
+Observed: the initial draft failed to compile before implementation, then six
+tests passed. Expanded native state/SSR coverage passed 12. The first interaction
+build exposed sibling module path resolution; explicit paths fixed it. The final
+selected regression run passed 32 tests: editor 16, own-permission Settings 11 and
+existing admin shell five. Clippy then requested a simpler equivalent boolean
+condition; that is corrected. The post-fix editor run passed all 16 tests, and
+offline all-targets server Clippy (1m01s) and WASM Clippy (12.60s) both passed
+with warnings denied. No full database suite or full flake check was rerun for
+this UI-only increment; the backend results below belong to its earlier run.
+
+No CSS or SQL changed. Full T018 remains open for template creation/deletion UI,
+readable management-loss names, navigation recovery and browser/keyboard/theme/
+viewport acceptance. The legacy AdminShell/directory still needs its reviewed
+canonical-policy integration; this consumer does not activate policy or make the
+full six-profile feature ready. Only isolated fixtures may enable policy 1.
+
 ## Authenticated editor backend (T126–T129)
 
 Use the owned disposable PostgreSQL database and the Nix dev shell; never enable
