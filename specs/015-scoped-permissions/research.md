@@ -1,5 +1,31 @@
 # Permissions discovery
 
+## Next service-reader integration candidate (2026-10-04)
+
+- Evidence: `notifications::deliver` first reads an outbox claim and then reads
+  recipient/payload through separate pool queries. The current recipient rule
+  requires active recipient/project, enabled alerts and Manager/Admin or an
+  eligible lead/admin/creator assignment. Existing `notifications/tests.rs`
+  covers stale claims and recipients revoked before delivery, not concurrent
+  revocation during preparation. The main review confirmed both production
+  queries and their lack of a shared authorization boundary.
+- Existing requirement: feature 011's data model requires eligibility at enqueue
+  and delivery; `contracts/permission-state.md` requires bounded current reads
+  and release before external transport. No new Harvest predicate is needed to
+  integrate that existing rule. OP37's canonical/custom recipient mapping is
+  still separate and must not be inferred from legacy roles.
+- Next design task: refine a preparation transaction that gates organization,
+  recipient and project/settings in the reviewed hierarchy, refreshes eligibility
+  after waits and rechecks claim ownership/remaining lease using current time.
+  Return only authorized message/recipient after releasing locks; keep sendmail,
+  acknowledgements, five-attempt policy and message identity outside that gate.
+  Test concurrent revocation, claim expiry, one-connection reuse and no locks
+  across a blocked stub transport. This is research, not an implemented fix.
+- Do not substitute this for import-worker activation. Historical NULL
+  requesters, retry/restoration and final service authority remain open;
+  `original_requester_id` is still provenance, not executable permission.
+  Budget enqueue's own lock integration also remains separate.
+
 ## CSV cursor transport feasibility (2026-10-04)
 
 - Decision: continue the single-connection READ COMMITTED cursor design rather

@@ -1,5 +1,88 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — CSV authority integration
+
+- The intervening MVP answer was status-only, with no implementation progress.
+  Revalidated clean `feat/scoped-permissions` at published `108594e`, matching
+  origin. This completes the preceding increment's publication next-action;
+  no merge or real-data change occurred.
+- Spec Kit Plan/Tasks reused existing artifacts and refined T110–T113 under
+  `contracts/csv-exports.md`, using the previously verified native-cursor probe
+  and independent design review. No new product predicate is introduced.
+- Keep source snapshots separate from current release authority. The review
+  requires an independent output-row cap and a post-capture invoice fixture;
+  a pre-DECLARE table wait would weaken the original snapshot assertion.
+- Scoped analysis maps FR-006/007/010/017/018 and SC-006 subsets to all four
+  tasks: no unmapped task, ambiguity, duplication or local constitution issue.
+  General requirements remain 12/16; seven local checklists remain complete.
+  Prior independent-increment authorization applies. No extension hooks exist.
+- RED reproduced inactive project actors receiving HTTP 200 (1.03s after
+  4m30s compilation). Integrated the invoker cursor helper, per-block fresh
+  savepoint authority and all three producers, retaining actor identity.
+  Migration 0046 was applied only to the owned disposable database.
+- Initial GREEN passes all nine existing CSV regressions (13.07s after 5m14s
+  compilation), including exact types/amounts, 10,001 rows and post-capture
+  invoice coherence. Those results precede the new race/cleanup test module.
+- Independent code review prompted dropping the first invoice row after its
+  metadata/totals are captured and adding production-path tests rather than
+  relying on the old test-only streaming helper. Session 48976 compiles the
+  expanded report suite and real-cookie HTTP matrix. A new invoice fixture
+  incorrectly wrote a generated subtotal; corrected it to update only total.
+  The in-flight compilation predates that fixture correction.
+- Session 48976 terminated at compile time: SQLx rejected both generated-column
+  fixture updates. Corrected session 56478 compiles in 1m50s and runs the report
+  family before the HTTP matrix. No test pass is inferred from the failed build.
+- Review additionally strengthened the mixed-project block test (deny the whole
+  block when one current ID loses access; allow it when only a previously sent
+  ID is revoked) and asserted HTTP 200/CSV headers before parsing empty results.
+  The report binary already running predates these last test-only changes;
+  the final full regression must cover the corrected snapshot.
+- The expanded report family passes 84 tests, zero failures and two existing
+  manual exclusions (57.30s). Cancellation during FETCH and authority waits,
+  native byte/row bounds, snapshot preservation and current release checks pass.
+  Session 56478 is recompiling for the HTTP matrix after test refinements.
+  Independent re-review confirms its three findings resolved; no remaining
+  material issue found. Full final-snapshot regression remains required.
+- The real-cookie HTTP matrix passes (11.46s after 1m55s recompilation), now
+  including all three CSV routes alongside existing XLSX/PDF. T110/T111 are
+  complete. Session 56478 is terminal; session 36093 runs the final-snapshot
+  full server suite, then complete SQLx preparation and offline Clippy/WASM.
+  The previous report run does not substitute for this final regression.
+- Full final-snapshot server regression passes: 980 passed, zero failures,
+  11 existing exclusions, 991 discovered (257.91s after 1m50s compilation).
+  T112 is complete. Session 36093 continues with complete cache regeneration
+  and offline Clippy/WASM. GitHub confirms existing #212 is still open/draft
+  on this branch at 108594e; no PR mutation or merge occurred.
+- Session 36093 finishes successfully: SQLx preparation 55.52s, offline
+  all-target Clippy 1m06s, denied-warning WASM 27.57s. Catalog inspection confirms
+  the installed helper is SECURITY INVOKER and PUBLIC has no EXECUTE privilege.
+  Cache review, however, finds 93 removed descriptors and 41 new ones (1,229
+  total); sampled removals still exist in `tests/integration.rs`. Cached target
+  compilation omitted their regeneration, so these cache/offline results are
+  not accepted as complete-cache evidence. Session 15361 cleans only Horae's
+  rebuildable package artifacts, regenerates all targets and repeats offline
+  gates. No source or business data is removed by that cleanup.
+- Clean preparation passes in 56.54s: 41 new, two obsolete and zero modified
+  descriptors, 1,320 total. Both removals are the old unqualified invoice
+  snapshot fixture updates, replaced by the reviewed post-capture fixture.
+  All unrelated integration descriptors are restored. Offline all-target Clippy
+  passes (1m05s) and denied-warning WASM passes (10.41s); session 15361 is terminal.
+- T110–T113 are complete for all three CSV families. Final scoped analysis maps
+  six requirement subsets to four tasks with no unmapped task, ambiguity,
+  duplication or local constitutional/critical/high finding. Independent review
+  findings are resolved and covered by the full final-snapshot passing suite.
+  This does not close full feature policy, approvals, UI or activation gates.
+- Final formatting check passes with zero changes (3.001s). Stopped only the
+  owned disposable PostgreSQL after all checks, preserving its data. Publication
+  uses the existing isolated branch and draft PR; no merge is authorized.
+
+Next after unsigned publication to existing draft #212: refine the bounded
+`notifications::deliver` preparation contract from the new research evidence,
+including current recipient eligibility and claim lease after waits, before
+implementing its tests/transaction. Do not select unresolved historical import
+requester/retry policy, activate canonical grants, send real mail or merge.
+Full policy, approvals, UI and reviewed activation remain open.
+
 ## 2026-10-04 — Materialized project exports
 
 - Previous goal turn made progress: T104–T106 verified and published unsigned

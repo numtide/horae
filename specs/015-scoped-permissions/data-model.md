@@ -1,5 +1,12 @@
 # Permission data model
 
+CSV delivery uses transient native cursor rows and per-output-block project IDs
+under `contracts/csv-exports.md`. Migration 0046 adds only an invoker transport
+function: no new table, persisted job, public DTO or business-data conversion.
+The private payload weight includes every projected variable-width field.
+Invoice metadata and nullable line-ID sentinel share one source projection;
+authorization facts are refreshed separately and are never loaded from it.
+
 Materialized project exports use a private captured UUID set under
 `contracts/project-exports.md`. IDs accompany the existing server-only export
 rows for current-scope revalidation after rendering; they are neither persisted

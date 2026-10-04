@@ -97,6 +97,17 @@ close T042, replace legacy guards or authorize mixed-policy operation.
 
 ### Existing increments and remaining integration
 
+T110–T113 integrate all three CSV paths under `contracts/csv-exports.md`.
+Reuse the existing download worker, one-row output channel and admission limit.
+A native PostgreSQL cursor preserves source values while short rolled-back
+savepoints obtain current authority before output. A fixed-cursor invoker
+function enables checked native SQLx projections without JSON or a dependency.
+Project authorization shares XLSX's parent-lock/current-predicate boundary.
+Local constitution review passes: no business-state or arithmetic change,
+bounded transport, same legacy predicates and disposable migration tests only.
+Full activation, operation-matrix and migration gates remain open. Sequential
+tests → integration → races → complete gates are required before publication.
+
 T107–T109 integrate project XLSX under `contracts/project-exports.md`: explicit
 READ COMMITTED organization/actor gates, one bounded size/payload statement,
 then fresh captured-project authorization after rendering. Reuse the current

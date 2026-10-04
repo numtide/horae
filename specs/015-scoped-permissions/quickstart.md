@@ -1,5 +1,38 @@
 # Permission verification
 
+## CSV delivery (T110–T113)
+
+Use the Nix shell and the owned disposable PostgreSQL only. Run the server
+binary's `streamed_` tests, then `job_endpoints_enforce_session_role_and_organization`
+and the full server regression. The cases in `contracts/csv-exports.md` cover
+FR-006/007 (current actor and project scope), FR-010 (revocation under waits and
+backpressure), FR-017 (unchanged source snapshot/CSV amounts), FR-018 and SC-006
+(all three real routes, native transport, limits and cancellation). Follow with
+complete SQLx preparation, offline Clippy/WASM and formatting. Actual outcomes
+are recorded below and in `progress.md`; full permission activation is separate.
+
+| Requirement subset | Executable evidence |
+| --- | --- |
+| FR-006/007: active same-tenant actor and correct operation predicate | `streamed_project_exports_deny_inactive_actors`, `streamed_exports_require_current_tenant_bound_actors_even_when_empty`, real-cookie export matrix |
+| FR-010: fresh checks after organization, actor and parent waits | `streamed_exports_refresh_after_organization_or_actor_wait`, `streamed_projects_capture_scope_gained_during_initial_wait`, `streamed_project_release_refreshes_scope_after_parent_wait` |
+| FR-007/010: current release authority without backpressure locks | `streamed_timesheet_rechecks_after_backpressure_without_retaining_locks`, `streamed_pending_project_block_checks_all_captured_ids_after_capacity`, `streamed_header_and_total_blocks_recheck_manager_after_capacity` |
+| FR-017: exact frozen source values across new authority checks | `streamed_source_stays_frozen_across_batches_while_authority_is_fresh`, `streamed_invoice_metadata_and_lines_share_one_snapshot`, `streamed_invoice_keeps_original_metadata_lines_and_totals_between_batches`, existing escaping/fee/integer tests |
+| FR-018: native transport and bounded buffering | `streamed_native_batches_keep_crossing_rows_and_reject_invalid_limits`, `streamed_compressible_unicode_payload_bounds_native_prefetch`, `streamed_native_projection_mismatch_fails_instead_of_coercing`, existing 10,001-row production export |
+| FR-018 / SC-006: settings, cleanup and regression | `streamed_authority_releases_successful_locks_and_overrides_inherited_settings`, `streamed_cancelled_authorization_reclaims_its_single_connection`, `streamed_cancelled_fetch_reclaims_connection_without_authority_locks`, existing body-drop/deadline tests, HTTP and full server suites |
+
+RED reproduced inactive-actor HTTP 200. Initial CSV regression passed nine tests;
+the expanded report family passed 84 with two existing manual exclusions.
+The real-cookie matrix passed (11.46s). Final-snapshot server regression passes
+980 tests with zero failures and 11 existing exclusions (257.91s), including
+the strengthened mixed-block and empty-response checks from adversarial review.
+The first expanded build's generated-column fixture error was corrected, not
+suppressed. Clean SQLx regeneration passes (56.54s; 1,320 descriptors, 41 new
+and two obsolete), followed by offline all-target Clippy (1m05s) and
+denied-warning WASM (10.41s). The initial cached preparation omitted unchanged
+integration-test descriptors; cleaning only rebuildable Horae artifacts restored
+them. This increment has no unresolved local critical/high review finding and
+does not imply full canonical policy, UI or migration acceptance.
+
 ## Materialized project exports (T107–T109)
 
 Use disposable PostgreSQL and the Nix shell. Run the `project_exports` subset

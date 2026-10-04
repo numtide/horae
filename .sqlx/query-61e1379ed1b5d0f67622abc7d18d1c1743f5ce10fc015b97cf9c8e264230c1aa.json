@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DECLARE horae_csv NO SCROLL CURSOR FOR\n         SELECT i.number,i.currency::text,i.issued_on,i.due_on,i.terms_days,i.po_number,\n                i.subtotal_cents,i.discount_cents,i.tax1_cents,i.tax2_cents,i.total_cents,\n                i.discount_bps,i.tax1_bps,i.tax2_name,i.tax2_bps,\n                l.id,l.description,l.minutes,l.rate_cents,l.amount_cents,\n                256::bigint + octet_length(i.number)::bigint + octet_length(i.currency::text)::bigint\n                  + octet_length(i.po_number)::bigint + COALESCE(octet_length(i.tax2_name),0)::bigint\n                  + COALESCE(octet_length(l.description),0)::bigint AS export_bytes\n         FROM invoices i LEFT JOIN invoice_line_items l ON l.invoice_id=i.id\n         WHERE i.id=$1 AND i.org_id=$2 ORDER BY l.id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "61e1379ed1b5d0f67622abc7d18d1c1743f5ce10fc015b97cf9c8e264230c1aa"
+}

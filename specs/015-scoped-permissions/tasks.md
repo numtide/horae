@@ -391,6 +391,18 @@ revocation. This does not close CSV, canonical US3 or T039/T040/T042.
 - [x] T108 [US3] Implement bounded fresh project materialization and captured-ID release authorization in `crates/horae/src/reports/limits/project.rs`, wired through `reports/limits.rs` and `reports.rs`; preserve existing CSV, columns and limits (FR-006/007/010/017).
 - [x] T109 [US3] Extend real-cookie project XLSX checks in `crates/horae/src/server_fns/importers/authorization_tests/exports.rs` and its `exports/projects.rs` submodule, including a real finalize/editor writer winning the organization gate; update only the inactive-actor expectation in `crates/horae/src/reports/privacy_tests.rs`; run focused/full regressions, cache/offline/lint/format checks, adversarial review and analysis, recording evidence in `specs/015-scoped-permissions/quickstart.md` and `progress.md` (FR-018, SC-006 subset).
 
+### CSV delivery authorization
+
+T109 → T110 → T111 → T112 → T113 implements `contracts/csv-exports.md`.
+All four tasks are sequential because source signatures, migration, buffer and
+fixtures overlap. Independent acceptance requires all three CSV families, not
+just the native helper. Full-policy activation remains separately gated.
+
+- [x] T110 [US3] Reproduce inactive-actor acceptance in `crates/horae/src/reports/streaming/database_tests.rs` before modifying producers; cover initial missing/foreign/role-denied cases as interfaces are retained (FR-006/007/010/018).
+- [x] T111 [US3] Add `crates/horae/migrations/0046_csv_export_cursor.sql` and checked native projections in `crates/horae/src/reports/streaming/cursor.rs`; integrate current-authority savepoints, bounded batches/output and retained actors through `reports/streaming.rs`, `reports.rs` and `reports/limits/project.rs`, reusing invoice adjustment formatting in `models/invoice.rs` (FR-006/007/010/017).
+- [x] T112 [US3] Add deterministic backpressure/revocation, snapshot, byte/row/native-type and cleanup tests in `crates/horae/src/reports/streaming/database_tests/authorization.rs` and update the invoice snapshot fixture in `database_tests.rs` to pause after capture, preserving exact original-value assertions (FR-006/007/010/017/018).
+- [x] T113 [US3] Register and verify all three real-cookie CSV routes in `crates/horae/src/server_fns/importers/authorization_tests.rs` and `authorization_tests/exports.rs`; run full server/export regressions, SQLx/cache/offline/lint/WASM/format gates, adversarial review and scoped analysis, recording results in `specs/015-scoped-permissions/quickstart.md` and `progress.md` before unsigned publication to existing draft #212 (FR-018, SC-006 subset).
+
 ## Phase 7: US4 — Custom profiles and permission explanations (P2)
 
 ### Isolated create/delete command implementation

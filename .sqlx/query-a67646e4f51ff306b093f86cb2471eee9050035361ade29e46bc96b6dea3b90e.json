@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT spent_date AS \"spent_date!: NaiveDate\", project_name AS \"project_name!\",\n            task_name AS \"task_name!\", user_name AS \"user_name!\", minutes AS \"minutes!\",\n            rounded_minutes, billable AS \"billable!\", notes\n         FROM fetch_csv_export_rows($1) AS source(spent_date date,project_name text,\n            task_name text,user_name text,minutes integer,rounded_minutes integer,\n            billable boolean,notes text,export_bytes bigint)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "spent_date!: NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 1,
+        "name": "project_name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "task_name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "user_name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "minutes!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "rounded_minutes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "billable!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "notes",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "a67646e4f51ff306b093f86cb2471eee9050035361ade29e46bc96b6dea3b90e"
+}
