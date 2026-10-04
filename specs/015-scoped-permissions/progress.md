@@ -43,6 +43,10 @@
   finding. T195–T197 are complete for this reload repair only; no SQL/cache,
   endpoint or policy activation changed. Publication to the existing draft is
   next; no full feature or full Nix acceptance is claimed.
+- Published unsigned `1879b8a` to draft #212 and appended the verified scope and
+  remaining directory work to its existing description. Final formatting
+  `50092` changes zero files. No merge occurred. The next action remains the
+  canonical directory integration below, not another reload investigation.
 
 Next: verify the fix and recovery regressions, then connect canonical People,
 shell/navigation and the initial page-requester binding. These are still required;
