@@ -38,9 +38,11 @@ type SaveReply = oneshot::Receiver<Result<ProfileOutcome, ServerFnError>>;
 type TemplateReply = oneshot::Receiver<Result<TemplateOutcome, ServerFnError>>;
 type DeletionReply = oneshot::Receiver<Result<TemplateDeletionPreview, ServerFnError>>;
 type LoadReply = oneshot::Receiver<Result<PermissionEditor, ServerFnError>>;
+type IdentityReply = oneshot::Receiver<Result<PermissionRequester, ServerFnError>>;
 
 #[derive(Clone)]
 struct Probe {
+    open_person: bool,
     editor: PermissionEditor,
     previews: Rc<RefCell<Vec<ProfileDraft>>>,
     preview_replies: Rc<RefCell<VecDeque<PreviewReply>>>,
@@ -54,11 +56,15 @@ struct Probe {
     loads: Rc<RefCell<usize>>,
     load_replies: Rc<RefCell<VecDeque<LoadReply>>>,
     confirmations: Rc<RefCell<VecDeque<Result<bool, document::EvalError>>>>,
+    storage: Rc<RefCell<HashMap<String, String>>>,
+    storage_failure: Rc<RefCell<Option<String>>>,
+    identity_replies: Rc<RefCell<VecDeque<IdentityReply>>>,
 }
 
 impl Probe {
     fn new() -> Self {
         Self {
+            open_person: true,
             editor: PermissionEditor {
                 requester: PermissionRequester {
                     org_id: Uuid::now_v7(),
@@ -88,6 +94,9 @@ impl Probe {
             loads: Default::default(),
             load_replies: Default::default(),
             confirmations: Default::default(),
+            storage: Default::default(),
+            storage_failure: Default::default(),
+            identity_replies: Default::default(),
         }
     }
 
@@ -137,7 +146,7 @@ impl Probe {
 fn app(probe: Probe) -> Element {
     use_context_provider(|| probe.clone());
     use_context_provider(|| Rc::new(probe.clone()) as Rc<dyn document::Document>);
-    let person = use_signal(|| Some(probe.editor.user_id));
+    let person = use_signal(|| probe.open_person.then_some(probe.editor.user_id));
     rsx! { permission_editor::PermissionEditorDialog {
         person, on_saved: move |changed| probe.saved.borrow_mut().push(changed),
     } }
@@ -145,6 +154,14 @@ fn app(probe: Probe) -> Element {
 
 impl document::Document for Probe {
     fn eval(&self, script: String) -> document::Eval {
+        if script == include_str!("../assets/js/permission-recovery-storage.js") {
+            return document::Eval::new(dioxus::core::current_owner().insert(Box::new(
+                StorageReply {
+                    probe: self.clone(),
+                    reply: RefCell::new(None),
+                },
+            )));
+        }
         struct Reply(Option<Result<bool, document::EvalError>>);
         impl document::Evaluator for Reply {
             fn poll_join(
@@ -176,6 +193,63 @@ impl document::Document for Probe {
             Err(document::EvalError::Unsupported)
         };
         document::Eval::new(dioxus::core::current_owner().insert(Box::new(Reply(Some(reply)))))
+    }
+}
+
+// The JS protocol is tested separately; this provider controls bridge failures
+// and verifies production handlers do not send before storage acknowledgement.
+struct StorageReply {
+    probe: Probe,
+    reply: RefCell<Option<Result<serde_json::Value, document::EvalError>>>,
+}
+impl document::Evaluator for StorageReply {
+    fn poll_join(
+        &mut self,
+        _: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<serde_json::Value, document::EvalError>> {
+        std::task::Poll::Ready(Err(document::EvalError::Unsupported))
+    }
+    fn poll_recv(
+        &mut self,
+        _: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<serde_json::Value, document::EvalError>> {
+        std::task::Poll::Ready(
+            self.reply
+                .borrow_mut()
+                .take()
+                .expect("missing storage operation"),
+        )
+    }
+    fn send(&self, message: serde_json::Value) -> Result<(), document::EvalError> {
+        let (key, operation, value): (String, String, Option<String>) =
+            serde_json::from_value(message).unwrap();
+        let mut storage = self.probe.storage.borrow_mut();
+        let failure = self.probe.storage_failure.borrow().clone();
+        let result: Result<Option<String>, String> = if failure.as_deref() == Some(&operation) {
+            Err("Browser session storage is unavailable. Keep this tab and retry.".into())
+        } else if operation == "load" {
+            Ok(storage.get(&key).cloned())
+        } else if storage
+            .get(&key)
+            .is_some_and(|current| Some(current) != value.as_ref())
+        {
+            Err("Another permission request is unresolved. Reload to recover it.".into())
+        } else {
+            if operation == "store" {
+                storage.insert(key, value.unwrap());
+            } else {
+                assert_eq!(operation, "clear");
+                storage.remove(&key);
+            }
+            Ok(None)
+        };
+        let reply = if failure.as_deref() == Some("ack-store") && operation == "store" {
+            Err(document::EvalError::Unsupported)
+        } else {
+            Ok(serde_json::to_value(result).unwrap())
+        };
+        *self.reply.borrow_mut() = Some(reply);
+        Ok(())
     }
 }
 
@@ -696,14 +770,10 @@ async fn rejected_template_reload_fetches_and_explicitly_discards_the_person_dra
         "{}",
         ui.html()
     );
-    let reply = probe.preview_reply();
-    ui.click("permission-review");
-    assert_eq!(
-        probe.previews.borrow()[0].grants,
-        probe.editor.permissions.grants
-    );
-    assert_eq!(probe.previews.borrow()[0].action, ProfileAction::Edit);
-    reply.send(Ok(probe.effects())).unwrap();
+    assert!(ui.html().contains("Recover permission request"));
+    assert!(!ui.html().contains("Review changes"));
+    assert_eq!(probe.templates.borrow().len(), 1);
+    assert_eq!(probe.storage.borrow().len(), 1);
     ui.settle();
 }
 
@@ -923,8 +993,414 @@ async fn keeping_projects_requires_new_review_and_confirmation_of_remaining_peop
     assert!(probe.saved.borrow().is_empty());
 }
 
+fn review_person(ui: &mut Ui, probe: &Probe) {
+    let reply = probe.preview_reply();
+    ui.click("permission-review");
+    reply.send(Ok(probe.effects())).unwrap();
+    ui.settle();
+}
+
+fn person_outcome(probe: &Probe) -> ProfileOutcome {
+    ProfileOutcome {
+        user_id: probe.editor.user_id,
+        access_revision: 7,
+        person_revision: 3,
+        changed: false,
+    }
+}
+
+fn interrupted_person(probe: &Probe) {
+    let mut ui = Ui::new(probe.clone());
+    review_person(&mut ui, probe);
+    let reply = probe.save_reply();
+    ui.click("permission-save");
+    reply
+        .send(Err(ServerFnError::new("response lost")))
+        .unwrap();
+    ui.settle();
+    assert_eq!(probe.storage.borrow().len(), 1);
+}
+
+#[tokio::test]
+async fn remount_recovers_the_same_person_command_without_automatic_submission_or_target_load() {
+    let mut probe = Probe::new();
+    interrupted_person(&probe);
+    let original = probe.saves.borrow()[0].clone();
+    probe.open_person = false;
+    let mut ui = Ui::new(probe.clone());
+    assert!(ui.html().contains("Recover permission request"));
+    assert_eq!(probe.saves.borrow().len(), 1);
+    assert_eq!(*probe.loads.borrow(), 1);
+    ui.navigation_state("pending");
+    let reply = probe.save_reply();
+    ui.click("permission-recovery-retry");
+    ui.click("permission-recovery-retry");
+    assert_eq!(
+        probe.saves.borrow().as_slice(),
+        &[original.clone(), original]
+    );
+    reply.send(Ok(person_outcome(&probe))).unwrap();
+    ui.settle();
+    assert!(probe.storage.borrow().is_empty());
+    assert_eq!(probe.saved.borrow().as_slice(), &[false]);
+    ui.navigation_state("clean");
+}
+
+#[tokio::test]
+async fn missing_storage_acknowledgement_never_sends_a_command_and_reuses_its_record() {
+    for failure in ["store", "ack-store"] {
+        let probe = Probe::new();
+        let mut ui = Ui::new(probe.clone());
+        review_person(&mut ui, &probe);
+        *probe.storage_failure.borrow_mut() = Some(failure.into());
+        ui.click("permission-save");
+        assert!(probe.saves.borrow().is_empty());
+        assert!(probe.saved.borrow().is_empty());
+        ui.navigation_state("pending");
+        let retained = probe.storage.borrow().clone();
+        *probe.storage_failure.borrow_mut() = None;
+        let reply = probe.save_reply();
+        ui.click("permission-save");
+        if failure == "ack-store" {
+            assert_eq!(*probe.storage.borrow(), retained);
+        }
+        reply.send(Ok(person_outcome(&probe))).unwrap();
+        ui.settle();
+        assert_eq!(probe.saves.borrow().len(), 1);
+        assert!(probe.storage.borrow().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn acknowledged_person_cleanup_retries_without_resubmitting() {
+    let probe = Probe::new();
+    let mut ui = Ui::new(probe.clone());
+    review_person(&mut ui, &probe);
+    *probe.storage_failure.borrow_mut() = Some("clear".into());
+    let reply = probe.save_reply();
+    ui.click("permission-save");
+    reply.send(Ok(person_outcome(&probe))).unwrap();
+    ui.settle();
+    assert!(ui.html().contains("The server confirmed this request"));
+    assert!(ui.html().contains("Finish recovery cleanup"));
+    assert_eq!(probe.storage.borrow().len(), 1);
+    *probe.storage_failure.borrow_mut() = None;
+    ui.click("permission-save");
+    assert_eq!(probe.saves.borrow().len(), 1);
+    assert!(probe.storage.borrow().is_empty());
+    assert_eq!(probe.saved.borrow().as_slice(), &[false]);
+}
+
+#[tokio::test]
+async fn rejected_recovery_keeps_the_record_until_explicit_checked_discard() {
+    for code in [400, 401, 403, 404, 409] {
+        let mut probe = Probe::new();
+        interrupted_person(&probe);
+        let retained = probe.storage.borrow().clone();
+        probe.open_person = false;
+        let mut ui = Ui::new(probe.clone());
+        let reply = probe.save_reply();
+        ui.click("permission-recovery-retry");
+        reply
+            .send(Err(ServerFnError::ServerError {
+                code,
+                message: "private error".into(),
+                details: None,
+            }))
+            .unwrap();
+        ui.settle();
+        assert_eq!(*probe.storage.borrow(), retained);
+        assert!(
+            ui.html()
+                .contains("An earlier attempt may still have saved")
+        );
+        if [401, 403, 404].contains(&code) {
+            assert!(!ui.html().contains("private error"));
+        }
+        ui.click("permission-recovery-discard");
+        assert_eq!(*probe.storage.borrow(), retained);
+        ui.click("permission-recovery-checked");
+        *probe.storage_failure.borrow_mut() = Some("clear".into());
+        ui.click("permission-recovery-discard");
+        assert_eq!(*probe.storage.borrow(), retained);
+        *probe.storage_failure.borrow_mut() = None;
+        ui.click("permission-recovery-discard");
+        assert!(probe.storage.borrow().is_empty());
+        assert!(probe.saved.borrow().is_empty());
+        ui.navigation_state("clean");
+    }
+}
+
+#[tokio::test]
+async fn template_recovery_survives_remount_and_cleanup_failure_without_saving_a_person() {
+    let mut probe = Probe::new();
+    let mut ui = Ui::new(probe.clone());
+    ui.click("permission-template-create");
+    ui.form_event("permission-template-name", "input", "Team");
+    let reply = probe.template_reply();
+    ui.click("permission-template-save");
+    reply
+        .send(Err(ServerFnError::new("response lost")))
+        .unwrap();
+    ui.settle();
+    drop(ui);
+    probe.open_person = false;
+    let mut ui = Ui::new(probe.clone());
+    assert_eq!(probe.templates.borrow().len(), 1);
+    *probe.storage_failure.borrow_mut() = Some("clear".into());
+    let reply = probe.template_reply();
+    ui.click("permission-recovery-retry");
+    assert_eq!(probe.templates.borrow()[0], probe.templates.borrow()[1]);
+    reply
+        .send(Ok(TemplateOutcome {
+            template_id: Uuid::now_v7(),
+            access_revision: 8,
+            detached_people: 0,
+        }))
+        .unwrap();
+    ui.settle();
+    assert_eq!(probe.storage.borrow().len(), 1);
+    *probe.storage_failure.borrow_mut() = None;
+    ui.click("permission-recovery-retry");
+    assert_eq!(probe.templates.borrow().len(), 2);
+    assert!(probe.storage.borrow().is_empty());
+    assert!(ui.html().contains("Custom profile request completed"));
+    ui.click("permission-recovery-done");
+    ui.navigation_state("clean");
+    assert!(probe.saves.borrow().is_empty());
+    assert!(probe.saved.borrow().is_empty());
+}
+
+#[tokio::test]
+async fn another_request_cannot_be_overwritten_or_cleared_by_the_live_editor() {
+    let probe = Probe::new();
+    let mut ui = Ui::new(probe.clone());
+    review_person(&mut ui, &probe);
+    let key = format!(
+        "horae-permission-request:v1:{}:{}",
+        probe.editor.requester.org_id, probe.editor.requester.user_id
+    );
+    probe
+        .storage
+        .borrow_mut()
+        .insert(key, "another unresolved request".into());
+    ui.click("permission-save");
+    assert!(probe.saves.borrow().is_empty());
+    assert!(
+        ui.html()
+            .contains("Another permission request is unresolved")
+    );
+    assert_eq!(
+        probe.storage.borrow().values().next().unwrap(),
+        "another unresolved request"
+    );
+}
+
+#[tokio::test]
+async fn acknowledged_cleanup_does_not_erase_a_replacement_record() {
+    let probe = Probe::new();
+    let mut ui = Ui::new(probe.clone());
+    review_person(&mut ui, &probe);
+    let reply = probe.save_reply();
+    ui.click("permission-save");
+    let key = probe.storage.borrow().keys().next().unwrap().clone();
+    probe
+        .storage
+        .borrow_mut()
+        .insert(key, "different request".into());
+    reply.send(Ok(person_outcome(&probe))).unwrap();
+    ui.settle();
+    ui.click("permission-save");
+    assert_eq!(
+        probe.storage.borrow().values().next().unwrap(),
+        "different request"
+    );
+    assert_eq!(probe.saves.borrow().len(), 1);
+    assert!(probe.saved.borrow().is_empty());
+    assert!(ui.html().contains("The server confirmed this request"));
+}
+
+#[tokio::test]
+async fn template_editor_cleanup_failure_never_reissues_the_acknowledged_command() {
+    let probe = Probe::new();
+    let mut ui = Ui::new(probe.clone());
+    ui.click("permission-template-create");
+    ui.form_event("permission-template-name", "input", "Team");
+    *probe.storage_failure.borrow_mut() = Some("clear".into());
+    let reply = probe.template_reply();
+    ui.click("permission-template-save");
+    reply
+        .send(Ok(TemplateOutcome {
+            template_id: Uuid::now_v7(),
+            access_revision: 8,
+            detached_people: 0,
+        }))
+        .unwrap();
+    ui.settle();
+    assert!(ui.html().contains("Finish recovery cleanup"));
+    assert_eq!(probe.storage.borrow().len(), 1);
+    *probe.storage_failure.borrow_mut() = None;
+    ui.click("permission-template-save");
+    assert!(ui.html().contains("Custom profile created"));
+    assert_eq!(probe.templates.borrow().len(), 1);
+    assert!(probe.storage.borrow().is_empty());
+}
+
+#[tokio::test]
+async fn storage_load_failure_blocks_new_edits_and_retry_restores_them() {
+    let probe = Probe::new();
+    *probe.storage_failure.borrow_mut() = Some("load".into());
+    let mut ui = Ui::new(probe.clone());
+    assert!(!ui.html().contains("permission-review"));
+    assert!(ui.html().contains("Retry recovery check"));
+    *probe.storage_failure.borrow_mut() = None;
+    ui.click("permission-editor-reload");
+    assert!(ui.html().contains("permission-review"));
+    assert!(probe.saves.borrow().is_empty());
+}
+
+#[tokio::test]
+async fn pending_or_failed_session_check_never_exposes_permission_controls() {
+    let probe = Probe::new();
+    let (send, receive) = oneshot::channel();
+    probe.identity_replies.borrow_mut().push_back(receive);
+    let mut ui = Ui::new(probe.clone());
+    ui.navigation_state("pending");
+    assert!(!ui.html().contains("Review changes"));
+    send.send(Err(ServerFnError::new("private session diagnostic")))
+        .unwrap();
+    ui.settle();
+    assert!(!ui.html().contains("private session diagnostic"));
+    assert!(!ui.html().contains("Review changes"));
+    assert!(ui.html().contains("Cannot check the current session"));
+    ui.click("permission-editor-reload");
+    assert!(ui.html().contains("Review changes"));
+    assert!(probe.saves.borrow().is_empty());
+}
+
+#[tokio::test]
+async fn uncertain_recovery_keeps_retry_available_without_discard_or_permanent_aria_busy() {
+    let mut probe = Probe::new();
+    interrupted_person(&probe);
+    let retained = probe.storage.borrow().clone();
+    probe.open_person = false;
+    let mut ui = Ui::new(probe.clone());
+    for problem in [
+        ServerFnError::new("private diagnostic"),
+        ServerFnError::ServerError {
+            code: 500,
+            message: "private diagnostic".into(),
+            details: None,
+        },
+    ] {
+        let reply = probe.save_reply();
+        ui.click("permission-recovery-retry");
+        assert!(ui.html().contains("aria-busy=true"));
+        reply.send(Err(problem)).unwrap();
+        ui.settle();
+        assert!(ui.html().contains("aria-busy=false"));
+        assert!(ui.html().contains("may already have completed"));
+        assert!(!ui.html().contains("Discard recovery record"));
+        assert!(!ui.html().contains("private diagnostic"));
+        ui.dismiss("escape");
+        ui.dismiss("backdrop");
+        ui.navigation_state("pending");
+        assert!(ui.html().contains("Recover permission request"));
+        assert_eq!(*probe.storage.borrow(), retained);
+    }
+    assert!(probe.saved.borrow().is_empty());
+}
+
+#[tokio::test]
+async fn invalid_or_misbound_storage_is_preserved_without_rendering_its_contents() {
+    let original = Probe::new();
+    interrupted_person(&original);
+    let stored = original.storage.borrow().values().next().unwrap().clone();
+    for value in [
+        "{broken private data".to_owned(),
+        stored.clone(),
+        format!("{stored} "),
+        "x".repeat(524289),
+    ] {
+        let probe = Probe::new();
+        let key = format!(
+            "horae-permission-request:v1:{}:{}",
+            probe.editor.requester.org_id, probe.editor.requester.user_id
+        );
+        probe.storage.borrow_mut().insert(key, value.clone());
+        let ui = Ui::new(probe.clone());
+        assert!(ui.html().contains("recovery data is invalid"));
+        assert!(!ui.html().contains("private data"));
+        assert!(!ui.html().contains("Review changes"));
+        assert!(probe.saves.borrow().is_empty());
+        assert_eq!(probe.storage.borrow().values().next().unwrap(), &value);
+    }
+}
+
+#[tokio::test]
+async fn switching_accounts_or_workspaces_does_not_load_or_erase_the_original_request() {
+    let original = Probe::new();
+    interrupted_person(&original);
+    let retained = original.storage.borrow().clone();
+    for change_org in [false, true] {
+        let mut probe = original.clone();
+        if change_org {
+            probe.editor.requester.org_id = Uuid::now_v7();
+        } else {
+            probe.editor.requester.user_id = Uuid::now_v7();
+        }
+        let ui = Ui::new(probe.clone());
+        assert!(!ui.html().contains("Recover permission request"));
+        assert!(ui.html().contains("Review changes"));
+        assert_eq!(*probe.storage.borrow(), retained);
+        assert_eq!(probe.saves.borrow().len(), 1);
+    }
+}
+
 mod server_fns {
     use super::*;
+
+    pub struct CurrentUser {
+        pub id: Uuid,
+        pub org_id: Uuid,
+    }
+    pub async fn get_me() -> Result<CurrentUser, ServerFnError> {
+        let probe = use_context::<Probe>();
+        let reply = probe.identity_replies.borrow_mut().pop_front();
+        let requester = match reply {
+            Some(reply) => reply.await.expect("identity reply dropped")?,
+            None => probe.editor.requester,
+        };
+        Ok(CurrentUser {
+            id: requester.user_id,
+            org_id: requester.org_id,
+        })
+    }
+
+    fn assert_stored(probe: &Probe, kind: &str, command: &impl serde::Serialize) {
+        let requester = probe.editor.requester;
+        let key = format!(
+            "horae-permission-request:v1:{}:{}",
+            requester.org_id, requester.user_id
+        );
+        let stored: serde_json::Value = serde_json::from_str(
+            probe
+                .storage
+                .borrow()
+                .get(&key)
+                .expect("mutation before storage"),
+        )
+        .unwrap();
+        assert_eq!(
+            stored["requester"],
+            serde_json::to_value(requester).unwrap()
+        );
+        assert_eq!(stored["command"]["kind"], kind);
+        assert_eq!(
+            stored["command"]["value"],
+            serde_json::to_value(command).unwrap()
+        );
+    }
 
     pub async fn load_permission_editor(id: Uuid) -> Result<PermissionEditor, ServerFnError> {
         let probe = use_context::<Probe>();
@@ -956,6 +1432,7 @@ mod server_fns {
     ) -> Result<ProfileOutcome, ServerFnError> {
         let probe = use_context::<Probe>();
         assert_eq!(expected_requester, probe.editor.requester);
+        assert_stored(&probe, "person", &command);
         probe.saves.borrow_mut().push(command);
         let reply = probe
             .save_replies
@@ -971,6 +1448,7 @@ mod server_fns {
     ) -> Result<TemplateOutcome, ServerFnError> {
         let probe = use_context::<Probe>();
         assert_eq!(expected_requester, probe.editor.requester);
+        assert_stored(&probe, "template", &command);
         probe.templates.borrow_mut().push(command);
         let reply = probe
             .template_replies

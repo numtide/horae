@@ -1,5 +1,38 @@
 # Permission verification
 
+## Durable tab recovery (T018, in progress)
+
+Run in the Nix shell without a live database:
+
+```sh
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo test -p horae --features server --test permission_editor_ui --test own_permissions_ui --test admin_shell
+node --test crates/horae/tests/browser/editor-navigation.cjs crates/horae/tests/browser/permission-recovery-storage.cjs
+```
+
+All 61 selected UI tests pass (45 editor, 11 Settings, five admin shell; 39.56s
+build). All 14 shipped-script unit tests pass (eight navigation, six storage).
+Production handlers require acknowledged storage before server submission and
+retain the exact command/requester across a VirtualDom remount with no selected
+person. Cases cover person/template recovery, no automatic submission, duplicate
+clicks, session/read/write/acknowledgement failures, malformed/misbound/oversized
+records, account/workspace isolation, denied-retry retention, explicit checked
+discard, conditional cleanup and acknowledged cleanup without resubmission.
+
+Source review corrected permanent `aria-busy` during idle recovery and kept
+authentication diagnostics separate from public validation messages. The cached
+acknowledgement is bound to its whole command/requester; cleanup cannot erase a
+different record. Existing Modal, Checkbox and CSS are unchanged. Server commands,
+authorization, SQL and schema are unchanged, so no SQLx regeneration is needed.
+Final offline all-targets server Clippy (1m02s) and WASM Clippy (13.26s) pass with
+warnings denied. Formatting CI and whitespace checks also pass.
+
+These are controlled handler/remount and Node VM tests, not Chrome persistence,
+keyboard, focus, viewport or theme acceptance. No browser tool is loaded in this
+session. Full T018, full-flake verification and policy integration remain open;
+no real data or active policy changed. Spec Kit prerequisites pass, but its
+implement skill is not available through the current local catalog or tools;
+the existing contract/plan/task workflow was followed directly.
+
 ## Original requester binding (T130–T132)
 
 Run in the Nix shell against the owned disposable PostgreSQL database:

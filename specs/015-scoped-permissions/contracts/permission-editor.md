@@ -75,11 +75,52 @@ reloading the editor and comparing its permissions, choices and access revision.
 The existing UI must pass the loaded pair on both save paths and retain it on
 uncertain retries. This prerequisite does not itself persist or recover requests.
 
-The subsequent durable consumer must acknowledge storing the exact command and
+The durable consumer must acknowledge storing the exact command and
 pair before its first submission and must not overwrite another unresolved
 request. In particular, a denied retry does not prove an earlier attempt failed:
 401/403 after a lost response must not automatically erase its durable record.
 Never recover by minting a new request ID or using a freshly loaded requester.
+
+### Durable tab recovery
+
+Use a versioned `sessionStorage` slot per original organization/requester, shared
+by person and template commands within that tab. Preserve the typed command,
+including request ID, exact grants, revisions and confirmed removal sets. Store
+no credentials, unrelated person names or loaded authority snapshot. A requested
+template name remains part of the exact create command. Limit encoded records to
+512 KiB in UTF-8; unknown/malformed/noncanonical records or mismatched embedded
+identity block new edits and remain untouched. This is recovery across reloads,
+not a promise to retain ordinary unsent drafts or survive closing the tab.
+
+Use the existing authenticated `get_me` only to locate the current user's local
+slot. This is not an authorization decision: neither reading browser storage nor
+any recovered command bypasses current server authorization. Do not enumerate
+other users' slots or require a fresh target/template lookup before replay; a
+completed deletion or a lost selected-person ID must remain recoverable.
+
+Check recovery before exposing the editor, on explicit reload, and when changing
+its target. A retained request opens recovery even when no person is selected.
+Never submit on load. Storage must acknowledge the identical record before each
+unacknowledged attempt. Compare and store/clear synchronously without an await
+between comparison and mutation: absent/identical slots are allowed; a different
+record cannot be overwritten or erased. Bridge/quota errors send no command.
+
+Every server rejection retains the record, including a 401/403 after a lost
+response. Offer explicit checked discard only after a known rejection, stating
+that an earlier attempt may have saved and that discarding never undoes server
+data. An uncertain failure does not enable discard. A successful server response
+followed by failed cleanup keeps that outcome in component state, so retrying
+cleanup issues no second server command (especially after self-demotion).
+Reloading before successful cleanup loses that in-memory acknowledgement; retain
+the record and reapply current authorization honestly, without claiming failure
+or weakening replay authorization. Successful cleanup releases the editor;
+template recovery reports only its own completion, not a person save.
+
+Use the existing Modal, Checkbox, status/error semantics and wrapping utilities.
+Preserve person/template draft behavior and the other editor navigation guards.
+Test actual Dioxus handlers with remounts, controlled server responses and storage
+bridge failures; separately execute the shipped storage script for conditional
+operations, byte limits and failures. Neither suite is browser acceptance.
 
 ## Errors and verification
 
@@ -120,9 +161,9 @@ Disable controls and dismissal while a request is pending. After an uncertain
 save response, retain the identical command and request ID and offer retry,
 without permitting edits or reporting success. A known rejection requires reload;
 authentication/authority/not-found denial also hides the person's form. Distinguish
-an unchanged successful receipt from a real change. No request is persisted in
-browser storage by this consumer; navigation/reload recovery remains an acceptance
-case to resolve before declaring the full editor complete.
+an unchanged successful receipt from a real change. Submitted requests now follow
+the durable tab recovery contract above. Full rendered recovery/navigation
+acceptance remains required before declaring the editor complete.
 
 ### Navigation protection
 

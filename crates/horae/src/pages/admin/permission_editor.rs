@@ -15,6 +15,14 @@ use draft::DraftState;
 #[path = "permission_editor/templates.rs"]
 mod templates;
 use templates::{TemplateEditor, TemplateIntent};
+#[path = "permission_editor/recovery_storage.rs"]
+mod recovery_storage;
+use recovery_storage::{
+    AcknowledgedPermission, PendingCommand, PendingPermission, RecoveryError, RecoveryOutcome,
+};
+#[path = "permission_editor/recovery.rs"]
+mod recovery;
+use recovery::RecoveryForm;
 
 const BAD_REQUEST: u16 = 400;
 const UNAUTHORIZED: u16 = 401;
@@ -37,6 +45,28 @@ pub(super) fn PermissionEditorDialog(
     let mut locked = use_signal(|| false);
     let mut dirty = use_signal(|| false);
     let mut confirming_discard = use_signal(|| false);
+    let mut recovery = use_resource(move || async move {
+        let _ = person();
+        let user = server_fns::get_me().await.map_err(|error| {
+            if matches!(
+                error,
+                ServerFnError::ServerError {
+                    code: UNAUTHORIZED,
+                    ..
+                }
+            ) {
+                "Sign in again to check this tab's permission recovery request."
+            } else {
+                "Cannot check the current session. Retry before editing permissions."
+            }
+            .to_owned()
+        })?;
+        PendingPermission::load(crate::models::permission_editor::PermissionRequester {
+            org_id: user.org_id,
+            user_id: user.id,
+        })
+        .await
+    });
     let mut editor = use_resource(move || async move {
         match person() {
             Some(id) => server_fns::load_permission_editor(id).await.map(Some),
@@ -50,13 +80,16 @@ pub(super) fn PermissionEditorDialog(
             dirty.set(false);
             generation.set(Uuid::now_v7());
             editor.restart();
+            recovery.restart();
         }
     });
     let form_generation = generation();
-    let ready = editor.state()() == UseResourceState::Ready;
+    let recovery_ready = recovery.state()() == UseResourceState::Ready;
+    let recovering = recovery_ready && matches!(&*recovery.read(), Some(Ok(Some(_))));
+    let ready = recovery_ready && (recovering || editor.state()() == UseResourceState::Ready);
     let pending = locked() || !ready;
     let dismiss = use_callback(move |_: ()| {
-        if locked() || editor.state()() != UseResourceState::Ready || confirming_discard() {
+        if locked() || recovering || !ready || confirming_discard() {
             return;
         }
         if !dirty() {
@@ -87,18 +120,34 @@ pub(super) fn PermissionEditorDialog(
     rsx! {
         Modal {
             id: "person-permissions-dialog", labelledby: "person-permissions-title",
-            open: person().is_some(), busy: pending || confirming_discard(), large: true,
+            open: person().is_some() || recovering, busy: pending || confirming_discard(), large: true,
             on_dismiss: move |_| dismiss.call(()),
             div { class: "px-6 pt-6",
-                h2 { id: "person-permissions-title", class: "text-2xl font-semibold", "Edit permissions" }
+                h2 { id: "person-permissions-title", class: "text-2xl font-semibold",
+                    if recovering { "Recover permission request" } else { "Edit permissions" }
+                }
             }
             div { class: "modal-body wrap-anywhere",
                 "data-editor-kind": "permissions",
-                "data-editor-state": if person().is_none() { "clean" }
+                "data-editor-state": if recovering { "pending" } else if person().is_none() { "clean" }
                     else if pending { "pending" }
                     else if ready && dirty() { "dirty" } else { "clean" },
                 if !ready {
                     p { role: "status", class: "text-sm text-secondary", "Loading permissions…" }
+                } else if let Some(Ok(Some(request))) = &*recovery.read() {
+                    RecoveryForm { key: "recovery-{form_generation}", request: request.clone(), locked,
+                        on_finished: move |changed: Option<bool>| {
+                            locked.set(false);
+                            person.set(None);
+                            reload.call(());
+                            if let Some(changed) = changed { on_saved.call(changed); }
+                        },
+                    }
+                } else if let Some(Err(message)) = &*recovery.read() {
+                    p { role: "alert", class: "text-danger text-sm", "{message}" }
+                    button { id: RELOAD_BUTTON, r#type: "button", class: "btn btn-secondary mt-4",
+                        onclick: move |_| reload.call(()), "Retry recovery check"
+                    }
                 } else {
                     {match &*editor.read() {
                         Some(Ok(Some(value))) if Some(value.user_id) == person() => {
@@ -134,7 +183,7 @@ pub(super) fn PermissionEditorDialog(
                     }}
                 }
             }
-            if !pending {
+            if !pending && !recovering {
                 div { class: "px-6 pb-6",
                     button { id: CLOSE_BUTTON, r#type: "button", class: "btn btn-secondary",
                         disabled: confirming_discard(), onclick: move |_| dismiss.call(()), "Close"
@@ -159,6 +208,7 @@ fn PermissionForm(
     let mut error = use_signal(|| None::<String>);
     let mut reload_required = use_signal(|| false);
     let mut unavailable = use_signal(|| false);
+    let acknowledged = use_signal(|| None::<AcknowledgedPermission>);
     let mut template_intent = use_signal(|| None::<TemplateIntent>);
     let template_dirty = use_signal(|| false);
     use_effect(move || {
@@ -341,9 +391,14 @@ fn PermissionForm(
                         locked.set(true);
                         error.set(None);
                         spawn(async move {
-                            match server_fns::save_person_permissions(command, requester).await {
-                                Ok(outcome) => { locked.set(false); on_saved.call(outcome.changed); },
-                                Err(problem) => {
+                            let request = PendingPermission { requester, command: PendingCommand::Person(command) };
+                            match request.attempt(acknowledged).await {
+                                Ok(RecoveryOutcome::Person(outcome)) => { locked.set(false); on_saved.call(outcome.changed); },
+                                Ok(RecoveryOutcome::Template) => {},
+                                Err(RecoveryError::Storage(message) | RecoveryError::Cleanup(message)) => {
+                                    error.set(Some(message)); busy.set(false);
+                                },
+                                Err(RecoveryError::Server(problem)) => {
                                     if definite_rejection(&problem) {
                                         state.write().request = None;
                                         state.write().invalidate_preview();
@@ -359,7 +414,8 @@ fn PermissionForm(
                             }
                         });
                     },
-                    if busy() { "Saving…" } else if snapshot.request.is_some() { "Retry same save" } else { "Confirm permissions" }
+                    if busy() { "Saving…" } else if acknowledged.read().is_some() { "Finish recovery cleanup" }
+                    else if snapshot.request.is_some() { "Retry same save" } else { "Confirm permissions" }
                 }
                 if snapshot.request.is_none() {
                     button { r#type: "button", class: "btn btn-secondary", disabled: busy(),

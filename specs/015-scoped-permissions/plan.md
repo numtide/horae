@@ -123,6 +123,15 @@ This requires no SQL, schema or receipt-format change and prevents a stale edito
 from submitting under a changed login. It is a prerequisite for, not completion
 of, durable tab recovery; no policy activation or real-data operation is implied.
 
+T018's durable consumer follows that binding with a versioned, size-bounded
+sessionStorage slot per requester, using the existing get_me for slot selection
+only. Conditional store/clear operations run in one synchronous JS segment;
+the Rust consumer preserves exact commands and cached acknowledgements. Reuse
+the existing dialog for explicit recovery before new edits, with no automatic
+submission, new endpoint, CSS, dependency, schema or authority change. Verify
+real handlers across remount/error cases and the shipped script separately;
+browser acceptance and full runtime cutover gates stay open.
+
 Loss previews enrich only the evaluated relationship IDs with tenant-local subject
 names in the existing authorized transaction. Reuse the name-free historical
 relationship type for command audits; names are never confirmation authority.

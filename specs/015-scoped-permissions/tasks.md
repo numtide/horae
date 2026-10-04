@@ -504,6 +504,17 @@ project/invoice history and scroll regression cases. Controlled handlers and
 Node script tests are not browser evidence. Durable same-request recovery after
 forced reload, bound to the original requester/workspace, remains required.
 
+The durable consumer in `permission_editor/recovery_storage.rs` and `recovery.rs`
+extends the same T018 acceptance, not a replacement feature. Map FR-004/012/016/018
+to store-before-send, exact retry, requester isolation, no automatic submission,
+conditional cleanup, denied-retry retention and explicit checked discard. Test
+both person/template production controls, remount with no selected person,
+malformed/misbound/oversized storage and successful-response cleanup failure in
+`tests/permission_editor_ui.rs`; execute the shipped JS with
+`tests/browser/permission-recovery-storage.cjs`. Complete server/WASM lint,
+formatting and adversarial review; full rendered recovery, keyboard, viewport
+and theme acceptance still must pass before checking T018.
+
 Relationship-loss labels extend the authorized preview in `permissions/editor.rs`,
 not its stored audit or the command confirmation shape. Cover names, inactive
 subjects, other managers/tenants, no-loss proposals, denial, strict historical

@@ -1,5 +1,45 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Durable permission request recovery
+
+- Previous turn was status-only, not implementation progress. Revalidated the
+  clean synchronized worktree and OPEN/DRAFT #212 at `6bba224`; reused them.
+  Spec Kit prerequisites pass. The implement skill is absent from the current
+  local catalog/tools; followed the existing contract/plan/tasks directly under
+  the independent-increment approval. General requirements remain 12/16.
+- Added requester-scoped tab storage for exact person/template commands before
+  sending. The shipped script refuses conflicting records and bounds UTF-8 size;
+  Rust rejects malformed/misbound/noncanonical data. No new endpoint, dependency,
+  schema, authority rule or CSS was needed. Existing get_me selects only the local
+  storage slot, never server authority.
+- Integrated explicit recovery into the existing dialog, including remount with
+  no selected person. No automatic submission or invented request IDs. All server
+  rejections retain the record; checked discard explains that an earlier attempt
+  may have saved. Cached acknowledgements bind the whole original request and
+  permit cleanup without issuing another command after a successful response.
+- Storage tests first failed for the missing implementation, then all six passed.
+  Existing handler expectations were updated to require recovery after rejection,
+  not silently resume editing. Corrected a test that incorrectly expected public
+  validation messages to be hidden like authentication diagnostics. The final
+  selected run passes 61 UI tests and the combined script run passes 14 tests.
+- Adversarial source review checked storage acknowledgement ordering, identity
+  isolation, denied/unknown retries, replacement records, self-demotion cleanup,
+  request-bound acknowledgements, dismissal and canonical decoding. Corrected
+  permanent aria-busy during idle recovery and added an error-state regression.
+  No further actionable finding in this increment; this was source review, not
+  independent rendered acceptance. Existing design primitives remain unchanged.
+- Final offline all-targets server Clippy (1m02s), WASM Clippy (13.26s), formatting
+  CI and whitespace checks pass. No SQL changed, so no cache preparation or
+  disposable database startup was needed for this increment.
+
+Delivery remains existing draft #212, without merge or policy activation. No
+browser tool is loaded, so real reload/sessionStorage, focus, keyboard, theme and
+viewport acceptance remain unverified. Next: obtain isolated browser evidence for
+T018 when available; continue the unresolved operation/approval/migration contracts
+and canonical shell/directory integration without weakening their existing gates.
+Full permissions, scoped approvals, enforcement and reviewed migration remain the
+goal, not merely the completed editor increments.
+
 ## 2026-10-04 — Bind permission saves to the original requester
 
 - Previous goal turn made progress: navigation protection was published as

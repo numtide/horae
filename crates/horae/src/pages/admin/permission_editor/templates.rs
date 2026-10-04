@@ -10,6 +10,9 @@ use crate::models::permission_editor::{
 };
 use crate::server_fns;
 
+use super::recovery_storage::{
+    AcknowledgedPermission, PendingCommand, PendingPermission, RecoveryError,
+};
 use super::{access_denied, definite_rejection, load_error, rejection_message};
 
 const SAVE_BUTTON: &str = "permission-template-save";
@@ -58,6 +61,7 @@ pub(super) fn TemplateEditor(
     let mut rejected = use_signal(|| false);
     let mut denied = use_signal(|| false);
     let mut saved = use_signal(|| false);
+    let acknowledged = use_signal(|| None::<AcknowledgedPermission>);
     use_effect(move || dirty.set(!saved() && (!name.read().is_empty() || confirmed())));
     let create = matches!(intent, TemplateIntent::Create(_));
     let preview_ready = preview.state()() == UseResourceState::Ready;
@@ -173,9 +177,11 @@ pub(super) fn TemplateEditor(
                         locked.set(true);
                         error.set(None);
                         spawn(async move {
-                            match server_fns::save_permission_template(command, requester).await {
+                            let request = PendingPermission { requester, command: PendingCommand::Template(command) };
+                            match request.attempt(acknowledged).await {
                                 Ok(_) => { pending.set(None); saved.set(true); locked.set(false); },
-                                Err(problem) => {
+                                Err(RecoveryError::Storage(message) | RecoveryError::Cleanup(message)) => error.set(Some(message)),
+                                Err(RecoveryError::Server(problem)) => {
                                     if definite_rejection(&problem) {
                                         pending.set(None);
                                         rejected.set(true);
@@ -191,6 +197,7 @@ pub(super) fn TemplateEditor(
                         });
                     },
                     if busy() { "Saving…" }
+                    else if acknowledged.read().is_some() { "Finish recovery cleanup" }
                     else if pending.read().is_some() { "Retry same save" }
                     else if create { "Create custom profile" }
                     else { "Confirm deletion" }
