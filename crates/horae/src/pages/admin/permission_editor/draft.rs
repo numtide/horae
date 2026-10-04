@@ -4,7 +4,7 @@ use horae_core::permissions::catalog::{
 use uuid::Uuid;
 
 use crate::models::permission_editor::{
-    PermissionEditor, ProfileAction, ProfileCommand, ProfileDraft, ProfilePreview,
+    PermissionEditor, ProfileAction, ProfileCommand, ProfileDraft, ProfilePreview, ProfileSource,
 };
 
 #[derive(Clone, PartialEq)]
@@ -18,6 +18,26 @@ pub(super) struct DraftState {
 }
 
 impl DraftState {
+    pub fn has_changes(&self) -> bool {
+        let source = match self.action {
+            ProfileAction::Edit => self.editor.permissions.source,
+            ProfileAction::BuiltIn { profile } => ProfileSource::BuiltIn(profile),
+            ProfileAction::Template {
+                id,
+                expected_revision,
+            } => ProfileSource::Template {
+                id,
+                applied_revision: expected_revision,
+            },
+        };
+        source != self.editor.permissions.source
+            || self.administrator() != self.editor.permissions.is_administrator
+            || self
+                .selection
+                .iter()
+                .ne(self.editor.permissions.grants.iter().copied())
+    }
+
     pub fn new(editor: PermissionEditor) -> Result<Self, String> {
         let selection = PermissionSelection::from_stored(
             PERMISSION_CATALOG_VERSION,
@@ -216,6 +236,61 @@ mod tests {
         let mut loaded = editor();
         loaded.permissions.grants.clear();
         assert!(DraftState::new(loaded).is_err());
+    }
+
+    #[test]
+    fn dirty_state_tracks_reverted_grants_and_profile_provenance() {
+        let mut state = DraftState::new(editor()).unwrap();
+        assert!(!state.has_changes());
+        state.toggle(Permission::BillingRead).unwrap();
+        assert!(state.has_changes());
+        state.toggle(Permission::BillingRead).unwrap();
+        assert!(!state.has_changes());
+        state.toggle(Permission::ClientReadAll).unwrap();
+        state.toggle(Permission::ClientReadAll).unwrap();
+        assert!(
+            state.has_changes(),
+            "dependent grants are not implicitly restored"
+        );
+        state
+            .choose_builtin(BuiltInProfile::ProjectManager)
+            .unwrap();
+        assert!(!state.has_changes());
+        let mut state = DraftState::new(state.editor).unwrap();
+        state.editor.permissions.source = ProfileSource::Individual;
+        assert!(!state.has_changes());
+        state
+            .choose_builtin(BuiltInProfile::ProjectManager)
+            .unwrap();
+        assert!(state.has_changes());
+    }
+
+    #[test]
+    fn dirty_state_includes_template_revision_and_independent_identity() {
+        let id = Uuid::now_v7();
+        let mut loaded = editor();
+        loaded.permissions.source = ProfileSource::Template {
+            id,
+            applied_revision: 2,
+        };
+        loaded
+            .templates
+            .push(crate::models::permission_editor::TemplateChoice {
+                id,
+                name: "Studio".into(),
+                grants: loaded.permissions.grants.clone(),
+                revision: 2,
+            });
+        let mut state = DraftState::new(loaded).unwrap();
+        state.choose_template(id).unwrap();
+        assert!(!state.has_changes());
+        state.editor.templates[0].revision = 3;
+        state.choose_template(id).unwrap();
+        assert!(state.has_changes());
+        state.editor.templates[0].revision = 2;
+        state.choose_template(id).unwrap();
+        state.editor.permissions.is_administrator = true;
+        assert!(state.has_changes());
     }
 
     #[test]

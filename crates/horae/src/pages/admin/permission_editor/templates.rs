@@ -25,6 +25,7 @@ pub(super) fn TemplateEditor(
     intent: TemplateIntent,
     access_revision: i64,
     mut locked: Signal<bool>,
+    mut dirty: Signal<bool>,
     on_cancel: EventHandler<()>,
     on_reload: EventHandler<()>,
 ) -> Element {
@@ -54,6 +55,7 @@ pub(super) fn TemplateEditor(
     let mut rejected = use_signal(|| false);
     let mut denied = use_signal(|| false);
     let mut saved = use_signal(|| false);
+    use_effect(move || dirty.set(!saved() && (!name.read().is_empty() || confirmed())));
     let create = matches!(intent, TemplateIntent::Create(_));
     let preview_ready = preview.state()() == UseResourceState::Ready;
     let preview_pending = !create && !preview_ready;

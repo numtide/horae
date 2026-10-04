@@ -1,5 +1,41 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Permission editor navigation protection
+
+- The preceding MVP reply was status-only (no implementation progress). Revalidated
+  the retained worktree changes and OPEN/DRAFT #212 at `8db19ba`; continued the
+  existing T018 work without restarting it. Spec Kit prerequisites pass; seven
+  local checklists pass and general requirements remain 12/16 under the existing
+  independent-increment authorization. No extension hooks exist.
+- Connected dirty/pending state to the existing project/invoice history guard.
+  Reverted grants, profile source/revision and independent identity participate
+  in dirty tracking. Template operations cannot clear unsaved person changes.
+  The shared script changes only its permission-specific messages.
+- Source review found initial/reload reads were still marked clean. A failing
+  controlled-response test reproduced it; those reads now protect navigation
+  and dismissal. Close, Cancel, native cancel/Escape and backdrop share native
+  discard confirmation; refusal or bridge failure preserves the draft. A delayed
+  reply checks the current target, generation and pending request before closing.
+- Eight shipped-script unit tests and 48 selected UI tests pass. Fixed test
+  harness assumptions about Dioxus static IDs and pointer event construction;
+  corrected the grant-reversal fixture to retain dependency-removal effects.
+  Independent source re-review closes the read/dismissal findings. The design
+  documentation review confirms no new global design rule/artifact is needed.
+- Final offline all-targets server Clippy (1m03s) and WASM Clippy (12.76s) pass
+  with warnings denied. No query changed, so SQLx regeneration is unnecessary.
+  Formatting CI passes (491 files, zero changes), as does whitespace validation.
+- Scoped consistency review maps FR-004/012/016/018 to T018, its navigation
+  contract, handler tests and script regressions. No new local specification or
+  constitution conflict was found. Full Spec Kit analysis/acceptance remains
+  unfinished with the general requirements and policy-transition gates.
+
+Delivery uses existing draft #212 without merging. Next implementation: durable
+same-request recovery after
+forced reload with original requester/workspace binding; use the invoice recovery
+flow as prior art, not its legacy role assumptions. Browser acceptance remains
+unverified (no browser tool loaded). Full enforcement, scoped approvals and
+reviewed migration remain required; no real data or active policy changed.
+
 ## 2026-10-04 — Readable management-loss previews
 
 - The preceding turn was status-only. Revalidated clean synchronized `0f97cb2`

@@ -25,6 +25,9 @@ const PROFILE_FIELD: &str = "person-permissions-profile";
 const REVIEW_BUTTON: &str = "permission-review";
 const SAVE_BUTTON: &str = "permission-save";
 const CREATE_TEMPLATE_BUTTON: &str = "permission-template-create";
+const CLOSE_BUTTON: &str = "permission-editor-close";
+const CANCEL_BUTTON: &str = "permission-editor-cancel";
+const RELOAD_BUTTON: &str = "permission-editor-reload";
 
 #[component]
 pub(super) fn PermissionEditorDialog(
@@ -32,6 +35,8 @@ pub(super) fn PermissionEditorDialog(
     on_saved: EventHandler<bool>,
 ) -> Element {
     let mut locked = use_signal(|| false);
+    let mut dirty = use_signal(|| false);
+    let mut confirming_discard = use_signal(|| false);
     let mut editor = use_resource(move || async move {
         match person() {
             Some(id) => server_fns::load_permission_editor(id).await.map(Some),
@@ -42,21 +47,56 @@ pub(super) fn PermissionEditorDialog(
     let mut generation = use_signal(Uuid::now_v7);
     let reload = use_callback(move |_: ()| {
         if !locked() {
+            dirty.set(false);
             generation.set(Uuid::now_v7());
             editor.restart();
         }
     });
     let form_generation = generation();
     let ready = editor.state()() == UseResourceState::Ready;
+    let pending = locked() || !ready;
+    let dismiss = use_callback(move |_: ()| {
+        if locked() || editor.state()() != UseResourceState::Ready || confirming_discard() {
+            return;
+        }
+        if !dirty() {
+            person.set(None);
+            return;
+        }
+        let target = person();
+        let current_generation = generation();
+        confirming_discard.set(true);
+        spawn(async move {
+            let confirmed =
+                document::eval("return window.confirm('Discard unsaved permission changes?');")
+                    .join::<bool>()
+                    .await
+                    .unwrap_or(false);
+            confirming_discard.set(false);
+            if confirmed
+                && !locked()
+                && editor.state()() == UseResourceState::Ready
+                && person() == target
+                && generation() == current_generation
+            {
+                dirty.set(false);
+                person.set(None);
+            }
+        });
+    });
     rsx! {
         Modal {
             id: "person-permissions-dialog", labelledby: "person-permissions-title",
-            open: person().is_some(), busy: locked(), large: true,
-            on_dismiss: move |_| { if !locked() { person.set(None); } },
+            open: person().is_some(), busy: pending || confirming_discard(), large: true,
+            on_dismiss: move |_| dismiss.call(()),
             div { class: "px-6 pt-6",
                 h2 { id: "person-permissions-title", class: "text-2xl font-semibold", "Edit permissions" }
             }
             div { class: "modal-body wrap-anywhere",
+                "data-editor-kind": "permissions",
+                "data-editor-state": if person().is_none() { "clean" }
+                    else if pending { "pending" }
+                    else if ready && dirty() { "dirty" } else { "clean" },
                 if !ready {
                     p { role: "status", class: "text-sm text-secondary", "Loading permissions…" }
                 } else {
@@ -66,19 +106,19 @@ pub(super) fn PermissionEditorDialog(
                                 Ok(initial) => rsx! {
                                     PermissionForm {
                                         key: "{value.user_id}-{value.access_revision}-{value.permissions.revision}-{form_generation}",
-                                        initial, locked,
+                                        initial, locked, dirty,
                                         on_reload: reload,
                                         on_saved: move |changed| {
                                             locked.set(false);
                                             person.set(None);
                                             on_saved.call(changed);
                                         },
-                                        on_cancel: move |_| { if !locked() { person.set(None); } },
+                                        on_cancel: move |_| dismiss.call(()),
                                     }
                                 },
                                 Err(message) => rsx! {
                                     p { class: "text-danger text-sm", role: "alert", "{message}" }
-                                    button { r#type: "button", class: "btn btn-secondary mt-4",
+                                    button { id: RELOAD_BUTTON, r#type: "button", class: "btn btn-secondary mt-4",
                                         onclick: move |_| reload.call(()), "Reload permissions"
                                     }
                                 },
@@ -86,7 +126,7 @@ pub(super) fn PermissionEditorDialog(
                         },
                         Some(Err(error)) => rsx! {
                             p { role: "alert", class: "text-danger text-sm", "{load_error(error)}" }
-                            button { r#type: "button", class: "btn btn-secondary mt-4",
+                            button { id: RELOAD_BUTTON, r#type: "button", class: "btn btn-secondary mt-4",
                                 onclick: move |_| reload.call(()), "Reload permissions"
                             }
                         },
@@ -94,10 +134,10 @@ pub(super) fn PermissionEditorDialog(
                     }}
                 }
             }
-            if !locked() {
+            if !pending {
                 div { class: "px-6 pb-6",
-                    button { r#type: "button", class: "btn btn-secondary",
-                        onclick: move |_| person.set(None), "Close"
+                    button { id: CLOSE_BUTTON, r#type: "button", class: "btn btn-secondary",
+                        disabled: confirming_discard(), onclick: move |_| dismiss.call(()), "Close"
                     }
                 }
             }
@@ -109,6 +149,7 @@ pub(super) fn PermissionEditorDialog(
 fn PermissionForm(
     initial: DraftState,
     mut locked: Signal<bool>,
+    mut dirty: Signal<bool>,
     on_reload: EventHandler<()>,
     on_saved: EventHandler<bool>,
     on_cancel: EventHandler<()>,
@@ -119,10 +160,14 @@ fn PermissionForm(
     let mut reload_required = use_signal(|| false);
     let mut unavailable = use_signal(|| false);
     let mut template_intent = use_signal(|| None::<TemplateIntent>);
+    let template_dirty = use_signal(|| false);
+    use_effect(move || {
+        dirty.set(state.read().has_changes() || (template_intent().is_some() && template_dirty()))
+    });
     if let Some(intent) = template_intent() {
         return rsx! {
             TemplateEditor {
-                intent, access_revision: state.read().editor.access_revision, locked,
+                intent, access_revision: state.read().editor.access_revision, locked, dirty: template_dirty,
                 on_cancel: move |_| template_intent.set(None),
                 on_reload: move |_| on_reload.call(()),
             }
@@ -348,7 +393,7 @@ fn PermissionForm(
                     if busy() { "Reviewing…" } else { "Review changes" }
                 }
             }
-            button { r#type: "button", class: "btn btn-secondary", disabled: locked(),
+            button { id: CANCEL_BUTTON, r#type: "button", class: "btn btn-secondary", disabled: locked(),
                 onclick: move |_| { if !locked() { on_cancel.call(()); } }, "Cancel"
             }
         }

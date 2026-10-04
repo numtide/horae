@@ -1,5 +1,40 @@
 # Permission verification
 
+## Editor navigation and dismissal (T018, in progress)
+
+Run without a database in the Nix shell:
+
+```sh
+node crates/horae/tests/browser/editor-navigation.cjs
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo test -p horae --features server --test permission_editor_ui --test own_permissions_ui --test admin_shell --locked
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --no-default-features --features web --target wasm32-unknown-unknown --locked -- -D warnings
+```
+
+Observed: eight Node unit tests pass against the shipped history guard; 48 selected
+UI tests pass (editor 32, Settings 11, admin shell five). Node uses a simulated
+DOM/history, not a browser. Dioxus tests invoke production controls with controlled
+server replies and a test document provider for native confirmation responses.
+The default browser CI runner also includes the Node suite.
+Offline all-targets server Clippy (1m03s) and WASM Clippy (12.76s) pass with
+warnings denied. Formatting CI passes (491 files, zero changes).
+
+| Requirement | Increment evidence |
+| --- | --- |
+| FR-004 draft preservation | Grant reversal/dependency loss, source/template revision and independent identity; person edits survive template operations |
+| FR-012 distinct states | Initial/reload/preview/save pending; errors release read locks; uncertain saves remain pending; clean dismissal needs no confirmation |
+| FR-016 existing controls | Shared Modal unchanged; no CSS; Close/Cancel/native cancel/backdrop share discard confirmation, refusal/error preserves input |
+| FR-018 entry-point regression | Actual Rust handlers, permission/project/invoice push/replace/pop/unload cases, Dioxus scroll slots and legacy project attributes |
+
+RED reproduced missing navigation state and the unprotected initial load. Source
+review identified that read gap and existing unconfirmed modal dismissal; both
+were corrected and re-reviewed. Test-fixture corrections account for static
+Dioxus IDs, explicit pointer data and grant removal cascading to dependents.
+The source/documentation reviews found no further issue within this increment.
+They do not establish rendered acceptance. Full T018, browser keyboard/themes/
+viewports and durable same-request recovery after forced reload remain open.
+No SQL, migration, dependency, shared Modal or active-policy change is included.
+
 ## Management-loss names (T018, in progress)
 
 Run in the Nix shell against the owned disposable database:

@@ -487,6 +487,14 @@ Creation/deletion does not also save the person; reload explicitly discards thei
 unsaved changes. Legacy shell/directory replacement, improved recovery and full
 browser acceptance remain separate unfinished parts of T015/T017/T018.
 
+Navigation protection extends T018 without closing it: verify dirty/reverted
+grants, provenance and identity; preserve dirty person state through template
+operations; block pending initial/reload/preview/save requests; and require
+confirmation for dirty Close/Cancel/Escape/backdrop exits. Keep shared
+project/invoice history and scroll regression cases. Controlled handlers and
+Node script tests are not browser evidence. Durable same-request recovery after
+forced reload, bound to the original requester/workspace, remains required.
+
 Relationship-loss labels extend the authorized preview in `permissions/editor.rs`,
 not its stored audit or the command confirmation shape. Cover names, inactive
 subjects, other managers/tenants, no-loss proposals, denial, strict historical

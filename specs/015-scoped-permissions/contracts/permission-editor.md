@@ -93,6 +93,27 @@ an unchanged successful receipt from a real change. No request is persisted in
 browser storage by this consumer; navigation/reload recovery remains an acceptance
 case to resolve before declaring the full editor complete.
 
+### Navigation protection
+
+Connect the open dialog to the existing editor navigation guard. Unsubmitted
+person/profile edits are dirty; pending reads, mutations and uncertain mutation
+responses are pending. Reverting to the loaded configuration, explicit discard,
+successful saves and a closed dialog release the appropriate state. Template
+editing must not erase the person's dirty state. No browser storage is added by
+this guard, and no history/navigation action sends a mutation.
+
+Pending operations block same-document exits (including Back/Forward and URL
+replacement). Dirty exits require the existing native discard confirmation.
+Close, Cancel, Escape and backdrop dismissal share that confirmation. Refusal or
+an unavailable confirmation bridge preserves the draft; a delayed response cannot
+close a different target/generation or an editor with an unresolved request.
+Initial loads/reloads also block dismissal until their response settles.
+Reload/full-document exits use the existing browser warning, not a guarantee
+against forced reload or tab termination. Preserve Dioxus's history/scroll data
+and existing project/invoice messages and behavior. Keep their regression cases
+alongside the new permission cases. Durable same-request recovery after forced
+reload, session/tenant binding and full rendered acceptance remain required.
+
 ### Direction contract
 
 - Thesis: review an actual person's access before changing it, without presenting

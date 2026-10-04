@@ -108,6 +108,14 @@ draft; a completed template change requires an explicit fresh reload before more
 person editing. Canonical shell/directory enforcement, navigation recovery and
 browser acceptance remain unfinished, not implicitly supplied by this consumer.
 
+Navigation protection reuses the existing project/invoice guard, adding only
+permission-specific messages. The dialog publishes clean/dirty/pending state,
+including initial reads and reloads; native confirmation protects whole-dialog
+dismissal. Template drafts cannot erase person edits. Preserve shared Modal,
+history/scroll behavior and CSS. Verify the shipped script with Node's built-in
+test runner and real Dioxus handlers with controlled responses. These checks do
+not establish browser acceptance or durable actor-bound recovery after reload.
+
 Loss previews enrich only the evaluated relationship IDs with tenant-local subject
 names in the existing authorized transaction. Reuse the name-free historical
 relationship type for command audits; names are never confirmation authority.

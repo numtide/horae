@@ -18,12 +18,15 @@
   };
   const canLeave = () => {
     const invoice = document.querySelector('[data-editor-kind="invoice"]');
+    const permissions = document.querySelector('[data-editor-kind="permissions"]');
     if (state() === 'pending') {
-      alert(invoice ? 'An invoice request is unresolved. Wait for it to finish, or recover the request before leaving.'
+      alert(permissions ? 'A permission request is unresolved. Wait for it to finish, or retry the same request before leaving.'
+        : invoice ? 'An invoice request is unresolved. Wait for it to finish, or recover the request before leaving.'
         : 'A project save is unresolved. Wait for it to finish, or retry the request before leaving.');
       return false;
     }
-    return state() !== 'dirty' || confirm(invoice ? 'Discard unsaved invoice changes?' : 'Discard unsaved project changes?');
+    return state() !== 'dirty' || confirm(permissions ? 'Discard unsaved permission changes?'
+      : invoice ? 'Discard unsaved invoice changes?' : 'Discard unsaved project changes?');
   };
 
   history.pushState = (data, title, url) => {

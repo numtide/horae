@@ -37,6 +37,7 @@ type PreviewReply = oneshot::Receiver<Result<ProfilePreview, ServerFnError>>;
 type SaveReply = oneshot::Receiver<Result<ProfileOutcome, ServerFnError>>;
 type TemplateReply = oneshot::Receiver<Result<TemplateOutcome, ServerFnError>>;
 type DeletionReply = oneshot::Receiver<Result<TemplateDeletionPreview, ServerFnError>>;
+type LoadReply = oneshot::Receiver<Result<PermissionEditor, ServerFnError>>;
 
 #[derive(Clone)]
 struct Probe {
@@ -51,6 +52,8 @@ struct Probe {
     deletions: Rc<RefCell<Vec<Uuid>>>,
     deletion_replies: Rc<RefCell<VecDeque<DeletionReply>>>,
     loads: Rc<RefCell<usize>>,
+    load_replies: Rc<RefCell<VecDeque<LoadReply>>>,
+    confirmations: Rc<RefCell<VecDeque<Result<bool, document::EvalError>>>>,
 }
 
 impl Probe {
@@ -79,12 +82,20 @@ impl Probe {
             deletions: Default::default(),
             deletion_replies: Default::default(),
             loads: Default::default(),
+            load_replies: Default::default(),
+            confirmations: Default::default(),
         }
     }
 
     fn preview_reply(&self) -> oneshot::Sender<Result<ProfilePreview, ServerFnError>> {
         let (send, receive) = oneshot::channel();
         self.preview_replies.borrow_mut().push_back(receive);
+        send
+    }
+
+    fn load_reply(&self) -> oneshot::Sender<Result<PermissionEditor, ServerFnError>> {
+        let (send, receive) = oneshot::channel();
+        self.load_replies.borrow_mut().push_back(receive);
         send
     }
 
@@ -121,10 +132,47 @@ impl Probe {
 
 fn app(probe: Probe) -> Element {
     use_context_provider(|| probe.clone());
+    use_context_provider(|| Rc::new(probe.clone()) as Rc<dyn document::Document>);
     let person = use_signal(|| Some(probe.editor.user_id));
     rsx! { permission_editor::PermissionEditorDialog {
         person, on_saved: move |changed| probe.saved.borrow_mut().push(changed),
     } }
+}
+
+impl document::Document for Probe {
+    fn eval(&self, script: String) -> document::Eval {
+        struct Reply(Option<Result<bool, document::EvalError>>);
+        impl document::Evaluator for Reply {
+            fn poll_join(
+                &mut self,
+                _: &mut std::task::Context<'_>,
+            ) -> std::task::Poll<Result<serde_json::Value, document::EvalError>> {
+                std::task::Poll::Ready(self.0.take().unwrap().map(serde_json::Value::Bool))
+            }
+            fn poll_recv(
+                &mut self,
+                _: &mut std::task::Context<'_>,
+            ) -> std::task::Poll<Result<serde_json::Value, document::EvalError>> {
+                std::task::Poll::Ready(Err(document::EvalError::Unsupported))
+            }
+            fn send(&self, _: serde_json::Value) -> Result<(), document::EvalError> {
+                Err(document::EvalError::Unsupported)
+            }
+        }
+        let reply = if script.contains("window.confirm(") {
+            assert_eq!(
+                script,
+                "return window.confirm('Discard unsaved permission changes?');"
+            );
+            self.confirmations
+                .borrow_mut()
+                .pop_front()
+                .expect("unexpected discard confirmation")
+        } else {
+            Err(document::EvalError::Unsupported)
+        };
+        document::Eval::new(dioxus::core::current_owner().insert(Box::new(Reply(Some(reply)))))
+    }
 }
 
 struct Ui {
@@ -171,20 +219,57 @@ impl Ui {
     }
 
     fn click(&mut self, name: &str) {
+        self.dispatch(name, "click", Box::<SerializedMouseData>::default());
+    }
+
+    fn dispatch(&mut self, name: &str, kind: &str, data: Box<dyn Any>) {
         let id = *self
             .targets
             .get(name)
             .unwrap_or_else(|| panic!("missing {name}: {}", self.html()));
-        let event = Event::new(
-            Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())) as Rc<dyn Any>,
-            true,
-        );
-        self.dom.runtime().handle_event("click", event, id);
+        let event = Event::new(Rc::new(PlatformEventData::new(data)) as Rc<dyn Any>, true);
+        self.dom.runtime().handle_event(kind, event, id);
         self.settle();
+    }
+
+    fn dismiss(&mut self, path: &str) {
+        match path {
+            "escape" => self.dispatch(
+                "person-permissions-dialog",
+                "cancel",
+                Box::new(SerializedCancelData {}),
+            ),
+            "backdrop" => {
+                let mut data = serde_json::to_value(SerializedMouseData::default()).unwrap();
+                data.as_object_mut().unwrap().extend(
+                    serde_json::json!({
+                        "pointer_id": 1, "width": 1, "height": 1, "pressure": 0,
+                        "tangential_pressure": 0, "tilt_x": 0, "tilt_y": 0,
+                        "twist": 0, "pointer_type": "mouse", "is_primary": true,
+                    })
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+                );
+                let data: SerializedPointerData = serde_json::from_value(data).unwrap();
+                self.dispatch("person-permissions-dialog", "pointerdown", Box::new(data));
+                self.click("person-permissions-dialog");
+            }
+            _ => self.click(path),
+        }
     }
 
     fn html(&self) -> String {
         dioxus::ssr::render(&self.dom)
+    }
+
+    fn navigation_state(&self, state: &str) {
+        let html = self.html();
+        assert!(html.contains("data-editor-kind=\"permissions\""), "{html}");
+        assert!(
+            html.contains(&format!("data-editor-state=\"{state}\"")),
+            "{html}"
+        );
     }
 
     fn select_profile(&mut self, value: &str) {
@@ -204,10 +289,80 @@ impl Ui {
 }
 
 #[tokio::test]
+async fn loading_and_reloading_protect_navigation_until_success_or_error() {
+    let probe = Probe::new();
+    let reply = probe.load_reply();
+    let mut ui = Ui::new(probe.clone());
+    ui.navigation_state("pending");
+    assert!(ui.html().contains("aria-busy=true"));
+    ui.dismiss("escape");
+    ui.dismiss("backdrop");
+    ui.navigation_state("pending");
+    reply
+        .send(Err(ServerFnError::new("private transport")))
+        .unwrap();
+    ui.settle();
+    ui.navigation_state("clean");
+    let reply = probe.load_reply();
+    ui.click("permission-editor-reload");
+    ui.navigation_state("pending");
+    reply.send(Ok(probe.editor.clone())).unwrap();
+    ui.settle();
+    ui.navigation_state("clean");
+    assert!(ui.html().contains("Example person"));
+}
+
+#[tokio::test]
+async fn dirty_close_requires_confirmation_and_failure_preserves_the_draft() {
+    for path in [
+        "permission-editor-close",
+        "permission-editor-cancel",
+        "escape",
+        "backdrop",
+    ] {
+        let probe = Probe::new();
+        let mut ui = Ui::new(probe.clone());
+        ui.select_profile("Member");
+        for reply in [Ok(false), Err(document::EvalError::Unsupported)] {
+            probe.confirmations.borrow_mut().push_back(reply);
+            ui.dismiss(path);
+            ui.navigation_state("dirty");
+            assert!(ui.html().contains("Example person"));
+        }
+        probe.confirmations.borrow_mut().push_back(Ok(true));
+        ui.dismiss(path);
+        ui.navigation_state("clean");
+        assert!(!ui.html().contains("Example person"));
+        assert!(probe.confirmations.borrow().is_empty());
+        assert!(probe.saves.borrow().is_empty());
+        assert!(probe.templates.borrow().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn clean_dismissal_needs_no_confirmation() {
+    for path in [
+        "permission-editor-close",
+        "permission-editor-cancel",
+        "escape",
+        "backdrop",
+    ] {
+        let probe = Probe::new();
+        let mut ui = Ui::new(probe.clone());
+        ui.dismiss(path);
+        ui.navigation_state("clean");
+        assert!(!ui.html().contains("Example person"));
+        assert!(probe.saves.borrow().is_empty());
+    }
+}
+
+#[tokio::test]
 async fn creating_a_template_captures_final_grants_and_retries_without_saving_the_person() {
     let probe = Probe::new();
     let mut ui = Ui::new(probe.clone());
+    ui.navigation_state("clean");
     ui.select_profile("Member");
+    ui.navigation_state("dirty");
     ui.click("permission-ClientReadAll");
     ui.click("permission-template-create");
     assert!(ui.html().contains("Create custom profile"));
@@ -216,6 +371,7 @@ async fn creating_a_template_captures_final_grants_and_retries_without_saving_th
     let reply = probe.template_reply();
     ui.click("permission-template-save");
     ui.click("permission-template-save");
+    ui.navigation_state("pending");
     assert_eq!(probe.templates.borrow().len(), 1);
     let command = probe.templates.borrow()[0].clone();
     assert_eq!(command.expected_access_revision, 7);
@@ -230,6 +386,7 @@ async fn creating_a_template_captures_final_grants_and_retries_without_saving_th
         .unwrap();
     ui.settle();
     ui.form_event("permission-template-name", "input", "Changed intent");
+    ui.navigation_state("pending");
     ui.click("permission-template-cancel");
     assert!(ui.html().contains("Retry same save"));
     let reply = probe.template_reply();
@@ -244,6 +401,7 @@ async fn creating_a_template_captures_final_grants_and_retries_without_saving_th
         .unwrap();
     ui.settle();
     assert!(ui.html().contains("Custom profile created"));
+    ui.navigation_state("dirty");
     assert!(
         ui.html()
             .contains("Reload and discard unsaved person changes")
@@ -579,26 +737,51 @@ async fn cancelling_a_loaded_deletion_preview_preserves_person_edits_without_mut
 }
 
 #[tokio::test]
+async fn navigation_tracks_reverted_edits_and_cancelled_template_inputs() {
+    let probe = Probe::new();
+    let mut ui = Ui::new(probe.clone());
+    ui.navigation_state("clean");
+    ui.select_profile("Project Manager");
+    ui.navigation_state("clean");
+    ui.select_profile("Member");
+    ui.navigation_state("dirty");
+    ui.select_profile("current");
+    ui.navigation_state("clean");
+    ui.click("permission-template-create");
+    ui.navigation_state("clean");
+    ui.form_event("permission-template-name", "input", "Unsaved profile");
+    ui.navigation_state("dirty");
+    ui.click("permission-template-cancel");
+    ui.navigation_state("clean");
+    assert!(probe.saves.borrow().is_empty());
+    assert!(probe.templates.borrow().is_empty());
+}
+
+#[tokio::test]
 async fn real_controls_review_once_and_retry_the_identical_uncertain_save() {
     let probe = Probe::new();
     let mut ui = Ui::new(probe.clone());
     let reply = probe.preview_reply();
     ui.click("permission-review");
     ui.click("permission-review");
+    ui.navigation_state("pending");
     assert_eq!(probe.previews.borrow().len(), 1);
     assert!(probe.saves.borrow().is_empty());
     reply.send(Ok(probe.effects())).unwrap();
     ui.settle();
+    ui.navigation_state("clean");
     assert!(ui.html().contains("No changes to the saved configuration"));
     let save_reply = probe.save_reply();
     ui.click("permission-save");
     ui.click("permission-save");
+    ui.navigation_state("pending");
     assert_eq!(probe.saves.borrow().len(), 1);
     save_reply
         .send(Err(ServerFnError::new("private transport details")))
         .unwrap();
     ui.settle();
     assert!(ui.html().contains("Retry same save"));
+    ui.navigation_state("pending");
     assert!(!ui.html().contains("private transport details"));
     let retry_reply = probe.save_reply();
     ui.click("permission-save");
@@ -614,6 +797,7 @@ async fn real_controls_review_once_and_retry_the_identical_uncertain_save() {
         .unwrap();
     ui.settle();
     assert_eq!(*probe.saved.borrow(), vec![false]);
+    ui.navigation_state("clean");
 }
 
 #[tokio::test]
@@ -742,7 +926,11 @@ mod server_fns {
         let probe = use_context::<Probe>();
         *probe.loads.borrow_mut() += 1;
         assert_eq!(id, probe.editor.user_id);
-        Ok(probe.editor)
+        let reply = probe.load_replies.borrow_mut().pop_front();
+        match reply {
+            Some(reply) => reply.await.expect("load reply dropped"),
+            None => Ok(probe.editor),
+        }
     }
 
     pub async fn preview_person_permissions(
