@@ -59,9 +59,14 @@
   warnings denied (13.84s). No runtime code changed after the full test pass.
   T189–T191 are complete for authenticated backend delivery, with the independent
   review closed and all existing SQLx descriptions preserved.
+- Published unsigned implementation commit `84d5352`; GitHub confirms the exact
+  head on open draft #212. Its description retains prior evidence and adds this
+  increment. Final formatting changes zero files; the worktree was clean after
+  publication. No merge or policy activation occurred.
 
-Next: publish this verified increment to draft #212 without merge, then resume
-the remaining permission integration. This delivers no form/browser integration or policy activation;
+Next: resume the remaining permission integration, resolving the composite
+project-form field predicates before connecting canonical manager editing to UI.
+This delivers no form/browser integration or policy activation;
 remaining field predicates, new-relationship activity and approval decisions are
 unchanged. The full permission goal remains active.
 
