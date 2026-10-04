@@ -8,6 +8,51 @@ use uuid::Uuid;
 use super::people::PeopleCursor;
 use super::permission_editor::PermissionRequester;
 
+/// Explicit server policy; a denied canonical read never selects legacy mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TimesheetPolicy {
+    LegacyOwn,
+    Scoped,
+}
+
+/// The selected subject is distinct from the authenticated requester.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    not(feature = "server"),
+    expect(
+        dead_code,
+        reason = "Connected Timesheet consumer is being integrated."
+    )
+)]
+pub struct TimesheetQuery {
+    pub subject_id: Option<Uuid>,
+    pub date_from: NaiveDate,
+    pub date_to: NaiveDate,
+    pub after: Option<TimeEntryCursor>,
+    pub expected_requester: Option<PermissionRequester>,
+    pub expected_policy: Option<TimesheetPolicy>,
+}
+
+/// A subject, its labels and entries admitted under one current authority fence.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    not(feature = "server"),
+    expect(
+        dead_code,
+        reason = "Connected Timesheet consumer is being integrated."
+    )
+)]
+pub struct TimesheetPage {
+    pub requester: PermissionRequester,
+    pub subject: TimesheetPerson,
+    pub policy: TimesheetPolicy,
+    pub entries: Vec<VisibleTimeEntry>,
+    pub next_after: Option<TimeEntryCursor>,
+}
+
 /// Narrow authorized Timesheet identities, independently of the displayed dates.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

@@ -1,5 +1,97 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Bound selected-person page reads
+
+- Revalidated existing `60f60f9` worktree and active goal after the delegation
+  status turn. That status response itself was not implementation progress.
+
+- Implemented `load_timesheet_page` and its explicit query/response in existing
+  time modules. Subject resolution and entries share one transaction and both
+  requester/target activity fences. Reused candidate/entry SQL, rather than
+  composing independently authenticated reads or fabricating internal entries.
+  Policy 0 is explicitly own-only; policy 1 never falls back after denial.
+
+- The initial RED (`58531`, exit 101) failed all three planned positive-context
+  tests on the temporary unimplemented reader. GREEN (`5996`, exit 0) passes six
+  context tests (6.35s), eight candidate regressions (1.53s), eight scoped-reader
+  regressions (1.67s) and the real-session HTTP matrix (9.42s). The tests cover
+  empty selection, unrelated-project exclusion, identity/policy changes, 501-row
+  paging, malformed query/state, selected-person archive ordering and cancellation.
+
+- Real HTTP coverage proves session-derived identity, legacy own compatibility,
+  canonical subject projection with exact safe fields, forged outer identity,
+  foreign requester, unavailable subjects, sanitized failures and inactive denial.
+  No browser result or page integration is claimed. SQLx and native/WASM lint are
+  still pending for this increment; source formatting and diff checks pass.
+
+- The parallel specialist reports a reproduced six-case revoked-reader leak and
+  incoherent invoice header/lines. Its seven focused reader tests now pass; a
+  route-name ambiguity in its HTTP test helper was fixed, and its full server
+  suite is running. Parent has not yet reviewed its final verified diff.
+
+- Final verification (`63000`, exit 0): complete SQLx preparation (1m07s),
+  offline all-target server Clippy (1m13s) and WASM Clippy (13.70s), both with
+  warnings denied. All 1,465 SQLx descriptors remain unchanged: the implementation
+  reuses existing SQL. Cleaned only 1.7 GiB of regenerable Horae package artifacts
+  after validating the worktree target; the private PostgreSQL was stopped.
+
+- Bounded parent adversarial review found no high/critical issue in the new read
+  boundary: no authority from expected identity/policy, no fallback on denial,
+  stable selected-person activity, independent row scope, minimal HTTP projection
+  and no changed legacy consumers. This is not completed UI/delegated-write review.
+
+- Reviewed the specialist's production diff and complete transaction/HTTP tests;
+  no high/critical finding in that bounded legacy repair. It reports all 1,325
+  server tests passing (1,104 in-crate, 221 external; 11 existing ignored tests).
+  Its SQLx/lint verification remains independent and in progress.
+
+- Read the remaining Timesheet renderers/tests and the full handoff Design System
+  page (identical in both worktrees). Component-kit/import reading and the
+  immediate pre-edit craft-floor step are still pending before visual changes.
+
+Next: complete SQLx/native/WASM checks and publish the context increment on draft
+#212, then connect the actual Timesheet consumer and commands. Finish the remaining
+handoff imports before visual edits. T014/T015/T018, policy activation/migration,
+expense/approval coverage and lock semantics remain open; no merge or real-data
+change was made. Keep the full goal active.
+
+## 2026-10-04 — Connected Timesheet integration and parallel reader repair
+
+- Published candidate discovery as unsigned `60f60f9` on existing draft #212;
+  push completed successfully and the worktree was clean. Final format CI passed
+  with zero changes. T179–T181 are complete, not the full permission feature.
+- Read the full Timesheet handoff and traced current page loading, URL state,
+  grid/dialog/Calendar dispatch, `ProjectTaskPicker` and `RunningTimer`. The
+  handoff has no teammate selector. More importantly, all current actions and
+  tracking choices assume the session person; edits omit project/task movement,
+  and row removal uses independent requests. Recorded the connected integration
+  boundary in `contracts/timesheet-integration.md`, including requester/subject
+  binding, stale responses and preserving shell ownership. No UI change yet.
+- Read `design-implement` and Impeccable's instructions. The context launcher
+  failed because its engine is absent and the default cache is not writable;
+  reported the prescribed fallback and read existing design context directly.
+  `PRODUCT.md` is absent. Preserve the incumbent world; no tooling installation,
+  design-system rewrite or browser validation is claimed. Shared handoff imports
+  still need to be read before visual implementation, and craft-floor guidance
+  must be read immediately before UI edits.
+- The specialist found no new defect in completed export contracts, but located
+  the already-open T014/T039 revocation gap in `report_detailed`, `list_invoices`
+  and `get_invoice`. Parent inspection confirms these pass organization identity
+  after an initial manager gate without retaining the actor. Delegated the
+  bounded legacy repair and real race tests in a separate worktree/branch from
+  `60f60f9`, with a draft dependent PR allowed after verification, no merge.
+- Reflink is unavailable. The specialist will use its own target with debug
+  symbols/incremental disabled and two build jobs; no shared target, full-copy
+  fallback or unrelated cleanup. Parent compilation remains idle while the
+  first reproduction is prepared. No browser/MCP tools are loaded in this turn.
+
+Next: implement the connected Timesheet context/commands and screen path from the
+recorded boundary, completing its required source/reference reading first. Review
+the specialist's actual reproduction and verified diff when returned; do not
+mistake its proposed test for executed evidence. Approval/expense coverage,
+company locks, full policy migration and cross-surface acceptance remain open.
+The goal stays active with parallel implementation work, not complete or blocked.
+
 ## 2026-10-04 — Timesheet candidate discovery integration
 
 - The user confirmed A: active managed-project participants are selectable even

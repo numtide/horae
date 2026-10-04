@@ -1,5 +1,26 @@
 # Permission verification
 
+## Selected Timesheet page context (T014/T015 in progress)
+
+In the same isolated Nix/PostgreSQL setup below, also run:
+
+```sh
+CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae timesheet_context_tests::
+```
+
+The initial three positive cases failed against the unimplemented page reader.
+The implemented boundary passes six transaction tests (6.35s), eight candidate
+tests (1.53s), eight scoped-entry tests (1.67s) and the real HTTP matrix (9.42s).
+It proves explicit legacy/scoped policy, separate requester/subject, empty managed
+participants, per-project entry limits, expected-identity/policy denial, 501-row
+continuation, invalid queries/state and both target-archive lock orders including
+cancellation. Exact HTTP payload assertions exclude financial/internal data.
+
+Complete SQLx generation preserves all 1,465 descriptors unchanged. Offline server
+all-target and WASM Clippy pass with warnings denied. A bounded self-review found
+no high/critical defect in this read boundary. The screen still uses its existing
+reader; this is not selected-person UI, delegated-write or full-feature acceptance.
+
 ## Timesheet candidate discovery (T179–T181)
 
 Use the Nix shell and a disposable PostgreSQL database with CREATEDB. After other

@@ -118,3 +118,100 @@ not fall back to legacy responses.
 Full activation still requires the operation matrix, migration review, real
 expense/approval integration and cross-surface enforcement. This sequence does
 not authorize a partially enforced rollout or omit any of those requirements.
+
+## Selected-person integration boundary at `60f60f9`
+
+Source review confirms the handoff's Day/Week/Calendar layout, but its complete
+`04_Timesheet.dc.html` contains no teammate selector or delegated warning state.
+Compose these from the existing controls under the confirmed missing-mockup
+authorization; do not invent an alternate Timesheet layout. The current
+`ProjectTaskPicker` loads the session person's contexts internally and therefore
+cannot safely be reused unchanged for a selected teammate. The shell's use of
+that component must remain session-owned.
+
+The next implementation is a connected consumer change, not another independently
+delivered permission reader:
+
+1. **Resolve the page context.** Distinguish authenticated requester from selected
+   subject and include both in every load/mutation context. Select the legacy or
+   canonical path from an explicit server policy result, never from a failed
+   canonical request. Policy 0 keeps the existing own sheet; canonical failures,
+   unknown versions and inaccessible subjects do not fall back to it. Do not
+   activate policy as part of the UI change.
+1. **Preserve navigation identity.** Carry the selected subject through Day, Week,
+   Calendar, date navigation, span changes and browser history. Own-sheet links
+   remain valid. Invalid or inaccessible subject IDs must not silently become a
+   different person's sheet. Resolve selected IDs outside the first candidate
+   page using the verified narrowing query.
+1. **Bind asynchronous work.** A loaded page belongs to requester, subject and
+   date window; only the matching current context may display its entries,
+   totals, errors or mutation result. Discard obsolete responses and clear stale
+   dialogs, pending rows and drag state on accepted context changes. Pending
+   mutations retain their original context; a later selection cannot retarget
+   them. Reuse existing dirty/pending navigation conventions instead of silently
+   dropping unsaved inputs. Server mutations independently check the expected
+   requester and selected subject against current authenticated authority.
+1. **Replace the data dependency, not the facts.** Day/week/calendar currently
+   consume `TimeEntry`, own tracking project/task lists and `list_clients(true)`.
+   The canonical path must consume the safe scoped entry projection and its
+   labels; do not fabricate a full internal entry or fetch the general client
+   directory merely to name historical work. Collect all authorized pages before
+   displaying period totals, keeping each total equal to displayed source rows.
+1. **Separate tracking choices from historical labels.** Creation and editing
+   need target-specific eligible project/task combinations and current operation
+   scope. Session-person tracking contexts do not describe a teammate. Historical
+   labels remain readable after tracking membership changes without restoring
+   tracking eligibility or granting project management.
+1. **Connect every action.** `persist_entry`, week cells, row removal, dialog
+   save/delete, Day start/stop and Calendar move/resize/reorder must carry the
+   same captured subject. The current edit dispatch omits project/task changes;
+   the current row-removal loop issues independent deletions and reports partial
+   results. Neither may be mistaken for a delegated atomic command. Pin and test
+   the complete affected set before enabling a corresponding bulk affordance.
+   Keep source/destination scope and independent locks; no one `can_edit` flag.
+1. **Retain shell ownership.** `RunningTimer` refreshes the session timer and
+   invalidates page data. A teammate action may invalidate these resources but
+   must never replace the shell timer owner or operate on it accidentally.
+
+Required discriminating tests include an A→B selection while A's load/save is
+pending, a requester change between pages, a stale dialog after selection,
+unreadable selected IDs, a selected person beyond candidate page one, mixed
+project read/write scope, archived historical labels and a concurrent own timer
+while viewing a teammate. Test Day/Week/Calendar and route history together.
+Submission/withdrawal and locked corrections retain their explicit coverage and
+company-lock dependencies; do not hide those requirements behind this boundary.
+
+### Atomic page context
+
+`load_timesheet_page(TimesheetQuery)` now resolves the authenticated requester,
+selected active subject, explicit policy and one authorized entry page in the
+same bounded transaction. This is the read boundary for the connected consumer,
+not completed Day/Week/Calendar integration or delegated commands.
+
+- Policy 0 admits only the session person's sheet, without requiring canonical
+  permission state. Policy 1 uses the existing strict grants and candidate/entry
+  predicates. Missing or unknown policy and invalid stored state do not fall
+  back to legacy mode. No activation or role remapping occurs.
+- An absent subject means the requester; an explicit inaccessible, foreign,
+  archived or unknown subject is denied, never replaced by the requester. Empty
+  managed-project participants retain the user-confirmed navigation rule without
+  exposing their unrelated time.
+- Hold both requester and selected-subject activity stable until labels and rows
+  are materialized. This covers independent target archiving as well as the
+  existing organization policy/relationship fence. No database session defaults
+  are changed; rollback/cancellation release locks.
+- Return `requester`, minimal `subject`, `policy`, safe `entries` and `next_after`.
+  Reuse the existing 500-entry descending cursor query and labels; no invoice,
+  currency, rates, directory or authentication fields are added.
+- The consumer must capture returned requester/policy/subject on the initial
+  load, pass `expected_requester` and `expected_policy` on continuation and
+  retain the selected subject. Mismatches are denied; these expected values are
+  equality checks, never sources of authority. Exhaust pages before totals;
+  there is no claim of a repeatable snapshot across different page requests.
+
+Six transaction tests and the real registered-session matrix cover legacy own
+compatibility, canonical subject resolution, empty membership, mixed-project
+scope, identity/policy changes, inaccessible subjects, 501-entry continuation,
+invalid query/state, target-archive ordering and cancellation. Existing candidate
+and scoped-reader suites remain unchanged and pass. Native/WASM lint and full
+SQLx verification are recorded separately in the progress log.
