@@ -287,6 +287,13 @@ command kind as conflicting intent rather than trying to decode its shape.
 
 ### Internal project delegation
 
+Authenticated existing-project delivery, using the closed FR-026 contract without
+changing initial creation, financial fields, legacy form saves or policy activation:
+
+- [x] T189 Add failing manager-set reader and registered-session tests for exact retained identities, project scope, requester binding, revocation, replay, self-removal and sanitized failures.
+- [x] T190 Connect the canonical manager reader and existing replacement transaction to authenticated server functions with shared minimal DTOs, preserving command/receipt serialization and organization-first locking.
+- [x] T191 Verify affected transaction/HTTP tests, SQLx completeness, offline server/WASM checks and adversarial review; record remaining form/browser integration explicitly.
+
 T058 → T059 → T060 → T061 implements the closed local contract in
 `contracts/project-management-commands.md`. These sequential tasks share fixtures
 and commands; no parallel code work. Person-management lifecycle, editor wiring,

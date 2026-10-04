@@ -203,6 +203,7 @@ async fn check_historical_shapes(
         .await
         .unwrap();
     let project = project_management::ProjectManagersCommand {
+        kind: crate::models::project_managers::ProjectManagersCommandKind::ReplaceProjectManagers,
         request_id: Uuid::now_v7(),
         expected_access_revision: 1,
         project_id: ids.project_id,

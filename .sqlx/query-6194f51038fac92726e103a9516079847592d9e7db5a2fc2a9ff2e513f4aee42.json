@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT u.id,u.name,u.active FROM project_management_assignments m\n         JOIN users u ON u.org_id=m.org_id AND u.id=m.manager_id\n         WHERE m.org_id=$1 AND m.project_id=$2 ORDER BY u.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "active",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "6194f51038fac92726e103a9516079847592d9e7db5a2fc2a9ff2e513f4aee42"
+}

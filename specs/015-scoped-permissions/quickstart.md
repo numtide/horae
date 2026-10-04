@@ -1,5 +1,35 @@
 # Permission verification
 
+## Authenticated project-manager delivery (T189–T191)
+
+The policy-1 `load_project_managers` and `save_project_managers` endpoints derive
+the actor and organization from the session and require current project-edit
+authority. Reads return the complete retained set with only ID/name/activity;
+saves pin the original requester and reuse the existing atomic replacement.
+Neither endpoint enables policy 1 or replaces the legacy project editor.
+
+Run in the Nix shell against disposable PostgreSQL:
+
+```sh
+cargo test -p horae --features server --bin horae project_management_tests::
+cargo test -p horae --features server --bin horae command_preserves_durable_intent
+cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization
+```
+
+Coverage includes exact retained identities, archived/incompatible managers,
+all/managed scope, requester binding, both revocation orders, cancellation,
+atomic invalid selections, replay, self-removal and administrator-only audit
+access. Registered HTTP testing exposed a command that serialized `kind` but
+rejected it on deserialization. The explicit single-variant discriminator keeps
+the durable JSON unchanged while rejecting missing/wrong kinds and extra fields.
+
+Full server-binary run `49140` passes 1,150 tests with 11 pre-existing ignored
+cases. Clean SQLx preparation preserves all 1,512 previous descriptions and adds
+eight; offline all-target server Clippy (`52861`) and WASM Clippy (`69854`) pass
+with warnings denied. This is backend/session evidence, not browser integration, policy
+activation, full Nix acceptance or permission feature completion. Complete
+project-form field predicates remain a separate integration gate.
+
 ## Selected-person Timesheet browser acceptance (T187–T188)
 
 `run-design-checks.sh timesheet-permissions` uses the same built client/server and

@@ -1,27 +1,101 @@
 //! Project delegation changes scope, never grants or tracking membership.
 
 use horae_core::permissions::catalog::Permission;
-use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
+use serde::Serialize;
+use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
 use super::{PermissionStorageError, load_person_permissions};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename = "replace_project_managers", deny_unknown_fields)]
-pub(crate) struct ProjectManagersCommand {
-    pub request_id: Uuid,
-    pub expected_access_revision: i64,
-    pub project_id: Uuid,
-    pub manager_ids: Vec<Uuid>,
+use crate::models::permission_editor::PermissionRequester;
+use crate::models::project_managers::{ProjectManager, ProjectManagers};
+pub(crate) use crate::models::project_managers::{ProjectManagersCommand, ProjectManagersOutcome};
+
+/// Materialize the complete current set without revalidating retained targets.
+pub(crate) async fn read(
+    pool: &PgPool,
+    org_id: Uuid,
+    actor_id: Uuid,
+    project_id: Uuid,
+) -> Result<ProjectManagers, ProjectManagersError> {
+    let mut tx = pool.begin().await?;
+    super::configure_administration(&mut tx).await?;
+    let org = sqlx::query!(
+        "SELECT permission_policy_version, access_revision FROM organizations WHERE id=$1 FOR SHARE",
+        org_id
+    ).fetch_optional(&mut *tx).await?.ok_or(ProjectManagersError::Forbidden)?;
+    if org.permission_policy_version != 1 {
+        return Err(ProjectManagersError::Forbidden);
+    }
+    authorize_actor(&mut tx, org_id, actor_id, project_id).await?;
+    sqlx::query_scalar!(
+        "SELECT id FROM projects WHERE org_id=$1 AND id=$2",
+        org_id,
+        project_id
+    )
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or(ProjectManagersError::NotFound)?;
+    let managers = sqlx::query_as!(
+        ProjectManager,
+        "SELECT u.id,u.name,u.active FROM project_management_assignments m
+         JOIN users u ON u.org_id=m.org_id AND u.id=m.manager_id
+         WHERE m.org_id=$1 AND m.project_id=$2 ORDER BY u.id",
+        org_id,
+        project_id
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(ProjectManagers {
+        requester: PermissionRequester {
+            org_id,
+            user_id: actor_id,
+        },
+        project_id,
+        access_revision: org.access_revision,
+        managers,
+    })
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct ProjectManagersOutcome {
-    pub project_id: Uuid,
-    pub access_revision: i64,
-    pub changed: bool,
+/// The caller holds the organization gate before checking current project authority.
+async fn authorize_actor(
+    connection: &mut PgConnection,
+    org_id: Uuid,
+    actor_id: Uuid,
+    project_id: Uuid,
+) -> Result<(), ProjectManagersError> {
+    let active = sqlx::query_scalar!(
+        "SELECT active FROM users WHERE org_id = $1 AND id = $2 FOR SHARE",
+        org_id,
+        actor_id
+    )
+    .fetch_optional(&mut *connection)
+    .await?;
+    if active != Some(true) {
+        return Err(ProjectManagersError::Forbidden);
+    }
+    let actor = load_person_permissions(connection, org_id, actor_id)
+        .await?
+        .ok_or(ProjectManagersError::Forbidden)?;
+    if !actor.grants.contains(Permission::ProjectWriteAll) {
+        if !actor.grants.contains(Permission::ProjectWriteManaged) {
+            return Err(ProjectManagersError::Forbidden);
+        }
+        let designated = sqlx::query_scalar!(
+            "SELECT EXISTS(SELECT 1 FROM project_management_assignments
+             WHERE org_id = $1 AND project_id = $2 AND manager_id = $3)",
+            org_id,
+            project_id,
+            actor_id
+        )
+        .fetch_one(connection)
+        .await?;
+        if designated != Some(true) {
+            return Err(ProjectManagersError::Forbidden);
+        }
+    }
+    Ok(())
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -74,7 +148,7 @@ struct ProjectManagersAudit {
 }
 
 /// IDs identifying the actor and organization must come from authentication.
-/// Internal only until all runtime access paths enforce the canonical policy.
+/// Unavailable in legacy policy; this operation does not activate canonical policy.
 pub(crate) async fn execute(
     pool: &PgPool,
     org_id: Uuid,
@@ -87,36 +161,10 @@ pub(crate) async fn execute(
         "SELECT permission_policy_version, access_revision FROM organizations WHERE id = $1 FOR UPDATE",
         org_id
     ).fetch_optional(&mut *tx).await?.ok_or(ProjectManagersError::Forbidden)?;
-    let active = sqlx::query_scalar!(
-        "SELECT active FROM users WHERE org_id = $1 AND id = $2 FOR SHARE",
-        org_id,
-        actor_id
-    )
-    .fetch_optional(&mut *tx)
-    .await?;
-    if org.permission_policy_version != 1 || active != Some(true) {
+    if org.permission_policy_version != 1 {
         return Err(ProjectManagersError::Forbidden);
     }
-    let actor = load_person_permissions(&mut tx, org_id, actor_id)
-        .await?
-        .ok_or(ProjectManagersError::Forbidden)?;
-    if !actor.grants.contains(Permission::ProjectWriteAll) {
-        if !actor.grants.contains(Permission::ProjectWriteManaged) {
-            return Err(ProjectManagersError::Forbidden);
-        }
-        let designated = sqlx::query_scalar!(
-            "SELECT EXISTS(SELECT 1 FROM project_management_assignments
-             WHERE org_id = $1 AND project_id = $2 AND manager_id = $3)",
-            org_id,
-            request.project_id,
-            actor_id
-        )
-        .fetch_one(&mut *tx)
-        .await?;
-        if designated != Some(true) {
-            return Err(ProjectManagersError::Forbidden);
-        }
-    }
+    authorize_actor(&mut tx, org_id, actor_id, request.project_id).await?;
     let mut intent = request.clone();
     intent.manager_ids.sort_unstable();
     if intent.manager_ids.windows(2).any(|pair| pair[0] == pair[1]) {

@@ -448,6 +448,7 @@ async fn profile_and_project_history_decode_exact_changes_and_noops(pool: PgPool
     .unwrap();
     assert!(serde_json::to_value(noop).unwrap()["audit"]["details"]["change"].is_null());
     let mut managers = ProjectManagersCommand {
+        kind: crate::models::project_managers::ProjectManagersCommandKind::ReplaceProjectManagers,
         request_id: Uuid::now_v7(),
         expected_access_revision: 1,
         project_id: ids.project_id,

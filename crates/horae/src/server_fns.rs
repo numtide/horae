@@ -516,6 +516,7 @@ mod permission_editor;
 mod permissions;
 mod plugins;
 mod project_creation;
+mod project_managers;
 mod projects;
 mod reports;
 #[cfg(feature = "server")]

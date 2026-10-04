@@ -1,5 +1,70 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Authenticated project-manager delivery
+
+- Previous turn made progress: published verified `5f7895c` to draft #212.
+  Revalidated the clean worktree. Rechecked current Harvest permissions/budget
+  guides; they still do not close all composite project-form financial effects.
+  No new product decision, restricted-user observation or account write follows.
+- Independent review identified the closed FR-026 existing-project delegation
+  contract as implementable without creation, financial or person-management
+  activity decisions. T189–T191 connect its existing transaction, not a new
+  policy engine or ad-hoc UI. Checked Spec Kit prerequisites; command skills are
+  absent locally, so no slash-command execution is claimed.
+- Added exact retained-set and authority/revocation/cancellation tests. RED `2150`
+  fails the real reader test with `Forbidden` against the placeholder. Shared
+  DTOs preserve the command's exact serialized tag/fields and receipt format.
+- Implemented minimal reader and authenticated read/save wrappers. Both reader
+  and existing writer share current actor/project-edit authorization under their
+  organization gates. Requester binding stays outside durable intent; current
+  authorization still precedes replay. Retained inactive/incompatible people
+  are returned without private fields or permission-state reads.
+- Added registered HTTP cases for identity binding, exact payloads, scoped
+  authority, stale/duplicate/invalid batches, replay, self-removal and audit
+  denial to non-administrator authors. Reader-first/revocation-first checks use
+  real PostgreSQL blockers, including direct activity changes and cancellation.
+- Applied Rust/testing/async and simplicity guidance. Removed only this thread's
+  two redundant Dioxus native caches (1.7 GiB) after confirming they had no live
+  compiler; sources, tested native/client artifacts and databases were preserved.
+- User reconfirmed FR-033/B: terminal timer recovery stays owner-only. This
+  repeats the recorded decision and requires no broader delegated exception.
+- Focused `43174` passes all 29 project-management tests, including both direct
+  activity lock orders. Its registered HTTP phase fails before authentication.
+  Diagnostic `48468` confirms the writer's serialized `kind` is rejected by the
+  derived struct deserializer. Replaced the serialization-only struct tag with
+  an explicit, single-variant discriminant: durable JSON is unchanged and input
+  remains strict. Added exact round-trip, wrong/missing kind and extra-field tests.
+- Independent static review approves the activity/audit test delta. Final
+  `49140` runs the server-binary regressions, complete SQLx preparation and
+  offline server/all-target and WASM lint. Results are pending.
+- Independent review also approves the strict discriminator fix. `49140` now
+  passes all server-binary regressions: 1,150 passed, zero failures and the 11
+  pre-existing ignored cases in 114.00s. This includes the corrected registered
+  HTTP matrix, 29 delegation tests and the DTO round-trip test. SQLx/offline
+  phases remain in progress; T189/T190 are complete, T191 remains open.
+- `49140` ends with WASM dead-code lint for the five new DTOs, not a failing
+  runtime test. Applied the existing pending-UI convention only to this shared
+  DTO module and only outside the server build. Its cached SQLx preparation
+  also omitted 91 existing descriptors; do not publish those deletions.
+  `52861` regenerates after cleaning only the validated worktree's Horae dev
+  package artifacts (dry-run: 330 regenerable files, 7.9 GiB), then reruns both
+  offline lint targets. No sources or databases are removed by that cleanup.
+- Clean preparation `52861` preserves all 1,512 previous SQLx descriptors and
+  adds eight. Offline all-target server Clippy passes in 1m18s. WASM rejects
+  the module-level lint expectation as unfulfilled; moved that expectation to
+  each of the five pending DTOs, following the existing project-picker model.
+  This is compile-time annotation only; `76301` verifies the final WASM build.
+- `76301` identifies two redundant expectations on nested types. Kept only
+  the three top-level DTO expectations; final WASM Clippy `69854` passes with
+  warnings denied (13.84s). No runtime code changed after the full test pass.
+  T189–T191 are complete for authenticated backend delivery, with the independent
+  review closed and all existing SQLx descriptions preserved.
+
+Next: publish this verified increment to draft #212 without merge, then resume
+the remaining permission integration. This delivers no form/browser integration or policy activation;
+remaining field predicates, new-relationship activity and approval decisions are
+unchanged. The full permission goal remains active.
+
 ## 2026-10-04 — Delegated Calendar mutation acceptance
 
 - Revalidated published `e29f4d8` and reused draft #212. Extended the isolated

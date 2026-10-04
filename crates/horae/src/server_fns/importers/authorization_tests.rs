@@ -33,6 +33,7 @@ mod own_permissions;
 mod own_submission;
 mod permission_audit;
 mod permission_editor;
+mod project_managers;
 mod project_people;
 mod scoped_time;
 mod session_identity;
@@ -353,6 +354,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     session_identity::check(&pool, &api).await;
     user_directory::check(&pool, &api).await;
     project_people::check(&pool, &api).await;
+    project_managers::check(&pool, &api).await;
     scoped_time::check(&pool, &api).await;
     delegated_time::check(&pool, &api).await;
     own_submission::check(&pool, &api).await;

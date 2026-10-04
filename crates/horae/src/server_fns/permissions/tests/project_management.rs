@@ -6,6 +6,9 @@ use horae_core::types::OrgRole;
 use sqlx::PgPool;
 use std::time::Duration;
 
+#[path = "project_management_read.rs"]
+mod reader_tests;
+
 async fn permissions(pool: &PgPool, org: Uuid, user: Uuid, grants: &[Permission]) {
     let ids: Vec<String> =
         serde_json::from_value(serde_json::to_value(PermissionSelection::new(grants)).unwrap())
@@ -57,6 +60,7 @@ async fn person(pool: &PgPool, org: Uuid, grants: &[Permission]) -> Uuid {
 
 fn request(project_id: Uuid, managers: &[Uuid]) -> ProjectManagersCommand {
     ProjectManagersCommand {
+        kind: crate::models::project_managers::ProjectManagersCommandKind::ReplaceProjectManagers,
         request_id: Uuid::now_v7(),
         expected_access_revision: 0,
         project_id,
