@@ -176,6 +176,44 @@ state, foreign/empty cursors, grant/relationship revocation, direct deactivation
 cancellation/pool reuse and registered-session requests. The new endpoint does
 not activate policy, complete the directory UI or pass the complete OP19 row.
 
+### Directory consumer and workspace navigation
+
+The People route selects the legacy component only after an explicit successful
+policy-0 own-permission response. Policy 1 mounts the scoped reader, never legacy
+people/task resources or invitation, role, activity and task writes. Failed or
+unsupported permission projections cannot select legacy mode. Preserve Importers'
+existing server authority; People read grants do not authorize importing. Audit
+and permission editing continue to require explicit canonical Administrator identity.
+Navigation visibility is a hint, not a substitute for each endpoint's fresh checks.
+
+Use active/archived/all and previous/next pages of 50, with no invented total,
+last-active timestamp or role column. Bind the first directory response's requester
+through filters, pagination and refresh; reject a different requester without
+showing its rows. Hide old results during pending/failed/denied reads. A permission
+editor selection carries target ID and that page's requester together, including
+the very first load. Reload never replaces the binding. Reuse the existing table,
+form controls and token utilities; no global CSS or visual identity change.
+
+Denial or failure at the People shell must not erase or strand an unresolved
+permission request. Mount a recovery-only dialog host beside the notice, with no
+selected person. It may locate only the current authenticated user's tab slot,
+not load people, tasks, editor targets or subjects. It cannot grant directory
+access or submit automatically, and retries retain the original server-authorized
+command contract. Never mount two dialog/recovery hosts at once or discard an
+acknowledged cleanup outcome by refreshing authorization prematurely.
+The same recovery-only host remains beside the legacy directory if the workspace
+returns to policy 0; that policy denies canonical replay but must not hide the
+retained record. A canonical projection error cannot revoke Importers' separate
+legacy admission; it only suppresses canonical navigation hints there.
+
+Acceptance combines actual component gates and resource isolation with a real
+disposable browser: canonical Administrator/legacy Member, managed-only readers,
+all-grants non-Administrator, legacy Admin without canonical People read, policy-0
+regressions, activity/paging, account switches before initial editor load and later
+pages, denial/error suppression, and forced-reload recovery after all People grants
+are revoked. This integration does not implement ordinary people writes or activate
+the policy on real data; those full-feature requirements remain open.
+
 - Directory rows require `PeopleReadManaged` or `PeopleReadAll`, with trusted
   current person-management relationships; project membership or management alone
   is not a people-directory grant. Do not infer access from profile ordering.

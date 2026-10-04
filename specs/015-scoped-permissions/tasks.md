@@ -791,6 +791,12 @@ data repair, role mapping or runtime activation is authorized by these cases.
 
 ## Phase 9: Acceptance
 
+### Canonical People integration
+
+- [x] T198 Add failing actual-consumer tests for canonical People route/navigation, legacy isolation, scoped paging/activity and initial editor requester binding (FR-002/006/008/010/011/018).
+- [x] T199 Connect the scoped directory and Administrator editor, isolate legacy resources/writes and preserve recovery after loss of directory authority.
+- [x] T200 Verify the complete connected flow in disposable Chromium, including account changes, denied recovery, keyboard/theme/viewport and legacy regressions; run native/WASM checks, independent review and record remaining full-feature gates.
+
 ### Editor identity continuity before directory integration
 
 - [x] T195 Reproduce requester switching through explicit editor reload after both an initial response and a rejected subject-picker load (FR-010/011/018).

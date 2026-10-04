@@ -1,4 +1,5 @@
 use dioxus::prelude::*;
+use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
 
 use crate::components::avatar::Avatar;
 use crate::components::icons::NavIcon;
@@ -78,10 +79,11 @@ fn SideLink(to: Route, icon: String, label: String, on_navigate: EventHandler<()
 #[component]
 fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
     let me = use_resource(|| async move { server_fns::get_me().await });
+    let mut own = use_resource(server_fns::get_my_permissions);
     let mut open = use_signal(|| false);
 
     let user = me.read();
-    let (name, email, role, marks, is_admin) = match &*user {
+    let (name, email, legacy_role, marks, is_admin) = match &*user {
         Some(Ok(u)) => (
             u.name.clone(),
             u.email.clone(),
@@ -97,8 +99,26 @@ fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
             false,
         ),
     };
-    // The role renders as a compact status pill; admins get the pine variant.
-    let role_class = if is_admin {
+    let (people, administrator, role) =
+        match (own.state()() == UseResourceState::Ready, &*own.read()) {
+            (true, Some(Ok(None))) => (is_admin, is_admin, legacy_role),
+            (true, Some(Ok(Some(access))))
+                if access.catalog_version == PERMISSION_CATALOG_VERSION =>
+            {
+                (
+                    access.grants.contains(&Permission::PeopleReadAll)
+                        || access.grants.contains(&Permission::PeopleReadManaged),
+                    access.is_administrator,
+                    if access.is_administrator {
+                        "Administrator".into()
+                    } else {
+                        String::new()
+                    },
+                )
+            }
+            _ => (false, false, String::new()),
+        };
+    let role_class = if administrator {
         "badge badge-info badge-sm"
     } else {
         "badge badge-neutral badge-sm"
@@ -126,18 +146,17 @@ fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
                             "Settings"
                         }
                     }
-                    // Org administration, only for admins.
-                    if is_admin {
+                    if people || is_admin {
                         div { class: "sidebar-menu-list",
-                            div { class: "menu-group", "Admin" }
-                            Link { to: Route::AdminUsers {}, class: "menu-item", onclick: move |_| { open.set(false); on_navigate.call(()); },
+                            div { class: "menu-group", "Workspace" }
+                            if people { Link { to: Route::AdminUsers {}, class: "menu-item", onclick: move |_| { open.set(false); on_navigate.call(()); },
                                 span { class: "menu-item-icon", NavIcon { name: "users" } }
                                 "People"
-                            }
-                            Link { to: Route::HarvestImport {}, class: "menu-item", onclick: move |_| { open.set(false); on_navigate.call(()); },
+                            } }
+                            if is_admin { Link { to: Route::HarvestImport {}, class: "menu-item", onclick: move |_| { open.set(false); on_navigate.call(()); },
                                 span { class: "menu-item-icon", NavIcon { name: "import" } }
                                 "Importers"
-                            }
+                            } }
                         }
                     }
                     div { class: "sidebar-menu-foot",
@@ -152,7 +171,10 @@ fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
                 class: "sidebar-footer",
                 "aria-haspopup": "menu",
                 "aria-expanded": "{open()}",
-                onclick: move |_| open.set(!open()),
+                onclick: move |_| {
+                    if !open() { own.restart(); }
+                    open.set(!open());
+                },
                 Avatar { initials: "{marks}" }
                 // The chip keeps the identity while the popover is open (the design
                 // shows both); the caret flips to signal the open state.

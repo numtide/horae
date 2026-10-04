@@ -1,5 +1,57 @@
 # Permission verification
 
+## Canonical People consumer (T198–T200)
+
+The People route and sidebar now use supported own People-read grants. Only an
+explicit policy-0 response selects the legacy users/tasks editor. Canonical
+Administrator identity, not equivalent grants or a legacy Admin role, enables
+permission editing. Importers retains its independent legacy gate even when the
+canonical projection fails; audit remains canonical-Administrator-only.
+
+The directory uses its bounded server projection with active/archived/all filters
+and previous/next pages, without a fabricated total or legacy role column. Its
+first requester remains fixed across page/filter/refresh requests. Selecting a row
+passes `(target, requester)` into the editor before its first read; session or
+organization changes cannot retarget the form through a load or reload.
+
+Denied/failed People and policy-0 fallback retain the recovery-only dialog. That
+host locates the signed-in user's tab record without loading directory/editor
+targets, and does not submit automatically. Current server authority still governs
+replay. Acknowledged cleanup completes before authorization refresh unmounts the
+editor. Ordinary canonical invitation/activity/task writers are not implemented
+by this consumer and are not exposed as legacy actions.
+
+```sh
+nix develop --command env SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo test -p horae --features server --test admin_shell --test permission_editor_ui --config 'profile.dev.package.horae.strip="debuginfo"'
+```
+
+Original-shell execution reproduced both new admission failures. Restored-source
+verification `29224` passes 11 actual-shell and 55 actual editor/directory tests,
+plus offline all-target server and WASM Clippy with warnings denied. Native tests
+drive real controls/resources with controlled replies; they are not browser tests.
+
+The real `permission-editor-recovery` suite (`92963`, Chromium 148.0.7778.96)
+passes canonical Administrator/legacy Member navigation, managed-only scope,
+all-grants non-admin, legacy Admin denial, policy-0 isolation, 50-row paging,
+activity filters and keyboard navigation. A second tab switches the actual cookie;
+the first editor read and explicit retry both reject the new requester's successful
+server response. Complete People-grant revocation and return to policy 0 preserve
+the same recovery command. Existing audit, template, lost-response and acknowledged
+self-demotion cleanup cases remain included. All fixture writes use the runner's
+disposable PostgreSQL, never a reference Harvest or developer database.
+
+Desktop-dark/narrow-light captures exposed over-aggressive word wrapping in the
+new table cells; removed that local utility while preserving shared horizontal
+scrolling. Final `67362` passes all 66 tests, both lint targets and official
+server/WASM packaging; complete Chromium `98074` passes on that bundle. Inspected
+the final 1440-dark and 390-light captures under `.scratch/people-directory-final/`:
+names/emails remain readable and the table scrolls locally without page overflow.
+Formatting CI checks all 541 selected files with zero changes (`32073`). Independent
+review has no remaining high/medium finding. No CSS, SQL, migration or new
+dependency changed. Full Nix acceptance, ordinary
+people management, remaining operation predicates and real-policy cutover remain
+open; this is not completion of the permission feature.
+
 ## Editor reload requester continuity (T195–T197)
 
 The editor pins its first accepted response's requester and preserves that pair
@@ -33,9 +85,9 @@ Offline all-target server Clippy and WASM Clippy pass with warnings denied
 finding and finds no remaining material defect in this delta. No SQL or migration
 changed, so SQLx regeneration was not needed. Full Nix/feature gates remain open.
 
-This repair does not bind an external directory row before the first editor
-response. Canonical People integration, its route/navigation gates and initial
-page-requester binding remain required; it is not full T018 or feature acceptance.
+That earlier repair did not bind an external directory row before the first editor
+response. The canonical consumer above adds that binding and its route/navigation
+gates; neither increment alone completes T018 or full-feature acceptance.
 
 ## Invoice writer and revocation ordering (T192–T194)
 

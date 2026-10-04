@@ -44,13 +44,12 @@ const RELOAD_BUTTON: &str = "permission-editor-reload";
 
 #[component]
 pub(super) fn PermissionEditorDialog(
-    mut person: Signal<Option<Uuid>>,
+    mut person: Signal<Option<(Uuid, PermissionRequester)>>,
     on_saved: EventHandler<bool>,
 ) -> Element {
     let mut locked = use_signal(|| false);
     let mut dirty = use_signal(|| false);
     let mut confirming_discard = use_signal(|| false);
-    let mut selected_by = use_signal(|| None::<PermissionRequester>);
     let mut recovery = use_resource(move || async move {
         let _ = person();
         let user = server_fns::get_me().await.map_err(|error| {
@@ -75,17 +74,15 @@ pub(super) fn PermissionEditorDialog(
     });
     let mut editor = use_resource(move || async move {
         match person() {
-            Some(id) => {
-                let expected = *selected_by.peek();
+            Some((id, expected)) => {
                 let loaded = server_fns::load_permission_editor(id).await?;
-                if expected.is_some_and(|requester| requester != loaded.requester) {
+                if expected != loaded.requester {
                     return Err(ServerFnError::ServerError {
                         code: FORBIDDEN,
                         message: "Session changed while selecting a person.".into(),
                         details: None,
                     });
                 }
-                selected_by.set(Some(loaded.requester));
                 Ok(Some(loaded))
             }
             None => Ok(None),
@@ -111,8 +108,7 @@ pub(super) fn PermissionEditorDialog(
             return;
         }
         if !dirty() {
-            selected_by.set(next.map(|(_, requester)| requester));
-            person.set(next.map(|(id, _)| id));
+            person.set(next);
             return;
         }
         let target = person();
@@ -133,8 +129,7 @@ pub(super) fn PermissionEditorDialog(
                 && generation() == current_generation
             {
                 dirty.set(false);
-                selected_by.set(next.map(|(_, requester)| requester));
-                person.set(next.map(|(id, _)| id));
+                person.set(next);
             }
         });
     });
@@ -159,7 +154,6 @@ pub(super) fn PermissionEditorDialog(
                     RecoveryForm { key: "recovery-{form_generation}", request: request.clone(), locked,
                         on_finished: move |changed: Option<bool>| {
                             locked.set(false);
-                            selected_by.set(None);
                             person.set(None);
                             reload.call(());
                             if let Some(changed) = changed { on_saved.call(changed); }
@@ -172,7 +166,7 @@ pub(super) fn PermissionEditorDialog(
                     }
                 } else {
                     {match &*editor.read() {
-                        Some(Ok(Some(value))) if Some(value.user_id) == person() => {
+                        Some(Ok(Some(value))) if Some((value.user_id, value.requester)) == person() => {
                             match DraftState::new(value.clone()) {
                                 Ok(initial) => rsx! {
                                     PermissionForm {
@@ -183,7 +177,6 @@ pub(super) fn PermissionEditorDialog(
                                         on_reload: reload,
                                         on_saved: move |changed| {
                                             locked.set(false);
-                                            selected_by.set(None);
                                             person.set(None);
                                             on_saved.call(changed);
                                         },

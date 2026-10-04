@@ -13,6 +13,8 @@ use horae_core::permissions::catalog::{BuiltInProfile, Permission};
 use tokio::sync::oneshot;
 use uuid::Uuid;
 
+#[path = "../src/components/badge.rs"]
+pub mod badge;
 #[path = "../src/components/controls.rs"]
 pub mod controls;
 #[path = "../src/components/form.rs"]
@@ -23,14 +25,21 @@ pub mod menu;
 pub mod modal;
 #[path = "../src/components/permission_description.rs"]
 pub mod permission_description;
+#[path = "../src/components/table.rs"]
+pub mod table;
 mod components {
-    pub use super::{controls, form, menu, modal, permission_description};
+    pub use super::{badge, controls, form, menu, modal, permission_description, table};
 }
+#[path = "../src/models/people.rs"]
+pub mod people_model;
 #[path = "../src/models/permission_editor.rs"]
 pub mod permission_editor_model;
 mod models {
+    pub use super::people_model as people;
     pub use super::permission_editor_model as permission_editor;
 }
+#[path = "../src/pages/admin/people.rs"]
+mod people;
 #[path = "../src/pages/admin/permission_editor.rs"]
 mod permission_editor;
 use permission_editor_model::*;
@@ -42,9 +51,17 @@ type DeletionReply = oneshot::Receiver<Result<TemplateDeletionPreview, ServerFnE
 type LoadReply = oneshot::Receiver<Result<PermissionEditor, ServerFnError>>;
 type IdentityReply = oneshot::Receiver<Result<PermissionRequester, ServerFnError>>;
 type SubjectsReply = oneshot::Receiver<Result<PermissionSubjectPage, ServerFnError>>;
+type PeopleReply = oneshot::Receiver<Result<people_model::PeoplePage, ServerFnError>>;
+type PeopleQuery = (
+    people_model::PeopleActivity,
+    Option<people_model::PeopleCursor>,
+);
 
 #[derive(Clone)]
 struct Probe {
+    directory: Option<bool>,
+    people_replies: Rc<RefCell<VecDeque<PeopleReply>>>,
+    people_queries: Rc<RefCell<Vec<PeopleQuery>>>,
     open_person: bool,
     editor: PermissionEditor,
     previews: Rc<RefCell<Vec<ProfileDraft>>>,
@@ -70,6 +87,9 @@ struct Probe {
 impl Probe {
     fn new() -> Self {
         Self {
+            directory: None,
+            people_replies: Default::default(),
+            people_queries: Default::default(),
             open_person: true,
             editor: PermissionEditor {
                 requester: PermissionRequester {
@@ -178,7 +198,14 @@ impl Probe {
 fn app(probe: Probe) -> Element {
     use_context_provider(|| probe.clone());
     use_context_provider(|| Rc::new(probe.clone()) as Rc<dyn document::Document>);
-    let person = use_signal(|| probe.open_person.then_some(probe.editor.user_id));
+    let person = use_signal(|| {
+        probe
+            .open_person
+            .then_some((probe.editor.user_id, probe.editor.requester))
+    });
+    if let Some(can_edit_permissions) = probe.directory {
+        return rsx! { people::CanonicalPeople { can_edit_permissions, on_saved: move |changed| probe.saved.borrow_mut().push(changed) } };
+    }
     rsx! { permission_editor::PermissionEditorDialog {
         person, on_saved: move |changed| probe.saved.borrow_mut().push(changed),
     } }
@@ -333,10 +360,7 @@ impl Ui {
     }
 
     fn dispatch(&mut self, name: &str, kind: &str, data: Box<dyn Any>) {
-        let id = *self
-            .targets
-            .get(name)
-            .unwrap_or_else(|| panic!("missing {name}: {}", self.html()));
+        let id = self.target(name);
         let event = Event::new(Rc::new(PlatformEventData::new(data)) as Rc<dyn Any>, true);
         self.dom.runtime().handle_event(kind, event, id);
         self.settle();
@@ -387,7 +411,7 @@ impl Ui {
     }
 
     fn form_event(&mut self, name: &str, event_name: &str, value: &str) {
-        let id = self.targets[name];
+        let id = self.target(name);
         let data = SerializedFormData::new(value.into(), vec![]);
         let event = Event::new(
             Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>,
@@ -396,6 +420,49 @@ impl Ui {
         self.dom.runtime().handle_event(event_name, event, id);
         self.settle();
     }
+
+    fn target(&self, name: &str) -> ElementId {
+        self.targets
+            .get(name)
+            .copied()
+            .or_else(|| static_target(&self.dom, self.dom.base_scope().root_node(), name))
+            .unwrap_or_else(|| panic!("missing {name}: {}", self.html()))
+    }
+}
+
+// Static IDs live in templates rather than SetAttribute mutations. Resolve the
+// real mounted event target without forcing production IDs to become dynamic.
+fn static_target(dom: &VirtualDom, vnode: &VNode, name: &str) -> Option<ElementId> {
+    use dioxus::core::{DynamicNode, TemplateAttribute, TemplateNode};
+    for (index, path) in vnode.template.attr_paths.iter().enumerate() {
+        let mut node = &vnode.template.roots[usize::from(path[0])];
+        for child in &path[1..] {
+            let TemplateNode::Element { children, .. } = node else {
+                return None;
+            };
+            node = &children[usize::from(*child)];
+        }
+        if let TemplateNode::Element { attrs, .. } = node
+            && attrs.iter().any(|attr| matches!(attr, TemplateAttribute::Static { name: "id", value, .. } if *value == name)) {
+            return vnode.mounted_dynamic_attribute(index, dom);
+        }
+    }
+    for (index, node) in vnode.dynamic_nodes.iter().enumerate() {
+        let found = match node {
+            DynamicNode::Component(component) => component
+                .mounted_scope(index, vnode, dom)
+                .and_then(|scope| scope.try_root_node())
+                .and_then(|node| static_target(dom, node, name)),
+            DynamicNode::Fragment(nodes) => {
+                nodes.iter().find_map(|node| static_target(dom, node, name))
+            }
+            _ => None,
+        };
+        if found.is_some() {
+            return found;
+        }
+    }
+    None
 }
 
 #[tokio::test]
@@ -573,7 +640,7 @@ async fn reload_cannot_adopt_another_requester_after_a_rejected_subject_load() {
 }
 
 #[tokio::test]
-async fn initial_editor_response_pins_requester_across_reload() {
+async fn initial_editor_selection_pins_requester_across_reload() {
     for change_org in [false, true] {
         let probe = Probe::new();
         let mut invalid = probe.editor.clone();
@@ -600,6 +667,149 @@ async fn initial_editor_response_pins_requester_across_reload() {
         ui.settle();
         assert!(ui.html().contains("Example person"));
         assert!(probe.saves.borrow().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn first_editor_response_cannot_replace_the_directory_requester() {
+    for change_org in [false, true] {
+        let probe = Probe::new();
+        let mut foreign = probe.editor.clone();
+        foreign.name = "Foreign response".into();
+        if change_org {
+            foreign.requester.org_id = Uuid::now_v7();
+        } else {
+            foreign.requester.user_id = Uuid::now_v7();
+        }
+        probe.load_reply().send(Ok(foreign)).unwrap();
+        let ui = Ui::new(probe.clone());
+        assert!(ui.html().contains("Permission editing is unavailable"));
+        assert!(!ui.html().contains("Foreign response"));
+        assert!(!ui.html().contains("Review changes"));
+        assert!(probe.saves.borrow().is_empty());
+    }
+}
+
+fn directory_reply(
+    probe: &Probe,
+) -> oneshot::Sender<Result<people_model::PeoplePage, ServerFnError>> {
+    let (send, receive) = oneshot::channel();
+    probe.people_replies.borrow_mut().push_back(receive);
+    send
+}
+
+fn directory_page(probe: &Probe, next: bool) -> people_model::PeoplePage {
+    people_model::PeoplePage {
+        requester: probe.editor.requester,
+        people: vec![people_model::PersonSummary {
+            id: probe.editor.user_id,
+            name: "Directory person".into(),
+            email: "person@example.test".into(),
+            active: true,
+        }],
+        next_after: next.then(|| people_model::PeopleCursor {
+            name: "Directory person".into(),
+            id: probe.editor.user_id,
+        }),
+    }
+}
+
+#[tokio::test]
+async fn directory_paging_filtering_and_errors_hide_stale_rows() {
+    use people_model::PeopleActivity;
+    let mut probe = Probe::new();
+    probe.directory = Some(false);
+    let first = directory_reply(&probe);
+    let mut ui = Ui::new(probe.clone());
+    assert!(ui.html().contains("Loading people"));
+    first.send(Ok(directory_page(&probe, true))).unwrap();
+    ui.settle();
+    assert!(ui.html().contains("Directory person"));
+    assert!(!ui.html().contains("Edit permissions for"));
+    assert!(!ui.html().contains("Invite User"));
+    assert_eq!(*probe.loads.borrow(), 0);
+    let next = directory_reply(&probe);
+    ui.click("people-next");
+    assert!(!ui.html().contains("Directory person"));
+    next.send(Err(ServerFnError::new("private SQL error")))
+        .unwrap();
+    ui.settle();
+    assert!(ui.html().contains("Could not load people"));
+    assert!(!ui.html().contains("private SQL"));
+    let previous = directory_reply(&probe);
+    ui.click("people-previous");
+    previous.send(Ok(directory_page(&probe, true))).unwrap();
+    ui.settle();
+    let archived = directory_reply(&probe);
+    ui.form_event("people-activity", "change", "archived");
+    assert!(!ui.html().contains("Directory person"));
+    let mut empty = directory_page(&probe, false);
+    empty.people.clear();
+    archived.send(Ok(empty)).unwrap();
+    ui.settle();
+    assert!(ui.html().contains("No people match this filter"));
+    let all = directory_reply(&probe);
+    ui.form_event("people-activity", "change", "all");
+    all.send(Ok(directory_page(&probe, false))).unwrap();
+    ui.settle();
+    assert_eq!(
+        *probe.people_queries.borrow(),
+        vec![
+            (PeopleActivity::Active, None),
+            (
+                PeopleActivity::Active,
+                directory_page(&probe, true).next_after
+            ),
+            (PeopleActivity::Active, None),
+            (PeopleActivity::Archived, None),
+            (PeopleActivity::All, None),
+        ]
+    );
+    assert!(probe.saves.borrow().is_empty());
+}
+
+#[tokio::test]
+async fn directory_keeps_requester_on_paging_filters_refresh_and_initial_editor_load() {
+    for change_org in [false, true] {
+        for action in ["editor", "refresh", "next", "filter"] {
+            let mut probe = Probe::new();
+            probe.directory = Some(true);
+            directory_reply(&probe)
+                .send(Ok(directory_page(&probe, true)))
+                .unwrap();
+            let mut ui = Ui::new(probe.clone());
+            let mut foreign = probe.editor.requester;
+            if change_org {
+                foreign.org_id = Uuid::now_v7();
+            } else {
+                foreign.user_id = Uuid::now_v7();
+            }
+            if action == "editor" {
+                let reply = probe.load_reply();
+                ui.click(&format!("people-permissions-{}", probe.editor.user_id));
+                let mut loaded = probe.editor.clone();
+                loaded.requester = foreign;
+                loaded.name = "Foreign response".into();
+                reply.send(Ok(loaded)).unwrap();
+            } else {
+                let reply = directory_reply(&probe);
+                match action {
+                    "refresh" => ui.click("people-refresh"),
+                    "next" => ui.click("people-next"),
+                    "filter" => ui.form_event("people-activity", "change", "all"),
+                    _ => unreachable!(),
+                }
+                assert!(!ui.html().contains("Directory person"));
+                let mut loaded = directory_page(&probe, false);
+                loaded.requester = foreign;
+                loaded.people[0].name = "Foreign response".into();
+                reply.send(Ok(loaded)).unwrap();
+            }
+            ui.settle();
+            assert!(!ui.html().contains("Foreign response"));
+            assert!(!ui.html().contains("Review changes"));
+            assert!(probe.saves.borrow().is_empty());
+        }
     }
 }
 
@@ -1622,6 +1832,20 @@ async fn switching_accounts_or_workspaces_does_not_load_or_erase_the_original_re
 
 mod server_fns {
     use super::*;
+
+    pub async fn list_people(
+        activity: people_model::PeopleActivity,
+        after: Option<people_model::PeopleCursor>,
+    ) -> Result<people_model::PeoplePage, ServerFnError> {
+        let probe = use_context::<Probe>();
+        probe.people_queries.borrow_mut().push((activity, after));
+        let reply = probe
+            .people_replies
+            .borrow_mut()
+            .pop_front()
+            .expect("unexpected directory request");
+        reply.await.expect("directory response dropped")
+    }
 
     pub struct CurrentUser {
         pub id: Uuid,

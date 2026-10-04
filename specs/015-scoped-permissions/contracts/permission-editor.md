@@ -74,11 +74,10 @@ selection, reload both recovery and editor data, binding the selected person's
 load to the original requester. A session switch must not silently retarget an
 old editor. Pending/uncertain person or template saves cannot switch targets.
 An explicit reload retains the selected requester's organization and user IDs,
-including after a rejected target load. Pin the first successful editor response
-for an initially unbound entry point; subsequent reloads cannot adopt another
-requester. Closing or completing the dialog releases that binding. This does not
-yet bind a legacy directory row before its first editor response: the canonical
-directory must pass its own page requester when that consumer is connected.
+including after a rejected target load. The canonical directory passes its page
+requester and selected target together before the first editor read; neither
+that read nor subsequent reloads may adopt another requester. Closing or
+completing the dialog releases that binding. Legacy rows do not open this editor.
 The menu does not replace general-directory or shell policy and is not evidence
 of complete T018 acceptance.
 

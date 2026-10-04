@@ -1,5 +1,76 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Canonical People consumer integration
+
+- The previous clarification response was no implementation progress: FR-033/B
+  was already recorded. Revalidated the existing worktree and ran the actual
+  Spec Kit prerequisite script successfully; its command skills remain absent.
+- Reused the test executable compiled before the shell change: both new tests
+  fail on the original gate (valid canonical reader denied; legacy Admin without
+  People scope admitted). The earlier linker failure was not a test result.
+- Connected canonical directory reads, activity filters, cursor paging, shared
+  table controls and initial `(target, requester)` editor binding. Policy 0 alone
+  selects the legacy directory/tasks/writes; failed or unsupported projections
+  cannot fall back. Sidebar entry follows People read scope, not legacy role.
+- Independent review identified two P2 cases, now addressed: recovery remains
+  mounted after returning to policy 0, and canonical projection failures cannot
+  change the legacy Importers admission rule. Denied canonical People mounts
+  only recovery, without directory/target reads. No shared CSS or SQL changed.
+- Added actual-component paging/filter/error/requester tests and disposable
+  browser scenarios for managed/all scope, canonical Administrator with legacy
+  Member role, all-grants non-admin, denial, legacy isolation and recovery after
+  complete People-grant revocation. Verification is still in progress.
+- Native linking encountered a bus error with less than 1 GiB disk free. Removed
+  debug symbols from this worktree's regenerable old native executable, retaining
+  its runnable code and the reusable browser-build caches; no source/data removed.
+  Fixed compile diagnostics in test module resolution and shell result typing.
+  Nine shell tests passed before the additional Importers regression; final
+  combined test invocation `82918` is live, not yet evidence of completion.
+- `82918` ended on native-link disk exhaustion; direct test execution found two
+  harness failures resolving static control IDs, not passing directory tests.
+  Added traversal of actual mounted templates rather than changing production IDs.
+  `89909` then passed all 11 shell and 55 editor/directory component tests. Official
+  sequential Dioxus server/WASM packaging `88704` passed in 76s.
+- Nix's automatic cache collection removed the browser font configuration.
+  An incorrect path-based `getFlake` evaluation to restore it copied ignored build
+  artifacts too, consuming 21 GiB and exhausting disk during a test-file write.
+  Stopped that evaluation, recovered the complete modified test file from the
+  evaluation's pre-failure snapshot, and removed only that verified store copy
+  through Nix (19.9 GiB freed) plus three old regenerable test executables.
+  Git, original data and other worktrees were not deleted. A Git-filtered flake
+  evaluation restored the exact fonts configuration without copying `target/`.
+- Clippy identified a complex test-only type and nested conditional; corrected
+  both without suppression. `29224` repeats tests/native/WASM lint on the restored
+  final source. Real disposable Chromium `14009` is now running. These live
+  handles are not completed verification; no full-feature acceptance is claimed.
+- `29224` passed all 66 component tests and both Clippy targets. Chromium
+  `14009` passed the new scope/session cases, then exposed an outdated test focus
+  expectation: the account-switch scenario now opens from the other administrator's
+  row. Corrected the expected return-focus target; full suite `92963` passes.
+  Independent final review closes both P2 findings with no new high/medium issue.
+- The batched 1440-dark/390-light inspection found short fragments in narrow
+  name/email cells. Removed only their `wrap-anywhere` utility and retained the
+  shared scrolling table, without CSS changes. Extended requester tests to next
+  page and filter changes as well as refresh/initial editor load. Final `67362`
+  passes 11 shell + 55 editor/directory tests, server Clippy (71s), WASM Clippy
+  (14s) and official server/WASM packaging (71s). Final browser confirmation is
+  running on that bundle; no further visual redesign or policy change is planned.
+- Final browser `98074` passes the complete suite on the current bundle with no
+  JavaScript page errors. The second batched visual inspection confirms readable
+  names/emails and local horizontal scrolling at 390px, with desktop preserved.
+  Formatting CI `32073` checks 541 files and changes none. T198–T200 are complete
+  for this connected consumer; no full permission feature or Nix gate is claimed.
+  GitHub confirms #212 remains open/draft at `dab6885` before publication.
+
+Next: publish this verified increment to draft #212 without merging, then continue
+T014/T015 by resolving the remaining Reports filter-candidate contract against
+Harvest before replacing its `list_users(false)` resource. Investigate zero-record
+managed-project participants, historical contributors and filter narrowing; do
+not import Timesheet decisions or People directory grants as report authority.
+The existing person-management activity question remains pending, not reopened.
+Ordinary people writers, approvals, project financial integration, the remaining
+cross-command/migration gates and full feature acceptance stay open.
+
 ## 2026-10-04 — Editor reload identity before directory integration
 
 - Previous response only reconfirmed the already implemented FR-033/B rule; it

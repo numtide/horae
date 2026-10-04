@@ -1,33 +1,86 @@
 use dioxus::prelude::*;
-use horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION;
+use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
 
 use crate::pages::timesheet::{Anchor, CalSpan, ViewMode};
 use crate::route::Route;
 use crate::server_fns;
 
+#[derive(Clone, Copy, PartialEq)]
+enum Section {
+    People,
+    Audit,
+    Importers,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+struct WorkspaceAccess {
+    people: bool,
+    audit: bool,
+    importers: bool,
+}
+
+impl WorkspaceAccess {
+    fn allows(self, section: Section) -> bool {
+        match section {
+            Section::People => self.people,
+            Section::Audit => self.audit,
+            Section::Importers => self.importers,
+        }
+    }
+}
+
 /// The admin area shell: a secondary sub-navigation (Workspace / Data) beside the
 /// active admin panel, rendered through an `Outlet`. Layered inside `AppLayout`,
 /// so the main rail stays put and this owns only the content panel (per the
-/// design's admin settings shell). Admin-only; non-admins get a short notice.
+/// design's admin settings shell). Each section has its own access boundary.
 ///
 /// Only sections with a real destination are listed — People (user management)
 /// Importers (Harvest), and the permission audit log. Other sections are deferred
 /// until they have a backend.
 #[component]
 pub fn AdminShell() -> Element {
-    let audit = matches!(use_route::<Route>(), Route::PermissionAudit {});
-    let mut me = use_resource(use_reactive!(|audit| async move {
-        // Only this reader has moved to canonical Administrator authority.
-        let allowed = if audit {
-            server_fns::get_my_permissions().await.map(|own| {
-                own.is_some_and(|own| {
-                    own.catalog_version == PERMISSION_CATALOG_VERSION && own.is_administrator
-                })
+    let section = match use_route::<Route>() {
+        Route::AdminUsers {} => Section::People,
+        Route::PermissionAudit {} => Section::Audit,
+        _ => Section::Importers,
+    };
+    let mut me = use_resource(use_reactive!(|section| async move {
+        let access: Result<WorkspaceAccess, ServerFnError> = async {
+            let own = server_fns::get_my_permissions().await.and_then(|own| {
+                if own
+                    .as_ref()
+                    .is_some_and(|own| own.catalog_version != PERMISSION_CATALOG_VERSION)
+                {
+                    Err(ServerFnError::new("Unsupported permission catalog"))
+                } else {
+                    Ok(own)
+                }
+            });
+            let legacy_admin = server_fns::get_me().await?.is_admin();
+            if section == Section::Importers && own.is_err() {
+                return Ok(WorkspaceAccess {
+                    people: false,
+                    audit: false,
+                    importers: legacy_admin,
+                });
+            }
+            // These are navigation hints; every reader/command authorizes afresh.
+            Ok(match own? {
+                Some(own) => WorkspaceAccess {
+                    people: own.grants.contains(&Permission::PeopleReadAll)
+                        || own.grants.contains(&Permission::PeopleReadManaged),
+                    audit: own.is_administrator,
+                    importers: legacy_admin,
+                },
+                None => WorkspaceAccess {
+                    people: legacy_admin,
+                    audit: false,
+                    importers: legacy_admin,
+                },
             })
-        } else {
-            server_fns::get_me().await.map(|user| user.is_admin())
-        };
-        (audit, allowed)
+        }
+        .await;
+        (section, access)
     }));
 
     // Mount the workspace and its outlet only after authorization resolves.
@@ -35,26 +88,28 @@ pub fn AdminShell() -> Element {
     let response = me.read();
     let current = response
         .as_ref()
-        .filter(|(requested, _)| *requested == audit)
+        .filter(|(requested, _)| *requested == section)
         .map(|(_, result)| result);
     match (current, me.state()() == UseResourceState::Ready) {
-        (Some(Ok(true)), true) => rsx! { AdminWorkspace {} },
-        (Some(Ok(false)), true) => rsx! {
+        (Some(Ok(access)), true) if access.allows(section) => {
+            rsx! { AdminWorkspace { access: *access } }
+        }
+        (Some(Ok(_)), true) => rsx! {
             div { class: "card flex flex-col items-start gap-3 max-w-md",
-                h1 { class: "page-title", "Admins only" }
-                p { class: "text-secondary", "You need Administrator access to view this workspace section." }
+                h1 { class: "page-title", "Access unavailable" }
+                p { class: "text-secondary", "Your account cannot view this workspace section." }
                 Link {
                     to: Route::Timesheet { view: ViewMode::Week, date: Anchor::default(), span: CalSpan::default(), user: String::new() },
                     class: "btn btn-secondary",
                     "Back to Timesheet"
                 }
             }
+            if section == Section::People { crate::pages::admin::PermissionRecovery { on_saved: move |_| me.restart() } }
         },
-        (Some(Err(error)), true) => rsx! {
+        (Some(Err(_)), true) => rsx! {
             div { class: "card flex flex-col items-start gap-3 max-w-md",
                 div { class: "alert alert-danger", role: "alert",
-                    if audit { "Could not verify Administrator access. Sign in again or retry." }
-                    else { "{error}" }
+                    "Could not verify workspace access. Sign in again or retry."
                 }
                 button {
                     class: "btn btn-secondary",
@@ -63,6 +118,7 @@ pub fn AdminShell() -> Element {
                     "Retry"
                 }
             }
+            if section == Section::People { crate::pages::admin::PermissionRecovery { on_saved: move |_| me.restart() } }
         },
         _ => rsx! {
             div { class: "text-muted text-sm", role: "status", "Loading…" }
@@ -71,7 +127,7 @@ pub fn AdminShell() -> Element {
 }
 
 #[component]
-fn AdminWorkspace() -> Element {
+fn AdminWorkspace(access: WorkspaceAccess) -> Element {
     // The workspace's real name for the header chip (no slug — the schema has no
     // such field, so we show the name only rather than inventing a URL).
     let org = use_resource(|| async move { server_fns::get_org_name().await });
@@ -99,19 +155,21 @@ fn AdminWorkspace() -> Element {
                         span { class: "adm-head-mark", "{org_initial}" }
                         div { class: "min-w-0",
                             div { class: "text-sm font-semibold truncate mb-1", "{org_name}" }
-                            span { class: "badge badge-info badge-sm", "Admin" }
+                            if access.audit { span { class: "badge badge-info badge-sm", "Administrator" } }
                         }
                     }
 
-                    div { class: "adm-group-label", "Workspace" }
-                    nav { class: "flex flex-col gap-1 mb-5",
-                        AdmLink { to: Route::AdminUsers {}, label: "People" }
+                    if access.people {
+                        div { class: "adm-group-label", "Workspace" }
+                        nav { class: "flex flex-col gap-1 mb-5", AdmLink { to: Route::AdminUsers {}, label: "People" } }
                     }
 
-                    div { class: "adm-group-label", "Data" }
-                    nav { class: "flex flex-col gap-1 mb-5",
-                        AdmLink { to: Route::HarvestImport {}, label: "Importers" }
-                        AdmLink { to: Route::PermissionAudit {}, label: "Audit log" }
+                    if access.importers || access.audit {
+                        div { class: "adm-group-label", "Data" }
+                        nav { class: "flex flex-col gap-1 mb-5",
+                            if access.importers { AdmLink { to: Route::HarvestImport {}, label: "Importers" } }
+                            if access.audit { AdmLink { to: Route::PermissionAudit {}, label: "Audit log" } }
+                        }
                     }
                 }
                 div { class: "adm-main flex-1 min-w-0",
