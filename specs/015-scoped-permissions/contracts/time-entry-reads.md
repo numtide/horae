@@ -53,3 +53,40 @@ keyset boundaries, populated sensitive-field omission, policy/state/actor denial
 and revocation ordering. Exercise the registered session endpoint as well as
 database transactions. Full shell/Timesheet integration remains a separate
 required delivery step, not something this reader alone completes.
+
+## Existing time-entry response boundary (T168–T170)
+
+The legacy `TimeEntry` response is shared by lists, current timer, start/stop,
+create/update and rescheduling. No page or component reads its `invoice_id`;
+Timesheet uses `state` to distinguish locked entries. FR-008 therefore permits
+removing this unused invoice identity from every serialization of the model,
+including null placeholders, without changing any action grant or business lock.
+Keep the database field and SQLx decoding intact for internal billing checks.
+Ignore incoming invoice identities during model deserialization: the browser
+cannot reconstruct billing authority by supplying a hidden field. Preserve all
+other response facts. Invoice/report and Harvest-compatibility projections are
+separate types and remain unchanged.
+
+Verify the real own-entry response with a populated invoice link for each legacy
+role, session-only identity, exact field omission and unchanged stored relation.
+Exercise shared serialization/deserialization and existing timer/invoice tests.
+This repair does not activate canonical policy or finish Timesheet integration.
+
+## Timesheet integration findings
+
+The existing `TimesheetContent` fetches an entire week and sums it in Day, Week
+and Calendar views. Its name maps come from the actor's tracking catalogs, not
+the selected teammate's authorized entries. Its grid, dialog, drag/reorder,
+delete, timer and submission callbacks all assume the session user. Wiring the
+new list into these callbacks alone would be incorrect: selected-person context,
+read-only affordances, complete-period loading and independently authorized
+writes must be integrated together. Do not fabricate full `TimeEntry` records
+from the minimal scoped projection or fall back to legacy reads after denial.
+
+The handoff `04_Timesheet.dc.html` shows own-time entry controls but no teammate
+selector. Harvest's [other-person timesheet guide](https://support.getharvest.com/hc/en-us/articles/360048687591-How-to-view-edit-and-submit-another-person-s-timesheet)
+documents a Teammates selector and a return-to-own-timesheet link. Its legacy
+role wording does not establish the exact candidate set for new custom grants,
+archived people or people without entries; that boundary still needs evidence.
+Its submission flow can include expenses, so the current time-only submit action
+must not be presented as complete combined-submission parity.

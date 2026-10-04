@@ -1,5 +1,68 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Timesheet integration trace and shared payload repair
+
+- The preceding goal turn was progress: published `4ac30fa` with the canonical
+  time reader and passing database/HTTP/build checks. Revalidated its clean
+  worktree and traced the existing Timesheet before changing any UI.
+
+- The screen assumes own-user context throughout name lookup, complete-week
+  totals, grid, dialog, calendar drag/reorder, timer and submission callbacks.
+  Simply replacing its list resource would not deliver teammate access safely.
+  Recorded those integration dependencies and current Harvest sources in
+  `contracts/time-entry-reads.md`; no unverified teammate candidate rule is
+  inferred from legacy-role documentation or the own-time design prototype.
+
+- Found an independent FR-008 exposure during that trace: shared `TimeEntry`
+  serialization includes `invoice_id`, unused by every page/component. SQLx and
+  the separate invoice/compatibility projections must retain billing facts.
+  Added T168–T170 and regression tests before changing the shared wire boundary.
+
+- Rust/testing/async and simplicity guidance favor the existing model's single
+  serialization boundary, not parallel wrappers for every time endpoint. The
+  registered-session red test is running against the owned disposable database.
+  Spec Kit prerequisites pass; unavailable skill procedures are not claimed run.
+
+- Impeccable's context launcher could not use its unwritable engine cache; used
+  the prescribed direct DESIGN.md fallback without installing anything. The
+  design review does not authorize a UI change or claim visual verification.
+
+- The registered HTTP red test fails on the actual populated `invoice_id` in a
+  member's own-entry response (1.07s after 2m13s compilation). Added `serde(skip)`
+  to the internal relation, leaving SQLx loading and every other field intact.
+  Expanded the real-route fixture to all three legacy roles with a stored-link
+  preservation assertion. Payload, session, time, invoice and Timesheet checks
+  are running; no passing result is inferred from compilation alone.
+
+- The intervening benefits-only response was no implementation progress.
+  Revalidated the six-file diff at `4ac30fa` and resumed the existing test
+  process instead of restarting it. Both model tests pass, the registered HTTP
+  matrix passes (12.64s), all 38 time-entry regressions pass (18.46s), all 35
+  invoice tests pass (8.43s), and all 25 Timesheet unit tests pass. The HTTP
+  fixture proves omission and stored-link preservation for Member, Manager
+  and Admin; it does not exercise invoice lifecycle, which has its own suite.
+
+- Bounded adversarial self-review traced every shared-model consumer and the
+  explicit plugin and Harvest projections. No production UI reads the omitted
+  field; SQLx still loads it, input JSON cannot restore it, and no write guard,
+  business-state transition or financial projection is changed. No critical or
+  high finding remains in this repair; this is not an independent or full-feature
+  review.
+
+- Full SQLx preparation passes in 57.08s, retaining all 1,453 existing cache
+  descriptors unchanged. Fresh offline all-targets server Clippy passes in
+  1m07s and WASM Clippy in 13.75s, both with warnings denied. The package-local
+  clean removed only 1.7 GiB of regenerable artifacts. Stopped the disposable
+  PostgreSQL after its final required use. Formatting corrected one Markdown
+  indentation and is checked again before publication. T168–T170 are complete
+  for this bounded response repair; no browser or full flake run is claimed.
+
+Next: publish the verified repair unsigned to draft #212, then resume the
+Timesheet person-context/read-write integration
+contract and remaining operation predicates. Full Timesheet integration and the
+complete permission goal remain open; no real data, policy activation or
+migration is authorized here.
+
 ## 2026-10-04 — Scoped time-entry read implementation
 
 - The previous benefits-only response was no progress. Revalidated the clean

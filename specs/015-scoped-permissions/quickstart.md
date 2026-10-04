@@ -1,5 +1,42 @@
 # Permission verification
 
+## Shared time-entry payload (T168–T170)
+
+Use the Nix shell with the owned disposable PostgreSQL database:
+
+```sh
+cargo test -p horae --features server --bin horae models::time_entry::tests::
+cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization
+cargo test -p horae --features server --bin horae server_fns::time_entries::
+cargo test -p horae --features server --bin horae server_fns::invoices::tests::
+cargo test -p horae --features server --bin horae pages::timesheet::tests::
+# Once all compilations/tests have finished:
+cargo clean -p horae
+CARGO_INCREMENTAL=0 cargo sqlx prepare --workspace -- --features server --all-targets
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --no-default-features --features web --target wasm32-unknown-unknown -- -D warnings
+nix fmt -- --ci
+```
+
+The registered HTTP test first failed on a populated invoice identity in the
+legacy own-time response. After applying `serde(skip)` to the internal relation,
+the matrix passes (12.64s), including all three legacy roles, forged target
+identity and unchanged stored links. Both model tests pass: all other fields
+round-trip unchanged, and a supplied invoice identity is ignored. All 38
+time-entry regressions (18.46s), 35 invoice tests (8.43s) and 25 Timesheet unit
+tests pass. Complete SQLx preparation passes (57.08s) and retains all 1,453
+descriptors unchanged. Fresh offline all-targets server Clippy (1m07s) and WASM
+Clippy (13.75s) pass with warnings denied. The package-local clean removed only
+1.7 GiB of regenerable build artifacts; the disposable PostgreSQL is stopped.
+Formatting corrected one Markdown indentation; the final CI-format check is
+repeated before publication. T168–T170 close only this response boundary.
+
+The local adversarial review covers all model consumers, shared response
+envelopes, SQLx loading and separate plugin/Harvest projections. This repair
+changes no UI/CSS, database values, billing lifecycle, grants or policy version.
+It does not establish browser acceptance, teammate Timesheet integration or
+full-feature readiness, and is not a new independent review.
+
 ## Scoped time-entry reads (T165–T167)
 
 Use the Nix shell and an isolated PostgreSQL database, never the agency database:

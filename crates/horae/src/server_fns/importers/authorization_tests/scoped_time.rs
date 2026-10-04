@@ -35,6 +35,42 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     .unwrap();
     sqlx::query!("UPDATE users SET oidc_subject=id::text, cost_rate_cents=6000, billable_rate_cents=10000 WHERE org_id=$1", ids.org_id).execute(pool).await.unwrap();
     let cookie = api.cookie(ids.user_id).await;
+    for role in [OrgRole::Member, OrgRole::Manager, OrgRole::Admin] {
+        sqlx::query!(
+            "UPDATE users SET org_role = $2 WHERE id = $1",
+            target,
+            role as OrgRole
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+        let cookie = api.cookie(target).await;
+        let response = api
+            .json(
+                "list_time_entries",
+                json!({
+                    "_user_id":foreign.user_id,"project_id":null,
+                    "date_from":"2026-09-01","date_to":"2026-09-30","limit":null
+                }),
+                &cookie,
+            )
+            .await;
+        for row in response.as_array().unwrap() {
+            assert!(
+                row.get("invoice_id").is_none(),
+                "time read disclosed invoice identity: {row}"
+            );
+            assert_eq!(row["user_id"], json!(target));
+        }
+        assert_eq!(response.as_array().unwrap().len(), 1);
+        assert_eq!(response[0]["id"], json!(entry));
+        let stored =
+            sqlx::query_scalar!("SELECT invoice_id FROM time_entries WHERE id = $1", entry)
+                .fetch_one(pool)
+                .await
+                .unwrap();
+        assert_eq!(stored, Some(invoice));
+    }
     let request = json!({"query":{"date_from":"2026-09-01","date_to":"2026-09-30","user_id":null,"project_id":null,"after":null}});
     assert_eq!(
         api.call("list_visible_time_entries", request.clone(), None, false)

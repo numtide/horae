@@ -20,8 +20,18 @@ not replace full Timesheet integration, editing, approval or policy activation.
 
 ## Phase 2: Independent foundation (FR-006)
 
+### Existing time-entry payload boundary (FR-008/018)
+
+- [x] T168 Reproduce invoice-identity disclosure from the actual legacy time list with populated billing data; test shared model serialization and untrusted deserialization.
+
+- [x] T169 Exclude invoice identity from the shared time-entry wire model without changing SQLx fields, billing relations, lifecycle checks or existing UI behavior.
+
+- [x] T170 Run real-session, time-entry and invoice regressions, verify SQLx and server/WASM builds, and review all model consumers before publication.
+
 - [x] T003 Write record-scope truth-table, isolation, missing-ID, assignment-removal and union-law tests in `crates/core/src/permissions/tests.rs`; expose the module in `crates/core/src/lib.rs` and observe failure before implementation.
+
 - [x] T004 Implement allocation-free scope union and coverage in `crates/core/src/permissions.rs`, without changing existing role types, schema or runtime guards.
+
 - [x] T005 Run focused/core tests, core Clippy and formatting; record results and limitations in `specs/015-scoped-permissions/quickstart.md`.
 
 ## Phase 3: Independent increments and full-policy integration gate
