@@ -61,6 +61,7 @@
   Final offline all-target native/WASM Clippy also passed in `25607` (1m21s and
   17.14s), with warnings denied. No SQL/schema change was needed
   for this fix. Formatting `8154` passed (535 files; three changed).
+
 - Final formatting and format-CI `82090` passed (535 files, zero changes), and
   whitespace checks pass. GitHub confirms the existing open draft #212 on this
   branch; publication preserves the draft and documents the design deviations.
