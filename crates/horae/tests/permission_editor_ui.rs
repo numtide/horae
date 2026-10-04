@@ -60,6 +60,10 @@ impl Probe {
     fn new() -> Self {
         Self {
             editor: PermissionEditor {
+                requester: PermissionRequester {
+                    org_id: Uuid::now_v7(),
+                    user_id: Uuid::now_v7(),
+                },
                 user_id: Uuid::now_v7(),
                 name: "Example person".into(),
                 active: true,
@@ -948,8 +952,10 @@ mod server_fns {
 
     pub async fn save_person_permissions(
         command: ProfileCommand,
+        expected_requester: PermissionRequester,
     ) -> Result<ProfileOutcome, ServerFnError> {
         let probe = use_context::<Probe>();
+        assert_eq!(expected_requester, probe.editor.requester);
         probe.saves.borrow_mut().push(command);
         let reply = probe
             .save_replies
@@ -961,8 +967,10 @@ mod server_fns {
 
     pub async fn save_permission_template(
         command: TemplateCommand,
+        expected_requester: PermissionRequester,
     ) -> Result<TemplateOutcome, ServerFnError> {
         let probe = use_context::<Probe>();
+        assert_eq!(expected_requester, probe.editor.requester);
         probe.templates.borrow_mut().push(command);
         let reply = probe
             .template_replies

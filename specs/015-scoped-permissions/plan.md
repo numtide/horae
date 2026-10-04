@@ -116,6 +116,13 @@ history/scroll behavior and CSS. Verify the shipped script with Node's built-in
 test runner and real Dioxus handlers with controlled responses. These checks do
 not establish browser acceptance or durable actor-bound recovery after reload.
 
+T130–T132 first bind both person/template save transports to the requester pair
+returned by the authorized editor read. Compare it to the authenticated session,
+then retain the existing command's transaction-level authorization and replay.
+This requires no SQL, schema or receipt-format change and prevents a stale editor
+from submitting under a changed login. It is a prerequisite for, not completion
+of, durable tab recovery; no policy activation or real-data operation is implied.
+
 Loss previews enrich only the evaluated relationship IDs with tenant-local subject
 names in the existing authorized transaction. Reuse the name-free historical
 relationship type for command audits; names are never confirmation authority.

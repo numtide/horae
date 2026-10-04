@@ -107,6 +107,15 @@ Sequential shared-file work; backend acceptance does not close UI or activation.
 - [x] T128 [US1] Expose session-derived editor/profile/template functions in `crates/horae/src/server_fns/permission_editor.rs`, with HTTP tests in `server_fns/importers/authorization_tests/permission_editor.rs`; preserve replay/error contracts and update module/operation wiring (FR-004/010/011/013/018/032).
 - [x] T129 [US1] Verify command/HTTP/regression suites, complete `.sqlx/`, offline server/WASM lint and formatting, adversarial review and scoped analysis; record evidence in feature 015 `quickstart.md` and `progress.md` before unsigned publication to draft #212 (FR-018).
 
+Requester-bound recovery prerequisite (FR-010/011/013/018):
+
+- [x] T130 [US1] Reproduce cross-login saves through registered HTTP functions in `server_fns/importers/authorization_tests/permission_editor.rs`; cover person/template commands, same/foreign organization, omitted binding and unchanged state on denial.
+- [x] T131 [US1] Return the session-derived requester from the authorized editor read; require that pair on both save transports in `server_fns/permission_editor.rs` and retain it in existing person/template UI calls. Preserve internal commands, audit/receipt shapes and runtime policy.
+- [x] T132 [US1] Verify registered HTTP and UI regressions, offline native/WASM lint, formatting and requester/replay source review. Record evidence and browser-recovery limits in `quickstart.md` and `progress.md`; no activation or migration.
+
+T129 → T130 → T131 → T132 is sequential transport/consumer work supporting
+T018's durable reload recovery, not a replacement for that remaining acceptance.
+
 Independent test: all six profiles allow/deny correctly; concurrent demotions preserve an active administrator.
 
 - [ ] T010 [US1] Add failing profile, stale-edit and concurrent administrator tests in `crates/horae/tests/integration.rs` and pure grant tests under `crates/core/src/permissions/` (FR-001/003/010/011).

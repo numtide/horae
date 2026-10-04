@@ -4,11 +4,13 @@ use super::*;
 use horae_core::permissions::catalog::BuiltInProfile;
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
+    check_requester_binding(pool, api).await;
     let ids = crate::server_fns::test_seed::seed(pool, OrgRole::Member).await;
     let foreign = crate::server_fns::test_seed::seed(pool, OrgRole::Admin).await;
     let target = super::user(pool, ids.org_id, OrgRole::Member).await;
     let cookie = api.cookie(ids.user_id).await;
     let member_cookie = api.cookie(target).await;
+    let expected_requester = json!({"org_id":ids.org_id,"user_id":ids.user_id});
     let lookup = json!({"user_id":target});
     assert_eq!(
         api.call("load_permission_editor", lookup.clone(), None, false)
@@ -110,7 +112,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     let saved = api
         .json(
             "save_person_permissions",
-            json!({"command":command}),
+            json!({"command":command,"expected_requester":expected_requester}),
             &cookie,
         )
         .await;
@@ -118,7 +120,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     assert_eq!(
         api.json(
             "save_person_permissions",
-            json!({"command":command}),
+            json!({"command":command,"expected_requester":expected_requester}),
             &cookie
         )
         .await,
@@ -146,7 +148,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     let created = api
         .json(
             "save_permission_template",
-            json!({"command":create}),
+            json!({"command":create,"expected_requester":expected_requester}),
             &cookie,
         )
         .await;
@@ -160,7 +162,11 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         "expected_person_revision":1,"action":{"kind":"template","id":template,"expected_revision":0},
         "grants":BuiltInProfile::PeopleAdmin.selection(),"remove_projects":[],"remove_people":[]});
     let applied = api
-        .json("save_person_permissions", json!({"command":apply}), &cookie)
+        .json(
+            "save_person_permissions",
+            json!({"command":apply,"expected_requester":expected_requester}),
+            &cookie,
+        )
         .await;
     let deletion =
         json!({"template_id":template,"expected_access_revision":3,"expected_template_revision":0});
@@ -174,7 +180,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     let removed = api
         .json(
             "save_permission_template",
-            json!({"command":delete}),
+            json!({"command":delete,"expected_requester":expected_requester}),
             &cookie,
         )
         .await;
@@ -191,14 +197,18 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         effects["people"][0]["permissions"]["grants"]
     );
     assert_eq!(
-        api.json("save_person_permissions", json!({"command":apply}), &cookie)
-            .await,
+        api.json(
+            "save_person_permissions",
+            json!({"command":apply,"expected_requester":expected_requester}),
+            &cookie
+        )
+        .await,
         applied
     );
     assert_eq!(
         api.json(
             "save_permission_template",
-            json!({"command":delete}),
+            json!({"command":delete,"expected_requester":expected_requester}),
             &cookie
         )
         .await,
@@ -212,8 +222,14 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
 
     for (name, body) in [
         ("preview_person_permissions", json!({"draft":draft})),
-        ("save_person_permissions", json!({"command":command})),
-        ("save_permission_template", json!({"command":create})),
+        (
+            "save_person_permissions",
+            json!({"command":command,"expected_requester":expected_requester}),
+        ),
+        (
+            "save_permission_template",
+            json!({"command":create,"expected_requester":expected_requester}),
+        ),
         (
             "preview_permission_template_deletion",
             json!({"template_id":template,"expected_access_revision":4,"expected_template_revision":0}),
@@ -227,6 +243,9 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         forged["actor_id"] = json!(ids.user_id);
         forged["org_id"] = json!(ids.org_id);
         forged["is_administrator"] = json!(true);
+        if name == "save_person_permissions" || name == "save_permission_template" {
+            forged["expected_requester"] = json!({"org_id":ids.org_id,"user_id":target});
+        }
         assert_eq!(
             api.call(name, forged, Some(&member_cookie), false)
                 .await
@@ -246,8 +265,14 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         for (name, body) in [
             ("load_permission_editor", lookup.clone()),
             ("preview_person_permissions", json!({"draft":draft})),
-            ("save_person_permissions", json!({"command":command})),
-            ("save_permission_template", json!({"command":create})),
+            (
+                "save_person_permissions",
+                json!({"command":command,"expected_requester":expected_requester}),
+            ),
+            (
+                "save_permission_template",
+                json!({"command":create,"expected_requester":expected_requester}),
+            ),
             (
                 "preview_permission_template_deletion",
                 json!({"template_id":template,"expected_access_revision":4,"expected_template_revision":0}),
@@ -273,7 +298,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     assert_eq!(
         api.call(
             "save_person_permissions",
-            json!({"command":invalid}),
+            json!({"command":invalid,"expected_requester":expected_requester}),
             Some(&cookie),
             false
         )
@@ -285,7 +310,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     assert!(
         !api.call(
             "save_person_permissions",
-            json!({"command":invalid}),
+            json!({"command":invalid,"expected_requester":expected_requester}),
             Some(&cookie),
             false
         )
@@ -300,7 +325,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     assert_eq!(
         api.call(
             "save_permission_template",
-            json!({"command":invalid_template}),
+            json!({"command":invalid_template,"expected_requester":expected_requester}),
             Some(&cookie),
             false
         )
@@ -316,6 +341,97 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     let message = unavailable.text().await.unwrap();
     assert!(message.contains("Permission editor is unavailable"));
     assert!(!message.contains("private-invalid-grant"));
+}
+
+async fn check_requester_binding(pool: &PgPool, api: &Api) {
+    let ids = crate::server_fns::test_seed::seed(pool, OrgRole::Member).await;
+    let other = super::user(pool, ids.org_id, OrgRole::Member).await;
+    let foreign = crate::server_fns::test_seed::seed(pool, OrgRole::Admin).await;
+    for user in [ids.user_id, other] {
+        let grants: Vec<String> =
+            serde_json::from_value(json!(BuiltInProfile::Administrator.selection())).unwrap();
+        let admin = true;
+        sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
+            VALUES ($1,$2,$3,1,$4,$5,'individual')", Uuid::now_v7(), ids.org_id, user, &grants, admin)
+            .execute(pool).await.unwrap();
+    }
+    sqlx::query!(
+        "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
+        ids.org_id
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    let cookie = api.cookie(ids.user_id).await;
+    let other_cookie = api.cookie(other).await;
+    let foreign_cookie = api.cookie(foreign.user_id).await;
+    let requester = json!({"org_id":ids.org_id, "user_id":ids.user_id});
+    let lookup = json!({"user_id":other});
+    let before = api
+        .json("load_permission_editor", lookup.clone(), &cookie)
+        .await;
+    let profile = json!({"request_id":Uuid::now_v7(), "expected_access_revision":0,
+        "user_id":other,"expected_person_revision":0,"action":{"kind":"edit"},
+        "grants":BuiltInProfile::Administrator.selection(),"remove_projects":[],"remove_people":[]});
+    let template = json!({"request_id":Uuid::now_v7(),"expected_access_revision":0,
+        "action":{"kind":"create","name":"Original requester","grants":BuiltInProfile::Member.selection()}});
+    for (name, command) in [
+        ("save_person_permissions", profile),
+        ("save_permission_template", template),
+    ] {
+        for (binding, session) in [
+            (requester.clone(), &other_cookie),
+            (requester.clone(), &foreign_cookie),
+            (json!({"org_id":ids.org_id,"user_id":other}), &cookie),
+            (
+                json!({"org_id":foreign.org_id,"user_id":ids.user_id}),
+                &cookie,
+            ),
+        ] {
+            assert_eq!(
+                api.call(
+                    name,
+                    json!({"command":command,"expected_requester":binding}),
+                    Some(session),
+                    false
+                )
+                .await
+                .status(),
+                StatusCode::FORBIDDEN,
+                "{name} must not execute as a different requester"
+            );
+        }
+        assert!(
+            !api.call(name, json!({"command":command}), Some(&cookie), false)
+                .await
+                .status()
+                .is_success()
+        );
+        assert_eq!(
+            api.json("load_permission_editor", lookup.clone(), &cookie)
+                .await,
+            before
+        );
+        let bound = json!({"command":command,"expected_requester":requester});
+        let saved = api.json(name, bound.clone(), &cookie).await;
+        let reauthenticated_cookie = api.cookie(ids.user_id).await;
+        assert_eq!(
+            api.json(name, bound.clone(), &reauthenticated_cookie).await,
+            saved
+        );
+        assert_eq!(
+            api.call(name, bound, Some(&other_cookie), false)
+                .await
+                .status(),
+            StatusCode::FORBIDDEN
+        );
+    }
+    assert_eq!(before["requester"], requester);
+    assert_eq!(
+        api.json("load_permission_editor", lookup, &other_cookie)
+            .await["requester"],
+        json!({"org_id":ids.org_id,"user_id":other})
+    );
 }
 
 async fn check_authentication_failure(pool: &PgPool, api: &Api, target: Uuid, cookie: &str) {

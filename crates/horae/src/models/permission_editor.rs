@@ -4,6 +4,14 @@ use horae_core::permissions::catalog::{BuiltInProfile, Permission};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+/// Session identity captured by an authorized read, not a source of authority.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PermissionRequester {
+    pub org_id: Uuid,
+    pub user_id: Uuid,
+}
+
 /// Confirmed intent; actor identity is supplied separately by the server.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -110,6 +118,7 @@ pub struct TemplateChoice {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PermissionEditor {
+    pub requester: PermissionRequester,
     pub user_id: Uuid,
     pub name: String,
     pub active: bool,

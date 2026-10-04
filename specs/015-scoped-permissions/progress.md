@@ -1,5 +1,39 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Bind permission saves to the original requester
+
+- Previous goal turn made progress: navigation protection was published as
+  `e7d8a36` on existing draft #212. Revalidated the clean synchronized branch and
+  reused its worktree. Spec Kit prerequisites pass; the independent-increment
+  authorization and unfinished full-feature gates remain unchanged.
+- Investigation of invoice recovery identified a prerequisite before copying its
+  browser storage flow: an unsent permission draft could execute under a changed
+  login. Added the local contract and sequential T130–T132 without inventing new
+  Harvest behavior or changing the full goal.
+- A registered HTTP regression reproduced the issue: a different Administrator
+  received 200 from the person save. The editor now returns its authenticated
+  organization/user pair; both save transports require it to match the session
+  before execution/replay. Existing canonical authorization still runs inside
+  the command transaction. UI callers keep the loaded pair on retries.
+- Initial registered HTTP matrix and 48 selected UI tests pass. The final HTTP
+  run (11.63s) additionally keeps the non-admin forged-payload case bound to that
+  actual caller, so denial verifies authority rather than only identity mismatch.
+  All 34 profile/editor PostgreSQL regressions pass (15.41s).
+- Offline all-targets server Clippy (1m02s), WASM Clippy (12.67s), formatting CI
+  (491 files, zero changes) and whitespace checks pass. SQLx prepare --check
+  completes successfully (52.24s), warning of potentially unused descriptors.
+  No cache file was pruned or changed; fixtures reuse existing checked SQL.
+- Adversarial source inspection checked changed-login first sends, historical
+  replay, cross-organization identity, omitted transport, all-grant non-admins and
+  existing transaction/revocation ordering. The separate pair cannot select
+  server authority or alter historical canonical intent. Full browser/recovery
+  acceptance is not inferred from this check.
+
+Delivery uses draft #212 without merge. Next: implement durable tab storage and recovery UI,
+storing the exact command/pair before sending and preserving unresolved records
+across denied retries. Do not mistake a later 401/403 for proof that an earlier
+attempt did not commit. No real data, schema or runtime policy has changed.
+
 ## 2026-10-04 — Permission editor navigation protection
 
 - The preceding MVP reply was status-only (no implementation progress). Revalidated

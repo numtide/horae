@@ -7,8 +7,8 @@ use uuid::Uuid;
 use super::profiles::{self, ProfileCommandError};
 use super::{load_permission_template, load_person_permissions, restore_grants};
 use crate::models::permission_editor::{
-    PermissionEditor, PermissionSnapshot, ProfileDraft, ProfilePreview, ProfileSource,
-    RelationshipRemoval, TemplateAssignee, TemplateChoice, TemplateDeletionPreview,
+    PermissionEditor, PermissionRequester, PermissionSnapshot, ProfileDraft, ProfilePreview,
+    ProfileSource, RelationshipRemoval, TemplateAssignee, TemplateChoice, TemplateDeletionPreview,
 };
 use crate::models::permissions::{PermissionSource, PersonPermissions};
 
@@ -104,6 +104,10 @@ pub(crate) async fn load(
     .collect::<Result<Vec<_>, ProfileCommandError>>()?;
     tx.commit().await?;
     Ok(PermissionEditor {
+        requester: PermissionRequester {
+            org_id: org,
+            user_id: actor,
+        },
         user_id: user,
         name: target.name,
         active: target.active,

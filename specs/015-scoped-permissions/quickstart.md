@@ -1,5 +1,35 @@
 # Permission verification
 
+## Original requester binding (T130–T132)
+
+Run in the Nix shell against the owned disposable PostgreSQL database:
+
+```sh
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization --locked
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae permissions::profile_tests --locked
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo test -p horae --features server --test permission_editor_ui --test own_permissions_ui --test admin_shell --locked
+```
+
+RED reproduced an HTTP 200 person save under a different Administrator's session
+instead of the required 403. After binding both save transports to the requester
+returned by the authorized load, the registered HTTP matrix passes (11.63s).
+Cases cover different users/organizations, omitted or forged binding, unchanged
+state after denial, success and exact historical replay after same-user
+reauthentication. Matching one's own identity is not authority: the non-admin
+negative-payload case still exercises canonical authorization, not only a
+mismatched pair. All 34 profile/editor PostgreSQL regressions pass (15.41s).
+
+All 48 selected UI tests pass; the production person/template controls supply the
+loaded requester on both initial submission and identical-command retry. Existing
+command intent, audit/receipt storage, policy checks and CSS are unchanged. New
+fixtures reuse existing checked SQL; no new query descriptor or migration is
+needed. This is a recovery prerequisite, not browser persistence or full T018.
+Offline all-targets server Clippy (1m02s), WASM Clippy (12.67s) and formatting CI
+(491 files, zero changes) pass.
+`cargo sqlx prepare --workspace --check -- --features server --all-targets`
+also succeeds (52.24s) with a potentially-unused-descriptor warning. Existing
+cache files are unchanged, not pruned on the basis of that warning.
+
 ## Editor navigation and dismissal (T018, in progress)
 
 Run without a database in the Nix shell:

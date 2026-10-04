@@ -5,7 +5,9 @@ use uuid::Uuid;
 use crate::components::controls::Checkbox;
 use crate::components::form::{FormGroup, Input};
 use crate::components::permission_description::permission_description;
-use crate::models::permission_editor::{TemplateAction, TemplateChoice, TemplateCommand};
+use crate::models::permission_editor::{
+    PermissionRequester, TemplateAction, TemplateChoice, TemplateCommand,
+};
 use crate::server_fns;
 
 use super::{access_denied, definite_rejection, load_error, rejection_message};
@@ -24,6 +26,7 @@ pub(super) enum TemplateIntent {
 pub(super) fn TemplateEditor(
     intent: TemplateIntent,
     access_revision: i64,
+    requester: PermissionRequester,
     mut locked: Signal<bool>,
     mut dirty: Signal<bool>,
     on_cancel: EventHandler<()>,
@@ -170,7 +173,7 @@ pub(super) fn TemplateEditor(
                         locked.set(true);
                         error.set(None);
                         spawn(async move {
-                            match server_fns::save_permission_template(command).await {
+                            match server_fns::save_permission_template(command, requester).await {
                                 Ok(_) => { pending.set(None); saved.set(true); locked.set(false); },
                                 Err(problem) => {
                                     if definite_rejection(&problem) {

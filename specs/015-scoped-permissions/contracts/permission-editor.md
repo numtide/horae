@@ -50,6 +50,37 @@ canonical state without this gate is not an authorized writer protocol.
 - Authorize before replay; exact historical replay precedes now-stale subject or
   template checks. Preserve serialized canonical intent and no-op receipts.
 
+## Requester binding before browser recovery
+
+The authorized editor response includes the requesting organization/user IDs,
+separate from the target person. Person and template saves require that exact
+`expected_requester` pair as a separate transport argument. Authenticate the
+session first, compare both IDs, and reject a mismatch with 403 before executing
+or replaying a command. Missing/malformed binding cannot execute a mutation.
+The pair is a precondition, never authority: all existing policy, activity and
+explicit-Administrator checks still run under the command transaction. A forged
+pair cannot select another actor, tenant, grants or receipt owner.
+
+Keep the command's request ID, canonical intent and historical receipt format
+unchanged. Neither retries nor a changed login may replace the original pair
+with the currently signed-in identity. Same-user reauthentication remains valid
+subject to current authority; another Administrator in the same workspace is not
+the original requester. This protects both unsent stale editors and later durable
+retries. Reads return session-derived identity, not client-supplied metadata.
+
+Registered HTTP tests cover same-user success/replay, different user (including
+another authorized Administrator), different organization, omitted/forged pair,
+and current policy/authority denial. Verify unchanged state after denial by
+reloading the editor and comparing its permissions, choices and access revision.
+The existing UI must pass the loaded pair on both save paths and retain it on
+uncertain retries. This prerequisite does not itself persist or recover requests.
+
+The subsequent durable consumer must acknowledge storing the exact command and
+pair before its first submission and must not overwrite another unresolved
+request. In particular, a denied retry does not prove an earlier attempt failed:
+401/403 after a lost response must not automatically erase its durable record.
+Never recover by minting a new request ID or using a freshly loaded requester.
+
 ## Errors and verification
 
 Missing session: 401; authority/policy denial: 403; local missing/foreign subject:

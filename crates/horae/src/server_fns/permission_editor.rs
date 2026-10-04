@@ -2,8 +2,8 @@
 
 use super::*;
 use crate::models::permission_editor::{
-    PermissionEditor, ProfileCommand, ProfileDraft, ProfileOutcome, ProfilePreview,
-    TemplateCommand, TemplateDeletionPreview, TemplateOutcome,
+    PermissionEditor, PermissionRequester, ProfileCommand, ProfileDraft, ProfileOutcome,
+    ProfilePreview, TemplateCommand, TemplateDeletionPreview, TemplateOutcome,
 };
 
 #[cfg(feature = "server")]
@@ -17,6 +17,17 @@ async fn editor_user() -> Result<User, ServerFnError> {
             server_err("Permission editor is unavailable")
         }
     })
+}
+
+#[cfg(feature = "server")]
+async fn expected_editor_user(expected: PermissionRequester) -> Result<User, ServerFnError> {
+    let user = editor_user().await?;
+    if user.org_id != expected.org_id || user.id != expected.user_id {
+        return Err(forbidden(
+            "Sign in as the original requester before retrying",
+        ));
+    }
+    Ok(user)
 }
 
 #[cfg(feature = "server")]
@@ -82,8 +93,9 @@ pub async fn preview_person_permissions(
 #[server]
 pub async fn save_person_permissions(
     command: ProfileCommand,
+    expected_requester: PermissionRequester,
 ) -> Result<ProfileOutcome, ServerFnError> {
-    let user = editor_user().await?;
+    let user = expected_editor_user(expected_requester).await?;
     let state = crate::state::global_state().await;
     permissions::profiles::execute(&state.db, user.org_id, user.id, &command)
         .await
@@ -115,8 +127,9 @@ pub async fn preview_permission_template_deletion(
 #[server]
 pub async fn save_permission_template(
     command: TemplateCommand,
+    expected_requester: PermissionRequester,
 ) -> Result<TemplateOutcome, ServerFnError> {
-    let user = editor_user().await?;
+    let user = expected_editor_user(expected_requester).await?;
     let state = crate::state::global_state().await;
     permissions::templates::execute(&state.db, user.org_id, user.id, &command)
         .await

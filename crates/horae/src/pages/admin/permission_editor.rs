@@ -167,7 +167,8 @@ fn PermissionForm(
     if let Some(intent) = template_intent() {
         return rsx! {
             TemplateEditor {
-                intent, access_revision: state.read().editor.access_revision, locked, dirty: template_dirty,
+                intent, access_revision: state.read().editor.access_revision,
+                requester: state.read().editor.requester, locked, dirty: template_dirty,
                 on_cancel: move |_| template_intent.set(None),
                 on_reload: move |_| on_reload.call(()),
             }
@@ -335,11 +336,12 @@ fn PermissionForm(
                     onclick: move |_| {
                         if busy() || reload_required() || unavailable() { return; }
                         let Some(command) = state.write().begin_save() else { return; };
+                        let requester = state.peek().editor.requester;
                         busy.set(true);
                         locked.set(true);
                         error.set(None);
                         spawn(async move {
-                            match server_fns::save_person_permissions(command).await {
+                            match server_fns::save_person_permissions(command, requester).await {
                                 Ok(outcome) => { locked.set(false); on_saved.call(outcome.changed); },
                                 Err(problem) => {
                                     if definite_rejection(&problem) {

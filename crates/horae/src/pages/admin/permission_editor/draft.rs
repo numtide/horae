@@ -193,6 +193,10 @@ mod tests {
 
     fn editor() -> PermissionEditor {
         PermissionEditor {
+            requester: crate::models::permission_editor::PermissionRequester {
+                org_id: Uuid::now_v7(),
+                user_id: Uuid::now_v7(),
+            },
             user_id: Uuid::now_v7(),
             name: "Person".into(),
             active: true,
