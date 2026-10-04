@@ -14,6 +14,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
 const actor = JSON.parse(sql("SELECT row_to_json(u) FROM (SELECT id, org_id, name FROM users WHERE email='admin@example.com' AND active AND org_role='admin') u"));
 assert.match(actor.id, /^[0-9a-f-]{36}$/);
 assert.match(actor.org_id, /^[0-9a-f-]{36}$/);
+assert.equal(sql("SELECT count(*) FROM users WHERE active AND org_role='admin'"), '1', 'The development login must have exactly one candidate before testing canonical permissions');
 assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${actor.org_id}'`), '0');
 assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${actor.org_id}'`), '0');
 assert.equal(sql(`SELECT count(*) FROM permission_change_receipts WHERE org_id='${actor.org_id}'`), '0');
@@ -68,9 +69,15 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     await editor.getByRole('button', { name: 'Review changes', exact: true }).click();
     await expect(editor.getByRole('button', { name: 'Confirm permissions', exact: true })).toBeEnabled();
   };
+  const resizeViewport = async (width, height) => {
+    await page.setViewportSize({ width, height });
+    // Deliver resize before opening a menu: the shared menu deliberately closes
+    // on resize, including when screenshots are disabled in the headless gate.
+    await page.evaluate(() => new Promise(requestAnimationFrame));
+  };
   const capture = async (label, showSubjects = false) => {
     for (const [width, height, theme] of [[1440, 900, 'dark'], [390, 844, 'light']]) {
-      await page.setViewportSize({ width, height });
+      await resizeViewport(width, height);
       await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
       const dialog = page.locator('dialog[open]');
       await expect(dialog).toBeVisible();
@@ -85,7 +92,7 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
         await page.screenshot({ path: join(process.env.HORAE_BROWSER_ARTIFACTS, `${label}-${width}-${theme}.png`), animations: 'disabled' });
       }
     }
-    await page.setViewportSize({ width: 1440, height: 900 });
+    await resizeViewport(1440, 900);
     await page.evaluate(() => document.documentElement.dataset.theme = 'dark');
   };
   await page.route('**/api/**', async route => {

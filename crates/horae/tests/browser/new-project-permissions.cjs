@@ -54,10 +54,12 @@ const name = 'Permission fixture project';
   let projectId;
   try {
     sql(`UPDATE users SET cost_rate_cents = 4321 WHERE id = '${actor.id}';
-      INSERT INTO users (id, org_id, email, name, org_role) VALUES ('${other}', '${actor.org_id}', 'permission-owner@example.test', 'Other draft owner', 'admin');
+      INSERT INTO users (id, org_id, email, name, org_role) VALUES ('${other}', '${actor.org_id}', 'permission-owner@example.test', 'Other draft owner', 'manager');
       INSERT INTO organizations (id, name) VALUES ('${foreignOrg}', 'Permission foreign organization');
       INSERT INTO clients (id, org_id, name, currency) VALUES ('${foreignClient}', '${foreignOrg}', 'Permission foreign client', 'EUR');
       INSERT INTO projects (id, org_id, client_id, name, currency) VALUES ('${foreignProject}', '${foreignOrg}', '${foreignClient}', 'Permission foreign project', 'EUR')`);
+    // The other draft owner needs project creation access, not another DEV_LOGIN candidate.
+    assert.equal(sql("SELECT count(*) FROM users WHERE active AND org_role='admin'"), '1');
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
     await page.waitForURL(`${base}/`);
