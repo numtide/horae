@@ -238,11 +238,13 @@ mod tests {
             id: Uuid::now_v7(),
             subject_id: Uuid::now_v7(),
             revision: 1,
+            name: "Widget".into(),
         });
         effects.remove_people.push(RelationshipRemoval {
             id: Uuid::now_v7(),
             subject_id: Uuid::now_v7(),
             revision: 2,
+            name: "Person".into(),
         });
         state.reviewed(effects.clone()).unwrap();
         assert!(state.begin_save().is_none());
@@ -291,6 +293,7 @@ mod tests {
             id: Uuid::now_v7(),
             subject_id: Uuid::now_v7(),
             revision: 0,
+            name: "Widget".into(),
         });
         state.reviewed(effects).unwrap();
         state.keep_project_access().unwrap();

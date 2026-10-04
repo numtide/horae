@@ -14,8 +14,9 @@ use uuid::Uuid;
 use super::{PermissionStorageError, load_permission_template, load_person_permissions};
 use crate::models::permissions::{PermissionSource, PersonPermissions};
 
+use crate::models::permission_audit::RemovedRelationship as RelationshipRemoval;
+use crate::models::permission_editor::ProfileDraft;
 pub(crate) use crate::models::permission_editor::{ProfileAction, ProfileCommand, ProfileOutcome};
-use crate::models::permission_editor::{ProfileDraft, RelationshipRemoval};
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum ProfileCommandError {

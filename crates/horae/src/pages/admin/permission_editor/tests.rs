@@ -23,11 +23,13 @@ fn effects() -> ProfilePreview {
             id: Uuid::now_v7(),
             subject_id: Uuid::now_v7(),
             revision: 22,
+            name: "Proyecto <Norte> & Sur".into(),
         }],
         remove_people: vec![RelationshipRemoval {
             id: Uuid::now_v7(),
             subject_id: Uuid::now_v7(),
             revision: 33,
+            name: "María <Equipo> & Co.".into(),
         }],
     }
 }
@@ -45,10 +47,20 @@ fn review_explains_identity_loss_and_both_exact_management_sets() {
         assert!(html.contains(expected), "{html}");
     }
     for removal in effects.remove_people.iter().chain(&effects.remove_projects) {
-        assert!(html.contains(&removal.subject_id.to_string()), "{html}");
+        assert!(!html.contains(&removal.subject_id.to_string()), "{html}");
         assert!(!html.contains(&removal.id.to_string()), "{html}");
     }
+    assert!(
+        html.contains("Project: Proyecto &#60;Norte&#62; &#38; Sur"),
+        "{html}"
+    );
+    assert!(
+        html.contains("Person: María &#60;Equipo&#62; &#38; Co."),
+        "{html}"
+    );
     assert!(!html.contains("887766"), "{html}");
+    assert!(!html.contains("<Norte>"), "{html}");
+    assert!(!html.contains("<Equipo>"), "{html}");
     assert!(!html.contains("style="), "{html}");
 }
 

@@ -463,9 +463,9 @@ fn preview_content(preview: &ProfilePreview) -> Element {
             if !preview.remove_projects.is_empty() || !preview.remove_people.is_empty() {
                 p { class: "text-sm font-semibold mt-4", "Management responsibilities to remove" }
                 p { class: "text-sm text-secondary mt-2", "Membership and existing work will be preserved. Restoring permissions later will not restore these responsibilities." }
-                ul { class: "text-sm flex flex-col gap-2 pl-5 mt-3",
-                    for item in &preview.remove_projects { li { "Project: {item.subject_id}" } }
-                    for item in &preview.remove_people { li { "Person: {item.subject_id}" } }
+                ul { class: "text-sm flex flex-col gap-2 pl-5 mt-3 wrap-anywhere",
+                    for item in &preview.remove_projects { li { "Project: {item.name}" } }
+                    for item in &preview.remove_people { li { "Person: {item.name}" } }
                 }
             }
         }

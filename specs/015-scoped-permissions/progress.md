@@ -1,5 +1,32 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Readable management-loss previews
+
+- The preceding turn was status-only. Revalidated clean synchronized `0f97cb2`
+  and OPEN/DRAFT #212; resumed T018 under the existing independent-work approval.
+  Spec Kit prerequisites pass; general requirements remain 12/16.
+- Added tenant-local subject names to the authorized loss preview, including
+  inactive subjects, without changing exact-ID confirmation or audit storage.
+  Reused the existing historical relationship type and wrapping utility; no CSS,
+  dependency, schema, policy activation or real-data change.
+- RED reproduced missing names. All 34 profile/editor database tests then passed.
+  Two UI assertions expected named HTML entities instead of Dioxus's equivalent
+  numeric escapes; corrected the expectations. All 42 selected UI tests and the
+  real-session HTTP authorization/lifecycle matrix passed. Native/WASM lint passed,
+  but cached SQLx preparation omitted 91 still-used integration-test descriptors.
+  Cleaning only rebuildable Horae artifacts (4.2 GiB) restored complete generation:
+  1,406 descriptors, five added and none removed or modified. Repeated offline
+  all-targets server Clippy (1m02s) and WASM Clippy (12.74s) passed with warnings
+  denied. Formatting CI passed (491 files, zero changes); disposable PostgreSQL
+  was stopped after verification.
+- Independent source review found no actionable issue. The documentation review
+  confirmed existing design primitives suffice. Neither review establishes
+  rendered, keyboard, viewport or theme acceptance; no browser tool is loaded.
+
+Delivery remains the existing draft #212, with no merge. Next implementation:
+draft/navigation/uncertain-save recovery using the existing editor navigation
+guard as prior art. Full T018, enforcement, approvals and migration remain open.
+
 ## 2026-10-04 — Reusable profile controls
 
 - Previous turn made progress by publishing the person editor. Revalidated clean

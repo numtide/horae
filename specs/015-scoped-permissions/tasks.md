@@ -487,6 +487,12 @@ Creation/deletion does not also save the person; reload explicitly discards thei
 unsaved changes. Legacy shell/directory replacement, improved recovery and full
 browser acceptance remain separate unfinished parts of T015/T017/T018.
 
+Relationship-loss labels extend the authorized preview in `permissions/editor.rs`,
+not its stored audit or the command confirmation shape. Cover names, inactive
+subjects, other managers/tenants, no-loss proposals, denial, strict historical
+decoding and real HTTP delivery in the existing editor tests. The UI renders
+escaped names with the existing wrapping utility and still submits exact IDs.
+
 ### Authenticated own-permission projection
 
 T035/T036/T057 → T095 → T096 → T097 implements `contracts/own-permissions.md`.

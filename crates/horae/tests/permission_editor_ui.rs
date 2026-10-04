@@ -668,14 +668,25 @@ async fn keeping_projects_requires_new_review_and_confirmation_of_remaining_peop
         id: Uuid::now_v7(),
         subject_id: Uuid::now_v7(),
         revision: 0,
+        name: "Proyecto <Norte> & Sur".into(),
     });
     effects.remove_people.push(RelationshipRemoval {
         id: Uuid::now_v7(),
         subject_id: Uuid::now_v7(),
         revision: 0,
+        name: "María <Equipo> & Co.".into(),
     });
     reply.send(Ok(effects.clone())).unwrap();
     ui.settle();
+    let html = ui.html();
+    assert!(
+        html.contains("Proyecto &#60;Norte&#62; &#38; Sur"),
+        "{html}"
+    );
+    assert!(html.contains("María &#60;Equipo&#62; &#38; Co."), "{html}");
+    for effect in effects.remove_projects.iter().chain(&effects.remove_people) {
+        assert!(!html.contains(&effect.subject_id.to_string()), "{html}");
+    }
     ui.click("permission-save");
     assert!(
         probe.saves.borrow().is_empty(),

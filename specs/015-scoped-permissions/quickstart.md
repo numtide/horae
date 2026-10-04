@@ -1,5 +1,33 @@
 # Permission verification
 
+## Management-loss names (T018, in progress)
+
+Run in the Nix shell against the owned disposable database:
+
+```sh
+cargo test -p horae --features server --bin horae permissions::profile_tests --locked
+cargo test -p horae --features server --test permission_editor_ui --test own_permissions_ui --test admin_shell --locked
+cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization --locked
+cargo sqlx prepare --workspace -- --features server --all-targets
+```
+
+Observed: RED reproduced missing preview names; 34 database tests, 42 selected UI
+tests and the registered HTTP matrix passed. The first UI run exposed two test
+expectations for named rather than numeric HTML entities; corrected expectations
+now verify Dioxus's escaped output. Cached SQLx preparation omitted 91 unchanged
+integration-test descriptors despite passing offline lint; cleaning only Horae's
+rebuildable artifacts restored complete generation: 1,406 descriptors, five added
+and none removed or modified. Repeated offline all-targets server Clippy (1m02s)
+and WASM Clippy (12.74s) passed with warnings denied.
+
+FR-010/018 coverage includes other managers/tenants, inactive subjects and denied
+requesters. FR-013/025/029/030 coverage preserves exact confirmation, strict
+name-free historical decoding and preview/save effects. FR-012/016 coverage
+checks escaped names, hidden internal IDs and shared wrapping utilities.
+Independent source and design-documentation reviews found no actionable issue
+in their scope. Browser acceptance and full T018 remain open; no activation,
+real-data migration, new schema, dependency or global CSS change is included.
+
 ## Reusable profile controls (T018, in progress)
 
 Use the same offline Nix UI/lint commands in the next section. The editor suite

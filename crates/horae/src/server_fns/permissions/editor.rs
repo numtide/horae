@@ -8,7 +8,7 @@ use super::profiles::{self, ProfileCommandError};
 use super::{load_permission_template, load_person_permissions, restore_grants};
 use crate::models::permission_editor::{
     PermissionEditor, PermissionSnapshot, ProfileDraft, ProfilePreview, ProfileSource,
-    TemplateAssignee, TemplateChoice, TemplateDeletionPreview,
+    RelationshipRemoval, TemplateAssignee, TemplateChoice, TemplateDeletionPreview,
 };
 use crate::models::permissions::{PermissionSource, PersonPermissions};
 
@@ -129,14 +129,43 @@ pub(crate) async fn preview(
     if changed && access_revision.checked_add(1).is_none() {
         return Err(ProfileCommandError::RevisionExhausted);
     }
+    // Enrich only the evaluated effects, under the same authorization gate.
+    // Names are display data and must not change stored audits or command intent.
+    let project_ids: Vec<_> = change.removed_projects.iter().map(|row| row.id).collect();
+    let person_ids: Vec<_> = change.removed_people.iter().map(|row| row.id).collect();
+    let remove_projects = sqlx::query_as!(
+        RelationshipRemoval,
+        "SELECT a.id, a.project_id AS subject_id, a.revision, p.name
+         FROM project_management_assignments a
+         JOIN projects p ON p.org_id=a.org_id AND p.id=a.project_id
+         WHERE a.org_id=$1 AND a.id=ANY($2) ORDER BY a.id",
+        org,
+        &project_ids
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+    let remove_people = sqlx::query_as!(
+        RelationshipRemoval,
+        "SELECT a.id, a.managed_user_id AS subject_id, a.revision, u.name
+         FROM person_management_assignments a
+         JOIN users u ON u.org_id=a.org_id AND u.id=a.managed_user_id
+         WHERE a.org_id=$1 AND a.id=ANY($2) ORDER BY a.id",
+        org,
+        &person_ids
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+    if remove_projects.len() != project_ids.len() || remove_people.len() != person_ids.len() {
+        return Err(ProfileCommandError::NotFound);
+    }
     let result = ProfilePreview {
         user_id: draft.user_id,
         access_revision,
         before: change.before.into(),
         after: change.after.into(),
         changed,
-        remove_projects: change.removed_projects,
-        remove_people: change.removed_people,
+        remove_projects,
+        remove_people,
     };
     tx.commit().await?;
     Ok(result)

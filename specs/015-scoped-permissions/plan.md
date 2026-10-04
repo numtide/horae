@@ -108,6 +108,14 @@ draft; a completed template change requires an explicit fresh reload before more
 person editing. Canonical shell/directory enforcement, navigation recovery and
 browser acceptance remain unfinished, not implicitly supplied by this consumer.
 
+Loss previews enrich only the evaluated relationship IDs with tenant-local subject
+names in the existing authorized transaction. Reuse the name-free historical
+relationship type for command audits; names are never confirmation authority.
+The UI uses escaped text and the existing wrapping utility. Verify inactive
+subjects, other managers/tenants, retained relationships, exact confirmation,
+strict audit decoding and registered HTTP delivery before publishing this part
+of T018. SQL query changes require complete cache regeneration and offline gates.
+
 T126–T129 connect authenticated editor load/preview and profile/template commands
 under `contracts/permission-editor.md`. Reuse grant logic and receipt shapes;
 display DTOs are not trusted authority. Local prerequisites are activity locks,

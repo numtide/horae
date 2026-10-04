@@ -14,6 +14,85 @@ fn draft(request: &ProfileCommand) -> ProfileDraft {
 
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]
+async fn editor_loss_names_cover_only_current_outgoing_effects(pool: PgPool) {
+    let ids = fixture(&pool).await;
+    let foreign = fixture(&pool).await;
+    let manager = person(&pool, ids.org_id, false, BuiltInProfile::ProjectManager).await;
+    let other_manager = person(&pool, ids.org_id, false, BuiltInProfile::ProjectManager).await;
+    let foreign_manager =
+        person(&pool, foreign.org_id, false, BuiltInProfile::ProjectManager).await;
+    let (project_link, person_link, _) = relationships(&pool, &ids, manager).await;
+    relationships(&pool, &ids, other_manager).await;
+    relationships(&pool, &foreign, foreign_manager).await;
+
+    // Inactive records still have responsibilities; they cannot disappear from confirmation.
+    sqlx::query!(
+        "UPDATE projects SET name=$2, active=false WHERE id=$1",
+        ids.project_id,
+        "Proyecto <Norte> & Sur"
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE users SET name=$2, active=false WHERE id=$1",
+        ids.user_id,
+        "María <Equipo> & Co."
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let actor = person(&pool, ids.org_id, true, BuiltInProfile::Administrator).await;
+    let proposal = draft(&apply(manager, BuiltInProfile::Member));
+    let preview = editor::preview(&pool, ids.org_id, actor, &proposal)
+        .await
+        .unwrap();
+    let display = serde_json::to_value(&preview).unwrap();
+    assert_eq!(
+        display["remove_projects"],
+        serde_json::json!([{
+            "id":project_link, "subject_id":ids.project_id, "revision":0,
+            "name":"Proyecto <Norte> & Sur"
+        }])
+    );
+    assert_eq!(
+        display["remove_people"],
+        serde_json::json!([{
+            "id":person_link, "subject_id":ids.user_id, "revision":0,
+            "name":"María <Equipo> & Co."
+        }])
+    );
+
+    let retained = editor::preview(
+        &pool,
+        ids.org_id,
+        actor,
+        &draft(&apply(manager, BuiltInProfile::ProjectManager)),
+    )
+    .await
+    .unwrap();
+    assert!(retained.remove_projects.is_empty());
+    assert!(retained.remove_people.is_empty());
+    for requester in [manager, ids.user_id, foreign.user_id] {
+        assert!(matches!(
+            editor::preview(&pool, ids.org_id, requester, &proposal).await,
+            Err(ProfileCommandError::Forbidden)
+        ));
+    }
+    assert!(matches!(
+        editor::preview(
+            &pool,
+            ids.org_id,
+            actor,
+            &draft(&apply(foreign.user_id, BuiltInProfile::Member))
+        )
+        .await,
+        Err(ProfileCommandError::NotFound)
+    ));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
 async fn editor_preview_matches_saved_effects_without_writing(pool: PgPool) {
     let ids = fixture(&pool).await;
     let user = person(&pool, ids.org_id, false, BuiltInProfile::ProjectManager).await;
@@ -27,6 +106,9 @@ async fn editor_preview_matches_saved_effects_without_writing(pool: PgPool) {
         .unwrap();
     assert_eq!(preview.before, loaded.permissions);
     assert!(preview.changed);
+    let display = serde_json::to_value(&preview).unwrap();
+    assert_eq!(display["remove_projects"][0]["name"], "Widget");
+    assert_eq!(display["remove_people"][0]["name"], "Test User");
     assert_eq!(
         preview
             .remove_projects
@@ -73,6 +155,19 @@ async fn editor_preview_matches_saved_effects_without_writing(pool: PgPool) {
         .unwrap();
     assert_eq!(reloaded.permissions, preview.after);
     assert_eq!(reloaded.access_revision, saved.access_revision);
+    let stored = sqlx::query_scalar!(
+        "SELECT audit FROM permission_change_receipts WHERE org_id=$1 AND request_id=$2",
+        ids.org_id,
+        command.request_id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let audit: crate::models::permission_audit::ProfileAudit =
+        serde_json::from_value(stored).unwrap();
+    let change = audit.change.unwrap();
+    assert_eq!(change.removed_projects[0].id, project);
+    assert_eq!(change.removed_people[0].id, managed_person);
     assert_eq!(
         relationship_ids(&pool, ids.org_id).await,
         (vec![], vec![incoming])

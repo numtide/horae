@@ -118,12 +118,14 @@ pub struct PermissionEditor {
     pub templates: Vec<TemplateChoice>,
 }
 
+/// Current display label; saves confirm relationship IDs, never names.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RelationshipRemoval {
     pub id: Uuid,
     pub subject_id: Uuid,
     pub revision: i64,
+    pub name: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -34,7 +34,12 @@ canonical state without this gate is not an authorized writer protocol.
 - Preview explicit action/final grants against expected person/access/template
   revisions using save's transition and relationship-effect calculation. Return
   before/after snapshots, changed status and exact outgoing removal IDs, subject
-  IDs and revisions. Last-active-Administrator failure is a conflict, not a
+  IDs, revisions and current subject names. Read names only for the evaluated
+  effects in the same authorized transaction, joining on both tenant and subject.
+  Include inactive subjects when their responsibilities will be removed; never
+  silently omit an effect whose label cannot be loaded. Names are display data,
+  not confirmation authority or a change to the historical audit format.
+  Last-active-Administrator failure is a conflict, not a
   successful executable proposal. Preview writes no state, revision or receipt.
 - Save recomputes effects and requires exact confirmed removal sets. Keeping
   project access is an explicit grant edit, never a server flag. Unchanged or
@@ -103,9 +108,10 @@ case to resolve before declaring the full editor complete.
   or a concept-selection exercise. Custom-profile creation/deletion extends the
   same dialog, not a nested modal or another visual identity.
 - Finish: browser, keyboard, viewport/theme and independent visual review remain
-  mandatory. Current loss DTOs contain subject IDs, not names; improve this
-  presentation before full acceptance instead of inventing labels from unrelated
-  or stale directory data. No full T018 completion follows from source/SSR tests.
+  mandatory. Render authorized loss-preview names as escaped text using existing
+  wrapping utilities; do not show raw internal IDs or invent labels from unrelated
+  or stale directory data. Exact IDs still identify confirmed removals, including
+  when subjects share a name. No full T018 completion follows from source/SSR tests.
 
 ### Template controls
 

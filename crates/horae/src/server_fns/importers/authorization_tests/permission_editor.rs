@@ -71,6 +71,12 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         StatusCode::NOT_FOUND
     );
 
+    let project_link = Uuid::now_v7();
+    let person_link = Uuid::now_v7();
+    sqlx::query!("INSERT INTO project_management_assignments (id, org_id, manager_id, project_id) VALUES ($1, $2, $3, $4)",
+        project_link, ids.org_id, target, ids.project_id).execute(pool).await.unwrap();
+    sqlx::query!("INSERT INTO person_management_assignments (id, org_id, manager_id, managed_user_id) VALUES ($1, $2, $3, $4)",
+        person_link, ids.org_id, target, ids.user_id).execute(pool).await.unwrap();
     let draft = json!({"user_id":target,"expected_access_revision":0,"expected_person_revision":0,
         "action":{"kind":"built_in","profile":"member"},"grants":BuiltInProfile::Member.selection()});
     let preview = api
@@ -82,13 +88,25 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         .await;
     assert_eq!(preview["changed"], true);
     assert_eq!(
+        preview["remove_projects"],
+        json!([{
+            "id":project_link,"subject_id":ids.project_id,"revision":0,"name":"Widget"
+        }])
+    );
+    assert_eq!(
+        preview["remove_people"],
+        json!([{
+            "id":person_link,"subject_id":ids.user_id,"revision":0,"name":"Test User"
+        }])
+    );
+    assert_eq!(
         api.json("load_permission_editor", lookup.clone(), &cookie)
             .await,
         loaded
     );
     let command = json!({"request_id":Uuid::now_v7(),"expected_access_revision":0,"user_id":target,
         "expected_person_revision":0,"action":{"kind":"built_in","profile":"member"},
-        "grants":BuiltInProfile::Member.selection(),"remove_projects":[],"remove_people":[]});
+        "grants":BuiltInProfile::Member.selection(),"remove_projects":[project_link],"remove_people":[person_link]});
     let saved = api
         .json(
             "save_person_permissions",
