@@ -1,5 +1,24 @@
 # Permission verification
 
+## Timesheet modal and mutation regressions (T186)
+
+The default disposable browser runner includes `modals` and `timesheet-errors`.
+For focused iteration, use `run-design-checks.sh modals timesheet-errors` with
+the same built server and pinned Playwright environment as the other suites.
+Both reject non-runner database targets.
+
+Coverage includes atomic row deletion after a stale-client lock, unlock/retry,
+failed calendar move/resize/reorder, a committed reschedule with a lost response,
+timer-start failure, modal keyboard/inertness/backdrop/short-viewport behavior,
+pending dismissal guards, draft preservation and real create/update/delete.
+Both Timesheet dialogs also receive 200-character project/task labels while
+retaining real eligible IDs; their panels fit 390px and 320px short viewports.
+Cancel returns focus to an available opener; refresh-disabled or removed openers
+use the shared `app-main` fallback. Deletion is checked against the complete
+refreshed DTO, not a transient empty grid. The fixture uses legacy own-person
+mode: these regressions do not prove delegated browser acceptance, final
+submitted-editing parity, policy activation or full feature completion.
+
 ## Browsable permission history (T182–T184)
 
 `/admin/audit` connects authenticated `list_permission_audit` to Workspace Data

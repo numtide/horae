@@ -1200,6 +1200,7 @@ fn TimesheetContent(
                 open: add_open.read().is_some(),
                 busy: add_saving(),
                 large: true,
+                focus_fallback: "app-main",
                 on_dismiss: move |_| add_open.set(None),
                 if let Some(date) = *add_open.read() {
                     div { id: "time-entry-title", class: "ts-modal-title",

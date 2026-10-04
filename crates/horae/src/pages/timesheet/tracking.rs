@@ -56,7 +56,7 @@ pub(super) fn TrackingPicker(
         .collect();
     rsx! {
         fieldset { class: "border-0 p-0 m-0 min-w-0", disabled,
-            div { class: "grid gap-2",
+            div { class: "flex flex-col gap-2",
                 label { r#for: "timesheet-project", class: "form-label", "Project" }
                 SelectField {
                     id: "timesheet-project", label: "project", options: projects,

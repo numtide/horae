@@ -776,6 +776,8 @@ data repair, role mapping or runtime activation is authorized by these cases.
 
 ### Full-gate regressions
 
+- [x] T186 Adapt the existing Timesheet modal/error browser suites to requester-bound commands; verify atomic stale-client deletion, transport reconciliation, draft preservation and focus fallback during authorized refresh. Include both suites in the default disposable runner after passing (FR-018).
+
 - [x] T174 Reproduce the Nix browser source-layout failure and cross-suite development-login ambiguity without weakening permission assertions (FR-018).
 
 - [x] T175 Correct browser inputs/fixtures and synchronize viewport changes; rerun the complete browser gate, preserving keyboard/recovery coverage (FR-018).

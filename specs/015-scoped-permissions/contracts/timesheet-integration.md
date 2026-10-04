@@ -1,5 +1,15 @@
 # Timesheet person context and operation integration
 
+### Modal focus during permission-bound refresh
+
+Closing the entry modal returns focus to its opener when that control remains
+available. A successful create/update/delete or timer start refreshes the scoped
+page and tracking options, which can disable or remove the opener. In that case,
+use the existing shared Modal fallback to `app-main`; do not retain stale tracking
+authority or delay-steal focus after the refresh. Cancel/Escape still return to
+the available opener. Browser acceptance must verify persisted deletion after
+the new response, not the transient empty grid while authority is reloaded.
+
 Implementation map at `5ec183a`, checked 2026-10-04. This is the required
 integration of OP02–OP05, FR-006/007/008/010/018/019, not permission to activate
 canonical policy. The existing scoped reader and activity fence are prerequisites,

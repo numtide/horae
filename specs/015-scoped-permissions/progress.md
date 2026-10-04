@@ -1,5 +1,66 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Timesheet mutation browser acceptance
+
+- Previous turn only reconfirmed FR-033/B; no implementation progress. Revalidated
+  clean `2f5357f` and reused the isolated feature worktree and draft #212.
+- Adapted existing `timesheet-errors.cjs` to requester-bound atomic commands,
+  current page reads and runner-only database validation. Fixtures are created
+  transactionally, collision-refusing and removed after the browser closes.
+- Chromium `12819` passes all six cases: stale-client submitted lock rejects the
+  entire row deletion, unlock/reload permits retry, failed move/resize/reorder,
+  committed reschedule with lost response reconciles actual data, and timer-start
+  transport error. This does not settle final submitted-editing parity.
+- Adapted `modals.cjs` to shared selectors and current commands. Chromium `5141`
+  passes keyboard/inertness/backdrop/short-viewport checks for Export, Add entry
+  and Add row, then reproduces lost focus after a save attempt: the authorized
+  refresh disables the opener before native dialog closure.
+- Reused the shared Modal's existing `app-main` focus fallback in Timesheet;
+  no shared component, CSS, permission guard or persistence change. Independent
+  review also identified a transient-empty-grid deletion false positive; the
+  test now verifies the refreshed complete DTO and Ready controls before absence.
+- Follow-up `91539` clarified that the first failure was Cancel immediately after
+  a failed retry, while tracking authority was still refreshing. Normal Cancel
+  now waits for an available opener, separately from fallback assertions after
+  successful create/update/delete. `92882` passes all ten scenarios in both suites
+  against the rebuilt client/server.
+- Native build `35587` passes (72s), asset processing `35262` passes, server
+  Clippy `39842` passes and WASM check `54166` passes. Dioxus `11558` regenerated
+  the client but also compiled a duplicate native profile despite `--fullstack false`; interrupted that redundant build and verified its processes stopped.
+  Removed only the two caches it created this turn, retaining the tested native
+  and client artifacts. Its interrupt is not a successful full Dioxus build.
+- Both suites are registered in the default runner. Combined run `46759` passes
+  the first 18 suites, then exposes real horizontal overflow in both Timesheet
+  dialogs after earlier suites create long project names. It exits 1; not a green
+  full gate. Standalone RED `76196` reproduces with 200-character catalog labels,
+  keeping real eligible IDs and all mutation authority unchanged.
+- Replaced TrackingPicker's implicit grid track with existing column-flex
+  utilities, locally shared by both Timesheet dialogs. No CSS/global selector
+  change. The modal suite now always supplies long labels and tests their actual
+  presence and bounds. Initial edit focus is required inside the native dialog,
+  rather than on a particular asynchronously arriving control.
+- Client rebuild `16869` reports completion in 38.95s; stopped only its redundant
+  native build after that message. Separate native build `18834` passes (56.75s),
+  followed by asset processing `21606` and server Clippy `70801`.
+- Final Chromium `23232` passes modals with long labels, all six mutation/error
+  cases and the complete permission-editor recovery/history suite, including its
+  loaded-CSS guard. Independent review approves both local UI changes and closes
+  the deletion false positive. All 21 default scripts have passed across the
+  complementary `46759`/`23232` blocks, not an uninterrupted green full gate;
+  no full Nix acceptance or full permission completion is claimed.
+- Independent research identifies the next connected person-management writer
+  and its mandatory audit/recovery consumers. Read official Harvest assignment,
+  teammate API and archive documentation; none settles activity of new relation
+  endpoints. Asked one scoped question and recorded sources/limits in the
+  person-management contract; no answer or archival behavior is inferred.
+
+Next: deliver this regression repair on draft #212 without merge, then implement
+the connected person-management command/editor once the new-relationship activity
+question is resolved. Reuse existing persistence, replay and profile-loss logic;
+extend strict audit decoding/history together. Full permission implementation,
+activation and the separate outstanding approval decision remain open. No real
+data or Harvest account was changed.
+
 ## 2026-10-04 — Permission history browser acceptance
 
 - Previous turn only acknowledged the already-recorded FR-033/B clarification;

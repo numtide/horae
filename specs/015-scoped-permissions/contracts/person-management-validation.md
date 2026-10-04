@@ -65,3 +65,24 @@ through existing selection methods; verify equality of inputs before/after.
 This is a local test oracle for approved Horae decisions, not evidence of Harvest
 server enforcement or atomic database commits. Transactional mixed-batch denial,
 revocation and audit rollback remain T012/T013 acceptance obligations.
+
+## Remaining runtime activity question — 2026-10-04
+
+The next connected writer can reuse the existing management table, organization
+gate, profile-loss handling and receipt/recovery protocol. It must also extend
+the strict audit decoder and history UI for the new command shape; an unknown
+receipt shape must not break history browsing after a successful assignment.
+
+Official [teammate API documentation](https://help.getharvest.com/api-v2/users-api/users/teammates/)
+defines Administrator-only set replacement but gives no activity constraint for
+the responsible person or newly added teammate. The [assignment guide](https://support.getharvest.com/hc/en-us/articles/4422314817677-Making-people-assignments-for-Managers)
+likewise does not document archived candidates. The [archiving guide](https://support.getharvest.com/hc/en-us/articles/360048687311-Archiving-deleting-and-restoring-people)
+describes disabled login, project assignments and historical reporting, not new
+person-management relationships. These pages were read on 2026-10-04; no account
+mutation or authenticated probe was performed. Absence of a documented rejection
+is not evidence that Harvest allows the operation.
+
+Asked the user whether both endpoints must be active for **new** relationships
+(recommended) or inactive endpoints are allowed. Answer pending. This question
+does not reopen FR-027/028/029/031 or authorize deletion of existing relationships,
+archival cleanup, activation or changes to historical business records.

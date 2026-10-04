@@ -1,10 +1,13 @@
-// Run against an isolated, seeded dev-login instance. Creates and deletes one
-// uniquely named entry; intercepted failures never reach the server.
-// HORAE_TEST_URL=http://127.0.0.1:8092 node crates/horae/tests/browser/modals.cjs
+// Run with run-design-checks.sh modals. Creates and deletes one uniquely named
+// entry in its disposable DB; intercepted failures never reach the server.
 const { chromium, expect } = require(process.env.PLAYWRIGHT_MODULE || 'playwright/test');
 const assert = require('node:assert/strict');
 const base = process.env.HORAE_TEST_URL;
-assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
+const target = new URL(base);
+const database = new URL(process.env.DATABASE_URL);
+assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port === '8093');
+assert.equal(database.pathname, '/horae');
+assert.match(database.searchParams.get('host') || '', /^\/tmp\/horae-browser\.[A-Za-z0-9]+$/);
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, headless: true });
@@ -12,6 +15,16 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
   const errors = [];
   const failures = [];
   page.on('pageerror', error => errors.push(error.message));
+  const longName = 'W'.repeat(200);
+  // Keep real eligible IDs/authority while exercising the supported label limit.
+  await page.route('**/api/load_timesheet_tracking*', async route => {
+    const response = await route.fetch();
+    if (response.status() !== 200) return route.fulfill({ response });
+    const options = await response.json();
+    await route.fulfill({ response, json: options.map(option => ({
+      ...option, project_name: longName, task_name: longName,
+    })) });
+  });
   async function visit(path, resource) {
     const ready = page.waitForResponse(r => r.url().includes(`/api/${resource}`) && r.status() === 200);
     await page.goto(`${base}${path}`);
@@ -19,7 +32,7 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
   }
   async function check(name, run) {
     try { await run(); console.log(`PASS: ${name}`); }
-    catch (error) { failures.push(name); console.error(`FAIL: ${name}: ${error.message}`); }
+    catch (error) { failures.push(name); console.error(`FAIL: ${name}: ${error.stack}`); }
   }
   try {
     await page.goto(`${base}/auth/login`);
@@ -27,8 +40,8 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     await page.waitForURL(`${base}/`);
     for (const scenario of [
       { path: '/projects', resource: 'list_projects', trigger: 'Export', title: 'Export projects' },
-      { path: '/timesheet/week/2027-10-04', resource: 'list_time_entries', trigger: 'Add entry', title: /New time entry/ },
-      { path: '/timesheet/week/2027-10-04', resource: 'list_time_entries', trigger: '＋ Add row', title: 'Add a row' },
+      { path: '/timesheet/week/2027-10-04', resource: 'load_timesheet_page', trigger: 'Add entry', title: /New time entry/ },
+      { path: '/timesheet/week/2027-10-04', resource: 'load_timesheet_page', trigger: '＋ Add row', title: 'Add a row' },
     ]) {
       await check(`${scenario.trigger}: semantics, keyboard, focus return, backdrop and short viewport`, async () => {
         await page.setViewportSize({ width: 1440, height: 900 });
@@ -67,6 +80,10 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
           await page.setViewportSize({ width, height: 320 });
           await trigger.click();
           await expect(modal).toBeVisible();
+          if (scenario.resource === 'load_timesheet_page') {
+            await expect(modal.getByRole('button', { name: 'Project', exact: true })).toContainText(longName);
+            await expect(modal.getByRole('button', { name: 'Task', exact: true })).toContainText(longName);
+          }
           const panel = modal.locator('.modal');
           const bounds = await panel.boundingBox();
           assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width + 1, 'Panel fits viewport width');
@@ -86,28 +103,34 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     }
     await check('pending save blocks dismissal; failure preserves input and allows retry', async () => {
       await page.setViewportSize({ width: 1440, height: 900 });
-      await visit('/timesheet/week/2027-10-04', 'list_time_entries');
+      await visit('/timesheet/week/2027-10-04', 'load_timesheet_page');
       const trigger = page.getByRole('button', { name: 'Add entry', exact: true });
       await trigger.click();
       const modal = page.getByRole('dialog', { name: /New time entry/ });
-      const project = modal.getByRole('combobox', { name: 'Project', exact: true });
+      const project = modal.getByRole('button', { name: 'Project', exact: true });
       await expect(project).toBeEnabled();
-      const projectId = await project.locator('option').evaluateAll(options => options.find(o => o.value)?.value);
-      await project.selectOption(projectId);
-      const task = modal.getByRole('combobox', { name: 'Task', exact: true });
-      const taskId = await task.locator('option').evaluateAll(options => options.find(o => o.value)?.value);
-      await task.selectOption(taskId);
+      async function selectFirst(label) {
+        await modal.getByRole('button', { name: label, exact: true }).click();
+        await page.getByRole('dialog', { name: `Choose ${label.toLowerCase()}`, exact: true }).getByRole('option').first().click();
+      }
+      await selectFirst('Project');
+      await selectFirst('Task');
       await modal.getByRole('textbox', { name: 'Duration', exact: true }).fill('1:00');
       const notes = `Modal browser regression ${Date.now()}`;
       await modal.getByPlaceholder('Notes (optional)').fill(notes);
       let release;
       const gate = new Promise(resolve => { release = resolve; });
-      const route = url => url.pathname.includes('/api/create_time_entry');
-      await page.route(route, async r => { await gate; await r.abort('failed'); });
+      const route = '**/api/apply_timesheet_command*';
+      let attempts = 0;
+      await page.route(route, async r => {
+        assert.equal(r.request().postDataJSON().command.operation, 'create');
+        attempts += 1;
+        await gate;
+        await r.abort('failed');
+      });
       try {
-        const sent = page.waitForRequest(r => r.url().includes('/api/create_time_entry'));
         await modal.getByRole('button', { name: 'Save entry', exact: true }).click();
-        await sent;
+        await expect.poll(() => attempts).toBe(1);
         await expect(modal.getByRole('button', { name: 'Saving…', exact: true })).toBeDisabled();
         await expect(modal.getByRole('button', { name: 'Cancel', exact: true })).toBeDisabled();
         await page.keyboard.press('Escape');
@@ -118,47 +141,63 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
       await expect(modal.getByPlaceholder('Notes (optional)')).toHaveValue(notes);
       await expect(modal.getByRole('button', { name: 'Save entry', exact: true })).toBeEnabled();
       await modal.getByRole('button', { name: 'Save entry', exact: true }).click();
+      await expect.poll(() => attempts).toBe(2);
       await expect(modal.getByRole('alert')).toContainText('Could not save');
       await page.unroute(route);
+      // A failed transport also refreshes authority; test Cancel once its opener
+      // is available, separately from the refresh fallback on successful writes.
+      await expect(trigger).toBeEnabled();
       await page.keyboard.press('Escape');
       await expect(modal).toBeHidden();
       await expect(trigger).toBeFocused();
       await trigger.click();
       await expect(project).toBeEnabled();
-      await project.selectOption(projectId);
-      await task.selectOption(taskId);
+      await selectFirst('Project');
+      await selectFirst('Task');
       await modal.getByRole('textbox', { name: 'Duration', exact: true }).fill('1:00');
       await modal.getByPlaceholder('Notes (optional)').fill(notes);
-      const refreshed = page.waitForResponse(r => r.url().includes('/api/list_time_entries') && r.status() === 200);
+      const refreshed = page.waitForResponse(r => r.url().includes('/api/load_timesheet_page') && r.status() === 200);
       await modal.getByRole('button', { name: 'Save entry', exact: true }).click();
       await expect(modal).toBeHidden();
-      await expect(trigger).toBeFocused();
+      // Refresh invalidates tracking options, so the opener is temporarily disabled.
+      await expect(page.locator('#app-main')).toBeFocused();
       await (await refreshed).finished();
-      await visit('/timesheet/day/2027-10-04', 'list_time_entries');
+      await visit('/timesheet/day/2027-10-04', 'load_timesheet_page');
       const row = page.locator('.ts-day-entry').filter({ hasText: notes });
       const edit = row.getByRole('button', { name: 'Edit', exact: true });
       await edit.click();
       const editing = page.getByRole('dialog', { name: /Edit time entry/ });
-      await expect(editing.getByRole('combobox', { name: 'Project', exact: true })).toBeDisabled();
-      await expect(editing.getByPlaceholder('Notes (optional)')).toBeFocused();
+      await expect(editing.getByRole('button', { name: 'Project', exact: true })).toBeEnabled();
+      // Catalog arrival can change the first available control; focus must stay
+      // inside the native dialog rather than depend on network timing.
+      await expect.poll(() => editing.evaluate(el => el.contains(document.activeElement))).toBe(true);
       await page.keyboard.press('Escape');
       await expect(edit).toBeFocused();
       await edit.click();
-      const updateRoute = url => url.pathname.includes('/api/update_time_entry');
-      await page.route(updateRoute, r => r.abort('failed'));
+      await page.route(route, r => {
+        assert.equal(r.request().postDataJSON().command.operation, 'update');
+        return r.abort('failed');
+      });
       await editing.getByRole('textbox', { name: 'Duration', exact: true }).fill('2:00');
       await editing.getByRole('button', { name: 'Save entry', exact: true }).click();
       await expect(editing.getByRole('alert')).toContainText('Could not save');
       await expect(editing.getByRole('textbox', { name: 'Duration', exact: true })).toHaveValue('2:00');
-      await page.unroute(updateRoute);
+      await page.unroute(route);
       await editing.getByRole('button', { name: 'Save entry', exact: true }).click();
       await expect(editing).toBeHidden();
+      await expect(page.locator('#app-main')).toBeFocused();
       await expect(row.locator('.ts-day-entry-dur')).toHaveText('2:00');
       await edit.click();
       await page.setViewportSize({ width: 320, height: 320 });
+      const deleted = page.waitForResponse(r => r.url().includes('/api/load_timesheet_page') && r.status() === 200);
       await editing.getByRole('button', { name: 'Delete', exact: true }).click();
       await expect(editing).toBeHidden();
+      const afterDelete = await (await deleted).json();
+      assert.equal(afterDelete.next_after, null);
+      assert.equal(afterDelete.entries.filter(entry => entry.notes === notes).length, 0);
+      await expect(trigger).toBeEnabled();
       await expect(row).toHaveCount(0);
+      await expect(page.locator('#app-main')).toBeFocused();
       await trigger.click();
       await expect(modal).toBeVisible();
       await page.keyboard.press('Escape');
