@@ -29,7 +29,7 @@ Recheck the migration sequence before creating
 | Relation | Required fields and constraints |
 | --- | --- |
 | `organizations` additions | `permission_policy_version` integer defaults to 0 (legacy); nonnegative `access_revision` bigint defaults to 0. Installing the migration does not activate a policy |
-| `permission_templates` | UUID v7 `id`; `org_id` FK; display `name`; catalog version; canonical `text[]` grant IDs; nonnegative revision; creation timestamp. Unique `(org_id, id)` for tenant references and unique `(org_id, lower(name))` for FR-032 |
+| `permission_templates` | UUID v7 `id`; `org_id` FK; display `name`; catalog version; canonical `text[]` grant IDs; nonnegative revision; creation timestamp. Unique `(org_id, id)` for tenant references and unique `(org_id, lower(name COLLATE permission_template_names))` for FR-032 |
 | `person_permission_states` | UUID v7 `id`; `org_id` FK; user ID with composite `(org_id, user_id)` FK and one row per organization/user; catalog version; canonical `text[]` grants; explicit administrative identity; source discriminator and source metadata; nonnegative revision; creation/update timestamps |
 
 Add the required unique `(org_id, id)` key on `users`; never rewrite user IDs,
@@ -41,11 +41,23 @@ of profile names and never reconstructed from audit or current template defaults
 
 The server trims surrounding whitespace, rejects blank names and counts Unicode
 scalar characters for the 100-character limit. Preserve display casing and do not
-remove internal whitespace or accents. PostgreSQL's `lower(name)` is the single
+remove internal whitespace or accents. PostgreSQL's `lower(name COLLATE permission_template_names)` is the single
 comparison authority for lookup/conflict checks and the unique index; do not
-introduce a differently normalized Rust key. Collation/case behavior follows the
-database's configured locale, consistently for creation and comparison. SQL also
-checks nonempty/length bounds. No new Unicode-normalization library is required.
+introduce a differently normalized Rust key. Migration 0047 pins a deterministic
+ICU root (`und`) collation instead of inheriting the database locale: a C-locale
+cluster otherwise admits both `Ágil` and `ágil`, violating FR-032. This requires
+PostgreSQL built with ICU support (included in the pinned Nix package). Accents
+and different Unicode normalization forms remain distinct; no accent stripping,
+normalization library or separate Rust comparison is introduced. SQL also checks
+nonempty/length bounds.
+
+The index replacement is transactional and does not rewrite names, IDs, grants
+or assignments. Existing equivalent names cause migration failure with the old
+index and rows preserved; never rename/delete profiles automatically. Diagnose
+and resolve collisions explicitly before retrying on an existing installation.
+No canonical policy is activated. See PostgreSQL's
+[collation documentation](https://www.postgresql.org/docs/15/collation.html)
+for ICU support and case-conversion semantics.
 
 Names do not identify a template in mutation requests: use its tenant-scoped ID
 and revision. A custom label equal to a built-in name cannot confer Administrator

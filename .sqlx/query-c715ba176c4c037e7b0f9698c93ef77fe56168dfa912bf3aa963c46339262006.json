@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "ALTER TABLE permission_templates ALTER COLUMN name TYPE text COLLATE \"C\"",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "c715ba176c4c037e7b0f9698c93ef77fe56168dfa912bf3aa963c46339262006"
+}

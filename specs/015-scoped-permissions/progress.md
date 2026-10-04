@@ -1,5 +1,139 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Unicode storage regression completion
+
+- Previous goal turn: progress. Revalidated local `4294aa3`, the seven pending
+  storage/documentation/cache paths and the exact live verification session.
+  No browser suite or database verification was restarted on quiet output.
+- Session `38465` completed, exit 0: all 11 storage tests pass, including both new
+  migration preservation/rollback tests and accented/Cyrillic name equivalence.
+  Compilation took 4m30s; the tests took 1.76s. Other integration binaries were
+  filtered out by `storage_tests`; this is not a full-server regression result.
+- Complete SQLx preparation had already passed with one added DDL descriptor and
+  1,458 unchanged descriptors. The verification script stopped its own temporary
+  C-locale PostgreSQL. No development or real database was migrated.
+- Rechecked the full task list: T006/T007/T009, canonical consumers, approval
+  coverage, real expense integration and preserved-data activation remain open.
+  No browser/MCP tool is loaded, and the pending Timesheet candidate question has
+  no new answer. Passing these regressions cannot complete the full goal.
+- Offline server all-targets Clippy passes with warnings denied in 1m16s (session
+  `12678`, exit 0). Formatting passes again (520 files, zero changes). The scoped
+  review confirms transactional index replacement, unchanged prior migrations,
+  name/grant preservation, strict tenant uniqueness and no second Rust name key;
+  it is a local review, not independent full-feature acceptance.
+- The filesystem has about 19 GiB free with 17 GiB in this worktree's regenerable
+  Cargo target; avoid parallel Nix builders and monitor free space during the
+  corrected full gate. No build cache was deleted in this iteration.
+
+Next: publish the two scoped unsigned commits to draft #212 and run the corrected
+Nix checks. Keep T175/T177/T020 open
+until their exact gates pass. Resume the integrated contracts afterward; no merge
+or runtime policy activation is authorized by this correction.
+
+## 2026-10-04 — Full-gate failures and corrective verification
+
+- Previous goal turn: no implementation progress (the permission-benefits
+  explanation). Revalidated published `228e151` and resumed the exact recorded
+  process instead of restarting it. Full Nix session `57201` is terminal, exit 1.
+- The original release, Clippy and SQLx outputs are valid. Both NixOS deployment
+  outputs are also valid: `kyay78h61w8krsiimgya880vmzvp0zh1-vm-test-run-horae-e2e`
+  and `zb73z0pz991i6ayh49k869s77ac26lpc-vm-test-run-horae-e2e-oidc`. These prove
+  regression coverage at `228e151`, not canonical activation or the full feature.
+- Server-binary tests in Nix report 1,086 passed, one failed, 11 ignored. The
+  failure is `template_names_are_case_insensitive_and_tenant_local`: the C-locale
+  cluster admits both `Ágil` and `ágil`. A separate disposable PostgreSQL probe
+  confirms default `lower('Ágil')` remains `Ágil`, while ICU root lower produces
+  `ágil` without equating `Agil`. The probe stopped its own cluster afterward.
+- Corrected browser derivation `mxn163sp54gf1a2k6ic6ighap7g9y745` is also terminal,
+  exit 1. Preserving crate-relative asset paths allowed the first 18 suites to
+  pass, then the permission editor could not open. The project-permission suite
+  retained a second active legacy administrator; DEV_LOGIN can select that user,
+  who has no canonical state in the subsequent fixture. A new explicit assertion
+  reproduces the two-candidate failure. Keep the other draft owner as a Manager
+  (still permitted to create drafts), and assert a single login candidate.
+- The corrected paired run exposed an intermittent focus assertion after viewport
+  restoration; the shared menu intentionally closes on resize. Isolated and
+  paired instrumented runs both subsequently passed all recovery assertions.
+  Synchronize the capture helper with the rendering frame after each viewport
+  change, including artifact-disabled runs. No production UI/JS/CSS or permission
+  assertion changed; the temporary event instrumentation was removed.
+- Full browser runner session `13276` completed successfully (exit 0): all 19
+  suites, including permission recovery, against the valid `228e151` release
+  and corrected test scripts, using new disposable data. The fixture/source-path
+  repair is committed unsigned as `4294aa3` (not yet pushed). This is not yet a
+  passing corrected Nix derivation and does not exercise migration 0047.
+- Migration 0047 pins the profile-name index to deterministic ICU root comparison;
+  prior migrations are unchanged. New tests cover preservation and transactional
+  collision failure, plus accented/Cyrillic case pairs, accent distinction and
+  distinct Unicode normalization forms. The storage contract no longer permits
+  cluster-locale drift; the deployment README records the ICU requirement.
+- Verification session `38465` applied migrations only in its new C-locale
+  disposable cluster. Complete SQLx preparation passed in 2m39s: 1,459 descriptors,
+  one new test DDL descriptor and all 1,458 existing descriptors unchanged. It is
+  now compiling storage regression tests. Formatting passes (520 files, zero
+  changes). No real database, profile or policy mode was modified. Skills
+  informed Nix source layout, minimal fixture changes, Rust tests and deployment
+  documentation. Impeccable context loading was unavailable; DESIGN.md and the
+  existing interaction code were read directly. No visual redesign was needed.
+
+Next: collect session `38465`, resolve any failures, verify the full
+corrected Nix gates, review and publish scoped unsigned commits to draft #212.
+T175/T177/T020 remain open. The Timesheet choice, integrated canonical enforcement,
+combined approvals/expenses and preserved-data activation are still outstanding;
+these regression repairs do not shrink the full goal.
+
+## 2026-10-04 — Full Nix verification in progress
+
+- Previous goal turn: progress. Published `228e151` with new source evidence and
+  the integrated Timesheet map. The zero-entry participant decision is still
+  unanswered; no default was accepted or implemented.
+- Revalidated a clean worktree and evaluated the actual Blueprint checks. The
+  dry run requires 269 derivations and 162 fetched paths (305.9 MiB download,
+  922.6 MiB unpacked), excluding additional compilation scratch space.
+- The filesystem initially had about 19 GiB free. Confirmed Cargo's target path
+  is this worktree's own `target`, then used `cargo clean --target-dir` on that
+  exact path: 32,436 regenerable build files, 21.1 GiB reported removed. Free
+  space rose to about 37 GiB. No source, scratch evidence, database, other
+  worktree or global Nix store was deleted.
+- Started `nix flake check --keep-going --max-jobs 1 --cores 4 --print-build-logs --log-format raw` against `228e151`. The live terminal
+  session is `57201`; resume that process, do not start a duplicate. Evaluation
+  succeeded and the package build started. No final gate result is claimed.
+- The package derivation is `k8413hw3ni8nzqbyjb0r4qvxp4s6niqs-horae-0.1.0`;
+  tests `8pkxh348mbh6swsw4nx2613kq2ariw2g-horae-tests-0.1.0`; SQLx
+  `6sgvmkyqqv8xr02v73w1mmh4ksj0l7lf-horae-sqlx-prepare-0.1.0`;
+  Clippy `ii8vn5nl49ykh6mypbqld82prv4mfvhr-horae-clippy-0.1.0`; browser
+  `64wnbh15kpm2fnzjwndma093rn28v71p-horae-browser-checks`. These immutable
+  derivations preserve the checked revision even while this log is updated.
+- The checks create their own databases and deployment VMs. A passing legacy
+  browser/deployment suite would be regression evidence, not proof of missing
+  canonical integration, migration, combined approvals or full-feature parity.
+- The isolated shell hides host processes and `/dev/kvm`; an elevated read-only
+  check confirms KVM is present and the build has active Cargo/rustc processes.
+  The initial isolated KVM result is not a deployment blocker. About 32 GiB
+  remains free during package compilation; no terminal build result yet.
+- Continuation classified the preceding turn as a verified wait and resumed
+  session `57201`. The release package is now valid at
+  `/nix/store/d9hrpqn3g2hmadvyysn43sfcd67nw5xw-horae-0.1.0`.
+- The original browser derivation failed before its first suite: the source
+  interpolation copied only `tests/browser`, while `editor-navigation.cjs` and
+  `permission-recovery-storage.cjs` load application JavaScript two directories
+  above. The stored log proves `ENOENT /nix/assets/js/project-edit-navigation.js`.
+  Corrected `nix/checks/browser.nix` to retain the crate-relative layout; no
+  browser assertion, runtime code or permission rule was weakened. Remaining
+  immutable-revision checks continue under `--keep-going`.
+- The corrected browser check is running in session `87425`, derivation
+  `mxn163sp54gf1a2k6ic6ighap7g9y745-horae-browser-checks`; its build plan reuses
+  the existing release package and builds only this check. Do not restart it.
+- Verified valid Nix outputs for Clippy
+  `/nix/store/jv5jf18h691xpg3sr3syh6sgw8hzp8zi-horae-clippy-0.1.0` and SQLx
+  `/nix/store/95fr8jzdwwpdhm41352k6bq4lf3c1n3m-horae-sqlx-prepare-0.1.0`.
+  The full-run session is now building the tests derivation. Browser and
+  deployment results remain pending; free space is about 32 GiB.
+
+Next: collect the live check's results, monitor free disk space, investigate any
+actual failures and record exact acceptance limits. Continue the integrated
+Timesheet package when its pending product predicate is resolved; keep T020 open.
+
 ## 2026-10-04 — Timesheet archive and Calendar contract findings
 
 - Previous goal turn: progress. Revalidated clean `5ec183a`, published to draft

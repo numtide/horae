@@ -720,6 +720,16 @@ data repair, role mapping or runtime activation is authorized by these cases.
 
 ## Phase 9: Acceptance
 
+### Full-gate regressions
+
+- [x] T174 Reproduce the Nix browser source-layout failure and cross-suite development-login ambiguity without weakening permission assertions (FR-018).
+
+- [ ] T175 Correct browser inputs/fixtures and synchronize viewport changes; rerun the complete browser gate, preserving keyboard/recovery coverage (FR-018).
+
+- [x] T176 Reproduce non-ASCII duplicate profile names in a C-locale PostgreSQL cluster (FR-032).
+
+- [ ] T177 Pin Unicode name comparison in a transactional forward migration; verify preservation, collision rollback, accents, tenant scope and concurrent uniqueness; refresh SQLx and rerun full gates (FR-018/032).
+
 - [ ] T020 Verify every matrix row, regression surface and migration case; record evidence in `specs/015-scoped-permissions/quickstart.md`, complete all requirement checks and run full Nix gates before requesting merge (FR-018/020, SC-001–009).
 
 ## Dependencies and parallelism

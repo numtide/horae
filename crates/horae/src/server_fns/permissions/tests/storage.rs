@@ -224,12 +224,80 @@ async fn person_grants_and_identity_round_trip_independently_of_source(pool: PgP
     }
 }
 
+async fn legacy_template_storage(pool: &PgPool) {
+    let mut previous = sqlx::migrate!("./migrations");
+    previous.migrations = std::borrow::Cow::Owned(
+        previous
+            .iter()
+            .filter(|migration| migration.version < 47)
+            .cloned()
+            .collect(),
+    );
+    previous.run(pool).await.unwrap();
+    // Reproduce C-locale installations even when the test cluster uses Unicode.
+    sqlx::query!("ALTER TABLE permission_templates ALTER COLUMN name TYPE text COLLATE \"C\"")
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
+#[sqlx::test(migrations = false)]
+#[serial_test::serial]
+async fn unicode_name_migration_preserves_existing_templates(pool: PgPool) {
+    legacy_template_storage(&pool).await;
+    let ids = seed(&pool, OrgRole::Member).await;
+    let id = template(&pool, ids.org_id, "Ágil").await.unwrap();
+    let before = load_permission_template(&mut pool.acquire().await.unwrap(), ids.org_id, id)
+        .await
+        .unwrap();
+
+    sqlx::migrate!("./migrations").run(&pool).await.unwrap();
+    let after = load_permission_template(&mut pool.acquire().await.unwrap(), ids.org_id, id)
+        .await
+        .unwrap();
+    assert_eq!(after, before);
+    constraint(
+        template(&pool, ids.org_id, "ágil").await.unwrap_err(),
+        "23505",
+    );
+}
+
+#[sqlx::test(migrations = false)]
+#[serial_test::serial]
+async fn unicode_name_collision_rolls_back_migration_without_changing_profiles(pool: PgPool) {
+    legacy_template_storage(&pool).await;
+    let ids = seed(&pool, OrgRole::Member).await;
+    let first = template(&pool, ids.org_id, "Ágil").await.unwrap();
+    let second = template(&pool, ids.org_id, "ágil").await.unwrap();
+    let migrator = sqlx::migrate!("./migrations");
+    let error = migrator.run(&pool).await.unwrap_err();
+    let sqlx::migrate::MigrateError::ExecuteMigration(error, 47) = error else {
+        panic!("unexpected migration error: {error}");
+    };
+    constraint(error, "23505");
+    for (id, name) in [(first, "Ágil"), (second, "ágil")] {
+        let row = load_permission_template(&mut pool.acquire().await.unwrap(), ids.org_id, id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(row.name, name);
+        assert_eq!(row.grants, BuiltInProfile::Member.selection());
+        assert_eq!(row.revision, 0);
+    }
+    // The old unique index must still protect the table after rollback.
+    template(&pool, ids.org_id, "Equipo").await.unwrap();
+    constraint(
+        template(&pool, ids.org_id, "equipo").await.unwrap_err(),
+        "23505",
+    );
+}
+
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]
 async fn template_names_are_case_insensitive_and_tenant_local(pool: PgPool) {
     let local = seed(&pool, OrgRole::Member).await;
     let foreign = seed(&pool, OrgRole::Member).await;
-    for (first, second) in [("Equipo", "equipo"), ("Ágil", "ágil")] {
+    for (first, second) in [("Equipo", "equipo"), ("Ágil", "ágil"), ("Роль", "роль")] {
         let id = template(&pool, local.org_id, first).await.unwrap();
         constraint(
             template(&pool, local.org_id, second).await.unwrap_err(),
@@ -250,6 +318,9 @@ async fn template_names_are_case_insensitive_and_tenant_local(pool: PgPool) {
                 .is_none()
         );
     }
+    // Only case is folded: accents and Unicode normalization forms remain labels.
+    template(&pool, local.org_id, "Agil").await.unwrap();
+    template(&pool, local.org_id, "A\u{301}gil").await.unwrap();
     for invalid in [String::new(), "x".repeat(101)] {
         constraint(
             template(&pool, local.org_id, &invalid).await.unwrap_err(),
