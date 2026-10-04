@@ -1,5 +1,61 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Captured own-week submission and approval discriminator
+
+- Previous response only acknowledged the already-recorded FR-033/B decision;
+  classify it as no implementation progress. Revalidated clean `a0632a8` before
+  this iteration; reused the existing branch/worktree and draft #212.
+- Read the approval coverage/visibility boundaries and current Harvest flexible
+  approval and submission documentation. A targeted official-source search did
+  not settle future-created project coverage or post-withdrawal submission state.
+  Asked one product question: whole-timesheet approval protects future projects
+  too (A), or only the existing project set (B). **No answer yet; neither rule is
+  implemented.** Do not re-ask while this question is outstanding.
+- Browser/MCP tools are not loaded. No account mutation, browser evidence or
+  actual Spec Kit invocation is claimed. Impeccable context could not install
+  its engine in the restricted cache; read existing DESIGN.md and the hardening
+  guidance instead. PRODUCT.md is absent; no design-system repair was attempted.
+- Independent concrete gap: the remaining own-week submission omitted the
+  captured requester/subject/policy used by ordinary Timesheet commands. Added
+  a real-session regression: RED `16764` exited 101, returning 404 for the new
+  session's empty week instead of rejecting the old page's identity with 403.
+- Bound `submit_week` to the existing Timesheet context, retaining its legacy
+  own-only contract. The production transaction now takes the organization gate,
+  checks policy 0 and active local owner before the exclusive time-write barrier.
+  Added both access-change orders and commit/rollback checks. No flexible
+  coverage, submitted-editing or delegated submission rule is inferred.
+- Full server regression `87811` completed successfully: **1,137 passed**, zero
+  failures and 11 pre-existing ignored cases, in 137.12s. This includes the new
+  registered-session checks, both access-change orders and existing submission,
+  rounding, cancellation, time, invoice and UI regressions. Formatting `47827`
+  completed successfully (532 files, two formatted).
+- The existing authorized specialist completed its read-only review with no
+  material finding. It inspected the organization → owner → Timesheet barrier →
+  approval → entry order against adjacent writers and the UI context handling;
+  it did not run tests or claim browser acceptance.
+- Offline native/all-target Clippy and WASM Clippy `99074` passed with warnings
+  denied (1m11s and 13.96s). SQLx `91933` returned success but removed 92
+  descriptors, including still-used cached integration queries. Invalidating
+  only integration's source timestamp in
+  `17730` regenerated that target but omitted the cached binary descriptors.
+  Neither incomplete generated cache is a deliverable. `99835` regenerated both
+  after touching their entry-point timestamps together; inspection then found
+  one still-omitted descriptor from `tests/cli_restart.rs`. Native/all-target
+  Clippy `39525` passed, but reused that unchanged target and is not proof of its
+  descriptor. `15539` invalidated main and **all** test entry-point timestamps
+  together and completed successfully. The resulting cache adds five descriptors
+  and removes only the superseded organization-rounding query; all still-used
+  descriptors are preserved. Final offline/all-target Clippy `31781` passed
+  (1m20s), including the freshly invalidated CLI/integration targets. Source
+  contents outside the scoped diff, dependencies, schema and real data are unchanged.
+- Final format and format-CI `13638` passed: 532 files, zero changes; diff checks
+  pass. GitHub `82730` confirmed #212 is open/draft on the existing branch against
+  master. Publish this verified increment unsigned without merging or activation.
+
+Next: publish unsigned on #212, then continue FR-019's full
+coverage/submitted-editing/expense work after closing its material lifecycle
+decisions. No canonical policy activation or full-feature completion is claimed.
+
 ## 2026-10-04 — Verified selected-person ordinary command integration
 
 - Reused `feat/scoped-permissions` and the authorized specialist's existing

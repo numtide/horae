@@ -84,6 +84,24 @@ it does not satisfy selected-person UI or delegated-write acceptance by itself.
 
 ## Actual consumers to integrate together
 
+### Existing own-week submission identity boundary
+
+The current `submit_week` consumer must capture the same `TimesheetWriteContext`
+as ordinary commands. Require its requester to match the authenticated session,
+its subject to be that requester, and its policy to be `LegacyOwn`. Inside the
+existing submission transaction, take the organization shared gate, verify
+policy 0 and lock/recheck the active local owner before taking the exclusive
+time-write barrier. Hold these facts through commit. A stale tab, session change,
+deactivation or cutover must not submit another person's sheet or invoke legacy
+submission under canonical policy. Preserve the existing weekly submission and
+rounding behavior; this is not the final flexible/delegated submission contract.
+
+T014/T015 tests must use registered session calls for stale requester, subject,
+organization and policy; test actual revocation commit/rollback and the reverse
+lock order with PostgreSQL. The UI retains the pending guard and refreshes its
+sheet after either result. This closes an identity gap without deciding any of
+the open approval-coverage, expense or submitted-editing rules.
+
 ### Tracking eligibility and terminal recovery — 2026-10-04
 
 The official [tracking troubleshooting guide](https://support.getharvest.com/hc/en-us/articles/27133087832205-Why-can-t-I-track-time)

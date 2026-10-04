@@ -49,6 +49,13 @@ lint and 10 navigation tests. T014/T015 stay unchecked:
 FR-019 coverage/submitted editing, combined submission, privileged correction,
 browser acceptance and full cross-surface policy integration remain required.
 
+The remaining `submit_week` call now captures the Timesheet context and rechecks
+policy/active owner transactionally, as specified in
+`contracts/timesheet-integration.md`. Real-session mismatch, both access-change
+orders, rollback and existing submission/rounding pass in the full 1,137-test
+server run. Native/all-target and WASM lint, complete SQLx, formatting and
+independent review also pass; this does not close flexible or delegated submission.
+
 ## Phase 2: Independent foundation (FR-006)
 
 ### Timesheet person discovery (T014/T015 integration)

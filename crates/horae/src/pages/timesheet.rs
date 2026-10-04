@@ -1152,18 +1152,20 @@ fn TimesheetContent(
                                         disabled: busy(),
                                         onclick: move |_| {
                                             if busy() { return; }
+                                            let Some(command_context) = context() else { return; };
                                             pending_action.set(true);
                                             let ws_str = ws.to_string();
                                             let mut timer = running_timer;
                                             let mut submit_status = submit_status;
                                             spawn(async move {
-                                                match server_fns::submit_week(ws_str).await {
+                                                match server_fns::submit_week(ws_str, command_context).await {
                                                     Ok(_) => {
                                                         submit_status.set(None);
-                                                        timer.refresh();
                                                     }
                                                     Err(e) => submit_status.set(Some(format!("{e}"))),
                                                 }
+                                                sheet.restart();
+                                                timer.refresh();
                                                 pending_action.set(false);
                                             });
                                         },

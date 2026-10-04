@@ -1,5 +1,32 @@
 # Permission verification
 
+## Captured own-week submission (T014/T015 in progress)
+
+`submit_week` now requires the page's `TimesheetWriteContext`. Registered-session
+coverage rejects a changed session, subject, organization or expected policy;
+the transaction rejects a policy cutover or inactive owner under the organization
+and owner locks before taking the exclusive Timesheet barrier. The UI captures
+the context and refreshes its sheet after either outcome. No shared CSS changes.
+
+The HTTP regression first failed (404 for the changed session instead of 403).
+The full server run then passed 1,137 tests, zero failures, with 11 existing
+ignored cases. New PostgreSQL tests cover access-change commit/rollback and
+submission-first ordering; existing rounding, running-timer, cancellation and
+one-connection cases remain green. Independent static review found no material
+issue. Cache/lint completion is recorded in `progress.md`.
+
+Use the same Nix/disposable-PostgreSQL commands below; run complete SQLx preparation
+with `cargo sqlx prepare --workspace -- --features server --all-targets` after SQL
+changes. This is the existing legacy own-week flow, **not** flexible/delegated
+submission, submitted editing, browser acceptance or canonical policy activation.
+
+If incremental preparation omits still-used descriptors, invalidate both binary
+and all test entry-point timestamps together before rerunning the full prepare
+command. Invalidating only `main.rs` or only `tests/integration.rs` is insufficient;
+`tests/cli_restart.rs` also owns a SQL macro. Inspect removals against their source
+and verify offline targets; a successful incremental command alone is not proof
+of a complete cache.
+
 ## Selected-person Timesheet commands (T014/T015 in progress)
 
 Use the existing isolated Nix shell and disposable PostgreSQL with CREATEDB.
