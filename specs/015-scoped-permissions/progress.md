@@ -61,9 +61,11 @@
   Formatting CI `32073` checks 541 files and changes none. T198–T200 are complete
   for this connected consumer; no full permission feature or Nix gate is claimed.
   GitHub confirms #212 remains open/draft at `dab6885` before publication.
+- Published unsigned `ee16165` to the existing `feat/scoped-permissions` branch
+  for draft #212. No merge occurred; the scoped verification above does not
+  assert complete CI/Nix or full-feature acceptance.
 
-Next: publish this verified increment to draft #212 without merging, then continue
-T014/T015 by resolving the remaining Reports filter-candidate contract against
+Next: continue T014/T015 by resolving the remaining Reports filter-candidate contract against
 Harvest before replacing its `list_users(false)` resource. Investigate zero-record
 managed-project participants, historical contributors and filter narrowing; do
 not import Timesheet decisions or People directory grants as report authority.
