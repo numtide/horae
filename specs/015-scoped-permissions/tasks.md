@@ -515,6 +515,15 @@ malformed/misbound/oversized storage and successful-response cleanup failure in
 formatting and adversarial review; full rendered recovery, keyboard, viewport
 and theme acceptance still must pass before checking T018.
 
+The real `permission-editor-recovery.cjs` browser suite now adds matching server/
+WASM, session-cookie and disposable PostgreSQL evidence for person/template lost
+responses, no-auto-submit reload, one-receipt replay, changed-account isolation,
+same-user reauthentication, authority denial/restoration, deleted-template replay
+and browser storage failures. It checks keyboard access, background inertness,
+dirty Escape/focus restoration and wide-dark/narrow-light layouts. It does not
+close full T018 or canonical shell/directory integration. See quickstart for the
+exact evidence and remaining browser/feature boundaries.
+
 Relationship-loss labels extend the authorized preview in `permissions/editor.rs`,
 not its stored audit or the command confirmation shape. Cover names, inactive
 subjects, other managers/tenants, no-loss proposals, denial, strict historical

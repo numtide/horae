@@ -1,5 +1,58 @@
 # Permission verification
 
+## Real-browser request recovery (T018 subset)
+
+`permission-editor-recovery.cjs` runs against the design runner's disposable
+PostgreSQL and a complete Dioxus server/WASM bundle, not mocked server outcomes.
+It is included in the default browser check. To focus it, provide the same
+`HORAE_TEST_SERVER`, `PLAYWRIGHT_MODULE` and `PLAYWRIGHT_BROWSERS_PATH` inputs as
+`nix/checks/browser.nix`, then run in the Nix shell:
+
+```sh
+bash crates/horae/tests/browser/run-design-checks.sh permission-editor-recovery
+```
+
+The server needs its matching `public/` beside it. The verification bundle was
+built from application commit `1ecfa21` with `dx bundle --web --fullstack true --debug-symbols false --locked` in `crates/horae/` (164.14s). This is a complete
+local build, not a full `nix flake check` result. The test refuses ordinary app
+ports and database connections outside the runner's `/tmp/horae-browser.*` socket,
+requires empty canonical fixture state/history, and restores policy 0, legacy
+login candidates and fixture state under the organization gate before shutdown.
+
+The headless Chromium 148.0.7778.96 / Playwright 1.60.0 run verifies:
+
+- A real person command commits before its response is deliberately lost; reload
+  offers explicit recovery, sends nothing automatically and replays the identical
+  command/requester. PostgreSQL contains one receipt and the expected grant.
+- A real template creation remains recoverable after switching accounts and
+  returning to the original user through a new login session. The other user is
+  not offered the original slot. A later current-authority denial retains it;
+  restoring authority replays the same receipt without another template.
+- A deleted template is not required for recovery: its exact deletion request
+  replays successfully without recreating it or duplicating its receipt.
+- A browser storage quota failure prevents the first HTTP mutation. Failure to
+  remove a record after successful self-demotion offers cleanup, which sends no
+  second command under the now non-administrative identity. Local storage is
+  empty after acknowledged recovery.
+- Tab reaches enabled controls, the modal keeps background controls inert,
+  Escape respects dirty-discard refusal/confirmation, focus returns to the opener,
+  and Enter triggers recovery. Wide dark (1440×900) and narrow light (390×844)
+  checks find no horizontal dialog overflow; the panel fits each viewport.
+
+Optional `HORAE_BROWSER_ARTIFACTS` captures editor/recovery screenshots. Inspected
+captures live in this worktree's `.scratch/permission-browser-evidence/` with
+`permission-editor-*` and `permission-recovery-*` names. They use disposable
+fixture data only. Initial test failures came from addressing a closed native
+details section and over-specifying focus wrap order; the test now opens the
+section and checks actual keyboard access, inertness and focus restoration.
+No production UI/CSS change was required by this browser pass.
+
+This is Linux headless Chromium, not Windows Chrome/MCP or a physical mobile
+device. It establishes these recovery cases, not full permissions/Workspace
+acceptance, migration, canonical shell/directory integration or all browser engines.
+Full T018 remains open; the earlier unit-only limitation below is superseded only
+for the browser cases enumerated here.
+
 ## Durable tab recovery (T018, in progress)
 
 Run in the Nix shell without a live database:

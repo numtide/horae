@@ -1,5 +1,45 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Real-browser recovery verification
+
+- Previous turn made progress: published durable recovery as `1ecfa21` on draft
+  #212. Revalidated the clean synchronized worktree and reused it. Spec Kit
+  prerequisites pass; the full scope and independent-increment authority remain
+  unchanged. General requirements are still 12/16, not an activation gate pass.
+- No interactive browser/MCP tool is loaded, but inspection found the pinned Nix
+  Playwright package and Chromium already available. Built matching server/WASM
+  bundles in 164.14s and used the existing design runner, fresh local socket-only
+  PostgreSQL and test-only canonical policy. No user browser, Harvest account or
+  real database was used.
+- Added the actual browser suite to the default runner. Real person/template
+  commands commit before deliberate response loss. Reload/replay preserves the
+  exact requester/command and a single PostgreSQL receipt. Cases also cover
+  account switching, same-user reauthentication, authority denial/restoration,
+  deleted-template replay, storage refusal and cleanup without resubmission.
+- The final Chromium 148.0.7778.96 / Playwright 1.60.0 run also verifies successful
+  self-demotion followed by browser cleanup failure: retry clears only local
+  storage and sends no command under the now non-administrative identity. The
+  combined runner passes all 14 existing script unit tests and the browser cases.
+- Initial test failures identified test assumptions, not a disappearing dialog:
+  its profile section was still collapsed. The corrected flow opens native
+  details. Replaced an over-specific focus-wrap assertion with actual Tab access,
+  background inertness and opener-focus restoration. Dirty Escape refusal and
+  confirmation, plus keyboard Enter recovery, pass in the real browser.
+- Inspected desktop-dark and narrow-light editor/recovery captures in
+  `.scratch/permission-browser-evidence/`; horizontal overflow and panel bounds
+  checks pass. No production UI, CSS, SQL macro or schema change was needed.
+  Browser contexts close and the runner stops its owned PostgreSQL/server.
+- Adversarial test review checked actual committed outcomes before dropped
+  responses, exact-body comparisons, receipt counts, target deletion, account
+  isolation and fixture teardown under the organization gate. No application
+  change was needed. Formatting and whitespace checks pass; no repeated Rust
+  regression or full-flake result is claimed for this test-only increment.
+
+Next: continue T006/T009's unfinished operation/approval/migration contracts and
+canonical shell/directory dependencies. This browser pass closes the enumerated
+recovery evidence gap, not full T018, full enforcement, scoped approvals, reviewed
+migration or the complete goal. Delivery remains draft #212 without merge.
+
 ## 2026-10-04 — Durable permission request recovery
 
 - Previous turn was status-only, not implementation progress. Revalidated the
