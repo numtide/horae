@@ -1,5 +1,40 @@
 # Permission verification
 
+## Combined-approval record guard (T136–T138)
+
+Pure FR-006/024 checks use existing canonical selections and record coverage.
+They are not a replacement for the pending database approval transaction. Run:
+
+```sh
+cargo test -p horae-core permissions::approvals --locked
+cargo test -p horae-core --locked
+cargo clippy -p horae-core --all-targets --locked -- -D warnings
+cargo check -p horae-core --target wasm32-unknown-unknown --locked
+```
+
+The first test run failed for the missing guard. After implementation, all 180
+core tests pass, including 11 new approval tests. A deliberate mutation changing
+the expense approval/read conjunction to OR makes the mixed-hidden-expense test
+fail. Restored the conjunction and reran all 180 successfully; final core Clippy
+and WASM compilation pass (0.66s / 9.21s), with formatting and whitespace checks.
+
+Coverage includes independent expense read/approval scope truth tables, every
+catalog grant's inability to substitute for approval or expense reads, inactive
+and foreign provenance, mixed visible/hidden inputs in both orders, both domains'
+out-of-scope rows, overlapping/removed assignments, duplicate/missing dimensions,
+empty domains and reevaluation after revocation. The canonical approval grants
+already require their matching time reads; the guard still checks both explicitly.
+No invalid stored selection or fabricated runtime authority is used as a fixture.
+
+Focused adversarial self-review checked the intersection of capabilities versus
+the union of managed scopes, own-read retention, empty-input identity checks and
+non-disclosing all-or-nothing output. No independent agent or backend/browser
+acceptance is claimed. Passing empty record slices does not authorize empty-date
+locks, and passing an own record does not settle self-approval. The caller must
+load the full intended set without visibility filtering and evaluate current
+facts inside the eventual atomic transaction. T012/T013, feature 016 expenses,
+T042 and full cutover gates remain open. No SQL, schema, UI or live data changed.
+
 ## Project-delegation activity fences (T133–T135)
 
 Run in the Nix shell with the owned disposable PostgreSQL database, never the

@@ -187,6 +187,15 @@ work below retains its command/storage/concurrency dependencies.
 
 ### Remaining transaction and approval work
 
+Closed FR-024 record guard, independent of the unresolved lifecycle/activation
+contracts: see `contracts/approval-visibility.md`.
+
+- [x] T136 [US2] Add failing scope/visibility/authority and tenant/provenance tests in `crates/core/src/permissions/approvals/tests.rs` for the complete supplied time/expense set (FR-006/024).
+
+- [x] T137 [US2] Implement the pure borrowed-input guard in `crates/core/src/permissions/approvals.rs`, reusing catalog/scopes without runtime integration, writes or new dependencies (FR-006/024).
+
+- [x] T138 [US2] Verify focused/full core tests, core Clippy, formatting and adversarial scope/empty-input review; record actual evidence and remaining transactional acceptance in `quickstart.md` and `progress.md`.
+
 - [ ] T012 [US2] Add management-assignment and scoped approval/withdrawal/lock concurrency tests in `crates/horae/tests/integration.rs`. Cover every FR-024 case in `contracts/approval-visibility.md`: readable/unreadable time and expenses, missing approval authority, truly expense-free selections, revocation/new-record races, non-disclosing errors, direct requests and atomic full-selection effects. Combined acceptance requires feature 016 expense fixtures, not mocks alone (FR-005/006/009/010/019/024).
 
 - [ ] T013 [US2] Implement verified assignment storage, date/project approval coverage and transitions in `crates/horae/migrations/`, `crates/horae/src/server_fns/approvals.rs`, relevant project/person server functions and `crates/core/src/state.rs`; refresh `.sqlx/`. Enforce FR-024's complete-set visibility and atomic denial under the reviewed transaction protocol, without silent filtering, implicit grants or extrapolating withdrawal semantics. Apply FR-025's existing-designation retention/read-loss rules atomically with permission revision and audit (FR-005/006/009/010/013/017/019/024/025).

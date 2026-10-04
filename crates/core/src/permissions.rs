@@ -6,6 +6,7 @@
 
 use uuid::Uuid;
 
+pub mod approvals;
 pub mod catalog;
 pub mod person_management;
 pub mod rates;

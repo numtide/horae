@@ -71,6 +71,7 @@ passing full-feature runtime outcomes. Unrelated open predicates remain open.
 
 | Work | Entry gate | Exit gate / what it does not authorize |
 | --- | --- | --- |
+| Completed: pure combined-approval record guard, T136–T138 | FR-006/024 and the closed record checks in `contracts/approval-visibility.md`; existing scope/catalog foundations | Core tests and mutation check, core lint/WASM check and formatting; no complete-set database acquisition, self-approval/empty-date policy, transaction, API or activation acceptance |
 | Completed: pure person-management validation, T050–T052 | Completed catalog/restoration, FR-027/028/029/031 and `contracts/person-management-validation.md`; no unresolved local predicate | Red/green tests, core regressions, Clippy, formatting and focused review; no server consumer, schema, assignment write or complete US2 acceptance |
 | Non-activating storage, T035/T036 | FR-032 and reviewed `contracts/permission-storage.md`; schema/tenant/loader checks and isolated PostgreSQL tests | Evidence for storage only; no inferred mappings, authenticated command acceptance or automatic runtime consumers |
 | Replacing guards / activating policy | T006–T009, T042, reviewed migration and concurrency/recovery design, complete cross-surface integration | Full allowed/denied, revocation, migration and browser acceptance plus Nix gates; no endpoint-by-endpoint fallback to old roles |

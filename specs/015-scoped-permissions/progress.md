@@ -1,5 +1,35 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Combined-approval record guard
+
+- Previous turn made progress: published project-delegation activity fences as
+  `202ee96` on draft #212. Revalidated the clean synchronized worktree and reused
+  it. The archived-person assignment question remains unanswered; no default
+  or repeated question has been introduced.
+- Spec Kit prerequisites pass. Its skills remain absent locally; followed the
+  existing spec/plan/contracts/tasks directly without claiming skill execution.
+  Refined the closed FR-006/024 record-level conjunction as T136–T138. Unresolved
+  self-approval, withdrawal, empty-date coverage and transaction rules remain
+  outside that pure guard, not removed from the goal.
+- Added the guard and 11 tests using existing selections/scopes and borrowed
+  time/expense slices. It returns one boolean, never a filtered authorized
+  subset or private denial details. No new dependency or catalog prerequisite.
+- Initial test compilation fails for the missing function. Implementation passes
+  all 180 core tests. The deliberate OR-for-AND mutation fails the mixed hidden
+  expense regression; restored the correct code and all 180 pass again.
+- Core all-targets Clippy and WASM compilation pass, as do formatting and
+  whitespace checks. Focused adversarial self-review checked provenance, scope
+  union versus capability intersection, empty inputs and caller obligations.
+  This is not independent agent review or combined backend/browser acceptance.
+- No application consumer, SQL/schema, UI, live data or policy activation changed.
+  Delivery stays draft #212 without merge; general requirements remain 12/16.
+
+Next: finish the approval lifecycle/coverage contract and its production
+transaction with feature 016 fixtures; implement person-management transactions
+when the pending inactive-endpoint decision is answered. Continue independent
+T006/T009 work meanwhile. The pure guard cannot prove complete-set loading,
+concurrent revocation, atomic rollback or full permission enforcement.
+
 ## 2026-10-04 — Project-delegation activity fences
 
 - Previous turn was status-only, not implementation progress. Revalidated the
