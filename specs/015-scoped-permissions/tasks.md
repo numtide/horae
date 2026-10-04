@@ -69,6 +69,15 @@ and non-rate fields remain explicit entry gates, not invented defaults.
 - [ ] T160 Integrate typed protected-field intent and authorized projections into the real form/read/save transaction together, preserving legacy mode, revisions, complete-set validation, financial history and replay; never treat a missing client field as authority to clear storage.
 - [ ] T161 Verify the real form, registered session paths, concurrent revocation and browser behavior, SQLx completeness, server/WASM checks and adversarial cross-surface review; retain full activation and Nix gates.
 
+### Session identity payload (OP01, FR-008/010/018)
+
+Continue independently of T159's open financial-form predicates using the closed
+payload repair in `contracts/own-permissions.md`; do not change canonical policy.
+
+- [x] T162 Reproduce unused rate/provider-field disclosure through the registered `get_me` endpoint with populated fixtures for every legacy role; verify session-only identity, demotion/activity and logout behavior.
+- [x] T163 Return the explicit `CurrentUser` identity projection from `get_me`; keep internal authorization models and current presentation behavior, updating typed consumer fixtures.
+- [x] T164 Verify registered HTTP and consumer regressions, server/WASM lint and formatting; review exact serialization and unchanged authority, recording the remaining shell/cutover gates.
+
 ### Confirmed catalog implementation (independent of runtime cutover)
 
 The user requested implementation without paying for or modifying Harvest on

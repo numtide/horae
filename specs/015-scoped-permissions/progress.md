@@ -1,5 +1,51 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Minimal session identity response
+
+- Previous goal turn was progress: published `4c00660` with the project-form
+  inventory and 16 verified editor baselines. Revalidated its clean worktree.
+  The unanswered creation/designation question is not a new authorization.
+- Reviewed independent work against current OP01. `get_me` still returns the
+  complete database User, including cost/billable rates and OIDC subject. Traced
+  every production consumer: account menu/display gates and recovery need only
+  ID, organization ID, name, email and legacy role. None needs financial/provider
+  data, activity or creation time. This permits a real payload repair without
+  inventing pending financial-form or approval predicates.
+- Added the closed response boundary to `contracts/own-permissions.md` and tasks
+  T162–T164. Added exact-response and session tests to the existing registered
+  HTTP harness; removed the old directory test's assertion of the excess own-user
+  payload. Started the red check on the owned disposable database on 55416.
+- Rust/testing/async and simplicity skills call for a concrete five-field DTO,
+  existing session lookup and real-route tests; no policy framework or UI/CSS
+  change. Spec Kit prerequisites pass; its absent skills are not claimed executed.
+- The initial `--exact` short-name filter compiled but selected zero tests; the
+  corrected command reproduces the private fields in the real JSON response.
+  Implemented `CurrentUser` and converted the existing page helpers/fixture
+  responses, retaining internal `User` authentication and unchanged legacy gates.
+- The registered HTTP matrix now passes in 12.58s, including all three roles,
+  forged foreign selectors, same-cookie demotion/deactivation, missing identity
+  and both active/inactive logout. All 81 selected consumer tests pass. Their
+  navigation fixture exposed unused full-User warnings after adopting the small
+  DTO; exported its production-model module consistently with other fixtures,
+  without a lint suppression. WASM Clippy passes with warnings denied.
+- SQLx check passes with a potentially-unused-cache warning. Cleaned only the
+  local package's 4.4 GiB of regenerable artifacts and ran full preparation:
+  1,437 descriptors retained, none added, modified or deleted. The new fixture
+  queries already existed; production SQL is unchanged. Offline all-targets
+  server Clippy passed before that regeneration; a fresh final pass is running.
+  The owned disposable PostgreSQL is stopped; no real service was touched.
+- The final offline all-targets server Clippy passes in 1m06s with warnings denied.
+  Formatting CI passes with 512 files and zero changes; diff checks pass. Local
+  adversarial review verifies exact field selection, unchanged session/activity
+  checks, no input-controlled identity and no financial/provider placeholders.
+  T162–T164 close for this payload repair, not canonical policy or full acceptance.
+
+Delivery: publish the verified increment to draft #212 unsigned, without merge.
+Then continue the outstanding canonical form/shell integration and resolve the
+already-recorded product questions without inferring their answers.
+This does not deliver the still-open canonical form, shell, approval, migration
+or full-feature gates. Keep the complete goal active.
+
 ## 2026-10-04 — Project form preservation integration review
 
 - The preceding benefits-only answer was no progress. Revalidated `6b5dbae` and

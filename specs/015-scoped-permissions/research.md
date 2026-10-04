@@ -1,5 +1,22 @@
 # Permissions discovery
 
+## Session identity payload (2026-10-04)
+
+- Source `4c00660`: `auth::get_me` returns `require_user()`'s entire database
+  model. A real registered-session regression with populated rates and provider
+  subject fails on five extra keys: costs, billable rates, OIDC subject, activity
+  and creation time. The initial short-name `--exact` command selected zero tests;
+  the corrected filter runs and reproduces the payload failure in 0.53s.
+- Traced Sidebar, AdminShell, Projects, Clients, Approvals, Reports, invoice
+  recovery and permission-editor recovery. Their used identity/legacy display
+  fields close a five-field response contract independently of rate-read policy.
+  Returning private fields merely because the requester is the same person is
+  unnecessary for every current consumer, including an Administrator.
+- Keep the internal authentication lookup and its activity check unchanged.
+  The wire identity is not a permission token; existing server mutations still
+  reauthorize. Other financial APIs, mutation responses, legacy display gates
+  and canonical shell activation remain distinct work, not covered by this fix.
+
 ## Project form field and effect inventory (2026-10-04)
 
 - Traced the real full-form load/save, selected catalogs, draft finalization,

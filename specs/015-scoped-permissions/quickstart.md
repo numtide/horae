@@ -1,5 +1,39 @@
 # Permission verification
 
+## Session identity projection (T162–T164)
+
+Against disposable PostgreSQL, run:
+
+```sh
+cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization
+cargo test -p horae --features server --test detail_navigation --test approval_labels_ui --test admin_shell --test permission_editor_ui
+cargo sqlx prepare --workspace -- --features server --all-targets
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --no-default-features --features web --target wasm32-unknown-unknown -- -D warnings
+nix fmt -- --ci
+```
+
+The real-route red test exposes non-null financial/provider fields in `get_me`.
+After replacing the response with `CurrentUser`, the registered HTTP matrix
+passes in 12.58s. Exact JSON covers every legacy role and forged foreign target
+fields; the same-cookie checks cover demotion, deactivation, missing identity
+and logout. The four selected consumer suites pass 81 tests. Server all-targets
+and WASM Clippy pass with warnings denied. Internal authentication, legacy gates,
+other user endpoints, database values and UI/CSS are unchanged.
+
+SQLx check passes but warns about potentially unused cached descriptions. A clean
+package rebuild and full preparation retain all 1,437 descriptors with no changes:
+the new test macros use already-cached queries, and production SQL is unchanged.
+The clean removes only 4.4 GiB of regenerable package artifacts. No source or data
+is deleted; the owned disposable database is stopped after verification.
+
+Focused adversarial review checks that the DTO contains no flattened database
+model, authority token or private nullable placeholders; the wrapper constructs
+only the five used fields after the existing activity check. Request IDs cannot
+select another identity. Legacy display helpers do not replace canonical policy.
+This is local review, not a new independent review or browser/whole-feature pass.
+Full scoped shell, project-form, approval and migration acceptance remain open.
+
 ## Project-team identity choices (T154–T157)
 
 Run in the Nix shell against disposable PostgreSQL, never the agency database:

@@ -17,6 +17,12 @@ source table below describes its stated revision, not the current response. Own
 user and compatibility API reads remain separate paths; future migration diffs
 must use this repaired list boundary rather than promise unused directory rates.
 
+T162–T164 separately narrow `get_me` to its five used display/recovery identity
+fields. Own rates and provider metadata are no longer a generic identity-response
+promise. This projection does not change legacy roles, internal authentication,
+canonical grants or policy activation; other user mutation/compatibility responses
+remain independent review surfaces.
+
 T086–T088 add original-requester provenance for newly inserted jobs through the
 updated commands, under `permission-state.md`. Migration 0045 leaves historical
 NULL unchanged and is tested only on disposable databases. It does not resolve

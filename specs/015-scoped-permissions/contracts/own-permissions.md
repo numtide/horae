@@ -5,6 +5,31 @@ slice, not policy activation, another person's editor or complete Settings UI.
 FR-012 already requires a reachable own-access explanation for non-administrators;
 no unresolved Harvest lifecycle predicate is selected here.
 
+## Session identity payload repair (T162–T164)
+
+At `4c00660`, `get_me` serializes the complete database `User`, including populated
+cost/billable rates, OIDC subject, creation time and activity. Its callers need
+only ID/organization ID for recovery ownership, name/email for the account menu,
+and the legacy role for unchanged pre-cutover display gates. None consumes the
+financial/provider fields. This is the independent OP01/FR-008 payload boundary,
+not a replacement for the canonical explanation reader below.
+
+Return an explicit `CurrentUser` with exactly `id`, `org_id`, `name`, `email` and
+`org_role`. Keep `require_user`'s current session/activity lookup and its internal
+database model; construct the response without serializing or flattening that
+model. Keep current legacy presentation helpers, not additional authority flags.
+No caller-supplied ID selects the returned person. Logout stays independent of
+active-account authorization. This changes neither grants nor other endpoint
+responses, and does not activate or satisfy canonical shell authorization.
+
+Acceptance uses the registered route and real session cookies: exact fields with
+non-null private values for every legacy role, foreign/forged target parameters,
+same-cookie role change and deactivation, anonymous/missing identity denial and
+logout revocation. Run existing navigation, approval, shell and permission-editor
+consumer tests with the production response type where those tests use full user
+fixtures; compile server and WASM. No new SQL, schema, CSS or product predicate
+is needed for the production projection.
+
 ## Request and response
 
 Add Dioxus `get_my_permissions()` with no target/tenant/grant input. The wrapper

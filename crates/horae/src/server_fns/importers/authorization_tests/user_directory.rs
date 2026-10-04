@@ -80,10 +80,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
 
     // Reusing a session must not retain its earlier inactive-directory access.
     let cookie = api.cookie(ids.user_id).await;
-    let own = api.json("get_me", json!({}), &cookie).await;
-    assert_eq!(own["cost_rate_cents"], 6000);
-    assert_eq!(own["billable_rate_cents"], 10000);
-    assert_eq!(own["oidc_subject"], ids.user_id.to_string());
     sqlx::query!(
         "UPDATE users SET org_role = 'member' WHERE id = $1",
         ids.user_id

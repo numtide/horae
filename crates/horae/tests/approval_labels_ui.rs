@@ -39,7 +39,7 @@ struct Probe {
     actions: Rc<RefCell<Vec<Vec<String>>>>,
 }
 
-fn is_manager(me: &Resource<Result<user_model::User, ServerFnError>>) -> bool {
+fn is_manager(me: &Resource<Result<user_model::CurrentUser, ServerFnError>>) -> bool {
     matches!(&*me.read(), Some(Ok(user)) if user.is_manager_or_above())
 }
 
@@ -170,23 +170,18 @@ async fn single_approval_action_keeps_the_record_id_not_the_person_label() {
 pub mod server_fns {
     use super::*;
 
-    pub async fn get_me() -> Result<user_model::User, ServerFnError> {
+    pub async fn get_me() -> Result<user_model::CurrentUser, ServerFnError> {
         let probe = use_context::<Probe>();
-        Ok(user_model::User {
+        Ok(user_model::CurrentUser {
             id: Uuid::now_v7(),
             org_id: Uuid::now_v7(),
             name: "Reviewer".into(),
             email: "reviewer@example.test".into(),
-            oidc_subject: None,
             org_role: if probe.manager {
                 OrgRole::Manager
             } else {
                 OrgRole::Member
             },
-            cost_rate_cents: None,
-            billable_rate_cents: None,
-            active: true,
-            created_at: chrono::Utc::now(),
         })
     }
 

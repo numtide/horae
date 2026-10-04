@@ -18,10 +18,17 @@ pub async fn logout() -> Result<(), ServerFnError> {
         .map_err(server_err)
 }
 
-/// Return the currently authenticated user, or 401 if not logged in.
+/// Return the current session identity without financial or provider metadata.
 #[server]
-pub async fn get_me() -> Result<User, ServerFnError> {
-    require_user().await
+pub async fn get_me() -> Result<crate::models::user::CurrentUser, ServerFnError> {
+    let user = require_user().await?;
+    Ok(crate::models::user::CurrentUser {
+        id: user.id,
+        org_id: user.org_id,
+        email: user.email,
+        name: user.name,
+        org_role: user.org_role,
+    })
 }
 
 /// Read one permission-change record under the session's current Administrator authority.

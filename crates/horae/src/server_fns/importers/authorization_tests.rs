@@ -31,6 +31,7 @@ mod own_permissions;
 mod permission_audit;
 mod permission_editor;
 mod project_people;
+mod session_identity;
 mod user_directory;
 
 #[cfg(target_os = "linux")]
@@ -345,6 +346,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     };
     let mut server = tokio::task::JoinSet::new();
     server.spawn(async move { axum::serve(listener, router).await.unwrap() });
+    session_identity::check(&pool, &api).await;
     user_directory::check(&pool, &api).await;
     project_people::check(&pool, &api).await;
     approval_labels::check(&pool, &api).await;
