@@ -1,6 +1,6 @@
 # Permission verification
 
-## Selected-person Timesheet browser acceptance (T187)
+## Selected-person Timesheet browser acceptance (T187–T188)
 
 `run-design-checks.sh timesheet-permissions` uses the same built client/server and
 pinned Playwright environment as the existing disposable runner. It refuses
@@ -22,9 +22,25 @@ authority failure (403). Restoring membership permits delegated stop; a second
 real owner session can stop without restored membership under FR-033/B. SQL
 assertions verify the running states and unchanged unrelated time.
 
-This seven-scenario suite is registered in the default browser gate. It does
-not cover every delegated Calendar/create/delete interaction, Windows Chrome,
-submitted-entry parity, scoped approvals, real activation or full acceptance.
+Delegated mutation acceptance also creates entries through Day and Calendar,
+moves a timed block across days by exactly one hour, resizes it by 30 minutes,
+moves an untimed entry and inverts a two-entry order. SQL assertions verify the
+selected owner, project/task, dates, integer minutes and both sort positions.
+Modal deletion and one-command, two-ID Week row deletion preserve unrelated
+hours and the requester's running timer. Successful joint deletion is paired
+with the existing `timesheet-errors` stale-lock rollback/retry coverage.
+
+These tests reproduced two UI defects: nested labels distorted the timed drag's
+grab offset by 15 minutes, and Day's Add entry used the week default date.
+Noninteractive event labels now leave hit-testing to their container while the
+resize handle remains interactive. Single-day views use their visible date;
+Calendar Day view also has an explicit Tuesday-dialog regression.
+
+The eleven-scenario suite is registered in the default browser gate. Combined
+run `48723` passes it together with `modals`, `timesheet-errors` and
+`permission-editor-recovery`. This does not cover Windows Chrome, every input
+method or layout, submitted-entry parity, scoped approvals, real activation or
+full acceptance. No real database or Harvest account is used.
 
 ## Timesheet modal and mutation regressions (T186)
 

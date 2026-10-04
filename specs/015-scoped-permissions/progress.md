@@ -1,5 +1,53 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Delegated Calendar mutation acceptance
+
+- Revalidated published `e29f4d8` and reused draft #212. Extended the isolated
+  scoped Timesheet fixture with real creation, Calendar drawing/movement/resize,
+  two-entry ordering, modal deletion and one-command Week row deletion (T188).
+
+- RED `21196` moved a timed block from Monday 03:00 down one hour into Tuesday
+  but persisted 04:15 instead of 04:00. Native mouse offsets were relative to
+  nested text. Four noninteractive Calendar labels now ignore pointer hit-testing;
+  the event container and separate resize handle retain their behavior. No
+  shared utility, token, visual layout or authorization change.
+
+- Independent review required a real two-entry order inversion and multi-ID
+  row deletion; both now assert exact payloads and persisted rows. It finds no
+  unintended selector effects. Successful joint deletion alone is not proof of
+  transactional rollback; the existing mutation-error suite covers stale locks.
+
+- RED `83821` exposed a second defect while creating the Tuesday sibling:
+  Day's Add entry chose Monday. Single-day views now use their displayed date;
+  week defaults are unchanged. The regression checks Day's dialog and persisted
+  date, plus Calendar Day view's Tuesday dialog before cancellation.
+
+- Reused Rust/testing, simplicity and UI-hardening guidance. No new dependency,
+  schema, real-data write or permission activation. FR-033/B remains owner-only.
+
+- Browser `6400` confirmed corrected Day creation, then failed on the test's
+  exact menu-trigger name, which includes a caret. Reused its stable trigger ID
+  and bounded browser actions to 15 seconds; no application change for this.
+
+- Final combined Chromium `48723` passes all eleven scoped scenarios plus
+  modals, mutation errors and complete permission recovery/history. Exact SQL
+  assertions retain Tuesday 04:00, 90-minute resize, both sort orders and
+  two-ID deletion. Existing error coverage confirms stale-lock rollback/retry.
+  No JavaScript page errors; scoped fixtures clean up before neighboring suites.
+
+- Client assets regenerated with Dioxus; its redundant native build was stopped,
+  not counted as a full successful Dioxus build. Native `49421` passes (54.88s),
+  asset processing `38094` passes, server Clippy `72570` passes with warnings
+  denied, WASM check `49082` passes and formatting `91491` changes zero files.
+  Independent review also approves the date correction; its requested Calendar
+  single-day assertion passes. T188 is complete for this bounded acceptance.
+
+Next: publish the verified increment to draft #212 without merge, then continue
+the remaining connected permission integration. Outstanding new-relationship
+activity and approval questions are unchanged. These four Linux Chromium suites
+are not Windows Chrome, full Nix acceptance, real activation or MVP completion;
+the full goal remains active.
+
 ## 2026-10-04 — Scoped Timesheet browser navigation and recovery
 
 - Reused published `68bbaae`, the existing worktree and draft #212. Added a

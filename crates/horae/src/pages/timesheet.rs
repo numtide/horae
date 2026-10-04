@@ -961,19 +961,20 @@ fn TimesheetContent(
         Some((project_id, task_id, notes))
     });
 
-    // The "+" button adds for today when it's in the viewed week, else its first day.
-    let add_default_date = if (0..7).contains(&(today - ws).num_days()) {
-        today
-    } else {
-        ws
-    };
-
     let current_mode = *view_mode.read();
     let sel_offset = *selected_day_offset.read();
     // The pager moves a single day in Day view and in the Calendar's single-day
     // span; otherwise it moves a whole week (like Harvest).
     let day_paged = current_mode == ViewMode::Day
         || (current_mode == ViewMode::Calendar && span == CalSpan::Day);
+    // A single-day view must add to its displayed day, not the week's default.
+    let add_default_date = if day_paged {
+        date.0
+    } else if (0..7).contains(&(today - ws).num_days()) {
+        today
+    } else {
+        ws
+    };
 
     let mut picker_open = use_signal(|| false);
     // Pager stepping. Moving the anchor date across the week edge rolls the week

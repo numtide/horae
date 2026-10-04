@@ -1623,6 +1623,8 @@ tbody tr:hover { background: var(--color-row-hover); }
   background: var(--color-pine); border: 1px solid #2b7a66; border-radius: 6px; padding: 8px 9px;
 }
 .ts-cal-event:hover { border-color: var(--color-primary); }
+/* Drag offsets must be relative to the event box, not its nested text. */
+.ts-cal-ev-project, .ts-cal-ev-time, .ts-cal-ev-task, .ts-cal-ev-client { pointer-events: none; }
 /* While drawing a slot, entries ignore the pointer so the drag stays on the column. */
 .ts-cal-grid.dragging { cursor: ns-resize; }
 .ts-cal-grid.dragging .ts-cal-event { pointer-events: none; }

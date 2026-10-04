@@ -37,6 +37,7 @@ function assignPerson() {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
+  page.setDefaultTimeout(15000);
   const errors = [], requests = [], pending = new Set();
   let created = false, commandEndpoint;
   page.on('pageerror', error => errors.push(error.stack || error.message));
@@ -57,10 +58,10 @@ function assignPerson() {
   const settled = () => expect.poll(() => pending.size).toBe(0);
   const sheetResponse = () => page.waitForResponse(r => r.url().includes('/api/load_timesheet_page') && r.status() === 200);
   const expectedContext = user_id => ({ expected_requester: { org_id: org, user_id }, subject_id: person, expected_policy: 'scoped' });
-  const visit = async (mode, subject = person) => {
+  const visit = async (mode, subject = person, anchor = day) => {
     await settled();
     const ready = sheetResponse();
-    await page.goto(`${base}/timesheet/${mode}/${day}?span=week${subject ? `&user=${subject}` : ''}`);
+    await page.goto(`${base}/timesheet/${mode}/${anchor}?span=week${subject ? `&user=${subject}` : ''}`);
     const data = await (await ready).json();
     await settled();
     assert.equal(data.policy, 'scoped');
@@ -157,6 +158,122 @@ function assignPerson() {
     assert.equal(fixtureMinutes(), 120);
     assert.equal(sql(`SELECT minutes FROM time_entries WHERE id='${hiddenEntry}'`), '1200');
     console.log('PASS: Day and Week edits carry the selected owner and preserve hidden work');
+
+    // Separate week keeps calendar mutations independent of the timer fixture.
+    const calendarDay = '2027-10-04', nextDay = '2027-10-05';
+    const createdEntry = notes => {
+      const value = sql(`SELECT id FROM time_entries WHERE project_id='${project}' AND notes='${notes}'`);
+      assert.match(value, /^[0-9a-f-]{36}$/);
+      return value;
+    };
+    const stored = entryId => JSON.parse(sql(`SELECT json_build_object('user',user_id,'project',project_id,'task',task_id,
+      'day',spent_date,'minutes',minutes,'start',start_minute,'order',sort_order) FROM time_entries WHERE id='${entryId}'`));
+    const expectedEntry = (spentDay, minutes, start, order = 0) => ({ user: person, project, task, day: spentDay, minutes, start, order });
+    const adding = page.getByRole('dialog', { name: /New time entry/ });
+    for (const [date, duration, notes] of [
+      [calendarDay, '1:00', 'Delegated untimed'], [nextDay, '0:30', 'Delegated sibling'],
+    ]) {
+      await visit('day', person, date);
+      await page.getByRole('button', { name: 'Add entry', exact: true }).click();
+      await expect(adding.locator('#time-entry-title')).toHaveText(`New time entry for ${date === calendarDay ? 'Monday, 04' : 'Tuesday, 05'} Oct`);
+      await expect(adding.getByRole('button', { name: 'Project', exact: true })).toContainText(projectName);
+      await expect(adding.getByRole('button', { name: 'Task', exact: true })).toContainText(taskName);
+      await adding.getByRole('textbox', { name: 'Duration', exact: true }).fill(duration);
+      await adding.getByPlaceholder('Notes (optional)').fill(notes);
+      await mutation('create', () => adding.getByRole('button', { name: 'Save entry', exact: true }).click());
+      await expect(page.locator('.ts-day-entry').filter({ hasText: notes })).toBeVisible();
+    }
+    const untimedId = createdEntry('Delegated untimed');
+    const siblingId = createdEntry('Delegated sibling');
+    assert.deepEqual(stored(untimedId), expectedEntry(calendarDay, 60, null));
+    assert.deepEqual(stored(siblingId), expectedEntry(nextDay, 30, null));
+    console.log('PASS: delegated creation uses the selected person and eligible project/task');
+
+    await page.getByRole('button', { name: 'Calendar', exact: true }).click();
+    await page.locator('#calendar-span-menu-trigger').click();
+    await page.getByRole('menuitem', { name: 'Day view', exact: true }).click();
+    await expect(page.locator('.ts-cal-col')).toHaveCount(1);
+    await page.getByRole('button', { name: 'Add entry', exact: true }).click();
+    await expect(adding.locator('#time-entry-title')).toHaveText('New time entry for Tuesday, 05 Oct');
+    await adding.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await page.locator('#calendar-span-menu-trigger').click();
+    await page.getByRole('menuitem', { name: 'Week view', exact: true }).click();
+    const columns = page.locator('.ts-cal-col');
+    await expect(columns).toHaveCount(7);
+    await expect(columns.nth(0).locator('.ts-cal-event')).not.toHaveClass(/locked/);
+    const hourHeight = await page.locator('.ts-cal-hour').first().evaluate(el => el.getBoundingClientRect().height);
+    assert.ok(hourHeight > 0);
+    const monday = await columns.nth(0).boundingBox();
+    const drawX = monday.x + monday.width / 2, drawY = monday.y + hourHeight * 3 + 2;
+    await page.mouse.move(drawX, drawY);
+    await page.mouse.down();
+    await page.mouse.move(drawX, drawY + hourHeight, { steps: 5 });
+    await page.mouse.up();
+    await expect(adding).toBeVisible();
+    await expect(adding.getByRole('textbox', { name: 'Duration', exact: true })).toHaveValue('1:00');
+    await adding.getByPlaceholder('Notes (optional)').fill('Delegated timed');
+    await mutation('create', () => adding.getByRole('button', { name: 'Save entry', exact: true }).click());
+    const timedId = createdEntry('Delegated timed');
+    assert.deepEqual(stored(timedId), expectedEntry(calendarDay, 60, 180));
+    const timed = page.locator('.ts-cal-event.timed');
+    await expect(timed.locator('.ts-cal-ev-time')).toHaveText('3:00–4:00');
+
+    const drag = async (source, targetX, deltaY) => {
+      await source.scrollIntoViewIfNeeded();
+      const box = await source.boundingBox();
+      assert.ok(box);
+      const x = box.x + box.width / 2, y = box.y + box.height / 2;
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      await page.mouse.move(targetX ?? x, y + deltaY, { steps: 5 });
+      await page.mouse.up();
+    };
+    const tuesday = await columns.nth(1).boundingBox();
+    await mutation('reschedule', () => drag(timed, tuesday.x + tuesday.width / 2, hourHeight));
+    assert.deepEqual(stored(timedId), expectedEntry(nextDay, 60, 240));
+    await expect(columns.nth(1).locator('.ts-cal-ev-time')).toHaveText('4:00–5:00');
+    await expect(timed).not.toHaveClass(/locked/);
+    await mutation('reschedule', () => drag(timed.locator('.ts-cal-resize'), null, hourHeight / 2));
+    assert.deepEqual(stored(timedId), expectedEntry(nextDay, 90, 240));
+    await expect(timed.locator('.ts-cal-ev-time')).toHaveText('4:00–5:30');
+    console.log('PASS: delegated Calendar drawing, day movement and resizing persist exact minutes');
+
+    const untimed = columns.nth(0).locator('.ts-cal-event:not(.timed)');
+    await expect(untimed).not.toHaveClass(/locked/);
+    await mutation('reorder', () => drag(untimed, tuesday.x + tuesday.width / 2, 30));
+    assert.deepEqual(requests.at(-1).command.entry_ids, [siblingId, untimedId]);
+    assert.deepEqual(stored(siblingId), expectedEntry(nextDay, 30, null));
+    assert.deepEqual(stored(untimedId), expectedEntry(nextDay, 60, null, 1));
+    await expect(columns.nth(0).locator('.ts-cal-event')).toHaveCount(0);
+    await expect(columns.nth(1).locator('.ts-cal-event')).toHaveCount(3);
+    const moved = columns.nth(1).locator('.ts-cal-event:not(.timed)').filter({ has: page.locator('.ts-cal-ev-dur', { hasText: '1:00' }) });
+    await expect(moved).not.toHaveClass(/locked/);
+    await mutation('reorder', () => drag(moved, null, -hourHeight));
+    assert.deepEqual(requests.at(-1).command.entry_ids, [untimedId, siblingId]);
+    assert.deepEqual(stored(untimedId), expectedEntry(nextDay, 60, null));
+    assert.deepEqual(stored(siblingId), expectedEntry(nextDay, 30, null, 1));
+    console.log('PASS: delegated untimed moves and order inversions persist the complete ordered entry set');
+
+    await visit('day', person, nextDay);
+    await page.locator('.ts-day-entry').filter({ hasText: 'Delegated timed' }).getByRole('button', { name: 'Edit', exact: true }).click();
+    await mutation('delete', () => dialog.getByRole('button', { name: 'Delete', exact: true }).click());
+    assert.equal(sql(`SELECT count(*) FROM time_entries WHERE id='${timedId}'`), '0');
+    await expect(page.locator('.ts-day-entry').filter({ hasText: 'Delegated timed' })).toHaveCount(0);
+    assert.deepEqual(stored(untimedId), expectedEntry(nextDay, 60, null));
+    await page.getByRole('button', { name: 'Week', exact: true }).click();
+    const createdRow = page.locator('.ts-body').filter({ hasText: projectName });
+    await expect(createdRow.locator('.ts-rowtotal')).toHaveText('1:30');
+    const beforeDelete = requests.length;
+    await mutation('delete', () => createdRow.getByRole('button', { name: 'Remove row', exact: true }).click());
+    assert.equal(requests.length, beforeDelete + 1);
+    assert.deepEqual(requests.at(-1).command.entry_ids.slice().sort(), [untimedId, siblingId].sort());
+    assert.equal(sql(`SELECT count(*) FROM time_entries WHERE id IN ('${untimedId}','${timedId}','${siblingId}')`), '0');
+    await expect(page.getByRole('button', { name: 'Add entry', exact: true })).toBeEnabled();
+    await expect(createdRow).toHaveCount(0);
+    assert.equal(fixtureMinutes(), 120);
+    assert.equal(sql(`SELECT minutes FROM time_entries WHERE id='${hiddenEntry}'`), '1200');
+    assert.equal(sql(`SELECT is_running FROM time_entries WHERE id='${ownTimer}'`), 't');
+    console.log('PASS: delegated modal and Week row deletion preserve unrelated hours and requester timer');
 
     await visit('day');
     await row.getByRole('button', { name: 'Edit', exact: true }).click();

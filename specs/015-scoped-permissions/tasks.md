@@ -776,6 +776,8 @@ data repair, role mapping or runtime activation is authorized by these cases.
 
 ### Full-gate regressions
 
+- [x] T188 Complete real delegated Timesheet mutation browser coverage for create/delete, Calendar drawing/move/resize/reorder and atomic Week row deletion; assert selected-owner payloads, persisted values and unaffected unrelated time (FR-007/010/018).
+
 - [x] T187 Exercise scoped selected-person Timesheet in the disposable browser runner: navigation/history, Day/Week writes, revocation, independent requester timer and owner-only terminal recovery. Repair any reproduced delivery defect and retain SQL-backed assertions (FR-018/033).
 
 - [x] T186 Adapt the existing Timesheet modal/error browser suites to requester-bound commands; verify atomic stale-client deletion, transport reconciliation, draft preservation and focus fallback during authorized refresh. Include both suites in the default disposable runner after passing (FR-018).
