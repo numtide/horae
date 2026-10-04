@@ -73,7 +73,8 @@ pub(crate) async fn load_person_permissions(
     org_id: Uuid,
     user_id: Uuid,
 ) -> Result<Option<PersonPermissions>, PermissionStorageError> {
-    let Some(row) = sqlx::query!(
+    sqlx::query_as!(
+        StoredPersonPermissions,
         "SELECT catalog_version, grants, is_administrator, source, built_in_profile,
                 template_id, applied_template_revision, revision
          FROM person_permission_states WHERE org_id = $1 AND user_id = $2",
@@ -82,35 +83,52 @@ pub(crate) async fn load_person_permissions(
     )
     .fetch_optional(connection)
     .await?
-    else {
-        return Ok(None);
-    };
-    let source = match (
-        row.source.as_str(),
-        row.built_in_profile.as_deref(),
-        row.template_id,
-        row.applied_template_revision,
-    ) {
-        ("built_in", Some(profile), None, None) => {
-            PermissionSource::BuiltIn(Deserialize::deserialize(
-                serde::de::value::StrDeserializer::<serde::de::value::Error>::new(profile),
-            )?)
-        }
-        ("template", None, Some(id), Some(applied_revision)) if applied_revision >= 0 => {
-            PermissionSource::Template {
-                id,
-                applied_revision,
+    .map(StoredPersonPermissions::restore)
+    .transpose()
+}
+
+/// Native stored facts, also used to validate a retained export snapshot.
+pub(crate) struct StoredPersonPermissions {
+    pub catalog_version: i32,
+    pub grants: Vec<String>,
+    pub is_administrator: bool,
+    pub source: String,
+    pub built_in_profile: Option<String>,
+    pub template_id: Option<Uuid>,
+    pub applied_template_revision: Option<i64>,
+    pub revision: i64,
+}
+
+impl StoredPersonPermissions {
+    pub(crate) fn restore(self) -> Result<PersonPermissions, PermissionStorageError> {
+        let row = self;
+        let source = match (
+            row.source.as_str(),
+            row.built_in_profile.as_deref(),
+            row.template_id,
+            row.applied_template_revision,
+        ) {
+            ("built_in", Some(profile), None, None) => {
+                PermissionSource::BuiltIn(Deserialize::deserialize(
+                    serde::de::value::StrDeserializer::<serde::de::value::Error>::new(profile),
+                )?)
             }
-        }
-        ("individual", None, None, None) => PermissionSource::Individual,
-        _ => return Err(PermissionStorageError::Provenance),
-    };
-    Ok(Some(PersonPermissions {
-        grants: restore_grants(row.catalog_version, &row.grants)?,
-        is_administrator: row.is_administrator,
-        source,
-        revision: row.revision,
-    }))
+            ("template", None, Some(id), Some(applied_revision)) if applied_revision >= 0 => {
+                PermissionSource::Template {
+                    id,
+                    applied_revision,
+                }
+            }
+            ("individual", None, None, None) => PermissionSource::Individual,
+            _ => return Err(PermissionStorageError::Provenance),
+        };
+        Ok(PersonPermissions {
+            grants: restore_grants(row.catalog_version, &row.grants)?,
+            is_administrator: row.is_administrator,
+            source,
+            revision: row.revision,
+        })
+    }
 }
 
 /// Loads a tenant-scoped reusable selection without deriving person authority.

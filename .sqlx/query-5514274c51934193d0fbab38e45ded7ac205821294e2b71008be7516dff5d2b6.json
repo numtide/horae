@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM person_management_assignments WHERE org_id=$1 AND manager_id=$2 AND managed_user_id=$3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5514274c51934193d0fbab38e45ded7ac205821294e2b71008be7516dff5d2b6"
+}

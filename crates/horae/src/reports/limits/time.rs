@@ -31,25 +31,34 @@ async fn begin(
         .await
         .map_err(database_error)?;
     configure_deadlines(&mut tx).await?;
+    let (policy, grants) = authorize_current(&mut tx, requester).await?;
+    Ok((tx, policy, grants))
+}
+
+/// The caller configures the transaction and owns the lifetime of these gates.
+pub(in crate::reports) async fn authorize_current(
+    connection: &mut PgConnection,
+    requester: PermissionRequester,
+) -> Result<(i32, PermissionSelection), StatusCode> {
     let policy = sqlx::query_scalar!(
         "SELECT permission_policy_version FROM organizations WHERE id=$1 FOR SHARE",
         requester.org_id,
     )
-    .fetch_optional(&mut *tx)
+    .fetch_optional(&mut *connection)
     .await
     .map_err(database_error)?
     .ok_or(StatusCode::FORBIDDEN)?;
     let role = sqlx::query_scalar!(
         r#"SELECT org_role AS "role: OrgRole" FROM users WHERE org_id=$1 AND id=$2 AND active FOR SHARE"#,
         requester.org_id, requester.user_id,
-    ).fetch_optional(&mut *tx).await.map_err(database_error)?.ok_or(StatusCode::FORBIDDEN)?;
+    ).fetch_optional(&mut *connection).await.map_err(database_error)?.ok_or(StatusCode::FORBIDDEN)?;
     let grants = match policy {
         0 if matches!(role, OrgRole::Manager | OrgRole::Admin) => {
             PermissionSelection::new(&[Permission::TimeReadAll])
         }
         0 => return Err(StatusCode::FORBIDDEN),
         1 => {
-            load_person_permissions(&mut tx, requester.org_id, requester.user_id)
+            load_person_permissions(connection, requester.org_id, requester.user_id)
                 .await
                 .map_err(|error| match error {
                     PermissionStorageError::Database(error) => database_error(error),
@@ -70,7 +79,7 @@ async fn begin(
     {
         return Err(StatusCode::FORBIDDEN);
     }
-    Ok((tx, policy, grants))
+    Ok((policy, grants))
 }
 
 pub(in crate::reports) async fn entries(
@@ -195,10 +204,22 @@ impl TimeExportScope {
         if policy != self.policy {
             return Err(StatusCode::FORBIDDEN);
         }
-        let (owners, projects): (Vec<_>, Vec<_>) = self.contexts.into_iter().unzip();
-        // Source reassignment/deletion cannot change the scope of rendered bytes.
-        let allowed = sqlx::query_scalar!(
-            r#"SELECT NOT EXISTS (
+        authorize_rows(&mut tx, self.requester, &grants, &self.contexts).await?;
+        tx.commit().await.map_err(database_error)?;
+        Ok(body)
+    }
+}
+
+pub(in crate::reports) async fn authorize_rows(
+    connection: &mut PgConnection,
+    requester: PermissionRequester,
+    grants: &PermissionSelection,
+    contexts: &[(Uuid, Uuid)],
+) -> Result<(), StatusCode> {
+    let (owners, projects): (Vec<_>, Vec<_>) = contexts.iter().copied().unzip();
+    // Source reassignment/deletion cannot change the scope of rendered bytes.
+    let allowed = sqlx::query_scalar!(
+        r#"SELECT NOT EXISTS (
                  SELECT 1 FROM unnest($3::uuid[],$4::uuid[]) AS captured(owner_id,project_id)
                  WHERE NOT ($7::bool OR ($5::bool AND captured.owner_id=$2) OR ($6::bool AND (
                    EXISTS (SELECT 1 FROM person_management_assignments m
@@ -206,21 +227,19 @@ impl TimeExportScope {
                    OR EXISTS (SELECT 1 FROM project_management_assignments m
                      WHERE m.org_id=$1 AND m.manager_id=$2 AND m.project_id=captured.project_id))))
                ) AS "allowed!""#,
-            self.requester.org_id,
-            self.requester.user_id,
-            &owners,
-            &projects,
-            grants.contains(Permission::TimeReadOwn),
-            grants.contains(Permission::TimeReadManaged),
-            grants.contains(Permission::TimeReadAll),
-        )
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(database_error)?;
-        if !allowed {
-            return Err(StatusCode::FORBIDDEN);
-        }
-        tx.commit().await.map_err(database_error)?;
-        Ok(body)
+        requester.org_id,
+        requester.user_id,
+        &owners,
+        &projects,
+        grants.contains(Permission::TimeReadOwn),
+        grants.contains(Permission::TimeReadManaged),
+        grants.contains(Permission::TimeReadAll),
+    )
+    .fetch_one(connection)
+    .await
+    .map_err(database_error)?;
+    if !allowed {
+        return Err(StatusCode::FORBIDDEN);
     }
+    Ok(())
 }

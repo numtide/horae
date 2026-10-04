@@ -1,5 +1,45 @@
 # Scoped permissions investigation progress
 
+## 2026-10-05 — Recorded-scope CSV delivery
+
+- Reused published `cbc78a8`, existing worktree and draft #212. FR-033/B is
+  already recorded and implemented; its repeated confirmation adds no policy.
+- RED `94314` reproduced canonical Member rejection and legacy-Manager scope
+  expansion. Implemented native cursor authority metadata and strict decoding,
+  including the empty-source sentinel. The shared permission-state restore and
+  XLSX current-authority helpers avoid a second authorization implementation.
+- Delivery records private owner/project pairs for each bounded block, reserves
+  channel capacity without authority locks, then rechecks current grants and
+  pinned policy. Invoice/project exports and all CSV columns remain unchanged.
+  No schema, dependencies, CSS or real-data changes.
+- GREEN `30494` passes both initial tests. Independent production review finds
+  no material defect; this is static review, not proof of all concurrency cases.
+- Added DECLARE-versus-initial/FETCH authority and relationship tests, transient
+  invalid source with/without rows, missing-identity sentinels, metadata bounds,
+  blocked-body revocation, complete pending-context checks and clearing, empty
+  header invalidation, captured reassignment/deletion and actual HTTP assertions.
+  `9111` is running report/export regressions, strict storage tests, HTTP and
+  complete SQLx preparation in a disposable PostgreSQL cluster. No result is
+  claimed until that process finishes.
+- `9111` now passes 105 report/export tests (two manual measurements ignored),
+  all eleven strict storage tests and the actual-session HTTP suite. SQLx
+  preparation is running in the same disposable cluster. Independent review of
+  the new tests found no material defect; no fresh Harvest/browser claim.
+- `9111` completes full SQLx preparation in 72s: ten new cache files, two obsolete
+  time cursor/decoder descriptions removed, no unrelated deletions. Offline
+  server all-targets and WASM Clippy are running as `22934`. Existing #212 is
+  confirmed open/draft at `cbc78a8`; no new branch or duplicate PR is needed.
+- `22934` passes offline server all-targets Clippy (87s) and WASM Clippy (17s)
+  with warnings denied. Formatting checks 550 files with zero changes. T207–T209
+  are complete for this CSV boundary, not T203 or the full feature.
+
+Next: publish this verified increment unsigned to existing draft #212, without
+merging, then continue T203 with multi-ID download transport and the ordinary
+Reports consumer. Resolve remaining candidate discovery before full pickers.
+Multi-ID download transport, Reports consumer/candidate
+discovery, financial reports, remaining writes and migration/cutover stay open;
+the goal is active and no merge or full-feature acceptance is authorized.
+
 ## 2026-10-04 — Recorded-scope XLSX delivery
 
 - The preceding clarification only reconfirmed FR-033/B and was no progress.

@@ -14,6 +14,9 @@ Ordinary detailed Reports integration follows `contracts/time-reports.md`:
 - [x] T204 Reproduce canonical Member rejection and legacy-Manager overexposure in the XLSX reader (OP25/OP31, FR-006/007/008/010/018).
 - [x] T205 Implement the policy-aware XLSX source with one bounded size/payload snapshot and reauthorize captured person/project pairs after rendering; preserve legacy policy, format and admission limits.
 - [x] T206 Verify XLSX grant/relationship/policy/activity races, source reassignment/deletion, cancellation, limits and real-session delivery; refresh SQLx, run native/WASM lint and review independently. This XLSX increment does not close T203.
+- [x] T207 Reproduce canonical Member rejection and legacy-Manager overexposure in the native CSV source (OP25/OP31, FR-006/007/008/010/018).
+- [x] T208 Capture and strictly validate time authority in the native cursor snapshot, including empty-source metadata; reauthorize captured owner/project pairs after capacity becomes available, preserving bounded transport and legacy policy.
+- [x] T209 Verify source handoff, transient invalid state, pending-block revocation, captured history, metadata bounds and actual-session CSV delivery; rerun export/storage regressions, refresh SQLx, native/WASM lint and independent review. This does not close the multi-ID download transport, Reports consumer or full T203.
 
 These tasks do not close T014/T015 or the full Reports parity surface alone.
 

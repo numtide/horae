@@ -1,5 +1,51 @@
 # Permission verification
 
+## Recorded-scope CSV delivery (T207–T209)
+
+The registered `/api/reports/export/csv` route now delegates ordinary time
+authorization to its source and delivery gates. Policy 0 retains Manager/Admin;
+policy 1 uses strict own/managed/all scope independently of the legacy role.
+The native cursor captures authority, relationships and rows in one source
+snapshot. Its constant identity sentinel preserves missing/invalid authority
+even when no entry is visible. No metadata enters the eight-column CSV.
+
+Each bounded output block retains its captured owner/project pairs. Capacity is
+reserved without authority locks, then current authority is reloaded and checked
+against those pairs before synchronous delivery. Prior queued bytes cannot be
+recalled; a later denial interrupts the body rather than returning truncated
+success. Source reassignment or deletion cannot replace captured scope.
+
+Use disposable PostgreSQL and the Nix dev shell:
+
+```sh
+cargo test -p horae --features server --bin horae reports:: --config 'profile.dev.package.horae.strip="debuginfo"'
+cargo test -p horae --features server --bin horae server_fns::permissions::storage_tests:: --config 'profile.dev.package.horae.strip="debuginfo"'
+cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization --config 'profile.dev.package.horae.strip="debuginfo"'
+cargo sqlx prepare --workspace -- --features server --all-targets
+```
+
+RED `94314` reproduced Member denial and legacy-role overexposure; `30494`
+passes those two initial tests after implementation. Final regression run `9111`
+passes 105 report/export tests (40.91s), including ten new scoped CSV tests; two
+manual measurements remain ignored. All eleven strict storage tests pass (1.96s)
+after the shared restoration extraction. The registered-session HTTP suite also
+passes (11.19s), including CSV forgery, foreign filtering, private-field exclusion,
+missing state, legacy denial and inactive sessions. Complete SQLx preparation
+passes with ten added cache files and only the obsolete time cursor/decoder
+descriptors removed. Offline all-target server and WASM Clippy pass with warnings
+denied (`22934`, 87s/17s). Formatting checks 550 files with zero changes. This is
+not a full server, browser or Nix acceptance claim.
+
+Requirement mapping: OP25/OP31 and FR-006/007/008 cover scoped source and narrowed
+filters; FR-010 covers independent actor/owner identities and per-block current
+authorization; FR-018 covers DECLARE handoff, restored invalid source state,
+backpressure, context clearing, historical capture, bounds and real HTTP.
+Independent static production/test review found no material defects. Rust,
+testing, async and simplicity guidance kept this within the existing cursor,
+strict storage and shared XLSX predicates: no new dependency, schema, CSS or
+queue. Multi-ID URL transport, Reports consumer/candidate discovery and separate
+financial reports remain mandatory T203 work.
+
 ## Recorded-scope XLSX delivery (T204–T206)
 
 The existing `/api/reports/export/xlsx` route now applies canonical ordinary

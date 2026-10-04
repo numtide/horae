@@ -6,8 +6,17 @@ use horae_core::types::EntryState;
 use std::io::{Cursor, Read};
 
 async fn xlsx(api: &Api, cookie: Option<&str>, filter: &str) -> reqwest::Response {
+    download(api, cookie, "xlsx", filter).await
+}
+
+async fn download(
+    api: &Api,
+    cookie: Option<&str>,
+    format: &str,
+    filter: &str,
+) -> reqwest::Response {
     let mut request = api.client.get(format!(
-        "{}/api/reports/export/xlsx?from=2026-09-01&to=2026-09-30{filter}",
+        "{}/api/reports/export/{format}?from=2026-09-01&to=2026-09-30{filter}",
         api.base,
     ));
     if let Some(cookie) = cookie {
@@ -23,6 +32,14 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     sqlx::query!("UPDATE users SET oidc_subject=id::text,billable_rate_cents=123456,cost_rate_cents=987654 WHERE id=$1", ids.user_id).execute(pool).await.unwrap();
     let cookie = api.cookie(ids.user_id).await;
     assert_eq!(xlsx(api, None, "").await.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        download(api, None, "csv", "").await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        download(api, Some(&cookie), "csv", "").await.status(),
+        StatusCode::FORBIDDEN
+    );
     assert_eq!(
         xlsx(api, Some(&cookie), "").await.status(),
         StatusCode::FORBIDDEN
@@ -57,6 +74,10 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         StatusCode::INTERNAL_SERVER_ERROR
     );
     assert_eq!(
+        download(api, Some(&cookie), "csv", "").await.status(),
+        StatusCode::INTERNAL_SERVER_ERROR
+    );
+    assert_eq!(
         api.call(ENDPOINT, request.clone(), Some(&cookie), false)
             .await
             .status(),
@@ -73,6 +94,50 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         "next_after":null
     });
     assert_eq!(api.json(ENDPOINT, request.clone(), &cookie).await, expected);
+    let response = download(
+        api,
+        Some(&cookie),
+        "csv",
+        &format!("&org_id={}&actor_id={}", other.org_id, other.user_id),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.headers()["content-disposition"],
+        "attachment; filename=\"timesheet.csv\""
+    );
+    let data = response.text().await.unwrap();
+    let mut csv = csv::Reader::from_reader(data.as_bytes());
+    assert_eq!(csv.headers().unwrap().len(), 8);
+    let records = csv.records().collect::<Result<Vec<_>, _>>().unwrap();
+    assert_eq!(records.len(), 1);
+    assert_eq!(&records[0][1], "Widget");
+    assert_eq!(&records[0][3], "Test User");
+    for private in [
+        "123456",
+        "987654",
+        "billable_rate",
+        "cost_rate",
+        "EUR",
+        "time_read_own",
+        "catalog_version",
+    ] {
+        assert!(!data.contains(private), "{private}");
+    }
+    let response = download(
+        api,
+        Some(&cookie),
+        "csv",
+        &format!("&project_id={}", other.project_id),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        csv::Reader::from_reader(response.bytes().await.unwrap().as_ref())
+            .records()
+            .count(),
+        0
+    );
     let response = xlsx(
         api,
         Some(&cookie),
@@ -165,6 +230,10 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         .unwrap();
     assert_eq!(
         xlsx(api, Some(&cookie), "").await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        download(api, Some(&cookie), "csv", "").await.status(),
         StatusCode::UNAUTHORIZED
     );
     assert_eq!(

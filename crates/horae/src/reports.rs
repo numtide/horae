@@ -113,15 +113,6 @@ impl ExportParams {
             expected_requester: None,
         })
     }
-
-    fn filters(&self) -> ReportFilters {
-        ReportFilters {
-            client_id: self.client_id,
-            project_id: self.project_id,
-            user_id: self.user_id,
-            tag_id: self.tag_id,
-        }
-    }
 }
 
 /// Shared rows for materialized exports and the manager-only detailed report.
@@ -181,9 +172,7 @@ pub async fn export_csv(
     session: Session,
     Query(params): Query<ExportParams>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    // Same rows as the manager-only `report_detailed` server fn (every user's
-    // hours and notes), so the same gate applies.
-    let (actor_id, org_id) = require_manager(&session).await?;
+    let (actor_id, org_id) = require_session(&session).await?;
 
     let state = crate::state::global_state().await;
     streaming::entries(state.db.clone(), org_id, actor_id, params).await

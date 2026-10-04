@@ -1,8 +1,9 @@
 # Current authority during CSV delivery
 
 T110–T113 implement the US3 / FR-006/007/010/017/018 and SC-006 export
-subsets. They preserve legacy operation predicates until the reviewed full
-policy cutover; this is not canonical policy activation or full US3 acceptance.
+subsets. The ordinary time refinement below applies canonical scope only to
+policy-1 time exports. Invoice and project predicates remain unchanged; this is
+not canonical policy activation or full US3 acceptance.
 
 ## Source and authorization
 
@@ -14,8 +15,8 @@ The statement deadline now bounds each cursor fetch or authority statement,
 not an unbounded source query; the total deadline still bounds the whole job.
 
 Before declaring the source cursor, authorize inside a savepoint: organization
-SHARE, then active same-organization actor SHARE. Timesheet and invoice exports
-require the existing Manager/Admin predicate. Projects require an active actor
+SHARE, then active same-organization actor SHARE. Policy-0 timesheet and invoice
+exports require the existing Manager/Admin predicate. Projects require an active actor
 and the existing `project_read_access` predicate, not an invented Manager gate.
 Rollback and RELEASE the named authorization savepoint successfully before
 source declaration; successful checks must not accumulate savepoint frames.
@@ -41,6 +42,34 @@ Already authorized queued/delivered blocks cannot be recalled. A later denial
 interrupts the body, never a successful truncated EOF. No rollback/retry may
 resume a failed cursor. Cancellation closes its connection and releases the
 existing admission permits; no second connection or new worker is required.
+
+## Canonical ordinary time refinement
+
+Reuse the strict state restoration and current time authority used by XLSX.
+Acquire initial organization/actor gates inside the authorization savepoint and
+pin the selected policy version. Release the savepoint before `DECLARE`.
+The cursor independently reads policy, actor activity/legacy role, complete stored
+permission state and management relationships from its own source snapshot. Do
+not use earlier grant flags to choose its rows: gains/losses committed before
+`DECLARE` must change its result. Source rows use the same tenant-qualified report
+facts and narrowing filters as the ordinary reader and XLSX.
+
+Root source authority in a constant identity row with LEFT JOINs, not a filtered
+active actor. Carry native private authority fields beside each result; retain a
+nullable entry sentinel even for missing authority or zero visible entries.
+Validate captured policy/actor and strict canonical state before omitting the
+sentinel or writing any output. An invalid state captured during `DECLARE` must
+fail even if it is restored before delivery. Policy 0 must not require irrelevant
+canonical state. No source metadata or owner/project scope IDs enter the CSV.
+
+Retain the captured owner/project pairs for each pending output block. After
+reserving capacity, reload active identity, pinned policy and current strict
+grants, and apply own OR managed-person/project OR all to every pair. Never
+replace captured context with a current source-entry lookup. Rollback/release
+must succeed before synchronous send; clear scope together with its block.
+Count every private variable field, including grant array elements and provenance
+labels, in native `export_bytes`. The sentinel is not a CSV data record. Preserve
+all existing transport, timeout, cancellation and error-body guarantees.
 
 ## Bounded native transport
 

@@ -89,7 +89,7 @@ deletion or reassignment does not replace those pairs. Empty files still require
 current time-read authority. Denial, cancellation or failed final authorization
 must drop the body and release admission; no partial XLSX is a successful result.
 
-CSV remains a separate mandatory T203 boundary. Its cursor must be declared
+CSV uses the boundary detailed in `csv-exports.md` (T207–T209). Its cursor must be declared
 outside the authorization savepoint, with current source authority loaded in
 the cursor's own snapshot and validated even when the source is empty. Do not
 copy the XLSX transaction lifetime across client-paced CSV backpressure.
