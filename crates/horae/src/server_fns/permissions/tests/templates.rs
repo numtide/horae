@@ -73,6 +73,87 @@ async fn revision_and_count(pool: &PgPool, org: Uuid) -> (i64, i64) {
 
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]
+async fn template_command_waits_for_direct_actor_deactivation_on_replay(pool: PgPool) {
+    let ids = administrator(&pool).await;
+    let request = create("Team", 0);
+    execute(&pool, ids.org_id, ids.user_id, &request)
+        .await
+        .unwrap();
+    let mut revoke = pool.begin().await.unwrap();
+    sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
+        .execute(&mut *revoke)
+        .await
+        .unwrap();
+    let pid = sqlx::query_scalar!("SELECT pg_backend_pid()")
+        .fetch_one(&mut *revoke)
+        .await
+        .unwrap()
+        .unwrap();
+    let pending_pool = pool.clone();
+    let pending =
+        tokio::spawn(
+            async move { execute(&pending_pool, ids.org_id, ids.user_id, &request).await },
+        );
+    wait_for_blocked(&pool, pid).await;
+    revoke.commit().await.unwrap();
+    assert!(matches!(
+        pending.await.unwrap(),
+        Err(TemplateCommandError::Forbidden)
+    ));
+    assert_eq!(revision_and_count(&pool, ids.org_id).await, (1, 1));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn template_command_overrides_readonly_defaults_and_keeps_stricter_timeouts(pool: PgPool) {
+    let ids = administrator(&pool).await;
+    let restricted = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .after_connect(|connection, _| {
+            Box::pin(async move {
+                sqlx::query!("SET default_transaction_read_only = on")
+                    .execute(&mut *connection)
+                    .await?;
+                sqlx::query!("SET statement_timeout = '250ms'")
+                    .execute(&mut *connection)
+                    .await?;
+                Ok(())
+            })
+        })
+        .connect_with(pool.connect_options().as_ref().clone())
+        .await
+        .unwrap();
+    let mut hold = pool.begin().await.unwrap();
+    sqlx::query!("LOCK TABLE permission_change_receipts IN ACCESS EXCLUSIVE MODE")
+        .execute(&mut *hold)
+        .await
+        .unwrap();
+    let request = create("Team", 0);
+    let error = tokio::time::timeout(
+        Duration::from_secs(2),
+        execute(&restricted, ids.org_id, ids.user_id, &request),
+    )
+    .await
+    .unwrap()
+    .unwrap_err();
+    let TemplateCommandError::Database(sqlx::Error::Database(error)) = error else {
+        panic!("Expected statement timeout: {error}")
+    };
+    assert_eq!(error.code().as_deref(), Some("57014"));
+    hold.rollback().await.unwrap();
+    let defaults = sqlx::query!("SELECT current_setting('statement_timeout') AS timeout, current_setting('default_transaction_read_only') AS readonly")
+        .fetch_one(&restricted).await.unwrap();
+    assert_eq!(defaults.timeout.as_deref(), Some("250ms"));
+    assert_eq!(defaults.readonly.as_deref(), Some("on"));
+    assert_eq!(revision_and_count(&pool, ids.org_id).await, (0, 0));
+    execute(&restricted, ids.org_id, ids.user_id, &request)
+        .await
+        .unwrap();
+    restricted.close().await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
 async fn create_canonical_retry_returns_one_historical_change(pool: PgPool) {
     let ids = administrator(&pool).await;
     let mut command = create(" Equipo ", 0);

@@ -1,5 +1,16 @@
 # Permissions discovery
 
+## Permission editor integration (2026-10-04)
+
+- Decision: connect existing commands through the session-derived editor contract,
+  without enabling canonical policy. FR-002 permits this confirmed integration.
+- Independent source review found plain actor/target/survivor activity reads and
+  inherited READ ONLY/unbounded waits. Retain SHARE activity locks under the
+  organization gate with explicit bounded settings. Existing SHARE stays compatible.
+- Share preview/save effects; preserve canonical intent serialization and authorize
+  before replay. Display DTOs never become trusted authority. Reject duplicated
+  preview policy, implicit keep-access grants, new preview storage and activation.
+
 ## Authenticated audit delivery (2026-10-04)
 
 - Decision: expose the existing single-receipt historical projection through a

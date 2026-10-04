@@ -1,4 +1,4 @@
-//! Transactional reusable-profile commands. No runtime endpoint or policy activation.
+//! Transactional reusable-profile commands; policy activation remains separate.
 
 use horae_core::permissions::catalog::{
     InvalidTemplateName, PERMISSION_CATALOG_VERSION, Permission, PermissionSelection,
@@ -10,35 +10,9 @@ use uuid::Uuid;
 
 use super::{PermissionStorageError, load_person_permissions, restore_grants};
 
-/// Confirmed intent; actor identity is supplied separately by the server.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct TemplateCommand {
-    pub request_id: Uuid,
-    pub expected_access_revision: i64,
-    pub action: TemplateAction,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-pub(crate) enum TemplateAction {
-    Create {
-        name: String,
-        grants: Vec<Permission>,
-    },
-    Delete {
-        id: Uuid,
-        expected_revision: i64,
-    },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct TemplateOutcome {
-    pub template_id: Uuid,
-    pub access_revision: i64,
-    pub detached_people: usize,
-}
+pub(crate) use crate::models::permission_editor::{
+    TemplateAction, TemplateCommand, TemplateOutcome,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum TemplateCommandError {
@@ -139,19 +113,16 @@ pub(crate) async fn execute(
     request: &TemplateCommand,
 ) -> Result<TemplateOutcome, TemplateCommandError> {
     let mut tx = pool.begin().await?;
-    // Fresh reads after the gate wait are required even if the database default changes.
-    sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
-        .execute(&mut *tx)
-        .await?;
+    super::configure_administration(&mut tx).await?;
     let org = sqlx::query!(
         "SELECT permission_policy_version, access_revision FROM organizations WHERE id = $1 FOR UPDATE", org_id
     ).fetch_optional(&mut *tx).await?.ok_or(TemplateCommandError::Forbidden)?;
     let active = sqlx::query_scalar!(
-        "SELECT EXISTS(SELECT 1 FROM users WHERE org_id = $1 AND id = $2 AND active)",
+        "SELECT active FROM users WHERE org_id = $1 AND id = $2 FOR SHARE",
         org_id,
         actor_id
     )
-    .fetch_one(&mut *tx)
+    .fetch_optional(&mut *tx)
     .await?;
     if org.permission_policy_version != 1 || active != Some(true) {
         return Err(TemplateCommandError::Forbidden);

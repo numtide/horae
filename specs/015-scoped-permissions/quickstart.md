@@ -1,5 +1,66 @@
 # Permission verification
 
+## Authenticated editor backend (T126–T129)
+
+Use the owned disposable PostgreSQL database and the Nix dev shell; never enable
+policy 1 on application data for these tests. The local contract is
+`contracts/permission-editor.md`. No UI, migration or activation acceptance follows.
+
+```sh
+cargo test -p horae --features server --bin horae server_fns::permissions:: --locked
+cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization --locked
+cargo test -p horae --features server --bin horae --locked
+cargo sqlx prepare --workspace -- --features server --all-targets
+SQLX_OFFLINE=true cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+SQLX_OFFLINE=true cargo clippy -p horae --no-default-features --features web --target wasm32-unknown-unknown --locked -- -D warnings
+nix fmt -- --ci
+```
+
+| Requirement subset | Production evidence |
+| --- | --- |
+| FR-010/011 current actor and last active Administrator | Profile/template command tests cover direct deactivation before replay, target activation, survivor deactivation in both orders and retention through receipt insertion |
+| FR-004/015 explicit final proposal and template lifecycle | `editor_tests` compare every built-in preview with actual saved state, exact no-op and template detachment with preserved grants/identity |
+| FR-025/029/030 confirmed relationship losses | `editor_preview_matches_saved_effects_without_writing` compares exact joint effects with save, rejects missing confirmation and stale revisions; existing keep-access regressions remain |
+| FR-013/018/032 authenticated delivery and errors | `authorization_tests/permission_editor.rs` uses registered routes/cookies for load, preview, save, create/apply/delete, historical replay, forged authority, policy denial and sanitized failures |
+
+Initial RED reproduced two direct-deactivation races and READ ONLY SQLSTATE 25006.
+The first command GREEN run passed nine selected tests. Missing editor modules
+then failed compilation; shared evaluation/read implementation passed the first
+104 permission tests (45.61s). Registered-route RED found zero editor endpoints
+before the wrappers were added. Final full-suite and cache/lint results follow
+when observed; these intermediate runs are not final acceptance.
+
+Read-only independent reviews found no high/critical implementation issue. Added
+their requested template-deletion preview/save/stale-set and demotion-winning
+survivor-lock cases. Scoped Spec Kit analysis maps all four new tasks to ten
+requirement subsets, with no unmapped task, ambiguity, duplication or constitutional
+conflict in this increment. Full T006/T042, UI and activation remain open.
+
+Full server-binary regression: 1,030 passed, zero failures, 11 pre-existing ignored
+manual measurements (250.14s). This includes all 15 new PostgreSQL cases and the
+registered editor lifecycle. No new test was ignored. WASM Clippy passed with
+warnings denied (12.72s); root transport DTOs explicitly document their pending
+Workspace consumer without silencing server warnings or unrelated modules.
+The expanded registered HTTP matrix passed separately (11.53s), including
+initial-authentication cancellation/recovery, denial of every new endpoint under
+legacy/future policy and invalid-command validation. Final cache/lint gates follow.
+
+Complete SQLx regeneration finished in 52.55s: 14 added descriptors, six obsolete
+profile-query descriptors removed, zero modified; 1,401 total. Each removal was
+checked against the replaced leaf-lock/activity query, not an unexplained cache
+loss. The preparatory package clean removed only 1.6 GiB of regenerable build
+artifacts. An overlapping format check saw SQLx's transient cache removal and
+formatted a new progress paragraph; rerun formatting after preparation, never
+restore obsolete descriptions or report that interrupted check as passing.
+
+Fresh offline all-targets server Clippy passed with warnings denied (1m01s).
+The subsequent formatting CI run passed with zero changed files; diff checks
+passed. T126–T129 are complete for the authenticated backend only. No real-data
+operation, browser/UI acceptance, full `nix flake check`, policy activation or
+merge was performed. Spec Kit and Rust/testing/async/simplicity guidance kept
+preview/save calculation shared, preserved wire intent and avoided dependencies
+or new persisted preview state.
+
 ## Authenticated permission history (T123–T125)
 
 Use disposable PostgreSQL with the checked-in migrations, inside the Nix shell:

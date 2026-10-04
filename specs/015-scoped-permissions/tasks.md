@@ -97,6 +97,16 @@ API access-role side effects into canonical permissions.
 
 ## Phase 4: US1 — Six profiles and safe assignments (P1)
 
+### Authenticated editor integration
+
+T125 → T126 → T127 → T128 → T129 follows `contracts/permission-editor.md`.
+Sequential shared-file work; backend acceptance does not close UI or activation.
+
+- [x] T126 [US1] Add failing actor/target/survivor activity and inherited-settings tests in `crates/horae/src/server_fns/permissions/tests/profiles.rs` and `tests/templates.rs`; protect these decisions through completion in `permissions/profiles.rs` and `permissions/templates.rs` (FR-010/011).
+- [x] T127 [US1] Add editor tests in `crates/horae/src/server_fns/permissions/tests/editor.rs`; share preview/save effects in `permissions/profiles.rs`, add DTOs in `models/permission_editor.rs` and reads in `permissions/editor.rs` (FR-004/010/011/015/025/029/030).
+- [x] T128 [US1] Expose session-derived editor/profile/template functions in `crates/horae/src/server_fns/permission_editor.rs`, with HTTP tests in `server_fns/importers/authorization_tests/permission_editor.rs`; preserve replay/error contracts and update module/operation wiring (FR-004/010/011/013/018/032).
+- [x] T129 [US1] Verify command/HTTP/regression suites, complete `.sqlx/`, offline server/WASM lint and formatting, adversarial review and scoped analysis; record evidence in feature 015 `quickstart.md` and `progress.md` before unsigned publication to draft #212 (FR-018).
+
 Independent test: all six profiles allow/deny correctly; concurrent demotions preserve an active administrator.
 
 - [ ] T010 [US1] Add failing profile, stale-edit and concurrent administrator tests in `crates/horae/tests/integration.rs` and pure grant tests under `crates/core/src/permissions/` (FR-001/003/010/011).

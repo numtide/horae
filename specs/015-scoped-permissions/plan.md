@@ -97,6 +97,14 @@ close T042, replace legacy guards or authorize mixed-policy operation.
 
 ### Existing increments and remaining integration
 
+T126–T129 connect authenticated editor load/preview and profile/template commands
+under `contracts/permission-editor.md`. Reuse grant logic and receipt shapes;
+display DTOs are not trusted authority. Local prerequisites are activity locks,
+explicit transaction settings and shared preview/save effects. Independent
+research confirms FR-002 permits this mode1-only integration without activation.
+Constitution review requires no new dependency, schema, product choice or real-data
+operation. UI and complete enforcement/migration acceptance remain mandatory.
+
 T123–T125 expose the existing audit projection under `contracts/audit-lookup.md`.
 Reuse receipt storage, strict decoding and the registered session-route harness;
 move only historical wire DTOs into shared models. Organization/requester SHARE

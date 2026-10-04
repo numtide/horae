@@ -6,8 +6,9 @@ activate policy. The broader tasks remain open.
 
 ## Authority and integration boundary
 
-Implement server-internal commands taking a server-supplied actor and organization,
-not public server functions or UI inputs carrying trusted authority. Require policy
+The internal commands take a server-supplied actor and organization, never UI
+inputs carrying trusted authority. Their session-authenticated consumers follow
+`permission-editor.md`; the original T053–T055 increment exposed none. Require policy
 version 1, an active same-organization user and a strictly loaded permission state
 with explicit Administrator identity. Legacy/future policy, missing state,
 malformed grants and equivalent non-admin grants cannot authorize a command.
@@ -21,18 +22,18 @@ claims about Harvest's internal implementation.
 
 ## Local lock order
 
-Open a fresh READ COMMITTED transaction. Lock organization FOR UPDATE before any
-other row lock; then read current identity, canonical state and request receipt.
-Do not issue locking SELECTs or DML on users, projects, assignments, invoices,
-approval or job rows; the actor FK's implicit KEY SHARE is permitted.
+Open a fresh READ COMMITTED, READ WRITE transaction with bounded transaction-local
+waits under `permission-editor.md`. Lock organization FOR UPDATE before any other
+row lock, then the current actor FOR SHARE through commit, canonical state and
+request receipt. Do not issue user UPDATE locks or user/business-row DML, or lock
+projects, assignments, invoices, approval or job rows.
 For deletion lock the template, then affected person states ordered by user ID.
 Detach provenance, delete the template, increment revisions and insert the durable
 receipt/audit in the same transaction. No external work occurs under the lock.
 
-The existing project finalization/editor paths hold actor FOR SHARE before an
-organization SHARE lock. Taking a user UPDATE lock after the new organization
-UPDATE lock would introduce an inverse edge. Plain user reads and the actor FK's
-KEY SHARE avoid that conflict; PostgreSQL documents their compatibility in its
+Project finalization/editor paths now take the organization gate first (T068–T070).
+Actor SHARE also remains compatible with already held actor SHARE and FK KEY SHARE;
+PostgreSQL documents their compatibility in its
 [row-lock table](https://www.postgresql.org/docs/17/explicit-locking.html#LOCKING-ROWS).
 Existing legacy role/active mutations already take organization UPDATE first.
 Migration 0042's affected state rows have no parent-writing project/user triggers.
@@ -102,6 +103,7 @@ fabricated inside a rolled-back success transaction.
 | Audit insert forced to fail | Template/state/revisions roll back together |
 | Existing actor SHARE lock held during command | Command completes without requesting a conflicting user lock |
 
-Use production command helpers and real PostgreSQL fixtures. Runtime public
-wrappers, full last-admin/profile/assignment transitions, operator commands,
-audit browsing, browser confirmation and policy activation remain separate work.
+Use production command helpers and real PostgreSQL fixtures. Authenticated
+wrappers follow `permission-editor.md`. Full profile/assignment integration,
+operator commands, audit browsing, browser confirmation and policy activation
+remain separate work.

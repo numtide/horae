@@ -6,6 +6,9 @@ use horae_core::types::OrgRole;
 use sqlx::PgPool;
 use std::time::Duration;
 
+#[path = "editor.rs"]
+mod editor_tests;
+
 async fn save_state(
     pool: &PgPool,
     org: Uuid,
@@ -82,6 +85,289 @@ async fn state(pool: &PgPool, org: Uuid, user: Uuid) -> PersonPermissions {
         .await
         .unwrap()
         .unwrap()
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn profile_command_waits_for_direct_actor_deactivation_even_on_replay(pool: PgPool) {
+    let ids = fixture(&pool).await;
+    let user = person(&pool, ids.org_id, false, BuiltInProfile::Member).await;
+    let request = apply(user, BuiltInProfile::PeopleAdmin);
+    execute(&pool, ids.org_id, ids.user_id, &request)
+        .await
+        .unwrap();
+    let mut revoke = pool.begin().await.unwrap();
+    sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
+        .execute(&mut *revoke)
+        .await
+        .unwrap();
+    let pid = sqlx::query_scalar!("SELECT pg_backend_pid()")
+        .fetch_one(&mut *revoke)
+        .await
+        .unwrap()
+        .unwrap();
+    let pending_pool = pool.clone();
+    let pending =
+        tokio::spawn(
+            async move { execute(&pending_pool, ids.org_id, ids.user_id, &request).await },
+        );
+    wait_for_blocked(&pool, pid).await;
+    revoke.commit().await.unwrap();
+    assert!(matches!(
+        pending.await.unwrap(),
+        Err(ProfileCommandError::Forbidden)
+    ));
+    assert_eq!(state(&pool, ids.org_id, user).await.revision, 1);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn profile_command_rechecks_remaining_administrator_after_deactivation_wait(pool: PgPool) {
+    let ids = fixture(&pool).await;
+    let survivor = person(&pool, ids.org_id, true, BuiltInProfile::Administrator).await;
+    let request = apply(ids.user_id, BuiltInProfile::Member);
+    let mut revoke = pool.begin().await.unwrap();
+    sqlx::query!("UPDATE users SET active = false WHERE id = $1", survivor)
+        .execute(&mut *revoke)
+        .await
+        .unwrap();
+    let pid = sqlx::query_scalar!("SELECT pg_backend_pid()")
+        .fetch_one(&mut *revoke)
+        .await
+        .unwrap()
+        .unwrap();
+    let pending_pool = pool.clone();
+    let pending =
+        tokio::spawn(
+            async move { execute(&pending_pool, ids.org_id, ids.user_id, &request).await },
+        );
+    wait_for_blocked(&pool, pid).await;
+    revoke.commit().await.unwrap();
+    assert!(matches!(
+        pending.await.unwrap(),
+        Err(ProfileCommandError::LastAdministrator)
+    ));
+    assert!(state(&pool, ids.org_id, ids.user_id).await.is_administrator);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn profile_command_overrides_readonly_defaults_locally(pool: PgPool) {
+    let ids = fixture(&pool).await;
+    let user = person(&pool, ids.org_id, false, BuiltInProfile::Member).await;
+    let restricted = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .after_connect(|connection, _| {
+            Box::pin(async move {
+                sqlx::query!("SET default_transaction_read_only = on")
+                    .execute(&mut *connection)
+                    .await?;
+                sqlx::query!("SET default_transaction_isolation = 'repeatable read'")
+                    .execute(&mut *connection)
+                    .await?;
+                Ok(())
+            })
+        })
+        .connect_with(pool.connect_options().as_ref().clone())
+        .await
+        .unwrap();
+    execute(
+        &restricted,
+        ids.org_id,
+        ids.user_id,
+        &apply(user, BuiltInProfile::PeopleAdmin),
+    )
+    .await
+    .unwrap();
+    let defaults = sqlx::query!("SELECT current_setting('default_transaction_isolation') AS isolation, current_setting('default_transaction_read_only') AS readonly")
+        .fetch_one(&restricted).await.unwrap();
+    assert_eq!(defaults.isolation.as_deref(), Some("repeatable read"));
+    assert_eq!(defaults.readonly.as_deref(), Some("on"));
+    restricted.close().await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn profile_command_retains_target_activity_through_receipt_insert(pool: PgPool) {
+    let ids = fixture(&pool).await;
+    let user = person(&pool, ids.org_id, false, BuiltInProfile::Member).await;
+    let mut hold = pool.begin().await.unwrap();
+    // SHARE permits receipt lookup and blocks the later insert after evaluation.
+    sqlx::query!("LOCK TABLE permission_change_receipts IN SHARE MODE")
+        .execute(&mut *hold)
+        .await
+        .unwrap();
+    let holder = sqlx::query_scalar!("SELECT pg_backend_pid()")
+        .fetch_one(&mut *hold)
+        .await
+        .unwrap()
+        .unwrap();
+    let pending_pool = pool.clone();
+    let pending = tokio::spawn(async move {
+        execute(
+            &pending_pool,
+            ids.org_id,
+            ids.user_id,
+            &apply(user, BuiltInProfile::PeopleAdmin),
+        )
+        .await
+    });
+    wait_for_blocked(&pool, holder).await;
+    let command_pid = sqlx::query_scalar!("SELECT pid FROM pg_stat_activity WHERE datname = current_database() AND $1 = ANY(pg_blocking_pids(pid))", holder)
+        .fetch_one(&pool).await.unwrap().unwrap();
+    let deactivate_pool = pool.clone();
+    let deactivate = tokio::spawn(async move {
+        sqlx::query!("UPDATE users SET active=false WHERE id=$1", user)
+            .execute(&deactivate_pool)
+            .await
+            .unwrap();
+    });
+    wait_for_blocked(&pool, command_pid).await;
+    hold.commit().await.unwrap();
+    assert!(pending.await.unwrap().unwrap().changed);
+    deactivate.await.unwrap();
+    assert_eq!(state(&pool, ids.org_id, user).await.revision, 1);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn profile_command_rechecks_target_activation_before_demotion(pool: PgPool) {
+    let ids = fixture(&pool).await;
+    let user = person(&pool, ids.org_id, true, BuiltInProfile::Administrator).await;
+    sqlx::query!("UPDATE users SET active=false WHERE id=$1", user)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let mut activate = pool.begin().await.unwrap();
+    sqlx::query!("UPDATE users SET active=true WHERE id=$1", user)
+        .execute(&mut *activate)
+        .await
+        .unwrap();
+    let holder = sqlx::query_scalar!("SELECT pg_backend_pid()")
+        .fetch_one(&mut *activate)
+        .await
+        .unwrap()
+        .unwrap();
+    let pending_pool = pool.clone();
+    let pending = tokio::spawn(async move {
+        execute(
+            &pending_pool,
+            ids.org_id,
+            ids.user_id,
+            &apply(user, BuiltInProfile::Member),
+        )
+        .await
+    });
+    wait_for_blocked(&pool, holder).await;
+    activate.commit().await.unwrap();
+    assert!(pending.await.unwrap().unwrap().changed);
+    assert!(state(&pool, ids.org_id, ids.user_id).await.is_administrator);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn profile_demotion_retains_surviving_administrator_until_commit(pool: PgPool) {
+    let ids = fixture(&pool).await;
+    let survivor = person(&pool, ids.org_id, true, BuiltInProfile::Administrator).await;
+    let mut hold = pool.begin().await.unwrap();
+    sqlx::query!("LOCK TABLE permission_change_receipts IN SHARE MODE")
+        .execute(&mut *hold)
+        .await
+        .unwrap();
+    let holder = sqlx::query_scalar!("SELECT pg_backend_pid()")
+        .fetch_one(&mut *hold)
+        .await
+        .unwrap()
+        .unwrap();
+    let pending_pool = pool.clone();
+    let pending = tokio::spawn(async move {
+        execute(
+            &pending_pool,
+            ids.org_id,
+            ids.user_id,
+            &apply(ids.user_id, BuiltInProfile::Member),
+        )
+        .await
+    });
+    wait_for_blocked(&pool, holder).await;
+    let command_pid = sqlx::query_scalar!("SELECT pid FROM pg_stat_activity WHERE datname = current_database() AND $1 = ANY(pg_blocking_pids(pid))", holder)
+        .fetch_one(&pool).await.unwrap().unwrap();
+    let deactivate_pool = pool.clone();
+    let deactivate = tokio::spawn(async move {
+        sqlx::query!("UPDATE users SET active=false WHERE id=$1", survivor)
+            .execute(&deactivate_pool)
+            .await
+            .unwrap();
+    });
+    wait_for_blocked(&pool, command_pid).await;
+    hold.commit().await.unwrap();
+    assert!(pending.await.unwrap().unwrap().changed);
+    deactivate.await.unwrap();
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn cancelled_profile_save_rolls_back_effects_and_releases_single_connection(pool: PgPool) {
+    let ids = fixture(&pool).await;
+    let user = person(&pool, ids.org_id, false, BuiltInProfile::PeopleAdmin).await;
+    let connection = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .connect_with(pool.connect_options().as_ref().clone())
+        .await
+        .unwrap();
+    let request = apply(user, BuiltInProfile::Member);
+    let mut hold = pool.begin().await.unwrap();
+    sqlx::query!("LOCK TABLE permission_change_receipts IN SHARE MODE")
+        .execute(&mut *hold)
+        .await
+        .unwrap();
+    let holder = sqlx::query_scalar!("SELECT pg_backend_pid()")
+        .fetch_one(&mut *hold)
+        .await
+        .unwrap()
+        .unwrap();
+    let pending_pool = connection.clone();
+    let pending_request = request.clone();
+    let pending = tokio::spawn(async move {
+        execute(&pending_pool, ids.org_id, ids.user_id, &pending_request).await
+    });
+    wait_for_blocked(&pool, holder).await;
+    pending.abort();
+    assert!(pending.await.unwrap_err().is_cancelled());
+    hold.rollback().await.unwrap();
+    let unchanged =
+        tokio::time::timeout(Duration::from_secs(5), state(&connection, ids.org_id, user))
+            .await
+            .unwrap();
+    assert_eq!(unchanged.revision, 0);
+    assert_eq!(unchanged.grants, BuiltInProfile::PeopleAdmin.selection());
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT access_revision FROM organizations WHERE id=$1",
+            ids.org_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        0
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM permission_change_receipts WHERE org_id=$1",
+            ids.org_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(0)
+    );
+    assert!(
+        execute(&connection, ids.org_id, ids.user_id, &request)
+            .await
+            .unwrap()
+            .changed
+    );
+    connection.close().await;
 }
 
 #[sqlx::test(migrations = "./migrations")]

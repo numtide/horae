@@ -8,11 +8,31 @@ use uuid::Uuid;
 use crate::models::permissions::{PermissionSource, PermissionTemplate, PersonPermissions};
 
 pub(crate) mod audit;
+pub(crate) mod editor;
 pub(crate) mod own;
 pub(crate) mod preflight;
 pub(crate) mod profiles;
 pub(crate) mod project_management;
 pub(crate) mod templates;
+
+/// Bound permission administration independently of pooled connection defaults.
+async fn configure_administration(connection: &mut PgConnection) -> Result<(), sqlx::Error> {
+    sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED, READ WRITE")
+        .execute(&mut *connection)
+        .await?;
+    sqlx::query!(
+        "SELECT set_config(name,
+            (CASE WHEN setting::bigint = 0 THEN limits.milliseconds
+             ELSE LEAST(setting::bigint, limits.milliseconds) END)::text, true)
+         FROM pg_settings
+         JOIN (VALUES ('statement_timeout', 5000::bigint),
+                      ('idle_in_transaction_session_timeout', 10000::bigint))
+              AS limits(setting_name, milliseconds) ON name = limits.setting_name"
+    )
+    .fetch_all(connection)
+    .await?;
+    Ok(())
+}
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum PermissionStorageError {

@@ -1,5 +1,15 @@
 # Permission data model
 
+## Administrator editor transport
+
+`models/permission_editor.rs` carries existing profile/template command, action
+and outcome shapes unchanged, plus display snapshots, template choices, profile
+draft/effects and template-deletion assignees under `contracts/permission-editor.md`.
+`PermissionSnapshot`/`ProfileSource` are projections of trusted server state, never
+inputs to the authority loader. Previews are transient, with no stored token or
+receipt; current access/person/template revisions fence save. No new persisted
+entity, schema, activation or legacy mapping is introduced.
+
 The internal migration preflight returns only transient integer diagnostic counts
 under `contracts/migration-preflight.md`. No identifiers, readiness flag,
 confirmation token, persisted preview or new table is introduced. These counts

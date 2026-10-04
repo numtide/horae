@@ -28,6 +28,7 @@ mod exports;
 mod financial_snapshots;
 mod own_permissions;
 mod permission_audit;
+mod permission_editor;
 
 #[cfg(target_os = "linux")]
 mod report_stress;
@@ -343,6 +344,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     server.spawn(async move { axum::serve(listener, router).await.unwrap() });
     own_permissions::check(&pool, &api).await;
     permission_audit::check(&pool, &api).await;
+    permission_editor::check(&pool, &api).await;
     financial_snapshots::check(&pool, &api).await;
     exports::check(&pool, &api).await;
     let admin = api.cookie(owner.user_id).await;

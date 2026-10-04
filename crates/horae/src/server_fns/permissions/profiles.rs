@@ -7,42 +7,15 @@ use horae_core::permissions::{
     },
     person_management::has_person_management_grant,
 };
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
 use super::{PermissionStorageError, load_permission_template, load_person_permissions};
 use crate::models::permissions::{PermissionSource, PersonPermissions};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct ProfileCommand {
-    pub request_id: Uuid,
-    pub expected_access_revision: i64,
-    pub user_id: Uuid,
-    pub expected_person_revision: i64,
-    pub action: ProfileAction,
-    pub grants: Vec<Permission>,
-    pub remove_projects: Vec<Uuid>,
-    pub remove_people: Vec<Uuid>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-pub(crate) enum ProfileAction {
-    Edit,
-    BuiltIn { profile: BuiltInProfile },
-    Template { id: Uuid, expected_revision: i64 },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct ProfileOutcome {
-    pub user_id: Uuid,
-    pub access_revision: i64,
-    pub person_revision: i64,
-    pub changed: bool,
-}
+pub(crate) use crate::models::permission_editor::{ProfileAction, ProfileCommand, ProfileOutcome};
+use crate::models::permission_editor::{ProfileDraft, RelationshipRemoval};
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum ProfileCommandError {
@@ -74,20 +47,13 @@ pub(crate) enum ProfileCommandError {
     Json(#[from] serde_json::Error),
 }
 
-#[derive(Debug, Serialize)]
-struct Relationship {
-    id: Uuid,
-    subject_id: Uuid,
-    revision: i64,
-}
-
 #[derive(Serialize)]
-struct ProfileChange {
-    catalog_version: u32,
-    before: PersonPermissions,
-    after: PersonPermissions,
-    removed_projects: Vec<Relationship>,
-    removed_people: Vec<Relationship>,
+pub(super) struct ProfileChange {
+    pub catalog_version: u32,
+    pub before: PersonPermissions,
+    pub after: PersonPermissions,
+    pub removed_projects: Vec<RelationshipRemoval>,
+    pub removed_people: Vec<RelationshipRemoval>,
 }
 
 #[derive(Serialize)]
@@ -125,18 +91,16 @@ pub(crate) async fn execute(
     request: &ProfileCommand,
 ) -> Result<ProfileOutcome, ProfileCommandError> {
     let mut tx = pool.begin().await?;
-    sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
-        .execute(&mut *tx)
-        .await?;
+    super::configure_administration(&mut tx).await?;
     let org = sqlx::query!(
         "SELECT permission_policy_version, access_revision FROM organizations WHERE id = $1 FOR UPDATE", org_id
     ).fetch_optional(&mut *tx).await?.ok_or(ProfileCommandError::Forbidden)?;
     let active = sqlx::query_scalar!(
-        "SELECT EXISTS(SELECT 1 FROM users WHERE org_id = $1 AND id = $2 AND active)",
+        "SELECT active FROM users WHERE org_id = $1 AND id = $2 FOR SHARE",
         org_id,
         actor_id
     )
-    .fetch_one(&mut *tx)
+    .fetch_optional(&mut *tx)
     .await?;
     if org.permission_policy_version != 1 || active != Some(true) {
         return Err(ProfileCommandError::Forbidden);
@@ -176,106 +140,20 @@ pub(crate) async fn execute(
     if org.access_revision != intent.expected_access_revision {
         return Err(ProfileCommandError::Stale);
     }
-    // Template deletion takes the same template-before-person order.
-    if let ProfileAction::Template {
-        id,
-        expected_revision,
-    } = &intent.action
-    {
-        sqlx::query!(
-            "SELECT id FROM permission_templates WHERE org_id = $1 AND id = $2 FOR UPDATE",
-            org_id,
-            id
-        )
-        .fetch_optional(&mut *tx)
-        .await?
-        .ok_or(ProfileCommandError::NotFound)?;
-        let template = load_permission_template(&mut tx, org_id, *id)
-            .await?
-            .ok_or(ProfileCommandError::NotFound)?;
-        if template.revision != *expected_revision {
-            return Err(ProfileCommandError::Stale);
-        }
-    }
-    let target_active = sqlx::query_scalar!(
-        "SELECT active FROM users WHERE org_id = $1 AND id = $2",
-        org_id,
-        intent.user_id
-    )
-    .fetch_optional(&mut *tx)
-    .await?
-    .ok_or(ProfileCommandError::NotFound)?;
-    sqlx::query!(
-        "SELECT id FROM person_permission_states WHERE org_id = $1 AND user_id = $2 FOR UPDATE",
-        org_id,
-        intent.user_id
-    )
-    .fetch_optional(&mut *tx)
-    .await?
-    .ok_or(ProfileCommandError::NotFound)?;
-    let before = load_person_permissions(&mut tx, org_id, intent.user_id)
-        .await?
-        .ok_or(ProfileCommandError::NotFound)?;
-    if before.revision != intent.expected_person_revision {
-        return Err(ProfileCommandError::Stale);
-    }
-    let (source, is_administrator) = match intent.action {
-        ProfileAction::Edit => (
-            before.source,
-            before.is_administrator && grants == before.grants,
-        ),
-        ProfileAction::BuiltIn { profile } => {
-            if profile == BuiltInProfile::Administrator && grants != profile.selection() {
-                return Err(ProfileCommandError::AdministratorSelection);
-            }
-            (
-                PermissionSource::BuiltIn(profile),
-                profile == BuiltInProfile::Administrator,
-            )
-        }
-        ProfileAction::Template {
-            id,
-            expected_revision,
-        } => (
-            PermissionSource::Template {
-                id,
-                applied_revision: expected_revision,
-            },
-            false,
-        ),
+    let draft = ProfileDraft {
+        user_id: intent.user_id,
+        expected_access_revision: intent.expected_access_revision,
+        expected_person_revision: intent.expected_person_revision,
+        action: intent.action.clone(),
+        grants: intent.grants.clone(),
     };
-    let mut after = PersonPermissions {
-        grants,
-        is_administrator,
-        source,
-        revision: before.revision,
-    };
-    let removed_projects = if reads_projects(&before.grants) && !reads_projects(&after.grants) {
-        sqlx::query_as!(
-            Relationship,
-            "SELECT id, project_id AS subject_id, revision FROM project_management_assignments
-             WHERE org_id = $1 AND manager_id = $2 ORDER BY id FOR UPDATE",
-            org_id,
-            intent.user_id
-        )
-        .fetch_all(&mut *tx)
-        .await?
-    } else {
-        vec![]
-    };
-    let removed_people =
-        if has_person_management_grant(&before.grants)
-            && !has_person_management_grant(&after.grants)
-        {
-            sqlx::query_as!(Relationship,
-            "SELECT id, managed_user_id AS subject_id, revision FROM person_management_assignments
-             WHERE org_id = $1 AND manager_id = $2 ORDER BY id FOR UPDATE", org_id, intent.user_id
-        )
-            .fetch_all(&mut *tx)
-            .await?
-        } else {
-            vec![]
-        };
+    let ProfileChange {
+        before,
+        after,
+        removed_projects,
+        removed_people,
+        ..
+    } = evaluate(&mut tx, org_id, &draft, grants).await?;
     if !removed_projects
         .iter()
         .map(|row| row.id)
@@ -287,9 +165,6 @@ pub(crate) async fn execute(
     {
         return Err(ProfileCommandError::Confirmation);
     }
-    if target_active && before.is_administrator && !after.is_administrator {
-        ensure_other_administrator(&mut tx, org_id, intent.user_id).await?;
-    }
     let changed = before != after;
     let access_revision = if changed {
         increment(org.access_revision)?
@@ -297,7 +172,6 @@ pub(crate) async fn execute(
         org.access_revision
     };
     if changed {
-        after.revision = increment(before.revision)?;
         persist(&mut tx, org_id, intent.user_id, &after).await?;
         sqlx::query!("DELETE FROM project_management_assignments WHERE org_id = $1 AND manager_id = $2 AND id = ANY($3)",
             org_id, intent.user_id, &intent.remove_projects).execute(&mut *tx).await?;
@@ -347,6 +221,112 @@ pub(crate) async fn execute(
     Ok(result)
 }
 
+/// Evaluates confirmed input under an already-held organization gate.
+/// Both preview and save use this calculation; no state is written here.
+pub(super) async fn evaluate(
+    connection: &mut PgConnection,
+    org_id: Uuid,
+    draft: &ProfileDraft,
+    grants: PermissionSelection,
+) -> Result<ProfileChange, ProfileCommandError> {
+    if let ProfileAction::Template {
+        id,
+        expected_revision,
+    } = &draft.action
+    {
+        let template = load_permission_template(connection, org_id, *id)
+            .await?
+            .ok_or(ProfileCommandError::NotFound)?;
+        if template.revision != *expected_revision {
+            return Err(ProfileCommandError::Stale);
+        }
+    }
+    let target_active = sqlx::query_scalar!(
+        "SELECT active FROM users WHERE org_id = $1 AND id = $2 FOR SHARE",
+        org_id,
+        draft.user_id
+    )
+    .fetch_optional(&mut *connection)
+    .await?
+    .ok_or(ProfileCommandError::NotFound)?;
+    let before = load_person_permissions(connection, org_id, draft.user_id)
+        .await?
+        .ok_or(ProfileCommandError::NotFound)?;
+    if before.revision != draft.expected_person_revision {
+        return Err(ProfileCommandError::Stale);
+    }
+    let (source, is_administrator) = match draft.action {
+        ProfileAction::Edit => (
+            before.source,
+            before.is_administrator && grants == before.grants,
+        ),
+        ProfileAction::BuiltIn { profile } => {
+            if profile == BuiltInProfile::Administrator && grants != profile.selection() {
+                return Err(ProfileCommandError::AdministratorSelection);
+            }
+            (
+                PermissionSource::BuiltIn(profile),
+                profile == BuiltInProfile::Administrator,
+            )
+        }
+        ProfileAction::Template {
+            id,
+            expected_revision,
+        } => (
+            PermissionSource::Template {
+                id,
+                applied_revision: expected_revision,
+            },
+            false,
+        ),
+    };
+    let mut after = PersonPermissions {
+        grants,
+        is_administrator,
+        source,
+        revision: before.revision,
+    };
+    let removed_projects = if reads_projects(&before.grants) && !reads_projects(&after.grants) {
+        sqlx::query_as!(
+            RelationshipRemoval,
+            "SELECT id, project_id AS subject_id, revision FROM project_management_assignments
+             WHERE org_id = $1 AND manager_id = $2 ORDER BY id",
+            org_id,
+            draft.user_id
+        )
+        .fetch_all(&mut *connection)
+        .await?
+    } else {
+        vec![]
+    };
+    let removed_people =
+        if has_person_management_grant(&before.grants)
+            && !has_person_management_grant(&after.grants)
+        {
+            sqlx::query_as!(RelationshipRemoval,
+            "SELECT id, managed_user_id AS subject_id, revision FROM person_management_assignments
+             WHERE org_id = $1 AND manager_id = $2 ORDER BY id", org_id, draft.user_id
+        )
+            .fetch_all(&mut *connection)
+            .await?
+        } else {
+            vec![]
+        };
+    if target_active && before.is_administrator && !after.is_administrator {
+        ensure_other_administrator(connection, org_id, draft.user_id).await?;
+    }
+    if before != after {
+        after.revision = increment(before.revision)?;
+    }
+    Ok(ProfileChange {
+        catalog_version: PERMISSION_CATALOG_VERSION,
+        before,
+        after,
+        removed_projects,
+        removed_people,
+    })
+}
+
 async fn ensure_other_administrator(
     connection: &mut PgConnection,
     org: Uuid,
@@ -355,8 +335,13 @@ async fn ensure_other_administrator(
     let others = sqlx::query_scalar!(
         "SELECT p.user_id FROM person_permission_states p
          JOIN users u ON u.id = p.user_id AND u.org_id = p.org_id
-         WHERE p.org_id = $1 AND p.user_id <> $2 AND p.is_administrator AND u.active ORDER BY p.user_id", org, target
-    ).fetch_all(&mut *connection).await?;
+         WHERE p.org_id = $1 AND p.user_id <> $2 AND p.is_administrator AND u.active
+         ORDER BY p.user_id FOR SHARE OF u",
+        org,
+        target
+    )
+    .fetch_all(&mut *connection)
+    .await?;
     for user in &others {
         load_person_permissions(connection, org, *user)
             .await?

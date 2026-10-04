@@ -1,7 +1,8 @@
 # Atomic person-profile commands
 
-Local implementation contract for T056–T058, refining FR-004/010/011/013/015/025/029/030.
-No public endpoint, legacy backfill, policy activation or real-data migration.
+Local command contract for T056–T058, refining FR-004/010/011/013/015/025/029/030.
+T126–T129's session consumers and shared previews follow `permission-editor.md`.
+No legacy backfill, policy activation or real-data migration.
 
 ## Resolved transitions and evidence
 
@@ -47,15 +48,19 @@ sort sets for replay comparison, without adding privileges or dropping effects.
 Template application also carries the expected template revision. Actor and
 organization identities come from the server, not a payload authority field.
 
-1. Begin fresh READ COMMITTED; lock organization UPDATE before any other lock.
+1. Begin fresh READ COMMITTED, READ WRITE with bounded transaction-local waits
+   under `permission-editor.md`; lock organization UPDATE before any other lock.
    Require policy version 1, active same-tenant actor and strict canonical explicit
-   Administrator identity. No user/project row locks or DML.
+   Administrator identity. Retain actor/target user SHARE locks to protect activity;
+   no user UPDATE, project row locks or user/project DML.
 1. Compare canonical intent with the shared user/request receipt before checking
    current subject/template revisions. Same-key different command kinds conflict;
    exact authenticated replay returns the historical result even after template
    deletion. Revoked actors cannot read a prior result.
-1. Check organization revision, then lock/strictly load a selected template before
-   the target state. Check target existence/tenancy, person/template revisions and
+1. Check organization revision, then strictly load a selected template before
+   the target state under the retained organization gate. The editor's shared
+   calculation uses plain canonical-state reads, not leaf UPDATE locks.
+   Check target existence/tenancy, person/template revisions and
    resolve the transition above. A changed template is never silently refreshed.
 1. On loss of project-read compatibility or the last person-compatible grant,
    recompute outgoing relationship removals. Require exact confirmation, including
@@ -69,6 +74,8 @@ organization identities come from the server, not a payload authority field.
 1. Demoting an active explicit Administrator requires another active, strictly
    valid explicit Administrator in this organization. Malformed state fails closed;
    grant-equivalent non-admins and inactive admins cannot satisfy this protection.
+   Lock remaining active Administrator user rows in ID order with SHARE and recheck
+   activity after waits; retain these locks through commit.
 1. A real change atomically updates person state, removes only confirmed links,
    advances person/org revisions and inserts typed before/after audit plus receipt.
    Check overflow before writes. Any failure rolls everything back.

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, managed_user_id AS subject_id, revision FROM person_management_assignments\n             WHERE org_id = $1 AND manager_id = $2 ORDER BY id FOR UPDATE",
+  "query": "SELECT id, project_id AS subject_id, revision FROM project_management_assignments\n             WHERE org_id = $1 AND manager_id = $2 ORDER BY id",
   "describe": {
     "columns": [
       {
@@ -31,5 +31,5 @@
       false
     ]
   },
-  "hash": "ecf6cd754c883d9b779db79f5b6045e98f5088c55a75589eb0e2649380b59260"
+  "hash": "cadc3102929d4a99de039b777b0ac6458d8d57d363e599e094432c28c912c7d1"
 }

@@ -1,5 +1,74 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Permission editor integration
+
+- Previous turn was an MVP status answer: no implementation progress. Revalidated
+  clean synchronized `300d1e9`; reuse the existing worktree/branch and draft #212.
+- Executed Spec Kit Plan/Tasks/Implement helpers, preserving all existing artifacts.
+  Seven local checklists pass 7/7; full requirements remain 12/16 under the existing
+  authorization for confirmed independent increments. No extension hooks exist.
+- Independent Plan research identified concrete command activity/settings gaps.
+  Added the editor contract and T126–T129 without activation, legacy guard changes,
+  guessed product predicates or data migration. Full scope remains unchanged.
+
+Next: reproduce the command races/settings failures, protect command authority,
+then connect shared preview/save effects and authenticated editor delivery. The
+remaining UI, enforcement, scoped approvals and reviewed migration are not complete.
+
+- RED reproduced all three new profile failures: actor replay and remaining-admin
+  deactivation did not wait for competing writes; inherited READ ONLY rejected
+  organization locking with SQLSTATE 25006. Added SHARE activity protection and
+  a shared bounded transaction configurator for profile/template administration.
+  The focused GREEN run is in progress; no passing result is assumed.
+
+- GREEN: all nine selected command tests passed, including the three reproduced
+  failures and direct template replay deactivation. Added the shared profile
+  calculation, editor projections and mode1-only load/preview. Editor RED failed
+  for missing modules before implementation; the first broader run passed all
+  104 permission tests (45.61s), including preview/save/no-op equivalence.
+
+- Registered-route RED reproduced zero `load_permission_editor` endpoints.
+  Implemented all five session-derived editor endpoints, preserving command wire
+  shapes and sanitizing authentication/storage failures. Added template deletion
+  preview and actual HTTP lifecycle coverage. Full server regression is running.
+
+- Independent research review found no blocking issue in internal calculation,
+  activity locks or replay shapes. Added its requested template-deletion
+  equivalence/stale-preview and command-winning survivor-deactivation tests.
+  Wrapper review and final validation/publication are still pending.
+
+- Full server binary passed: 1,030 tests, zero failures, 11 pre-existing ignored
+  manual measurements (250.14s), including all 15 new database cases and the
+  registered editor lifecycle. T126/T127 are complete. Independent wrapper
+  re-review found no high/critical issue. WASM lint passed after scoped transport
+  DTO annotations for the not-yet-connected Workspace consumer. No UI is claimed.
+
+- GitHub confirms #212 remains OPEN/DRAFT on `feat/scoped-permissions` at
+  `300d1e9`. The expanded HTTP matrix, complete SQLx/offline gates and publication
+  remain next; no merge or policy activation is authorized by these passing tests.
+
+- Expanded real-session HTTP matrix passed (11.53s), including sanitized initial
+  authentication failure/recovery, every endpoint's legacy/future-policy denial
+  and input errors. T128 is complete. SQLx preparation finished in 52.55s with
+  14 added/six obsolete removed descriptions (1,401 total); inspected all removals
+  against the changed profile queries. Only 1.6 GiB of rebuildable package
+  artifacts were cleaned, with no source or database removal. Offline native
+  lint remains running. Retry formatting after SQLx's transient cache deletion;
+  the overlapping format check was not a passing result.
+
+- Fresh offline all-targets native Clippy passed (1m01s), and the subsequent
+  formatting CI check passed with zero changes. T126–T129 are complete for this
+  backend. No schema, dependency, UI/CSS, real data or policy activation changed.
+
+Next: publish this verified editor backend as an unsigned commit on existing
+draft #212, without merging. Then apply the design skills to the Workspace/person
+permission editor, using these real load/preview/save functions and shared grant
+descriptions. Inspect the existing `pages/admin.rs`/AdminUsers route rather than
+assuming a Workspace page already exists. Keep legacy mode non-editable for the
+new model. UI/browser acceptance, remaining operation predicates, person-management
+commands, scoped approvals, full enforcement and reviewed migration remain
+mandatory. The full goal stays active; this is not an MVP-ready declaration.
+
 ## 2026-10-04 — Authenticated audit delivery
 
 - Previous MVP reply was status-only, not implementation progress. Revalidated

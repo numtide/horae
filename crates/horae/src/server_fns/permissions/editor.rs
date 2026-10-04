@@ -1,0 +1,200 @@
+//! Current Administrator editor reads. Previews never authorize a later save.
+
+use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, PermissionSelection};
+use sqlx::{PgPool, Postgres, Transaction};
+use uuid::Uuid;
+
+use super::profiles::{self, ProfileCommandError};
+use super::{load_permission_template, load_person_permissions, restore_grants};
+use crate::models::permission_editor::{
+    PermissionEditor, PermissionSnapshot, ProfileDraft, ProfilePreview, ProfileSource,
+    TemplateAssignee, TemplateChoice, TemplateDeletionPreview,
+};
+use crate::models::permissions::{PermissionSource, PersonPermissions};
+
+impl From<PersonPermissions> for PermissionSnapshot {
+    fn from(state: PersonPermissions) -> Self {
+        Self {
+            grants: state.grants.iter().collect(),
+            is_administrator: state.is_administrator,
+            source: match state.source {
+                PermissionSource::BuiltIn(profile) => ProfileSource::BuiltIn(profile),
+                PermissionSource::Template {
+                    id,
+                    applied_revision,
+                } => ProfileSource::Template {
+                    id,
+                    applied_revision,
+                },
+                PermissionSource::Individual => ProfileSource::Individual,
+            },
+            revision: state.revision,
+        }
+    }
+}
+
+async fn begin(
+    pool: &PgPool,
+    org: Uuid,
+    actor: Uuid,
+) -> Result<(Transaction<'static, Postgres>, i64), ProfileCommandError> {
+    let mut tx = pool.begin().await?;
+    super::configure_administration(&mut tx).await?;
+    let organization = sqlx::query!(
+        "SELECT permission_policy_version, access_revision FROM organizations WHERE id=$1 FOR SHARE",
+        org
+    ).fetch_optional(&mut *tx).await?.ok_or(ProfileCommandError::Forbidden)?;
+    if organization.permission_policy_version != 1 {
+        return Err(ProfileCommandError::Forbidden);
+    }
+    let active = sqlx::query_scalar!(
+        "SELECT active FROM users WHERE org_id = $1 AND id = $2 FOR SHARE",
+        org,
+        actor
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
+    if active != Some(true)
+        || !load_person_permissions(&mut tx, org, actor)
+            .await?
+            .is_some_and(|state| state.is_administrator)
+    {
+        return Err(ProfileCommandError::Forbidden);
+    }
+    Ok((tx, organization.access_revision))
+}
+
+pub(crate) async fn load(
+    pool: &PgPool,
+    org: Uuid,
+    actor: Uuid,
+    user: Uuid,
+) -> Result<PermissionEditor, ProfileCommandError> {
+    let (mut tx, access_revision) = begin(pool, org, actor).await?;
+    let target = sqlx::query!(
+        "SELECT name, active FROM users WHERE org_id=$1 AND id=$2 FOR SHARE",
+        org,
+        user
+    )
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or(ProfileCommandError::NotFound)?;
+    let permissions = load_person_permissions(&mut tx, org, user)
+        .await?
+        .ok_or(ProfileCommandError::NotFound)?
+        .into();
+    let templates = sqlx::query!(
+        "SELECT id, name, catalog_version, grants, revision FROM permission_templates
+         WHERE org_id=$1 ORDER BY lower(name), id",
+        org
+    )
+    .fetch_all(&mut *tx)
+    .await?
+    .into_iter()
+    .map(|row| {
+        Ok(TemplateChoice {
+            id: row.id,
+            name: row.name,
+            grants: restore_grants(row.catalog_version, &row.grants)?
+                .iter()
+                .collect(),
+            revision: row.revision,
+        })
+    })
+    .collect::<Result<Vec<_>, ProfileCommandError>>()?;
+    tx.commit().await?;
+    Ok(PermissionEditor {
+        user_id: user,
+        name: target.name,
+        active: target.active,
+        access_revision,
+        permissions,
+        templates,
+    })
+}
+
+pub(crate) async fn preview(
+    pool: &PgPool,
+    org: Uuid,
+    actor: Uuid,
+    draft: &ProfileDraft,
+) -> Result<ProfilePreview, ProfileCommandError> {
+    let (mut tx, access_revision) = begin(pool, org, actor).await?;
+    if access_revision != draft.expected_access_revision {
+        return Err(ProfileCommandError::Stale);
+    }
+    let grants = PermissionSelection::from_stored(PERMISSION_CATALOG_VERSION, &draft.grants)?;
+    let change = profiles::evaluate(&mut tx, org, draft, grants).await?;
+    let changed = change.before != change.after;
+    if changed && access_revision.checked_add(1).is_none() {
+        return Err(ProfileCommandError::RevisionExhausted);
+    }
+    let result = ProfilePreview {
+        user_id: draft.user_id,
+        access_revision,
+        before: change.before.into(),
+        after: change.after.into(),
+        changed,
+        remove_projects: change.removed_projects,
+        remove_people: change.removed_people,
+    };
+    tx.commit().await?;
+    Ok(result)
+}
+
+pub(crate) async fn preview_template_deletion(
+    pool: &PgPool,
+    org: Uuid,
+    actor: Uuid,
+    template_id: Uuid,
+    expected_access_revision: i64,
+    expected_template_revision: i64,
+) -> Result<TemplateDeletionPreview, ProfileCommandError> {
+    let (mut tx, access_revision) = begin(pool, org, actor).await?;
+    if access_revision != expected_access_revision {
+        return Err(ProfileCommandError::Stale);
+    }
+    let template = load_permission_template(&mut tx, org, template_id)
+        .await?
+        .ok_or(ProfileCommandError::NotFound)?;
+    if template.revision != expected_template_revision {
+        return Err(ProfileCommandError::Stale);
+    }
+    if access_revision.checked_add(1).is_none() {
+        return Err(ProfileCommandError::RevisionExhausted);
+    }
+    let rows = sqlx::query!(
+        "SELECT p.user_id, u.name FROM person_permission_states p
+         JOIN users u ON u.org_id=p.org_id AND u.id=p.user_id
+         WHERE p.org_id=$1 AND p.template_id=$2 ORDER BY p.user_id",
+        org,
+        template_id
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+    let mut people = Vec::with_capacity(rows.len());
+    for row in rows {
+        let permissions = load_person_permissions(&mut tx, org, row.user_id)
+            .await?
+            .ok_or(ProfileCommandError::NotFound)?;
+        if permissions.revision.checked_add(1).is_none() {
+            return Err(ProfileCommandError::RevisionExhausted);
+        }
+        people.push(TemplateAssignee {
+            user_id: row.user_id,
+            name: row.name,
+            permissions: permissions.into(),
+        });
+    }
+    tx.commit().await?;
+    Ok(TemplateDeletionPreview {
+        access_revision,
+        template: TemplateChoice {
+            id: template_id,
+            name: template.name,
+            grants: template.grants.iter().collect(),
+            revision: template.revision,
+        },
+        people,
+    })
+}
