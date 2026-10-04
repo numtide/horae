@@ -208,6 +208,11 @@ created projects and historical whole-week conversion require the verified
 FR-019 contract before selecting a coverage schema. No approval table is replaced
 by a generic permission audit.
 
+See [approval coverage](contracts/approval-coverage.md) for the concrete legacy
+replacement map, reference discriminators and combined-transaction dependency.
+The schema gate is local: resolving those facts can authorize coverage storage
+without pretending the unrelated full-policy activation gate has passed.
+
 The [migration contract](contracts/migration.md) still owns legacy role mappings,
 historical requester provenance and atomic cutover/recovery. The proposed mode and
 revisions supply mechanics, not approval of any mapping or a permanent legacy mode.

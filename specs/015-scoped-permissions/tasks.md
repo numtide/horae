@@ -187,6 +187,12 @@ work below retains its command/storage/concurrency dependencies.
 
 ### Remaining transaction and approval work
 
+The [coverage/lifecycle boundary](contracts/approval-coverage.md) maps production
+symbols, AC01–AC06 fixtures, schema-affecting reference discriminators and the
+actual feature 016 dependency. Resolve its local coverage gates before T013;
+the expense worktree currently supplies reference evidence, not runtime fixtures.
+T012 must exercise actual production transactions, not a second SQL-only model.
+
 Closed FR-024 record guard, independent of the unresolved lifecycle/activation
 contracts: see `contracts/approval-visibility.md`.
 

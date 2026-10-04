@@ -1,5 +1,36 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Approval production-boundary review
+
+- The preceding MVP response was status-only, not implementation progress.
+  Revalidated clean synchronized `3f45b7c` and reused the existing worktree.
+  Spec Kit prerequisites pass; its skills remain absent. No task completion or
+  runtime acceptance follows from that prerequisite check.
+- Read current official flexible approval, submission, FAQ, unlocking and
+  approval-history sources. Older weekly/admin-only descriptions remain mixed
+  with the flexible flow; neither resolves post-withdrawal submission state.
+  No browser/MCP tool is loaded and no reference-account mutation occurred.
+- Added `contracts/approval-coverage.md`: concrete production replacement map,
+  transaction obligations, AC01–AC06 acceptance fixtures and discriminating
+  unknowns. Distinguished other-project record state from whole-timesheet
+  empty-cell coverage so FR-009 cannot erase FR-019's documented promotion case.
+- Verified `feat/expense-parity` at `ba1b8e9` has reference/spec artifacts but no
+  expense model, migration or server module. Combined approval fixtures are an
+  actual implementation dependency, not a helper already available to import.
+- Focused adversarial self-review rejects weekly row deletion as withdrawal,
+  existing-row-only coverage, visibility-filtered mutation selection and assumed
+  cross-writer ordering. Material lifecycle/schema findings remain open. No
+  Rust/schema/UI/data change, policy activation, fresh runtime test or merge.
+- GitHub confirms #212 remains OPEN/DRAFT at the starting revision. Formatting
+  normalized the new Markdown list; the repeat CI-format check passes with
+  496 files and zero changes, as do staged/worktree whitespace checks.
+
+Next: resolve the new contract's discriminating coverage/withdrawal cases before
+selecting its schema; reconcile expense delivery and T042 writer ordering.
+Person-management writes still await the existing archived-endpoint answer.
+Other closed operation-matrix/integration work remains available; do not repeat
+the same documentation searches as if they supplied restricted-actor evidence.
+
 ## 2026-10-04 — Combined-approval record guard
 
 - Previous turn made progress: published project-delegation activity fences as
