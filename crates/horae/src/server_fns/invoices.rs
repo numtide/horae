@@ -140,6 +140,17 @@ pub async fn list_invoices(status: Option<String>) -> Result<Vec<Invoice>, Serve
         .map(|s| parse_enum(s, "status"))
         .transpose()?;
 
+    fetch_list(&state.db, manager.org_id, manager.id, status_filter).await
+}
+
+#[cfg(feature = "server")]
+pub(super) async fn fetch_list(
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
+    status_filter: Option<InvoiceStatus>,
+) -> Result<Vec<Invoice>, ServerFnError> {
+    let mut tx = super::snapshot::manager(pool, org_id, actor_id).await?;
     let invoices = sqlx::query_as!(
         Invoice,
         r#"SELECT id, org_id, client_id, number,
@@ -154,13 +165,14 @@ pub async fn list_invoices(status: Option<String>) -> Result<Vec<Invoice>, Serve
            WHERE org_id = $1
              AND ($2::invoice_status IS NULL OR status = $2)
            ORDER BY created_at DESC"#,
-        manager.org_id,
+        org_id,
         status_filter as Option<InvoiceStatus>,
     )
-    .fetch_all(&state.db)
+    .fetch_all(&mut *tx)
     .await
     .map_err(server_err)?;
 
+    tx.commit().await.map_err(server_err)?;
     Ok(invoices)
 }
 
@@ -169,11 +181,24 @@ pub async fn get_invoice(invoice_id: String) -> Result<InvoiceWithLines, ServerF
     let manager = require_manager().await?;
     let id = parse_uuid(&invoice_id, "invoice_id")?;
 
-    let (invoice, lines) = crate::reports::fetch_invoice_with_lines(id, manager.org_id)
+    let state = crate::state::global_state().await;
+    fetch_detail(&state.db, manager.org_id, manager.id, id).await
+}
+
+#[cfg(feature = "server")]
+pub(super) async fn fetch_detail(
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
+    invoice_id: uuid::Uuid,
+) -> Result<InvoiceWithLines, ServerFnError> {
+    let mut tx = super::snapshot::manager(pool, org_id, actor_id).await?;
+    let (invoice, lines) = crate::reports::fetch_invoice_from(&mut tx, invoice_id, org_id)
         .await
         .map_err(server_err)?
         .ok_or_else(|| not_found("Invoice not found"))?;
 
+    tx.commit().await.map_err(server_err)?;
     Ok(InvoiceWithLines { invoice, lines })
 }
 

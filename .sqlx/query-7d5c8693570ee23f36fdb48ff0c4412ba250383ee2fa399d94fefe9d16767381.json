@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "LOCK TABLE invoices IN ACCESS EXCLUSIVE MODE",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "7d5c8693570ee23f36fdb48ff0c4412ba250383ee2fa399d94fefe9d16767381"
+}

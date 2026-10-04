@@ -8,6 +8,9 @@ use crate::db::{OrganizationLock, lock_organization};
 
 const MAX_ATTEMPTS: usize = 3;
 
+#[cfg(test)]
+mod reader_tests;
+
 fn database_error(error: sqlx::Error) -> ServerFnError {
     tracing::error!(%error, "Unable to authorize financial snapshot");
     server_err("Unable to prepare a consistent snapshot")
