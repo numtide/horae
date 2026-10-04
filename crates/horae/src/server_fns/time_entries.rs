@@ -2,6 +2,35 @@
 
 use super::*;
 
+/// Minimal authorized person labels; selection never grants entry access.
+#[server]
+pub async fn list_timesheet_people(
+    query: crate::models::scoped_time::TimesheetPeopleQuery,
+) -> Result<crate::models::scoped_time::TimesheetPeoplePage, ServerFnError> {
+    use permissions::time_entries::TimeReadError;
+
+    let user = require_user().await.map_err(|error| match error {
+        error @ ServerFnError::ServerError {
+            code: UNAUTHORIZED, ..
+        } => error,
+        error => {
+            tracing::error!(%error, "Unable to authenticate timesheet people read");
+            server_err("Timesheet people are unavailable")
+        }
+    })?;
+    let state = crate::state::global_state().await;
+    permissions::time_entries::people(&state.db, user.org_id, user.id, &query)
+        .await
+        .map_err(|error| match error {
+            TimeReadError::Forbidden => forbidden("Current time-read authority is required"),
+            TimeReadError::InvalidQuery => err(BAD_REQUEST, "Invalid timesheet people query"),
+            error => {
+                tracing::error!(%error, "Scoped timesheet people read failed");
+                server_err("Timesheet people are unavailable")
+            }
+        })
+}
+
 /// Read a bounded page of time entries under current canonical permissions.
 #[server]
 pub async fn list_visible_time_entries(

@@ -30,6 +30,16 @@ check or legacy fallback satisfies these tasks.
 
 ## Phase 2: Independent foundation (FR-006)
 
+### Timesheet person discovery (T014/T015 integration)
+
+Follow the confirmed candidate contract in `contracts/timesheet-integration.md`.
+This supplies the selector's authorized identities, not a standalone delivered
+Timesheet or a substitute for its selected-person read/write integration.
+
+- [x] T179 Add failing candidate-scope, history, isolation, paging and revocation tests under `server_fns/permissions/tests/` and registered-session coverage under `server_fns/importers/authorization_tests/` (FR-006/007/008/010/018).
+- [x] T180 Implement minimal candidate query/page models in `models/scoped_time.rs`, reuse the scoped-time read fence in `permissions/time_entries.rs` and expose the session-bound reader in `server_fns/time_entries.rs`, without directory fallback or policy activation.
+- [x] T181 Verify candidate and existing scoped-time/HTTP regressions, complete SQLx, server/WASM lint and formatting; adversarially review identity disclosure, query scope and lock ordering before publication. Continue T014/T015/T018 for the actual selected-person screen and commands.
+
 ### Interactive time-writer activity (FR-010/018)
 
 Follow `contracts/time-writer-activity.md` before delegated OP04 integration.

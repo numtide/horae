@@ -43,11 +43,44 @@ financial data or editing. Direct managed-person and organization-wide time
 read scope remain independent. This is an approved Horae rule, not a claim of
 observed Harvest custom-grant enforcement. Do not ask this decision again.
 
-The final candidate contract must also preserve people with authorized historical
-entries after membership removal, without restoring tracking eligibility, and
-must state whether the candidate set depends on the viewed dates. Candidate
-discovery must not fall back to the general people directory: time-read authority
-does not confer directory, email, financial or permission-configuration access.
+### Candidate discovery implementation contract
+
+The selector is navigation, not a report filter over a particular week's rows.
+Its candidate set therefore does not depend on the selected dates: choosing an
+empty week must not remove the person currently being viewed. This follows the
+confirmed zero-entry rule and preserves the already-authorized historical read
+scope; it is an integration decision, not newly observed Harvest behavior.
+
+- Require the active session actor, canonical policy 1 and strictly restored time
+  grants, using the same organization/actor read fences as scoped entry reads.
+  Do not use directory access, legacy role or Administrator identity as a bypass.
+- `TimeReadOwn` discovers the actor; `TimeReadAll` discovers active local people.
+  `TimeReadManaged` discovers active directly managed people plus active people
+  participating in a currently managed project, even without time entries.
+  Also retain active people with authorized historical entries in a currently
+  managed project after their tracking membership is removed. Union these sets
+  without duplicates; do not restore membership or tracking authority.
+- Archived people are excluded from this Timesheet-only projection. Archived
+  projects/tasks do not erase history. Qualify projects, clients, tasks and
+  historical entries by tenant just as the existing scoped reader does; malformed
+  cross-tenant parent links must not establish candidate visibility.
+- Return only candidate ID/name and the session-derived requester. A single-ID
+  narrowing filter supports restoring a selected person beyond the first page;
+  unknown, foreign, archived and out-of-scope IDs all yield an empty result.
+  Search and the exclusive `(name,id)` cursor only narrow authorized rows.
+  Bound each page to 50 with an explicit continuation, using the existing people
+  cursor; trim search, reject NUL and search over 100 characters. These are
+  transport bounds, not claimed Harvest limits or a cap on organization size.
+- Reauthorize every page and selected-ID lookup. After grants, assignments or
+  activity change, the next request must reflect current scope. The returned
+  identity is not authority for time reads or mutations. No candidate payload
+  contains email, activity flags, rates, grants, project lists or hour totals.
+
+T179–T181 exercise zero-entry discovery, removed membership/history, each grant
+family and all built-in profiles, duplicate paths, archived/foreign data,
+pagination/search/narrowing, registered HTTP payloads, both revocation lock orders
+and cancellation. This is the first backend step of the joint integration below;
+it does not satisfy selected-person UI or delegated-write acceptance by itself.
 
 ## Actual consumers to integrate together
 
@@ -69,7 +102,7 @@ not fall back to legacy responses.
 
 ## Required delivery sequence
 
-1. Bind the confirmed candidate choice to explicit discovery/date-history cases
+1. Implement and verify the candidate discovery/date-history contract above
    and close remaining ordinary/delegated tracking predicates;
    retain explicit gaps for coverage and privileged corrections.
 1. Add real transaction/session tests and implement the selected-person read and

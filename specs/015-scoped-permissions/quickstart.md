@@ -1,5 +1,51 @@
 # Permission verification
 
+## Timesheet candidate discovery (T179–T181)
+
+Use the Nix shell and a disposable PostgreSQL database with CREATEDB. After other
+package builds finish, clean only this worktree's Horae package artifacts before
+SQLx preparation so Cargo cannot skip cached integration-test query expansion:
+
+```sh
+cargo clean -p horae
+CARGO_INCREMENTAL=0 cargo sqlx prepare --workspace -- --features server --all-targets
+CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae timesheet_people_tests::
+CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae time_entries_tests::
+CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features server --all-targets -- -D warnings
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features web --target wasm32-unknown-unknown -- -D warnings
+nix fmt -- --ci
+```
+
+The initial RED denied the candidate request at the unimplemented reader. The
+implemented reader passes all eight candidate tests (2.00s), all eight existing
+scoped-time tests (1.95s), and the registered-session HTTP matrix (10.66s).
+Coverage includes zero-entry project participants, direct management, retained
+history, six profiles/custom scope, deduplication, archived people/context,
+foreign parent links, 51-person pagination, literal/trimmed search, narrowing,
+revocation in both lock orders, cancellation and inherited pool defaults.
+The HTTP check compares the exact ID/name payload, rejects missing/inactive
+sessions, ignores forged outer authority, sanitizes storage failures and proves
+that selecting a participant exposes no hours from an unrelated project.
+
+The first SQLx preparation incorrectly omitted 90 unchanged integration-test
+descriptors because Cargo reused their prior compilation; offline Clippy caught
+the missing cache. Clean regeneration passed (1m10s), retaining all 1,460 prior
+descriptors unchanged and adding five. Offline all-targets server Clippy (1m28s)
+and WASM Clippy (47.95s) passed with warnings denied. Only 10.8 GiB of regenerable
+Horae package artifacts were cleaned; no source, user data or external cache.
+
+Adversarial self-review traced both public readers through the shared current
+policy/actor/grant fence. Candidate visibility is a union of time scopes, not
+directory or financial authority; search, cursor and selected ID only narrow it.
+Every historical parent is tenant-qualified, and inactive people are filtered
+without changing the general reader's historical records. Exact JSON assertions
+exclude email, rates and authentication metadata. Real database waiters establish
+both race orders without timing sleeps. No critical/high finding remains in this
+bounded implementation review. This is not
+an independent review, a browser/UI pass, delegated-write acceptance or activation
+of the complete policy. T014/T015/T018 remain open.
+
 ## Authenticated template capacity (T178)
 
 Inside the Nix shell, use a disposable PostgreSQL database with CREATEDB:

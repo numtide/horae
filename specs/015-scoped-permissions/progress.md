@@ -1,5 +1,66 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Timesheet candidate discovery integration
+
+- The user confirmed A: active managed-project participants are selectable even
+  without time entries; visible hours remain restricted to authorized projects.
+  The decision was already published in `9b53182` and is not asked again.
+
+- Implemented minimal ID/name discovery under the existing scoped-time read
+  transaction, independent of the displayed dates. Direct person management,
+  project participation and retained project history form a deduplicated union;
+  no directory, finance, legacy-role or Administrator-identity bypass is added.
+
+- Added session-authenticated `list_timesheet_people`, search/keyset pagination
+  and selected-ID narrowing. This does not activate policy, connect the selector
+  UI or grant delegated writes. OP03 and the Timesheet contract track the boundary.
+
+- T179 initial RED failed with the expected unimplemented-reader denial. The
+  first GREEN run (`11838`, exit 0) passes five tests covering profiles/custom
+  scope, zero-entry membership, history, tenant parents, pagination and revocation.
+  Three further tests add reader-first ordering, cancellation/inherited pool
+  defaults and invalid policy/state. The real HTTP matrix checks exact minimal
+  payloads, forged authority, sanitized failures and no unrelated-project hours.
+
+- Resumed verification after status-only user exchanges. Session `74926` runs
+  complete SQLx preparation, all eight candidate tests, existing scoped-time
+  regressions, authenticated HTTP coverage and server/WASM Clippy against its own
+  disposable PostgreSQL. Results are pending, not covered by the older Nix gate.
+
+- Rust/testing/async and simplicity guidance keep the implementation in existing
+  modules with one shared authority helper and no new dependency. Spec Kit command
+  skills remain absent; do not equate manual artifact updates with running them.
+
+- `74926` is terminal, exit 101. All eight candidate tests (2.00s), all eight
+  existing scoped-time tests (1.95s) and the authenticated HTTP matrix (10.66s)
+  pass. Offline all-targets Clippy caught 90 unchanged integration-test SQLx
+  descriptors omitted by Cargo's cached compilation; this is not a reader test
+  failure. Session `85936` validates the exact worktree target, cleans only Horae
+  package artifacts, then fully regenerates SQLx and repeats native/WASM lint.
+
+- Bounded adversarial self-review recorded in `quickstart.md`: no directory or
+  financial bypass, no scope expansion through discovery/search/cursors, current
+  authorization after waits, minimal HTTP projection and preserved history. This
+  is not independent review or full-feature acceptance. The prerequisite helper
+  passes; no new browser observation, policy activation, schema or CSS change.
+
+- `85936` is terminal, exit 0. Clean SQLx regeneration passes (1m10s), all 1,460
+  previous descriptors remain unchanged, and five new descriptions bring the
+  total to 1,465. Offline all-targets server Clippy (1m28s) and WASM Clippy (47.95s)
+  pass with warnings denied. Removed only 10.8 GiB of regenerable Horae package
+  artifacts from the validated worktree target. The temporary PostgreSQL stopped.
+
+- The user authorized a parallel specialist. `reports_permissions_review` is
+  reviewing reports/export authorization read-only, without touching Timesheet
+  files or competing for compilation resources. Findings are not yet received;
+  this is separate from the completed candidate self-review.
+
+Next: run the final formatting gate and publish the increment to existing draft
+#212 without merging. Continue
+the selected-person/delegated-operation contract and actual Timesheet consumers;
+T014/T015/T018, lifecycle coverage, migration review and full acceptance remain
+required. The goal is active, not complete or blocked.
+
 ## 2026-10-04 — Authenticated template-capacity acceptance
 
 - The intervening benefits explanation was no implementation progress. Resumed
