@@ -206,8 +206,7 @@ pub(super) async fn save(
     canonical.review.fees.sort_by_key(|fee| fee.line_id);
     canonical.confirmed_excess.sort_by_key(|fee| fee.line_id);
     let payload = serde_json::to_value(&canonical).map_err(server_err)?;
-    let mut tx = pool.begin().await.map_err(server_err)?;
-    balances::lock_invoices(&mut tx, org_id).await?;
+    let mut tx = begin_invoice_write(pool, org_id).await?;
     lock_actor(&mut tx, org_id, actor_id).await?;
     let size = sqlx::query_scalar!(
         r#"SELECT octet_length($1::jsonb::text) AS "size!""#,

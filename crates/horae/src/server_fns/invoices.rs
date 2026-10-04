@@ -26,6 +26,25 @@ mod balances;
 #[cfg(feature = "server")]
 mod editing;
 
+#[cfg(feature = "server")]
+async fn begin_invoice_write(
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, ServerFnError> {
+    let mut tx = pool.begin().await.map_err(server_err)?;
+    sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED, READ WRITE")
+        .execute(&mut *tx)
+        .await
+        .map_err(server_err)?;
+    // User revocation holds the organization before updating this writer's actor.
+    // Acquire it before invoice/actor locks and implicit organization FK checks.
+    crate::db::lock_organization(&mut tx, org_id, crate::db::OrganizationLock::Shared)
+        .await
+        .map_err(server_err)?;
+    balances::lock_invoices(&mut tx, org_id).await?;
+    Ok(tx)
+}
+
 #[server]
 pub async fn get_invoice_editor(invoice_id: String) -> Result<InvoiceEditor, ServerFnError> {
     let manager = require_manager().await?;
@@ -309,9 +328,7 @@ async fn generate_invoice_with_request(
     // Everything from selecting the entries to flipping them to 'invoiced'
     // runs in one transaction so two concurrent generate calls cannot bill the
     // same time twice or mint the same invoice number.
-    let mut tx = pool.begin().await.map_err(server_err)?;
-
-    balances::lock_invoices(&mut tx, org_id).await?;
+    let mut tx = begin_invoice_write(pool, org_id).await?;
     let canonical = request.map(|(request, _)| {
         let mut request = request.clone();
         request.review.lines.sort_by(|a, b| a.source.cmp(&b.source));
@@ -739,8 +756,7 @@ async fn transition_invoice(
     target: InvoiceStatus,
     actor_id: uuid::Uuid,
 ) -> Result<Invoice, ServerFnError> {
-    let mut tx = pool.begin().await.map_err(server_err)?;
-    balances::lock_invoices(&mut tx, org_id).await?;
+    let mut tx = begin_invoice_write(pool, org_id).await?;
     editing::lock_actor(&mut tx, org_id, actor_id).await?;
 
     // Validate under the same row lock as the transition: payment and void

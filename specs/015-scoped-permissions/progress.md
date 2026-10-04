@@ -1,5 +1,62 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Cross-command invoice authorization gate
+
+- Previous turn made progress: authenticated project delegation and verification
+  were published to draft #212 (`c4e83c8`). Revalidated that clean worktree and
+  the constitution, plan, tasks and remaining project-form predicates. Spec Kit
+  prerequisite script passes; its command skills remain absent locally.
+- Current public permissions/rate/budget documentation still does not resolve
+  initial creation scope or all non-rate form effects. A fresh read-only attempt
+  through the existing Windows Playwright client (`97024`) initializes MCP but
+  `browser_tabs` times out; no browser outcome or account mutation is claimed.
+- Independent T042 review identifies a concrete invoice actor/organization-FK
+  inversion against the real user-revocation command, distinct from the existing
+  T068 assignment test. T192–T194 refine that cross-command requirement without
+  changing invoice grants or relaxing the unresolved full-feature gates.
+- Applied Rust, async, testing and simplicity guidance. Added a real-command
+  regression for both invoice/user-revocation orders, using PostgreSQL waiters
+  and the authenticated generation request. RED execution `75652` is pending;
+  no production locking change has been made yet.
+- RED `75652` reproduces `deadlock detected` (500) through those real commands
+  in 1.19s. Added one common writer prefix: explicit READ COMMITTED/READ WRITE,
+  organization SHARE, then the existing invoice advisory lock. Generation,
+  editing and lifecycle transitions all use it before their actor checks.
+  No financial/lifecycle/grant predicate changed. Verification is pending.
+- Follow-up clarification did not change implementation: FR-033/B was already
+  recorded. Polling `17952` established the original regression now passes
+  (both command orders, 0.23s). This is focused evidence, not full acceptance.
+- Added persisted invoice/receipt counts and actual edit/transition races in
+  both orders, denied replays and inherited read-only/repeatable-read tests.
+  `28313` exposed a test result-type mismatch; corrected it. `94723` passes all
+  three non-cancellation tests. Its cancellation assertion incorrectly required
+  PostgreSQL rollback before releasing an in-flight advisory wait and times out.
+  Independent review confirms SQLx queues rollback; cancellation is not a query
+  CancelRequest. Corrected the test to release the blocker, verify rollback and
+  reuse a one-connection pool, matching the existing transaction contract.
+  No new immediate-cancellation guarantee or production timeout was added.
+- Final-source `72281` rebuilt and passed the original regression, but its
+  temporary runner still selected the default single test and then hit a driver
+  syntax error. It is not full-suite evidence. Validated the corrected runner
+  before starting `11887`; the sandbox initially denied Nix's daemon socket, and
+  the authorized retry uses the same disposable-database workflow.
+- `11887` passes the complete server-binary suite: 1,154 passed, zero failures,
+  11 pre-existing ignored in 121.31s, including all four new authority tests and
+  registered-session, user/project, invoice and financial regressions. Independent
+  review approves the final test/production delta. T192/T193 are complete.
+  Removed only this worktree's regenerable Horae dev artifacts (220 files,
+  1.7 GiB) for complete SQLx preparation. SQLx/offline lint phases remain live;
+  T194 stays open. No source, database, policy or real-account data was removed.
+- `11887` completes successfully: SQLx preserves all 1,520 existing descriptions
+  and adds four; offline all-target server Clippy passes in 1m12s and WASM Clippy
+  in 14.51s, with warnings denied. Formatting `36426` changes zero files. T194
+  is complete for this bounded invoice/user-revocation integration. No full Nix,
+  canonical invoice policy, full permission feature or activation claim follows.
+
+Next: publish the verified change to the existing draft without
+merge. Project-form decisions, scoped invoice
+policy and full activation remain open. No merge or real-data operation.
+
 ## 2026-10-04 — Authenticated project-manager delivery
 
 - Previous turn made progress: published verified `5f7895c` to draft #212.

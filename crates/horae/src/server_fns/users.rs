@@ -227,7 +227,7 @@ pub async fn set_user_role(user_id: String, role: String) -> Result<User, Server
 }
 
 #[cfg(feature = "server")]
-async fn change_user_role(
+pub(super) async fn change_user_role(
     db: &sqlx::PgPool,
     org_id: uuid::Uuid,
     actor_id: uuid::Uuid,

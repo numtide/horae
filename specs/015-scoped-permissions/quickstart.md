@@ -1,5 +1,37 @@
 # Permission verification
 
+## Invoice writer and revocation ordering (T192–T194)
+
+The three invoice writers share organization SHARE → invoice advisory lock →
+current actor SHARE before their existing resource locks. The transaction uses
+READ COMMITTED/READ WRITE without changing session defaults. This repairs a
+reproduced deadlock against the actual user-role command; it does not replace
+legacy invoice authority with canonical permission grants.
+
+Run in the Nix shell against disposable PostgreSQL:
+
+```sh
+cargo test -p horae --features server --bin horae server_fns::invoices::tests::authority
+cargo test -p horae --features server --bin horae
+```
+
+The focused cases cover reviewed generation and real edit/transition commands,
+both revocation orders, denied replays, persisted invoices/receipts and unchanged
+amounts. All three writers run under inherited read-only/repeatable-read defaults.
+Cancellation while waiting for invoice serialization checks rollback and reuse
+of a one-connection pool after the blocking statement can finish, not immediate
+query cancellation or interruption halfway through a mutation.
+
+Independent static review found no material outstanding issue. Full server-binary
+run `11887` passes 1,154 tests with zero failures and 11 pre-existing ignored cases
+in 121.31s. This includes the four new authority tests and registered-session,
+user/project and financial regressions. The same run regenerates SQLx without
+removing any of the 1,520 existing descriptions and adds four. Offline all-target
+server Clippy passes in 1m12s and WASM Clippy in 14.51s, both with warnings denied.
+Formatting passes without changes. Full T042, canonical invoice scope, full Nix
+acceptance, policy activation and feature completion remain separate open
+requirements.
+
 ## Authenticated project-manager delivery (T189–T191)
 
 The policy-1 `load_project_managers` and `save_project_managers` endpoints derive

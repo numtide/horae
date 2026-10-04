@@ -60,6 +60,49 @@ artifact's complete recorded scope, not just its original generation permission.
 
 ## Concrete lock inventory (T042, partial)
 
+### Invoice writers and user revocation (T192–T194)
+
+Source rechecked at `c4e83c8`, 2026-10-04. The three production invoice writers
+are `generate_invoice_with_request`, `editing::save` and `transition_invoice`.
+Each currently takes invoice advisory serialization before actor SHARE and
+does not acquire the organization gate. User role/activity changes take
+organization UPDATE before updating the target user. Invoice generation/edit
+then inserts invoice or receipt rows whose organization FK takes KEY SHARE.
+This admits a cycle: invoice holds the target actor and waits for organization;
+revocation holds organization and waits for that actor. The T068 assignment/FK
+test uses NO KEY UPDATE and generation without a request actor, so it cannot
+establish safety for this different pair of production commands.
+
+Reproduce with a real reviewed generation request and the real user-role command:
+hold a source entry, observe generation waiting while retaining actor authority,
+start a second administrator's revocation, observe its wait, then release the
+source. Neither command may deadlock or partially commit. In the reverse order,
+revocation commits first and the invoice command must deny without source or
+receipt changes. Database wait relationships, not sleeps, determine ordering.
+
+Use one prefix in all three writers: organization SHARE, invoice advisory lock,
+current active same-tenant manager SHARE, then existing resources. Establish
+READ COMMITTED/READ WRITE before the first query so inherited repeatable-read
+or read-only defaults cannot preserve earlier authority or disable writes.
+Do not upgrade the organization gate, change action predicates, bypass frozen
+money or replay checks, or move plugin dispatch inside transactions. Test-only
+generation adapters without an actor still acquire the common organization and
+invoice gates; they are not production admission paths.
+
+Cover completed and waiting revocation, both command orders, edit/generation
+replay and transition denial, cancelled waits and released connections, keeping
+all existing invoice financial/fee/default/revision tests. The local change uses
+existing schema, SQLx locks and transaction conventions; no dependency, new
+permission, real-data operation or mixed-project policy decision is required.
+Cancellation coverage aborts the writer waiting for invoice serialization, joins
+the cancelled task, releases the test blocker and verifies rollback, revocation
+completion and single-connection reuse. SQLx queues rollback behind the current
+statement; this does not promise immediate PostgreSQL query cancellation or
+prove interruption halfway through invoice mutation.
+It does not close the separate source/fee/entry order, import/operator writers
+or full T042. Historical project orders below were already replaced by T068–070
+and must not be reported as current defects.
+
 ### Import session cleanup (T089–T091)
 
 Before acknowledging interrupted execution, both API and CSV must join their

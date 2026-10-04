@@ -144,6 +144,16 @@ and non-rate fields remain explicit entry gates, not invented defaults.
 - [ ] T160 Integrate typed protected-field intent and authorized projections into the real form/read/save transaction together, preserving legacy mode, revisions, complete-set validation, financial history and replay; never treat a missing client field as authority to clear storage.
 - [ ] T161 Verify the real form, registered session paths, concurrent revocation and browser behavior, SQLx completeness, server/WASM checks and adversarial cross-surface review; retain full activation and Nix gates.
 
+### Invoice writer participation in the organization gate (T039/T040/T042)
+
+The current cross-command inventory identifies an actor/FK lock inversion, not
+a new invoice permission predicate. Preserve legacy action and financial rules.
+The local contract is in `contracts/permission-state.md`.
+
+- [x] T192 Reproduce authenticated invoice generation versus real user revocation with database-observed waiters; cover both gate orders, edit/replay/transition and cancellation without synthetic SQL implementations of invoice commands.
+- [x] T193 Apply organization SHARE before invoice serialization and actor/resource locks to all three invoice writers, using explicit fresh transaction isolation and existing lock helpers; preserve money, sources, revisions, receipts and post-commit events.
+- [x] T194 Verify invoice/user/project concurrency and financial regressions, registered sessions, complete SQLx cache and offline server/WASM checks; review the cross-command evidence and retain remaining T042 and policy-cutover gates.
+
 ### Session identity payload (OP01, FR-008/010/018)
 
 Continue independently of T159's open financial-form predicates using the closed
