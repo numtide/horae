@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id FROM horae_outbox WHERE id=$1 AND org_id=$2\n         AND claim_token=$3 AND event_kind='budget_email' AND payload=$4 AND attempts=$5\n         AND delivered_at IS NULL AND failed_at IS NULL\n         AND available_at > clock_timestamp() + interval '25 seconds'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Jsonb",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c797bf17deb31ad123e892cbe7bec2246c45965224c498f8a53325e7f35a0023"
+}

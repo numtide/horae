@@ -1,5 +1,66 @@
 # Permissions discovery
 
+## Next canonical integration target: invoice permissions (2026-10-04)
+
+- Decision: next refine OP21–OP24 into an executable canonical invoice contract,
+  rather than treating another isolated legacy guard as six-profile delivery.
+  Full T006 still blocks replacing active authorization; T007 separately gates
+  approved migration/activation. Constitution 1.1.0 already includes the target,
+  so T008's remaining work is reconciliation and transition design, not another
+  amendment adopting six profiles.
+- Source inspection confirmed `generate_invoice_with_request`,
+  `transition_invoice` and `invoices/editing::save` acquire the invoice advisory
+  root before an organization gate. `fees::scheduled_fees` takes project/settings
+  SHARE for generation; `prepare_fees` then inserts occurrences whose migration
+  0039 trigger writes the project. Their common hierarchy needs design and race
+  tests; changing the initial lock alone is not a complete fix.
+- Fresh [Harvest permission documentation](https://support.getharvest.com/hc/en-us/articles/44171549176077-Permissions)
+  confirms distinct managed invoice read, managed draft creation/editing, managed
+  invoice management and organization-wide read/manage grants. This does not by
+  itself establish the complete mixed-project/manual-line authorization rule.
+- [Invoice/project linking](https://support.getharvest.com/hc/en-us/articles/360048686631-Linking-invoices-to-projects)
+  distinguishes linked line projects from underlying tracked sources: relinking
+  does not move the original entries. A project's displayed invoice amount is
+  only its linked portion. Preserve that distinction when researching authority;
+  one visible portion is not proof of access to the entire invoice.
+- [Fixed-fee context](https://support.getharvest.com/hc/en-us/articles/360048686671-Getting-project-context-when-invoicing-Fixed-Fee-projects)
+  separately conditions opening related invoices on invoice permission and keeps
+  notes visibility independent. Its role terminology is older; do not infer the
+  new custom-profile predicate from it. Restricted-user enforcement and manual
+  invoices without project links remain unverified.
+- Next: verify the full read/draft/status/source matrix and its transaction
+  contract before implementing the internal canonical consumer. Do not activate
+  policy or choose mixed-scope behavior by guess. If reference investigation
+  leaves an indispensable product choice, ask that one choice; meanwhile a
+  read-only disposable migration preflight can advance T007 without selecting
+  role mappings or repairing records. Previously asked inactive-manager and
+  historical-unknown-requester questions remain open and must not be repeated.
+
+## Budget email preparation design (2026-10-04)
+
+- Decision: organization SHARE, current recipient SHARE, project SHARE, then
+  outbox UPDATE; use separate fresh checks after waits. Preserve the existing
+  recipient predicate while preparing one message, then commit before transport.
+- Independent review confirms migration 0039 child-to-parent triggers make
+  settings/assignment locks after the project unsafe. Parent fencing with a
+  later predicate avoids that cycle. Enqueue inserts new notification/outbox
+  rows rather than updating the claimed row; no additional inversion was found.
+- Alternatives rejected: a pre-wait lease check can expire while waiting;
+  outbox SHARE followed by an UPDATE upgrades competing readers; terminalizing
+  outside the transaction can fail a same-token replacement payload. Late
+  outbox UPDATE with in-transaction terminal rejection avoids those races.
+- Notification identity columns are not immutable by schema. Require exact
+  discovered/locked identities in the final read; retargeting or a newly present
+  notification skips this attempt instead of using unlocked resources. Missing
+  settings with an unchanged notification is real ineligibility, not drift.
+- PostgreSQL's [READ COMMITTED snapshots](https://www.postgresql.org/docs/17/transaction-iso.html)
+  and [row lock compatibility](https://www.postgresql.org/docs/17/explicit-locking.html)
+  support this ordering. Its [current-time functions](https://www.postgresql.org/docs/17/functions-datetime.html#FUNCTIONS-DATETIME-CURRENT)
+  distinguish transaction-start `now()` from actual `clock_timestamp()`; the
+  final lease margin must use the latter. Local tests will verify the exact path.
+- No new product decision is required. This closes the local preparation design
+  in `contracts/budget-email-authority.md`, not OP37 or full canonical activation.
+
 ## Next service-reader integration candidate (2026-10-04)
 
 - Evidence: `notifications::deliver` first reads an outbox claim and then reads

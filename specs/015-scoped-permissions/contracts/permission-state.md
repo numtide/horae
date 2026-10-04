@@ -324,6 +324,13 @@ reevaluate current recipient/payload access under the bounded read protocol, the
 release the gate before mail transport. A queued event is not perpetual recipient
 authority, and already handed-off mail cannot be recalled.
 
+The local delivery integration is specified in `budget-email-authority.md`:
+organization/recipient/project locks precede the final outbox lock; current
+eligibility and claim margin are refreshed after waits. Terminal rejection is
+atomic inside preparation; external sending and its acknowledgements follow
+transaction release. Parent revision fencing avoids child-lock inversion.
+This does not finalize OP37's canonical recipient mapping or budget enqueue.
+
 `db::run_migrations` runs schema changes, legacy report conversion and constraint
 validation; `init`/`seed` use an empty-installation table lock. These are explicitly
 coordinated operator/startup operations, not ordinary permission transactions.

@@ -1,5 +1,88 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Budget email authority preparation
+
+- The preceding MVP answer was status-only, with no implementation progress.
+  Revalidated clean `feat/scoped-permissions` at local `dcf4ac8`, one ahead of
+  origin. Normal push succeeded; local and origin now match. Existing draft
+  #212 is reused; no merge or real-data mutation occurred.
+
+- Spec Kit Plan/Tasks setup and prerequisite scripts reused existing artifacts.
+  Seven local checklists pass 7/7 each; general requirements remain 12/16 under
+  the prior authorization for independently clarified increments. No extension
+  hooks or agent-context generator exist. Refined T114–T116 and the bounded
+  budget-email contract; full policy and activation gates remain open.
+
+- Source review confirms migration 0039's child-to-parent trigger ordering:
+  recipient/project gates need fresh eligibility reads, not later child locks.
+  Independent design review is in progress. Only disposable PostgreSQL and
+  local executable sender stubs will be used.
+
+- Independent review closed the local design: late outbox UPDATE and terminal
+  rejection inside the transaction avoid stale-payload terminalization and lock
+  upgrades. Notification retarget/appearance is drift, not ineligibility.
+
+- Scoped Analyze maps FR-006/007/010/017/018 and SC-006 subsets to T114–T116;
+  no unmapped task, ambiguity, duplication or local constitutional/critical/high
+  finding. Full operation/migration/UI/activation gates remain open.
+
+- RED reproduced the missing organization gate (5.62s after 1m47s compilation).
+  Implemented private preparation and preserved post-release transport/acks.
+  Initial notification run passes 20/21; the assignment fixture wrongly updated
+  a nonexistent membership. Corrected to INSERT the lead assignment before
+  revoking it; no production predicate was weakened. Expanded session 72877
+  rejected a misplaced test-output flag before compiling. The corrected command
+  formats and tests the final fixture snapshot; no pass is inferred from 72877.
+
+- Independent code review found no critical/high defect and requested explicit
+  inherited READ ONLY coverage; added a preparation-only check so unrelated
+  post-send queue writes are not conflated with the authorization transaction.
+
+- Expanded review strengthened cancellation to wait after acquiring domain locks
+  and verify their release from another connection. The blocked sender fixture
+  now opens its FIFO read/write before launch and bounds joining the task.
+  Independent re-review confirms both fixes and no remaining blocking finding.
+
+- Added winning activation/alert enable, project retarget/disappearance and exact
+  terminal-reason coverage. SQLx caught test-only mistakes in legacy assignment
+  columns and a cleanup SELECT's alias/fetch method; corrected them rather than
+  weakening checks. Sessions 64383/3852/91469 are terminal compile failures.
+  Session 93679 passes all 30 notification tests: 13 new authority tests plus
+  existing mail tests, zero failures (2.86s after 1m34s compilation).
+
+- T114/T115 are complete. The final source snapshot now runs the full server
+  binary regression, then clean complete SQLx preparation and offline lint/WASM.
+  No full-suite pass is inferred from the focused notification result.
+
+- Full server-binary regression passes: 993 passed, zero failures and 11 existing
+  exclusions, 1,004 discovered (238.69s). Session 46574 continues with clean SQLx
+  preparation and offline gates after removing only rebuildable package artifacts.
+  Formatting passed (two documentation files changed; no source behavior change).
+
+- Next-action review identifies T006's invoice operation contract as the next
+  canonical integration target. Verified the three invoice mutation roots and
+  fee parent-trigger ordering, and revisited current Harvest invoice permissions,
+  project linking and fixed-fee context documentation. Research records evidence
+  and unresolved mixed/manual scope; no predicate or existing-data mapping was
+  selected. Previously asked product questions remain open without repetition.
+
+- Session 46574 finishes successfully. Clean SQLx preparation takes 52.89s;
+  review confirms 44 new descriptors and only the two replaced notification
+  queries removed, 1,362 total. Offline all-targets Clippy passes (1m00s) and
+  denied-warning WASM passes (9.48s). T116 is complete for this boundary.
+  Final scoped Analyze retains six requirement subsets/three mapped tasks,
+  no ambiguity/duplication/local constitutional violation or unresolved critical/
+  high review finding. Full feature gates and `nix flake check` remain open;
+  no merge readiness or canonical runtime completion is claimed.
+
+- Stopped only the owned disposable PostgreSQL, preserving its data. The final
+  format check normalized list whitespace in this log and is rerun before the
+  authorized unsigned publication to the existing branch/draft PR.
+
+Next after publication: refine OP21–OP24's canonical invoice permission and
+transaction contract from reference evidence before implementation; do not
+substitute another unrelated legacy repair or activate a partially enforced policy.
+
 ## 2026-10-04 — CSV authority integration
 
 - The intervening MVP answer was status-only, with no implementation progress.

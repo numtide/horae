@@ -97,6 +97,15 @@ close T042, replace legacy guards or authorize mixed-policy operation.
 
 ### Existing increments and remaining integration
 
+T114–T116 integrate bounded budget-email preparation under
+`contracts/budget-email-authority.md`. Reuse the current recipient predicate,
+outbox claim/acknowledgement and sendmail transport. Organization, recipient and
+project locks precede a late outbox fence; fresh statements check current scope
+and lease after waits. Never lock trigger-writing child rows after their parent
+or retain locks across transport. Local constitution review needs no schema,
+dependency, grant mapping, arithmetic or real-data change. Full canonical
+service authority, enqueue integration and activation remain separate gates.
+
 T110–T113 integrate all three CSV paths under `contracts/csv-exports.md`.
 Reuse the existing download worker, one-row output channel and admission limit.
 A native PostgreSQL cursor preserves source values while short rolled-back

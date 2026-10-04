@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE horae_outbox SET event_kind='project_created' WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2ae52f17fde8e66900a70389a729cca7d682aae377e786e04b490ca07c193518"
+}

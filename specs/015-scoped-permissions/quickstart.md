@@ -1,5 +1,38 @@
 # Permission verification
 
+## Budget email preparation (T114–T116)
+
+Run `cargo test -p horae --features server --bin horae notifications:: --locked`
+inside the Nix shell against disposable PostgreSQL; no configured real mail
+transport is used. `notifications/tests/authority.rs` exercises production
+delivery with local executable stubs. Map current identity/eligibility to
+FR-006/007, lock-wait revocation and late claim fencing to FR-010, unchanged
+message/retry/disabled behavior to FR-017 and all concurrency/cleanup/regression
+checks to FR-018 and SC-006. The exact cases are in
+`contracts/budget-email-authority.md`. Follow with outbox/full server regression,
+clean complete SQLx preparation, offline all-targets Clippy/WASM and formatting.
+Record actual outcomes here and in `progress.md`; planned cases are not passes.
+
+| Requirement subset | Executable evidence |
+| --- | --- |
+| FR-006/007/010: current recipient, project and relationship eligibility | `budget_delivery_waits_for_organization_and_rechecks_recipient`, `budget_delivery_refreshes_after_recipient_and_project_waits`, `budget_delivery_observes_winning_activation_and_alert_enable` |
+| FR-007/010: trusted claim and actual lease after waits | `budget_delivery_rechecks_claim_and_clock_after_final_wait`, `budget_delivery_uses_current_payload_after_recipient_wait` |
+| FR-007/010: no disclosure or terminal mutation on identity drift | `budget_delivery_skips_retargeted_notification_without_terminalizing`, `budget_delivery_skips_project_drift_or_disappearance`, `budget_delivery_skips_notification_appearing_after_discovery` |
+| FR-017: preserved recipient rules and terminal behavior | `budget_delivery_rejects_missing_settings_without_waiting_on_child_locks`, `budget_delivery_terminal_rejections_preserve_existing_reasons`, existing retry/identity/disabled-worker tests |
+| FR-018 / SC-006 subset: settings, cancellation and transport lock lifetime | `budget_preparation_overrides_read_only_without_leaking_transaction_settings`, `budget_preparation_cancellation_and_deadline_release_single_connection`, `budget_delivery_releases_all_gates_before_blocked_transport` |
+
+The initial organization-wait test reproduced the missing preparation gate.
+The corrected focused suite passes 30 notification tests, including all 13 new
+authority tests (2.86s). Independent review's cancellation-observer and FIFO
+lifetime findings are fixed and included in that pass. Full server-binary
+regression passes 993 tests, zero failures and 11 existing exclusions (238.69s).
+Clean SQLx preparation passes (52.89s): 44 new descriptors and only the two
+replaced notification queries removed, 1,362 total. Offline all-targets Clippy
+passes (1m00s), as does denied-warning WASM (9.48s). Formatting passes. Scoped
+analysis covers six requirement subsets through three tasks with no unmapped
+task or unresolved local critical/high review finding. No real mail or canonical
+activation occurred; full feature acceptance and merge gates remain separate.
+
 ## CSV delivery (T110–T113)
 
 Use the Nix shell and the owned disposable PostgreSQL only. Run the server

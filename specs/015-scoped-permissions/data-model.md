@@ -1,5 +1,11 @@
 # Permission data model
 
+Budget email preparation adds only an optional private transient record under
+`contracts/budget-email-authority.md`: current recipient/message with stored
+attempt count. Skips return no record; terminal rejection stores the existing
+sanitized reason within the preparation transaction. Notification/outbox schema
+is unchanged; no browser DTO or claim-derived user authority is introduced.
+
 CSV delivery uses transient native cursor rows and per-output-block project IDs
 under `contracts/csv-exports.md`. Migration 0046 adds only an invoker transport
 function: no new table, persisted job, public DTO or business-data conversion.

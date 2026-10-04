@@ -8,6 +8,8 @@ use uuid::Uuid;
 
 use crate::config::{MailConfig, valid_mailbox};
 
+mod preparation;
+
 const SEND_TIMEOUT: Duration = Duration::from_secs(20);
 const MAX_ATTEMPTS: i32 = 5;
 
@@ -50,60 +52,15 @@ async fn deliver(
     config: &MailConfig,
     event: &crate::jobs::OutboxEvent,
 ) -> anyhow::Result<()> {
-    let Some(stored) = sqlx::query!(
-        "SELECT payload, attempts FROM horae_outbox WHERE id = $1 AND org_id = $2
-         AND claim_token = $3 AND event_kind = 'budget_email'
-         AND delivered_at IS NULL AND failed_at IS NULL
-         AND available_at > now() + interval '25 seconds'",
-        event.id,
-        event.org_id,
-        event.claim_token,
-    )
-    .fetch_optional(pool)
-    .await?
-    else {
+    let Some(prepared) = preparation::prepare(pool, event).await? else {
         return Ok(());
     };
-    if stored.attempts > MAX_ATTEMPTS {
-        crate::jobs::stop_outbox_delivery(pool, event, "Budget email attempt limit reached")
-            .await?;
-        return Ok(());
-    }
-    let Ok(payload) = serde_json::from_value::<BudgetEmail>(stored.payload) else {
-        crate::jobs::stop_outbox_delivery(pool, event, "Invalid budget email event").await?;
-        return Ok(());
-    };
-    let Some(row) = sqlx::query!(
-        r#"SELECT n.id, n.created_at AS "created_at: DateTime<Utc>", n.period_key, n.threshold,
-                  p.name, u.email,
-                  CASE WHEN n.task_id IS NOT NULL THEN 'task' WHEN n.user_id IS NOT NULL THEN 'person' ELSE 'project' END AS "scope!"
-           FROM project_budget_notifications n
-           JOIN projects p ON p.id = n.project_id AND p.org_id = n.org_id
-           JOIN project_settings ps ON ps.project_id = p.id AND ps.org_id = n.org_id
-           JOIN users u ON u.id = n.recipient_id AND u.org_id = n.org_id
-           WHERE n.id = $1 AND n.org_id = $2 AND p.active AND ps.alert_enabled AND u.active
-             AND (u.org_role IN ('admin', 'manager') OR EXISTS (
-                 SELECT 1 FROM assignments a WHERE a.project_id = p.id AND a.user_id = u.id
-                 AND (a.role IN ('lead', 'admin') OR u.id = ps.creator_id)))"#,
-        payload.notification_id, event.org_id,
-    ).fetch_optional(pool).await? else {
-        crate::jobs::stop_outbox_delivery(pool, event, "Budget email recipient or project is no longer eligible").await?;
-        return Ok(());
-    };
-    let message = BudgetMessage {
-        id: row.id,
-        created_at: row.created_at,
-        project_name: row.name,
-        scope: row.scope,
-        period: row.period_key,
-        threshold: row.threshold,
-    };
-    match send(config, &row.email, &message, SEND_TIMEOUT).await {
+    match send(config, &prepared.recipient, &prepared.message, SEND_TIMEOUT).await {
         Ok(()) => {
             crate::jobs::mark_outbox_delivered(pool, event).await?;
         }
         Err(error) => {
-            let terminal = stored.attempts >= MAX_ATTEMPTS
+            let terminal = prepared.attempts >= MAX_ATTEMPTS
                 || matches!(error, MailError::InvalidAddress | MailError::InvalidMessage);
             let recorded = if terminal {
                 crate::jobs::stop_outbox_delivery(pool, event, &error.to_string()).await?
@@ -111,7 +68,7 @@ async fn deliver(
                 crate::jobs::mark_outbox_failed(pool, event, &error.to_string()).await?
             };
             if recorded {
-                tracing::warn!(event_id = %event.id, attempt = stored.attempts, terminal, %error, "budget email attempt failed");
+                tracing::warn!(event_id = %event.id, attempt = prepared.attempts, terminal, %error, "budget email attempt failed");
             }
         }
     }

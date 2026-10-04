@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE horae_outbox SET payload=jsonb_build_object('notification_id',$2::uuid) WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5e15429a57d88a1c8788bf6ed61ab91c45f4bf49675564f67452824801bb5d76"
+}

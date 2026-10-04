@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO assignments(id,project_id,user_id,role) VALUES($1,$2,$3,'lead')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "44c38b2bf387d1837d49452cc1208c8f8a180bc9818bf5bb73df439408297dc5"
+}

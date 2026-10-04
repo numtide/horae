@@ -221,6 +221,17 @@ hierarchy and audited transactions; combined expense behavior depends on 016.
 
 ## Phase 6: US3 — Enforcement on every delivery path (P1)
 
+### Budget email preparation authority
+
+T113 → T114 → T115 → T116 follows `contracts/budget-email-authority.md`.
+Sequential shared-file work; preserve the existing recipient predicate without
+claiming OP37 or full policy activation. Independent acceptance is preparation
+under current eligibility/claim ownership with all locks released before transport.
+
+- [x] T114 [US3] Add failing production-delivery concurrency tests in `crates/horae/src/notifications/tests/authority.rs`, wired from `notifications/tests.rs`, for revocation during organization/recipient/project waits and changed claims/leases (FR-006/007/010/018).
+- [x] T115 [US3] Extract bounded current-authority preparation in `crates/horae/src/notifications.rs` or its `notifications/preparation.rs` submodule; preserve trusted claim payloads, recipient predicate, sanitized terminal outcomes, transport and acknowledgement outside locks (FR-006/007/010/017).
+- [x] T116 [US3] Extend `crates/horae/src/notifications/tests/authority.rs` for current payload, inherited settings, cancellation, exact claim fencing and size-one-pool/blocked transport; run notification/outbox/full server regressions, regenerate complete `.sqlx/`, verify offline lint/WASM/format, adversarial review and scoped analysis; record actual evidence in feature 015 `quickstart.md` and `progress.md` (FR-017/018, SC-006 subset).
+
 ### Interrupted import session disposal
 
 T089 → T090 → T091 implements the closed cleanup contract in
