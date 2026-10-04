@@ -82,19 +82,17 @@ pub(crate) async fn execute(
     request: &ProjectManagersCommand,
 ) -> Result<ProjectManagersOutcome, ProjectManagersError> {
     let mut tx = pool.begin().await?;
-    sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
-        .execute(&mut *tx)
-        .await?;
+    super::configure_administration(&mut tx).await?;
     let org = sqlx::query!(
         "SELECT permission_policy_version, access_revision FROM organizations WHERE id = $1 FOR UPDATE",
         org_id
     ).fetch_optional(&mut *tx).await?.ok_or(ProjectManagersError::Forbidden)?;
     let active = sqlx::query_scalar!(
-        "SELECT EXISTS(SELECT 1 FROM users WHERE org_id = $1 AND id = $2 AND active)",
+        "SELECT active FROM users WHERE org_id = $1 AND id = $2 FOR SHARE",
         org_id,
         actor_id
     )
-    .fetch_one(&mut *tx)
+    .fetch_optional(&mut *tx)
     .await?;
     if org.permission_policy_version != 1 || active != Some(true) {
         return Err(ProjectManagersError::Forbidden);
@@ -184,11 +182,11 @@ pub(crate) async fn execute(
             continue;
         }
         let active = sqlx::query_scalar!(
-            "SELECT EXISTS(SELECT 1 FROM users WHERE org_id = $1 AND id = $2 AND active)",
+            "SELECT active FROM users WHERE org_id = $1 AND id = $2 FOR SHARE",
             org_id,
             manager_id
         )
-        .fetch_one(&mut *tx)
+        .fetch_optional(&mut *tx)
         .await?;
         if active != Some(true) {
             return Err(ProjectManagersError::Ineligible);

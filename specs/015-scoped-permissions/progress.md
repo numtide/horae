@@ -1,5 +1,40 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Project-delegation activity fences
+
+- Previous turn was status-only, not implementation progress. Revalidated the
+  clean synchronized `c88ca6d` worktree and reused draft #212's branch. Spec Kit
+  prerequisites pass; its skills remain absent locally, so followed the existing
+  spec/contract/task workflow without claiming skill execution.
+- Investigated the next person-management transaction. Official assignment/API
+  and archive documentation does not settle new links involving archived people.
+  Asked one product question and recorded it in `research.md`; no answer or
+  default has been inferred, and no existing decision was reopened.
+- Independent work found project delegation's plain actor/new-manager activity
+  reads can race direct deactivation. Three red regressions reproduced those
+  two cases and inherited READ ONLY failure before the fix.
+- Reused `configure_administration` and tenant-scoped user SHARE reads, without
+  new user/project writes or lifecycle changes. Added reverse-order deactivation
+  and single-connection cancellation/retry checks. All 128 selected permission
+  regressions pass, including six new tests, in 54.22s after compilation.
+- Focused adversarial source review checked replay authority, activity retention,
+  retained inactive targets, the project NOWAIT rollback and cancellation effects.
+  No additional actionable finding in this repair; this is self-review, not an
+  independent agent review or full-policy acceptance.
+- Cached SQLx preparation omitted unchanged integration-test descriptors; a
+  missing sample still exists in `tests/integration.rs`. Cleaned only rebuildable
+  Horae package artifacts (4.2 GiB); complete regeneration produced 1,405
+  descriptors, removing only the replaced plain activity query. The locking
+  query already has a shared descriptor. Offline all-targets server Clippy passes
+  with warnings denied (1m03s), as do formatting and whitespace checks. No new
+  WASM/browser/full-flake result is claimed. Delivery stays existing draft #212.
+
+Next: the person-management transaction once its inactive-endpoint rule is
+answered, or independent T006/T009 contracts
+while it remains open. Full scoped approvals, cross-surface enforcement and
+reviewed migration remain required. No policy activation, real-data mutation or
+merge is authorized by this increment.
+
 ## 2026-10-04 — Real-browser recovery verification
 
 - Previous turn made progress: published durable recovery as `1ecfa21` on draft

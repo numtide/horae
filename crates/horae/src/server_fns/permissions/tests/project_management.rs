@@ -86,6 +86,233 @@ async fn revision(pool: &PgPool, org: Uuid) -> i64 {
     .unwrap()
 }
 
+#[derive(Clone, Copy)]
+enum ActivitySubject {
+    Actor,
+    AddedManager,
+}
+
+async fn retains_activity_until_commit(pool: &PgPool, subject: ActivitySubject) {
+    let ids = fixture(pool).await;
+    let target = person(pool, ids.org_id, &[Permission::ProjectReadManaged]).await;
+    let user = match subject {
+        ActivitySubject::Actor => ids.user_id,
+        ActivitySubject::AddedManager => target,
+    };
+    let mut hold = pool.begin().await.unwrap();
+    // Pause after all decisions and relationship writes, before receipt commit.
+    sqlx::query!("LOCK TABLE permission_change_receipts IN SHARE MODE")
+        .execute(&mut *hold)
+        .await
+        .unwrap();
+    let holder = sqlx::query_scalar!("SELECT pg_backend_pid()")
+        .fetch_one(&mut *hold)
+        .await
+        .unwrap()
+        .unwrap();
+    let pending_pool = pool.clone();
+    let command = request(ids.project_id, &[target]);
+    let pending =
+        tokio::spawn(
+            async move { execute(&pending_pool, ids.org_id, ids.user_id, &command).await },
+        );
+    wait_for_blocked(pool, holder).await;
+    let command_pid = sqlx::query_scalar!("SELECT pid FROM pg_stat_activity WHERE datname = current_database() AND $1 = ANY(pg_blocking_pids(pid))", holder)
+        .fetch_one(pool).await.unwrap().unwrap();
+    let deactivate_pool = pool.clone();
+    let mut deactivate = tokio::spawn(async move {
+        sqlx::query!("UPDATE users SET active=false WHERE id=$1", user)
+            .execute(&deactivate_pool)
+            .await
+    });
+    let protected = tokio::select! {
+        result = &mut deactivate => {
+            result.unwrap().unwrap();
+            false
+        },
+        () = wait_for_blocked(pool, command_pid) => true,
+    };
+    hold.commit().await.unwrap();
+    assert!(pending.await.unwrap().unwrap().changed);
+    if protected {
+        deactivate.await.unwrap().unwrap();
+    }
+    assert!(
+        protected,
+        "deactivation must wait until the delegation commits"
+    );
+    assert_eq!(
+        managers(pool, ids.org_id, ids.project_id).await,
+        vec![target]
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn project_delegation_retains_actor_activity_until_commit(pool: PgPool) {
+    retains_activity_until_commit(&pool, ActivitySubject::Actor).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn project_delegation_retains_added_manager_activity_until_commit(pool: PgPool) {
+    retains_activity_until_commit(&pool, ActivitySubject::AddedManager).await;
+}
+
+async fn deactivation_before_check_denies_delegation(pool: &PgPool, subject: ActivitySubject) {
+    let ids = fixture(pool).await;
+    let target = person(pool, ids.org_id, &[Permission::ProjectReadManaged]).await;
+    let user = match subject {
+        ActivitySubject::Actor => ids.user_id,
+        ActivitySubject::AddedManager => target,
+    };
+    let mut deactivate = pool.begin().await.unwrap();
+    sqlx::query!("UPDATE users SET active=false WHERE id=$1", user)
+        .execute(&mut *deactivate)
+        .await
+        .unwrap();
+    let holder = sqlx::query_scalar!("SELECT pg_backend_pid()")
+        .fetch_one(&mut *deactivate)
+        .await
+        .unwrap()
+        .unwrap();
+    let pending_pool = pool.clone();
+    let command = request(ids.project_id, &[target]);
+    let pending =
+        tokio::spawn(
+            async move { execute(&pending_pool, ids.org_id, ids.user_id, &command).await },
+        );
+    wait_for_blocked(pool, holder).await;
+    deactivate.commit().await.unwrap();
+    let result = pending.await.unwrap();
+    match subject {
+        ActivitySubject::Actor => assert!(matches!(result, Err(ProjectManagersError::Forbidden))),
+        ActivitySubject::AddedManager => {
+            assert!(matches!(result, Err(ProjectManagersError::Ineligible)))
+        }
+    }
+    assert_eq!(revision(pool, ids.org_id).await, 0);
+    assert!(managers(pool, ids.org_id, ids.project_id).await.is_empty());
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM permission_change_receipts WHERE org_id=$1",
+            ids.org_id
+        )
+        .fetch_one(pool)
+        .await
+        .unwrap(),
+        Some(0)
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn project_delegation_denies_actor_deactivated_before_check(pool: PgPool) {
+    deactivation_before_check_denies_delegation(&pool, ActivitySubject::Actor).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn project_delegation_denies_manager_deactivated_before_check(pool: PgPool) {
+    deactivation_before_check_denies_delegation(&pool, ActivitySubject::AddedManager).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn cancelled_project_delegation_rolls_back_and_releases_single_connection(pool: PgPool) {
+    let ids = fixture(&pool).await;
+    let target = person(&pool, ids.org_id, &[Permission::ProjectReadManaged]).await;
+    let connection = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .connect_with(pool.connect_options().as_ref().clone())
+        .await
+        .unwrap();
+    let mut hold = pool.begin().await.unwrap();
+    sqlx::query!("LOCK TABLE permission_change_receipts IN SHARE MODE")
+        .execute(&mut *hold)
+        .await
+        .unwrap();
+    let holder = sqlx::query_scalar!("SELECT pg_backend_pid()")
+        .fetch_one(&mut *hold)
+        .await
+        .unwrap()
+        .unwrap();
+    let pending_pool = connection.clone();
+    let command = request(ids.project_id, &[target]);
+    let retry = command.clone();
+    let pending =
+        tokio::spawn(
+            async move { execute(&pending_pool, ids.org_id, ids.user_id, &command).await },
+        );
+    wait_for_blocked(&pool, holder).await;
+    pending.abort();
+    assert!(pending.await.unwrap_err().is_cancelled());
+    hold.rollback().await.unwrap();
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(5), revision(&connection, ids.org_id))
+            .await
+            .unwrap(),
+        0
+    );
+    assert!(
+        managers(&connection, ids.org_id, ids.project_id)
+            .await
+            .is_empty()
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM permission_change_receipts WHERE org_id=$1",
+            ids.org_id
+        )
+        .fetch_one(&connection)
+        .await
+        .unwrap(),
+        Some(0)
+    );
+    assert!(
+        execute(&connection, ids.org_id, ids.user_id, &retry)
+            .await
+            .unwrap()
+            .changed
+    );
+    connection.close().await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn project_delegation_overrides_readonly_defaults_locally(pool: PgPool) {
+    let ids = fixture(&pool).await;
+    let restricted = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .after_connect(|connection, _| {
+            Box::pin(async move {
+                sqlx::query!("SET default_transaction_read_only = on")
+                    .execute(&mut *connection)
+                    .await?;
+                sqlx::query!("SET default_transaction_isolation = 'repeatable read'")
+                    .execute(&mut *connection)
+                    .await?;
+                Ok(())
+            })
+        })
+        .connect_with(pool.connect_options().as_ref().clone())
+        .await
+        .unwrap();
+    execute(
+        &restricted,
+        ids.org_id,
+        ids.user_id,
+        &request(ids.project_id, &[ids.user_id]),
+    )
+    .await
+    .unwrap();
+    let defaults = sqlx::query!("SELECT current_setting('default_transaction_isolation') AS isolation, current_setting('default_transaction_read_only') AS readonly")
+        .fetch_one(&restricted).await.unwrap();
+    assert_eq!(defaults.isolation.as_deref(), Some("repeatable read"));
+    assert_eq!(defaults.readonly.as_deref(), Some("on"));
+    restricted.close().await;
+}
+
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]
 async fn project_editor_delegates_existing_read_grants_without_promotion(pool: PgPool) {

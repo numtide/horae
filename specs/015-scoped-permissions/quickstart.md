@@ -1,5 +1,42 @@
 # Permission verification
 
+## Project-delegation activity fences (T133–T135)
+
+Run in the Nix shell with the owned disposable PostgreSQL database, never the
+application database:
+
+```sh
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae permissions:: -- --nocapture
+```
+
+Three initial regressions failed on `c88ca6d`: actor and added-manager activity
+were not retained until receipt commit, and inherited READ ONLY rejected the
+organization lock. After sharing the administration setup and locking activity
+reads, all 128 selected permission tests pass (54.22s test execution).
+
+Six new cases cover both subjects in both race orders, local transaction defaults,
+and cancellation/rollback with immediate exact retry through a one-connection
+pool. Tests observe PostgreSQL blocker dependencies; they do not infer ordering
+from sleeps. Existing project tests also pass for retained inactive/incompatible
+managers, archived projects, no-ops, exact replay, revocation, audit failure,
+membership/history preservation and the project NOWAIT rollback.
+
+Focused source review checks authorization before replay, tenant-bound activity
+reads, sorted added-manager locks, compatible SHARE modes and absence of user or
+project-parent writes. The existing organization gate serializes canonical
+writers; direct SQL changing grants outside that protocol remains unsupported.
+The new command setup preserves stricter inherited statement/idle limits and
+does not change session defaults. No new grant, endpoint, migration or dependency
+is introduced. This is not global policy activation or browser acceptance.
+
+Complete SQLx regeneration after cleaning only Horae build artifacts produces
+1,405 descriptors. The sole removal is the replaced plain EXISTS activity query;
+its locking replacement already has a shared descriptor. The first cached run
+omitted still-used integration queries and was not accepted. Offline all-targets
+server Clippy passes with warnings denied (1m03s). Formatting and whitespace
+checks pass. No new WASM, browser, full server-suite or full-flake result is
+claimed for this internal server-only repair.
+
 ## Real-browser request recovery (T018 subset)
 
 `permission-editor-recovery.cjs` runs against the design runner's disposable

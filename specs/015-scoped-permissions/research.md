@@ -1,5 +1,28 @@
 # Permissions discovery
 
+## Relationship transaction follow-up (2026-10-04)
+
+- Before extending person-management commands, inspected the existing project
+  delegation path. Its plain activity reads permit direct deactivation before
+  receipt commit, unlike the updated profile/template commands. Three new
+  regressions reproduce actor activity loss, added-manager activity loss and
+  inherited READ ONLY failure. Reuse the existing administration setup and SHARE
+  activity fences; preserve retained/removed-manager eligibility and project
+  NOWAIT behavior. This is FR-010/026 enforcement, not a new product predicate.
+- Rechecked the official [people-assignment guide](https://support.getharvest.com/hc/en-us/articles/4422314817677-Making-people-assignments-for-Managers),
+  [teammates API](https://help.getharvest.com/api-v2/users-api/users/teammates/)
+  and [archive guide](https://support.getharvest.com/hc/en-us/articles/360048687311-Archiving-deleting-and-restoring-people).
+  They establish Administrator assignment authority and retained historical
+  reporting after archival, but do not settle adding archived people to a
+  responsible person's scope. Asked one product question: restrict new edges to
+  active endpoints while retaining/removing existing edges, or allow new edges
+  involving archived people. No answer has been accepted; FR-027/028/029/031
+  remain unchanged. This is not a reason to repeat their confirmed decisions.
+- No current Harvest browser connection or account mutation occurred. The source
+  guides do not establish custom-profile enforcement. The person-management
+  command and its inactive-endpoint predicate remain unfinished; no temporary
+  default or new archive/restore side effect is introduced.
+
 ## Permission editor integration (2026-10-04)
 
 - Decision: connect existing commands through the session-derived editor contract,

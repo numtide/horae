@@ -26,8 +26,11 @@ inactive-target lifecycle remains unresolved and outside this command.
 
 ## Atomicity and replay
 
-Start READ COMMITTED, lock organization FOR UPDATE, validate policy version and
-current actor authority. Exact canonical receipt replay requires that same current
+Use the existing administration setup: READ COMMITTED, READ WRITE and local
+statement/idle limits of at most 5/10 seconds, preserving stricter inherited
+limits without changing session defaults. Lock organization FOR UPDATE, then
+read actor activity FOR SHARE and validate policy version/current authority.
+Hold actor SHARE through receipt lookup or commit. Exact canonical receipt replay requires that same current
 project authority, including after self-removal; then precedes stale-revision
 checks. Changed intent, including another command kind, conflicts before decoding
 its result. Outcomes contain only project ID, access revision and changed status;
@@ -38,8 +41,11 @@ project FOR KEY SHARE NOWAIT. PostgreSQL 55P03 causes explicit whole-transaction
 rollback and a retryable busy outcome, never an in-transaction retry. This prevents
 the concrete legacy-editor cycle: project UPDATE → organization SHARE versus
 organization UPDATE → project FK KEY SHARE. Parent protection then covers child
-inserts. Plain user reads and FK KEY SHARE do not conflict with existing user SHARE
-locks. Do not add project writes, legacy membership writes or parent-write triggers.
+inserts. Read every newly added manager's activity FOR SHARE in sorted ID order
+before loading their grants. Hold those locks through receipt commit: FK KEY SHARE
+alone does not protect the active flag against a non-key update. Existing user
+SHARE locks remain compatible. Do not require activity for retained/removed
+managers, add user/project writes, legacy membership writes or parent-write triggers.
 
 Read current relationships in deterministic order. Validate every addition before
 writing; preserve retained IDs/revisions, delete removed edges and insert UUID-v7
@@ -62,6 +68,11 @@ writers must participate in this organization gate/revision protocol.
 - Concurrent replacements, revocation winning the organization gate, and a held
   legacy-style project UPDATE produce no stale commit or lock cycle.
 - Audit failure preserves links, permissions, revision and receipts atomically.
+- Actor/new-manager deactivation first makes the locking check wait and then
+  reject; command first holds activity through receipt commit. Exercise actual
+  PostgreSQL blockers, not assumed task timing. Cancellation releases the gate
+  and rolls back relationship/revision changes. Inherited READ ONLY/repeatable-read
+  defaults do not alter command semantics or get overwritten at session level.
 
 Read-only adversarial contract review found no unresolved high finding in this
 subset. Full T042, activation, UI and editor integration remain open: the legacy

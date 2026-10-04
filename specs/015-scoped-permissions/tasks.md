@@ -160,6 +160,13 @@ full T042 and runtime activation remain separate gates.
 - [x] T060 [US2] Implement internal atomic manager-set replacement in `crates/horae/src/server_fns/permissions/project_management.rs`, using existing canonical loaders, 0044 relations and receipts; prevent the legacy project-parent lock cycle without policy activation or membership changes (FR-005/010/011/013/017/026).
 - [x] T061 [US2] Verify focused and affected PostgreSQL regressions, complete `.sqlx/` regeneration, offline all-targets server Clippy and formatting; adversarially review the implementation and record actual evidence in `specs/015-scoped-permissions/quickstart.md` and `progress.md`.
 
+Activity-fence follow-up, reusing the same FR-010/026 contract and existing
+administration transaction settings; no new grant or lifecycle rule:
+
+- [x] T133 [US2] Reproduce concurrent actor/new-manager deactivation and inherited READ ONLY failure in `crates/horae/src/server_fns/permissions/tests/project_management.rs`; cover both race orders, retained inactive managers and cancellation rollback.
+- [x] T134 [US2] Hold actor and added-manager activity with SHARE through receipt commit in `permissions/project_management.rs`, under the existing organization gate; reuse `configure_administration`, preserving the project NOWAIT rollback and all eligibility/replay rules.
+- [x] T135 [US2] Verify project/profile/template command regressions, SQLx cache, offline server lint and formatting; adversarially review lock ordering, retained-manager behavior and rollback, recording evidence in `quickstart.md` and `progress.md`.
+
 Independent test: two projects/two approvers with overlapping people scope, filtered dates, empty cells and withdrawal; no unrelated changes.
 
 ### Completed increment: pure relationship prerequisites
