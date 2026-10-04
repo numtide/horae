@@ -1,5 +1,51 @@
 # Permission verification
 
+## Canonical scoped directory (T148–T150)
+
+Run in the Nix shell against disposable PostgreSQL:
+
+```sh
+SQLX_OFFLINE=true cargo test -p horae --features server --bin horae directory_tests --locked
+SQLX_OFFLINE=true cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization --locked
+SQLX_OFFLINE=true cargo test -p horae --features server --bin horae permissions:: --locked
+SQLX_OFFLINE=true cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features web --target wasm32-unknown-unknown --locked -- -D warnings
+```
+
+The initial test compilation fails for missing directory/model imports. After
+implementation and a test-reference correction, seven PostgreSQL tests pass in
+4.35s and the expanded registered-session HTTP matrix passes in 11.97s. The
+reader exercises all six profiles, custom direct-person scope, tenant/activity
+denial, invalid or missing policy/state, minimal fields, name/UUID pagination,
+deleted/foreign cursors, authorization before empty results, revocation after
+lock waits, cancellation and reuse of a one-connection pool with READ ONLY /
+REPEATABLE READ defaults. HTTP coverage asserts exact basic-identity values even
+when rates/provider data are populated, ignored forged requester fields,
+activity filters, NUL-cursor validation and sanitized internal failures.
+
+The query cache preparation passes in 1m02s with 1,423 descriptors, adding 14 and
+removing none. Every new descriptor maps to the reader or its test fixtures.
+WASM initially reports the four DTOs as unused because UI cutover is not yet
+authorized. The two root types carry non-server `expect(dead_code)` annotations
+with that reason; redundant expectations on their nested row/cursor types were
+removed after Clippy reported them as unfulfilled. Remove the two remaining
+expectations when connecting the real directory consumer.
+
+Focused adversarial source review checks SQL scope-before-limit, current grants
+rather than labels/admin shortcuts, organization-then-actor locks against
+canonical writers, transaction-local defaults, cancellation rollback, cursor
+bounds without identity lookup and minimal/sanitized response paths. It finds
+no new material issue in this reader; it is not an independent review or full
+operation acceptance. New-model Harvest inactive/email behavior still needs
+reference acceptance; workflow identity rules and legacy shell integration stay
+open. No browser, UI, migration, production-data or full-flake claim is made.
+
+Final offline all-targets server Clippy passes in 1m13s and WASM Clippy in 13.38s,
+both with warnings denied. All 141 selected permission regressions pass in
+61.24s after offline-cache compilation (including the seven directory tests).
+This is not a rerun of the entire server suite. T148–T150 close only this reader;
+the general requirements checklist remains 12/16.
+
 ## User directory payload (T145–T147)
 
 Run in the Nix shell with `DATABASE_URL` pointing only to disposable PostgreSQL:

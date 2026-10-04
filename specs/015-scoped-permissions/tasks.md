@@ -27,6 +27,16 @@ It does not define new-model directory, picker or lifecycle authority.
 - [x] T146 Replace the database `User` response with the explicit `UserListItem` consumer projection and minimal SQL in `models/user.rs` and `server_fns/users.rs`; update the navigation test double to the same response type.
 - [x] T147 Verify real-route and consumer regressions, regenerate SQLx cache, run server/WASM lint and formatting; review payload and unchanged-guard boundaries and record evidence.
 
+### Scoped directory reads (OP19, FR-002/006/007/008/010/018)
+
+T147 → T148 → T149 → T150 implements the policy-1 reader in
+`contracts/people-directory.md`, not legacy guard replacement or activation.
+Reference limitations, workflow identities and full cutover remain separate.
+
+- [x] T148 Add failing database tests and registered-session coverage for the scoped-directory contract, including six-profile/custom scope, sensitive fields, pagination/activity, revocation and cancellation.
+- [x] T149 Add the minimal page/filter/cursor DTO and transactional reader plus authenticated `list_people` wrapper, using current canonical grants and person-management relationships without legacy fallback.
+- [x] T150 Verify focused and affected regressions, SQLx completeness, server/WASM lint and formatting; adversarially review query/authority boundaries and record evidence.
+
 ### Confirmed catalog implementation (independent of runtime cutover)
 
 The user requested implementation without paying for or modifying Harvest on

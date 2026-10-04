@@ -1,5 +1,60 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Canonical scoped-directory reads
+
+- The preceding MVP response was status-only. Revalidated the existing worktree
+  at `7f14e4b` and continued its uncommitted directory contract/tests rather than
+  restarting the feature. Spec Kit prerequisites pass; its skills remain absent.
+
+- Implemented `users::list_people` with session-derived requester identity,
+  strict policy/state loading, current people grants and direct person scope.
+  The query selects only ID/name/email/activity, applies scope before pagination
+  and never falls back to legacy roles. Every page reauthorizes under the bounded
+  organization/actor read locks. Errors exclude internal storage diagnostics.
+
+- Initial tests fail on missing reader/model imports. Corrected one test's
+  borrowed profile comparison during implementation. All seven directory tests
+  then pass in 4.35s after compilation: six default profiles, custom managed
+  scope, foreign/inactive/missing/invalid authority, hidden rows, duplicate and
+  mixed names, exact/continued pages, activity filters, deleted/foreign cursors,
+  relationship/grant revocation, direct deactivation and cancellation/pool reuse.
+
+- Registered-session HTTP matrix passes in 11.97s, including exact minimal
+  payload with non-null sensitive database fields, forged authority ignored,
+  archived/active filters, invalid cursor, same-session revocation and sanitized
+  invalid-state errors. Existing legacy directory checks still pass.
+
+- WASM lint initially identifies the four not-yet-consumed directory DTOs.
+  Added two individually scoped, non-server-only `expect(dead_code)` annotations
+  on the root types, explaining the pending UI cutover; these must be removed
+  with that consumer. Removed redundant nested-type expectations after lint
+  reported them as unfulfilled.
+  Full SQLx preparation passes in 1m02s: 1,423 descriptors, 14 additions and no
+  removals. Offline all-targets server Clippy passes in 1m13s; final WASM Clippy
+  passes in 13.38s, both with warnings denied. The 141 selected permission
+  regressions pass in 61.24s after an offline-cache compilation.
+
+- Reopened current Harvest permission and Users API documentation. The new
+  catalog supports separate people grants; the API's legacy-role descriptions
+  do not prove new-model inactive/email enforcement. The contract labels that
+  inference and retains reference acceptance before activation. No browser or
+  real-account mutation occurred.
+
+- Focused adversarial source review checks field projection, scope-before-limit,
+  session-derived identity, gate ordering against existing writers, rollback,
+  pagination and sanitized errors. No new material local finding; this is not
+  independent review or whole-feature acceptance. No schema, dependency or CSS
+  change. T148–T150 close for the reader only; general readiness remains 12/16.
+
+- The owned disposable PostgreSQL is stopped after verification. Formatting
+  corrected one Markdown list boundary; final formatting is checked before
+  publication. No real records were changed.
+
+Delivery stays on existing draft #212 without merge. Next: close the per-consumer
+workflow identity rules (report/approval names and project assignment choices)
+before directory/shell integration. Full OP19 and reviewed activation remain
+open, as do approvals, actual expenses and person-management writes.
+
 ## 2026-10-04 — Minimal user-directory response
 
 - The preceding MVP response was status-only (no implementation progress).
