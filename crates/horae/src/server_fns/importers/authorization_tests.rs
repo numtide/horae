@@ -23,6 +23,7 @@ use uuid::Uuid;
 
 use super::*;
 
+mod approval_labels;
 mod cli;
 mod exports;
 mod financial_snapshots;
@@ -344,6 +345,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     let mut server = tokio::task::JoinSet::new();
     server.spawn(async move { axum::serve(listener, router).await.unwrap() });
     user_directory::check(&pool, &api).await;
+    approval_labels::check(&pool, &api).await;
     own_permissions::check(&pool, &api).await;
     permission_audit::check(&pool, &api).await;
     permission_editor::check(&pool, &api).await;

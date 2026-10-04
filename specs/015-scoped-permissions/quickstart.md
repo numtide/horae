@@ -1,5 +1,48 @@
 # Permission verification
 
+## Approval label projection (T151–T153)
+
+Run in the Nix shell with `DATABASE_URL` pointing to disposable PostgreSQL:
+
+```sh
+cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization --locked
+cargo test -p horae --features server --test approval_labels_ui --locked
+cargo test -p horae --features server --bin horae server_fns::approvals:: --locked
+cargo sqlx prepare --workspace -- --features server --all-targets
+SQLX_OFFLINE=true cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features web --target wasm32-unknown-unknown --locked -- -D warnings
+```
+
+The registered HTTP test first fails on the absent name field; all three actual
+page tests first fail on an unnecessary directory request. After the repair,
+the HTTP matrix passes in 12.62s, all three page tests pass, and all 14 existing
+approval regressions pass in 3.89s. Two test expectations were corrected to the
+existing duration format (`1:30`) and Dioxus's numeric HTML entities.
+
+HTTP coverage checks manager/admin access, anonymous/member/inactive denial,
+same-session demotion, state filters, archived and active duplicate names,
+same-session renaming, foreign approvals and malformed foreign submitter links,
+exact summary fields and total/billable minutes. Actual-page VirtualDom/SSR
+coverage checks escaped Unicode/markup names, loading/error/empty/access-denied
+states, no directory calls and an approval click retaining its record ID.
+These are not browser tests or proof of canonical scoped-approval enforcement.
+
+Focused adversarial self-review checks the only summary producer and consumer,
+tenant-qualified join cardinality, archived retention, projection fields and
+unchanged filter/order/aggregation/mutation code. No material finding remains
+within this label repair; full approval coverage, expenses, lifecycle, revocation
+and policy activation remain open. Existing primitives and CSS are preserved.
+This is not an independent review or a whole-feature acceptance claim.
+
+Full non-incremental SQLx preparation passes in 1m14s with 1,427 descriptors:
+five additions and only the replaced list query removed. The first cached run
+omitted 91 unrelated test descriptions; cleaning 18.3 GiB of regenerable Horae
+artifacts and repeating preparation restores them. Offline all-targets server
+Clippy passes in 1m12s with warnings denied. No migration or dependency changes.
+Offline WASM Clippy also passes in 15.07s with warnings denied. Formatting and
+whitespace checks pass. T151–T153 close only this projection; the general
+requirements checklist remains 12/16. No full-flake or fresh browser run is claimed.
+
 ## Canonical scoped directory (T148–T150)
 
 Run in the Nix shell against disposable PostgreSQL:

@@ -37,6 +37,16 @@ Reference limitations, workflow identities and full cutover remain separate.
 - [x] T149 Add the minimal page/filter/cursor DTO and transactional reader plus authenticated `list_people` wrapper, using current canonical grants and person-management relationships without legacy fallback.
 - [x] T150 Verify focused and affected regressions, SQLx completeness, server/WASM lint and formatting; adversarially review query/authority boundaries and record evidence.
 
+### Approval label projection (OP06/19, FR-006/008/018)
+
+T150 → T151 → T152 → T153 removes the approval table's unrelated directory
+dependency under `contracts/people-directory.md`, without activating policy or
+changing approval transitions. Reports and project pickers stay separate.
+
+- [x] T151 Reproduce missing approval names through the real session endpoint; add tenant/activity/filter/payload/total tests and actual-page tests without a directory service.
+- [x] T152 Join submitter identity within the approval's organization, add `ApprovalSummary.user_name` and use it directly in `pages/approvals.rs`; preserve controls and CSS.
+- [x] T153 Verify HTTP/UI and affected approval regressions, SQLx cache, server/WASM lint and formatting; review scope, names, aggregates and unchanged actions, recording remaining parity limits.
+
 ### Confirmed catalog implementation (independent of runtime cutover)
 
 The user requested implementation without paying for or modifying Harvest on

@@ -198,7 +198,7 @@ pub async fn list_approvals(status: Option<String>) -> Result<Vec<ApprovalSummar
     // period (actual `minutes`, split by `billable`) via a lateral join, so the
     // whole table comes back in one query rather than a lookup per approval.
     let rows = sqlx::query!(
-        r#"SELECT a.id, a.org_id, a.user_id,
+        r#"SELECT a.id, a.org_id, a.user_id, u.name as user_name,
                 a.period_start as "period_start: chrono::NaiveDate",
                 a.period_end as "period_end: chrono::NaiveDate",
                 a.state as "state: EntryState",
@@ -208,6 +208,7 @@ pub async fn list_approvals(status: Option<String>) -> Result<Vec<ApprovalSummar
                 COALESCE(t.total_minutes, 0) as "total_minutes!",
                 COALESCE(t.billable_minutes, 0) as "billable_minutes!"
          FROM approvals a
+         JOIN users u ON u.id = a.user_id AND u.org_id = a.org_id
          LEFT JOIN LATERAL (
              SELECT (SUM(minutes))::bigint as total_minutes,
                     (SUM(minutes) FILTER (WHERE billable))::bigint as billable_minutes
@@ -240,6 +241,7 @@ pub async fn list_approvals(status: Option<String>) -> Result<Vec<ApprovalSummar
                 approved_by: r.approved_by,
                 approved_at: r.approved_at,
             },
+            user_name: r.user_name,
             total_minutes: r.total_minutes,
             billable_minutes: r.billable_minutes,
         })

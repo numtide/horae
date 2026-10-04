@@ -1,5 +1,45 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Approval labels without directory access
+
+- The preceding status reply was no progress. Resumed the retained UI test
+  process, which completed with all three tests failing on the unwanted directory
+  call. The earlier registered HTTP test reproduced the missing `user_name` field.
+
+- Added the submitter name to the approval query with a same-organization join
+  and removed the page's separate directory resource and UUID fallback. Archived
+  submitters remain nameable; malformed foreign references are excluded. Existing
+  authorization, minute aggregation, controls and CSS remain unchanged.
+
+- The first post-fix UI run passed action and resource-state tests; its escaped
+  name assertion expected named HTML entities, while Dioxus emits numeric entities.
+  Corrected that test expectation, not the production escaping.
+
+- The corrected UI suite passes all three tests. The registered HTTP matrix
+  passes in 12.62s and the 14 existing approval regressions pass in 3.89s.
+  Cached SQLx preparation omits unchanged integration-test queries (92 deletions,
+  only one intended). Cleaned 18.3 GiB of regenerable package artifacts and rerun
+  complete preparation; no source, database or real records were removed.
+
+- Full preparation passes in 1m14s with 1,427 descriptors: five additions and
+  only the replaced approval-list query removed. Offline all-targets server
+  Clippy passes in 1m12s. The following status-only response made no additional
+  progress; resumed that retained lint process rather than restarting it.
+
+- Offline WASM Clippy passes in 15.07s with warnings denied. Formatting and
+  whitespace checks pass. Focused adversarial self-review found no additional
+  issue in this projection; this is not an independent whole-feature review.
+  T151–T153 close, with general requirements still 12/16. Rust/testing and
+  Impeccable hardening guidance kept names escaped and existing components/CSS
+  unchanged. Spec Kit prerequisites pass; its absent skills were not executed.
+
+Delivery: unsigned commit on existing draft #212, without merge. Next: close
+the remaining report-filter and project-assignment identity contracts, then
+integrate the canonical directory/shell under the reviewed full-policy gates.
+Flexible approval lifecycle, actual expenses, person-management writes and
+preserved-data activation remain required. No policy activation, real data,
+fresh browser or full-feature completion is claimed.
+
 ## 2026-10-04 — Canonical scoped-directory reads
 
 - The preceding MVP response was status-only. Revalidated the existing worktree

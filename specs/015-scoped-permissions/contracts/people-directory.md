@@ -15,7 +15,7 @@ includes archived-person navigation, but its three-role guidance is not evidence
 for every new custom permission. No authenticated reference browser was available
 in this turn; no Harvest account or data was changed.
 
-Current Horae consumers of `server_fns::list_users`:
+Horae consumers of `server_fns::list_users` at the inspected baseline:
 
 | Consumer | Used fields |
 | --- | --- |
@@ -23,6 +23,9 @@ Current Horae consumers of `server_fns::list_users`:
 | `pages::projects::ProjectDetail` | ID/name lookup; ID/name/email assignment choices |
 | `pages::reports::Reports` | ID/name filter choices |
 | `pages::approvals::Approvals` | ID/name lookup |
+
+The approval-label increment removes the last consumer from this table; the
+other three continue using the legacy directory until their reviewed cutover.
 
 None uses rates, organization ID, identity-provider subject or account creation
 time. The inspected baseline query nevertheless loads and serializes those fields; the
@@ -51,6 +54,41 @@ unauthenticated and deactivated denial; same-cookie demotion of inactive access.
 Compile server and WASM consumers and run the detail-navigation regressions.
 
 ## Required full-policy integration
+
+### Approval row labels, independent of the directory
+
+At the baseline, `Approvals` fetches `list_users(false)` solely to map approval user IDs
+to names. An archived submitter disappears from that lookup even though the
+approval remains visible, and an unrelated directory failure replaces names with
+UUIDs. This also fetches email/role/activity for every active person unnecessarily.
+The handoff `design/project/app/06_Approvals.dc.html` displays teammate names and
+avatars; no general directory lookup is required for those labels.
+
+Return `ApprovalSummary.user_name` from the same query as its approval, joining
+the submitter by both user ID and organization. Do not require an active submitter
+or canonical permission state to label retained business records. Invalid
+cross-organization references must not resolve a foreign identity or appear as
+valid review rows. Keep the existing manager gate, state filter, period order,
+minute aggregation and mutation contracts; no grants or approval eligibility
+are inferred from a display label. Remove the page's directory resource and map,
+render the supplied name as escaped text and retain existing components/styles.
+
+Acceptance: real registered-session requests for manager/admin, member/anonymous/
+inactive denial, state filters, active and archived submitters, duplicate labels,
+renames, foreign approvals and malformed cross-organization references, exact
+summary fields and unchanged total/billable minutes. Render the actual page with
+controlled approval responses and no directory service; verify escaped names,
+loading/error/empty/access-denied behavior and unchanged mutation IDs.
+This closes only the label dependency, not the scoped approval lifecycle.
+
+For reports, distinguish result labels from filter choices: the
+[archiving guide](https://support.getharvest.com/hc/en-us/articles/360048687311-Archiving-deleting-and-restoring-people),
+reopened 2026-10-04, says archived people's time remains in all-person results,
+while selecting archived people in detailed report filters requires the archived
+items option. Do not narrow report totals by reusing an active-only directory or
+derive the complete choice set from the currently displayed rows. Custom report
+scope, zero-record candidates and project assignment eligibility remain separate
+contracts. This source does not prove new-model approval enforcement.
 
 ### Scoped directory reader
 
@@ -94,8 +132,8 @@ Hold the organization SHARE gate and active actor SHARE lock until the read
 commits, using the existing bounded READ COMMITTED transaction setup. Canonical
 grant/relationship writers serialize through the organization gate; direct actor
 deactivation must also be observed after waits. HTTP authentication and storage
-failures are sanitized. Legacy `list_users` and its existing consumers remain
-unchanged until the coordinated shell/workflow cutover; this reader must never
+failures are sanitized. Legacy `list_users` and its remaining consumers stay
+in place until the coordinated shell/workflow cutover; this reader must never
 be a fallback to broaden a denied report/approval/project picker.
 
 Acceptance requires the six default profiles and custom managed/all selections,
