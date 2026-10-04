@@ -1,5 +1,10 @@
 # Permission data model
 
+The internal migration preflight returns only transient integer diagnostic counts
+under `contracts/migration-preflight.md`. No identifiers, readiness flag,
+confirmation token, persisted preview or new table is introduced. These counts
+cannot authorize activation or substitute for its complete reviewed input set.
+
 Budget email preparation adds only an optional private transient record under
 `contracts/budget-email-authority.md`: current recipient/message with stored
 attempt count. Skips return no record; terminal rejection stores the existing

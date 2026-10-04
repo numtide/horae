@@ -79,6 +79,11 @@ they do not establish that the installation contains anomalous rows.
 
 ## Concrete preservation and preflight cases
 
+The independent count-only reader is refined in
+[migration-preflight.md](migration-preflight.md), T117–T119. It inspects source
+anomalies/provenance only. No complete preview, mapping, conversion or activation
+is authorized by this implementation; clean counts cannot satisfy those gates.
+
 These cases extend the fixtures below and are owned by T007/T019. They are
 required test inputs/outcomes, not executed tests or approved role mappings.
 

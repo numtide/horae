@@ -1,5 +1,41 @@
 # Permission verification
 
+## Legacy source preflight (T117–T119)
+
+Run `cargo test -p horae --features server --bin horae preflight_tests --locked`
+inside the Nix shell against disposable PostgreSQL with all checked-in migrations.
+No application server, Chrome, mail transport or real account is needed. Follow
+with `server_fns::permissions::` regressions, clean complete SQLx preparation,
+offline all-targets Clippy/WASM and formatting. The seven production-reader
+tests in `permissions/tests/preflight.rs` map to the bounded contract:
+
+| Requirement subset | Executable evidence |
+| --- | --- |
+| FR-006/014: tenant anomalies without foreign identities | `preflight_counts_cross_tenant_memberships_from_both_ends`, `preflight_approval_diagnostics_preserve_stored_history` |
+| FR-014/017: unknown requester versus source corruption, unchanged artifacts | `preflight_separates_unknown_import_requesters_without_changing_artifacts` |
+| FR-006/010: current legacy authority, not staged canonical privileges | `preflight_requires_current_legacy_administrator_not_staged_grants`, `preflight_rechecks_revocation_after_organization_and_actor_waits` |
+| FR-017/018: cancellation/failure cleanup and size-one pool | `preflight_cancellation_releases_organization_and_single_connection`, `preflight_lock_failure_releases_organization_without_mutating_data` |
+
+The initial count test fails against the empty reader (0 versus 1 cross-tenant
+membership). The first implemented snapshot passes six tests. The subsequent
+snapshot adds historical inactive-approver and lock-timeout coverage; its final
+results are recorded separately below. Counts are neither unique combined totals
+nor approval to activate. Full M01–M08, reviewed mappings and T019 remain open.
+
+Final permission regression: 92 passed, zero failures/ignored (40.77s), including
+all seven preflight tests and the inactive historical approver. Independent
+static re-review found no blocking defect; it suggested an additional isolated
+approver-only inbound fixture, beyond the existing combined inbound fixture.
+The fixed numeric type and one aggregate statement are also source-reviewed;
+no full migration or full-feature acceptance is inferred from this suite.
+
+Clean SQLx preparation passes (51.94s): 17 new descriptors, none removed or
+modified, 1,379 total. Offline all-targets server Clippy with denied warnings
+passes (1m00s); denied-warning WASM passes (9.71s). This isolated internal reader
+has no runtime callers or public surface; the affected permission suite above,
+not a new full-server or `nix flake check` run, is this increment's regression
+evidence. Full merge gates remain required before making the draft PR ready.
+
 ## Budget email preparation (T114–T116)
 
 Run `cargo test -p horae --features server --bin horae notifications:: --locked`

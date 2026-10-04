@@ -1,5 +1,37 @@
 # Permissions discovery
 
+## Invoice evidence follow-up and source preflight (2026-10-04)
+
+- Fresh independent primary-source review did not close new-model mixed-project
+  or unlinked-invoice authorization. The current permission guide establishes
+  distinct read/draft/manage grants, not the document-level scope predicate.
+  [Single-invoice creation](https://support.getharvest.com/hc/en-us/articles/360048686371-How-to-create-a-single-invoice)
+  supports optional project links on manual documents. The
+  [overview's project filter](https://support.getharvest.com/hc/en-us/articles/12389698137869-Invoices-overview)
+  is not evidence of the authorization predicate. Do not infer either from
+  older Manager descriptions. One mixed-project coverage question is pending;
+  its answer will not implicitly settle unlinked invoices or source disclosure.
+- Browser evidence limitation: the existing MCP client initialized, but the
+  tab-list request timed out. No current account observation or account write
+  occurred. Existing snapshots remain historical evidence only.
+- Decision: advance the already specified read-only M01/M07/M08 diagnostics,
+  not another legacy behavior repair or an unreviewed invoice predicate.
+  `contracts/migration-preflight.md` defines a fixed numeric projection,
+  organization/actor fencing and one statement snapshot. Independent review
+  found inbound approval references can occupy another tenant's subject/period
+  uniqueness slot; include every cross-tenant approval touching the inspected
+  organization, without exposing any foreign identity.
+- Schema/source review: the shared entry-state enum permits open/invoiced
+  approvals, but current approval writers use submitted/approved or deletion.
+  Count unexpected states, non-approved attribution and missing approved
+  attribution separately. An inactive or demoted historical approver with
+  complete local attribution is not missing provenance. Job NULL requesters
+  remain unknown; group by actual pending/terminal state without choosing their
+  execution/retry policy. No diagnostic repairs data or proves full readiness.
+- Alternatives rejected: per-row payloads, a ready-to-activate flag, guessed
+  historical actors, role mappings, automatic cleanup and interpreting all job
+  kinds as user imports. No new dependency, schema or public endpoint is needed.
+
 ## Next canonical integration target: invoice permissions (2026-10-04)
 
 - Decision: next refine OP21–OP24 into an executable canonical invoice contract,

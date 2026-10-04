@@ -478,6 +478,19 @@ No full US4 or activation completion follows from this read-only slice.
 
 Independent test: populated migration fixture, reviewed access differences, safe retry and no import-driven privilege overwrite.
 
+### Read-only source preflight
+
+T117–T119 refine the diagnostic portion of M01/M07/M08 under
+`contracts/migration-preflight.md`. They depend on the existing schema/current
+Administrator boundary, not an unreviewed target mapping. Sequential tests →
+reader → verification; no activation, repair or full US5 acceptance follows.
+
+- [x] T117 [US5] Add failing diagnostic/authority/revocation/preservation tests in `crates/horae/src/server_fns/permissions/tests/preflight.rs` for the closed preflight contract (FR-006/010/014/017/018).
+- [x] T118 [US5] Implement the internal count-only reader in `crates/horae/src/server_fns/permissions/preflight.rs`, wire it in `permissions.rs` and regenerate `.sqlx/`; preserve all existing data and active authorization.
+- [x] T119 [US5] Run focused/permission regressions, complete SQLx preparation, offline lint/build and formatting; review the diagnostic boundary adversarially and record evidence in `specs/015-scoped-permissions/quickstart.md` and `progress.md`.
+
+### Reviewed migration and activation
+
 - [ ] T019 [US5] Add migration, import and identity-linking fixtures in `crates/horae/tests/integration.rs`; implement only the reviewed migration in `crates/horae/migrations/` and import/auth consumers (FR-014/017).
 
 T007/T019 include migration cases M01–M08 in `contracts/migration.md`: parent

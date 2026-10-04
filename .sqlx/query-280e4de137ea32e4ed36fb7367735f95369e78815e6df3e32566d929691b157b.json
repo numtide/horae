@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n          (SELECT count(*) FROM assignments a\n           JOIN projects p ON p.id = a.project_id JOIN users u ON u.id = a.user_id\n           WHERE p.org_id <> u.org_id AND (p.org_id = $1 OR u.org_id = $1)) AS \"cross_org_memberships!\",\n          (SELECT count(*) FROM approvals a JOIN users u ON u.id = a.user_id\n           LEFT JOIN users approver ON approver.id = a.approved_by\n           WHERE (a.org_id <> u.org_id OR a.org_id <> approver.org_id)\n             AND (a.org_id = $1 OR u.org_id = $1 OR approver.org_id = $1)) AS \"cross_org_approvals!\",\n          (SELECT count(*) FROM approvals WHERE org_id = $1 AND state = 'approved'\n             AND (approved_by IS NULL OR approved_at IS NULL)) AS \"incomplete_approval_attribution!\",\n          (SELECT count(*) FROM approvals WHERE org_id = $1 AND state <> 'approved'\n             AND (approved_by IS NOT NULL OR approved_at IS NOT NULL)) AS \"unexpected_approval_attribution!\",\n          (SELECT count(*) FROM approvals WHERE org_id = $1 AND state IN ('open', 'invoiced')) AS \"unexpected_approval_states!\",\n          (SELECT count(*) FROM horae_jobs WHERE org_id = $1\n             AND kind IN ('harvest_api_import', 'harvest_csv_import')\n             AND original_requester_id IS NULL AND status IN ('queued', 'running')) AS \"pending_imports_without_requester!\",\n          (SELECT count(*) FROM horae_jobs WHERE org_id = $1\n             AND kind IN ('harvest_api_import', 'harvest_csv_import')\n             AND original_requester_id IS NULL AND status IN ('succeeded', 'failed', 'cancelled')) AS \"terminal_imports_without_requester!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "cross_org_memberships!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "cross_org_approvals!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "incomplete_approval_attribution!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "unexpected_approval_attribution!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "unexpected_approval_states!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "pending_imports_without_requester!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "terminal_imports_without_requester!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "280e4de137ea32e4ed36fb7367735f95369e78815e6df3e32566d929691b157b"
+}

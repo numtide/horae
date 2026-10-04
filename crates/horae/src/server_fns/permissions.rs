@@ -9,6 +9,7 @@ use crate::models::permissions::{PermissionSource, PermissionTemplate, PersonPer
 
 pub(crate) mod audit;
 pub(crate) mod own;
+pub(crate) mod preflight;
 pub(crate) mod profiles;
 pub(crate) mod project_management;
 pub(crate) mod templates;
@@ -133,3 +134,7 @@ mod audit_tests;
 #[cfg(test)]
 #[path = "permissions/tests/own.rs"]
 mod own_tests;
+
+#[cfg(test)]
+#[path = "permissions/tests/preflight.rs"]
+mod preflight_tests;

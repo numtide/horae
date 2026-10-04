@@ -1,5 +1,58 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Invoice scope research and migration preflight
+
+- The intervening MVP response was status-only. Revalidated clean branch at
+  `0793ce7`, one ahead; normal authorized push succeeded. No merge occurred.
+- Spec Kit Clarify/Plan/Tasks reused feature 015 and existing artifacts. Fresh
+  primary-source research still cannot establish mixed-project invoice scope.
+  Asked one new product question about whole-invoice coverage; no answer is
+  inferred and earlier pending questions are not repeated.
+- Started the existing Chrome MCP client for read-only evidence; connection is
+  pending, not a successful browser observation. No account data was changed.
+- Refined the independent M01/M07/M08 count-only source preflight, T117–T119.
+  This advances reviewed-transition preparation without selecting mappings,
+  repairing historical data or treating a clean report as activation readiness.
+  Independent design review closed the local boundary, including inbound approval
+  references and independent counts for attribution and unexpected states.
+- Scoped Spec Kit Analyze maps five requirement subsets to T117–T119 with no
+  unmapped task, local constitutional violation, duplication or unresolved
+  critical/high issue. The general checklist remains 12/16; seven local
+  checklists remain 7/7 under the prior independent-increment authorization.
+- Browser tab listing timed out. Closed only the owned MCP client; no tabs or
+  account data were modified. Source documentation and existing snapshots do not
+  substitute for a current restricted-user observation.
+- RED fails on the missing cross-tenant count (0 versus 1; 0.52s after 1m43s
+  compilation). The implemented reader passes six focused tests (3.56s after
+  1m36s compilation). Subsequent test-only additions cover the independent
+  review's historical inactive approver case and lock-timeout cleanup; the final
+  permission regression now recompiles that snapshot. No final pass is inferred
+  from the earlier six-test result.
+- Final permission regression passes all 92 tests, including seven preflight
+  tests, zero failures/exclusions (40.77s after 1m36s compilation). Independent
+  re-review finds no blocking implementation issue. An optional approver-only
+  inbound fixture was suggested; current SQL covers it, while the existing
+  inbound fixture exercises both subject and approver together.
+- Session 47930 continues with clean complete SQLx preparation and offline gates.
+  Only rebuildable package artifacts were removed (173 files, 1.6 GiB); no data
+  or source files were deleted. Full server/flake acceptance is not claimed.
+- Session 47930 completed successfully: clean SQLx preparation 51.94s, offline
+  all-targets Clippy 1m00s and denied-warning WASM 9.71s. Cache review finds 17
+  new descriptors, zero removed/modified and 1,379 total. No unrelated cache
+  entry was lost. Only the owned disposable database is being stopped, retaining
+  its data. Final formatting and unsigned publication remain before handoff.
+- Disposable database shutdown succeeded. Formatting passes with zero changed
+  files. T117–T119 are complete for this internal diagnostic only; reviewed
+  activation, complete source preflight and invoice scope decisions stay open.
+  Publication targets the same verified OPEN/DRAFT #212, with no merge.
+
+Next after publication: integrate the user's mixed-project invoice answer when
+received; separately resolve unlinked invoice and source/projection permissions
+before implementing canonical OP21–OP24. Do not silently infer those answers,
+activate policy or substitute another unrelated legacy repair for integration.
+If no answer is available, refine the remaining reviewed-transition inventory
+without mapping roles, repairing records or treating the diagnostic as readiness.
+
 ## 2026-10-04 — Budget email authority preparation
 
 - The preceding MVP answer was status-only, with no implementation progress.

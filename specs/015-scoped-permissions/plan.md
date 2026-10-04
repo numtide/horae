@@ -97,6 +97,13 @@ close T042, replace legacy guards or authorize mixed-policy operation.
 
 ### Existing increments and remaining integration
 
+T117–T119 implement a read-only legacy-source preflight under
+`contracts/migration-preflight.md`. Reuse organization/actor fencing and one
+aggregate statement for consistent, count-only diagnostics. No new schema,
+dependency, role mapping, business mutation or public endpoint is required.
+The local constitution check passes; full migration preview, current-input
+activation fencing and reviewed mappings remain mandatory and independent.
+
 T114–T116 integrate bounded budget-email preparation under
 `contracts/budget-email-authority.md`. Reuse the current recipient predicate,
 outbox claim/acknowledgement and sendmail transport. Organization, recipient and

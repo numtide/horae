@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO approvals (id, org_id, user_id, period_start, period_end, state, approved_by, approved_at)\n         VALUES ($1, $2, $3, DATE '2028-01-01', DATE '2028-01-07', 'approved', $3, now())",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6e0d148f6e92813f15258b2f26f867ad1527e71d68491801179f097ef9ba6e9e"
+}

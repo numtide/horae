@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO person_permission_states (id, org_id, user_id, catalog_version, grants, is_administrator, source)\n             VALUES ($1, $2, $3, 1, $4, true, 'individual')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a1189b2be8627b43f759751f35d2aa33baedeb32c9cda8c91772ea404a52f257"
+}
