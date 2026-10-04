@@ -1,5 +1,39 @@
 # Permission verification
 
+## Recorded-scope XLSX delivery (T204–T206)
+
+The existing `/api/reports/export/xlsx` route now applies canonical ordinary
+time-read scope when policy 1 is selected. Policy 0 preserves its Manager/Admin
+gate. It retains the eight-column workbook and existing limits/admission; the
+rendered file is released only after rechecking active identity, the original
+policy version and current authority over every captured person/project pair.
+Rendering retains neither database connection nor authority locks. Source
+reassignment/deletion does not change the scope of already captured bytes.
+
+Use disposable PostgreSQL and the Nix dev shell:
+
+```sh
+cargo test -p horae --features server --bin horae reports:: --config 'profile.dev.package.horae.strip="debuginfo"'
+cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization --config 'profile.dev.package.horae.strip="debuginfo"'
+cargo sqlx prepare --workspace -- --features server --all-targets
+```
+
+RED `70145` reproduces both initial canonical failures. The final regression run
+`42927` passes 95 report/export tests, including eleven new scoped XLSX tests;
+two manual performance measurements remain ignored. The registered-session HTTP
+suite also passes with the new XLSX checks. This is not the full server or Nix
+suite. Full SQLx preparation passes with ten added cache files and the obsolete
+size query removed. Offline all-target server Clippy (83s) and WASM Clippy (15s)
+pass with warnings denied (`60722`).
+Formatting `36144` checks 548 files with zero changes.
+
+Independent final static review found no material defect. The inherited snapshot
+test now permits an exact old result or coherent 413 for the READ COMMITTED
+time statement; invoice/PDF snapshot assertions remain unchanged. No new schema,
+dependencies, CSS or real-data changes. CSV authorization, multi-ID URL transport,
+the canonical Reports consumer and full candidate discovery remain open T203
+work, not replaced by this increment or by its internal multi-ID reader tests.
+
 ## Ordinary detailed time-report reader (T201–T202)
 
 `list_visible_time_report_entries` is a canonical-policy session endpoint for

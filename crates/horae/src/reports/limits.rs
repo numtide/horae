@@ -2,11 +2,12 @@ use axum::http::StatusCode;
 use sqlx::{PgConnection, PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
-use crate::models::{DetailedReportRow, Invoice, InvoiceLine, OrgBranding};
+use crate::models::{Invoice, InvoiceLine, OrgBranding};
 
-use super::{ExportParams, ProjectExportRow};
+use super::ProjectExportRow;
 
 mod project;
+pub(super) mod time;
 pub(super) use project::{authorize_project_rows, authorize_projects, projects};
 
 const MAX_FIELD_BYTES: i32 = 32_767;
@@ -89,46 +90,6 @@ pub(super) async fn configure_deadlines(connection: &mut PgConnection) -> Result
         .await
         .map_err(database_error)?;
     Ok(())
-}
-
-pub(super) async fn entries(
-    pool: &PgPool,
-    org_id: Uuid,
-    actor_id: Uuid,
-    params: &ExportParams,
-) -> Result<Vec<DetailedReportRow>, StatusCode> {
-    let from: chrono::NaiveDate = params.from.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
-    let to: chrono::NaiveDate = params.to.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
-    let mut tx = begin_manager(pool, org_id, actor_id).await?;
-    let size = sqlx::query!(
-        r#"SELECT COUNT(*) as "rows!",
-                  COALESCE(SUM(octet_length(project_name)::bigint + octet_length(task_name)
-                    + octet_length(user_name) + COALESCE(octet_length(notes), 0)), 0)::bigint as "bytes!",
-                  COALESCE(MAX(GREATEST(octet_length(project_name), octet_length(task_name),
-                    octet_length(user_name), COALESCE(octet_length(notes), 0))), 0) as "field_bytes!"
-           FROM (SELECT p.name project_name, t.name task_name, u.name user_name, te.notes
-                 FROM time_entries te
-                 JOIN projects p ON p.id = te.project_id
-                 JOIN tasks t ON t.id = te.task_id
-                 JOIN users u ON u.id = te.user_id
-                 WHERE te.org_id = $6 AND te.spent_date BETWEEN $1 AND $2
-                   AND ($3::uuid IS NULL OR p.client_id = $3)
-                   AND ($4::uuid IS NULL OR te.project_id = $4)
-                   AND ($5::uuid IS NULL OR te.user_id = $5)
-                   AND ($8::uuid IS NULL OR EXISTS (
-                     SELECT 1 FROM project_tag_links l
-                     WHERE l.org_id = te.org_id AND l.project_id = te.project_id AND l.tag_id = $8
-                   ))
-                 LIMIT $7) bounded"#,
-        from as chrono::NaiveDate, to as chrono::NaiveDate,
-        params.client_id, params.project_id, params.user_id, org_id, XLSX.rows + 1, params.tag_id,
-    ).fetch_one(&mut *tx).await.map_err(database_error)?;
-    check(size.rows, size.bytes, size.field_bytes, XLSX)?;
-    let rows = super::fetch_entries(&mut *tx, org_id, (from, to), params.filters())
-        .await
-        .map_err(database_error)?;
-    tx.commit().await.map_err(database_error)?;
-    Ok(rows)
 }
 
 async fn read_invoice(
@@ -237,12 +198,26 @@ pub(super) async fn pdf(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::DetailedReportRow;
+    use crate::reports::ExportParams;
     use crate::server_fns::test_seed::{SeedIds, seed};
     use horae_core::types::OrgRole;
     use std::io::{Cursor, Read};
 
     mod authorization;
     mod project_authorization;
+    mod time_authorization;
+
+    async fn entries(
+        pool: &PgPool,
+        org_id: Uuid,
+        actor_id: Uuid,
+        params: &ExportParams,
+    ) -> Result<Vec<DetailedReportRow>, StatusCode> {
+        Ok(time::entries(pool, org_id, actor_id, &params.time_query()?)
+            .await?
+            .rows)
+    }
 
     fn xlsx_part(bytes: &[u8], path: &str) -> String {
         let mut zip = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();

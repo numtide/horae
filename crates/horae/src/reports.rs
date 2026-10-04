@@ -100,6 +100,20 @@ pub(crate) struct ReportFilters {
 }
 
 impl ExportParams {
+    fn time_query(&self) -> Result<crate::models::time_report::TimeReportQuery, StatusCode> {
+        Ok(crate::models::time_report::TimeReportQuery {
+            date_from: self.from.parse().map_err(|_| StatusCode::BAD_REQUEST)?,
+            date_to: self.to.parse().map_err(|_| StatusCode::BAD_REQUEST)?,
+            client_ids: self.client_id.into_iter().collect(),
+            project_ids: self.project_id.into_iter().collect(),
+            user_ids: self.user_id.into_iter().collect(),
+            task_ids: Vec::new(),
+            tag_ids: self.tag_id.into_iter().collect(),
+            after: None,
+            expected_requester: None,
+        })
+    }
+
     fn filters(&self) -> ReportFilters {
         ReportFilters {
             client_id: self.client_id,
@@ -222,18 +236,15 @@ pub async fn export_xlsx(
     session: Session,
     Query(params): Query<ExportParams>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    // Same rows as the manager-only `report_detailed` server fn (every user's
-    // hours and notes), so the same gate applies.
-    let (actor_id, org_id) = require_manager(&session).await?;
+    let (actor_id, org_id) = require_session(&session).await?;
     let permit = bounded::ExportPermit::acquire()?;
 
     let state = crate::state::global_state().await;
-    let entries = limits::entries(&state.db, org_id, actor_id, &params).await?;
-
-    let data = render_manager_export(permit, &state.db, org_id, actor_id, move || {
-        entries_xlsx(&entries)
-    })
-    .await?;
+    let export = limits::time::entries(&state.db, org_id, actor_id, &params.time_query()?).await?;
+    let data = export
+        .scope
+        .render(permit, &state.db, move || entries_xlsx(&export.rows))
+        .await?;
 
     Ok((
         [

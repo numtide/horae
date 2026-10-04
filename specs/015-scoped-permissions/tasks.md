@@ -11,6 +11,9 @@ Ordinary detailed Reports integration follows `contracts/time-reports.md`:
 - [x] T201 Reproduce and implement scoped detailed report reads with historical labels, exact report rounding, narrowing multi-ID filters, requester binding and bounded keyset pages.
 - [x] T202 Verify registered-session payloads, scope/revocation races and query boundaries; refresh SQLx, run native/WASM checks and review independently.
 - [ ] T203 Connect the canonical ordinary Reports consumer and equivalent CSV/XLSX delivery, preserving bounded transports and current authority over recorded scope; resolve candidate discovery before wiring full pickers. Financial-family reports retain separate requirements.
+- [x] T204 Reproduce canonical Member rejection and legacy-Manager overexposure in the XLSX reader (OP25/OP31, FR-006/007/008/010/018).
+- [x] T205 Implement the policy-aware XLSX source with one bounded size/payload snapshot and reauthorize captured person/project pairs after rendering; preserve legacy policy, format and admission limits.
+- [x] T206 Verify XLSX grant/relationship/policy/activity races, source reassignment/deletion, cancellation, limits and real-session delivery; refresh SQLx, run native/WASM lint and review independently. This XLSX increment does not close T203.
 
 These tasks do not close T014/T015 or the full Reports parity surface alone.
 

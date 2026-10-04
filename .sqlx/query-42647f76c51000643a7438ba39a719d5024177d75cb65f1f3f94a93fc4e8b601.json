@@ -1,0 +1,114 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH bounded AS MATERIALIZED (\n             SELECT e.id, e.user_id, e.project_id, e.spent_date, p.name project_name,\n                    t.name task_name, u.name user_name, e.minutes,\n                    effective_minutes(e.minutes,e.rounded_minutes,o.round_minutes,o.round_dir) rounded_minutes,\n                    (e.billable AND (e.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable'\n                      AND COALESCE(pt.billable,t.billable_default)))) billable, e.notes\n             FROM time_entries e JOIN organizations o ON o.id=e.org_id\n             JOIN users u ON u.id=e.user_id AND u.org_id=e.org_id\n             JOIN projects p ON p.id=e.project_id AND p.org_id=e.org_id\n             JOIN tasks t ON t.id=e.task_id AND t.org_id=e.org_id\n             JOIN clients c ON c.id=p.client_id AND c.org_id=e.org_id\n             LEFT JOIN project_tasks pt ON pt.project_id=p.id AND pt.task_id=t.id\n             WHERE e.org_id=$1 AND (\n               $5::bool OR ($3::bool AND e.user_id=$2) OR ($4::bool AND (\n                 EXISTS (SELECT 1 FROM person_management_assignments m\n                   WHERE m.org_id=e.org_id AND m.manager_id=$2 AND m.managed_user_id=e.user_id)\n                 OR EXISTS (SELECT 1 FROM project_management_assignments m\n                   WHERE m.org_id=e.org_id AND m.manager_id=$2 AND m.project_id=e.project_id))))\n               AND e.spent_date BETWEEN $6 AND $7\n               AND (cardinality($8::uuid[])=0 OR p.client_id=ANY($8))\n               AND (cardinality($9::uuid[])=0 OR e.project_id=ANY($9))\n               AND (cardinality($10::uuid[])=0 OR e.user_id=ANY($10))\n               AND (cardinality($11::uuid[])=0 OR e.task_id=ANY($11))\n               AND (cardinality($12::uuid[])=0 OR EXISTS (\n                 SELECT 1 FROM project_tag_links l JOIN project_tags tag ON tag.id=l.tag_id AND tag.org_id=l.org_id\n                 WHERE l.org_id=e.org_id AND l.project_id=e.project_id AND tag.id=ANY($12)))\n             LIMIT $13::bigint + 1\n           ), stats AS (\n             SELECT COUNT(*) rows,\n                    COALESCE(SUM(octet_length(project_name)::bigint + octet_length(task_name)\n                      + octet_length(user_name) + COALESCE(octet_length(notes),0)),0)::bigint bytes,\n                    COALESCE(MAX(GREATEST(octet_length(project_name),octet_length(task_name),\n                      octet_length(user_name),COALESCE(octet_length(notes),0))),0) field_bytes\n             FROM bounded\n           )\n           SELECT s.rows AS \"rows!\", s.bytes AS \"bytes!\", s.field_bytes AS \"field_bytes!\",\n                  b.id AS \"id?\", b.user_id AS \"user_id?\", b.project_id AS \"project_id?\",\n                  b.spent_date AS \"spent_date?: chrono::NaiveDate\", b.project_name AS \"project_name?\",\n                  b.task_name AS \"task_name?\", b.user_name AS \"user_name?\", b.minutes AS \"minutes?\",\n                  b.rounded_minutes AS \"rounded_minutes?\", b.billable AS \"billable?\", b.notes\n           FROM stats s LEFT JOIN bounded b ON s.rows <= $13 AND s.bytes <= $14 AND s.field_bytes <= $15\n           ORDER BY b.spent_date,b.project_name COLLATE \"C\",b.task_name COLLATE \"C\",b.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "rows!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "bytes!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "field_bytes!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "user_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "project_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "spent_date?: chrono::NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 7,
+        "name": "project_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "task_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "user_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "minutes?",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 11,
+        "name": "rounded_minutes?",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 12,
+        "name": "billable?",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 13,
+        "name": "notes",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Date",
+        "Date",
+        "UuidArray",
+        "UuidArray",
+        "UuidArray",
+        "UuidArray",
+        "UuidArray",
+        "Int8",
+        "Int8",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      true
+    ]
+  },
+  "hash": "42647f76c51000643a7438ba39a719d5024177d75cb65f1f3f94a93fc4e8b601"
+}

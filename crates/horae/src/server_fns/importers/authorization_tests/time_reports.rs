@@ -3,6 +3,18 @@
 use super::*;
 use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::EntryState;
+use std::io::{Cursor, Read};
+
+async fn xlsx(api: &Api, cookie: Option<&str>, filter: &str) -> reqwest::Response {
+    let mut request = api.client.get(format!(
+        "{}/api/reports/export/xlsx?from=2026-09-01&to=2026-09-30{filter}",
+        api.base,
+    ));
+    if let Some(cookie) = cookie {
+        request = request.header("cookie", cookie);
+    }
+    request.send().await.unwrap()
+}
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
     let ids = crate::server_fns::test_seed::seed(pool, OrgRole::Member).await;
@@ -10,6 +22,11 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     let entry = crate::server_fns::test_seed::time_entry(pool, &ids, EntryState::Open).await;
     sqlx::query!("UPDATE users SET oidc_subject=id::text,billable_rate_cents=123456,cost_rate_cents=987654 WHERE id=$1", ids.user_id).execute(pool).await.unwrap();
     let cookie = api.cookie(ids.user_id).await;
+    assert_eq!(xlsx(api, None, "").await.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        xlsx(api, Some(&cookie), "").await.status(),
+        StatusCode::FORBIDDEN
+    );
     let request = json!({"query": {
         "date_from":"2026-09-01", "date_to":"2026-09-30",
         "client_ids":[], "project_ids":[], "user_ids":[], "task_ids":[], "tag_ids":[],
@@ -36,6 +53,10 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     .await
     .unwrap();
     assert_eq!(
+        xlsx(api, Some(&cookie), "").await.status(),
+        StatusCode::INTERNAL_SERVER_ERROR
+    );
+    assert_eq!(
         api.call(ENDPOINT, request.clone(), Some(&cookie), false)
             .await
             .status(),
@@ -52,6 +73,53 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         "next_after":null
     });
     assert_eq!(api.json(ENDPOINT, request.clone(), &cookie).await, expected);
+    let response = xlsx(
+        api,
+        Some(&cookie),
+        &format!("&org_id={}&actor_id={}", other.org_id, other.user_id),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.headers()["content-disposition"],
+        "attachment; filename=\"timesheet.xlsx\""
+    );
+    let mut archive = zip::ZipArchive::new(Cursor::new(response.bytes().await.unwrap())).unwrap();
+    let mut sheet = String::new();
+    archive
+        .by_name("xl/worksheets/sheet1.xml")
+        .unwrap()
+        .read_to_string(&mut sheet)
+        .unwrap();
+    assert_eq!(sheet.matches("<row ").count(), 2);
+    let mut strings = String::new();
+    archive
+        .by_name("xl/sharedStrings.xml")
+        .unwrap()
+        .read_to_string(&mut strings)
+        .unwrap();
+    assert!(strings.contains("Widget") && strings.contains("Test User"));
+    for private in ["123456", "987654", "billable_rate", "cost_rate", "EUR"] {
+        assert!(
+            !strings.contains(private) && !sheet.contains(private),
+            "{private}"
+        );
+    }
+    let response = xlsx(
+        api,
+        Some(&cookie),
+        &format!("&project_id={}", other.project_id),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let mut archive = zip::ZipArchive::new(Cursor::new(response.bytes().await.unwrap())).unwrap();
+    let mut sheet = String::new();
+    archive
+        .by_name("xl/worksheets/sheet1.xml")
+        .unwrap()
+        .read_to_string(&mut sheet)
+        .unwrap();
+    assert_eq!(sheet.matches("<row ").count(), 1);
     let mut forged = request.clone();
     forged["org_id"] = json!(other.org_id);
     forged["user_id"] = json!(other.user_id);
@@ -95,6 +163,10 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         .execute(pool)
         .await
         .unwrap();
+    assert_eq!(
+        xlsx(api, Some(&cookie), "").await.status(),
+        StatusCode::UNAUTHORIZED
+    );
     assert_eq!(
         api.call(ENDPOINT, request, Some(&cookie), false)
             .await

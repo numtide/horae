@@ -66,6 +66,39 @@ Do not reuse a manager-only release check for canonical downloads. Moving XLSX
 to READ COMMITTED also requires a single-statement size/payload snapshot, as in
 `limits::project::projects`, rather than retaining separate count/read queries.
 
+### XLSX delivery
+
+Use the existing XLSX route, format, renderer admission and output limits. Policy
+0 retains Manager/Admin access; policy 1 requires valid ordinary time-read
+grants, regardless of the legacy role. Capture the policy version with the
+requester and private person/project pairs. Never serialize these scope facts.
+Reject a policy change at release rather than falling back between policies.
+
+Hold the organization and active actor SHARE gates for source authorization and
+one bounded size/payload statement. Scope and all filters apply before the
+10,001-row size probe; oversized results return 413 without materializing their
+text in the client. Preserve the 10,000-row, 8 MiB text and 32,767-byte field
+limits. Reject reversed dates and page cursors: a download represents the full
+selected period, not the current page. The scalar legacy URL filters remain
+supported; the canonical multi-ID query transport and UI are separate T203 work.
+
+Commit before rendering. Immediately before releasing the rendered body, load
+current policy, active requester and strict grants under fresh gates, and require
+every captured person/project pair to be currently readable. Source entry
+deletion or reassignment does not replace those pairs. Empty files still require
+current time-read authority. Denial, cancellation or failed final authorization
+must drop the body and release admission; no partial XLSX is a successful result.
+
+CSV remains a separate mandatory T203 boundary. Its cursor must be declared
+outside the authorization savepoint, with current source authority loaded in
+the cursor's own snapshot and validated even when the source is empty. Do not
+copy the XLSX transaction lifetime across client-paced CSV backpressure.
+PostgreSQL closes cursors created inside a rolled-back savepoint
+([ROLLBACK TO](https://www.postgresql.org/docs/17/sql-rollback-to.html)); changing
+to `WITH HOLD` instead would materialize their source
+([DECLARE](https://www.postgresql.org/docs/17/sql-declare.html)). Both references
+were checked on 2026-10-04; neither is a reason to replace bounded streaming.
+
 ## Acceptance
 
 Cover profile/custom scope unions, historical labels, malformed tenant parents,

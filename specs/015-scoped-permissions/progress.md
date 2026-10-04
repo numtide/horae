@@ -1,5 +1,51 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Recorded-scope XLSX delivery
+
+- The preceding clarification only reconfirmed FR-033/B and was no progress.
+  Revalidated clean `75f13a1`, the already published detailed reader, and actual
+  Spec Kit prerequisites. Its command skills remain unavailable locally.
+- CSV review ruled out declaring its source cursor inside a rolled-back
+  authorization savepoint: that destroys the cursor. Preserve the existing
+  bounded transport; capture/validate authority in the cursor snapshot, including
+  empty-source metadata. This remains required follow-through, not implemented.
+- Closed the XLSX boundary in `contracts/time-reports.md`. RED `70145` reproduces
+  Member denial and canonical legacy-Manager overexposure in both initial tests.
+- Replaced the XLSX two-query reader with one scoped size/payload statement and
+  private captured owner/project pairs. Rendering runs outside authority locks;
+  release reloads strict grants and active identity, pins policy and checks every
+  recorded pair. The registered route now delegates authorization to this gate.
+  Invoice gates, CSV, CSS, schema and real data are unchanged.
+- Added tests for unions/filters, source reassignment in both directions during
+  rendering, source deletion, one captured pair revoked, empty-file state and
+  policy invalidation, cancellation/pool recovery and real-session XLSX delivery.
+  Initial compile `93359` exposed the private permission module boundary; reused
+  its strict loader through a crate-private re-export instead of duplicating it.
+- Independent static review found no material production defect and requested
+  direct coverage of the new release method, not the legacy manager renderer.
+  Added that coverage before starting build/test `76042`.
+- `76042` finished with all eight then-current scoped XLSX tests passing and one
+  inherited snapshot assertion failing on a valid 413. Adjusted only Entries to
+  accept its exact earlier snapshot or coherent size rejection, not oversized
+  payload. Added source grant gains/losses, direct actor commit/rollback and
+  in-render grant revocation coverage. Final review reports no material defect.
+- `42927` passes 95 report/export tests (including eleven new XLSX cases); two
+  manual measurements remain ignored. The actual-session HTTP suite also passes
+  in 11s. Complete SQLx preparation passes with ten new cache files and one
+  obsolete size-query cache removed. No full server-suite or Nix-suite claim.
+- Offline all-target server/WASM Clippy passes with warnings denied (`60722`,
+  83s/15s). T204–T206 are complete for this boundary, not T203 or full feature
+  acceptance. GitHub confirms #212 remains open/draft at `75f13a1` before this
+  increment's publication. Formatting `36144` checks 548 files with zero changes.
+  Publication target remains that draft PR, with an unsigned commit and no merge.
+
+Next implementation: continue T203 with canonical CSV source/release
+authorization, multi-ID download transport,
+Reports consumer and full candidate discovery. Retain private source authority
+metadata in the CSV cursor snapshot, validate its empty-source case and recheck
+captured scope before each bounded output block. Remaining financial families,
+people/approval/project writes and policy cutover gates stay open.
+
 ## 2026-10-04 — Ordinary detailed report reader
 
 - The previous turn only reconfirmed the already implemented FR-033/B decision;
