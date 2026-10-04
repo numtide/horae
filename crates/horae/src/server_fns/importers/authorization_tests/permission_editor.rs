@@ -5,6 +5,7 @@ use horae_core::permissions::catalog::BuiltInProfile;
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
     check_requester_binding(pool, api).await;
+    check_template_capacity(pool, api).await;
     let ids = crate::server_fns::test_seed::seed(pool, OrgRole::Member).await;
     let foreign = crate::server_fns::test_seed::seed(pool, OrgRole::Admin).await;
     let target = super::user(pool, ids.org_id, OrgRole::Member).await;
@@ -383,6 +384,166 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     let message = unavailable.text().await.unwrap();
     assert!(message.contains("Permission editor is unavailable"));
     assert!(!message.contains("private-invalid-grant"));
+}
+
+async fn check_template_capacity(pool: &PgPool, api: &Api) {
+    let ids = crate::server_fns::test_seed::seed(pool, OrgRole::Member).await;
+    let other = super::user(pool, ids.org_id, OrgRole::Member).await;
+    let grants: Vec<String> =
+        serde_json::from_value(json!(BuiltInProfile::Administrator.selection())).unwrap();
+    for user in [ids.user_id, other] {
+        let admin = true;
+        sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
+            VALUES ($1,$2,$3,1,$4,$5,'individual')", Uuid::now_v7(), ids.org_id, user, &grants, admin)
+            .execute(pool).await.unwrap();
+    }
+    sqlx::query!(
+        "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
+        ids.org_id
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    let cookies = [api.cookie(ids.user_id).await, api.cookie(other).await];
+    let create = |actor, name: String, revision| {
+        json!({
+            "expected_requester":{"org_id":ids.org_id,"user_id":actor},
+            "command":{"request_id":Uuid::now_v7(),"expected_access_revision":revision,
+                "action":{"kind":"create","name":name,"grants":BuiltInProfile::Member.selection()}}
+        })
+    };
+    for index in 0..49 {
+        let saved = api
+            .json(
+                "save_permission_template",
+                create(ids.user_id, format!("Profile {index}"), index),
+                &cookies[0],
+            )
+            .await;
+        assert_eq!(saved["access_revision"], index + 1);
+    }
+    let requests = [
+        create(ids.user_id, "First contender".into(), 49),
+        create(other, "Second contender".into(), 49),
+    ];
+    let mut hold = pool.begin().await.unwrap();
+    sqlx::query!(
+        "SELECT id FROM organizations WHERE id = $1 FOR UPDATE",
+        ids.org_id
+    )
+    .fetch_one(&mut *hold)
+    .await
+    .unwrap();
+    let holder = sqlx::query_scalar!("SELECT pg_backend_pid()")
+        .fetch_one(&mut *hold)
+        .await
+        .unwrap()
+        .unwrap();
+    let release = async {
+        tokio::time::timeout(Duration::from_secs(3), async {
+            loop {
+                // A queued row writer can wait on the first writer's tuple lock.
+                let waiting = sqlx::query_scalar!(
+                    "WITH RECURSIVE blocked(pid) AS (
+                        SELECT $1::int
+                        UNION
+                        SELECT activity.pid FROM pg_stat_activity activity
+                        JOIN blocked ON blocked.pid = ANY(pg_blocking_pids(activity.pid))
+                        WHERE activity.datname = current_database()
+                     ) SELECT count(*) FROM blocked WHERE pid <> $1",
+                    holder
+                )
+                .fetch_one(pool)
+                .await
+                .unwrap()
+                .unwrap();
+                if waiting == 2 {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("both authenticated creators must reach the organization gate");
+        hold.rollback().await.unwrap();
+    };
+    let (first, second, ()) = tokio::join!(
+        api.call(
+            "save_permission_template",
+            requests[0].clone(),
+            Some(&cookies[0]),
+            false
+        ),
+        api.call(
+            "save_permission_template",
+            requests[1].clone(),
+            Some(&cookies[1]),
+            false
+        ),
+        release,
+    );
+    let (winner, saved, refused) = match (first.status(), second.status()) {
+        (StatusCode::OK, StatusCode::CONFLICT) => (0, first, second),
+        (StatusCode::CONFLICT, StatusCode::OK) => (1, second, first),
+        statuses => panic!("expected one creation and one revision conflict, got {statuses:?}"),
+    };
+    assert!(
+        refused
+            .text()
+            .await
+            .unwrap()
+            .contains("The permission state has changed")
+    );
+    let saved: Value = saved.json().await.unwrap();
+    assert_eq!(saved["access_revision"], 50);
+    assert_eq!(
+        api.json(
+            "save_permission_template",
+            requests[winner].clone(),
+            &cookies[winner]
+        )
+        .await,
+        saved
+    );
+
+    let lookup = json!({"user_id":ids.user_id});
+    let before = api
+        .json("load_permission_editor", lookup.clone(), &cookies[0])
+        .await;
+    assert_eq!(before["templates"].as_array().unwrap().len(), 50);
+    let mut overflow = requests[1 - winner].clone();
+    overflow["command"]["expected_access_revision"] = json!(50);
+    let refused = api
+        .call(
+            "save_permission_template",
+            overflow,
+            Some(&cookies[1 - winner]),
+            false,
+        )
+        .await;
+    assert_eq!(refused.status(), StatusCode::CONFLICT);
+    assert!(
+        refused
+            .text()
+            .await
+            .unwrap()
+            .contains("At most 50 reusable profiles are allowed")
+    );
+    assert_eq!(
+        api.json("load_permission_editor", lookup, &cookies[0])
+            .await,
+        before
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM permission_change_receipts WHERE org_id = $1",
+            ids.org_id
+        )
+        .fetch_one(pool)
+        .await
+        .unwrap(),
+        Some(50),
+    );
 }
 
 async fn check_requester_binding(pool: &PgPool, api: &Api) {

@@ -1,5 +1,41 @@
 # Permission verification
 
+## Authenticated template capacity (T178)
+
+Inside the Nix shell, use a disposable PostgreSQL database with CREATEDB:
+
+```sh
+CARGO_INCREMENTAL=0 cargo sqlx prepare --workspace -- --features server --all-targets
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae template_tests::
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features server --all-targets --locked -- -D warnings -W clippy::perf
+nix fmt -- --ci
+```
+
+The HTTP harness creates 49 templates through the registered endpoint, then
+observes two distinct authenticated Administrators waiting behind an organization
+lock. Exactly one creation succeeds; the stale contender conflicts. A request
+with the current revision still cannot create profile 51. Replaying the winner
+returns its exact outcome, with 50 templates and 50 receipts and unchanged person
+state. This supplies the authenticated-capacity part of T016/T017, not their full
+application/classification acceptance.
+
+The complete HTTP harness passed twice (10.54s and 10.47s). All 19 template
+regressions passed (3.99s). The repeat reused the exact newly compiled test binary
+against another disposable cluster, not cached results. All-targets offline
+server Clippy passed with warnings denied (1m26s). Non-incremental preparation
+retains all 1,459 prior descriptors unchanged and adds one observation query;
+temporary diagnostics and incomplete incremental output are not retained.
+
+Local adversarial review checked real routes/cookies, independent Administrator
+identities, distinct request keys, replay-before-stale behavior, both returned
+errors, exact persisted counts and bounded cleanup on failure. The initial
+direct-blocker observation failed because the second writer waited behind the
+first writer's tuple lock. The corrected test follows the blocker chain rather
+than weakening concurrency or adding sleeps. No production guard, UI, migration
+or real data changed. This is not an independent review or a new full-flake run;
+the prior complete Nix gate remains evidence for production revision `3308926`.
+
 ## Interactive time-writer activity (T171–T173)
 
 Use the Nix shell and the owned disposable PostgreSQL database:

@@ -94,9 +94,10 @@ must not be presented as complete combined-submission parity.
 The [integration map](timesheet-integration.md) records subsequent evidence:
 archived people remain available in historical reports but not Timesheets;
 delegated timer stop requires write authority; Calendar has a specific locked
-correction exception. The managed-project zero-entry candidate question remains
-unanswered. Preserve this reader's historical semantics while implementing the
-separate Timesheet navigation boundary.
+correction exception. On 2026-10-04 the user confirmed inclusion of active
+managed-project participants without recorded time, without widening visible
+entry scope or write authority. Preserve this reader's historical semantics
+while implementing the separate Timesheet navigation boundary.
 
 Rechecked 2026-10-04: the [time-editing guide](https://support.getharvest.com/hc/en-us/articles/26885299659405-Editing-and-deleting-time-entries)
 allows changing unlocked entry details except their owner. Horae's existing

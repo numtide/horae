@@ -77,6 +77,10 @@ confirmed contracts; local tests alone cannot settle contradictory reference fac
 
 - Q: When an existing responsible person loses the last compatible permission, should their person-management assignments be removed with confirmation or retained dormant? → A: A. Preview the affected assignments and require confirmation to remove them atomically with the permission change. Do not delete people or history, restore grants, or reactivate removed assignments when permissions return.
 
+### Session 2026-10-04
+
+- Q: May a responsible person select active participants of their managed projects in Timesheet before those participants have recorded time? → A: Yes (A). Include them while keeping visible time limited to authorized projects. Candidate discovery does not grant access to the person's other time, financial data or editing. This resolves Horae's zero-entry candidate choice, not verified Harvest custom-grant behavior.
+
 ## User Scenarios & Testing
 
 ### User Story 1 - Assign a role that matches a person's responsibilities (Priority: P1)

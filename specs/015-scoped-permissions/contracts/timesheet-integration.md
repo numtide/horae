@@ -34,14 +34,14 @@ These are official documentation findings, not new browser observations. No
 browser tools are loaded in this session, and the earlier client's connection
 timeout was not retried without changed evidence.
 
-## Candidate decision still awaiting the user
+## Confirmed zero-entry candidate decision
 
-The asynchronous question asks whether managed-project access should discover
-active project participants with no recorded time. The recommended choice
-includes them while retaining per-record/project scope. The alternative derives
-project-only choices from visible historical time, leaving direct managed-person
-choices independent. Neither is recorded as accepted. Do not infer the answer
-from owner-only Harvest observations or from the Administrator teammates API.
+On 2026-10-04 the user selected A: managed-project access includes active project
+participants who have not recorded time. Keep per-record/project read scope;
+discovering that person never grants their unrelated time, directory details,
+financial data or editing. Direct managed-person and organization-wide time
+read scope remain independent. This is an approved Horae rule, not a claim of
+observed Harvest custom-grant enforcement. Do not ask this decision again.
 
 The final candidate contract must also preserve people with authorized historical
 entries after membership removal, without restoring tracking eligibility, and
@@ -69,7 +69,8 @@ not fall back to legacy responses.
 
 ## Required delivery sequence
 
-1. Close candidate discovery and remaining ordinary/delegated tracking predicates;
+1. Bind the confirmed candidate choice to explicit discovery/date-history cases
+   and close remaining ordinary/delegated tracking predicates;
    retain explicit gaps for coverage and privileged corrections.
 1. Add real transaction/session tests and implement the selected-person read and
    write contract with consistent lock ordering. Reuse the catalog, stored grants

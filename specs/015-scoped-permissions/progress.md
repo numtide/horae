@@ -1,5 +1,83 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Authenticated template-capacity acceptance
+
+- The intervening benefits explanation was no implementation progress. Resumed
+  existing worktree state, collected the terminal formatter and published the
+  full-gate evidence as unsigned `8af562e` on existing draft #212. No merge.
+
+- Rechecked the lock overview/Q&A through Harvest's public Help Center API;
+  the web reader failed but public JSON succeeded. Calendar edge semantics
+  remain unspecified, so T043 is not implementation-ready. No account access.
+
+- Continued independent T016/T017 acceptance via T178: real session requests
+  from two different canonical Administrators at count 49, observed concurrent
+  database waiters, overflow with the current revision, exact replay and
+  state/receipt preservation. No production code or permission rule changed.
+
+- Read the Rust, testing, async and simplicity guidance. Spec Kit's checked-in
+  prerequisite helper passes for feature 015; its command skills remain absent
+  from the local catalog, so this is not a claim to have rerun the complete suite.
+
+- Verification session `76322` runs the existing HTTP matrix after complete
+  SQLx preparation in its own disposable C-locale PostgreSQL. Results pending;
+  the earlier full Nix success does not verify this new test revision.
+
+- Full SQLx preparation passed in 1m17s, adding one waiter-count descriptor and
+  changing/deleting none of the 1,459 existing descriptors. Test compilation is
+  still live in the same session. Formatting and diff checks pass. GitHub confirms
+  draft #212 at `8af562e28b9bfa3d538558cd628eb8bfde40ae91`.
+
+- Reminded the user of the single pending Timesheet candidate choice while
+  independent verification continues; no answer has yet been recorded.
+
+- Session `76322` is terminal, exit 101: compilation passed in 2m24s, but the
+  new two-waiter observation timed out before capacity assertions (3.97s test).
+  This is not yet evidence of a production capacity failure. Added temporary
+  private-fixture lock diagnostics and started `83996` in a new disposable
+  cluster. Inspect actual waiter dependencies before changing the barrier;
+  remove diagnostic instrumentation and its descriptor afterward.
+
+- The first diagnostic compile (`83996`) caught an optional PostgreSQL PID
+  formatted as Display; corrected the temporary diagnostic. `40680` then
+  reproduced two actual organization-gate requests: one waits on a transaction
+  and the other on a tuple. Counting only direct blockers missed the queued
+  request. The final barrier follows the blocking chain with a bounded recursive
+  query, retaining the requirement that both requests are waiting. Removed
+  temporary query logging. No production authorization defect is inferred.
+
+- Incremental preparation omitted 90 unchanged cached descriptors after the
+  failed compile. `72459` now regenerates with `CARGO_INCREMENTAL=0` before
+  rerunning the matrix in another disposable cluster. Verify the whole cache
+  against HEAD before publication; do not commit those omissions.
+
+- `72459` completed, exit 0: non-incremental SQLx preparation (1m07s) restores
+  every previous descriptor unchanged and adds only the final transitive-waiter
+  query; temporary diagnostics are absent. Test compilation took 1m56s and the
+  complete registered HTTP matrix passes in 10.54s (one harness test, 1,099
+  filtered). The script stopped its private PostgreSQL.
+
+- The user confirmed Timesheet candidate option A: active managed-project
+  participants without recorded time are selectable, while entry visibility
+  remains scoped. Updated spec, both read/integration contracts, research and
+  tasks. This is no longer a pending user decision and must not be asked again;
+  delegated tracking, date/history cases and full integration remain required.
+
+- Offline all-targets server Clippy is running in `33507`. A separate private
+  fixture reuses the exact just-built test binary for template regressions and
+  a second HTTP matrix run; no recompilation or shared development database.
+
+- Both are now terminal, exit 0: `33507` passes all-targets offline Clippy with
+  warnings denied in 1m26s; `5225` passes 19 template regressions (3.99s) and the
+  repeated HTTP matrix (10.47s), then stops its private PostgreSQL. T178 is
+  complete. Local adversarial review and runnable verification are recorded in
+  `quickstart.md`; no production changes or full-feature completion are claimed.
+
+Next: format and publish the verified
+acceptance increment. Then implement the Timesheet integration following the
+confirmed candidate choice and remaining documented operation predicates.
+T016/T017/T020 remain open; no partially enforced policy activation or merge.
+
 ## 2026-10-04 — Corrected full Nix gate passes
 
 - Previous goal turn: verified wait. Revalidated the unchanged published code at

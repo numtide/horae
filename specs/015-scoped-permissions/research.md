@@ -15,8 +15,10 @@
   form while forbidding drag/resize and project/task changes; the general
   Day-only wording must not erase that surface-specific exception.
 - Asked one new product question about active managed-project participants with
-  no hours in the teammate selector. No answer is recorded. The catalog and
-  current docs do not prove the exact custom-grant candidate set. No browser
+  no hours in the teammate selector. The user subsequently confirmed A on
+  2026-10-04: include active managed-project participants without widening
+  visible records or editing rights. The catalog and current docs do not prove
+  Harvest's exact custom-grant candidate set. No browser
   tools are loaded; no new reference-account observation or write is claimed.
 - No UI, runtime grants, migration or data changed. This is integration research,
   not implemented Timesheet parity or execution of unavailable Spec Kit skills.

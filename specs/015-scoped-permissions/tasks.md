@@ -21,7 +21,8 @@ not replace full Timesheet integration, editing, approval or policy activation.
 The next integration belongs to T014/T015 and T018, not another completed reader
 task: follow `contracts/timesheet-integration.md` for selected-person resources,
 labels, Day/Week/Calendar callbacks, source/destination authorization and separate
-shell timer ownership. Its candidate decision is awaiting the user. Include
+shell timer ownership. The user confirmed zero-entry active project participants
+on 2026-10-04; retain scoped records and independent write authority. Include
 archived-person Timesheet exclusion without removing report history, delegated
 timer write authority and operation-specific locked Calendar controls. Coverage
 and combined submission retain their T012/T013 dependencies; no UI-only permission
@@ -579,9 +580,11 @@ unchanged save, explicit selection/reset and final individual edits; use current
 template/person revisions and confirmed relationship effects. Verify exact grants
 after reload and unchanged other assignees. No profile-ID shortcut may discard
 explicit edits or normalize stored grants. FR-032 and `permission-storage.md`
-now close the storage-specific name/provenance gate. T016/T017 still test the
-50-template limit and concurrent creation via authenticated commands. In-place
-template update/rename is not an evidenced mandatory lifecycle operation.
+now close the storage-specific name/provenance gate. T178 supplies T016/T017's
+50-template limit and concurrent-creation acceptance via authenticated commands.
+In-place template update/rename is not an evidenced mandatory lifecycle operation.
+
+- [x] T178 [US4] Exercise the 50-template boundary through registered session routes in `server_fns/importers/authorization_tests/permission_editor.rs`: two distinct Administrators waiting at the same organization gate, one accepted creation, stale and current-revision overflow denial, exact replay and unchanged state/receipt count. Refresh SQLx and verify the real HTTP matrix (FR-004/010/013/018/032); this does not close full profile application or policy activation.
 
 Classification acceptance also varies available templates and equal-grant source
 order without changing the person. Loading must not reinterpret presentation as

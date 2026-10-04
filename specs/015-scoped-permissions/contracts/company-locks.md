@@ -32,6 +32,17 @@ controls do not override this documented newer behavior.
 
 ## Horae integration obligations
 
+Rechecked both articles through the public Help Center JSON API on 2026-10-04
+after the web reader could not retrieve their HTML. The overview's `updated_at`
+is `2026-07-02T21:00:35Z`; the Q&A's is `2026-06-11T10:49:18Z`.
+The overview explicitly binds weekly/monthly cutoff calculation to the end of
+the preceding week/month and manual-date validation to company-local today.
+It does not specify what a monthly day 29–31 does in shorter months, DST gap/fold
+resolution, or overdue execution after downtime. The Q&A does not resolve those
+cases either. Keep T043 open; neither another product's scheduler nor an older
+deadline-only preferences article supplies Harvest evidence for these rules.
+No authenticated browser observation or account change was made.
+
 These are implementation safeguards from FR-006/007/010/013/017/019, not claims
 about Harvest's internal design:
 
