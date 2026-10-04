@@ -1,6 +1,43 @@
 # Permission verification
 
-## Connected own Timesheet (T014/T015 in progress)
+## Selected-person Timesheet commands (T014/T015 in progress)
+
+Use the existing isolated Nix shell and disposable PostgreSQL with CREATEDB.
+Keep the same build profile/target; do not create another dependency cache.
+
+```sh
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae -- --test-threads=4
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features server --all-targets -- -D warnings
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features web --target wasm32-unknown-unknown -- -D warnings
+node --test crates/horae/tests/browser/editor-navigation.cjs
+nix fmt -- --ci
+```
+
+The command boundary binds the authenticated requester, selected owner and
+explicit policy. Its 13 focused PostgreSQL cases cover the seven intents,
+source/destination scope, atomic sets, tracking restrictions, legacy history,
+FR-033 owner-only recovery, revocation commit/rollback orders and cancellation.
+The registered-session matrix checks both endpoints, exact minimal choices,
+400/401/403/409 errors and sanitized 500 responses. A real rejection removes
+coverage and permits ordinary writes again. These focused backend gates pass;
+complete SQLx generation adds 38 descriptors without deleting existing ones.
+
+The consumer carries `user` through Day/Week/Calendar routes, uses the atomic
+page context and writable owner-specific choices, and captures the context for
+each command. The shell timer stays session-owned. Node navigation tests pass
+10/10. The integrated server suite passes 1,135 tests, zero failures and 11
+pre-existing ignored cases, including all 41 consumer tests and five route
+cases. The five AdminShell regressions and final offline server/all-target and
+WASM Clippy checks pass with warnings denied. VDOM and HTTP tests do **not**
+replace browser/keyboard acceptance.
+
+This is not full Timesheet acceptance or policy activation. FR-019 remains open:
+commands temporarily reject approval-covered dates (including empty cells in a
+submitted week), non-Open entries and billed entries. Remove that boundary only
+after reconciling coverage storage, approval writers and frozen rounding.
+Legacy own submission remains a separate endpoint, not delegated submission.
+
+## Previous connected own Timesheet baseline (T014/T015 in progress)
 
 No database is needed for these consumer regressions; compile with the committed
 SQLx cache inside the Nix shell:

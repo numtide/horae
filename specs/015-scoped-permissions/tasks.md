@@ -36,10 +36,18 @@ Day/Week/Calendar consumer now uses that paginated projection with historical
 labels, current-week checks and retained grid drafts. Selected-person navigation
 and delegated commands remain open, so this does not close a user story.
 
-The next connected OP04 work must include FR-033's confirmed B rule: terminal
+The connected OP04 work must include FR-033's confirmed B rule: terminal
 recovery after tracking-eligibility loss is owner-only. Verify delegate denial,
 restoration, actor/owner separation and revocation; do not reopen the decision
 or mistake time-read visibility for permission to stop a timer.
+
+Local selected-person integration now connects routes, picker, minimal target
+choices and seven context-bound commands. The command boundary has 13 passing
+PostgreSQL cases, registered-session coverage and a complete SQLx cache. The
+integrated suite passes 1,135 server tests, five AdminShell tests, native/WASM
+lint and 10 navigation tests. T014/T015 stay unchecked:
+FR-019 coverage/submitted editing, combined submission, privileged correction,
+browser acceptance and full cross-surface policy integration remain required.
 
 ## Phase 2: Independent foundation (FR-006)
 

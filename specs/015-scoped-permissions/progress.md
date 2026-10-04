@@ -1,5 +1,81 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Verified selected-person ordinary command integration
+
+- Reused `feat/scoped-permissions` and the authorized specialist's existing
+  worktree. The specialist's completed report-reader branch and draft #217 are
+  preserved; its new command branch starts at `e1ddd9a`. No additional agent,
+  runtime policy change, migration or external Harvest write was introduced.
+- Integrated the local command DTO contract (`48a6533`, from `8360b20`) to build
+  the consumer against the agreed API. Its fail-closed placeholder is **not a
+  deliverable** and must not be published without the verified implementation.
+- Route RED `47573` failed the two new selected-person cases; route GREEN
+  `83397` passed all four cases. Day/Week/Calendar retain the `user` query and
+  malformed IDs remain explicit failures. The outer requester survives keyed
+  person/date/view remounts. The existing history guard now recognizes Timesheet;
+  Node RED `95605` failed its two new messages and GREEN `58241` passed 10/10.
+- Connected the person picker, owner-specific minimal tracking choices and seven
+  captured-context command intents in local UI code. Existing SelectField and
+  utility classes are reused; no shared CSS or shell timer owner changed.
+  Multi-entry row removal is one atomic command, not independent deletions.
+  Current-response checks suppress old picker searches and tracking contexts.
+  Dirty drafts/dialogs/rows and pending writes participate in navigation guards.
+- Review caught a legacy compatibility edge: editing a historical source must
+  not depend on eligibility for creating new time there. The local UI preserves
+  that explicit policy-0 distinction, while canonical edits require eligible
+  source pairs. Restart eligibility is independent of the source entry's state;
+  read access alone enables neither editing nor a delegated stop.
+- The specialist reports seven passing PostgreSQL cases after an initial
+  two-case RED against placeholders. Parent read the implementation and requested
+  sanitized authenticated errors plus real-session coverage. A hypothesized
+  rejected-approval row was disproved by schema and `reject_submission`: rejection
+  deletes that row. Require a reopen/write regression, not a fabricated status.
+- Intermediate consumer run `4551` passed all 41 Timesheet tests, including
+  actual Day renderer read-only controls, preserved Week inputs and advisory
+  owner/delegate recovery predicates. Subsequent small DTO/label/identity changes
+  still need the final integrated run. Formatting `95384` passed; no browser
+  acceptance is inferred from these VDOM tests.
+- Current boundary: submitted editing, weekly coverage and combined submission
+  remain unfinished FR-019 work. Legacy own submission still uses the existing
+  separate endpoint; it is not delegated or complete captured-context approval
+  integration. No activation or full Timesheet acceptance is claimed.
+- Integrated the real backend as `02c4245` (specialist `a0ea691`), replacing the
+  placeholder. Its 13 PostgreSQL tests and registered-session matrix pass, with
+  real rejection/reopen, sanitized failures and both revocation orders. Complete
+  SQLx adds 38 descriptors without removal; specialist server/all-target Clippy,
+  format and diff checks pass. Independent UI review found no additional high
+  identity/retention issue. Parent full server regressions are running in `34248`
+  against the specialist's Unix-only disposable PostgreSQL, not real data.
+- Integrated full-server `34248` passed **1,135 tests**, zero failures and 11
+  pre-existing ignored cases in 141.14s. This includes the final 41 consumer
+  tests, five route cases and the registered-session matrix. All-target lint
+  `28922` found the separate AdminShell test router still lacked `user`; updated
+  only that controlled fixture and started its five tests plus both lint targets
+  in `75640`. No production fix or server-suite rerun is implied by that fixture
+  correction.
+- Final `75640` passed all five AdminShell regressions, offline server/all-target
+  Clippy (1m15s) and WASM Clippy (14.33s), both with warnings denied. Formatting
+  `9385` checked 531 files with zero changes. GitHub `62107` confirms #212 remains
+  open/draft on `feat/scoped-permissions` against `master`. No temporary command
+  implementation remains. Publish the verified consumer and evidence unsigned
+  on that existing branch, without merging or activating the canonical policy.
+
+Next: after publication, integrate FR-019's actual approval coverage, submitted
+editing and frozen rounding, starting with the concrete transaction/storage
+dependencies below. Do not replace these with an Open-only product rule or ask
+the confirmed recovery question again. Browser acceptance remains unavailable,
+not passed; the full goal remains active.
+
+FR-019 dependency checkpoint: `submit_user_week` freezes `rounded_minutes` under
+the exclusive owner barrier; `approve_periods` and `reopen_period` lock approval
+rows before entries without the organization/owner fences needed for scoped
+commands. Storage remains whole-week `(user_id, period_start)` rather than
+project/date coverage. The current explicit conflict covers any approval interval
+intersecting a source or destination (including empty Submitted cells), non-Open
+entries and billed rows. Reconcile those writers, storage and rounding before
+removing that temporary boundary. Retain the distinct legacy submission and
+combined time/expense acceptance requirements.
+
 ## 2026-10-04 — Actual Timesheet consumer and terminal recovery decision
 
 - Revalidated `5faed76` on the existing worktree/branch; the preceding delegation

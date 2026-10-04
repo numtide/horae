@@ -43,7 +43,7 @@ function setup(kind, state, legacy = false) {
   };
 }
 
-for (const [kind, noun] of [['permissions', 'permission'], ['invoice', 'invoice'], ['project', 'project']]) {
+for (const [kind, noun] of [['permissions', 'permission'], ['invoice', 'invoice'], ['project', 'project'], ['timesheet', 'timesheet']]) {
   test(`${kind}: pending navigation preserves history until the request is resolved`, () => {
     const ui = setup(kind, 'pending');
     ui.history.pushState([5, 6], '', '/away');

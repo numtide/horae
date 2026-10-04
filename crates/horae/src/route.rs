@@ -28,7 +28,7 @@ fn NotFound(route: Vec<String>) -> Element {
                 }
                 div { style: "text-align: center; margin-top: 1rem;",
                     Link {
-                        to: Route::Timesheet { view: ViewMode::Week, date: Anchor::default(), span: CalSpan::default() },
+                        to: Route::Timesheet { view: ViewMode::Week, date: Anchor::default(), span: CalSpan::default(), user: String::new() },
                         class: "btn btn-primary",
                         "Go to Timesheet"
                     }
@@ -45,12 +45,13 @@ pub enum Route {
     #[layout(AppLayout)]
     // Clean, shareable paths like Harvest (/timesheet/day/2026-08-06); bare "/"
     // lands on this week.
-    #[redirect("/", || Route::Timesheet { view: ViewMode::Week, date: Anchor::default(), span: CalSpan::default() })]
-    #[route("/timesheet/:view/:date?:span")]
+    #[redirect("/", || Route::Timesheet { view: ViewMode::Week, date: Anchor::default(), span: CalSpan::default(), user: String::new() })]
+    #[route("/timesheet/:view/:date?:span&:user")]
     Timesheet {
         view: ViewMode,
         date: Anchor,
         span: CalSpan,
+        user: String,
     },
     #[route("/clients")]
     ClientList {},
@@ -108,6 +109,36 @@ fn matches_navigation(to: &Route, current: &Route) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn timesheet_routes_preserve_selected_person_in_every_view() {
+        let user = Uuid::now_v7();
+        for view in ["day", "week", "calendar"] {
+            for span in ["day", "5day", "week"] {
+                let url = format!("/timesheet/{view}/2026-09-07?span={span}&user={user}");
+                let route: Route = url.parse().unwrap();
+                assert_eq!(route.to_string(), url);
+            }
+        }
+    }
+
+    #[test]
+    fn invalid_timesheet_person_is_not_silently_removed_from_the_route() {
+        let url = "/timesheet/week/2026-09-07?span=week&user=invalid-person";
+        assert_eq!(url.parse::<Route>().unwrap().to_string(), url);
+    }
+
+    #[test]
+    fn existing_timesheet_links_without_a_person_still_select_own_time() {
+        for url in [
+            "/timesheet/week/2026-09-07",
+            "/timesheet/calendar/2026-09-07?span=5day",
+        ] {
+            assert!(
+                matches!(url.parse::<Route>().unwrap(), Route::Timesheet { user, .. } if user.is_empty())
+            );
+        }
+    }
 
     #[test]
     fn new_project_is_static_and_highlights_only_projects() {

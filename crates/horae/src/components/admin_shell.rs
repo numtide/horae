@@ -25,7 +25,7 @@ pub fn AdminShell() -> Element {
                 h1 { class: "page-title", "Admins only" }
                 p { class: "text-secondary", "You need an admin role to manage the workspace." }
                 Link {
-                    to: Route::Timesheet { view: ViewMode::Week, date: Anchor::default(), span: CalSpan::default() },
+                    to: Route::Timesheet { view: ViewMode::Week, date: Anchor::default(), span: CalSpan::default(), user: String::new() },
                     class: "btn btn-secondary",
                     "Back to Timesheet"
                 }
@@ -66,7 +66,7 @@ fn AdminWorkspace() -> Element {
     rsx! {
         div {
             Link {
-                to: Route::Timesheet { view: ViewMode::Week, date: Anchor::default(), span: CalSpan::default() },
+                to: Route::Timesheet { view: ViewMode::Week, date: Anchor::default(), span: CalSpan::default(), user: String::new() },
                 class: "adm-back inline-flex items-center gap-2 text-sm text-secondary mb-5",
                 span { "←" }
                 "Back to Timesheet"

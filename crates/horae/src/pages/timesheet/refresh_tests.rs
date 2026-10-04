@@ -29,6 +29,17 @@ fn typing_in_another_cell_survives_a_save_refresh() {
                 add_row: use_callback(|()| {}),
                 drafts: use_signal(HashMap::new),
                 saving: use_signal(HashSet::new).into(),
+                tracking: use_memo(|| {
+                    vec![crate::models::scoped_time::TimesheetTrackingOption {
+                        project_id: Uuid::nil(),
+                        project_name: "Project".into(),
+                        task_id: Uuid::nil(),
+                        task_name: "Task".into(),
+                        billable: true,
+                    }]
+                }),
+                busy: use_memo(|| false),
+                policy: use_memo(|| Some(TimesheetPolicy::Scoped)),
             };
             if !ready.get() {
                 return rsx! { div { "Loading timesheet…" } };

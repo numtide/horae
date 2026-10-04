@@ -271,11 +271,12 @@ mod route {
 
     #[derive(Clone, PartialEq, Routable)]
     pub enum Route {
-        #[route("/timesheet?:view&:date&:span")]
+        #[route("/timesheet?:view&:date&:span&:user")]
         Timesheet {
             view: ViewMode,
             date: Anchor,
             span: CalSpan,
+            user: String,
         },
         #[layout(AdminShell)]
         #[route("/admin/users")]
@@ -289,7 +290,7 @@ mod route {
     }
 
     #[component]
-    fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
+    fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan, user: String) -> Element {
         rsx! { "Timesheet" }
     }
 
