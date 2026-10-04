@@ -102,7 +102,10 @@ Modal and shared grant descriptions. Keep its local draft/confirmation/retry
 state separate from server authority; use the core prerequisite graph rather
 than duplicated permission rules. The consumer contract is in
 `contracts/permission-editor.md`. No schema, dependency, CSS or activation is
-needed. Canonical shell/directory enforcement, template-management controls and
+needed. Template creation/deletion uses the same dialog and published commands,
+with no nested modal or second mutation path. Cancellation retains the person
+draft; a completed template change requires an explicit fresh reload before more
+person editing. Canonical shell/directory enforcement, navigation recovery and
 browser acceptance remain unfinished, not implicitly supplied by this consumer.
 
 T126–T129 connect authenticated editor load/preview and profile/template commands

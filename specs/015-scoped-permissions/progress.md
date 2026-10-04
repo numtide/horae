@@ -1,5 +1,47 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Reusable profile controls
+
+- Previous turn made progress by publishing the person editor. Revalidated clean
+  synchronized `9e6d8bd`; reused the worktree, branch and draft #212. Executed
+  Spec Kit prerequisites; existing independent-increment authorization remains
+  in force, with full requirements still 12/16 and no policy activation.
+- Added template creation/deletion within the existing dialog using shared
+  Input, FormGroup, Checkbox, descriptions and CSS utilities. No CSS, SQL,
+  migration, dependency or server policy changed. Removed obsolete WASM DTO
+  unused-consumer annotations now that all three template DTOs have consumers.
+- Initial RED reproduced missing create/delete controls. Corrected the preview
+  call to supply both expected revisions; used the existing constant-ID pattern
+  for production control events in the VirtualDom harness. Expanded editor suite
+  passed all 24 tests (38.54s build, 0.02s execution).
+- New cases cover final draft grants without saving the person, same-command
+  retry, explicit deletion confirmation including empty profiles, stale/mismatched
+  previews, cancellation preserving the person draft, duplicate/limit/validation
+  errors, creation identity/count gates and denial hiding.
+- Selected regressions initially passed 40 tests; offline server/WASM lint also
+  passed before review fixes. Independent source review found no high/critical
+  issue, but requested pending-deletion-preview locking and replacement of
+  nonexistent `my-*` utilities. Corrected both; its source verdict confirms the
+  two fixes, without claiming rendered acceptance.
+- Added pending-preview, loaded-preview cancellation and explicit reload tests.
+  The expanded run passed 25/26 and reproduced reload retaining the old form when
+  returned revisions were unchanged. Fixed all dialog reload entry points with a
+  local generation key, preserving server revisions and pending-save guards.
+  The post-fix run passed all 42 selected UI tests (editor 26, Settings 11, admin
+  shell five), offline all-targets server Clippy (1m02s) and WASM Clippy (12.53s),
+  with warnings denied. Independent source review also found the reload fix sound.
+- The read-only design documentation review found no new system rule or remaining
+  source-to-token mismatch in its scope. Existing DESIGN.md remains unchanged;
+  no rendered/focus/keyboard acceptance is inferred from this source verdict.
+
+Delivery remains the existing draft #212, with unsigned commits and no merge.
+Next implementation: readable person-editor relationship-loss labels from its
+authorized preview, then draft/navigation recovery and isolated browser acceptance.
+No loaded browser tool is available; keyboard, viewport, theme and rendered
+acceptance are not claimed. Template mutation currently requires explicit reload/
+discard of unsaved person changes; smoother draft recovery and all full-feature
+enforcement/approval/migration gates remain required. No real data changed.
+
 ## 2026-10-04 — Person editor publication
 
 - Published unsigned commit `98b1692` on `feat/scoped-permissions` and updated

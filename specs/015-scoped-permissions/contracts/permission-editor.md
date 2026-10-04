@@ -100,8 +100,29 @@ case to resolve before declaring the full editor complete.
   profile selector and permission controls; review/save actions follow the form.
   The shared dialog owns scrolling, inertness and focus restoration.
 - Form: local extension of AdminUsers in Operate mode, not a new visual identity
-  or a concept-selection exercise. Template create/delete controls remain open.
+  or a concept-selection exercise. Custom-profile creation/deletion extends the
+  same dialog, not a nested modal or another visual identity.
 - Finish: browser, keyboard, viewport/theme and independent visual review remain
   mandatory. Current loss DTOs contain subject IDs, not names; improve this
   presentation before full acceptance instead of inventing labels from unrelated
   or stale directory data. No full T018 completion follows from source/SSR tests.
+
+### Template controls
+
+Create captures the person's current non-administrative draft selection, displays
+its exact grants and requests a name. It never also saves the person. A custom
+profile does not carry Administrator identity, even if it contains every grant.
+The server owns name uniqueness, Unicode bounds and the concurrent 50-profile
+limit; the loaded count can disable creation but cannot authorize it.
+
+Deletion loads the existing preview endpoint and verifies the selected template
+and access revision before showing affected names. Explicit confirmation applies
+to that exact preview; everyone keeps their grants and independent identity.
+Cancellation returns to the untouched person draft without issuing a command.
+
+Use the same pending-command/retry rules as person saves. Do not permit switching
+between person/template commands while a template result is uncertain. Known
+rejection or completed template mutation requires fresh editor data; the reload
+control explicitly says it discards unsaved person changes. Do not automatically
+rebase an older person draft over an intervening access revision or silently
+apply the created profile. Navigation recovery and browser acceptance stay open.

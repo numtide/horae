@@ -35,6 +35,8 @@ use permission_editor_model::*;
 
 type PreviewReply = oneshot::Receiver<Result<ProfilePreview, ServerFnError>>;
 type SaveReply = oneshot::Receiver<Result<ProfileOutcome, ServerFnError>>;
+type TemplateReply = oneshot::Receiver<Result<TemplateOutcome, ServerFnError>>;
+type DeletionReply = oneshot::Receiver<Result<TemplateDeletionPreview, ServerFnError>>;
 
 #[derive(Clone)]
 struct Probe {
@@ -44,6 +46,11 @@ struct Probe {
     saves: Rc<RefCell<Vec<ProfileCommand>>>,
     save_replies: Rc<RefCell<VecDeque<SaveReply>>>,
     saved: Rc<RefCell<Vec<bool>>>,
+    templates: Rc<RefCell<Vec<TemplateCommand>>>,
+    template_replies: Rc<RefCell<VecDeque<TemplateReply>>>,
+    deletions: Rc<RefCell<Vec<Uuid>>>,
+    deletion_replies: Rc<RefCell<VecDeque<DeletionReply>>>,
+    loads: Rc<RefCell<usize>>,
 }
 
 impl Probe {
@@ -67,6 +74,11 @@ impl Probe {
             saves: Default::default(),
             save_replies: Default::default(),
             saved: Default::default(),
+            templates: Default::default(),
+            template_replies: Default::default(),
+            deletions: Default::default(),
+            deletion_replies: Default::default(),
+            loads: Default::default(),
         }
     }
 
@@ -92,6 +104,18 @@ impl Probe {
             remove_projects: vec![],
             remove_people: vec![],
         }
+    }
+
+    fn template_reply(&self) -> oneshot::Sender<Result<TemplateOutcome, ServerFnError>> {
+        let (send, receive) = oneshot::channel();
+        self.template_replies.borrow_mut().push_back(receive);
+        send
+    }
+
+    fn deletion_reply(&self) -> oneshot::Sender<Result<TemplateDeletionPreview, ServerFnError>> {
+        let (send, receive) = oneshot::channel();
+        self.deletion_replies.borrow_mut().push_back(receive);
+        send
     }
 }
 
@@ -164,15 +188,394 @@ impl Ui {
     }
 
     fn select_profile(&mut self, value: &str) {
-        let id = self.targets["person-permissions-profile"];
+        self.form_event("person-permissions-profile", "change", value);
+    }
+
+    fn form_event(&mut self, name: &str, event_name: &str, value: &str) {
+        let id = self.targets[name];
         let data = SerializedFormData::new(value.into(), vec![]);
         let event = Event::new(
             Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>,
             true,
         );
-        self.dom.runtime().handle_event("change", event, id);
+        self.dom.runtime().handle_event(event_name, event, id);
         self.settle();
     }
+}
+
+#[tokio::test]
+async fn creating_a_template_captures_final_grants_and_retries_without_saving_the_person() {
+    let probe = Probe::new();
+    let mut ui = Ui::new(probe.clone());
+    ui.select_profile("Member");
+    ui.click("permission-ClientReadAll");
+    ui.click("permission-template-create");
+    assert!(ui.html().contains("Create custom profile"));
+    assert!(probe.templates.borrow().is_empty());
+    ui.form_event("permission-template-name", "input", "  Equipo  ");
+    let reply = probe.template_reply();
+    ui.click("permission-template-save");
+    ui.click("permission-template-save");
+    assert_eq!(probe.templates.borrow().len(), 1);
+    let command = probe.templates.borrow()[0].clone();
+    assert_eq!(command.expected_access_revision, 7);
+    let TemplateAction::Create { name, grants } = &command.action else {
+        panic!("expected create");
+    };
+    assert_eq!(name, "Equipo");
+    assert!(grants.contains(&Permission::ClientReadAll));
+    assert!(!grants.contains(&Permission::ProjectReadManaged));
+    reply
+        .send(Err(ServerFnError::new("private transport")))
+        .unwrap();
+    ui.settle();
+    ui.form_event("permission-template-name", "input", "Changed intent");
+    ui.click("permission-template-cancel");
+    assert!(ui.html().contains("Retry same save"));
+    let reply = probe.template_reply();
+    ui.click("permission-template-save");
+    assert_eq!(probe.templates.borrow()[1], command);
+    reply
+        .send(Ok(TemplateOutcome {
+            template_id: Uuid::now_v7(),
+            access_revision: 8,
+            detached_people: 0,
+        }))
+        .unwrap();
+    ui.settle();
+    assert!(ui.html().contains("Custom profile created"));
+    assert!(
+        ui.html()
+            .contains("Reload and discard unsaved person changes")
+    );
+    assert!(!ui.html().contains("private transport"));
+    assert!(probe.saves.borrow().is_empty());
+    assert!(probe.saved.borrow().is_empty());
+}
+
+#[tokio::test]
+async fn deleting_a_template_requires_its_current_affected_people_preview() {
+    let mut probe = Probe::new();
+    let template = TemplateChoice {
+        id: Uuid::now_v7(),
+        name: "Studio".into(),
+        grants: probe.editor.permissions.grants.clone(),
+        revision: 2,
+    };
+    probe.editor.templates.push(template.clone());
+    let mut ui = Ui::new(probe.clone());
+    let reply = probe.deletion_reply();
+    ui.click(&format!("permission-template-delete-{}", template.id));
+    assert_eq!(*probe.deletions.borrow(), vec![template.id]);
+    assert!(probe.templates.borrow().is_empty());
+    ui.click("permission-template-cancel");
+    assert!(ui.html().contains("Loading affected people"));
+    assert!(ui.html().contains("aria-busy=true"));
+    assert!(!ui.html().contains(">Close</button>"));
+    reply
+        .send(Ok(TemplateDeletionPreview {
+            access_revision: 7,
+            template: template.clone(),
+            people: vec![TemplateAssignee {
+                user_id: probe.editor.user_id,
+                name: "Affected person".into(),
+                permissions: probe.editor.permissions.clone(),
+            }],
+        }))
+        .unwrap();
+    ui.settle();
+    assert!(ui.html().contains("Affected person"));
+    assert!(ui.html().contains("keep their permissions"));
+    ui.click("permission-template-save");
+    assert!(probe.templates.borrow().is_empty());
+    ui.click("permission-template-confirm");
+    let reply = probe.template_reply();
+    ui.click("permission-template-save");
+    assert_eq!(
+        probe.templates.borrow()[0].action,
+        TemplateAction::Delete {
+            id: template.id,
+            expected_revision: 2,
+        }
+    );
+    reply
+        .send(Err(ServerFnError::ServerError {
+            code: 409,
+            message: "Permissions changed".into(),
+            details: None,
+        }))
+        .unwrap();
+    ui.settle();
+    assert!(ui.html().contains("Permissions changed"));
+    assert!(
+        ui.html()
+            .contains("Reload and discard unsaved person changes")
+    );
+    assert!(!ui.html().contains("permission-template-save"));
+    assert!(probe.saved.borrow().is_empty());
+}
+
+#[tokio::test]
+async fn cancelling_template_creation_keeps_the_unsaved_person_draft() {
+    let probe = Probe::new();
+    let mut ui = Ui::new(probe.clone());
+    ui.select_profile("Member");
+    ui.click("permission-ClientReadAll");
+    ui.click("permission-template-create");
+    ui.click("permission-template-save");
+    assert!(
+        probe.templates.borrow().is_empty(),
+        "blank names cannot submit"
+    );
+    ui.form_event("permission-template-name", "input", "Unsaved");
+    ui.click("permission-template-cancel");
+    let reply = probe.preview_reply();
+    ui.click("permission-review");
+    let draft = probe.previews.borrow()[0].clone();
+    assert!(draft.grants.contains(&Permission::ClientReadAll));
+    assert!(!draft.grants.contains(&Permission::ProjectReadManaged));
+    assert!(probe.templates.borrow().is_empty());
+    reply
+        .send(Err(ServerFnError::new("test preview stopped")))
+        .unwrap();
+    ui.settle();
+}
+
+#[tokio::test]
+async fn template_creation_is_disabled_for_administrator_identity_or_fifty_profiles() {
+    let probe = Probe::new();
+    let mut ui = Ui::new(probe.clone());
+    ui.select_profile("Administrator");
+    ui.click("permission-template-create");
+    assert!(!ui.html().contains("permission-template-name"));
+    assert!(ui.html().contains("Choose a non-administrative profile"));
+    let mut full = Probe::new();
+    full.editor.templates = (0..50)
+        .map(|index| TemplateChoice {
+            id: Uuid::now_v7(),
+            name: format!("Profile {index}"),
+            revision: 0,
+            grants: full.editor.permissions.grants.clone(),
+        })
+        .collect();
+    let mut ui = Ui::new(full.clone());
+    ui.click("permission-template-create");
+    assert!(!ui.html().contains("permission-template-name"));
+    assert!(ui.html().contains("limit of 50 custom profiles"));
+    assert!(full.templates.borrow().is_empty());
+}
+
+#[tokio::test]
+async fn template_creation_reports_duplicate_limit_and_validation_errors_without_success() {
+    for (code, message) in [
+        (409, "A profile with this name already exists"),
+        (409, "At most 50 reusable profiles are allowed"),
+        (400, "Profile names must have at most 100 characters"),
+    ] {
+        let probe = Probe::new();
+        let mut ui = Ui::new(probe.clone());
+        ui.click("permission-template-create");
+        ui.form_event("permission-template-name", "input", "Equipo");
+        let reply = probe.template_reply();
+        ui.click("permission-template-save");
+        reply
+            .send(Err(ServerFnError::ServerError {
+                code,
+                message: message.into(),
+                details: None,
+            }))
+            .unwrap();
+        ui.settle();
+        assert!(ui.html().contains(message), "{}", ui.html());
+        assert!(!ui.html().contains("Custom profile created"));
+        assert!(!ui.html().contains("permission-template-save"));
+        assert!(probe.saves.borrow().is_empty());
+    }
+}
+
+fn deletion_fixture() -> (Probe, TemplateChoice) {
+    let mut probe = Probe::new();
+    let template = TemplateChoice {
+        id: Uuid::now_v7(),
+        name: "Sensitive profile".into(),
+        revision: 3,
+        grants: probe.editor.permissions.grants.clone(),
+    };
+    probe.editor.templates.push(template.clone());
+    (probe, template)
+}
+
+#[tokio::test]
+async fn deletion_never_confirms_mismatched_or_denied_previews() {
+    for mismatch in 0..4 {
+        let (probe, template) = deletion_fixture();
+        let mut ui = Ui::new(probe.clone());
+        let reply = probe.deletion_reply();
+        ui.click(&format!("permission-template-delete-{}", template.id));
+        let mut preview = TemplateDeletionPreview {
+            access_revision: 7,
+            template,
+            people: vec![],
+        };
+        match mismatch {
+            0 => preview.access_revision += 1,
+            1 => preview.template.revision += 1,
+            2 => preview.template.id = Uuid::now_v7(),
+            _ => {}
+        }
+        if mismatch == 3 {
+            reply
+                .send(Err(ServerFnError::ServerError {
+                    code: 403,
+                    message: "private authority".into(),
+                    details: None,
+                }))
+                .unwrap();
+        } else {
+            reply.send(Ok(preview)).unwrap();
+        }
+        ui.settle();
+        let html = ui.html();
+        assert!(!html.contains("permission-template-save"), "{html}");
+        assert!(!html.contains("Sensitive profile"), "{html}");
+        assert!(!html.contains("private authority"), "{html}");
+        assert!(probe.templates.borrow().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn empty_profile_deletion_requires_confirmation_and_keeps_exact_retry() {
+    let (probe, template) = deletion_fixture();
+    let mut ui = Ui::new(probe.clone());
+    let reply = probe.deletion_reply();
+    ui.click(&format!("permission-template-delete-{}", template.id));
+    reply
+        .send(Ok(TemplateDeletionPreview {
+            access_revision: 7,
+            template: template.clone(),
+            people: vec![],
+        }))
+        .unwrap();
+    ui.settle();
+    assert!(ui.html().contains("No people currently use this profile"));
+    ui.click("permission-template-save");
+    assert!(probe.templates.borrow().is_empty());
+    ui.click("permission-template-confirm");
+    let reply = probe.template_reply();
+    ui.click("permission-template-save");
+    reply
+        .send(Err(ServerFnError::new("response lost")))
+        .unwrap();
+    ui.settle();
+    ui.click("permission-template-confirm");
+    ui.click("permission-template-cancel");
+    let reply = probe.template_reply();
+    ui.click("permission-template-save");
+    assert_eq!(probe.templates.borrow()[0], probe.templates.borrow()[1]);
+    reply
+        .send(Ok(TemplateOutcome {
+            template_id: template.id,
+            access_revision: 8,
+            detached_people: 0,
+        }))
+        .unwrap();
+    ui.settle();
+    assert!(ui.html().contains("Custom profile deleted"));
+    assert!(!ui.html().contains("style="));
+    assert!(probe.saved.borrow().is_empty());
+}
+
+#[tokio::test]
+async fn template_save_revocation_hides_the_selection_and_does_not_report_success() {
+    let probe = Probe::new();
+    let mut ui = Ui::new(probe.clone());
+    ui.click("permission-template-create");
+    ui.form_event("permission-template-name", "input", "Private name");
+    let reply = probe.template_reply();
+    ui.click("permission-template-save");
+    reply
+        .send(Err(ServerFnError::ServerError {
+            code: 403,
+            message: "private authority".into(),
+            details: None,
+        }))
+        .unwrap();
+    ui.settle();
+    let html = ui.html();
+    assert!(html.contains("Permission editing is unavailable"));
+    assert!(!html.contains("Private name"));
+    assert!(!html.contains("View managed projects"));
+    assert!(!html.contains("private authority"));
+    assert!(probe.saved.borrow().is_empty());
+}
+
+#[tokio::test]
+async fn rejected_template_reload_fetches_and_explicitly_discards_the_person_draft() {
+    let probe = Probe::new();
+    let mut ui = Ui::new(probe.clone());
+    assert_eq!(*probe.loads.borrow(), 1);
+    ui.select_profile("Member");
+    ui.click("permission-template-create");
+    ui.form_event("permission-template-name", "input", "Duplicate");
+    let reply = probe.template_reply();
+    ui.click("permission-template-save");
+    reply
+        .send(Err(ServerFnError::ServerError {
+            code: 409,
+            message: "A profile with this name already exists".into(),
+            details: None,
+        }))
+        .unwrap();
+    ui.settle();
+    ui.click("permission-template-reload");
+    assert_eq!(*probe.loads.borrow(), 2);
+    assert!(
+        !ui.html().contains("permission-template-name"),
+        "{}",
+        ui.html()
+    );
+    let reply = probe.preview_reply();
+    ui.click("permission-review");
+    assert_eq!(
+        probe.previews.borrow()[0].grants,
+        probe.editor.permissions.grants
+    );
+    assert_eq!(probe.previews.borrow()[0].action, ProfileAction::Edit);
+    reply.send(Ok(probe.effects())).unwrap();
+    ui.settle();
+}
+
+#[tokio::test]
+async fn cancelling_a_loaded_deletion_preview_preserves_person_edits_without_mutation() {
+    let (probe, template) = deletion_fixture();
+    let mut ui = Ui::new(probe.clone());
+    ui.select_profile("Member");
+    let reply = probe.deletion_reply();
+    ui.click(&format!("permission-template-delete-{}", template.id));
+    reply
+        .send(Ok(TemplateDeletionPreview {
+            access_revision: 7,
+            template,
+            people: vec![],
+        }))
+        .unwrap();
+    ui.settle();
+    ui.click("permission-template-confirm");
+    ui.click("permission-template-cancel");
+    assert!(probe.templates.borrow().is_empty());
+    let reply = probe.preview_reply();
+    ui.click("permission-review");
+    assert_eq!(
+        probe.previews.borrow()[0].grants,
+        BuiltInProfile::Member
+            .selection()
+            .iter()
+            .collect::<Vec<_>>()
+    );
+    reply
+        .send(Err(ServerFnError::new("test preview stopped")))
+        .unwrap();
+    ui.settle();
 }
 
 #[tokio::test]
@@ -326,6 +729,7 @@ mod server_fns {
 
     pub async fn load_permission_editor(id: Uuid) -> Result<PermissionEditor, ServerFnError> {
         let probe = use_context::<Probe>();
+        *probe.loads.borrow_mut() += 1;
         assert_eq!(id, probe.editor.user_id);
         Ok(probe.editor)
     }
@@ -354,5 +758,44 @@ mod server_fns {
             .pop_front()
             .expect("unexpected save");
         reply.await.expect("save reply dropped")
+    }
+
+    pub async fn save_permission_template(
+        command: TemplateCommand,
+    ) -> Result<TemplateOutcome, ServerFnError> {
+        let probe = use_context::<Probe>();
+        probe.templates.borrow_mut().push(command);
+        let reply = probe
+            .template_replies
+            .borrow_mut()
+            .pop_front()
+            .expect("unexpected template save");
+        reply.await.expect("template reply dropped")
+    }
+
+    pub async fn preview_permission_template_deletion(
+        id: Uuid,
+        expected_access_revision: i64,
+        expected_template_revision: i64,
+    ) -> Result<TemplateDeletionPreview, ServerFnError> {
+        let probe = use_context::<Probe>();
+        assert_eq!(expected_access_revision, probe.editor.access_revision);
+        assert_eq!(
+            expected_template_revision,
+            probe
+                .editor
+                .templates
+                .iter()
+                .find(|template| template.id == id)
+                .unwrap()
+                .revision
+        );
+        probe.deletions.borrow_mut().push(id);
+        let reply = probe
+            .deletion_replies
+            .borrow_mut()
+            .pop_front()
+            .expect("unexpected deletion preview");
+        reply.await.expect("deletion reply dropped")
     }
 }

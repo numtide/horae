@@ -7,13 +7,6 @@ use uuid::Uuid;
 /// Confirmed intent; actor identity is supplied separately by the server.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(
-    not(feature = "server"),
-    expect(
-        dead_code,
-        reason = "Editor transport; the Workspace consumer is not connected yet"
-    )
-)]
 pub struct TemplateCommand {
     pub request_id: Uuid,
     pub expected_access_revision: i64,
@@ -35,13 +28,6 @@ pub enum TemplateAction {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(
-    not(feature = "server"),
-    expect(
-        dead_code,
-        reason = "Editor transport; the Workspace consumer is not connected yet"
-    )
-)]
 pub struct TemplateOutcome {
     pub template_id: Uuid,
     pub access_revision: i64,
@@ -162,13 +148,6 @@ pub struct TemplateAssignee {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(
-    not(feature = "server"),
-    expect(
-        dead_code,
-        reason = "Editor transport; the Workspace consumer is not connected yet"
-    )
-)]
 pub struct TemplateDeletionPreview {
     pub access_revision: i64,
     pub template: TemplateChoice,

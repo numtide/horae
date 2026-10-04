@@ -1,5 +1,40 @@
 # Permission verification
 
+## Reusable profile controls (T018, in progress)
+
+Use the same offline Nix UI/lint commands in the next section. The editor suite
+now contains 26 tests, including ten new control-level template scenarios.
+Initial RED failed on missing creation/deletion controls. After wiring both
+expected deletion revisions and the existing stable control-ID pattern, all 24
+passed (38.54s compilation, 0.02s execution). Selected regressions initially
+passed 40 tests, followed by offline native/WASM lint. Source review's pending
+deletion-preview lock and undefined margin-class findings are corrected and
+re-reviewed. Adding cancellation/reload coverage then passed 25/26, reproducing
+an unchanged-revision reload that retained the old form. The shared reload now
+changes a local component-generation key. Final post-fix selected regressions
+passed all 42 tests: editor 26, Settings 11, admin shell five (39.42s build).
+Offline all-targets server Clippy (1m02s) and WASM Clippy (12.53s) passed with
+warnings denied. The independent source verdict found the reload fix sound;
+the read-only documentation review confirmed existing design primitives suffice.
+
+The tests invoke production UI handlers with controlled server replies. They
+cover final grants, blank/duplicate/limit/validation failures, explicit identity,
+cancellation retaining the unsaved person draft, exact affected-person review,
+stale/mismatched previews, revoked authority and identical create/delete retries.
+Server preservation and real PostgreSQL/HTTP results remain the separate earlier
+backend evidence, not newly rerun or established by these UI tests.
+
+| Requirement subset | UI evidence |
+| --- | --- |
+| FR-004/015/032 explicit reusable selections and names | Final-grant capture, no person save, count/identity gates, server duplicate/limit/validation responses |
+| FR-010/011/018 current authority and recovery | Denial hiding, exact request retries, mismatch/stale rejection, pending-preview lock, explicit fresh reload |
+| FR-012/016 shared explanations and preservation | Shared grant descriptions, affected names, confirmation even for empty profiles, cancellation retaining person edits |
+
+No CSS, SQL, migration or dependency changed. A completed template mutation still
+requires an explicit reload/discard before editing the person again; navigation
+recovery and browser/theme/viewport/keyboard checks remain open. No full T018,
+canonical activation, migration acceptance or visual pass follows.
+
 ## Person permission editor UI (T018, in progress)
 
 These checks need no running database. Run in the pinned Nix shell with the

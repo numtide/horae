@@ -479,7 +479,12 @@ local draft uses the core prerequisite graph, keeps explicit profile intent and
 invalidates confirmation on every edit. Test malformed loads, joint losses,
 explicit keep-project access and identical-command retry. Reuse Modal, Checkbox,
 form utilities and shared descriptions; no global CSS or active-policy change.
-Legacy shell/directory replacement, template create/delete controls and full
+Template create/delete controls extend this dialog in `permission_editor/templates.rs`.
+The controlled-response suite covers exact grants, blank/duplicate/limit errors,
+identity separation, cancellation retaining the person draft, affected-person
+confirmation, mismatched previews, stale saves, denial hiding and identical retry.
+Creation/deletion does not also save the person; reload explicitly discards their
+unsaved changes. Legacy shell/directory replacement, improved recovery and full
 browser acceptance remain separate unfinished parts of T015/T017/T018.
 
 ### Authenticated own-permission projection

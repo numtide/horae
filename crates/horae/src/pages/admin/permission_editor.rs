@@ -12,6 +12,9 @@ use crate::server_fns;
 #[path = "permission_editor/draft.rs"]
 mod draft;
 use draft::DraftState;
+#[path = "permission_editor/templates.rs"]
+mod templates;
+use templates::{TemplateEditor, TemplateIntent};
 
 const BAD_REQUEST: u16 = 400;
 const UNAUTHORIZED: u16 = 401;
@@ -21,6 +24,7 @@ const CONFLICT: u16 = 409;
 const PROFILE_FIELD: &str = "person-permissions-profile";
 const REVIEW_BUTTON: &str = "permission-review";
 const SAVE_BUTTON: &str = "permission-save";
+const CREATE_TEMPLATE_BUTTON: &str = "permission-template-create";
 
 #[component]
 pub(super) fn PermissionEditorDialog(
@@ -34,6 +38,15 @@ pub(super) fn PermissionEditorDialog(
             None => Ok(None),
         }
     });
+    // A successful reload can return unchanged revisions but must discard local state.
+    let mut generation = use_signal(Uuid::now_v7);
+    let reload = use_callback(move |_: ()| {
+        if !locked() {
+            generation.set(Uuid::now_v7());
+            editor.restart();
+        }
+    });
+    let form_generation = generation();
     let ready = editor.state()() == UseResourceState::Ready;
     rsx! {
         Modal {
@@ -52,9 +65,9 @@ pub(super) fn PermissionEditorDialog(
                             match DraftState::new(value.clone()) {
                                 Ok(initial) => rsx! {
                                     PermissionForm {
-                                        key: "{value.user_id}-{value.access_revision}-{value.permissions.revision}",
+                                        key: "{value.user_id}-{value.access_revision}-{value.permissions.revision}-{form_generation}",
                                         initial, locked,
-                                        on_reload: move |_| editor.restart(),
+                                        on_reload: reload,
                                         on_saved: move |changed| {
                                             locked.set(false);
                                             person.set(None);
@@ -66,7 +79,7 @@ pub(super) fn PermissionEditorDialog(
                                 Err(message) => rsx! {
                                     p { class: "text-danger text-sm", role: "alert", "{message}" }
                                     button { r#type: "button", class: "btn btn-secondary mt-4",
-                                        onclick: move |_| editor.restart(), "Reload permissions"
+                                        onclick: move |_| reload.call(()), "Reload permissions"
                                     }
                                 },
                             }
@@ -74,7 +87,7 @@ pub(super) fn PermissionEditorDialog(
                         Some(Err(error)) => rsx! {
                             p { role: "alert", class: "text-danger text-sm", "{load_error(error)}" }
                             button { r#type: "button", class: "btn btn-secondary mt-4",
-                                onclick: move |_| editor.restart(), "Reload permissions"
+                                onclick: move |_| reload.call(()), "Reload permissions"
                             }
                         },
                         _ => rsx! {},
@@ -105,6 +118,16 @@ fn PermissionForm(
     let mut error = use_signal(|| None::<String>);
     let mut reload_required = use_signal(|| false);
     let mut unavailable = use_signal(|| false);
+    let mut template_intent = use_signal(|| None::<TemplateIntent>);
+    if let Some(intent) = template_intent() {
+        return rsx! {
+            TemplateEditor {
+                intent, access_revision: state.read().editor.access_revision, locked,
+                on_cancel: move |_| template_intent.set(None),
+                on_reload: move |_| on_reload.call(()),
+            }
+        };
+    }
     let snapshot = state.read();
     let frozen = busy() || snapshot.request.is_some() || reload_required() || unavailable();
     let administrator = snapshot.administrator();
@@ -195,6 +218,41 @@ fn PermissionForm(
             p { class: "text-sm text-secondary mb-4",
                 "Permissions do not enable unavailable features or remove approval and invoice locks. Changes apply only after confirmation."
             }
+            details { class: "mb-4",
+                summary { class: "text-sm font-semibold", "Reusable custom profiles ({snapshot.editor.templates.len()}/50)" }
+                p { class: "text-sm text-secondary mt-3 mb-3", "Creating or deleting a custom profile does not save this person's draft. After a profile change, reload permissions before editing this person again." }
+                button { id: CREATE_TEMPLATE_BUTTON, r#type: "button", class: "btn btn-secondary btn-sm",
+                    disabled: frozen || administrator || snapshot.editor.templates.len() >= 50,
+                    onclick: move |_| {
+                        let draft = state.peek();
+                        if busy() || reload_required() || unavailable() || draft.request.is_some()
+                            || draft.administrator() || draft.editor.templates.len() >= 50 { return; }
+                        template_intent.set(Some(TemplateIntent::Create(draft.selection.iter().collect())));
+                    }, "Save these permissions as a custom profile"
+                }
+                if administrator { p { class: "text-sm text-secondary mt-2", "Choose a non-administrative profile before creating a custom profile." } }
+                if snapshot.editor.templates.len() >= 50 { p { class: "text-sm text-secondary mt-2", "The workspace has reached the limit of 50 custom profiles." } }
+                ul { class: "flex flex-col gap-3 mt-4",
+                    for template in &snapshot.editor.templates {
+                        li { key: "{template.id}", class: "flex flex-wrap items-center justify-between gap-3",
+                            span { class: "text-sm", "{template.name}" }
+                            button { id: "permission-template-delete-{template.id}", r#type: "button",
+                                class: "btn btn-danger btn-sm", disabled: frozen,
+                                aria_label: "Delete custom profile {template.name}",
+                                onclick: {
+                                    let template = template.clone();
+                                    move |_| {
+                                        if !busy() && !reload_required() && !unavailable() && state.peek().request.is_none() {
+                                            locked.set(true);
+                                            template_intent.set(Some(TemplateIntent::Delete(template.clone())));
+                                        }
+                                    }
+                                }, "Delete"
+                            }
+                        }
+                    }
+                }
+            }
             if let Some(preview) = &snapshot.preview {
                 {preview_content(preview)}
                 if !preview.remove_projects.is_empty() {
@@ -206,7 +264,7 @@ fn PermissionForm(
                             }
                         },
                     }
-                    p { class: "text-sm text-secondary my-3", "Choosing this changes the draft. Review it again before saving; person-management removals are evaluated separately." }
+                    p { class: "text-sm text-secondary mt-3 mb-3", "Choosing this changes the draft. Review it again before saving; person-management removals are evaluated separately." }
                 }
                 if !preview.remove_projects.is_empty() || !preview.remove_people.is_empty() {
                     Checkbox { id: "permission-confirm-removals", checked: snapshot.confirmed, disabled: frozen,
