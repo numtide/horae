@@ -1,5 +1,37 @@
 # Permission verification
 
+## Interactive time-writer activity (T171–T173)
+
+Use the Nix shell and the owned disposable PostgreSQL database:
+
+```sh
+CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae --locked
+# After tests and other package compilations finish:
+cargo clean -p horae
+CARGO_INCREMENTAL=0 cargo sqlx prepare --workspace -- --features server --all-targets
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --no-default-features --features web --target wasm32-unknown-unknown -- -D warnings
+nix fmt -- --ci
+```
+
+The inactive-owner regression first reproduced a persisted 90-minute edit after
+deactivation. The complete server-binary suite now passes: 1,087 passed, zero
+failed, 11 ignored in 277.79s. All 43 time-entry tests pass. New cases exercise
+seven operations across all three legacy roles with inactive and missing users,
+exact record preservation, deactivation in both lock orders, rollback,
+cancellation and inherited pool defaults. The organization-gated race uses the
+shared access-change gate, not the complete user-administration command.
+
+The production prefix rechecks activity and holds organization/actor fences
+through commit. The service-import barrier, current ownership/task checks and
+existing business states are unchanged. Full SQLx preparation passes in 56.48s,
+adding five descriptors while retaining all 1,453 prior descriptors unchanged.
+Offline all-targets server Clippy (1m07s) and WASM Clippy (13.32s) pass with
+warnings denied. The disposable PostgreSQL is stopped. Formatting corrected
+Markdown list spacing; the final CI-format gate is repeated before publication.
+These checks do not establish browser, delegated-write, approval-policy or
+full-flake acceptance.
+
 ## Shared time-entry payload (T168–T170)
 
 Use the Nix shell with the owned disposable PostgreSQL database:

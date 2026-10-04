@@ -20,6 +20,14 @@ not replace full Timesheet integration, editing, approval or policy activation.
 
 ## Phase 2: Independent foundation (FR-006)
 
+### Interactive time-writer activity (FR-010/018)
+
+Follow `contracts/time-writer-activity.md` before delegated OP04 integration.
+
+- [x] T171 Reproduce post-session inactive-account time writes; test each production mutation, deactivation order, cancellation and inherited settings.
+- [x] T172 Fence interactive time writes with organization-first current activity through commit, preserving service barriers and existing lifecycle rules.
+- [x] T173 Verify time, submission, user-access and invoice regressions, SQLx, server/WASM lint, formatting and bounded adversarial lock review.
+
 ### Existing time-entry payload boundary (FR-008/018)
 
 - [x] T168 Reproduce invoice-identity disclosure from the actual legacy time list with populated billing data; test shared model serialization and untrusted deserialization.

@@ -1,5 +1,83 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Activity-fence regression completion
+
+- The preceding benefits-only response was no implementation progress. Resumed
+  the existing full-suite process, rather than restarting it, and revalidated
+  the worktree at `c80233b` with the activity-fence changes still uncommitted.
+- The complete server-binary suite passes: 1,087 passed, zero failed, 11 ignored
+  in 277.79s after 2m14s compilation. All 43 time-entry tests pass, including
+  the five new activity tests and both repaired foreign-user fixtures.
+- Rechecked the shared prefix, its six production callers, submission lock
+  compatibility and unchanged lower-level service-import barrier. The local
+  review found no critical/high issue in this bounded change; this is not an
+  independent review or approval/canonical-policy completion.
+- Complete SQLx preparation passes in 56.48s: five new descriptors, all 1,453
+  previous descriptors unchanged. The package-local clean removed 1.7 GiB of
+  regenerable artifacts. The owned disposable PostgreSQL is stopped.
+- Fresh offline all-targets server Clippy passes in 1m07s and WASM Clippy in
+  13.32s, both with warnings denied. The format check corrected Markdown list
+  spacing; rerunning the final format gate before the unsigned commit.
+- T171–T173 close this activity prerequisite only. No UI/CSS, service authority,
+  canonical grants, policy activation, migration or real data changed. Browser
+  and full `nix flake check` acceptance remain open for the complete feature.
+
+Next: publish the verified change unsigned to draft #212 and resume the
+Timesheet/delegated-write integration. The full permission goal remains active.
+
+## 2026-10-04 — Interactive writer activity prerequisite
+
+- Previous goal turn: progress. Revalidated clean published `c80233b`; the shared
+  invoice-identity repair is on draft #212 with its recorded checks.
+
+- Reopened Harvest's permission, other-person timesheet and time-editing guides.
+  They confirm separate read/write scope and teammate navigation. Unlocked-entry
+  editing permits project/task changes but not reassigning the person; the
+  current modal/update transport cannot express those edits. Existing company
+  lock and approval contracts still own independent locks and submitted editing.
+  No legacy Administrator prose is treated as a new custom-grant predicate.
+
+- The existing Chrome MCP client initialized, but `browser_tabs` timed out while
+  connecting. No page observation, mutation, screenshot or successful browser
+  test is claimed. Requested client disconnection without closing browser tabs;
+  continuing independent work instead of repeatedly reconnecting.
+
+- Tracing the seven interactive time operations found that all six transaction
+  helpers join the submission barrier without rechecking current account
+  activity after session lookup. Added a production-helper regression before
+  implementation; its isolated-database RED run is in progress.
+
+- `contracts/time-writer-activity.md` and T171–T173 define the bounded activity
+  prerequisite. Rust, async, testing and simplicity guidance require one shared
+  transaction prefix and deterministic database waits, not per-button guards.
+  This does not waive Timesheet, canonical policy or approval integration gates.
+
+- RED confirmed a real post-deactivation edit: the production helper returned
+  success and persisted 90 minutes instead of 60 (0.41s after 1m47s compilation).
+  Implemented `begin_active_time_write` for all six production helpers, reusing
+  bounded transaction settings, organization SHARE and the advisory barrier.
+  The active actor is reloaded and SHARE-locked before entry/task locks. The old
+  barrier-only begin helper is now test-only; import service use is unchanged.
+
+- Added all seven operations across the three legacy roles and missing/inactive
+  identities with whole-record preservation, direct and organization-gated
+  deactivation in both orders, rollback and single-connection cancellation/default
+  tests. The focused run passed 41/43 cases, including all new activity tests;
+  two older foreign-actor checks instead supplied nonexistent users and received
+  the new earlier forbidden result. Replaced those UUIDs with actual foreign
+  users, retaining their original conflict/not-found assertions. Added inactive
+  no-op coverage and started the complete server-binary regression suite.
+
+- Review traced organization-before-actor-before-submission ordering, compatible
+  FK locks, rollback on denial/cancellation and all six production call sites.
+  No service import calls the new active-person prefix. No canonical grant,
+  role promotion, new dependency, CSS or approval-state rule is introduced.
+
+Next: finish the full regression, complete SQLx preparation and offline native/
+WASM checks, then publish the verified fence unsigned to draft #212. Resume the
+remaining Timesheet selection/delegated-write and approval predicates afterward;
+no real-data migration, policy activation, Harvest write or merge.
+
 ## 2026-10-04 — Timesheet integration trace and shared payload repair
 
 - The preceding goal turn was progress: published `4ac30fa` with the canonical

@@ -95,6 +95,40 @@ struct NewTimeEntry<'a> {
     is_running: bool,
 }
 
+/// Keep current account activity stable through the interactive mutation.
+#[cfg(feature = "server")]
+async fn begin_active_time_write(
+    pool: &sqlx::PgPool,
+    user_id: uuid::Uuid,
+) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, ServerFnError> {
+    let mut tx = pool.begin().await.map_err(server_err)?;
+    super::permissions::configure_administration(&mut tx)
+        .await
+        .map_err(server_err)?;
+    // Routing only: recheck the same tenant and activity after the organization gate.
+    let org_id = sqlx::query_scalar!("SELECT org_id FROM users WHERE id=$1", user_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(server_err)?
+        .ok_or_else(|| forbidden("Active account required"))?;
+    crate::db::lock_organization(&mut tx, org_id, crate::db::OrganizationLock::Shared)
+        .await
+        .map_err(server_err)?;
+    sqlx::query_scalar!(
+        "SELECT id FROM users WHERE id=$1 AND org_id=$2 AND active FOR SHARE",
+        user_id,
+        org_id,
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(server_err)?
+    .ok_or_else(|| forbidden("Active account required"))?;
+    crate::db::lock_time_entry_write(&mut tx, user_id)
+        .await
+        .map_err(server_err)?;
+    Ok(tx)
+}
+
 /// Preserve archived history while enforcing current task grants. Lock both
 /// the restriction and a matching grant so revocation cannot race the write.
 #[cfg(feature = "server")]
@@ -175,9 +209,7 @@ async fn insert_time_entry(
     user_id: uuid::Uuid,
     input: NewTimeEntry<'_>,
 ) -> Result<TimeEntry, ServerFnError> {
-    let mut tx = crate::db::begin_time_entry_write(db, user_id)
-        .await
-        .map_err(server_err)?;
+    let mut tx = begin_active_time_write(db, user_id).await?;
     lock_task_access(&mut tx, user_id, input.project_id, input.task_id).await?;
     let entry = sqlx::query_as!(
         TimeEntry,
@@ -329,9 +361,7 @@ async fn stop_entry_timer(
     entry_id: uuid::Uuid,
 ) -> Result<TimeEntry, ServerFnError> {
     // Stopping an own running timer remains possible after task access is revoked.
-    let mut tx = crate::db::begin_time_entry_write(db, user_id)
-        .await
-        .map_err(server_err)?;
+    let mut tx = begin_active_time_write(db, user_id).await?;
 
     // Read the running entry's start time, then compute the exact elapsed
     // minutes in `horae-core` (floored to the minute, no artificial 1-minute
@@ -514,9 +544,7 @@ async fn update_entry(
     start_minute: Option<i32>,
 ) -> Result<(TimeEntry, bool), ServerFnError> {
     let (minutes, start_minute) = normalize_start(minutes, start_minute)?;
-    let mut tx = crate::db::begin_time_entry_write(db, user_id)
-        .await
-        .map_err(server_err)?;
+    let mut tx = begin_active_time_write(db, user_id).await?;
     // Lock before comparing so a competing edit cannot turn a stale no-op
     // into an unreported change, or cause duplicate update events (FR-012).
     let before = sqlx::query_as!(
@@ -600,9 +628,7 @@ async fn delete_entry(
     user_id: uuid::Uuid,
     entry_id: uuid::Uuid,
 ) -> Result<TimeEntry, ServerFnError> {
-    let mut tx = crate::db::begin_time_entry_write(db, user_id)
-        .await
-        .map_err(server_err)?;
+    let mut tx = begin_active_time_write(db, user_id).await?;
     lock_entry_task_access(&mut tx, user_id, &[entry_id]).await?;
 
     // Delete and capture the row in one statement so the "only open entries"
@@ -670,9 +696,7 @@ async fn reschedule_entry(
     minutes: i32,
 ) -> Result<TimeEntry, ServerFnError> {
     let (minutes, start_minute) = normalize_start(minutes, Some(start_minute))?;
-    let mut tx = crate::db::begin_time_entry_write(db, user_id)
-        .await
-        .map_err(server_err)?;
+    let mut tx = begin_active_time_write(db, user_id).await?;
     lock_entry_task_access(&mut tx, user_id, &[entry_id]).await?;
 
     let entry = sqlx::query_as!(
@@ -732,9 +756,7 @@ async fn reorder_entries(
 ) -> Result<(), ServerFnError> {
     let count = i32::try_from(ids.len()).map_err(|_| conflict("Too many entries to reorder"))?;
     let orders: Vec<i32> = (0..count).collect();
-    let mut tx = crate::db::begin_time_entry_write(pool, user_id)
-        .await
-        .map_err(server_err)?;
+    let mut tx = begin_active_time_write(pool, user_id).await?;
     lock_entry_task_access(&mut tx, user_id, ids).await?;
 
     let updated = sqlx::query!(
@@ -764,6 +786,9 @@ async fn reorder_entries(
 
 #[cfg(all(test, feature = "server"))]
 mod update_tests;
+
+#[cfg(all(test, feature = "server"))]
+mod activity_tests;
 
 #[cfg(all(test, feature = "server"))]
 mod tests {

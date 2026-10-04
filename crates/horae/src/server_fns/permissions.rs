@@ -18,8 +18,10 @@ pub(crate) mod project_people;
 pub(crate) mod templates;
 pub(crate) mod time_entries;
 
-/// Bound permission administration independently of pooled connection defaults.
-async fn configure_administration(connection: &mut PgConnection) -> Result<(), sqlx::Error> {
+/// Bound authorization transactions independently of pooled connection defaults.
+pub(super) async fn configure_administration(
+    connection: &mut PgConnection,
+) -> Result<(), sqlx::Error> {
     sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED, READ WRITE")
         .execute(&mut *connection)
         .await?;

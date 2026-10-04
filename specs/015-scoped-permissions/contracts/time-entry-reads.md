@@ -90,3 +90,11 @@ role wording does not establish the exact candidate set for new custom grants,
 archived people or people without entries; that boundary still needs evidence.
 Its submission flow can include expenses, so the current time-only submit action
 must not be presented as complete combined-submission parity.
+
+Rechecked 2026-10-04: the [time-editing guide](https://support.getharvest.com/hc/en-us/articles/26885299659405-Editing-and-deleting-time-entries)
+allows changing unlocked entry details except their owner. Horae's existing
+dialog fixes project/task and its update transport omits those fields; delegated
+integration must not preserve that limitation as claimed Harvest parity.
+The separate [company-lock contract](company-locks.md) owns privileged locked
+corrections; a read/write grant is not a generic unlock. The reproduced current
+account-activity race has an independent [writer-fence contract](time-writer-activity.md).
