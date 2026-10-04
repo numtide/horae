@@ -1,32 +1,13 @@
 //! Administrator-only historical projection, never a source of current authority.
 
 use chrono::{DateTime, Utc};
-use horae_core::permissions::catalog::{BuiltInProfile, Permission, PermissionSelection};
-use serde::{Deserialize, Deserializer, Serialize};
+use horae_core::permissions::catalog::{Permission, PermissionSelection};
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::{PermissionStorageError, load_person_permissions};
-
-#[derive(Debug, PartialEq, Eq, Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub(super) enum AuditPrincipal {
-    User {
-        user_id: Uuid,
-    },
-    Operator {
-        invocation_id: String,
-        command: String,
-    },
-}
-
-#[derive(Debug, Serialize)]
-pub(crate) struct AuditEntry {
-    pub(super) id: Uuid,
-    pub(super) actor: AuditPrincipal,
-    created_at: DateTime<Utc>,
-    audit: HistoricalAudit,
-}
+use crate::models::permission_audit::{AuditEntry, HistoricalSource, PersonSnapshot};
+pub(super) use crate::models::permission_audit::{AuditPrincipal, HistoricalAudit};
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum AuditReadError {
@@ -40,134 +21,6 @@ pub(crate) enum AuditReadError {
     Storage(#[from] PermissionStorageError),
     #[error(transparent)]
     Database(#[from] sqlx::Error),
-}
-
-#[derive(Debug, Serialize)]
-#[serde(tag = "kind", content = "details", rename_all = "snake_case")]
-pub(super) enum HistoricalAudit {
-    Template(TemplateAudit),
-    Profile(ProfileAudit),
-    ProjectManagers(ProjectAudit),
-}
-
-// These are versioned historical wire types, not deserializable authority models.
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(super) struct TemplateAudit {
-    previous_access_revision: i64,
-    access_revision: i64,
-    #[serde(deserialize_with = "required_option")]
-    before: Option<TemplateSnapshot>,
-    #[serde(deserialize_with = "required_option")]
-    after: Option<TemplateSnapshot>,
-    detached_people: Vec<DetachedPerson>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct TemplateSnapshot {
-    id: Uuid,
-    name: String,
-    catalog_version: i32,
-    grants: Vec<Permission>,
-    revision: i64,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct DetachedPerson {
-    user_id: Uuid,
-    catalog_version: i32,
-    grants: Vec<Permission>,
-    is_administrator: bool,
-    previous_template_id: Uuid,
-    previous_applied_revision: i64,
-    previous_revision: i64,
-    revision: i64,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(super) struct ProfileAudit {
-    user_id: Uuid,
-    previous_access_revision: i64,
-    access_revision: i64,
-    #[serde(deserialize_with = "required_option")]
-    change: Option<ProfileChange>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct ProfileChange {
-    catalog_version: u32,
-    before: PersonSnapshot,
-    after: PersonSnapshot,
-    removed_projects: Vec<RemovedRelationship>,
-    removed_people: Vec<RemovedRelationship>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct PersonSnapshot {
-    grants: Vec<Permission>,
-    is_administrator: bool,
-    source: HistoricalSource,
-    revision: i64,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(
-    tag = "kind",
-    content = "value",
-    rename_all = "snake_case",
-    deny_unknown_fields
-)]
-enum HistoricalSource {
-    BuiltIn(BuiltInProfile),
-    Template { id: Uuid, applied_revision: i64 },
-    Individual,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct RemovedRelationship {
-    id: Uuid,
-    subject_id: Uuid,
-    revision: i64,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(super) struct ProjectAudit {
-    project_id: Uuid,
-    previous_access_revision: i64,
-    access_revision: i64,
-    #[serde(deserialize_with = "required_option")]
-    change: Option<ProjectChange>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct ProjectChange {
-    added: Vec<Designation>,
-    removed: Vec<Designation>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Designation {
-    id: Uuid,
-    manager_id: Uuid,
-    revision: i64,
-}
-
-fn required_option<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
-where
-    D: Deserializer<'de>,
-    T: Deserialize<'de>,
-{
-    // A missing field must not be treated as an explicit unchanged outcome.
-    Option::<T>::deserialize(deserializer)
 }
 
 fn revision_step(before: i64, after: i64, changed: bool) -> bool {
@@ -280,9 +133,20 @@ pub(crate) async fn read(
     receipt_id: Uuid,
 ) -> Result<Option<AuditEntry>, AuditReadError> {
     let mut tx = pool.begin().await?;
-    sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
+    sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED, READ WRITE")
         .execute(&mut *tx)
         .await?;
+    sqlx::query!(
+        "SELECT set_config(name,
+            (CASE WHEN setting::bigint = 0 THEN limits.milliseconds
+             ELSE LEAST(setting::bigint, limits.milliseconds) END)::text, true)
+         FROM pg_settings
+         JOIN (VALUES ('statement_timeout', 5000::bigint),
+                      ('idle_in_transaction_session_timeout', 10000::bigint))
+              AS limits(setting_name, milliseconds) ON name = limits.setting_name"
+    )
+    .fetch_all(&mut *tx)
+    .await?;
     let policy = sqlx::query_scalar!(
         "SELECT permission_policy_version FROM organizations WHERE id = $1 FOR SHARE",
         org_id
@@ -290,13 +154,13 @@ pub(crate) async fn read(
     .fetch_optional(&mut *tx)
     .await?;
     let active = sqlx::query_scalar!(
-        "SELECT EXISTS(SELECT 1 FROM users WHERE org_id = $1 AND id = $2 AND active)",
+        "SELECT id FROM users WHERE org_id = $1 AND id = $2 AND active FOR SHARE",
         org_id,
         requester
     )
-    .fetch_one(&mut *tx)
+    .fetch_optional(&mut *tx)
     .await?;
-    if policy != Some(1) || active != Some(true) {
+    if policy != Some(1) || active.is_none() {
         return Err(AuditReadError::Forbidden);
     }
     if !load_person_permissions(&mut tx, org_id, requester)

@@ -27,6 +27,240 @@ async fn fixture(pool: &PgPool, administrator: bool) -> SeedIds {
     ids
 }
 
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn direct_deactivation_winning_user_lock_denies_audit_read(pool: PgPool) {
+    let ids = fixture(&pool, true).await;
+    let (receipt, _) = create_template(&pool, &ids).await;
+    let mut revoke = pool.begin().await.unwrap();
+    sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
+        .execute(&mut *revoke)
+        .await
+        .unwrap();
+    let pid = sqlx::query_scalar!("SELECT pg_backend_pid()")
+        .fetch_one(&mut *revoke)
+        .await
+        .unwrap()
+        .unwrap();
+    let reader_pool = pool.clone();
+    let reader =
+        tokio::spawn(async move { read(&reader_pool, ids.org_id, ids.user_id, receipt).await });
+    wait_for_blocked(&pool, pid).await;
+    revoke.commit().await.unwrap();
+    assert!(matches!(
+        tokio::time::timeout(Duration::from_secs(5), reader)
+            .await
+            .unwrap()
+            .unwrap(),
+        Err(AuditReadError::Forbidden)
+    ));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn audit_reader_overrides_transaction_defaults_without_changing_connection(pool: PgPool) {
+    let ids = fixture(&pool, true).await;
+    let (receipt, _) = create_template(&pool, &ids).await;
+    let reader = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .after_connect(|connection, _| {
+            Box::pin(async move {
+                sqlx::query!("SET default_transaction_isolation = 'repeatable read'")
+                    .execute(&mut *connection)
+                    .await?;
+                sqlx::query!("SET default_transaction_read_only = on")
+                    .execute(&mut *connection)
+                    .await?;
+                Ok(())
+            })
+        })
+        .connect_with(pool.connect_options().as_ref().clone())
+        .await
+        .unwrap();
+    assert_eq!(
+        read(&reader, ids.org_id, ids.user_id, receipt)
+            .await
+            .unwrap()
+            .unwrap()
+            .id,
+        receipt
+    );
+    let defaults = sqlx::query!("SELECT current_setting('default_transaction_isolation') AS isolation, current_setting('default_transaction_read_only') AS readonly")
+        .fetch_one(&reader).await.unwrap();
+    assert_eq!(defaults.isolation.as_deref(), Some("repeatable read"));
+    assert_eq!(defaults.readonly.as_deref(), Some("on"));
+    reader.close().await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn audit_reader_holds_requester_until_materialization_finishes(pool: PgPool) {
+    let ids = fixture(&pool, true).await;
+    let (receipt, _) = create_template(&pool, &ids).await;
+    let mut hold = pool.begin().await.unwrap();
+    sqlx::query!("LOCK TABLE permission_change_receipts IN ACCESS EXCLUSIVE MODE")
+        .execute(&mut *hold)
+        .await
+        .unwrap();
+    let holder = sqlx::query_scalar!("SELECT pg_backend_pid()")
+        .fetch_one(&mut *hold)
+        .await
+        .unwrap()
+        .unwrap();
+    let reader_pool = pool.clone();
+    let reader =
+        tokio::spawn(async move { read(&reader_pool, ids.org_id, ids.user_id, receipt).await });
+    wait_for_blocked(&pool, holder).await;
+    let reader_pid = sqlx::query_scalar!("SELECT pid FROM pg_stat_activity WHERE datname = current_database() AND $1 = ANY(pg_blocking_pids(pid))", holder).fetch_one(&pool).await.unwrap().unwrap();
+    let writer_pool = pool.clone();
+    let writer = tokio::spawn(async move {
+        sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
+            .execute(&writer_pool)
+            .await
+            .unwrap();
+    });
+    wait_for_blocked(&pool, reader_pid).await;
+    hold.commit().await.unwrap();
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(5), reader)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap()
+            .unwrap()
+            .id,
+        receipt
+    );
+    tokio::time::timeout(Duration::from_secs(5), writer)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(matches!(
+        read(&pool, ids.org_id, ids.user_id, receipt).await,
+        Err(AuditReadError::Forbidden)
+    ));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn audit_timeout_preserves_stricter_limits_and_releases_locks(pool: PgPool) {
+    let ids = fixture(&pool, true).await;
+    let (receipt, _) = create_template(&pool, &ids).await;
+    let reader = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .after_connect(|connection, _| {
+            Box::pin(async move {
+                sqlx::query!("SET statement_timeout = '250ms'")
+                    .execute(connection)
+                    .await?;
+                Ok(())
+            })
+        })
+        .connect_with(pool.connect_options().as_ref().clone())
+        .await
+        .unwrap();
+    let mut hold = pool.begin().await.unwrap();
+    sqlx::query!("LOCK TABLE permission_change_receipts IN ACCESS EXCLUSIVE MODE")
+        .execute(&mut *hold)
+        .await
+        .unwrap();
+    let error = tokio::time::timeout(
+        Duration::from_secs(2),
+        read(&reader, ids.org_id, ids.user_id, receipt),
+    )
+    .await
+    .unwrap()
+    .unwrap_err();
+    let AuditReadError::Database(sqlx::Error::Database(error)) = error else {
+        panic!("Expected statement timeout: {error}")
+    };
+    assert_eq!(error.code().as_deref(), Some("57014"));
+    hold.rollback().await.unwrap();
+    assert_eq!(
+        sqlx::query_scalar!("SELECT current_setting('statement_timeout')")
+            .fetch_one(&reader)
+            .await
+            .unwrap()
+            .as_deref(),
+        Some("250ms")
+    );
+    assert_unlocked(&pool, &ids).await;
+    assert_eq!(
+        read(&reader, ids.org_id, ids.user_id, receipt)
+            .await
+            .unwrap()
+            .unwrap()
+            .id,
+        receipt
+    );
+    reader.close().await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn cancelled_audit_read_releases_both_gates_and_single_connection(pool: PgPool) {
+    let ids = fixture(&pool, true).await;
+    let (receipt, _) = create_template(&pool, &ids).await;
+    let reader_pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .connect_with(pool.connect_options().as_ref().clone())
+        .await
+        .unwrap();
+    let mut hold = pool.begin().await.unwrap();
+    sqlx::query!("LOCK TABLE permission_change_receipts IN ACCESS EXCLUSIVE MODE")
+        .execute(&mut *hold)
+        .await
+        .unwrap();
+    let holder = sqlx::query_scalar!("SELECT pg_backend_pid()")
+        .fetch_one(&mut *hold)
+        .await
+        .unwrap()
+        .unwrap();
+    let connection = reader_pool.clone();
+    let reader =
+        tokio::spawn(async move { read(&connection, ids.org_id, ids.user_id, receipt).await });
+    wait_for_blocked(&pool, holder).await;
+    reader.abort();
+    assert!(reader.await.unwrap_err().is_cancelled());
+    hold.rollback().await.unwrap();
+    tokio::time::timeout(
+        Duration::from_secs(5),
+        sqlx::query!("SELECT 1 AS drained").fetch_one(&reader_pool),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_unlocked(&pool, &ids).await;
+    assert_eq!(
+        read(&reader_pool, ids.org_id, ids.user_id, receipt)
+            .await
+            .unwrap()
+            .unwrap()
+            .id,
+        receipt
+    );
+    reader_pool.close().await;
+}
+
+async fn assert_unlocked(pool: &PgPool, ids: &SeedIds) {
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query!(
+        "SELECT id FROM organizations WHERE id=$1 FOR UPDATE NOWAIT",
+        ids.org_id
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "SELECT id FROM users WHERE id=$1 FOR UPDATE NOWAIT",
+        ids.user_id
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap();
+    tx.rollback().await.unwrap();
+}
+
 async fn receipt_id(pool: &PgPool, request: Uuid) -> Uuid {
     sqlx::query_scalar!(
         "SELECT id FROM permission_change_receipts WHERE request_id = $1",

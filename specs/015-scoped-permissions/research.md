@@ -1,5 +1,20 @@
 # Permissions discovery
 
+## Authenticated audit delivery (2026-10-04)
+
+- Decision: expose the existing single-receipt historical projection through a
+  session-authenticated server function, with separate shared wire DTOs. FR-013
+  already resolves Administrator-only visibility; this requires no new product
+  choice. Keep history browsing and active policy cutover separate.
+- Independent source review found plain actor activity could race direct user
+  deactivation, and inherited READ ONLY defaults reject the current row locks.
+  Use organization SHARE then requester SHARE, explicit READ COMMITTED/READ WRITE
+  and transaction-local bounded waits. Historical subjects remain plain reads.
+- Alternatives rejected: legacy `require_admin`, inferred identity from all
+  grants, untyped JSON, deserializable trusted permission state, new pagination
+  policy, schema changes and a new transaction abstraction. Existing receipt
+  decoder and one registered-route harness cover the relevant boundary.
+
 ## Invoice evidence follow-up and source preflight (2026-10-04)
 
 - Fresh independent primary-source review did not close new-model mixed-project

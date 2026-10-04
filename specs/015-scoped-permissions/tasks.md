@@ -474,6 +474,16 @@ No full US4 or activation completion follows from this read-only slice.
 - [x] T096 [US4] Implement `server_fns/permissions/own.rs`, a separate shared `models/own_permissions.rs` DTO and no-argument `get_my_permissions` wrapper in `server_fns/auth.rs`; update module wiring and operation inventory without policy activation or changing existing guards (FR-012).
 - [x] T097 [US4] Verify production-reader and registered-route tests, affected regressions, complete SQLx cache, offline server/web builds, lint/format and adversarial review; record results in `specs/015-scoped-permissions/quickstart.md` and `progress.md`.
 
+### Authenticated audit delivery
+
+T064 → T123 → T124 → T125 refines T041 under `contracts/audit-lookup.md`.
+Sequential work shares the historical DTO, reader and real-route harness.
+No history browser, privilege mutation or policy activation is included.
+
+- [x] T123 [US4] Add failing registered-route disclosure tests in `crates/horae/src/server_fns/importers/authorization_tests/permission_audit.rs` and reader deactivation/settings/cleanup tests in `server_fns/permissions/tests/audit.rs` (FR-010/011/013/018).
+- [x] T124 [US4] Move historical wire types to `crates/horae/src/models/permission_audit.rs`, retain strict server decoding, fence current requester reads in `server_fns/permissions/audit.rs` and expose the session-derived single-receipt wrapper in `server_fns/auth.rs`; update module wiring and operation inventory (FR-010/011/013).
+- [x] T125 [US4] Verify real HTTP, permission/decoder regressions, complete SQLx cache, offline server/WASM lint and formatting; perform adversarial review and scoped analysis, recording evidence in feature 015 `quickstart.md` and `progress.md` (FR-018).
+
 ### Own-permission Settings integration
 
 T097 → T120 → T121 → T122 follows the Settings consumer contract in

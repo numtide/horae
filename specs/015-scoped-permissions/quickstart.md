@@ -1,5 +1,51 @@
 # Permission verification
 
+## Authenticated permission history (T123–T125)
+
+Use disposable PostgreSQL with the checked-in migrations, inside the Nix shell:
+
+```sh
+cargo test -p horae --features server --bin horae server_fns::permissions:: --locked
+cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization --locked
+```
+
+The second command exercises actual registered Dioxus routes and real session
+cookies, not a direct-function substitute. Its permission-audit submatrix covers
+canonical Administrator identity independent of legacy role, forged identity
+claims, foreign/missing IDs, expired/inactive sessions, typed writer-shape/no-op
+round-trips, operator attribution and omission of private replay data. Corrupt
+history/authority and a cancelled initial session-user query must produce the
+same sanitized unavailable message. The cancellation targets only that test
+database's query observed waiting behind its own table lock.
+
+| Requirement subset | Reader evidence |
+| --- | --- |
+| FR-010: deactivation winning / reader winning | `direct_deactivation_winning_user_lock_denies_audit_read`, `audit_reader_holds_requester_until_materialization_finishes` |
+| FR-011/013: current authority, exact historical projection | Existing `audit_tests` plus `authorization_tests/permission_audit.rs` |
+| FR-018: inherited settings, bounded waits, cancellation and connection reuse | `audit_reader_overrides_transaction_defaults_without_changing_connection`, `audit_timeout_preserves_stricter_limits_and_releases_locks`, `cancelled_audit_read_releases_both_gates_and_single_connection` |
+
+RED reproduced the missing registered route, unguarded direct-deactivation race
+and inherited READ ONLY failure. The implemented reader passes all 97 permission
+tests (45.19s). Independent re-review found an unsanitized initial user lookup;
+the new HTTP cancellation case reproduced that failure before the wrapper fix.
+Final HTTP and post-fix gates are recorded below when completed. No UI/history
+browser, policy activation, live-data migration or full-feature acceptance follows.
+
+Post-fix full server-binary run: 1,015 passed, zero failures, 11 existing ignored
+manual measurements (240.64s); no test was newly excluded. This includes all 97
+permission tests and the registered HTTP matrix with initial-query sanitization
+and recovery. Independent re-review closes the error-projection finding and
+reports no further blocking issue. This is not a full `nix flake check` result.
+
+Complete SQLx preparation passes (51.45s), adding 14 descriptors with none removed
+or changed (1,393 total). Final offline all-targets server Clippy passes (1m00s)
+and offline WASM Clippy passes (11.21s), both with warnings denied. The shared
+root DTO has a web-only unused-code expectation until the history UI consumes it;
+no runtime check or test is disabled. The disposable database is stopped with
+its data retained. No real data or policy mode was changed.
+Formatting and `git diff --check` pass; T123–T125 are complete for this delivery
+boundary. Full T041/history UI, activation, browser and flake acceptance remain open.
+
 ## Legacy source preflight (T117–T119)
 
 Run `cargo test -p horae --features server --bin horae preflight_tests --locked`

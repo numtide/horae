@@ -97,6 +97,15 @@ close T042, replace legacy guards or authorize mixed-policy operation.
 
 ### Existing increments and remaining integration
 
+T123–T125 expose the existing audit projection under `contracts/audit-lookup.md`.
+Reuse receipt storage, strict decoding and the registered session-route harness;
+move only historical wire DTOs into shared models. Organization/requester SHARE
+locks fence policy changes and direct deactivation before materialization. Explicit
+transaction settings and bounded waits keep the new endpoint safe under inherited
+connection settings. The local constitution check requires no new dependency,
+schema, product predicate, mutation, UI or policy activation. Full T041 remains
+open for the complete history experience.
+
 T120–T122 consume the existing own-permission projection in Settings under
 `contracts/own-permissions.md`. Preserve General/Plugins, reuse utility/banner
 classes and share exhaustive grant descriptions with the future Workspace

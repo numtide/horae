@@ -1,5 +1,65 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Authenticated audit delivery
+
+- Previous MVP reply was status-only, not implementation progress. Revalidated
+  clean `8c15bfe` and reused `feat/scoped-permissions`; no activation or real-data
+  change. Spec Kit plan/task/prerequisite scripts reused feature 015. No extension
+  hooks are configured. General requirements remain 12/16; seven existing local
+  checklists remain 7/7 under the confirmed independent-increment authorization.
+- Refined T123–T125 for FR-010/011/013/018's authenticated single-receipt lookup.
+  Independent read-only design review identified direct deactivation and inherited
+  READ ONLY gaps before exposing the existing reader. Contract now requires
+  requester fencing, explicit transaction mode and local time limits.
+- Added registered-route/session/disclosure tests and reader regression cases.
+  Started only the retained disposable PostgreSQL on 55416. RED test is running;
+  no pass, completed task, publication or browser verification is claimed yet.
+- RED confirmed all three missing behaviors: inherited READ ONLY rejects SHARE
+  (SQLSTATE 25006); direct deactivation does not block the reader; the registered
+  route count is zero. The first GREEN compile exposed a missing qualified UUID
+  and a SELECT macro needing `fetch_all` rather than `execute`; both are corrected.
+- Implemented the typed session wrapper, shared historical DTOs and current
+  requester fence. Added both race orders, stricter statement-limit preservation,
+  cancellation/single-connection cleanup, real HTTP shape round-trips and separate
+  operator attribution. The complete permission regression is compiling.
+- Permission regression completed: 97 passed, zero failures/ignored (45.19s).
+  Independent implementation review found one error-projection gap before the
+  reader: the initial session-user query could leak a raw SQL error. A real HTTP
+  cancellation fixture reproduced it; the wrapper now preserves 401 and sanitizes
+  other authentication failures. Final post-fix HTTP and build gates remain.
+- Scoped Analyze covers four requirement subsets (FR-010/011/013/018), three
+  sequential tasks, 100% local mapping, zero unmapped tasks, ambiguity,
+  duplication or critical constitutional conflicts. General full-feature gates
+  remain unchanged. GitHub confirms #212 OPEN/DRAFT on the expected branch.
+- Registered HTTP matrix now passes in the running full-server suite, including
+  the reproduced initial-query error and post-error recovery. Independent
+  re-review closes that finding with no further blocker. T123/T124 are complete;
+  T125 still awaits the full run, cache, offline builds/lint and final formatting.
+- Full server-binary suite completed after the authentication fix: 1,015 passed,
+  zero failures, 11 existing ignored manual measurements (240.64s). All 97
+  permission cases and the registered HTTP matrix are included. No new exclusion
+  was added. Complete SQLx preparation and offline server/WASM Clippy follow.
+- Clean SQLx preparation passed (51.45s): 14 new descriptors, none removed or
+  changed, 1,393 total. Offline all-targets server Clippy passed (1m00s). WASM
+  denied-warning lint detected the deliberately unconnected historical DTOs;
+  added a web-only `expect(dead_code)` with the missing UI consumer as its reason.
+  A module-level expectation was unfulfilled; moved it to the root `AuditEntry`,
+  matching the project's earlier own-permission DTO pattern. Denied-warning
+  offline WASM then passed (11.21s). No runtime code or tests are bypassed;
+  the final offline server lint is finishing.
+- Final offline all-targets server Clippy also passed (1m00s). Review of all 14
+  new cache descriptors finds only this increment's checked production/test SQL;
+  no unrelated metadata was lost. Only rebuildable package artifacts were
+  cleaned, and the owned disposable PostgreSQL is stopped with its data retained.
+- Final formatting succeeds and `git diff --check` is clean. T123–T125 are
+  complete for authenticated single-record delivery. Publication uses an unsigned
+  commit and normal push to the existing draft; no merge or full-flake/browser
+  acceptance is claimed. The PR description preserves the remaining full scope.
+
+Next after publication: continue the canonical operation/transition contracts and authenticated permission
+editing, incorporating pending product answers without guessing them. Single-record
+audit delivery is not a history browser, policy activation or complete MVP.
+
 ## 2026-10-04 — Own-permission Settings integration
 
 - The preceding MVP response was status-only (no progress). Revalidated the clean
