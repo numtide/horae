@@ -52,10 +52,18 @@
   in 14.51s, with warnings denied. Formatting `36426` changes zero files. T194
   is complete for this bounded invoice/user-revocation integration. No full Nix,
   canonical invoice policy, full permission feature or activation claim follows.
+- Published unsigned `a25e544` and updated draft #212 with the regression,
+  verification and remaining boundaries. GitHub confirms that exact head on the
+  open draft. Final formatting `19348` changes zero files; the implementation
+  worktree is clean after publication. No merge or real-data operation occurred.
 
-Next: publish the verified change to the existing draft without
-merge. Project-form decisions, scoped invoice
-policy and full activation remain open. No merge or real-data operation.
+Next: resume the full T014/T015 integration inventory. T159/T160's project-form
+effects remain gated by the already-pending initial-designation and non-rate
+financial predicates; investigate resolving Harvest evidence before connecting
+the real form, without repeating settled FR-021/022/033 decisions. Continue
+independent resolved integration if those predicates remain open. Scoped invoice
+policy, approval lifecycle and full activation remain required, not completed by
+this repair. Do not rerun the closed deadlock investigation without new evidence.
 
 ## 2026-10-04 — Authenticated project-manager delivery
 
