@@ -97,6 +97,13 @@ close T042, replace legacy guards or authorize mixed-policy operation.
 
 ### Existing increments and remaining integration
 
+T120–T122 consume the existing own-permission projection in Settings under
+`contracts/own-permissions.md`. Preserve General/Plugins, reuse utility/banner
+classes and share exhaustive grant descriptions with the future Workspace
+consumer. No profile inference, schema, dependency, policy activation or writes.
+The local constitution check passes. SSR/resource tests verify display states and
+read wiring, not browser acceptance or full T018 completion.
+
 T117–T119 implement a read-only legacy-source preflight under
 `contracts/migration-preflight.md`. Reuse organization/actor fencing and one
 aggregate statement for consistent, count-only diagnostics. No new schema,

@@ -1,5 +1,41 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Own-permission Settings integration
+
+- The preceding MVP response was status-only (no progress). Revalidated the clean
+  worktree at `8aac739` and reused draft #212. No policy activation or real-data
+  change. Spec Kit prerequisites and task setup reused feature 015; the general
+  checklist remains 12/16 under the independent-increment authorization.
+- Refined the existing own-reader contract and T120–T122 for the Settings
+  consumer, preserving General/Plugins and using only existing CSS utilities.
+  No new dependency, SQL, schema, profile inference or privilege editor.
+- RED: nine SSR tests fail against the empty view. GREEN: all nine pass after
+  implementation. The interaction harness initially failed compilation on a
+  source-module path and missing ElementId import; both were corrected.
+- Adversarial self-review against the captured reference found that saved-report
+  `inactive` describes the owner, not product availability. Corrected both labels
+  and assertions; draft-invoice copy now includes creation. Broad withdrawal copy
+  does not invent unresolved lifecycle predicates. No blocking local finding
+  remains; this is self-review, not a new independent reviewer approval.
+- Final interaction/SSR suite passes all 11 tests (38.16s build, zero failures or
+  exclusions). It exercises actual resource loading, refresh, pending-click
+  suppression, stale-content removal and error recovery with controlled reads.
+  Session 80701 completed: all-targets server Clippy passes with warnings denied
+  (1m00s), as does denied-warning WASM (9.88s). Formatting normalized four changed
+  source/test files. No SQL changed, so cache regeneration is unnecessary.
+- Scoped Analyze maps FR-012/016/018 to all three new tasks, with no unmapped
+  task, local constitutional conflict, ambiguity or duplication. Browser layout,
+  keyboard and themes remain unverified; no Playwright tool is exposed this turn.
+  Full Settings/Workspace acceptance and activation gates remain open.
+- Final format check passes: 478 files, zero changes (2.604s); `git diff --check`
+  is clean. Verified #212 is OPEN/DRAFT on the expected branch. Publication uses
+  an unsigned commit and normal push; its refreshed description distinguishes
+  implemented storage/UI from still-incomplete canonical enforcement.
+
+Next after publication: continue
+the remaining canonical operation/transition contracts; incorporate pending
+product answers when received, without repeating questions or inferring consent.
+
 ## 2026-10-04 — Invoice scope research and migration preflight
 
 - The intervening MVP response was status-only. Revalidated clean branch at

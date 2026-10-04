@@ -4,6 +4,8 @@ use crate::components::form::{FormGroup, Select};
 use crate::components::theme::Theme;
 use crate::server_fns;
 
+mod own_permissions;
+
 #[component]
 pub fn Settings() -> Element {
     let mut theme = use_signal(|| Theme::Dark);
@@ -48,6 +50,7 @@ pub fn Settings() -> Element {
                     }
                 }
             }
+            own_permissions::OwnPermissionSection {}
             div { class: "card mt-4",
                 h2 { class: "card-title", "Plugins" }
                 {crate::pages::loaded(&plugins.read(), |items| rsx! {

@@ -7,13 +7,6 @@ use uuid::Uuid;
 /// The current person's permission explanation, not an authorization token.
 /// Management relationships still require independent action and state checks.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(
-    not(feature = "server"),
-    expect(
-        dead_code,
-        reason = "The permission view consumer is tracked by feature 015 T018"
-    )
-)]
 pub struct OwnPermissions {
     pub catalog_version: u32,
     pub grants: Vec<Permission>,

@@ -56,3 +56,37 @@ Snapshot reads never change revisions, grants, assignments or receipts.
 Extend the existing registered HTTP matrix: its process-global AppState owns one
 test pool. Do not initialize that singleton in a second independently seeded test.
 Only disposable databases may enable version 1. No real migration is authorized.
+
+## Settings consumer (T120–T122)
+
+Use the existing no-argument server function in Settings, independently of the
+plugin resource. Preserve General/Plugins and the app shell. The read-only section
+uses the handoff's heading, explanatory copy and administrator-only callout with
+existing utility/banner classes; no global CSS changes. Do not reproduce the
+prototype's fake profile selection, retired-Manager warning or update button.
+
+Show every returned grant using shared, exhaustive presentation descriptions,
+without normalization, profile classification or inferring Administrator from
+the grant set. Explain own/managed/all scope in the descriptions. Show management
+relationship counts separately, not names or UUIDs; responsibility does not grant
+unconditional access. Configured grants do not enable absent product features;
+saved-report grants refer to inactive owners, not inactive report features.
+No profile/source label is available
+in this DTO, so do not fabricate one. Workspace will reuse these descriptions
+when its independently authorized editor is integrated.
+
+Loading/reloading hides the previous snapshot. Legacy None explains that detailed
+permissions are not enabled, not that the user has no access. An empty grant list
+has an explicit empty state, not an inferred Member floor. Authentication and
+forbidden failures give distinct recovery guidance; other errors are sanitized.
+A real refresh/retry control reloads from the server and is disabled while pending.
+No edit controls, administrator-only help destination, raw error, revisions or
+assignment identifiers are rendered. An unsupported catalog is an unavailable
+state, never a guessed explanation.
+
+SSR tests cover these states, exact selected grants, independent administrative
+identity, private-field omission and pending stale-content suppression. A focused
+resource test must exercise the production component's read and refresh wiring.
+Server/WASM lint and formatting are local gates. Browser viewport/theme/keyboard
+acceptance and the remaining Workspace surface still belong to T018; unit or SSR
+tests must not mark those complete.

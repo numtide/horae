@@ -244,6 +244,37 @@ recorded in the progress register.
 This increment preserves legacy Manager/Admin authority; it is not full scoped
 policy, report streaming, Member export or invoice-editor acceptance.
 
+## Own-permission Settings consumer (T120–T122)
+
+Run in the pinned Nix shell without a database:
+
+```sh
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo test -p horae --features server --test own_permissions_ui --locked
+SQLX_OFFLINE=true cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+RUSTFLAGS="-D warnings" cargo check -p horae --features web --target wasm32-unknown-unknown --locked
+nix fmt -- --ci
+```
+
+| Requirement subset | Executable evidence |
+| --- | --- |
+| FR-012: own explanation, exact grants and independent administrative identity | `own_permissions_view_preserves_exact_grants_without_profile_inference`, `own_permissions_view_admin_identity_is_explicit_not_derived_from_grants`, exhaustive distinct description test |
+| FR-012/016: loading, legacy, empty, forbidden, error and recovery | Remaining `own_permissions_view_*` SSR tests and `refresh_uses_a_fresh_read_hides_stale_grants_and_recovers_from_errors` |
+| FR-018: presentation disclosure and real resource wiring | Internal-field omission test, pending stale-content suppression and production-component refresh with controlled responses |
+
+Nine SSR tests failed against the empty view, then passed against the
+implementation. The final interaction binary passes 11 tests, zero failures or
+exclusions (38.16s compilation). This uses the actual component/resource but
+controlled server responses; it does not replace the existing endpoint's real
+cookie/authorization tests or prove browser accessibility/visual acceptance.
+Final lint/build/format results are recorded in `progress.md`.
+
+Design boundary: reuse the handoff permission heading and administrator callout
+with existing classes; preserve General/Plugins and the shell. Exact configured
+grants replace the prototype's unbacked profile radios/update button. Counts
+explain management relationships without fabricating names or exposing UUIDs.
+No claim of full handoff alignment, Workspace integration or policy activation.
+The saved-report labels describe inactive owners, not inactive report features.
+
 ## Authenticated own-access explanation (T095–T097)
 
 Use the pinned Nix shell and the owned disposable PostgreSQL database; only

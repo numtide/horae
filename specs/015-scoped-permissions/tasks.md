@@ -474,6 +474,16 @@ No full US4 or activation completion follows from this read-only slice.
 - [x] T096 [US4] Implement `server_fns/permissions/own.rs`, a separate shared `models/own_permissions.rs` DTO and no-argument `get_my_permissions` wrapper in `server_fns/auth.rs`; update module wiring and operation inventory without policy activation or changing existing guards (FR-012).
 - [x] T097 [US4] Verify production-reader and registered-route tests, affected regressions, complete SQLx cache, offline server/web builds, lint/format and adversarial review; record results in `specs/015-scoped-permissions/quickstart.md` and `progress.md`.
 
+### Own-permission Settings integration
+
+T097 → T120 → T121 → T122 follows the Settings consumer contract in
+`contracts/own-permissions.md`. Sequential tests and UI wiring share the same
+component. No new policy predicate, mutation or activation is introduced.
+
+- [x] T120 [US4] Add failing SSR state, exact-grant, independent-identity and disclosure tests in `crates/horae/src/pages/settings/own_permissions/tests.rs` (FR-012/016/018).
+- [x] T121 [US4] Integrate the read-only resource in `crates/horae/src/pages/settings/own_permissions.rs` and `settings.rs`, with shared descriptions in `components/permission_description.rs`; preserve existing settings, use existing classes and remove the DTO's obsolete unused-consumer annotation (FR-012/016).
+- [x] T122 [US4] Exercise resource refresh wiring in `crates/horae/tests/own_permissions_ui.rs`, run focused tests, server/WASM lint and formatting, review exact projection and CSS consistency, and record evidence/visual limitations in feature 015 `quickstart.md` and `progress.md` (FR-018). Do not close full T018 or claim activation readiness.
+
 ## Phase 8: US5 — Data-preserving transition (P1)
 
 Independent test: populated migration fixture, reviewed access differences, safe retry and no import-driven privilege overwrite.
