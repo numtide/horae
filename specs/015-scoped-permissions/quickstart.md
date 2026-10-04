@@ -32,10 +32,42 @@ cargo test -p horae --features server --test permission_audit_ui --test admin_sh
 
 Complete SQLx preparation preserves all existing descriptors and adds five.
 Final offline native/all-target and WASM Clippy pass with warnings denied;
-formatting and publication evidence are tracked in `progress.md`. These
-are production-code/controlled-DOM checks, not browser acceptance. Browser/MCP is
-not loaded; no visual, keyboard or mobile browser pass is claimed. No real-data
-migration, runtime activation or full permission-feature completion follows.
+formatting and publication evidence are tracked in `progress.md`.
+
+T185 adds real Chromium acceptance to `permission-editor-recovery.cjs`, already
+included in the default browser gate. The existing fixture produces 29 actual
+person/template receipts through the editor. Checks cover empty history, exact
+25+4 paging, native keyboard expansion, deleted-template snapshots, a genuinely
+held refresh hiding previous data, revocation/restoration and Settings navigation
+for a canonical Administrator whose legacy role is Member. Earlier recovery,
+account-switching and self-demotion assertions still run. A theme-token and flex
+utility guard rejects an unstyled test bundle before layout assertions.
+
+Use the existing `run-design-checks.sh permission-editor-recovery` runner with
+the matching built server and `public/` directory, plus the pinned Playwright
+environment from `nix/checks/browser.nix`. The runner creates its own Unix-socket
+PostgreSQL, restores its fixture and stops only its owned services. Set
+`HORAE_BROWSER_ARTIFACTS` to an absolute `.scratch/` directory for captures.
+
+For low-disk local verification, the current native build can reuse `target/debug`:
+`cargo build -p horae --features server --locked`, with `SQLX_OFFLINE=true`.
+It still needs the current Dioxus-built client and **official asset processing**:
+`dx tools assets target/debug/horae target/dx/horae/debug/web/public/assets`.
+Expose that `public` beside the executable (a symlink avoids copying the bundle).
+A plain Cargo binary alone is not a correctly packaged browser application.
+The ordinary fullstack build remains the reproducible packaging path; do not
+assume `dx build` reuses Cargo's native profile, as it creates `server-dev`.
+
+The focused run passes in Chromium 148.0.7778.96 / Playwright 1.60.0, and the
+desktop-dark (1440×900) and narrow-light (390×844) captures were inspected.
+This is Linux headless Chromium and emulated viewport/keyboard evidence, not
+Windows Chrome/MCP, physical touch, screen-reader or full accessibility acceptance.
+Expanded grant lists make rows tall and center adjacent metadata vertically;
+that readability refinement remains part of the broader UI acceptance, not an
+overflow failure or a claim of pixel-identical design. Project-manager/operator
+detail rendering retains its existing server/controlled-DOM evidence, not a new
+browser probe. No real-data migration, runtime activation or full feature
+completion follows. The full browser gate outcome is recorded in `progress.md`.
 
 ## Captured own-week submission (T014/T015 in progress)
 

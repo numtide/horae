@@ -1,7 +1,7 @@
 # Permission-audit lookup
 
 FR-010/011/013, T062–T064 refine the internal read portion of T041; T123–T125
-add authenticated single-record delivery. T182–T184 extend it with browsing under
+add authenticated single-record delivery. T182–T185 extend it with browsing under
 the boundary below, without policy activation. Reuse receipt storage 0043; no
 schema, retention policy or operator mutation is introduced.
 
@@ -123,6 +123,8 @@ revocation, exact historical projection and non-disclosing errors. Reader tests
 cover direct deactivation in both lock orders, inherited transaction settings,
 timeout/cancellation cleanup and all existing decoder cases.
 
-Full T042, history browsing, browser integration and T041's
-complete acceptance remain open. Unresolved person-management lifecycle does not
+History browsing and bounded Chromium acceptance are implemented; see T182–T185
+and `quickstart.md` for the distinct server, controlled-DOM and browser evidence.
+Full T042, cross-browser/UI acceptance and T041's complete acceptance remain open.
+Unresolved person-management lifecycle does not
 affect this already-confirmed Administrator-only read rule.

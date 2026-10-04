@@ -1,5 +1,68 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Permission history browser acceptance
+
+- Previous turn only acknowledged the already-recorded FR-033/B clarification;
+  it was not implementation progress. Revalidated clean `2078a13`, reused the
+  isolated feature branch and extended the existing disposable Chromium suite
+  rather than creating another fixture or changing application behavior.
+- T185 exercises empty history, 29 real person/template receipts, exact 25+4
+  paging, native keyboard details, deleted-template snapshots, pending-content
+  suppression, revocation/restoration and canonical Administrator access from
+  Settings with a legacy Member role. Existing recovery assertions remain.
+- Independent static review identified a possible false positive in the held
+  history request. Added an explicit interception barrier before assertions;
+  independent re-review confirms closure. No additional agent was created.
+- Dioxus `build` unexpectedly created implicit native `server-dev` caches. At
+  low disk space, stopped the owned build (`37758`; its interrupt reports exit 0,
+  not a completed build) and verified no child compiler remained. Removed only
+  its newly created `target/server-dev` and `target/x86_64-unknown-linux-gnu`
+  directories, recovering 5.7 GiB. No prior build, worktree or database was removed.
+- The client bundle completed before interruption. Native `cargo build` on the
+  retained default target passed in 57.92s (`6259`). Linked its adjacent `public`
+  directory to that current client output without copying another binary.
+- First Chromium run `46457` passed functional checks, but inspecting both
+  captures showed missing CSS. This is **not visual acceptance**. Added a guard
+  requiring loaded theme tokens and generated utilities. Used the official
+  `dx tools assets` command to process the current native executable and assets
+  (`52256`, exit 0); no application/CSS change or stale bundle substitution.
+- The first styled run `80901` stopped on the new guard's uppercase color
+  expectation: Dioxus minification returns lowercase. Corrected the test, then
+  `12852` passed all recovery/history assertions. Inspected both styled history
+  captures. Follow-up review made the guard palette-independent: nonempty theme
+  token plus computed `display:flex`, rather than a particular hex value.
+- Complete browser gate `65390` exposed stale waits for `list_time_entries` in
+  Timesheet navigation. Updated the responsive/menu/style-audit readers to the
+  actual `load_timesheet_page` endpoint. The New Project reporting check now
+  awaits `apply_timesheet_command`, then verifies the refreshed scoped DTO's
+  unique entry, project, integer minutes and date rather than expecting the old
+  mutation's returned entry. No behavior assertion was removed. Rerun `55544`
+  passed through responsive/menu/mobile/bulk/action checks, then found an obsolete
+  native-select locator in New Project's Timesheet scenario. Updated it to use
+  the actual shared Project/Task selectors and assert the fixture's refreshed
+  page is complete. Continued the remaining default suites in `3987`, starting
+  from New Project, without claiming the interrupted complete runs passed.
+- `3987` completed with exit 0, including real project → Timesheet → reports and
+  both exports, invoice preparation, rate/permission/error/keyboard matrices,
+  interrupted transport, editing/navigation and the final history/recovery suite
+  with its palette-independent CSS guard. All 19 default scripts have therefore
+  passed across the complementary blocks (`55544` before its New Project
+  failure, then `3987`), **not a single uninterrupted green full-gate run**.
+  The optional shared-style baseline script was reviewed and syntax-checked but
+  not executed; no baseline comparison is claimed.
+- Independent review of the endpoint and selector adaptations found no material
+  issue. Its page-completeness suggestion is included in the passing New Project
+  scenario. Syntax checks for all five changed scripts passed (`64620`), and
+  format-CI passed (`17386`, 535 files, zero changes). No Rust, CSS, schema or
+  dependency changed; no fresh server-unit, SQLx or full Nix gate is claimed.
+
+Delivery remains the isolated feature branch and draft #212, unsigned and without
+merge. Next: update and execute the remaining standalone Timesheet modal/mutation
+browser scenarios (`modals.cjs`, `timesheet-errors.cjs` still reference old APIs),
+then continue the approved permission consumers/person-management flow. The
+complete implementation, cross-surface enforcement and activation remain open;
+the outstanding approval product question is not answered by this work.
+
 ## 2026-10-04 — Connected permission history
 
 - The prior clarification response was not implementation progress: FR-033/B was

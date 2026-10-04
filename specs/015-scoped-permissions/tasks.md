@@ -733,6 +733,7 @@ serializes builds and SQLx preparation in the same isolated feature worktree.
 - [x] T182 [US4] Add failing PostgreSQL/registered-session paging, tenant/requester, strict decoding and revocation tests plus controlled UI paging, stale/error and historical-rendering tests.
 - [x] T183 [US4] Implement bounded authenticated history and connect `/admin/audit`, canonical route gate, existing Workspace/Settings navigation and all historical detail types without changing other shell gates or shared CSS.
 - [x] T184 [US4] Verify existing audit/editor/Settings regressions, all affected server/session tests, SQLx cache, native/WASM lint and formatting; conduct adversarial review and record browser evidence or explicit limitations.
+- [x] T185 [US4] Exercise the actual history consumer in the existing disposable Chromium runner: real command receipts, empty state, stable paging, keyboard details, deleted profile history, pending-content suppression, revocation/restoration, canonical Administrator navigation and desktop-dark/narrow-light layouts. Preserve the existing editor recovery checks and record the scope of browser evidence.
 
 ### Own-permission Settings integration
 
