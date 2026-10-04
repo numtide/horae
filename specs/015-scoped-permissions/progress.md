@@ -1,5 +1,24 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Person editor publication
+
+- Published unsigned commit `98b1692` on `feat/scoped-permissions` and updated
+  existing #212's description with separate backend/UI evidence and limitations.
+  GitHub confirmed OPEN/DRAFT at that exact commit; local branch synchronized.
+  No merge, browser observation, migration, activation or real-data change.
+- Reused the completed test/lint process rather than rerunning it. Final
+  formatting CI passed again after the evidence update: 490 files, zero changes.
+  Full requirements remain 12/16 under the existing independent-work approval;
+  T018 and the full implementation goal remain open.
+
+Next: implement T018's template create/delete controls from the existing
+`template-commands.md` and `permission-editor.md` contracts. Start with their
+production-control regression tests: duplicate/limit errors, explicit final
+grants, stale deletion preview, exact affected-person confirmation and identical
+retry after an uncertain response. Preserve grants on deletion. Readable loss
+labels, navigation recovery, browser acceptance, canonical shell/directory,
+full enforcement/scoped approvals and reviewed data migration remain required.
+
 ## 2026-10-04 — Person permission editor controls
 
 - Prior turn made progress: backend and publication record were committed and
