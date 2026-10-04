@@ -71,6 +71,14 @@ documents Administrator notes/amount correction and deletion, not project/catego
 changes. These specific exceptions refine the general unlocking guide; correction
 and unlocking must not be treated as the same command.
 
+Checked 2026-10-04: the more specific [Calendar guide](https://support.getharvest.com/hc/en-us/articles/39977971409549-Track-and-edit-time-in-the-Calendar-view)
+also permits Administrator notes/start/end correction from the locked entry's
+Calendar form, while explicitly forbidding locked drag/resize and project/task
+changes. Do not implement the general article's Day-only wording as a prohibition
+of this documented Calendar exception. Calendar deletion of locked records is
+not explicitly settled by its separate generic deletion instructions; retain
+that gap rather than extrapolating the correction exception.
+
 These are documentation findings, not restricted-user browser tests. The newer
 permission catalog does not establish a custom-grant equivalent to these
 Administrator exceptions. Nor do these articles settle company-lock combinations,

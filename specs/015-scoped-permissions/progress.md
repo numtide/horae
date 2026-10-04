@@ -1,5 +1,28 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Timesheet archive and Calendar contract findings
+
+- Previous goal turn: progress. Revalidated clean `5ec183a`, published to draft
+  #212 with the full recorded server-binary regression and offline build gates.
+- Investigated the remaining Timesheet integration instead of adding another
+  unrelated compatibility repair. Fresh sources establish archived-person
+  exclusion from Timesheets while retaining report history, delegated timer-stop
+  write authority, and a Calendar-specific Administrator locked correction
+  exception. Updated the read and company-lock contracts accordingly.
+- Added `contracts/timesheet-integration.md`: selected context must reach reads,
+  labels, all three views, edits, timer actions and submission without changing
+  the shell timer's owner. It distinguishes source-backed facts, outstanding
+  candidate decisions and lifecycle/coverage dependencies.
+- Asked once whether active participants without time should be discoverable
+  under managed-project time access; the response remains pending. No browser
+  tool is loaded, no unchanged connection retry was made, and no new live
+  observation, runtime implementation, activation or migration is claimed.
+
+Next: incorporate the candidate decision, close selected-person tracking/write
+predicates and implement the integrated Timesheet transaction/UI package. Keep
+the general historical reader unchanged. Complete approval/expense and policy
+cutover gates remain required, not waived by these documentation findings.
+
 ## 2026-10-04 — Activity-fence regression completion
 
 - The preceding benefits-only response was no implementation progress. Resumed

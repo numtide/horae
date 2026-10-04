@@ -18,6 +18,15 @@ not replace full Timesheet integration, editing, approval or policy activation.
 - [x] T166 Implement the explicit projection, transactional scoped reader and session-authenticated server function without changing legacy callers.
 - [x] T167 Verify registered HTTP payloads, concurrency and pagination, refresh SQLx, run server/WASM checks and review the boundary adversarially.
 
+The next integration belongs to T014/T015 and T018, not another completed reader
+task: follow `contracts/timesheet-integration.md` for selected-person resources,
+labels, Day/Week/Calendar callbacks, source/destination authorization and separate
+shell timer ownership. Its candidate decision is awaiting the user. Include
+archived-person Timesheet exclusion without removing report history, delegated
+timer write authority and operation-specific locked Calendar controls. Coverage
+and combined submission retain their T012/T013 dependencies; no UI-only permission
+check or legacy fallback satisfies these tasks.
+
 ## Phase 2: Independent foundation (FR-006)
 
 ### Interactive time-writer activity (FR-010/018)

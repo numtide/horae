@@ -1,5 +1,26 @@
 # Permissions discovery
 
+## Timesheet integration evidence (2026-10-04)
+
+- Revalidated clean published `5ec183a` and traced `TimesheetContent`,
+  `persist_entry`, the Calendar callbacks, modal and shell `RunningTimer` owner.
+  `contracts/timesheet-integration.md` maps their joint integration and tests;
+  wiring only the existing scoped list would leave session-owned mutations.
+- Fresh official archive documentation closes one earlier unknown: archived
+  people retain reporting/invoice history but are absent from Timesheets. Keep
+  historical scoped reads intact; this is a separate navigation constraint.
+- Fresh running-timer documentation confirms delegated stopping requires edit
+  authority, not merely visibility or approval. Fresh Calendar documentation
+  specifically permits locked Administrator notes/start/end correction via its
+  form while forbidding drag/resize and project/task changes; the general
+  Day-only wording must not erase that surface-specific exception.
+- Asked one new product question about active managed-project participants with
+  no hours in the teammate selector. No answer is recorded. The catalog and
+  current docs do not prove the exact custom-grant candidate set. No browser
+  tools are loaded; no new reference-account observation or write is claimed.
+- No UI, runtime grants, migration or data changed. This is integration research,
+  not implemented Timesheet parity or execution of unavailable Spec Kit skills.
+
 ## Session identity payload (2026-10-04)
 
 - Source `4c00660`: `auth::get_me` returns `require_user()`'s entire database
