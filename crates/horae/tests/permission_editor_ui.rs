@@ -17,12 +17,14 @@ use uuid::Uuid;
 pub mod controls;
 #[path = "../src/components/form.rs"]
 pub mod form;
+#[path = "../src/components/menu.rs"]
+pub mod menu;
 #[path = "../src/components/modal.rs"]
 pub mod modal;
 #[path = "../src/components/permission_description.rs"]
 pub mod permission_description;
 mod components {
-    pub use super::{controls, form, modal, permission_description};
+    pub use super::{controls, form, menu, modal, permission_description};
 }
 #[path = "../src/models/permission_editor.rs"]
 pub mod permission_editor_model;
@@ -39,6 +41,7 @@ type TemplateReply = oneshot::Receiver<Result<TemplateOutcome, ServerFnError>>;
 type DeletionReply = oneshot::Receiver<Result<TemplateDeletionPreview, ServerFnError>>;
 type LoadReply = oneshot::Receiver<Result<PermissionEditor, ServerFnError>>;
 type IdentityReply = oneshot::Receiver<Result<PermissionRequester, ServerFnError>>;
+type SubjectsReply = oneshot::Receiver<Result<PermissionSubjectPage, ServerFnError>>;
 
 #[derive(Clone)]
 struct Probe {
@@ -59,6 +62,9 @@ struct Probe {
     storage: Rc<RefCell<HashMap<String, String>>>,
     storage_failure: Rc<RefCell<Option<String>>>,
     identity_replies: Rc<RefCell<VecDeque<IdentityReply>>>,
+    subject_replies: Rc<RefCell<VecDeque<SubjectsReply>>>,
+    subject_cursors: Rc<RefCell<Vec<Option<Uuid>>>>,
+    loaded_ids: Rc<RefCell<Vec<Uuid>>>,
 }
 
 impl Probe {
@@ -97,6 +103,9 @@ impl Probe {
             storage: Default::default(),
             storage_failure: Default::default(),
             identity_replies: Default::default(),
+            subject_replies: Default::default(),
+            subject_cursors: Default::default(),
+            loaded_ids: Default::default(),
         }
     }
 
@@ -104,6 +113,29 @@ impl Probe {
         let (send, receive) = oneshot::channel();
         self.preview_replies.borrow_mut().push_back(receive);
         send
+    }
+
+    fn subjects_reply(&self) -> oneshot::Sender<Result<PermissionSubjectPage, ServerFnError>> {
+        let (send, receive) = oneshot::channel();
+        self.subject_replies.borrow_mut().push_back(receive);
+        send
+    }
+
+    fn subjects_page(
+        &self,
+        id: Uuid,
+        name: &str,
+        next_after: Option<Uuid>,
+    ) -> PermissionSubjectPage {
+        PermissionSubjectPage {
+            requester: self.editor.requester,
+            subjects: vec![PermissionSubject {
+                id,
+                name: name.into(),
+                active: false,
+            }],
+            next_after,
+        }
     }
 
     fn load_reply(&self) -> oneshot::Sender<Result<PermissionEditor, ServerFnError>> {
@@ -364,6 +396,160 @@ impl Ui {
         self.dom.runtime().handle_event(event_name, event, id);
         self.settle();
     }
+}
+
+#[tokio::test]
+async fn subject_picker_empty_and_failed_pages_offer_read_only_recovery() {
+    let probe = Probe::new();
+    let reply = probe.subjects_reply();
+    let mut ui = Ui::new(probe.clone());
+    reply
+        .send(Err(ServerFnError::new("private database diagnostic")))
+        .unwrap();
+    ui.settle();
+    assert!(ui.html().contains("Could not load people"));
+    assert!(!ui.html().contains("private database diagnostic"));
+    let reply = probe.subjects_reply();
+    ui.click("permission-subject-retry");
+    reply
+        .send(Ok(PermissionSubjectPage {
+            requester: probe.editor.requester,
+            subjects: vec![],
+            next_after: None,
+        }))
+        .unwrap();
+    ui.settle();
+    assert!(ui.html().contains("No people on this page."));
+    assert!(probe.saves.borrow().is_empty());
+    assert_eq!(*probe.subject_cursors.borrow(), vec![None, None]);
+}
+
+#[tokio::test]
+async fn subject_picker_pages_hide_stale_choices_and_keep_duplicate_names_by_id() {
+    let probe = Probe::new();
+    let first = Uuid::now_v7();
+    let second = Uuid::now_v7();
+    let reply = probe.subjects_reply();
+    let mut ui = Ui::new(probe.clone());
+    assert!(ui.html().contains("Loading people"));
+    reply
+        .send(Ok(probe.subjects_page(first, "Same name", Some(first))))
+        .unwrap();
+    ui.settle();
+    assert!(ui.html().contains("Same name (inactive)"));
+    let reply = probe.subjects_reply();
+    ui.click("permission-subject-next");
+    assert!(!ui.html().contains(&format!("permission-subject-{first}")));
+    reply
+        .send(Ok(probe.subjects_page(second, "Same name", None)))
+        .unwrap();
+    ui.settle();
+    assert!(ui.html().contains(&format!("permission-subject-{second}")));
+    assert!(!ui.html().contains("id=\"permission-subject-next\""));
+    let reply = probe.subjects_reply();
+    ui.click("permission-subject-previous");
+    reply
+        .send(Ok(probe.subjects_page(first, "Same name", Some(first))))
+        .unwrap();
+    ui.settle();
+    assert_eq!(
+        *probe.subject_cursors.borrow(),
+        vec![None, Some(first), None]
+    );
+    assert!(probe.saves.borrow().is_empty());
+}
+
+#[tokio::test]
+async fn subject_picker_preserves_dirty_draft_until_confirmed_and_reloads_selected_person() {
+    let probe = Probe::new();
+    let other = Uuid::now_v7();
+    probe
+        .subjects_reply()
+        .send(Ok(probe.subjects_page(other, "Other person", None)))
+        .unwrap();
+    let mut ui = Ui::new(probe.clone());
+    ui.select_profile("Member");
+    for answer in [Ok(false), Err(document::EvalError::Unsupported)] {
+        probe.confirmations.borrow_mut().push_back(answer);
+        ui.click(&format!("permission-subject-{other}"));
+        ui.navigation_state("dirty");
+        assert_eq!(*probe.loaded_ids.borrow(), vec![probe.editor.user_id]);
+    }
+    probe.confirmations.borrow_mut().push_back(Ok(true));
+    let reply = probe.load_reply();
+    ui.click(&format!("permission-subject-{other}"));
+    ui.navigation_state("pending");
+    let mut selected = probe.editor.clone();
+    selected.user_id = other;
+    selected.name = "Other person".into();
+    reply.send(Ok(selected)).unwrap();
+    ui.settle();
+    ui.navigation_state("clean");
+    assert_eq!(
+        *probe.loaded_ids.borrow(),
+        vec![probe.editor.user_id, other]
+    );
+    assert!(ui.html().contains("Other person"));
+    assert!(probe.saves.borrow().is_empty());
+}
+
+#[tokio::test]
+async fn subject_picker_rejects_a_changed_requester_on_next_page_and_selected_load() {
+    for changed_on_page in [true, false] {
+        let probe = Probe::new();
+        let other = Uuid::now_v7();
+        let mut foreign = probe.editor.requester;
+        foreign.user_id = Uuid::now_v7();
+        probe
+            .subjects_reply()
+            .send(Ok(probe.subjects_page(other, "Local choice", Some(other))))
+            .unwrap();
+        let mut ui = Ui::new(probe.clone());
+        if changed_on_page {
+            let reply = probe.subjects_reply();
+            ui.click("permission-subject-next");
+            let mut page = probe.subjects_page(Uuid::now_v7(), "Must not appear", None);
+            page.requester = foreign;
+            reply.send(Ok(page)).unwrap();
+        } else {
+            let reply = probe.load_reply();
+            ui.click(&format!("permission-subject-{other}"));
+            let mut selected = probe.editor.clone();
+            selected.requester = foreign;
+            selected.user_id = other;
+            selected.name = "Must not appear".into();
+            reply.send(Ok(selected)).unwrap();
+        }
+        ui.settle();
+        assert!(!ui.html().contains("Must not appear"));
+        assert!(probe.saves.borrow().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn subject_picker_cannot_switch_during_preview_or_uncertain_save() {
+    let probe = Probe::new();
+    let other = Uuid::now_v7();
+    probe
+        .subjects_reply()
+        .send(Ok(probe.subjects_page(other, "Other person", None)))
+        .unwrap();
+    let mut ui = Ui::new(probe.clone());
+    let preview = probe.preview_reply();
+    ui.click("permission-review");
+    ui.click(&format!("permission-subject-{other}"));
+    assert_eq!(*probe.loads.borrow(), 1);
+    preview.send(Ok(probe.effects())).unwrap();
+    ui.settle();
+    let save = probe.save_reply();
+    ui.click("permission-save");
+    save.send(Err(ServerFnError::new("connection lost")))
+        .unwrap();
+    ui.settle();
+    ui.click(&format!("permission-subject-{other}"));
+    assert_eq!(*probe.loads.borrow(), 1);
+    assert_eq!(probe.saves.borrow().len(), 1);
+    ui.navigation_state("pending");
 }
 
 #[tokio::test]
@@ -1405,11 +1591,26 @@ mod server_fns {
     pub async fn load_permission_editor(id: Uuid) -> Result<PermissionEditor, ServerFnError> {
         let probe = use_context::<Probe>();
         *probe.loads.borrow_mut() += 1;
-        assert_eq!(id, probe.editor.user_id);
+        probe.loaded_ids.borrow_mut().push(id);
         let reply = probe.load_replies.borrow_mut().pop_front();
         match reply {
             Some(reply) => reply.await.expect("load reply dropped"),
-            None => Ok(probe.editor),
+            None => {
+                assert_eq!(id, probe.editor.user_id);
+                Ok(probe.editor)
+            }
+        }
+    }
+
+    pub async fn list_permission_subjects(
+        after: Option<Uuid>,
+    ) -> Result<PermissionSubjectPage, ServerFnError> {
+        let probe = use_context::<Probe>();
+        probe.subject_cursors.borrow_mut().push(after);
+        let reply = probe.subject_replies.borrow_mut().pop_front();
+        match reply {
+            Some(reply) => reply.await.expect("subjects reply dropped"),
+            None => Ok(probe.subjects_page(probe.editor.user_id, &probe.editor.name, None)),
         }
     }
 

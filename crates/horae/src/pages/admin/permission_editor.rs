@@ -6,7 +6,9 @@ use crate::components::controls::Checkbox;
 use crate::components::form::FormGroup;
 use crate::components::modal::Modal;
 use crate::components::permission_description::permission_description;
-use crate::models::permission_editor::{ProfileAction, ProfilePreview, ProfileSource};
+use crate::models::permission_editor::{
+    PermissionRequester, ProfileAction, ProfilePreview, ProfileSource,
+};
 use crate::server_fns;
 
 #[path = "permission_editor/draft.rs"]
@@ -23,6 +25,9 @@ use recovery_storage::{
 #[path = "permission_editor/recovery.rs"]
 mod recovery;
 use recovery::RecoveryForm;
+#[path = "permission_editor/subjects.rs"]
+mod subjects;
+use subjects::SubjectPicker;
 
 const BAD_REQUEST: u16 = 400;
 const UNAUTHORIZED: u16 = 401;
@@ -45,6 +50,7 @@ pub(super) fn PermissionEditorDialog(
     let mut locked = use_signal(|| false);
     let mut dirty = use_signal(|| false);
     let mut confirming_discard = use_signal(|| false);
+    let mut selected_by = use_signal(|| None::<PermissionRequester>);
     let mut recovery = use_resource(move || async move {
         let _ = person();
         let user = server_fns::get_me().await.map_err(|error| {
@@ -69,7 +75,18 @@ pub(super) fn PermissionEditorDialog(
     });
     let mut editor = use_resource(move || async move {
         match person() {
-            Some(id) => server_fns::load_permission_editor(id).await.map(Some),
+            Some(id) => {
+                let expected = *selected_by.peek();
+                let loaded = server_fns::load_permission_editor(id).await?;
+                if expected.is_some_and(|requester| requester != loaded.requester) {
+                    return Err(ServerFnError::ServerError {
+                        code: FORBIDDEN,
+                        message: "Session changed while selecting a person.".into(),
+                        details: None,
+                    });
+                }
+                Ok(Some(loaded))
+            }
             None => Ok(None),
         }
     });
@@ -78,6 +95,7 @@ pub(super) fn PermissionEditorDialog(
     let reload = use_callback(move |_: ()| {
         if !locked() {
             dirty.set(false);
+            selected_by.set(None);
             generation.set(Uuid::now_v7());
             editor.restart();
             recovery.restart();
@@ -88,12 +106,13 @@ pub(super) fn PermissionEditorDialog(
     let recovering = recovery_ready && matches!(&*recovery.read(), Some(Ok(Some(_))));
     let ready = recovery_ready && (recovering || editor.state()() == UseResourceState::Ready);
     let pending = locked() || !ready;
-    let dismiss = use_callback(move |_: ()| {
+    let change_person = use_callback(move |next: Option<(Uuid, PermissionRequester)>| {
         if locked() || recovering || !ready || confirming_discard() {
             return;
         }
         if !dirty() {
-            person.set(None);
+            selected_by.set(next.map(|(_, requester)| requester));
+            person.set(next.map(|(id, _)| id));
             return;
         }
         let target = person();
@@ -109,11 +128,13 @@ pub(super) fn PermissionEditorDialog(
             if confirmed
                 && !locked()
                 && editor.state()() == UseResourceState::Ready
+                && recovery.state()() == UseResourceState::Ready
                 && person() == target
                 && generation() == current_generation
             {
                 dirty.set(false);
-                person.set(None);
+                selected_by.set(next.map(|(_, requester)| requester));
+                person.set(next.map(|(id, _)| id));
             }
         });
     });
@@ -121,7 +142,7 @@ pub(super) fn PermissionEditorDialog(
         Modal {
             id: "person-permissions-dialog", labelledby: "person-permissions-title",
             open: person().is_some() || recovering, busy: pending || confirming_discard(), large: true,
-            on_dismiss: move |_| dismiss.call(()),
+            on_dismiss: move |_| change_person.call(None),
             div { class: "px-6 pt-6",
                 h2 { id: "person-permissions-title", class: "text-2xl font-semibold",
                     if recovering { "Recover permission request" } else { "Edit permissions" }
@@ -138,6 +159,7 @@ pub(super) fn PermissionEditorDialog(
                     RecoveryForm { key: "recovery-{form_generation}", request: request.clone(), locked,
                         on_finished: move |changed: Option<bool>| {
                             locked.set(false);
+                            selected_by.set(None);
                             person.set(None);
                             reload.call(());
                             if let Some(changed) = changed { on_saved.call(changed); }
@@ -154,15 +176,18 @@ pub(super) fn PermissionEditorDialog(
                             match DraftState::new(value.clone()) {
                                 Ok(initial) => rsx! {
                                     PermissionForm {
-                                        key: "{value.user_id}-{value.access_revision}-{value.permissions.revision}-{form_generation}",
+                                        key: "{value.user_id}-{value.requester.org_id}-{value.requester.user_id}-{value.access_revision}-{value.permissions.revision}-{form_generation}",
                                         initial, locked, dirty,
+                                        confirming_discard: confirming_discard(),
+                                        on_person_selected: move |choice| change_person.call(Some(choice)),
                                         on_reload: reload,
                                         on_saved: move |changed| {
                                             locked.set(false);
+                                            selected_by.set(None);
                                             person.set(None);
                                             on_saved.call(changed);
                                         },
-                                        on_cancel: move |_| dismiss.call(()),
+                                        on_cancel: move |_| change_person.call(None),
                                     }
                                 },
                                 Err(message) => rsx! {
@@ -186,7 +211,7 @@ pub(super) fn PermissionEditorDialog(
             if !pending && !recovering {
                 div { class: "px-6 pb-6",
                     button { id: CLOSE_BUTTON, r#type: "button", class: "btn btn-secondary",
-                        disabled: confirming_discard(), onclick: move |_| dismiss.call(()), "Close"
+                        disabled: confirming_discard(), onclick: move |_| change_person.call(None), "Close"
                     }
                 }
             }
@@ -199,6 +224,8 @@ fn PermissionForm(
     initial: DraftState,
     mut locked: Signal<bool>,
     mut dirty: Signal<bool>,
+    confirming_discard: bool,
+    on_person_selected: EventHandler<(Uuid, PermissionRequester)>,
     on_reload: EventHandler<()>,
     on_saved: EventHandler<bool>,
     on_cancel: EventHandler<()>,
@@ -237,6 +264,11 @@ fn PermissionForm(
             p { role: "alert", class: "text-danger text-sm mb-4", "{message}" }
         }
         if !unavailable() {
+            SubjectPicker {
+                requester: snapshot.editor.requester, selected: snapshot.editor.user_id,
+                disabled: frozen || confirming_discard,
+                on_selected: on_person_selected,
+            }
             h3 { class: "text-xl mb-2", "{snapshot.editor.name}" }
             p { class: "text-sm text-secondary mb-4", "Saved configuration: {source_label(&snapshot)}" }
             p { class: "text-sm mb-4",

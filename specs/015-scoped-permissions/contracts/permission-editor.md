@@ -58,6 +58,24 @@ inherited transaction defaults, cancellation/reuse and registered HTTP delivery.
 This closed FR-006/010/011/012 boundary needs no new schema or product predicate.
 General directory, shell and visual integration remain separately gated.
 
+### Subject picker consumer
+
+Extend the selected-person dialog with a `Change person` menu, using the shared
+Menu's keyboard/focus behavior and token utilities. Read pages only while an
+authorized editor is open. Show escaped names and inactive status; identify
+choices by UUID, not by name. Do not use the legacy directory as a fallback.
+Offer next/previous pages without claiming a total or a cross-page snapshot.
+Hide old choices while loading and discard responses belonging to a different
+requester. Loading/error/empty states must be explicit; retry reads no mutation.
+
+Changing person shares Close's dirty confirmation and pending-request guard.
+Cancellation or a failed confirmation bridge preserves the draft. After confirmed
+selection, reload both recovery and editor data, binding the selected person's
+load to the original requester. A session switch must not silently retarget an
+old editor. Pending/uncertain person or template saves cannot switch targets.
+The menu does not replace general-directory or shell policy and is not evidence
+of complete T018 acceptance.
+
 ### Selected person
 
 - Load the local target (including inactive people), exact grants, independent

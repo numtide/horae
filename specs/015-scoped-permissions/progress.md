@@ -1,5 +1,42 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Permission-editor subject picker
+
+- Previous user-facing MVP answer was status-only, not implementation progress.
+  Revalidated clean synchronized `8d49421` and OPEN/DRAFT #212; reused the worktree.
+  Spec Kit prerequisites pass; its unavailable skills were not executed.
+- Refined the existing editor contract and T142–T144, then reproduced four
+  missing-picker handler failures. Added paged Change person using shared Menu
+  and utilities, independent authorized reads, requester-bound selection and
+  the existing dirty/pending/recovery guards. No directory fallback or cutover.
+- The regression suite caught names remaining after revoked form access; moved
+  the picker inside the same availability boundary. Corrected component keys
+  and test event identifiers. Final 66 selected tests pass (50 editor, 11 own
+  permissions, five admin shell), including empty/error/retry coverage.
+- Full server/WASM bundle passes (78.82s). The extended real-browser recovery
+  suite passes on disposable PostgreSQL and Chromium 148 / Playwright 1.60;
+  keyboard focus/Escape, cancelled/confirmed dirty switch, clean switch back and
+  no selection mutations precede the existing real-command recovery scenarios.
+  Inspected all six desktop-dark/mobile-light editor/menu/recovery captures.
+- Offline all-targets server and WASM Clippy pass (1m06s / 13.17s). No SQL, schema,
+  dependencies, CSS or shared components changed. Removed the now-consumed DTO's
+  temporary web lint expectation. Owned browser services stop on runner exit.
+- Impeccable context and detector are unavailable because the engine is absent;
+  no installation or system changes. Source/capture review used existing design
+  context. Fresh independent finish review returns `ship` for this increment,
+  with no material findings. Its six-capture verdict does not cover rendered
+  pagination/duplicate/inactive/error states or full permissions acceptance.
+- Independent documentation review confirms no new durable system rule or
+  feature-contract correction. Existing stale DESIGN.md paths/tooling format
+  remain untouched. T142–T144 are complete; T018 and the full gates remain open.
+  Final formatting/whitespace checks pass. Delivery stays draft #212, no merge.
+
+Next: continue T006/OP19's general-directory projection and scope contract before
+canonical shell integration, without using this Administrator-only picker as a
+substitute for ordinary people access. Approval coverage, real
+expense dependency, person-management writes and preserved-data cutover remain
+open. General requirements remain 12/16; no full-feature/MVP readiness is claimed.
+
 ## 2026-10-04 — Permission-editor subject discovery
 
 - Previous turn made progress: published approval-boundary contract `eb56af3`.

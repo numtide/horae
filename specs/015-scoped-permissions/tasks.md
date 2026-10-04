@@ -511,6 +511,12 @@ delivery and integration, rather than claiming an internal helper completes it.
 
 - [x] T141 [US4] Run subject/editor/permission and real-session regressions, refresh SQLx cache, verify offline server/WASM lint and formatting, and record adversarial review. This does not complete general directory or browser integration.
 
+- [x] T142 [US4] Test actual editor handlers for paged person selection, inactive/duplicate names, dirty cancellation, pending/recovery guards and changed requester responses (FR-002/006/010/011/012).
+
+- [x] T143 [US4] Connect subject discovery to the existing permission dialog using shared controls; preserve requester binding, drafts and durable recovery without changing shell/directory policy.
+
+- [x] T144 [US4] Verify editor regressions, server/WASM lint, formatting and real-browser keyboard/viewport behavior; review and record evidence and remaining integration gates.
+
 T018's person editor consumes T126–T129 on the existing AdminUsers surface. Its
 local draft uses the core prerequisite graph, keeps explicit profile intent and
 invalidates confirmation on every edit. Test malformed loads, joint losses,

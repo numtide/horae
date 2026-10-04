@@ -22,10 +22,6 @@ pub struct PermissionSubject {
 }
 
 /// Independently authorized page; a cursor does not preserve access or a snapshot.
-#[cfg_attr(
-    feature = "web",
-    expect(dead_code, reason = "Subject discovery has no web picker consumer yet")
-)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PermissionSubjectPage {

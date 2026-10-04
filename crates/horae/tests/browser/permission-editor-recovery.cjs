@@ -68,12 +68,15 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     await editor.getByRole('button', { name: 'Review changes', exact: true }).click();
     await expect(editor.getByRole('button', { name: 'Confirm permissions', exact: true })).toBeEnabled();
   };
-  const capture = async label => {
+  const capture = async (label, showSubjects = false) => {
     for (const [width, height, theme] of [[1440, 900, 'dark'], [390, 844, 'light']]) {
       await page.setViewportSize({ width, height });
       await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
       const dialog = page.locator('dialog[open]');
       await expect(dialog).toBeVisible();
+      if (showSubjects && !await editor.locator('#permission-subjects').evaluate(el => el.matches(':popover-open'))) {
+        await editor.getByRole('button', { name: 'Change person', exact: false }).click();
+      }
       assert.equal(await dialog.evaluate(el => el.scrollWidth > el.clientWidth + 1), false, 'dialog must not overflow horizontally');
       const panel = await dialog.locator('.modal').boundingBox();
       assert.ok(panel && panel.x >= 0 && panel.x + panel.width <= width + 1);
@@ -121,6 +124,37 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     await page.goto(`${base}/admin/users`);
     await openEditor();
     await capture('permission-editor');
+
+    // The shared menu keeps keyboard focus inside the dialog. A refused dirty
+    // switch cannot discard the draft or submit it; a confirmed switch reloads.
+    const picker = editor.getByRole('button', { name: 'Change person', exact: false });
+    await picker.focus();
+    await page.keyboard.press('ArrowDown');
+    await expect(editor.getByRole('menu', { name: 'Change person', exact: false })).toBeVisible();
+    await expect(editor.locator('#permission-subjects [role="menuitem"]').first()).toBeFocused();
+    await capture('permission-subjects', true);
+    if (!await editor.locator('#permission-subjects').evaluate(el => el.matches(':popover-open'))) await picker.click();
+    await page.keyboard.press('Escape');
+    await expect(editor).toBeVisible();
+    await expect(picker).toBeFocused();
+    await editor.locator('#permission-ClientReadAll').click();
+    await picker.click();
+    await editor.getByRole('menuitem', { name: 'Other permission administrator', exact: true }).click();
+    await expect(editor.locator('#permission-ClientReadAll')).toBeChecked();
+    assert.equal(saves.length, 0);
+    discard = true;
+    await picker.click();
+    await editor.getByRole('menuitem', { name: 'Other permission administrator', exact: true }).click();
+    await expect(editor.getByRole('heading', { name: 'Other permission administrator', exact: true })).toBeVisible();
+    await readsFinished();
+    discard = false;
+    await picker.click();
+    await editor.getByRole('menuitem', { name: personName, exact: true }).click();
+    await expect(editor.getByRole('heading', { name: personName, exact: true })).toBeVisible();
+    await expect(editor.locator('#permission-ClientReadAll')).not.toBeChecked();
+    await readsFinished();
+    assert.equal(saves.length, 0, 'person selection must not save either person');
+
     await editor.locator('#person-permissions-profile').focus();
     await page.keyboard.press('Tab');
     await expect(editor.locator('#permission-TimeReadManaged')).toBeFocused();

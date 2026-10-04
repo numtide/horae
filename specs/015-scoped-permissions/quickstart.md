@@ -1,5 +1,50 @@
 # Permission verification
 
+## Permission-editor subject picker (T142–T144)
+
+Run inside the Nix shell:
+
+```sh
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo test -p horae --features server --test permission_editor_ui --test own_permissions_ui --test admin_shell --locked
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features web --target wasm32-unknown-unknown --locked -- -D warnings
+```
+
+Four initial handler tests fail for the missing picker. After implementation,
+66 selected tests pass (50 editor, 11 own-permissions, five admin shell), including
+the additional empty/error/retry case. Coverage includes cursor navigation,
+hidden stale pages, inactive/duplicate names identified by UUID, declined/failed
+dirty confirmation, independently loaded targets, changed requester rejection,
+pending previews and uncertain saves. Existing recovery and revocation tests
+remain green. The latter caught a picker retaining names after the form was
+denied; both now disappear together. Server/WASM Clippy pass (1m06s / 13.17s).
+
+The full server/WASM bundle builds in 78.82s. The extended
+`permission-editor-recovery` browser suite passes against its own disposable
+PostgreSQL on Chromium 148.0.7778.96 / Playwright 1.60.0. It checks keyboard menu
+opening, focus, Escape without dismissing the editor, cancelled/confirmed dirty
+person switches, a clean switch back and no selection-triggered mutation, then
+reruns the existing real-command/lost-response/recovery cases. Six captures of
+editor/menu/recovery at desktop-dark 1440 and mobile-light 390 were inspected in
+`.scratch/permission-subject-evidence/`. This is not Windows Chrome/MCP, full
+cross-browser, complete T018 or full-policy acceptance. Services stop on exit.
+
+The picker uses existing Menu, Modal and utilities; no CSS, shared-component,
+database, dependency or authority-policy change. The previously unused wire
+projection is consumed and its temporary lint expectation removed. Spec Kit
+prerequisites pass, but its skills are unavailable locally; no skill execution
+is claimed. Impeccable context/detector cannot run without its missing engine;
+source and screenshot checks substitute, without installing it.
+
+Fresh independent finish review returned `ship` for this extension, with no
+material findings in the changed code and six captures. Pagination/duplicate/
+inactive/error cases have handler evidence rather than rendered captures.
+The generic agent interface could not select the shipped reviewer type; it used
+the full reviewer packet in a fresh context. No full-feature verdict is implied.
+Independent documentation review confirms no new durable system rule or contract
+correction. Existing DESIGN.md path/tool-format drift is unchanged. Formatting
+and whitespace checks pass; T142–T144 close, while T018 remains open.
+
 ## Permission-editor subject discovery (T139–T141)
 
 Run in the Nix shell against the owned disposable PostgreSQL:
