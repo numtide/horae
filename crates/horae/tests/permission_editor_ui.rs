@@ -527,6 +527,83 @@ async fn subject_picker_rejects_a_changed_requester_on_next_page_and_selected_lo
 }
 
 #[tokio::test]
+async fn reload_cannot_adopt_another_requester_after_a_rejected_subject_load() {
+    for change_org in [false, true] {
+        let probe = Probe::new();
+        let other = Uuid::now_v7();
+        probe
+            .subjects_reply()
+            .send(Ok(probe.subjects_page(other, "Local choice", None)))
+            .unwrap();
+        let mut ui = Ui::new(probe.clone());
+        let mut selected = probe.editor.clone();
+        selected.user_id = other;
+        selected.name = "Selected local person".into();
+        let mut foreign = selected.clone();
+        foreign.name = "Must not appear".into();
+        if change_org {
+            foreign.requester.org_id = Uuid::now_v7();
+        } else {
+            foreign.requester.user_id = Uuid::now_v7();
+        }
+
+        let reply = probe.load_reply();
+        ui.click(&format!("permission-subject-{other}"));
+        reply.send(Ok(foreign.clone())).unwrap();
+        ui.settle();
+        assert!(ui.html().contains("Permission editing is unavailable"));
+
+        let reply = probe.load_reply();
+        ui.click("permission-editor-reload");
+        ui.navigation_state("pending");
+        reply.send(Ok(foreign)).unwrap();
+        ui.settle();
+        assert!(!ui.html().contains("Must not appear"), "{}", ui.html());
+        assert!(ui.html().contains("Permission editing is unavailable"));
+
+        let reply = probe.load_reply();
+        ui.click("permission-editor-reload");
+        reply.send(Ok(selected)).unwrap();
+        ui.settle();
+        assert!(ui.html().contains("Selected local person"));
+        assert!(probe.saves.borrow().is_empty());
+        assert!(probe.templates.borrow().is_empty());
+        assert!(probe.storage.borrow().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn initial_editor_response_pins_requester_across_reload() {
+    for change_org in [false, true] {
+        let probe = Probe::new();
+        let mut invalid = probe.editor.clone();
+        invalid.permissions.grants.clear();
+        probe.load_reply().send(Ok(invalid)).unwrap();
+        let mut ui = Ui::new(probe.clone());
+        assert!(!ui.html().contains("Review changes"));
+        let mut foreign = probe.editor.clone();
+        foreign.name = "Must not appear".into();
+        if change_org {
+            foreign.requester.org_id = Uuid::now_v7();
+        } else {
+            foreign.requester.user_id = Uuid::now_v7();
+        }
+        let reply = probe.load_reply();
+        ui.click("permission-editor-reload");
+        reply.send(Ok(foreign)).unwrap();
+        ui.settle();
+        assert!(!ui.html().contains("Must not appear"), "{}", ui.html());
+        assert!(ui.html().contains("Permission editing is unavailable"));
+        let reply = probe.load_reply();
+        ui.click("permission-editor-reload");
+        reply.send(Ok(probe.editor.clone())).unwrap();
+        ui.settle();
+        assert!(ui.html().contains("Example person"));
+        assert!(probe.saves.borrow().is_empty());
+    }
+}
+
+#[tokio::test]
 async fn subject_picker_cannot_switch_during_preview_or_uncertain_save() {
     let probe = Probe::new();
     let other = Uuid::now_v7();

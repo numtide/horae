@@ -791,6 +791,12 @@ data repair, role mapping or runtime activation is authorized by these cases.
 
 ## Phase 9: Acceptance
 
+### Editor identity continuity before directory integration
+
+- [x] T195 Reproduce requester switching through explicit editor reload after both an initial response and a rejected subject-picker load (FR-010/011/018).
+- [x] T196 Retain the original editor requester across reloads without changing close, save or durable-recovery semantics; keep canonical directory entry binding separately required.
+- [x] T197 Run the real-component regression suite, native/WASM checks and independent review; record evidence and remaining directory integration in `quickstart.md` and `progress.md`.
+
 ### Full-gate regressions
 
 - [x] T188 Complete real delegated Timesheet mutation browser coverage for create/delete, Calendar drawing/move/resize/reorder and atomic Week row deletion; assert selected-owner payloads, persisted values and unaffected unrelated time (FR-007/010/018).

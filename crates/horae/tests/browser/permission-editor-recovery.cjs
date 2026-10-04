@@ -50,6 +50,7 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
   const page = await context.newPage();
   const errors = [], saves = [], pending = new Set();
   let loseResponse = false, committedLostResponse = false, discard = false;
+  let delayedEditorLoad;
   page.on('pageerror', error => errors.push(error.stack || error.message));
   page.on('dialog', dialog => dialog.type() === 'beforeunload' || discard ? dialog.accept() : dialog.dismiss());
   page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/api/')) pending.add(request); });
@@ -97,6 +98,7 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
   };
   await page.route('**/api/**', async route => {
     const path = new URL(route.request().url()).pathname;
+    if (path.startsWith('/api/load_permission_editor') && delayedEditorLoad) await delayedEditorLoad;
     if (/^\/api\/save_(person_permissions|permission_template)/.test(path)) {
       const body = route.request().postDataJSON();
       const stored = JSON.parse(await record());
@@ -139,6 +141,56 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     await page.goto(`${base}/admin/users`);
     await openEditor();
     await capture('permission-editor');
+
+    // A second tab changes the real session cookie while this editor stays open.
+    // Reloading a rejected selection must not adopt the new Administrator.
+    const loginTab = await context.newPage();
+    const login = async () => {
+      await loginTab.goto(`${base}/auth/login`);
+      await loginTab.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
+      await loginTab.waitForURL(`${base}/`);
+    };
+    try {
+      sql(`UPDATE users SET org_role='manager' WHERE id='${actor.id}'; UPDATE users SET org_role='admin' WHERE id='${otherActor}'`);
+      await login();
+      await editor.getByRole('button', { name: 'Change person', exact: false }).click();
+      for (const action of [
+        () => editor.getByRole('menuitem', { name: 'Other permission administrator', exact: true }).click(),
+        () => editor.getByRole('button', { name: 'Reload permissions', exact: true }).click(),
+      ]) {
+        let release;
+        delayedEditorLoad = new Promise(resolve => { release = resolve; });
+        const response = page.waitForResponse(reply => new URL(reply.url()).pathname.startsWith('/api/load_permission_editor'));
+        try {
+          await action();
+          await expect(editor.locator('[data-editor-state="pending"]')).toBeVisible();
+          await expect(editor.getByText('Permission editing is unavailable for this account or workspace.', { exact: true })).toHaveCount(0);
+        } finally {
+          release();
+          delayedEditorLoad = undefined;
+        }
+        const loaded = await response;
+        assert.equal(loaded.status(), 200);
+        assert.deepEqual((await loaded.json()).requester, { org_id: actor.org_id, user_id: otherActor });
+        await expect(editor.getByText('Permission editing is unavailable for this account or workspace.', { exact: true })).toBeVisible();
+        await expect(editor.locator('#permission-review')).toHaveCount(0);
+      }
+      assert.equal(saves.length, 0);
+      assert.equal(receipts(), 0);
+      assert.equal(await record(), null);
+    } finally {
+      sql(`UPDATE users SET org_role='admin' WHERE id='${actor.id}'; UPDATE users SET org_role='member' WHERE id='${otherActor}'`);
+      await login();
+      await loginTab.close();
+    }
+    await editor.getByRole('button', { name: 'Reload permissions', exact: true }).click();
+    await expect(editor.getByRole('heading', { name: 'Other permission administrator', exact: true })).toBeVisible();
+    await readsFinished();
+    await editor.getByRole('button', { name: 'Change person', exact: false }).click();
+    await editor.getByRole('menuitem', { name: personName, exact: true }).click();
+    await expect(editor.getByRole('heading', { name: personName, exact: true })).toBeVisible();
+    await readsFinished();
+    console.log('PASS: editor reload rejects a changed session and recovers only for the original requester');
 
     // The shared menu keeps keyboard focus inside the dialog. A refused dirty
     // switch cannot discard the draft or submit it; a confirmed switch reloads.

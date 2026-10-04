@@ -85,6 +85,7 @@ pub(super) fn PermissionEditorDialog(
                         details: None,
                     });
                 }
+                selected_by.set(Some(loaded.requester));
                 Ok(Some(loaded))
             }
             None => Ok(None),
@@ -95,7 +96,6 @@ pub(super) fn PermissionEditorDialog(
     let reload = use_callback(move |_: ()| {
         if !locked() {
             dirty.set(false);
-            selected_by.set(None);
             generation.set(Uuid::now_v7());
             editor.restart();
             recovery.restart();

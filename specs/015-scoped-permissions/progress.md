@@ -1,5 +1,53 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Editor reload identity before directory integration
+
+- Previous response only reconfirmed the already implemented FR-033/B rule; it
+  was not implementation progress. Revalidated clean `774f60a`, the constitution
+  and Spec Kit prerequisites. No pending timer clarification remains.
+- Independent review confirms People read and canonical Administrator editor
+  reachability can proceed independently of the open financial predicates.
+  Directory integration must isolate legacy resources/writes and carry the page
+  requester into initial editor selection. It is not implemented yet.
+- Tracing that connection exposed a current defect: explicit reload clears the
+  requester already fixed by the subject picker. RED `12334` reproduces both
+  retry after a rejected subject load and initial-response reload adopting a
+  different requester; the existing picker rejection test still passes. These
+  are real Dioxus component tests, not browser evidence.
+- Retain the first accepted response's requester and preserve it on reload.
+  Close/save/recovery still release the binding. T195–T197 document the repair;
+  verification is pending. No design/CSS, endpoint, schema or grant changes.
+- GREEN `83067`: all 52 actual-component tests pass, including both user/org
+  mismatch loops and the existing draft, template, recovery and cleanup cases.
+  Independent review finds no material defect in the two-line change. Added a
+  disposable-browser regression with a real session-cookie switch in a second
+  tab, rejected reload, and restoration of the original account.
+- Browser packaging `50384` built the native executable but Dioxus also started
+  a separate `server-dev` profile despite the attempted client-only flag; disk
+  exhaustion prevented packaging. The handle is terminal, not a pending wait.
+  Removed only this worktree's two regenerable `server-dev` trees (2.1 GiB) and
+  native incremental cache (3.5 GiB), no source or database. Official sequential
+  packaging `4188` now limits build jobs to two, disables incremental compilation
+  and omits server debug symbols. Browser/lint verification remains pending.
+- Independent browser review found a stale-error false-positive risk. Held each
+  tested read until pending/stale-error suppression is observed, then verified
+  the actual 200 response carries the other Administrator's identity before
+  requiring local rejection. No fallback or server denial substitutes for this.
+- Official packaging `4188` passes in 279s. Full disposable-browser suite `83813`
+  passes in Chromium 148.0.7778.96, including the new real-session reload case,
+  audit history, lost-response recovery and acknowledged self-demotion cleanup.
+  The runner stops its owned services. Formatting `13071` passes (one test file
+  reformatted). T196 is complete; native/WASM lint `39182` remains live.
+- `39182` completes: offline all-target server Clippy passes in 75s and WASM
+  Clippy in 14.34s, warnings denied. Final independent review has no material
+  finding. T195–T197 are complete for this reload repair only; no SQL/cache,
+  endpoint or policy activation changed. Publication to the existing draft is
+  next; no full feature or full Nix acceptance is claimed.
+
+Next: verify the fix and recovery regressions, then connect canonical People,
+shell/navigation and the initial page-requester binding. These are still required;
+this repair does not complete directory integration, T018 or the feature.
+
 ## 2026-10-04 — Cross-command invoice authorization gate
 
 - Previous turn made progress: authenticated project delegation and verification

@@ -1,5 +1,42 @@
 # Permission verification
 
+## Editor reload requester continuity (T195–T197)
+
+The editor pins its first accepted response's requester and preserves that pair
+across explicit reloads. A failed selection cannot become accepted under a
+different user or organization merely by retrying. Returning to the original
+requester still permits a fresh authorized load. Close and completed save/recovery
+release the binding; no server permission or durable-record format changes.
+
+```sh
+nix develop --command env SQLX_OFFLINE=true cargo test -p horae --features server --test permission_editor_ui
+```
+
+Both new requester tests fail on the original source (`12334`); all 52 tests pass
+after the fix (`83067`). They cover user and organization switches, rejected
+selection followed by reload, an initial response with invalid grants followed by
+reload, and restoration of the original requester. Existing recovery/template/
+navigation tests remain included. This is controlled component evidence.
+
+The `permission-editor-recovery` browser suite additionally switches the real
+session cookie in a second tab while the first editor stays open. It holds each
+tested editor read to assert pending state and stale-error suppression, checks a
+successful server response identifying the second Administrator, then requires
+local rejection. Restoring the original session allows a reload again. Its only
+role writes target the runner's disposable database. The complete suite passes
+(`83813`) with Chromium 148.0.7778.96 / Playwright 1.60.0, including existing
+audit history, lost-response recovery and self-demotion cleanup. This is Linux
+headless Chromium, not Windows Chrome/MCP evidence. Official Dioxus packaging
+also passes (`4188`, 279s); no new visual styles were introduced.
+Offline all-target server Clippy and WASM Clippy pass with warnings denied
+(`39182`, 75s and 14.34s). Independent re-review closes the browser-barrier
+finding and finds no remaining material defect in this delta. No SQL or migration
+changed, so SQLx regeneration was not needed. Full Nix/feature gates remain open.
+
+This repair does not bind an external directory row before the first editor
+response. Canonical People integration, its route/navigation gates and initial
+page-requester binding remain required; it is not full T018 or feature acceptance.
+
 ## Invoice writer and revocation ordering (T192–T194)
 
 The three invoice writers share organization SHARE → invoice advisory lock →
