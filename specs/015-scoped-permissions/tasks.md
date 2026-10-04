@@ -9,6 +9,15 @@ Status: executable foundation tasks; later phases are required work packages to 
 - [x] T001 Record confirmed parity scope and independent foundation boundaries in `specs/015-scoped-permissions/plan.md` and `contracts/record-scope.md`.
 - [x] T002 Analyze foundation consistency and report unresolved full-feature gates against `specs/015-scoped-permissions/spec.md`, `plan.md` and `tasks.md` before code changes.
 
+## Scoped time-entry reads (OP03)
+
+The bounded read contract is in `contracts/time-entry-reads.md`. These tasks do
+not replace full Timesheet integration, editing, approval or policy activation.
+
+- [x] T165 Reproduce scoped time-read failures with six-profile/custom grants, tenant parents, historical rows, pagination and revocation fixtures.
+- [x] T166 Implement the explicit projection, transactional scoped reader and session-authenticated server function without changing legacy callers.
+- [x] T167 Verify registered HTTP payloads, concurrency and pagination, refresh SQLx, run server/WASM checks and review the boundary adversarially.
+
 ## Phase 2: Independent foundation (FR-006)
 
 - [x] T003 Write record-scope truth-table, isolation, missing-ID, assignment-removal and union-law tests in `crates/core/src/permissions/tests.rs`; expose the module in `crates/core/src/lib.rs` and observe failure before implementation.

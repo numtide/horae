@@ -1,5 +1,39 @@
 # Permission verification
 
+## Scoped time-entry reads (T165–T167)
+
+Use the Nix shell and an isolated PostgreSQL database, never the agency database:
+
+```sh
+cargo test -p horae --features server --bin horae time_entries_tests::
+cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization
+cargo sqlx prepare --workspace -- --features server --all-targets
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --no-default-features --features web --target wasm32-unknown-unknown -- -D warnings
+nix fmt -- --ci
+```
+
+The scope suite covers effective defaults for all six profiles and custom
+permissions, independent managed-person/project union, membership denial,
+foreign entry parents, archived history, filtering, tied/deleted cursors, exact
+500-row pages, policy/identity denial, both revocation orders and cancellation.
+The registered HTTP harness adds exact JSON from populated sensitive data,
+session-only actor identity, foreign filters, same-cookie revocation and
+sanitized errors. Consult `progress.md` for actual execution results; listing a
+command here does not itself establish a passing gate.
+
+Verified 2026-10-04: all eight scope tests pass (5.17s) and the registered HTTP
+matrix passes (12.53s). WASM Clippy and fresh offline all-targets server Clippy
+pass with warnings denied. Full SQLx preparation adds 16 descriptors, leaving
+all 1,437 prior descriptors unchanged. The owned disposable database is stopped.
+Local adversarial review found no remaining critical/high read-boundary issue;
+this is not a new independent review or complete-feature acceptance.
+
+This contract deliberately excludes financial fields even when the actor also
+has financial grants. It delivers contextual names, not unrelated directory or
+invoice access. No assertion of Timesheet UI integration, approval authority,
+browser validation, activation readiness or full `nix flake check` follows.
+
 ## Session identity projection (T162–T164)
 
 Against disposable PostgreSQL, run:

@@ -13,6 +13,7 @@ pub(crate) mod permissions;
 pub mod project;
 pub mod project_creation;
 pub mod project_people;
+pub mod scoped_time;
 pub mod task;
 pub mod time_entry;
 pub mod user;

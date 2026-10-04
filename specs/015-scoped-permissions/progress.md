@@ -1,5 +1,59 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Scoped time-entry read implementation
+
+- The previous benefits-only response was no progress. Revalidated the clean
+  worktree at published `3bb62ac` and resumed independent OP03 work; no unanswered
+  creation, assignment or approval decision is inferred.
+
+- Rechecked Harvest's current permission reference, confirmed own/managed/all
+  reads, traced the existing Timesheet's complete-week totals and contextual
+  labels, and recorded the bounded contract in `contracts/time-entry-reads.md`.
+  Spec Kit prerequisites pass; its absent skills are not claimed executed.
+
+- T165's initial compilation reproduced the missing reader/model imports.
+  Implemented the explicit projection, transactional reader and registered
+  session wrapper. Fixed SQLx's date/time feature ambiguity with explicit chrono
+  overrides, following existing queries. First five PostgreSQL tests pass in
+  3.90s after 1m56s compilation.
+
+- Added crossed person/project scopes, ordinary-membership denial, read-first
+  revocation and cancellation/default-isolation cases, plus the real HTTP exact
+  payload fixture with populated rates and linked invoice. Their verification is
+  in progress. One new fixture incorrectly assumed assignments had `org_id`;
+  corrected it to the existing parent-scoped schema. No schema change is needed.
+
+- Rust/testing/async and simplicity guidance reuse existing locks, stored grants,
+  session harness and dependencies. No UI/CSS change, data migration, policy
+  activation or Harvest mutation. All complete-feature acceptance gates remain.
+
+- All eight expanded database tests pass in 5.17s; the registered HTTP matrix
+  passes in 12.53s, including the exact populated-sensitive-data projection.
+  T165/T166 are complete. WASM lint identified the deliberately not-yet-consumed
+  query DTO; documented that boundary with the same feature-local `expect` used
+  by existing staged readers, not a global suppression or fake consumer.
+
+- Local adversarial review checks parent tenancy in each join, scope before
+  pagination, no legacy-role/administrator fallback, grant and relationship
+  revocation under the existing writer lock protocol, direct actor deactivation,
+  contextual-only labels, and no monetary or invoice fields. No critical/high
+  finding remains in this local read boundary; no independent review is claimed.
+
+- WASM Clippy passes with warnings denied in 14.98s. Full SQLx preparation after
+  cleaning 1.7 GiB of regenerable package artifacts completes in 1m01s: 16 new
+  descriptors, all 1,437 prior descriptors unchanged, none deleted. The owned
+  disposable database is stopped. Fresh offline all-targets server lint is
+  running; no browser or full-flake result is claimed.
+
+- Final offline all-targets server Clippy passes in 1m12s with warnings denied.
+  T167 closes for this reader only. Formatting and diff checks precede the
+  unsigned publication to existing open/draft #212; no merge is authorized.
+
+Next: publish this verified reader, then continue canonical Timesheet/shell
+integration and the remaining operation contracts without inferring answers to
+the outstanding product questions. This does not complete time editing,
+approval, person-management writes, migration or the full active goal.
+
 ## 2026-10-04 — Minimal session identity response
 
 - Previous goal turn was progress: published `4c00660` with the project-form
