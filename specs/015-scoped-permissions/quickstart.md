@@ -1,5 +1,42 @@
 # Permission verification
 
+## User directory payload (T145–T147)
+
+Run in the Nix shell with `DATABASE_URL` pointing only to disposable PostgreSQL:
+
+```sh
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization --locked
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo test -p horae --features server --test detail_navigation --test permission_editor_ui --test own_permissions_ui --test admin_shell --locked
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features web --target wasm32-unknown-unknown --locked -- -D warnings
+```
+
+The initial real-session test fails on ten response keys versus the five allowed
+by `contracts/people-directory.md`. The repaired registered HTTP matrix passes;
+the final offline-compiled run takes 12.81s after compilation. It exercises all
+three legacy roles, both inactive-filter values, unauthenticated/inactive denial,
+tenant isolation, duplicate names with distinct IDs, exact keys and values,
+unchanged own-user data and same-cookie demotion of inactive-directory access.
+The production query selects only the list fields, not a full `User` followed by
+redaction. The existing browser response shape changes together with its typed
+client; no compatibility API, authentication, mutation, schema or CSS changes.
+
+Full SQLx preparation with `--features server --all-targets` initially omits cached
+integration-test queries. Cleaning only rebuildable Horae artifacts and repeating
+preparation completes in 53.97s: 1,409 descriptors, replacing only the old list
+query and adding the non-null-sensitive-field fixture query. No unrelated query
+descriptor is lost. Focused source review checks every consumer, exact SQL/DTO
+fields, tenant/activity predicates, server-derived identity and unchanged legacy
+guards. This is not new-model directory/shell authorization, in-flight read
+revocation, fresh browser acceptance or a full-flake verification.
+
+All 89 selected consumer/permission tests pass (23 detail-navigation, 50 editor,
+11 own-permissions, five admin-shell). Offline all-targets server Clippy passes
+in 1m04s and WASM Clippy in 13.38s, both with warnings denied. Formatting and
+whitespace checks pass. The disposable PostgreSQL is stopped after verification.
+Spec Kit prerequisites pass; its unavailable skills were not executed. T145–T147
+are complete for this payload repair; full integration/acceptance remains open.
+
 ## Permission-editor subject picker (T142–T144)
 
 Run inside the Nix shell:

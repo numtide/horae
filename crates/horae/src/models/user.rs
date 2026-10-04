@@ -3,6 +3,18 @@ use horae_core::types::OrgRole;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+/// Identity and legacy administration fields used by the current user lists.
+/// These consumers need neither authentication metadata nor financial data.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(sqlx::FromRow))]
+pub struct UserListItem {
+    pub id: Uuid,
+    pub email: String,
+    pub name: String,
+    pub org_role: OrgRole,
+    pub active: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "server", derive(sqlx::FromRow))]
 pub struct User {

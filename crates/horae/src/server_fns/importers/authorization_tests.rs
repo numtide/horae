@@ -29,6 +29,7 @@ mod financial_snapshots;
 mod own_permissions;
 mod permission_audit;
 mod permission_editor;
+mod user_directory;
 
 #[cfg(target_os = "linux")]
 mod report_stress;
@@ -342,6 +343,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     };
     let mut server = tokio::task::JoinSet::new();
     server.spawn(async move { axum::serve(listener, router).await.unwrap() });
+    user_directory::check(&pool, &api).await;
     own_permissions::check(&pool, &api).await;
     permission_audit::check(&pool, &api).await;
     permission_editor::check(&pool, &api).await;

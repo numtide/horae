@@ -1,5 +1,42 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Minimal user-directory response
+
+- The preceding MVP response was status-only (no implementation progress).
+  Revalidated clean synchronized `b735b3a` and OPEN/DRAFT #212, reusing the branch.
+  Spec Kit prerequisites pass; the suite's skills are absent locally and were
+  not executed. No full requirement or migration gate is waived.
+- Traced all four `list_users` consumers and reread current official Harvest
+  permissions/team-overview documentation. Recorded OP19's closed payload repair
+  and remaining cross-consumer scope/field predicates in
+  `contracts/people-directory.md`; no authenticated Harvest/browser claim.
+- A real registered-route test reproduced ten response fields instead of the
+  five consumed fields. Replaced the full database `User` response and Member
+  rate scrub with `UserListItem` and a minimal SQL projection. Existing session,
+  legacy-role, tenant/activity filters, mutations and own/API responses remain
+  unchanged. Updated the navigation test double to the real response type.
+- Final offline-compiled HTTP matrix passes (12.81s), including role/filter
+  combinations, inactive/anonymous denial, tenant isolation, duplicate names,
+  exact field values, own-data preservation and same-cookie demotion. All 89
+  selected navigation/permission tests pass. No CSS, schema or dependencies change.
+- SQLx initially omitted cached integration queries. Cleaned only 4.2 GiB of
+  rebuildable Horae artifacts; full preparation then passes in 53.97s with 1,409
+  descriptors. Only the replaced list query is removed; two descriptors are
+  added. The owned disposable PostgreSQL is stopped; real data is untouched.
+- Focused adversarial source review checks every caller, SQL/DTO projection,
+  tenant/filter provenance and unchanged authorization. No new material local
+  finding; full directory scopes, email/role visibility and in-flight read
+  revocation remain open, not silently accepted. No independent review or new
+  browser/full-flake result is claimed. Offline server/WASM Clippy and formatting
+  pass. T145–T147 close; the general readiness checklist remains 12/16.
+
+Next: resolve T006/OP19's canonical per-consumer field and scope predicates:
+ordinary directory versus administrative role fields, report/approval identity
+reads, project choices and inactive visibility. Then integrate the reviewed
+directory/shell boundary under the full cutover gates. Scoped approvals, real
+expenses, person-management writes and preserved-data activation remain required.
+Delivery stays draft #212 without merge; no MVP/full-feature readiness is claimed.
+
 ## 2026-10-04 — Permission-editor subject picker
 
 - Previous user-facing MVP answer was status-only, not implementation progress.

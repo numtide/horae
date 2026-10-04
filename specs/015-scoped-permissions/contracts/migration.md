@@ -10,6 +10,13 @@ profile's display name as an access-preserving mapping. No migration was run.
 
 ## Verified source facts
 
+T145–T147 subsequently replace `list_users`' database model response with a
+five-field legacy consumer projection (`contracts/people-directory.md`). It no
+longer returns rates/provider subjects, even to an Administrator. The historical
+source table below describes its stated revision, not the current response. Own
+user and compatibility API reads remain separate paths; future migration diffs
+must use this repaired list boundary rather than promise unused directory rates.
+
 T086–T088 add original-requester provenance for newly inserted jobs through the
 updated commands, under `permission-state.md`. Migration 0045 leaves historical
 NULL unchanged and is tested only on disposable databases. It does not resolve

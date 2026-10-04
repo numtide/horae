@@ -17,6 +17,16 @@ Status: executable foundation tasks; later phases are required work packages to 
 
 ## Phase 3: Independent increments and full-policy integration gate
 
+### Directory payload boundary (OP19, FR-002/006/008/010/018)
+
+The closed pre-cutover repair in `contracts/people-directory.md` preserves current
+guards and consumers while removing unused financial/authentication fields.
+It does not define new-model directory, picker or lifecycle authority.
+
+- [x] T145 Reproduce excess fields through the registered `list_users` route with real-session fixtures for every legacy role; cover tenant/activity filtering and revoked inactive access in `server_fns/importers/authorization_tests/user_directory.rs`.
+- [x] T146 Replace the database `User` response with the explicit `UserListItem` consumer projection and minimal SQL in `models/user.rs` and `server_fns/users.rs`; update the navigation test double to the same response type.
+- [x] T147 Verify real-route and consumer regressions, regenerate SQLx cache, run server/WASM lint and formatting; review payload and unchanged-guard boundaries and record evidence.
+
 ### Confirmed catalog implementation (independent of runtime cutover)
 
 The user requested implementation without paying for or modifying Harvest on

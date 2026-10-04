@@ -540,8 +540,20 @@ mod server_fns {
         Ok(user(300, OrgRole::Admin))
     }
 
-    pub async fn list_users(_archived: bool) -> Result<Vec<User>, ServerFnError> {
-        Ok(vec![user(101, OrgRole::Member), user(102, OrgRole::Member)])
+    pub async fn list_users(_archived: bool) -> Result<Vec<user::UserListItem>, ServerFnError> {
+        Ok([101, 102]
+            .into_iter()
+            .map(|id| {
+                let user = user(id, OrgRole::Member);
+                user::UserListItem {
+                    id: user.id,
+                    name: user.name,
+                    email: user.email,
+                    org_role: user.org_role,
+                    active: user.active,
+                }
+            })
+            .collect())
     }
 
     pub async fn list_assignments(id: String) -> AssignmentResponse {
