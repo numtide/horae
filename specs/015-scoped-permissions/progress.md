@@ -1,5 +1,40 @@
 # Scoped permissions investigation progress
 
+## 2026-10-04 — Editor backend publication and UI entry-point check
+
+- The preceding MVP response was status-only. Resumed the actual retained final
+  formatting process: it completed successfully, 486 files and zero changes.
+  Both staged whitespace and unstaged-diff checks passed before committing.
+- Published unsigned commit `03e90b1` on the existing branch and updated draft
+  #212's body. GitHub confirms OPEN/DRAFT at that exact commit; no merge. The
+  worktree was clean and synchronized after publication. No test rerun was needed
+  for this unchanged, previously verified backend.
+- Executed the Spec Kit implementation prerequisite check against feature 015.
+  No extension hooks exist. This is not completion of the remaining implementation
+  tasks or the full requirements checklist.
+- Read the Workspace prototype and actual `pages/admin.rs`. The route still owns
+  legacy user creation, role changes, activation and task management. Preserve
+  these working flows; the new editor must not imply that policy 1 is active or
+  that the legacy three-role list is canonical permission state.
+- Workspace's prototype has a read-only three-role matrix and no per-person
+  editor. Its visual system remains useful, but its role semantics conflict with
+  the approved six-profile/custom-permission specification. Use the confirmed
+  feature contracts for behavior, not the obsolete prototype role matrix. Do not
+  copy its sample seats, last-active values, invitation counts or audit records.
+- The design context launcher failed because its engine is not installed and
+  its cache directory is unwritable. Read the existing DESIGN.md and handoff
+  directly instead; PRODUCT.md is absent. No UI/CSS edits, browser validation,
+  policy activation or real-data change occurred in this publication iteration.
+
+Next: implement T018's person-permission controls on the existing AdminUsers
+surface using the published load/preview/save endpoints, shared permission
+descriptions and existing components. Complete the design import/component
+inspection before editing. Cover stale previews, exact relationship-loss
+confirmation, cancellation and uncertain-save retry without changing request
+identity. Keep legacy mode non-editable for the new model; record the visual
+extension beyond the old three-role prototype. Full enforcement, assignment and
+approval integration, reviewed migration and browser acceptance remain open.
+
 ## 2026-10-04 — Permission editor integration
 
 - Previous turn was an MVP status answer: no implementation progress. Revalidated
