@@ -1,5 +1,49 @@
 # Scoped permissions investigation progress
 
+## 2026-10-05 — Grouped workbook delivery
+
+- Previous iteration published `e2e66fb` to existing draft #212; verified remote
+  HEAD and a clean worktree before continuing. This was implementation progress,
+  not full feature completion.
+- Reopened Harvest's Time-report guide: downloads represent the viewed report.
+  Implementing grouped XLSX first; grouped CSV retains its streaming requirement
+  and will not inherit an arbitrary source-entry or workbook row limit.
+- Independent design review rejected unbounded per-group context arrays for CSV:
+  the existing native fetch function does not truncate an oversized first record.
+  XLSX uses a complete scoped relation, separate bounded group/context probes and
+  a single statement for size/payload consistency. Tuple context and labels count
+  toward its logical budget; current scope is rechecked after rendering.
+- RED `96011` confirmed three failing grouped-workbook tests on the unavailable
+  reader. Implemented the bounded source, exact-text workbook renderer and a
+  separate canonical route; added group-count/field/filter and four-dimension
+  tests. `39878` found a test-only reference to an unavailable direct dependency;
+  reused Axum's existing query extractor instead of adding a dependency.
+- `80208` passed the first six focused tests, 11 storage tests and the registered
+  session suite (13.03 seconds), then completed full SQLx preparation in 85
+  seconds. It adds eight descriptors and deletes none. Independent source review found no
+  material defect; added its multi-context partial-revocation and exact combined
+  budget boundary tests for the final regression run. The grouped XLSX button
+  now carries dimension, dates, requester and policy only while data is ready.
+  Browser assertions include all dimensions, invalid/ambiguous queries, wrong
+  identity, unauthenticated access, empty results and later policy changes.
+  Final export regressions `14710` passed 119 tests with two existing manual
+  probes ignored (41.88 seconds). Fresh full Dioxus build `71419` passed in 87.95
+  seconds. `2402` passed native/all-targets Clippy (135 seconds) and WASM Clippy
+  (20.52 seconds), warnings denied, followed by all 15 component tests after a
+  113-second compilation. Final format gate `16719` passed with zero changes.
+  Static follow-up review confirmed the added tests and bound link;
+  browser ZIP/200 checks establish transport, while Rust assertions cover cells.
+- Disposable Chromium `44459` passed the new actual-route assertions and existing
+  report regressions. Captures are in `.scratch/grouped-xlsx-browser-evidence/`;
+  desktop and mobile were inspected together. No new shared CSS or dependency,
+  no database migration and no real data change. Publication remains pending;
+  no full-flake or full-feature claim is made.
+
+Next: publish the verified grouped XLSX increment to existing draft #212 without
+merging, then implement grouped CSV with bounded original-scope fragments (not
+unbounded context arrays or workbook-derived row limits). Nested reports remain
+required T221 work; full T203 and feature activation remain open.
+
 ## 2026-10-05 — Grouped report consumer
 
 - Previous turn published verified `41ff137` to existing draft #212; remote HEAD

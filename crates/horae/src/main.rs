@@ -250,6 +250,10 @@ fn main() -> anyhow::Result<()> {
                     .route("/api/reports/export/csv", get(reports::export_csv))
                     .route("/api/reports/export/xlsx", get(reports::export_xlsx))
                     .route(
+                        "/api/reports/time/grouped/xlsx",
+                        get(reports::export_time_groups_xlsx),
+                    )
+                    .route(
                         "/api/projects/export/csv",
                         get(reports::export_projects_csv),
                     )

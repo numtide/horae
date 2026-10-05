@@ -4,6 +4,8 @@ use crate::server_fns::test_seed::wait_for_blocked;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 use std::time::Duration;
 
+mod grouped;
+
 async fn capture(pool: &PgPool, ids: &SeedIds) -> Result<time::TimeExport, StatusCode> {
     time::entries(
         pool,

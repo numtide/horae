@@ -294,6 +294,7 @@ fn assert_no_results(dom: &VirtualDom) {
         "Old project",
         "Full-period totals",
         "/api/reports/export/",
+        "/api/reports/time/grouped/xlsx",
         "<tbody",
     ] {
         assert!(!html.contains(hidden), "stale {hidden}: {html}");
@@ -348,6 +349,9 @@ async fn grouped_tabs_reauthorize_and_hour_drilldown_binds_detail_and_download_f
     settle(&mut dom);
     let html = dioxus::ssr::render(&dom);
     assert!(html.contains("503.00") && html.contains("7.00") && html.contains("6.00"));
+    assert!(html.contains("/api/reports/time/grouped/xlsx?group_by=client"));
+    assert!(html.contains(&format!("expected_user_id={}", allowed.requester.user_id)));
+    assert!(!html.contains("after="));
     assert!(
         !html.contains("/api/reports/export/"),
         "grouped view must not mislabel detailed downloads"

@@ -13,6 +13,8 @@ use serde::Deserialize;
 use tower_sessions::Session;
 
 mod bounded;
+mod groups;
+pub use groups::export_xlsx as export_time_groups_xlsx;
 mod limits;
 pub(crate) use limits::time::read_access as read_time_report_access;
 mod streaming;

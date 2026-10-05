@@ -30,10 +30,12 @@ Ordinary detailed Reports integration follows `contracts/time-reports.md`:
 - [x] T220 Implement the typed grouped reader and authenticated endpoint using current time authority; verify registered-session payloads, revocation, tenant isolation, totals and pagination; refresh SQLx and run native/WASM checks and adversarial review.
 - [ ] T221 Connect grouped results, drilldown and equivalent grouped CSV/XLSX delivery to the bound ordinary consumer; verify browser transitions without legacy catalogs or financial leakage. Full picker and financial-family acceptance remains required by T203.
 
-T221 progress: the four grouping tabs and Hours-to-detail navigation are connected
-and verified through the real component and disposable Chromium. Detailed CSV/XLSX
-retain the chosen entity, dates and requester. Nested entity-name reports and
-exports of grouped rows are still pending; the task remains open.
+T221 progress: the four grouping tabs, Hours-to-detail navigation and grouped
+XLSX delivery are connected and verified through disposable Chromium. Detailed
+CSV/XLSX retain the chosen entity, dates and requester. Grouped XLSX retains every
+original person/project pair for final authorization, with group and payload
+limits applied after aggregation. Nested entity-name reports and grouped CSV
+remain pending; the task remains open.
 
 These tasks do not close T014/T015 or the full Reports parity surface alone.
 

@@ -1,5 +1,18 @@
 # Permission verification
 
+## Grouped workbook delivery (T221 partial)
+
+In the Nix shell, run `cargo test -p horae --features server --bin horae reports::`
+against disposable PostgreSQL, then the `scoped_reports_ui` integration target.
+The grouped tests cover all four dimensions, exact worksheet cells, 10,001 source
+entries in one group, distinct IDs with equal names, the group/name/combined-scope
+budgets, source reassignment and loss of only part of a group's captured scope.
+`reports-permissions.cjs` exercises the actual grouped XLSX route through each
+tab, requester/date binding, anonymous and malformed requests, empty results,
+policy changes and desktop/mobile layout. Its ZIP/HTTP assertions verify delivery;
+the Rust workbook assertions verify cells. Grouped CSV and nested report
+navigation remain required before T221 can close.
+
 ## Ordinary Reports consumer (T216–T218)
 
 `Reports` first obtains `get_time_report_access`: requester and supported

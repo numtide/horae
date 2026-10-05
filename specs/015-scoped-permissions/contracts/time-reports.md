@@ -192,7 +192,30 @@ to READ COMMITTED also requires a single-statement size/payload snapshot, as in
 
 ### XLSX delivery
 
-Use the existing XLSX route, format, renderer admission and output limits. Policy
+The canonical grouped route is `GET /api/reports/time/grouped/xlsx`, with required
+`group_by=client|project|task|person` and the same strict date/filter/requester
+parameters as detailed downloads. It requires policy 1 even when no expected
+policy is supplied; an explicit legacy expectation is denied. The UI supplies
+the scoped expectation and original requester, with no cursor. Unknown or
+duplicate grouping values and ambiguous filter keys are invalid, not defaults.
+
+Grouped XLSX uses the same canonical entry predicate, rounding and filters as
+the grouped reader, without its page cursor. Its 10,000-row cap counts groups,
+not contributing entries. A single statement captures group totals and distinct
+original `(person, project)` pairs from the complete matched set. The private
+pairs are retained only for `TimeExportScope` release authorization; they are
+never worksheet columns. No reread of reassigned/deleted entries may replace them.
+
+Apply the existing 8 MiB logical payload budget to UTF-8 group names plus 32 bytes
+per distinct UUID pair, with the existing 32,767-byte name limit. Bound group and
+context probes independently before materializing their payload in Rust. If any
+limit fails, return 413 and suppress both payload branches in SQL. This is a
+logical data budget, not a claim that Rust/protocol overhead is only 8 MiB.
+Group, context and empty-sentinel records must be distinct; partial contexts are
+internal errors, never silently discarded. These XLSX limits do not impose a
+source-entry cap or define the separately streaming grouped CSV behavior.
+
+Detailed exports retain their existing XLSX route, format, renderer admission and output limits. Policy
 0 retains Manager/Admin access; policy 1 requires valid ordinary time-read
 grants, regardless of the legacy role. Capture the policy version with the
 requester and private person/project pairs. Never serialize these scope facts.

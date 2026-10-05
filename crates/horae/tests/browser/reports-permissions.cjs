@@ -115,6 +115,31 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
       await expect(page.locator('tbody tr td:nth-child(4)')).toHaveText('0.00');
       await expect(page.locator('tbody')).not.toContainText('Private colleague');
       await expect(page.getByRole('link', { name: 'Export CSV', exact: true })).toHaveCount(0);
+      const groupedLink = await page.getByRole('link', { name: 'Export XLSX', exact: true }).getAttribute('href');
+      const groupedUrl = new URL(groupedLink, base);
+      assert.equal(groupedUrl.pathname, '/api/reports/time/grouped/xlsx');
+      assert.equal(groupedUrl.searchParams.get('group_by'), dimension);
+      assert.equal(groupedUrl.searchParams.get('expected_user_id'), actor.id);
+      assert.equal(groupedUrl.searchParams.get('expected_policy'), 'scoped');
+      assert.equal(groupedUrl.searchParams.has('after'), false);
+      const workbook = await context.request.get(groupedUrl.href);
+      assert.equal(workbook.status(), 200);
+      assert.ok((await workbook.body()).subarray(0, 2).equals(Buffer.from('PK')));
+      filteredLinks.push(groupedLink);
+      if (dimension === 'client') {
+        for (const suffix of ['&group_by=person', '&from=2040-01-01', '&after=', '&user_ids=invalid']) {
+          assert.equal((await context.request.get(`${groupedUrl.href}${suffix}`)).status(), 400);
+        }
+        const mismatched = new URL(groupedUrl.href);
+        mismatched.searchParams.set('expected_user_id', person);
+        assert.equal((await context.request.get(mismatched.href)).status(), 403);
+        const anonymous = await browser.newContext();
+        try {
+          assert.equal((await anonymous.request.get(groupedUrl.href)).status(), 401);
+        } finally {
+          await anonymous.close();
+        }
+      }
       await page.locator(`#report-hours-${entity}`).focus();
       await page.keyboard.press('Enter');
       await expect(page.locator('tbody tr')).toHaveCount(500);
@@ -153,6 +178,8 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
     await expect(page.locator('#report-group-refresh')).toBeEnabled();
     await expect(page.locator('tbody')).toHaveCount(0);
     await expect(page.locator('dl')).toContainText('0.00');
+    const emptyWorkbook = await context.request.get(new URL(await page.getByRole('link', { name: 'Export XLSX', exact: true }).getAttribute('href'), base).href);
+    assert.equal(emptyWorkbook.status(), 200);
     await expect(page.locator('#report-group-person')).toHaveAttribute('aria-pressed', 'true');
     await page.locator('#report-to').fill(date);
     await expect(page.locator(`#report-hours-${actor.id}`)).toHaveText('503.00');

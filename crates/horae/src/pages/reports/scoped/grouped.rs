@@ -67,12 +67,26 @@ pub(super) fn GroupedTimeReport(
         .filter(|_| ready)
         .and_then(|(_, result)| result.as_ref().ok());
     let next = loaded.and_then(|page| page.next_after.clone());
+    let download = loaded.map(|_| {
+        let group_by = match key.0 {
+            TimeReportGrouping::Client => "client",
+            TimeReportGrouping::Project => "project",
+            TimeReportGrouping::Task => "task",
+            TimeReportGrouping::Person => "person",
+        };
+        format!("/api/reports/time/grouped/xlsx?group_by={group_by}&from={}&to={}&expected_org_id={}&expected_user_id={}&expected_policy=scoped", key.2, key.3, requester.org_id, requester.user_id)
+    });
 
     rsx! {
         div { class: "flex flex-wrap items-center justify-between gap-4 mb-4",
             h2 { class: "text-lg m-0", "Time" }
-            button { id: "report-group-refresh", r#type: "button", class: "btn btn-secondary", disabled: !ready,
-                onclick: move |_| { if ready { page.restart(); } }, "Refresh report"
+            div { class: "flex flex-wrap items-center gap-3",
+                if let Some(href) = download {
+                    a { class: "btn btn-secondary", href, "Export XLSX" }
+                }
+                button { id: "report-group-refresh", r#type: "button", class: "btn btn-secondary", disabled: !ready,
+                    onclick: move |_| { if ready { page.restart(); } }, "Refresh report"
+                }
             }
         }
         div { class: "segmented flex-wrap mb-6", role: "group", aria_label: "Group time by",
