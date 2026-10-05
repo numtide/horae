@@ -93,7 +93,8 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         "requester":{"org_id":ids.org_id,"user_id":ids.user_id},
         "entries":[{"id":entry,"spent_date":"2026-09-07","project_name":"Widget",
             "task_name":"Dev","user_name":"Test User","minutes":60,"rounded_minutes":60,"billable":true,"notes":null}],
-        "next_after":null
+        "next_after":null,
+        "totals":{"entry_count":1,"total_minutes":60,"rounded_minutes":60,"billable_minutes":60}
     });
     assert_eq!(api.json(ENDPOINT, request.clone(), &cookie).await, expected);
     let response = download(
@@ -193,10 +194,27 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     assert_eq!(api.json(ENDPOINT, forged, &cookie).await, expected);
     let mut filtered = request.clone();
     filtered["query"]["user_ids"] = json!([other.user_id]);
+    let empty = api.json(ENDPOINT, filtered, &cookie).await;
+    assert_eq!(empty["entries"], json!([]));
     assert_eq!(
-        api.json(ENDPOINT, filtered, &cookie).await["entries"],
-        json!([])
+        empty["totals"],
+        json!({"entry_count":0,"total_minutes":0,"rounded_minutes":0,"billable_minutes":0})
     );
+
+    for _ in 0..500 {
+        crate::server_fns::test_seed::time_entry(pool, &ids, EntryState::Open).await;
+    }
+    let first = api.json(ENDPOINT, request.clone(), &cookie).await;
+    let totals = json!({"entry_count":501,"total_minutes":30060,"rounded_minutes":30060,"billable_minutes":30060});
+    assert_eq!(first["entries"].as_array().unwrap().len(), 500);
+    assert_eq!(first["totals"], totals);
+    assert!(!first["next_after"].is_null());
+    let mut next = request.clone();
+    next["query"]["after"] = first["next_after"].clone();
+    let last = api.json(ENDPOINT, next, &cookie).await;
+    assert_eq!(last["entries"].as_array().unwrap().len(), 1);
+    assert_eq!(last["totals"], totals);
+    assert!(last["next_after"].is_null());
     let mut invalid = request.clone();
     invalid["query"]["date_to"] = json!("2026-08-01");
     assert_eq!(

@@ -20,6 +20,9 @@ Ordinary detailed Reports integration follows `contracts/time-reports.md`:
 - [x] T210 Reproduce ignored plural filters, partial requester bindings and download cursors through the existing query extractor; retain legacy URL regression coverage (OP25/OP31, FR-006/007/008/010/018).
 - [x] T211 Parse complete multi-ID selections and optional requester bindings into the shared time-report query without changing SQL authority, bounded transports or existing scalar URLs; reject malformed/ambiguous selections.
 - [x] T212 Verify both actual-session CSV/XLSX routes across all filter dimensions, scope narrowing, malformed/duplicate keys and identity changes; run export/storage regressions, SQLx/native/WASM/format checks and independent review. Reports consumer and candidate discovery remain T203 work.
+- [x] T213 Reproduce missing full-period time totals across bounded report pages, empty/exhausted cursors, filters and scoped identities (FR-008/018).
+- [x] T214 Return exact nonfinancial totals and the bounded page from one scoped SQL snapshot, retaining current authority and filter semantics.
+- [x] T215 Verify large sums, rounding, tenant/scope/revocation and registered-session payloads; refresh SQLx, native/WASM checks and adversarial review. This does not close the ordinary Reports consumer or full T203.
 
 These tasks do not close T014/T015 or the full Reports parity surface alone.
 

@@ -47,6 +47,31 @@ and narrowing questions do not prevent implementing authorized result reads.
 - Return requester identity; an optional expected requester rejects account
   changes before reading rows. It binds the consumer, never supplies authority.
 
+### Full-period totals for the paged consumer
+
+Return `totals` alongside each page: `entry_count`, `total_minutes`,
+`rounded_minutes` and `billable_minutes`, all integer 64-bit values. Billable
+minutes sum effective rounded minutes of report-billable entries, matching the
+existing ordinary time accounting convention. These are time facts, not money.
+Compute totals over the entire authorized, date/filter-matched set before the
+cursor and page limit. An empty matched set returns zeros; an exhausted cursor
+may return no entries with nonzero full-period totals.
+
+Use one SQL statement/snapshot for the totals and bounded page, and one shared
+scoped/filter relation, so concurrent entry changes cannot mix snapshots within
+a response. Keep the current authority fences, deadlines and strict decoding.
+Do not materialize all report notes into application memory to compute totals.
+Each subsequent page still refreshes authority and data; the totals are not a
+cross-request snapshot or a directory of selectable candidates.
+
+This is an implementation refinement of exact scoped aggregates (FR-008/018),
+not a new Harvest permission rule. The Member report guide, reopened 2026-10-05,
+confirms period-wide time reporting and rounding; it does not settle restricted
+picker eligibility. Verify empty/exhausted pages, more than 500 entries, scope
+unions, filters, tenant parents, frozen rounding, large sums and revocation via
+the actual session endpoint as well as the reader. T203 remains open until the
+ordinary UI, complete pickers and matching delivery paths are connected.
+
 ## Required follow-through
 
 The new reader does not replace the legacy Reports component, grouped monetary

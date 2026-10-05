@@ -19,6 +19,22 @@ fn query() -> TimeReportQuery {
     }
 }
 
+fn assert_totals(
+    page: &crate::models::time_report::TimeReportPage,
+    count: i64,
+    actual: i64,
+    rounded: i64,
+    billable: i64,
+) {
+    assert_eq!(
+        serde_json::to_value(page).unwrap()["totals"],
+        serde_json::json!({
+            "entry_count":count, "total_minutes":actual,
+            "rounded_minutes":rounded, "billable_minutes":billable
+        })
+    );
+}
+
 async fn grants(pool: &PgPool, actor: Uuid, selection: PermissionSelection) {
     let values: Vec<String> =
         serde_json::from_value(serde_json::to_value(selection).unwrap()).unwrap();
@@ -57,6 +73,7 @@ async fn detailed_report_uses_own_scope_without_directory_or_financial_grants(po
     );
     assert_eq!(page.requester.user_id, actor);
     assert!(page.next_after.is_none());
+    assert_totals(&page, 1, 60, 60, 60);
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -97,6 +114,7 @@ async fn detailed_report_keeps_archived_history_and_report_rounding(pool: PgPool
     assert_eq!(page.entries[0].minutes, 17);
     assert_eq!(page.entries[0].rounded_minutes, 0);
     assert!(!page.entries[0].billable);
+    assert_totals(&page, 1, 17, 0, 0);
     let value = serde_json::to_value(&page.entries[0]).unwrap();
     assert_eq!(value.as_object().unwrap().len(), 9);
     for forbidden in [
@@ -171,6 +189,13 @@ async fn detailed_report_profiles_and_custom_scope_union_do_not_duplicate_rows(p
             page.entries.iter().map(|entry| entry.id).collect();
         assert_eq!(page.entries.len(), count);
         assert_eq!(actual, all_rows[..count].iter().copied().collect());
+        assert_totals(
+            &page,
+            count as i64,
+            count as i64 * 60,
+            count as i64 * 60,
+            count as i64 * 60,
+        );
     }
 }
 
@@ -215,22 +240,15 @@ async fn detailed_report_filters_are_any_within_and_between_dimensions(pool: PgP
         [entry]
     );
     filter.task_ids = vec![foreign.task_id];
-    assert!(
-        read(&pool, ids.org_id, ids.user_id, &filter)
-            .await
-            .unwrap()
-            .entries
-            .is_empty()
-    );
+    assert_totals(&page, 1, 60, 60, 60);
+    let empty = read(&pool, ids.org_id, ids.user_id, &filter).await.unwrap();
+    assert!(empty.entries.is_empty());
+    assert_totals(&empty, 0, 0, 0, 0);
     filter.task_ids.clear();
     filter.date_from = "2026-09-08".parse().unwrap();
-    assert!(
-        read(&pool, ids.org_id, ids.user_id, &filter)
-            .await
-            .unwrap()
-            .entries
-            .is_empty()
-    );
+    let empty = read(&pool, ids.org_id, ids.user_id, &filter).await.unwrap();
+    assert!(empty.entries.is_empty());
+    assert_totals(&empty, 0, 0, 0, 0);
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -244,6 +262,11 @@ async fn detailed_report_keyset_exhausts_ties_without_repeating_rows(pool: PgPoo
     expected.sort_unstable();
     let mut filter = query();
     let first = read(&pool, ids.org_id, ids.user_id, &filter).await.unwrap();
+    let totals = serde_json::json!({
+        "entry_count":503,"total_minutes":30180,"rounded_minutes":30180,
+        "billable_minutes":30180
+    });
+    assert_eq!(serde_json::to_value(&first).unwrap()["totals"], totals);
     assert_eq!(
         first
             .entries
@@ -254,6 +277,7 @@ async fn detailed_report_keyset_exhausts_ties_without_repeating_rows(pool: PgPoo
     );
     filter.after = first.next_after;
     let last = read(&pool, ids.org_id, ids.user_id, &filter).await.unwrap();
+    assert_eq!(serde_json::to_value(&last).unwrap()["totals"], totals);
     assert_eq!(
         last.entries
             .iter()
@@ -262,6 +286,20 @@ async fn detailed_report_keyset_exhausts_ties_without_repeating_rows(pool: PgPoo
         expected[500..]
     );
     assert!(last.next_after.is_none());
+    let final_entry = last.entries.last().unwrap();
+    let mut exhausted = filter.clone();
+    exhausted.after = Some(TimeReportCursor {
+        spent_date: final_entry.spent_date,
+        project_name: final_entry.project_name.clone(),
+        task_name: final_entry.task_name.clone(),
+        id: final_entry.id,
+    });
+    let empty = read(&pool, ids.org_id, ids.user_id, &exhausted)
+        .await
+        .unwrap();
+    assert!(empty.entries.is_empty());
+    assert!(empty.next_after.is_none());
+    assert_eq!(serde_json::to_value(&empty).unwrap()["totals"], totals);
     filter.after.as_mut().unwrap().id = Uuid::nil();
     assert_eq!(
         read(&pool, ids.org_id, ids.user_id, &filter)
@@ -384,7 +422,9 @@ async fn detailed_report_observes_revocation_after_wait_and_releases_on_cancel(p
             .await
             .unwrap();
             revoke.commit().await.unwrap();
-            assert!(reader.await.unwrap().unwrap().entries.is_empty());
+            let page = reader.await.unwrap().unwrap();
+            assert!(page.entries.is_empty());
+            assert_totals(&page, 0, 0, 0, 0);
         }
     }
     let mut tx = tokio::time::timeout(Duration::from_secs(5), reader_pool.begin())
@@ -439,13 +479,12 @@ async fn detailed_report_excludes_malformed_tenant_parents(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    assert!(
-        read(&pool, ids.org_id, ids.user_id, &query())
-            .await
-            .unwrap()
-            .entries
-            .is_empty()
-    );
+    assert_totals(&page, 1, 60, 60, 60);
+    let empty = read(&pool, ids.org_id, ids.user_id, &query())
+        .await
+        .unwrap();
+    assert!(empty.entries.is_empty());
+    assert_totals(&empty, 0, 0, 0, 0);
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -511,10 +550,11 @@ async fn detailed_report_preserves_billed_status_and_frozen_minutes_after_config
     .execute(&pool)
     .await
     .unwrap();
-    let rows = read(&pool, ids.org_id, ids.user_id, &query())
+    let page = read(&pool, ids.org_id, ids.user_id, &query())
         .await
-        .unwrap()
-        .entries;
+        .unwrap();
+    assert_totals(&page, 3, 51, 30, 0);
+    let rows = page.entries;
     let billed_row = rows.iter().find(|row| row.id == billed).unwrap();
     assert!(billed_row.billable);
     assert_eq!(billed_row.rounded_minutes, 0);
@@ -528,6 +568,71 @@ async fn detailed_report_preserves_billed_status_and_frozen_minutes_after_config
     let open_row = rows.iter().find(|row| row.id == open).unwrap();
     assert!(!open_row.billable);
     assert_eq!(open_row.rounded_minutes, 30);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn detailed_report_totals_round_each_entry_before_summing_billable_time(pool: PgPool) {
+    let ids = fixture(&pool).await;
+    let live = time_entry(&pool, &ids, EntryState::Open).await;
+    let frozen = time_entry(&pool, &ids, EntryState::Open).await;
+    let unbillable = time_entry(&pool, &ids, EntryState::Open).await;
+    sqlx::query!(
+        "UPDATE time_entries SET minutes=17,rounded_minutes=CASE WHEN id=$2 THEN 0 ELSE NULL END,
+         billable=(id<>$3) WHERE id=ANY($1)",
+        &[live, frozen, unbillable],
+        frozen,
+        unbillable
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE organizations SET round_minutes=15,round_dir='up' WHERE id=$1",
+        ids.org_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let page = read(&pool, ids.org_id, ids.user_id, &query())
+        .await
+        .unwrap();
+    assert_totals(&page, 3, 51, 60, 30);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn detailed_report_totals_use_bigint_and_count_zero_duration_entries(pool: PgPool) {
+    let ids = fixture(&pool).await;
+    let billed = time_entry(&pool, &ids, EntryState::Open).await;
+    let unbilled = time_entry(&pool, &ids, EntryState::Open).await;
+    sqlx::query!(
+        "UPDATE time_entries SET minutes=$2,rounded_minutes=$2,billable=(id=$3) WHERE id=ANY($1)",
+        &[billed, unbilled],
+        i32::MAX,
+        billed
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let page = read(&pool, ids.org_id, ids.user_id, &query())
+        .await
+        .unwrap();
+    let max = i64::from(i32::MAX);
+    assert_totals(&page, 2, max * 2, max * 2, max);
+
+    sqlx::query!(
+        "UPDATE time_entries SET minutes=0,rounded_minutes=0 WHERE org_id=$1",
+        ids.org_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let page = read(&pool, ids.org_id, ids.user_id, &query())
+        .await
+        .unwrap();
+    assert_eq!(page.entries.len(), 2);
+    assert_totals(&page, 2, 0, 0, 0);
 }
 
 #[sqlx::test(migrations = "./migrations")]

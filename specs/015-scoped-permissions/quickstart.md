@@ -1,5 +1,50 @@
 # Permission verification
 
+## Full-period ordinary time totals (T213–T215)
+
+`list_visible_time_report_entries` returns `totals` with integer `entry_count`,
+`total_minutes`, `rounded_minutes` and `billable_minutes`. The latter sums the
+effective rounded minutes of report-billable entries, without monetary fields.
+Totals use every authorized date/filter match before pagination; they remain
+nonzero on an exhausted cursor and zero on a genuinely empty matched set.
+The existing bounded page and totals share one scoped SQL statement/snapshot.
+Each request still reauthorizes and reads fresh data; no cross-page snapshot is
+promised. No picker discovery or permission widening follows from aggregate data.
+
+In a disposable PostgreSQL database with all migrations applied:
+
+```sh
+cargo test -p horae --features server --bin horae reports --config 'profile.dev.package.horae.debug=0' --config 'profile.dev.package.horae.strip="debuginfo"'
+cargo test -p horae --features server --bin horae server_fns::permissions::storage_tests:: --config 'profile.dev.package.horae.debug=0' --config 'profile.dev.package.horae.strip="debuginfo"'
+cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization --config 'profile.dev.package.horae.debug=0' --config 'profile.dev.package.horae.strip="debuginfo"'
+cargo sqlx prepare --workspace -- --features server --all-targets
+```
+
+After a disk-space compile failure and package-only artifact cleanup, RED `96539`
+executes eleven scoped cases: nine fail on absent totals; query/policy and actor
+denials pass. GREEN `34358` passes 136 report-related tests (44.87s; two existing
+manual measurements ignored), eleven storage tests (2.03s) and actual-session
+HTTP coverage (12.18s). Full SQLx preparation passes (89s), adding the new reader
+and three test descriptions and removing only the obsolete reader description.
+Offline all-target server Clippy (108s) and WASM Clippy (19.85s) pass with warnings
+denied (`91426`). Formatting `91995` updates only the two changed Rust test files.
+Final formatting CI `1692` checks 552 files with zero changes; diff checks pass.
+
+FR-006/007/008 map to identical scoped/filter sets for rows and sums; FR-010 to
+requester and active-session checks; FR-018 to empty/exhausted pages, 503-row
+pagination, duplicate/foreign filters, malformed tenant parents, own/managed/all
+scope unions, frozen zero and per-entry rounding, revoked authority and sums
+greater than `i32::MAX`. HTTP asserts exact payloads and full totals across 500/1
+pages, with foreign filters producing zeros. Independent static review found no
+material defect. The single-statement snapshot guarantee was inspected; no new
+forced concurrent-source-edit test is claimed. No browser or full Nix acceptance
+follows. UI, full picker discovery and financial-family reporting remain open.
+Rust/testing/async and simplicity guidance kept the implementation within the
+existing reader, typed DTO and SQLx macros, with no dependency, schema, CSS or
+new authorization abstraction. Spec Kit command skills are absent locally;
+the actual prerequisite script passes, and the existing contract/plan/tasks are
+updated without claiming unavailable commands were invoked.
+
 ## Multi-ID download queries (T210–T212)
 
 Both ordinary time download routes accept comma-separated `client_ids`,
@@ -124,7 +169,8 @@ work, not replaced by this increment or by its internal multi-ID reader tests.
 `list_visible_time_report_entries` is a canonical-policy session endpoint for
 nonfinancial report facts. Query lists narrow already authorized rows and do not
 grant candidate-discovery authority. Pages carry at most 500 rows and a bound
-requester; exhaust them before presenting complete-period data. Report rounding
+requester; exhaust them before presenting all detailed rows. T213–T215 adds
+full-period time totals separately from the page. Report rounding
 and billability are not the raw Timesheet fields. See `contracts/time-reports.md`.
 
 Against a disposable, fully migrated PostgreSQL database in the Nix dev shell:

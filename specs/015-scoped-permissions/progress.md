@@ -1,5 +1,64 @@
 # Scoped permissions investigation progress
 
+## 2026-10-05 — Full-period report totals
+
+- Previous goal turn was a verified wait on live Chrome client `81095` plus a
+  reconfirmation of the already recorded FR-033/B decision, not new code.
+  Revalidated clean published `93aaa68` and reused the existing worktree/#212.
+- The pending Chrome `browser_tabs` call timed out. Sent the client's `exit`
+  command without closing user tabs; no new authenticated Harvest evidence.
+  Reopened the official Member and detailed-report guides. They document
+  period-wide rounded reporting and archived/multiple selections, not the
+  unresolved restricted-actor picker cases.
+- Asked once whether Reports should include active, zero-record managed-project
+  participants; the Timesheet decision does not implicitly answer this separate
+  consumer. Historical candidates and filter narrowing remain separate questions.
+- Actual Spec Kit prerequisites pass; its command skills remain absent locally.
+  Read the constitution and Rust/testing/async/simplicity guidance. Closed the
+  full-period aggregate refinement and T213–T215 without inventing picker rules.
+  This is a prerequisite for exact paged reporting, not finished Reports UI.
+- RED `64711` is compiling the existing 503-entry keyset test with full-period
+  totals assertions, including the exhausted cursor. No result claimed yet.
+- `64711` ended before testing: LLVM exhausted the filesystem. Removed 4.3 GiB
+  of regenerable Horae-package artifacts only. Restart `89942` did not pick up
+  the attempted package-specific environment setting; explicitly interrupted it
+  (exit 130), cleaned its 1.1 MiB artifacts, and changed the ignored runner to
+  pass `profile.dev.package.horae.debug=0` through Cargo configuration. No
+  business data, dependency cache or source was deleted. Expanded scoped,
+  filtered, archived/frozen, revocation, tenant and large-sum assertions before
+  restarting RED. These infrastructure failures are not test results.
+- RED `96539` completes compilation and runs eleven focused cases: nine fail
+  specifically on missing `totals`, while invalid-query/policy and actor-denial
+  cases remain green. Implemented a single scoped SQL statement with totals
+  before the cursor, bounded text delivery and an empty-page sentinel. Extended
+  actual-session assertions across 501 rows and added per-entry live/frozen
+  rounding versus billable summation. Chrome client `81095` is now terminal after
+  interrupting the hung shutdown; no user tabs were closed.
+- GREEN `34358` passes 136 report-related regressions (44.87s; two existing
+  manual measurements ignored), including all twelve scoped report cases, eleven
+  permission-storage tests (2.03s) and the registered-session HTTP suite (12.18s).
+  Complete SQLx preparation is running in the same temporary cluster. Independent
+  static production/test review found no material defect. Snapshot coherence is
+  established by the single statement, not a newly forced concurrent-edit test.
+- `34358` finishes complete SQLx preparation (89s): four new descriptions replace
+  the obsolete detailed-reader description; the other three describe test-only
+  queries. Formatting `91995` updates only the two changed Rust test files.
+  Offline native/WASM Clippy runs as `91426`. GitHub confirms #212 open/draft at
+  `93aaa68` before publication. No schema, shared CSS or application data changed.
+- `91426` passes offline all-target server Clippy (108s) and WASM Clippy (19.85s),
+  warnings denied. T213–T215 are complete for full-period ordinary time totals;
+  T203 and full-feature acceptance remain open. Review confirms all new cache
+  descriptions match the changed SQL; no unrelated cache removals occurred.
+- Final formatting CI `1692` checks 552 files with zero changes; diff checks pass.
+  Publication target is the existing draft #212, unsigned and without merging.
+
+Next: continue T203 with canonical/legacy Reports resource separation and
+the ordinary consumer, resolving candidate eligibility before the full picker.
+The Reports zero-record question is pending; do not ask it again or infer its
+answer from Timesheet. Keep financial families, remaining writes, migration and
+full acceptance open. This increment is not a delivered Reports screen or a
+completed permissions feature.
+
 ## 2026-10-05 — Multi-ID download query transport
 
 - The previous goal turn made progress: verified scoped CSV delivery was

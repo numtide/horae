@@ -50,7 +50,18 @@ pub struct TimeReportEntry {
     pub notes: Option<String>,
 }
 
-/// A bounded result page, not a complete-period summary or filter candidate list.
+/// Exact time facts for the full authorized period/filter set, before pagination.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TimeReportTotals {
+    pub entry_count: i64,
+    pub total_minutes: i64,
+    pub rounded_minutes: i64,
+    /// Effective rounded minutes of billable entries, not a monetary amount.
+    pub billable_minutes: i64,
+}
+
+/// A bounded page and full-period totals from one snapshot, not filter candidates.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
@@ -61,4 +72,5 @@ pub struct TimeReportPage {
     pub requester: PermissionRequester,
     pub entries: Vec<TimeReportEntry>,
     pub next_after: Option<TimeReportCursor>,
+    pub totals: TimeReportTotals,
 }
