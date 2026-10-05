@@ -7,10 +7,13 @@ use crate::components::form::{FormGroup, Input};
 use crate::components::table::DataTable;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::time_report::{
-    TimeReportCursor, TimeReportGroupCursor, TimeReportGrouping, TimeReportQuery,
+    TimeReportCursor, TimeReportGroupCursor, TimeReportGroupQuery, TimeReportGrouping,
+    TimeReportQuery,
 };
 use crate::server_fns;
 
+#[path = "scoped/expanded.rs"]
+mod expanded;
 #[path = "scoped/grouped.rs"]
 mod grouped;
 
@@ -40,6 +43,44 @@ impl Selection {
         };
         *target = vec![self.id];
     }
+
+    fn apply_grouped(&self, query: &mut TimeReportGroupQuery) {
+        let target = match self.dimension {
+            TimeReportGrouping::Client => &mut query.client_ids,
+            TimeReportGrouping::Project => &mut query.project_ids,
+            TimeReportGrouping::Task => &mut query.task_ids,
+            TimeReportGrouping::Person => &mut query.user_ids,
+        };
+        *target = vec![self.id];
+    }
+
+    fn initial_dimension(&self) -> TimeReportGrouping {
+        match self.dimension {
+            TimeReportGrouping::Project => TimeReportGrouping::Task,
+            _ => TimeReportGrouping::Project,
+        }
+    }
+
+    fn includes_tab(&self, dimension: TimeReportGrouping) -> bool {
+        use TimeReportGrouping::*;
+        matches!(
+            (self.dimension, dimension),
+            (Client, Project | Task | Person)
+                | (Project, Task | Person)
+                | (Task, Project | Person)
+                | (Person, Project | Task)
+        )
+    }
+
+    fn expansion(&self, dimension: TimeReportGrouping) -> Option<TimeReportGrouping> {
+        use TimeReportGrouping::*;
+        match (self.dimension, dimension) {
+            (Client | Project, Task) => Some(Person),
+            (Client, Person) => Some(Project),
+            (Project, Person) => Some(Task),
+            _ => None,
+        }
+    }
 }
 
 fn period(from: &str, to: &str) -> Result<(NaiveDate, NaiveDate), &'static str> {
@@ -60,9 +101,10 @@ pub(super) fn ScopedReports(
     let mut from = use_signal(move || today.with_day(1).unwrap_or(today).to_string());
     let mut to = use_signal(move || today.to_string());
     let mut show_groups = use_signal(|| false);
-    let group_dimension = use_signal(|| TimeReportGrouping::Client);
+    let mut group_dimension = use_signal(|| TimeReportGrouping::Client);
+    let mut group_context = use_signal(|| None::<Selection>);
     let mut group_cursors = use_signal(|| vec![None::<TimeReportGroupCursor>]);
-    let mut selection = use_signal(|| None::<Selection>);
+    let mut selection = use_signal(Vec::<Selection>::new);
     let mut cursors = use_signal(|| vec![None::<TimeReportCursor>]);
     let mut page = use_resource(move || async move {
         let key = (
@@ -88,7 +130,7 @@ pub(super) fn ScopedReports(
                 after: key.2.clone(),
                 expected_requester: Some(requester),
             };
-            if let Some(selected) = &key.3 {
+            for selected in &key.3 {
                 selected.apply(&mut query);
             }
             let loaded = server_fns::list_visible_time_report_entries(query)
@@ -119,7 +161,7 @@ pub(super) fn ScopedReports(
         .and_then(Option::as_ref);
     let next = loaded.and_then(|page| page.next_after.clone());
     let download_query = loaded.and_then(|_| dates.ok()).map(|(date_from, date_to)| {
-        let filter = key.3.as_ref().map(|selected| format!("&{}={}", selected.filter_key(), selected.id)).unwrap_or_default();
+        let filter: String = key.3.iter().map(|selected| format!("&{}={}", selected.filter_key(), selected.id)).collect();
         format!("from={date_from}&to={date_to}&expected_org_id={}&expected_user_id={}&expected_policy=scoped{filter}", requester.org_id, requester.user_id)
     });
     let date_error_id = dates.err().map(|_| "report-date-error".to_string());
@@ -145,11 +187,15 @@ pub(super) fn ScopedReports(
         div { class: "segmented flex-wrap mb-6", role: "group", aria_label: "Report views",
             button { id: "report-view-time", r#type: "button",
                 class: if show_groups() { "segmented-item active" } else { "segmented-item" }, aria_pressed: show_groups(),
-                onclick: move |_| { selection.set(None); cursors.set(vec![None]); show_groups.set(true); }, "Time"
+                onclick: move |_| {
+                    selection.set(vec![]); cursors.set(vec![None]);
+                    if group_context().is_some() { group_dimension.set(TimeReportGrouping::Client); }
+                    group_context.set(None); group_cursors.set(vec![None]); show_groups.set(true);
+                }, "Time"
             }
             button { id: "report-view-detailed", r#type: "button",
                 class: if !show_groups() { "segmented-item active" } else { "segmented-item" }, aria_pressed: !show_groups(),
-                onclick: move |_| { selection.set(None); cursors.set(vec![None]); show_groups.set(false); }, "Detailed time"
+                onclick: move |_| { selection.set(vec![]); cursors.set(vec![None]); show_groups.set(false); }, "Detailed time"
             }
         }
         div { class: "flex flex-wrap items-end gap-4 mb-6",
@@ -169,8 +215,8 @@ pub(super) fn ScopedReports(
             p { id: "report-date-error", class: "alert alert-danger", role: "alert", "{message}" }
         } else if show_groups() {
             grouped::GroupedTimeReport {
-                requester, from, to, dimension: group_dimension, cursors: group_cursors,
-                on_detail: move |selected| { selection.set(Some(selected)); cursors.set(vec![None]); show_groups.set(false); }
+                requester, from, to, dimension: group_dimension, cursors: group_cursors, context: group_context,
+                on_detail: move |selected| { selection.set(selected); cursors.set(vec![None]); show_groups.set(false); }
             }
         } else if !ready {
             p { role: "status", class: "text-secondary", "Loading detailed report…" }
@@ -178,11 +224,11 @@ pub(super) fn ScopedReports(
             p { class: "alert alert-danger", role: "alert", "{message}" }
         }
         if let Some(loaded) = loaded {
-            if let Some(selected) = &key.3 {
+            if !key.3.is_empty() {
                 div { class: "flex flex-wrap items-center gap-3 mb-4",
-                    p { class: "m-0 wrap-anywhere", "{selected.name}" }
+                    for selected in &key.3 { p { class: "m-0 wrap-anywhere", "{selected.name}" } }
                     button { id: "report-clear-selection", r#type: "button", class: "btn btn-secondary btn-sm",
-                        onclick: move |_| { selection.set(None); cursors.set(vec![None]); }, "Clear selection"
+                        onclick: move |_| { selection.set(vec![]); cursors.set(vec![None]); }, "Clear selection"
                     }
                 }
             }

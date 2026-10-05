@@ -1,5 +1,50 @@
 # Scoped permissions investigation progress
 
+## 2026-10-05 — Individual time reports and breakdowns
+
+- Revalidated the worktree at published `2b59b58`; the grouped CSV backend is
+  already on draft #212. The interrupted RED run `89816` completed: 14 component
+  tests passed and the three missing-link/navigation tests failed as expected.
+  The disk-cleanup interruption was diagnostic progress, not a report change;
+  existing build artifacts and databases were retained.
+
+- Reopened Harvest's Time-report guide and ran Spec Kit prerequisites. Retained
+  the design handoff's shared controls and table framework; its Reports screen
+  depicts the custom builder, not ordinary Time results. Command skills remain
+  absent; no unavailable specify/analyze invocation is claimed.
+
+- Added bound grouped CSV links, all four individual report contexts, the
+  client's project navigation and all four documented client/project inline
+  breakdowns. Detail requests/downloads retain all selected dimensions; no
+  legacy catalogs, dependency, migration or CSS change. Added two navigation
+  glyphs to the existing icon component without changing existing glyphs.
+
+- Initial run `45847` passed all 17 component tests, with a deprecated signal
+  alias warning corrected afterward. Independent static review found no material
+  defect and requested late-response, paging and denial coverage for the child.
+  Added all four mappings, correct grouping cursors, collapse/late response,
+  identity mismatch, denial/retry/empty and pending-page/date-change remount
+  checks. `5872` passed all 18 tests without warnings in 67 seconds of build
+  time. Follow-up review found no material defect; its browser synchronization
+  recommendation is implemented with awaited context-filter links.
+
+- Full server/WASM build `26737` passed in 74.16 seconds. Native/all-target
+  and WASM Clippy `83106` passed with warnings denied (115 and 29.39 seconds).
+  Disposable Chromium `86289` passed real scoped reads/downloads, all four
+  individual reports and all four nested expansions. Desktop/mobile inspection
+  found no viewport overflow; the mobile capture cropped the lower breakdown
+  and transition timing made selection colors ambiguous. Updated only the
+  capture assertions: disabled screenshot animations, verified exactly one
+  selected group and captured the full nested page. Confirmation `79691` passed;
+  the final desktop/mobile captures in `.scratch/nested-reports-browser-evidence/`
+  were inspected together. Shared CSS and real data remain untouched. T221 is
+  complete for grouped navigation/delivery; full T203 is not.
+
+Next: format-check and publish this verified increment unsigned to draft #212,
+then resolve full report-picker candidate eligibility against Harvest before
+wiring the selectors. Financial families, protected project fields, approvals,
+policy activation and full cross-surface verification remain required. No merge.
+
 ## 2026-10-05 — Grouped CSV delivery
 
 - Revalidated clean `ca170c0` and completed the pending remote check: #212 is

@@ -28,16 +28,20 @@ Ordinary detailed Reports integration follows `contracts/time-reports.md`:
 - [x] T218 Verify real-component transitions and disposable-browser delivery, native/WASM lint and adversarial review; record full picker, grouping and financial-family work as open T203 dependencies.
 - [x] T219 Reproduce missing canonical client/project/task/person group aggregates with own/managed/all scope, exact rounding, duplicate labels, filters and bounded pages (FR-006/008/010/018).
 - [x] T220 Implement the typed grouped reader and authenticated endpoint using current time authority; verify registered-session payloads, revocation, tenant isolation, totals and pagination; refresh SQLx and run native/WASM checks and adversarial review.
-- [ ] T221 Connect grouped results, drilldown and equivalent grouped CSV/XLSX delivery to the bound ordinary consumer; verify browser transitions without legacy catalogs or financial leakage. Full picker and financial-family acceptance remains required by T203.
+- [x] T221 Connect grouped results, drilldown and equivalent grouped CSV/XLSX delivery to the bound ordinary consumer; verify browser transitions without legacy catalogs or financial leakage. Full picker and financial-family acceptance remains required by T203.
 
-T221 progress: the four grouping tabs, Hours-to-detail navigation and grouped
-XLSX delivery are connected and verified through disposable Chromium. Detailed
-CSV/XLSX retain the chosen entity, dates and requester. Grouped XLSX retains every
+T221 verification: the four grouping tabs, individual entity reports, documented
+client/project inline breakdowns and grouped CSV/XLSX delivery are connected and
+verified through disposable Chromium. Detailed CSV/XLSX retain every selected
+context/row/leaf ID, dates and requester. Grouped XLSX retains every
 original person/project pair for final authorization, with group and payload
 limits applied after aggregation. The grouped CSV backend is verified through
 the actual registered route in disposable Chromium, with bounded fragments,
-full-group authority, scope revocation and cancellation tests. Its bound UI link
-and nested entity-name reports remain pending; the task remains open.
+full-group authority, scope revocation and cancellation tests. Eighteen component
+tests include stale child responses, date-change remounts, identity mismatch and
+denial; browser tests cover all four contexts and expansions with real downloads.
+Native/all-target and WASM lint passed. This does not close complete ordinary
+Time parity, full picker eligibility, financial fields or policy activation.
 
 These tasks do not close T014/T015 or the full Reports parity surface alone.
 

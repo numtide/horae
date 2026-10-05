@@ -134,8 +134,39 @@ The grouped resource identity includes dates, dimension and cursor. A date
 change resets both page stacks and retains the selected grouping; every request
 change hides old rows and totals until its matching response is ready. Treat
 identity mismatch and access failure as non-data states, with no legacy fallback.
-Group entity-name navigation and grouped exports remain separate required work;
-plain names must not imply that the nested reports already exist.
+Group entity-name navigation and grouped exports have their own bound requests;
+plain names must not imply an unimplemented navigation action.
+
+#### Individual time reports and inline breakdowns
+
+The Time-report guide, rechecked 2026-10-05, distinguishes entity names from
+hours: root names open individual reports, whereas Hours opens the corresponding
+entries. Client reports offer Projects/Tasks/Team; project reports Tasks/Team;
+task reports Projects/Team; person reports Projects/Tasks. A client's project
+name opens that project's report. Preserve the selected period and requester;
+reset the cursor whenever context or grouping changes. Returning to Time clears
+the context, not the requester. The Detailed report action carries the current
+context without an extra row selection.
+
+Client task rows expand to people and client team rows to projects. Project task
+rows expand to people and project team rows to tasks. Each expansion adds its
+row ID to the context filter, retaining both dimensions. Its Hours action adds
+the leaf ID, carrying all three filters to detailed reads and both downloads.
+Allow one expanded row at a time, with native buttons, explicit expanded/control
+semantics, independent bounded cursor pages and error/retry/empty states. A late
+response after collapse or a period/context change cannot restore that child.
+An identity mismatch is an error, never a replacement requester.
+
+Resource keys include every selected context/filter, date, grouping and cursor.
+Only exact ready responses expose results and links. Grouped CSV and XLSX links
+include the viewed grouping, period, context, requester and scoped policy, but
+no cursor. Do not fetch legacy catalogs to label or populate these reports.
+
+This implements the documented ordinary time navigation, not financial fields,
+full project analysis, active-only filtering, saved/custom reports, complete
+filter candidate discovery or policy activation. The guide does not specify
+deeper name-navigation semantics inside task/person reports; keep those row
+names plain rather than silently inventing a broader or narrower report.
 
 Resolve a single authenticated report-access response before mounting any report
 or catalog resource. Reuse the export authority gate to read policy, active

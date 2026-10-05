@@ -62,10 +62,12 @@ pub mod badge;
 #[allow(dead_code)]
 #[path = "../src/components/form.rs"]
 pub mod form;
+#[path = "../src/components/icons.rs"]
+pub mod icons;
 #[path = "../src/components/table.rs"]
 pub mod table;
 mod components {
-    pub use super::{badge, form, table};
+    pub use super::{badge, form, icons, table};
 }
 #[path = "../src/pages/reports.rs"]
 mod reports;
@@ -295,6 +297,7 @@ fn assert_no_results(dom: &VirtualDom) {
         "Full-period totals",
         "/api/reports/export/",
         "/api/reports/time/grouped/xlsx",
+        "/api/reports/time/grouped/csv",
         "<tbody",
     ] {
         assert!(!html.contains(hidden), "stale {hidden}: {html}");
@@ -350,6 +353,7 @@ async fn grouped_tabs_reauthorize_and_hour_drilldown_binds_detail_and_download_f
     let html = dioxus::ssr::render(&dom);
     assert!(html.contains("503.00") && html.contains("7.00") && html.contains("6.00"));
     assert!(html.contains("/api/reports/time/grouped/xlsx?group_by=client"));
+    assert!(html.contains("/api/reports/time/grouped/csv?group_by=client"));
     assert!(html.contains(&format!("expected_user_id={}", allowed.requester.user_id)));
     assert!(!html.contains("after="));
     assert!(
@@ -383,6 +387,298 @@ async fn grouped_tabs_reauthorize_and_hour_drilldown_binds_detail_and_download_f
     );
     assert!(probe.legacy_reads.borrow().is_empty());
     assert_eq!(probe.identity_reads.get(), 0);
+}
+
+#[tokio::test]
+async fn individual_reports_use_the_documented_tabs_and_bind_grouped_downloads() {
+    use time_report::TimeReportGrouping as Grouping;
+    for (dimension, key, available, absent) in [
+        (
+            Grouping::Client,
+            "client",
+            vec!["project", "task", "person"],
+            vec!["client"],
+        ),
+        (
+            Grouping::Project,
+            "project",
+            vec!["task", "person"],
+            vec!["client", "project"],
+        ),
+        (
+            Grouping::Task,
+            "task",
+            vec!["project", "person"],
+            vec!["client", "task"],
+        ),
+        (
+            Grouping::Person,
+            "person",
+            vec!["project", "task"],
+            vec!["client", "person"],
+        ),
+    ] {
+        let probe = Probe::default();
+        let own = queue(&probe.access);
+        let first = queue(&probe.reports);
+        let allowed = access(TimeReportPolicy::Scoped);
+        let mut dom = mount(&probe);
+        own.send(Ok(allowed)).unwrap();
+        settle(&mut dom);
+        first.send(Ok(report(allowed, "Old project"))).unwrap();
+        settle(&mut dom);
+        let root = queue(&probe.groups);
+        click(&mut dom, "report-view-time");
+        let page = grouped(allowed, "<Individual & report>");
+        let entity = page.groups[0].id;
+        root.send(Ok(page.clone())).unwrap();
+        settle(&mut dom);
+        if dimension != Grouping::Client {
+            let changed = queue(&probe.groups);
+            click(&mut dom, &format!("report-group-{key}"));
+            changed.send(Ok(page)).unwrap();
+            settle(&mut dom);
+        }
+        let nested = queue(&probe.groups);
+        click(&mut dom, &format!("report-name-{entity}"));
+        assert_no_results(&dom);
+        let query = probe.group_queries.borrow().last().unwrap().clone();
+        let selected_ids = match dimension {
+            Grouping::Client => query.client_ids,
+            Grouping::Project => query.project_ids,
+            Grouping::Task => query.task_ids,
+            Grouping::Person => query.user_ids,
+        };
+        assert_eq!(selected_ids, vec![entity]);
+        assert!(query.after.is_none());
+        assert_eq!(query.expected_requester, Some(allowed.requester));
+        nested.send(Ok(grouped(allowed, "Nested result"))).unwrap();
+        settle(&mut dom);
+        let html = dioxus::ssr::render(&dom);
+        assert!(html.contains("&#60;Individual &#38; report&#62;"));
+        let filter = if key == "person" { "user" } else { key };
+        assert_eq!(html.matches(&format!("{filter}_ids={entity}")).count(), 2);
+        for tab in available {
+            assert!(html.contains(&format!("id=\"report-group-{tab}\"")));
+        }
+        for tab in absent {
+            assert!(!html.contains(&format!("id=\"report-group-{tab}\"")));
+        }
+        let changed = queue(&probe.groups);
+        input(&mut dom, "report-to", "2099-12-31");
+        assert_no_results(&dom);
+        changed
+            .send(Ok(grouped(allowed, "Updated period")))
+            .unwrap();
+        settle(&mut dom);
+        let root = queue(&probe.groups);
+        click(&mut dom, "report-group-root");
+        let query = probe.group_queries.borrow().last().unwrap().clone();
+        assert!(
+            query.client_ids.is_empty()
+                && query.project_ids.is_empty()
+                && query.task_ids.is_empty()
+                && query.user_ids.is_empty()
+        );
+        root.send(Ok(grouped(allowed, "Root again"))).unwrap();
+        settle(&mut dom);
+    }
+}
+
+#[tokio::test]
+async fn project_task_expansion_keeps_every_filter_in_detailed_requests_and_downloads() {
+    let probe = Probe::default();
+    let own = queue(&probe.access);
+    let first = queue(&probe.reports);
+    let allowed = access(TimeReportPolicy::Scoped);
+    let mut dom = mount(&probe);
+    own.send(Ok(allowed)).unwrap();
+    settle(&mut dom);
+    first.send(Ok(report(allowed, "Old project"))).unwrap();
+    settle(&mut dom);
+    let clients = queue(&probe.groups);
+    click(&mut dom, "report-view-time");
+    clients.send(Ok(grouped(allowed, "Client"))).unwrap();
+    settle(&mut dom);
+    let projects = queue(&probe.groups);
+    click(&mut dom, "report-group-project");
+    let project = grouped(allowed, "Project");
+    let project_id = project.groups[0].id;
+    projects.send(Ok(project)).unwrap();
+    settle(&mut dom);
+    let tasks = queue(&probe.groups);
+    click(&mut dom, &format!("report-name-{project_id}"));
+    let task = grouped(allowed, "Task");
+    let task_id = task.groups[0].id;
+    tasks.send(Ok(task)).unwrap();
+    settle(&mut dom);
+    let people = queue(&probe.groups);
+    click(&mut dom, &format!("report-expand-{task_id}"));
+    let query = probe.group_queries.borrow().last().unwrap().clone();
+    assert_eq!(query.group_by, time_report::TimeReportGrouping::Person);
+    assert_eq!(query.project_ids, vec![project_id]);
+    assert_eq!(query.task_ids, vec![task_id]);
+    let person = grouped(allowed, "<Person & name>");
+    let person_id = person.groups[0].id;
+    people.send(Ok(person)).unwrap();
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains("&#60;Person &#38; name&#62;"));
+    let detail = queue(&probe.reports);
+    click(&mut dom, &format!("report-expanded-hours-{person_id}"));
+    let query = probe.queries.borrow().last().unwrap().clone();
+    assert_eq!(query.project_ids, vec![project_id]);
+    assert_eq!(query.task_ids, vec![task_id]);
+    assert_eq!(query.user_ids, vec![person_id]);
+    assert_eq!(query.expected_requester, Some(allowed.requester));
+    detail.send(Ok(report(allowed, "Scoped detail"))).unwrap();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    for filter in [
+        format!("project_ids={project_id}"),
+        format!("task_ids={task_id}"),
+        format!("user_ids={person_id}"),
+    ] {
+        assert_eq!(html.matches(&filter).count(), 2);
+    }
+}
+
+#[tokio::test]
+async fn nested_breakdowns_bind_all_contexts_and_discard_late_or_mismatched_pages() {
+    use time_report::TimeReportGrouping as Grouping;
+    for (root, tab, leaf_dimension) in [
+        ("client", "task", Grouping::Person),
+        ("client", "person", Grouping::Project),
+        ("project", "task", Grouping::Person),
+        ("project", "person", Grouping::Task),
+    ] {
+        let probe = Probe::default();
+        let own = queue(&probe.access);
+        let first = queue(&probe.reports);
+        let allowed = access(TimeReportPolicy::Scoped);
+        let mut dom = mount(&probe);
+        own.send(Ok(allowed)).unwrap();
+        settle(&mut dom);
+        first.send(Ok(report(allowed, "Initial report"))).unwrap();
+        settle(&mut dom);
+        let response = queue(&probe.groups);
+        click(&mut dom, "report-view-time");
+        let parent = grouped(allowed, "Parent context");
+        let parent_id = parent.groups[0].id;
+        response.send(Ok(parent.clone())).unwrap();
+        settle(&mut dom);
+        if root == "project" {
+            let response = queue(&probe.groups);
+            click(&mut dom, "report-group-project");
+            response.send(Ok(parent)).unwrap();
+            settle(&mut dom);
+        }
+        let response = queue(&probe.groups);
+        click(&mut dom, &format!("report-name-{parent_id}"));
+        let row = grouped(allowed, "Expandable row");
+        let row_id = row.groups[0].id;
+        response.send(Ok(row.clone())).unwrap();
+        settle(&mut dom);
+        // Client reports start at Projects, project reports at Tasks.
+        if root == "client" || tab != "task" {
+            let response = queue(&probe.groups);
+            click(&mut dom, &format!("report-group-{tab}"));
+            response.send(Ok(row)).unwrap();
+            settle(&mut dom);
+        }
+        let response = queue(&probe.groups);
+        click(&mut dom, &format!("report-expand-{row_id}"));
+        let query = probe.group_queries.borrow().last().unwrap().clone();
+        assert_eq!(query.group_by, leaf_dimension);
+        assert_eq!(query.expected_requester, Some(allowed.requester));
+        assert_eq!(
+            if root == "client" {
+                &query.client_ids
+            } else {
+                &query.project_ids
+            },
+            &vec![parent_id]
+        );
+        assert_eq!(
+            if tab == "task" {
+                &query.task_ids
+            } else {
+                &query.user_ids
+            },
+            &vec![row_id]
+        );
+        let mut leaf = grouped(allowed, "Private breakdown label");
+        leaf.next_after.as_mut().unwrap().group_by = leaf_dimension;
+        response.send(Ok(leaf.clone())).unwrap();
+        settle(&mut dom);
+        assert!(dioxus::ssr::render(&dom).contains("Private breakdown label"));
+        let late = queue(&probe.groups);
+        click(&mut dom, "report-expanded-next");
+        assert!(!dioxus::ssr::render(&dom).contains("Private breakdown label"));
+        let mut expected = query.clone();
+        expected.after = leaf.next_after.clone();
+        assert_eq!(probe.group_queries.borrow().last(), Some(&expected));
+        click(&mut dom, &format!("report-expand-{row_id}"));
+        let _ = late.send(Ok(leaf));
+        settle(&mut dom);
+        assert!(!dioxus::ssr::render(&dom).contains("Private breakdown label"));
+        let response = queue(&probe.groups);
+        click(&mut dom, &format!("report-expand-{row_id}"));
+        assert_eq!(probe.group_queries.borrow().last(), Some(&query));
+        response
+            .send(Ok(grouped(
+                access(TimeReportPolicy::Scoped),
+                "Wrong session label",
+            )))
+            .unwrap();
+        settle(&mut dom);
+        let html = dioxus::ssr::render(&dom);
+        assert!(html.contains("Your session changed"));
+        assert!(!html.contains("Wrong session label"));
+        let response = queue(&probe.groups);
+        click(&mut dom, "report-expanded-refresh");
+        response.send(Err(ServerFnError::new("denied"))).unwrap();
+        settle(&mut dom);
+        assert!(dioxus::ssr::render(&dom).contains("Could not load the breakdown"));
+        let response = queue(&probe.groups);
+        click(&mut dom, "report-expanded-refresh");
+        let mut empty = grouped(allowed, "Hidden empty label");
+        empty.groups.clear();
+        empty.next_after = None;
+        response.send(Ok(empty)).unwrap();
+        settle(&mut dom);
+        assert!(dioxus::ssr::render(&dom).contains("No time in this breakdown"));
+        let response = queue(&probe.groups);
+        click(&mut dom, "report-expanded-refresh");
+        let mut leaf = grouped(allowed, "Old-period breakdown");
+        leaf.next_after.as_mut().unwrap().group_by = leaf_dimension;
+        response.send(Ok(leaf.clone())).unwrap();
+        settle(&mut dom);
+        let late = queue(&probe.groups);
+        click(&mut dom, "report-expanded-next");
+        let parent_response = queue(&probe.groups);
+        input(&mut dom, "report-to", "2099-12-31");
+        assert_no_results(&dom);
+        let _ = late.send(Ok(leaf));
+        settle(&mut dom);
+        assert!(!dioxus::ssr::render(&dom).contains("Old-period breakdown"));
+        let response = queue(&probe.groups);
+        let mut row = grouped(allowed, "Current-period row");
+        row.groups[0].id = row_id;
+        parent_response.send(Ok(row)).unwrap();
+        settle(&mut dom);
+        let current_query = probe.group_queries.borrow().last().unwrap().clone();
+        let mut expected = query.clone();
+        expected.date_to = "2099-12-31".parse().unwrap();
+        assert_eq!(current_query, expected);
+        response
+            .send(Ok(grouped(allowed, "Current-period breakdown")))
+            .unwrap();
+        settle(&mut dom);
+        let html = dioxus::ssr::render(&dom);
+        assert!(html.contains("Current-period breakdown"));
+        assert!(!html.contains("Old-period breakdown"));
+        assert!(probe.legacy_reads.borrow().is_empty());
+    }
 }
 
 #[tokio::test]

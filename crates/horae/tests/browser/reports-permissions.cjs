@@ -116,7 +116,7 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
       await expect(page.locator('tbody tr td:nth-child(3)')).toHaveText('503.00');
       await expect(page.locator('tbody tr td:nth-child(4)')).toHaveText('0.00');
       await expect(page.locator('tbody')).not.toContainText('Private colleague');
-      await expect(page.getByRole('link', { name: 'Export CSV', exact: true })).toHaveCount(0);
+      await expect(page.getByRole('link', { name: 'Export CSV', exact: true })).toBeVisible();
       const groupedLink = await page.getByRole('link', { name: 'Export XLSX', exact: true }).getAttribute('href');
       const groupedUrl = new URL(groupedLink, base);
       assert.equal(groupedUrl.pathname, '/api/reports/time/grouped/xlsx');
@@ -128,9 +128,9 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
       assert.equal(workbook.status(), 200);
       assert.ok((await workbook.body()).subarray(0, 2).equals(Buffer.from('PK')));
       filteredLinks.push(groupedLink);
-      // Exercise the registered CSV endpoint before exposing it in the UI.
-      const groupedCsv = new URL(groupedUrl.href);
-      groupedCsv.pathname = '/api/reports/time/grouped/csv';
+      const groupedCsv = new URL(await page.getByRole('link', { name: 'Export CSV', exact: true }).getAttribute('href'), base);
+      assert.equal(groupedCsv.pathname, '/api/reports/time/grouped/csv');
+      assert.equal(groupedCsv.search, groupedUrl.search);
       const download = await context.request.get(groupedCsv.href);
       assert.equal(download.status(), 200);
       assert.equal(download.headers()['content-type'], 'text/csv');
@@ -202,7 +202,81 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
       const cleared = new URL(await page.getByRole('link', { name: 'Export CSV', exact: true }).getAttribute('href'), base);
       assert.equal(cleared.searchParams.has(filter), false);
     }
-    await page.locator('#report-view-time').click();
+    const roots = [
+      ['client', client, 'client_ids', ['project', 'task', 'person']],
+      ['project', project, 'project_ids', ['task', 'person']],
+      ['task', task, 'task_ids', ['project', 'person']],
+      ['person', actor.id, 'user_ids', ['project', 'task']],
+    ];
+    const openIndividual = async (dimension, entity) => {
+      await page.locator('#report-view-time').click();
+      await page.locator(`#report-group-${dimension}`).click();
+      await expect(page.locator(`#report-name-${entity}`)).toBeVisible();
+      await page.locator(`#report-name-${entity}`).focus();
+      await page.keyboard.press('Enter');
+      await expect(page.locator('#report-group-root')).toBeVisible();
+      await expect(page.locator('#report-group-detail')).toBeVisible();
+    };
+    const checkDownloads = async (filters, grouped) => {
+      for (const format of ['CSV', 'XLSX']) {
+        for (const [filter, entity] of Object.entries(filters)) {
+          await expect(page.getByRole('link', { name: `Export ${format}`, exact: true })).toHaveAttribute('href', new RegExp(`${filter}=${entity}`));
+        }
+        const link = await page.getByRole('link', { name: `Export ${format}`, exact: true }).getAttribute('href');
+        const url = new URL(link, base);
+        assert.equal(url.pathname, grouped ? `/api/reports/time/grouped/${format.toLowerCase()}` : `/api/reports/export/${format.toLowerCase()}`);
+        for (const filter of ['client_ids', 'project_ids', 'task_ids', 'user_ids']) {
+          assert.equal(url.searchParams.get(filter), filters[filter] || null);
+        }
+        assert.equal(url.searchParams.get('from'), date);
+        assert.equal(url.searchParams.get('to'), date);
+        assert.equal(url.searchParams.get('expected_user_id'), actor.id);
+        assert.equal(url.searchParams.get('expected_policy'), 'scoped');
+        assert.equal(url.searchParams.has('after'), false);
+        const response = await context.request.get(url.href);
+        assert.equal(response.status(), 200);
+        if (format === 'CSV') {
+          const body = await response.text();
+          assert.ok(!body.includes('Private colleague') && !body.includes('Private report note'));
+          if (grouped) assert.ok(body.endsWith(',503.00,503.00,0.00\n'));
+          else assert.equal(body.match(/<Report & note>/g).length, 503);
+        } else assert.ok((await response.body()).subarray(0, 2).equals(Buffer.from('PK')));
+        filteredLinks.push(link);
+      }
+    };
+    for (const [dimension, entity, filter, tabs] of roots) {
+      await openIndividual(dimension, entity);
+      for (const tab of ['client', 'project', 'task', 'person']) {
+        await expect(page.locator(`#report-group-${tab}`)).toHaveCount(tabs.includes(tab) ? 1 : 0);
+      }
+      await checkDownloads({ [filter]: entity }, true);
+      await page.locator('#report-group-detail').click();
+      await expect(page.locator('tbody tr')).toHaveCount(500);
+      await checkDownloads({ [filter]: entity }, false);
+      if (dimension !== 'client' && dimension !== 'project') continue;
+      for (const [tab, row, leaf, leafFilter] of [
+        ['task', task, actor.id, 'user_ids'],
+        ['person', actor.id, dimension === 'client' ? project : task, dimension === 'client' ? 'project_ids' : 'task_ids'],
+      ]) {
+        await openIndividual(dimension, entity);
+        await page.locator(`#report-group-${tab}`).click();
+        await expect(page.locator(`#report-expand-${row}`)).toHaveAttribute('aria-expanded', 'false');
+        await page.locator(`#report-expand-${row}`).focus();
+        await page.keyboard.press('Enter');
+        await expect(page.locator(`#report-expanded-hours-${leaf}`)).toHaveText('503.00');
+        await expect(page.locator(`#report-expand-${row}`)).toHaveAttribute('aria-expanded', 'true');
+        await expect(page.locator(`#report-breakdown-${row}`)).not.toContainText('Private colleague');
+        await page.locator(`#report-expanded-hours-${leaf}`).click();
+        await expect(page.locator('tbody tr')).toHaveCount(500);
+        await checkDownloads({ [filter]: entity, [tab === 'task' ? 'task_ids' : 'user_ids']: row, [leafFilter]: leaf }, false);
+      }
+    }
+    await openIndividual('client', client);
+    await page.locator(`#report-name-${project}`).click();
+    await expect(page.locator('#report-group-detail')).toBeVisible();
+    await checkDownloads({ project_ids: project }, true);
+    await page.locator('#report-group-root').click();
+    await page.locator('#report-group-person').click();
     await expect(page.locator(`#report-hours-${actor.id}`)).toBeVisible();
     await page.locator('#report-from').fill('2040-01-01');
     await expect(page.locator('#report-group-refresh')).toBeEnabled();
@@ -240,28 +314,40 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
       assert.ok(await page.locator('#report-from').evaluate(el => getComputedStyle(el).getPropertyValue('--color-bg').trim()), 'bundle must include theme tokens');
       if (process.env.HORAE_BROWSER_ARTIFACTS) {
         mkdirSync(process.env.HORAE_BROWSER_ARTIFACTS, { recursive: true });
-        await page.screenshot({ path: join(process.env.HORAE_BROWSER_ARTIFACTS, `reports-${width}-${theme}.png`) });
+        await page.screenshot({ animations: 'disabled', path: join(process.env.HORAE_BROWSER_ARTIFACTS, `reports-${width}-${theme}.png`) });
       }
       await page.locator('#report-view-time').click();
       await page.locator('#report-group-project').click();
       await expect(page.locator(`#report-hours-${project}`)).toHaveText('503.00');
+      await expect(page.locator('[aria-label="Group time by"] [aria-pressed="true"]')).toHaveCount(1);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, 'grouped viewport must not overflow');
-      const nameLines = await page.locator('tbody tr:first-child td:first-child').evaluate(cell => {
+      const nameLines = await page.locator(`#report-name-${project}`).evaluate(button => {
         const range = document.createRange();
-        range.setStart(cell.firstChild, 0);
-        range.setEnd(cell.firstChild, 6);
+        range.setStart(button.firstChild, 0);
+        range.setEnd(button.firstChild, 6);
         return range.getClientRects().length;
       });
       assert.equal(nameLines, 1, 'group names must not break within individual words');
       await page.locator(`#report-hours-${project}`).focus();
       await expect(page.locator(`#report-hours-${project}`)).toBeFocused();
       if (process.env.HORAE_BROWSER_ARTIFACTS) {
-        await page.screenshot({ path: join(process.env.HORAE_BROWSER_ARTIFACTS, `report-groups-${width}-${theme}.png`) });
+        await page.screenshot({ animations: 'disabled', path: join(process.env.HORAE_BROWSER_ARTIFACTS, `report-groups-${width}-${theme}.png`) });
+      }
+      await page.locator(`#report-name-${project}`).click();
+      await expect(page.locator(`#report-expand-${task}`)).toBeVisible();
+      await page.locator(`#report-expand-${task}`).click();
+      await expect(page.locator(`#report-expanded-hours-${actor.id}`)).toHaveText('503.00');
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, 'nested viewport must not overflow');
+      await page.locator(`#report-expand-${task}`).focus();
+      await expect(page.locator(`#report-expand-${task}`)).toBeFocused();
+      if (process.env.HORAE_BROWSER_ARTIFACTS) {
+        await page.screenshot({ fullPage: true, animations: 'disabled', path: join(process.env.HORAE_BROWSER_ARTIFACTS, `report-nested-${width}-${theme}.png`) });
       }
       await page.locator('#report-view-detailed').click();
       await expect(page.locator('tbody tr')).toHaveCount(500);
     }
     await page.locator('#report-view-time').click();
+    await page.locator('#report-group-project').click();
     await expect(page.locator(`#report-hours-${project}`)).toBeVisible();
     // No grant change is needed: even an Admin's captured scoped link must not
     // adopt the wider policy-0 scope after the mode changes.
@@ -284,7 +370,7 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
     await expect(page.locator('tbody')).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Export CSV', exact: true })).toHaveCount(0);
     assert.deepEqual(errors, []);
-    console.log(`PASS: scoped report paging, totals, four group drilldowns, filtered exports, stale/invalid states and policy binding; Chromium ${browser.version()}`);
+    console.log(`PASS: scoped report paging, totals, four individual reports, four nested breakdowns, filtered exports, stale/invalid states and policy binding; Chromium ${browser.version()}`);
   } finally {
     if (release) release();
     await page.unrouteAll({ behavior: 'wait' });
