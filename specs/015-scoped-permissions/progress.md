@@ -1,5 +1,68 @@
 # Scoped permissions investigation progress
 
+## 2026-10-05 — Scoped group aggregates
+
+- Previous goal turn made implementation progress: published `7266abb` to draft
+  #212 and verified remote HEAD; its component/browser/native/WASM checks passed.
+  Revalidated a clean worktree before this increment.
+- Reopened Harvest's current permission, contractor, profitability and Time
+  report guides. Financial report families require distinct projections and
+  missing domain sources, not relabeling the legacy monetary time grouping.
+  Recorded dependencies without weakening C02 or assuming old administrator-only
+  wording overrides the approved custom grants. Ordinary four-dimension grouping
+  remains independent of the unanswered picker candidate question.
+- Actual Spec Kit prerequisites pass; command skills remain absent. Added the
+  grouped reader contract and T219–T221. Independent contract/DTO review found no
+  blocking decision; it calls out 501-group probing, entry-versus-group counts,
+  duplicate labels, zero-minute groups and totals before the cursor.
+- RED `89604` completed: all three initial tests failed on the unavailable
+  grouped-reader stub. GREEN `48973` then passed six SQLx tests against the real
+  grouped query: four dimensions, own/managed/all union, duplicate labels,
+  500/3 pagination, zero-minute groups, full-period totals, frozen rounding,
+  archived history, tenant-qualified parents and malformed input.
+- Following the requested cleanup, rechecked free disk space (187 GiB) and
+  resumed this existing increment. Added deterministic revocation/cancellation
+  and actor-deactivation waits, bigint sums, registered-session HTTP checks and
+  all-five-dimension filter combinations. `73292` is running report regressions,
+  storage checks, actual HTTP and SQLx preparation on disposable PostgreSQL.
+- Independent static review found no material authorization, tenant or paging
+  defect. Suggested explicit per-entry-before-group rounding and varied-label
+  C-order cursor coverage; these checks are next. No grouped UI/export acceptance
+  or full-feature completion is claimed. T221 and T203 remain open.
+- `73292` passed 181 report-related regressions (three manual measurements
+  ignored) and all eleven storage checks. HTTP caught a test expectation error:
+  Dioxus 0.7.9 maps argument-decoding errors to 500 before invoking the handler
+  (`ServerFnError` status conversion in fullstack-core and `magic.rs`). Kept
+  strict typed rejection and recorded the framework limitation; domain-invalid
+  ranges/cursors still require 400. No framework-wide patch is included here.
+  Added both suggested rounding and C-cursor tests before the final rerun.
+- Final disposable run `18050` passed 183 report-related regressions (three
+  pre-existing manual measurements ignored), eleven storage checks and the
+  registered-session HTTP suite (13.45 seconds), including all new grouped
+  cases. SQLx preparation with `--workspace --features server --all-targets`
+  completed successfully and added eight query cache entries without removing
+  existing ones. Formatting CI `26220` checked 557 files with zero changes.
+- The final read-only review also found no material issue in the extra tests
+  or the documented decoding limitation. Native/all-target and WASM Clippy are
+  running in `58545`; no full `nix flake check` or full-feature acceptance claimed.
+- `58545` passed native/all-target Clippy (98 seconds), then WASM correctly
+  reported the five not-yet-consumed grouped DTOs. Followed the existing
+  `models/project_managers.rs` pattern with non-server `expect(dead_code)` on
+  the query/page roots, explicitly tied to T221. The initial attempt covered
+  nested types too; `75440` correctly rejected those redundant expectations,
+  which were removed. These annotations do not relax
+  authorization or hide native warnings; remove them when wiring the consumer
+  (fulfilled expectations then become lint failures). No executable server or
+  SQL changed after the passing tests/cache/native lint.
+- Final WASM Clippy `44150` passed (15.55 seconds), warnings denied. T219/T220
+  are complete; T221/T203 and full activation remain explicitly open.
+
+Next: publish the verified reader increment unsigned to existing
+draft #212 without merging, then implement T221's bound grouped consumer,
+drilldown and equivalent exports against `design/`. Full pickers and financial
+families remain T203 requirements. Keep unanswered candidate-policy decisions
+distinct from the confirmed Timesheet choice; the implementation goal stays open.
+
 ## 2026-10-05 — Reports browser verification and disk recovery
 
 - Previous turn made concrete maintenance progress at the user's request: removed

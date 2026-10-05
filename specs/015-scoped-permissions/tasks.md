@@ -26,6 +26,9 @@ Ordinary detailed Reports integration follows `contracts/time-reports.md`:
 - [x] T216 Reproduce report/catalog reads before access resolution using the actual Reports component; cover canonical/legacy denial, pending, error and retry states (FR-006/008/010/018).
 - [x] T217 Separate policy consumers and connect bounded ordinary time rows, full-period totals and requester-bound downloads; preserve binding and hide stale results across date/page/permission refreshes.
 - [x] T218 Verify real-component transitions and disposable-browser delivery, native/WASM lint and adversarial review; record full picker, grouping and financial-family work as open T203 dependencies.
+- [x] T219 Reproduce missing canonical client/project/task/person group aggregates with own/managed/all scope, exact rounding, duplicate labels, filters and bounded pages (FR-006/008/010/018).
+- [x] T220 Implement the typed grouped reader and authenticated endpoint using current time authority; verify registered-session payloads, revocation, tenant isolation, totals and pagination; refresh SQLx and run native/WASM checks and adversarial review.
+- [ ] T221 Connect grouped results, drilldown and equivalent grouped CSV/XLSX delivery to the bound ordinary consumer; verify browser transitions without legacy catalogs or financial leakage. Full picker and financial-family acceptance remains required by T203.
 
 These tasks do not close T014/T015 or the full Reports parity surface alone.
 

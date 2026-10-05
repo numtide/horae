@@ -1,5 +1,7 @@
 //! Ordinary time reports share entry scope, not directory or financial authority.
 
+pub(crate) mod groups;
+
 use horae_core::permissions::catalog::Permission;
 use sqlx::PgPool;
 use uuid::Uuid;

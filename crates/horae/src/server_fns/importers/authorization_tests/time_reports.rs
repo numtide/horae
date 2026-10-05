@@ -6,6 +6,7 @@ use horae_core::types::EntryState;
 use std::io::{Cursor, Read};
 
 mod export_filters;
+mod groups;
 
 async fn xlsx(api: &Api, cookie: Option<&str>, filter: &str) -> reqwest::Response {
     download(api, cookie, "xlsx", filter).await
@@ -391,4 +392,5 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         }
     }
     export_filters::check(pool, api).await;
+    groups::check(pool, api).await;
 }

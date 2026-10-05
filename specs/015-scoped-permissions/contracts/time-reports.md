@@ -74,6 +74,53 @@ ordinary UI, complete pickers and matching delivery paths are connected.
 
 ## Required follow-through
 
+### Grouped ordinary time
+
+The [Time report guide](https://support.getharvest.com/hc/en-us/articles/360048181692-Time-report),
+rechecked 2026-10-05, defines client, project, task and teammate groupings. Only
+entities with recorded time in the selected period occur in these result tabs;
+this does not settle filter-candidate discovery. Its hours respect report
+rounding. Apply the same authorized entry set and multi-ID filters as detailed
+time, before aggregating. Duplicate labels never merge distinct entity IDs.
+
+Return only entity ID/name and integer entry/actual/rounded/billable totals,
+with the requester's identity. Do not route this through the legacy monetary
+`report_time` or treat a client-supplied report label as financial authority.
+Aggregate in PostgreSQL, with full-period totals and a maximum 500-group page
+from one statement/snapshot. Order by name under C collation then entity UUID;
+the exclusive cursor records grouping/name/UUID. Reject unknown grouping,
+grouping-mismatched cursors, NUL names, reversed dates and requester mismatch.
+Every page reauthorizes current active/scoped authority. Empty/exhausted pages
+retain the same zero/full-period total semantics as the detailed reader.
+
+Transport limitation: pinned Dioxus 0.7.9 rejects malformed typed arguments
+before the handler but maps decoding failures to HTTP 500. Unknown groupings,
+unknown query fields and invalid UUIDs must still fail without report data;
+handler-level invalid dates/cursors return 400. Correcting the framework-wide
+decode status is separate from report authority and must not loosen DTO parsing.
+
+This is an ordinary time grouping projection, not the complete Harvest Time
+report: financial amounts, active-only selection, drilldown and matching grouped
+exports remain required follow-through. UI changes must preserve requester/mode
+binding and hide results while changing dates, grouping or cursor. They must not
+present detailed exports as exports of grouped rows. These obligations remain
+open until implemented and verified, rather than redefining T203 as this reader.
+
+### Financial-family dependencies
+
+The current [permission guide](https://support.getharvest.com/hc/en-us/articles/44171549176077-Permissions)
+distinguishes profitability, contractor, and invoicing reports (the latter
+covers uninvoiced, invoiced and receivables). User-approved C02 authorizes only
+each report's defined projection and corresponding export, not ordinary rates.
+Do not relabel the existing monetary time grouping as one of these families.
+The [contractor guide](https://support.getharvest.com/hc/en-us/articles/360048687271-Contractor-report)
+requires a contractor designation and unrounded time; the current Horae user
+model has no such designation. The [profitability guide](https://support.getharvest.com/hc/en-us/articles/25342727197581-Profitability-report)
+also requires expenses and fixed-fee date allocation, not just time-rate sums.
+These domain prerequisites and report-specific projections must be implemented
+before claiming C02 integration. Older administrator-only help is not a reason
+to override the approved custom-grant contract or captured built-in defaults.
+
 ### Ordinary consumer integration
 
 Resolve a single authenticated report-access response before mounting any report
