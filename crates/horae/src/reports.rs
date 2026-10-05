@@ -19,6 +19,9 @@ mod streaming;
 #[cfg(test)]
 mod privacy_tests;
 
+#[cfg(test)]
+mod export_params_tests;
+
 /// `login_redirect_guard` lets `/api/` through, because everything else there is
 /// a server function that checks its own session. These handlers must too. The
 /// `active` check is what revokes a deactivated user's still-live session
@@ -78,9 +81,8 @@ async fn render_manager_export(
     Ok(body)
 }
 
-/// Mirrors the Reports page filters, so a download matches what is on screen.
-/// Absent client/project/user/tag means "all", as on the page.
-#[derive(Deserialize)]
+/// Download filters support both legacy scalar links and complete ID selections.
+#[derive(Default, Deserialize)]
 pub struct ExportParams {
     pub from: String,
     pub to: String,
@@ -88,6 +90,14 @@ pub struct ExportParams {
     pub project_id: Option<uuid::Uuid>,
     pub user_id: Option<uuid::Uuid>,
     pub tag_id: Option<uuid::Uuid>,
+    pub client_ids: Option<String>,
+    pub project_ids: Option<String>,
+    pub user_ids: Option<String>,
+    pub task_ids: Option<String>,
+    pub tag_ids: Option<String>,
+    pub expected_org_id: Option<uuid::Uuid>,
+    pub expected_user_id: Option<uuid::Uuid>,
+    pub after: Option<String>,
 }
 
 /// Entity filters shared by grouped reports, detailed rows and downloads.
@@ -101,17 +111,50 @@ pub(crate) struct ReportFilters {
 
 impl ExportParams {
     fn time_query(&self) -> Result<crate::models::time_report::TimeReportQuery, StatusCode> {
+        let date_from = self.from.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
+        let date_to = self.to.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
+        if date_from > date_to || self.after.is_some() {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        let expected_requester = match (self.expected_org_id, self.expected_user_id) {
+            (None, None) => None,
+            (Some(org_id), Some(user_id)) => {
+                Some(crate::models::permission_editor::PermissionRequester { org_id, user_id })
+            }
+            _ => return Err(StatusCode::BAD_REQUEST),
+        };
         Ok(crate::models::time_report::TimeReportQuery {
-            date_from: self.from.parse().map_err(|_| StatusCode::BAD_REQUEST)?,
-            date_to: self.to.parse().map_err(|_| StatusCode::BAD_REQUEST)?,
-            client_ids: self.client_id.into_iter().collect(),
-            project_ids: self.project_id.into_iter().collect(),
-            user_ids: self.user_id.into_iter().collect(),
-            task_ids: Vec::new(),
-            tag_ids: self.tag_id.into_iter().collect(),
+            date_from,
+            date_to,
+            client_ids: Self::ids(self.client_id, self.client_ids.as_deref())?,
+            project_ids: Self::ids(self.project_id, self.project_ids.as_deref())?,
+            user_ids: Self::ids(self.user_id, self.user_ids.as_deref())?,
+            task_ids: Self::ids(None, self.task_ids.as_deref())?,
+            tag_ids: Self::ids(self.tag_id, self.tag_ids.as_deref())?,
             after: None,
-            expected_requester: None,
+            expected_requester,
         })
+    }
+
+    fn ids(
+        single: Option<uuid::Uuid>,
+        multiple: Option<&str>,
+    ) -> Result<Vec<uuid::Uuid>, StatusCode> {
+        match (single, multiple) {
+            (Some(_), Some(_)) => Err(StatusCode::BAD_REQUEST),
+            (_, None) => Ok(single.into_iter().collect()),
+            (None, Some("")) => Ok(Vec::new()),
+            (None, Some(values)) => {
+                // Dropping an invalid element could turn a selected filter into "all".
+                let mut ids = values
+                    .split(',')
+                    .map(|value| value.parse().map_err(|_| StatusCode::BAD_REQUEST))
+                    .collect::<Result<Vec<_>, _>>()?;
+                ids.sort_unstable();
+                ids.dedup();
+                Ok(ids)
+            }
+        }
     }
 }
 

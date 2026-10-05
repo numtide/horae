@@ -1,5 +1,44 @@
 # Permission verification
 
+## Multi-ID download queries (T210–T212)
+
+Both ordinary time download routes accept comma-separated `client_ids`,
+`project_ids`, `user_ids`, `task_ids` and `tag_ids`. These only narrow authorized
+rows. Legacy scalar links still work, but mixing scalar/plural forms for the same
+dimension is rejected, including an empty plural value. Only a wholly empty
+list is unrestricted; invalid UUIDs or empty elements return 400 rather than
+silently widening the export. Known duplicate keys and all `after` parameters
+are rejected. The paired optional `expected_org_id`/`expected_user_id` values bind
+the download to its requesting account without supplying authority.
+
+Use the existing disposable PostgreSQL/Nix verification commands in the next
+section; the focused pure parser filter is `export_params_tests::`. Registered
+HTTP coverage lives in `authorization_tests/time_reports/export_filters.rs`.
+Its own/managed fixture includes independently identifiable excluded rows and
+compares actual CSV records and XLSX row counts/notes across all five dimensions,
+AND/OR combinations, duplicated IDs, foreign IDs, malformed parameters, legacy
+links and an actual switched session with independent export authority.
+
+RED `79204` reproduced four failing behavior groups while legacy links passed.
+`35028` passes 110 report/export tests (42.58s, two manual measurements ignored)
+and eleven storage tests (2.13s). HTTP setup initially omitted the required
+currency on a new test client; the fixture now supplies EUR. Final run `29148`
+passes all 110 report/export tests (42.36s), eleven storage tests (2.15s) and the
+actual-session HTTP suite (12.15s), including both formats and the new fixture.
+Complete SQLx preparation passes with five added test-query descriptions and no
+existing descriptions removed or changed. Offline all-target server Clippy
+(101s) and the unchanged WASM target pass with warnings denied (`29721`).
+Formatting checks 552 files with zero changes (`98173`). No full server, browser
+or Nix result is claimed for this increment.
+
+OP25/OP31 and FR-006/007/008 map to complete filter transport and scope narrowing;
+FR-010 maps to session-derived authority and requester binding; FR-018 maps to
+strict malformed-input and registered-route verification. Independent production
+and test review found no material defect. Rust/testing/async and simplicity
+guidance kept this in the existing `ExportParams` conversion, with no new parser
+dependency, SQL authority, schema, CSS or UI component. It does not close the
+Reports consumer, picker universe, financial reports, browser or full Nix gates.
+
 ## Recorded-scope CSV delivery (T207–T209)
 
 The registered `/api/reports/export/csv` route now delegates ordinary time

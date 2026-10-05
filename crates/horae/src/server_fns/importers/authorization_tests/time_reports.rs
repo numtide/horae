@@ -5,6 +5,8 @@ use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::EntryState;
 use std::io::{Cursor, Read};
 
+mod export_filters;
+
 async fn xlsx(api: &Api, cookie: Option<&str>, filter: &str) -> reqwest::Response {
     download(api, cookie, "xlsx", filter).await
 }
@@ -242,4 +244,5 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             .status(),
         StatusCode::UNAUTHORIZED
     );
+    export_filters::check(pool, api).await;
 }

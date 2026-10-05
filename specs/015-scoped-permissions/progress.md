@@ -1,5 +1,50 @@
 # Scoped permissions investigation progress
 
+## 2026-10-05 — Multi-ID download query transport
+
+- The previous goal turn made progress: verified scoped CSV delivery was
+  published as unsigned `09bd15f` on existing draft #212. Revalidated the clean
+  worktree and actual Spec Kit prerequisites; command skills are still absent.
+- Traced the existing scalar links, `ExportParams`, common query conversion,
+  both source/release gates and the registered-session harness. Closed the
+  multi-ID wire contract without changing report semantics or picker candidates.
+- Independent design review confirms strict presence-based scalar/plural
+  conflicts, wholly empty versus malformed lists and paired identity bindings.
+  No new product decision, SQL authority, dependency or UI abstraction is needed.
+- RED `79204` runs five extractor tests: legacy links pass; plural selections,
+  requester binding, cursor rejection and ambiguous-filter checks fail as
+  expected. Added strict conversion into the existing `TimeReportQuery`, reusing
+  the current CSV/XLSX authorization and output mechanisms.
+- Added registered HTTP tests for every dimension, AND/OR selection, duplicate
+  IDs, own/managed union, unauthorized/foreign IDs, malformed/repeated parameters,
+  legacy scalar links and actual account-switch binding. `35028` is compiling
+  the report regression suite, followed by storage/HTTP and full SQLx preparation
+  in a disposable PostgreSQL cluster. No result is claimed yet.
+- `35028` passes 110 report/export tests (including the five new parser cases)
+  and eleven storage tests. The HTTP fixture failed before requests because its
+  new client omitted the required currency. Corrected that test-only insert to
+  use EUR; no production change or waived assertion. Final HTTP/cache verification
+  must be rerun before publication.
+- Final `29148` repeats all 110 report/export and eleven storage tests in green;
+  the actual-session HTTP suite now passes in 12.15s. Full SQLx preparation is
+  running. Independent production/test review found no material defect. GitHub
+  confirms existing #212 open/draft at `09bd15f` before publication.
+- `29148` completes full SQLx preparation in 78s, adding five test-query cache
+  descriptions without deleting or changing any existing description. Offline
+  native/WASM Clippy is running as `29721`. No production SQL, schema, CSS or
+  application data changed.
+- `29721` passes offline server all-targets Clippy (101s) and the unchanged WASM
+  target with warnings denied. Formatting `98173` checks 552 files with zero
+  changes. T210–T212 are complete for the transport boundary, not T203 or the
+  full permissions feature.
+
+Next: publish this verified increment unsigned to draft #212 without merging,
+then connect the ordinary Reports consumer under the canonical policy and
+resolve its full candidate-discovery contract against Harvest before wiring
+pickers. The Reports consumer/candidate universe,
+financial families, remaining writes and migration/cutover gates are still
+required; the full goal remains active.
+
 ## 2026-10-05 — Recorded-scope CSV delivery
 
 - Reused published `cbc78a8`, existing worktree and draft #212. FR-033/B is

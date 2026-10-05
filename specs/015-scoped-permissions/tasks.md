@@ -17,6 +17,9 @@ Ordinary detailed Reports integration follows `contracts/time-reports.md`:
 - [x] T207 Reproduce canonical Member rejection and legacy-Manager overexposure in the native CSV source (OP25/OP31, FR-006/007/008/010/018).
 - [x] T208 Capture and strictly validate time authority in the native cursor snapshot, including empty-source metadata; reauthorize captured owner/project pairs after capacity becomes available, preserving bounded transport and legacy policy.
 - [x] T209 Verify source handoff, transient invalid state, pending-block revocation, captured history, metadata bounds and actual-session CSV delivery; rerun export/storage regressions, refresh SQLx, native/WASM lint and independent review. This does not close the multi-ID download transport, Reports consumer or full T203.
+- [x] T210 Reproduce ignored plural filters, partial requester bindings and download cursors through the existing query extractor; retain legacy URL regression coverage (OP25/OP31, FR-006/007/008/010/018).
+- [x] T211 Parse complete multi-ID selections and optional requester bindings into the shared time-report query without changing SQL authority, bounded transports or existing scalar URLs; reject malformed/ambiguous selections.
+- [x] T212 Verify both actual-session CSV/XLSX routes across all filter dimensions, scope narrowing, malformed/duplicate keys and identity changes; run export/storage regressions, SQLx/native/WASM/format checks and independent review. Reports consumer and candidate discovery remain T203 work.
 
 These tasks do not close T014/T015 or the full Reports parity surface alone.
 

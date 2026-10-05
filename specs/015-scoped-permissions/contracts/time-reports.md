@@ -80,7 +80,8 @@ one bounded size/payload statement. Scope and all filters apply before the
 text in the client. Preserve the 10,000-row, 8 MiB text and 32,767-byte field
 limits. Reject reversed dates and page cursors: a download represents the full
 selected period, not the current page. The scalar legacy URL filters remain
-supported; the canonical multi-ID query transport and UI are separate T203 work.
+supported alongside the multi-ID transport defined below. The Reports consumer
+and candidate discovery retain their separate T203 requirements.
 
 Commit before rendering. Immediately before releasing the rendered body, load
 current policy, active requester and strict grants under fresh gates, and require
@@ -98,6 +99,36 @@ PostgreSQL closes cursors created inside a rolled-back savepoint
 to `WITH HOLD` instead would materialize their source
 ([DECLARE](https://www.postgresql.org/docs/17/sql-declare.html)). Both references
 were checked on 2026-10-04; neither is a reason to replace bounded streaming.
+
+## Download query transport
+
+The existing CSV and XLSX GET routes accept the same `from`/`to` dates and
+optional comma-separated `client_ids`, `project_ids`, `user_ids`, `task_ids` and
+`tag_ids`. Parse every UUID strictly; only an entirely empty string means no
+additional restriction. Reject malformed IDs, empty interior elements and
+whitespace rather than dropping them. Sort/deduplicate IDs before reading.
+URL-encoded commas have the same meaning as literal commas. Repeated known
+query keys are invalid, not first/last-wins.
+
+Keep the existing scalar `client_id`, `project_id`, `user_id` and `tag_id` links.
+Reject scalar/plural conflicts for the same dimension by presence, including an
+empty plural value. Neither union nor silent precedence can change the user's
+selection. Multiple IDs are OR within a dimension and dimensions remain AND;
+foreign/unauthorized IDs cannot grant access. This is a wire-format refinement
+of the existing report contract, not a new Harvest product rule.
+
+Optional `expected_org_id` and `expected_user_id` must both be present and valid
+or both absent. Map them only to the expected-requester comparison; authority
+still comes from the session. Wrong complete binding returns 403; malformed or
+partial binding returns 400. Unrelated forged `org_id`/`actor_id` parameters
+remain ignored. Reject every `after` parameter, including a bare or empty one;
+downloads cover the selected period, never a paged suffix. Reject reversed or
+invalid dates. Preserve filenames, media types and bounded export behavior.
+
+Verify parsing and both registered HTTP routes, including mixed allowed/foreign
+filters, task/tag narrowing, unchanged scalar links, account changes and complete
+CSV/XLSX contents. No candidate-discovery assumption or UI acceptance follows
+from these transport checks.
 
 ## Acceptance
 
