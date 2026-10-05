@@ -1,5 +1,96 @@
 # Scoped permissions investigation progress
 
+## 2026-10-05 — Report candidates and active-project filtering
+
+- Previous iteration is published as `ecac66b`; remote #212 is OPEN/DRAFT at
+  that commit and the worktree was clean. Its final format gate `51708` passed
+  with 565 files and no changes. This is completed navigation/delivery progress,
+  not full T203 or feature acceptance.
+- Reopened the current detailed-report, Member-report and permission guides.
+  They confirm multiple filters and the distinction between retained archived
+  results and archived candidate choices, but do not settle restricted
+  zero-record teammate eligibility. Existing 2026-10-04 Chrome evidence remains
+  an owner-only observation, not a restricted-actor test.
+- Retried the reusable Windows MCP client (session `40431`). Initialization
+  succeeded, but `browser_tabs` returned no browser data and the client request
+  timed out after 240 seconds. Graceful exit did not finish; interrupted only
+  that client (terminal exit 1), without a tab-close command or business writes.
+  No new authenticated Harvest evidence is claimed. Asked one pending decision:
+  whether the already-approved Timesheet zero-record project-participant rule
+  should also apply to report filters. Do not infer the answer.
+- Continuing independent T222: the documented Active projects only result
+  filter. Contract and task now distinguish it from candidate discovery. Added
+  a default-false typed/wire field and tests before SQL implementation. Initial
+  `72068` ended with a test-only private-module import error; moved reader tests
+  into their existing permission modules instead of widening production access.
+- Revalidated after the cleanup interruption: 177 GiB free in WSL; preserved
+  current changes and active build artifacts. Corrected the test sibling path
+  after terminal `31547` reported the wrong module name. RED `58049` then ran:
+  strict transport passed, detailed/grouped readers and workbook-source tests
+  failed on retained archived rows (one passed, three failed). UI RED `3814`
+  failed because the filter control was absent, as expected.
+- Added source predicates to all six existing reader/export queries and bound
+  the shared Checkbox to detailed/grouped/nested request keys and download URLs.
+  No new dependency, migration, shared CSS or authority changes. Added filtered
+  empty/denied export, frozen cursor/workbook-source tests, strict flattened
+  grouped transport, late-response/cursor-reset component and actual-browser
+  fixtures. Formatter `21187` passed; full regression/cache run is next.
+- Re-ran Spec Kit's prerequisite script successfully (feature 015, all expected
+  artifact categories present); unavailable command skills are not claimed as
+  executed. Added T222 to the plan's contract/test matrix. Browser script syntax
+  check `22181` passed. Independent static review identified one P2: flattened
+  grouped URL values cannot deserialize directly as bool. Corrected only the
+  URL field with strict string-to-bool parsing; JSON request DTOs remain bool.
+  No other material static findings. Regression/cache session `19410` is live
+  and began before that parser correction; any result from it must be followed
+  by a fresh check of the corrected code.
+- `19410` finished with 133 passing, one failed and two pre-existing manual
+  measurements ignored. The only failure is the confirmed pre-fix flattened
+  URL bool parser. All four new export/activity/snapshot/empty-authority tests
+  passed, along with the existing export authorization regressions. This failed
+  batch did not reach permission-reader tests or SQLx preparation. A corrected
+  full retry is required; do not treat the preceding binary as current validation.
+- Corrected retry `2099` is confirmed live compiling. The reviewer independently
+  confirmed `query_bool` closes the P2 for direct/flattened URLs while preserving
+  default/duplicate/invalid handling and JSON types. No current GREEN claim,
+  cache completion, commit or push yet. Continue polling this exact session;
+  do not start another build while it is live.
+- Corrected `2099` has passed 134 report/export tests (two existing manual
+  measurements ignored), all 25 scoped detailed/grouped-reader tests, 11
+  permission-storage tests and the registered-session job authorization test.
+  The grouped boolean regression now passes. SQLx all-target preparation is
+  running in the same session; UI/build/browser/lint gates remain pending.
+- `2099` completed successfully, including SQLx all-target preparation (3m54s).
+  Cache changes replace six production query descriptions and add five test
+  query descriptions. Format check `42971` passed with 566 files unchanged;
+  its warnings name the six intentionally replaced cache files.
+- Verification chain `1423` is live: 19 actual-component tests, then native
+  all-target lint, WASM lint and a fresh fullstack browser bundle, sequentially
+  with `set -e`. Poll that exact handle; SQLx/backend verification is complete.
+- `1423` passed all 19 tests in `scoped_reports_ui` (2m44s compilation, 0.07s
+  tests), including active-filter paging resets, download binding and all four
+  nested late-response cases. Native all-target lint is the current live phase;
+  the pipeline has not yet reported WASM lint or fullstack-build completion.
+- `1423` completed successfully: native all-target lint passed in 4m19s,
+  WASM lint in 40.85s, both with warnings denied. Fresh Dioxus client/server
+  build passed in 164.17s. Started the isolated `reports-permissions` Chromium
+  suite; evidence goes to `.scratch/active-project-reports-browser-evidence/`.
+- Chromium `82589` passed against the fresh server/client and a disposable
+  database (Chromium 148.0.7778.96). Real sessions verify active/archived mixed
+  totals, keyboard checkbox changes from a later page, all grouped dimensions,
+  nested three-filter detail, strict direct/grouped CSV/XLSX URLs, empty output,
+  private-colleague exclusion and policy revocation. Inspected all six desktop
+  dark/mobile light captures together: the new control fits the incumbent
+  layout; tables retain contained horizontal scrolling. No visual repair or
+  shared CSS change needed. T222 is complete; full T203/feature 015 is not.
+- Final format gate `29584` passed (566 files, no changes), and `git diff --check` is clean. Remote `46340` confirms #212 OPEN/DRAFT on
+  `feat/scoped-permissions` at `ecac66b` before publication. No full-flake or
+  full-feature acceptance is claimed by this focused increment.
+
+Next: final format check and publish this verified increment unsigned to draft
+#212, without merging. Candidate decisions remain pending; no merge, real migration
+or Harvest data mutation. Full feature 015 and the implementation goal stay open.
+
 ## 2026-10-05 — Individual time reports and breakdowns
 
 - Revalidated the worktree at published `2b59b58`; the grouped CSV backend is

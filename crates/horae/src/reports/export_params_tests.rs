@@ -13,6 +13,27 @@ fn parse(filters: &str) -> Result<TimeReportQuery, StatusCode> {
 }
 
 #[test]
+fn active_projects_only_filter_is_optional_and_strict() {
+    assert!(!parse("").unwrap().active_projects_only);
+    assert!(
+        !parse("&active_projects_only=false")
+            .unwrap()
+            .active_projects_only
+    );
+    assert!(
+        parse("&active_projects_only=true")
+            .unwrap()
+            .active_projects_only
+    );
+    for value in ["", "1", "yes", "null", "true&active_projects_only=false"] {
+        assert_eq!(
+            parse(&format!("&active_projects_only={value}")),
+            Err(StatusCode::BAD_REQUEST)
+        );
+    }
+}
+
+#[test]
 fn download_policy_binding_rejects_unknown_and_repeated_modes() {
     for value in ["scoped", "legacy"] {
         let uri = format!(

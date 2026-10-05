@@ -20,6 +20,7 @@ pub(super) fn GroupedTimeReport(
     requester: PermissionRequester,
     from: Signal<String>,
     to: Signal<String>,
+    active_projects_only: Signal<bool>,
     mut dimension: Signal<TimeReportGrouping>,
     mut cursors: Signal<Vec<Option<TimeReportGroupCursor>>>,
     mut context: Signal<Option<Selection>>,
@@ -33,12 +34,14 @@ pub(super) fn GroupedTimeReport(
             from(),
             to(),
             context(),
+            active_projects_only(),
         );
         let result = async {
             let (date_from, date_to) = period(&key.2, &key.3)?;
             let mut query = TimeReportGroupQuery {
                 date_from,
                 date_to,
+                active_projects_only: key.5,
                 client_ids: vec![],
                 project_ids: vec![],
                 user_ids: vec![],
@@ -68,6 +71,7 @@ pub(super) fn GroupedTimeReport(
         from(),
         to(),
         context(),
+        active_projects_only(),
     );
     let response = page.read();
     let current = response.as_ref().filter(|(requested, _)| *requested == key);
@@ -84,7 +88,7 @@ pub(super) fn GroupedTimeReport(
             TimeReportGrouping::Person => "person",
         };
         let filter = key.4.as_ref().map(|selected| format!("&{}={}", selected.filter_key(), selected.id)).unwrap_or_default();
-        format!("group_by={group_by}&from={}&to={}&expected_org_id={}&expected_user_id={}&expected_policy=scoped{filter}", key.2, key.3, requester.org_id, requester.user_id)
+        format!("group_by={group_by}&from={}&to={}&active_projects_only={}&expected_org_id={}&expected_user_id={}&expected_policy=scoped{filter}", key.2, key.3, key.5, requester.org_id, requester.user_id)
     });
     let expansion = key
         .4
@@ -198,6 +202,7 @@ pub(super) fn GroupedTimeReport(
                                         td { colspan: "4", class: "bg-secondary",
                                             ExpandedTimeReport {
                                                 requester, from: key.2.clone(), to: key.3.clone(), dimension: group_by,
+                                                active_projects_only: key.5,
                                                 filters: {
                                                     let mut filters: Vec<_> = key.4.clone().into_iter().collect();
                                                     filters.push(Selection { dimension: key.0, id: group.id, name: group.name.clone() });

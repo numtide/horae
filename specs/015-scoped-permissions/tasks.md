@@ -29,6 +29,16 @@ Ordinary detailed Reports integration follows `contracts/time-reports.md`:
 - [x] T219 Reproduce missing canonical client/project/task/person group aggregates with own/managed/all scope, exact rounding, duplicate labels, filters and bounded pages (FR-006/008/010/018).
 - [x] T220 Implement the typed grouped reader and authenticated endpoint using current time authority; verify registered-session payloads, revocation, tenant isolation, totals and pagination; refresh SQLx and run native/WASM checks and adversarial review.
 - [x] T221 Connect grouped results, drilldown and equivalent grouped CSV/XLSX delivery to the bound ordinary consumer; verify browser transitions without legacy catalogs or financial leakage. Full picker and financial-family acceptance remains required by T203.
+- [x] T222 Implement the documented Active projects only result filter across detailed/grouped reads, totals, CSV/XLSX and nested UI requests; verify strict/default transport, authorization, historical snapshot behavior, cursor resets and browser parity. This is distinct from archived-item candidate discovery and does not close T203.
+
+T222 verification: six scoped source queries filter project activity before
+aggregation/pagination/export limits; default requests retain archived history.
+Direct and flattened download URLs reject invalid/repeated boolean values.
+PostgreSQL, real-component and disposable Chromium checks cover totals, every
+group dimension, nested filters, frozen export sources, empty/denied output,
+keyboard operation and stale-page resets. Native/WASM lint and SQLx preparation
+pass. The shared Checkbox and CSS framework remain unchanged. Full report
+candidates, financial families and policy activation remain open.
 
 T221 verification: the four grouping tabs, individual entity reports, documented
 client/project inline breakdowns and grouped CSV/XLSX delivery are connected and

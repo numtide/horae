@@ -13,6 +13,7 @@ pub(super) fn ExpandedTimeReport(
     to: ReadSignal<String>,
     dimension: ReadSignal<TimeReportGrouping>,
     filters: ReadSignal<Vec<Selection>>,
+    active_projects_only: ReadSignal<bool>,
     on_detail: EventHandler<Vec<Selection>>,
 ) -> Element {
     let mut cursors = use_signal(|| vec![None::<TimeReportGroupCursor>]);
@@ -23,12 +24,14 @@ pub(super) fn ExpandedTimeReport(
             dimension(),
             filters(),
             cursors.read().last().cloned().flatten(),
+            active_projects_only(),
         );
         let result = async {
             let (date_from, date_to) = period(&key.0, &key.1)?;
             let mut query = TimeReportGroupQuery {
                 date_from,
                 date_to,
+                active_projects_only: key.5,
                 group_by: key.2,
                 after: key.4.clone(),
                 client_ids: vec![],
@@ -58,6 +61,7 @@ pub(super) fn ExpandedTimeReport(
         dimension(),
         filters(),
         cursors.read().last().cloned().flatten(),
+        active_projects_only(),
     );
     let response = page.read();
     let current = response.as_ref().filter(|(requested, _)| *requested == key);

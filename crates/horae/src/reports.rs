@@ -90,6 +90,8 @@ async fn render_manager_export(
 pub struct ExportParams {
     pub from: String,
     pub to: String,
+    #[serde(default, deserialize_with = "query_bool")]
+    pub active_projects_only: bool,
     pub client_id: Option<uuid::Uuid>,
     pub project_id: Option<uuid::Uuid>,
     pub user_id: Option<uuid::Uuid>,
@@ -103,6 +105,13 @@ pub struct ExportParams {
     pub expected_user_id: Option<uuid::Uuid>,
     pub expected_policy: Option<crate::models::time_report::TimeReportPolicy>,
     pub after: Option<String>,
+}
+
+fn query_bool<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<bool, D::Error> {
+    // Flattened URL parameters retain strings instead of Serde's bool coercion.
+    String::deserialize(deserializer)?
+        .parse()
+        .map_err(serde::de::Error::custom)
 }
 
 /// Entity filters shared by grouped reports, detailed rows and downloads.
@@ -131,6 +140,7 @@ impl ExportParams {
         Ok(crate::models::time_report::TimeReportQuery {
             date_from,
             date_to,
+            active_projects_only: self.active_projects_only,
             client_ids: Self::ids(self.client_id, self.client_ids.as_deref())?,
             project_ids: Self::ids(self.project_id, self.project_ids.as_deref())?,
             user_ids: Self::ids(self.user_id, self.user_ids.as_deref())?,

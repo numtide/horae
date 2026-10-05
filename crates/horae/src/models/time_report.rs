@@ -37,6 +37,8 @@ pub struct TimeReportCursor {
 pub struct TimeReportQuery {
     pub date_from: NaiveDate,
     pub date_to: NaiveDate,
+    #[serde(default)]
+    pub active_projects_only: bool,
     pub client_ids: Vec<Uuid>,
     pub project_ids: Vec<Uuid>,
     pub user_ids: Vec<Uuid>,
@@ -105,6 +107,8 @@ pub struct TimeReportGroupCursor {
 pub struct TimeReportGroupQuery {
     pub date_from: NaiveDate,
     pub date_to: NaiveDate,
+    #[serde(default)]
+    pub active_projects_only: bool,
     pub client_ids: Vec<Uuid>,
     pub project_ids: Vec<Uuid>,
     pub user_ids: Vec<Uuid>,

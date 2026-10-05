@@ -9,6 +9,7 @@ fn query() -> TimeReportQuery {
     TimeReportQuery {
         date_from: "2026-09-01".parse().unwrap(),
         date_to: "2026-09-30".parse().unwrap(),
+        active_projects_only: false,
         client_ids: vec![],
         project_ids: vec![],
         user_ids: vec![],
@@ -16,6 +17,52 @@ fn query() -> TimeReportQuery {
         tag_ids: vec![],
         after: None,
         expected_requester: None,
+    }
+}
+
+pub(super) async fn active_projects_fixture(pool: &PgPool) -> SeedIds {
+    let ids = fixture(pool).await;
+    time_entry(pool, &ids, EntryState::Open).await;
+    let other = Uuid::now_v7();
+    sqlx::query!("INSERT INTO projects (id,org_id,client_id,name,currency,active) VALUES ($1,$2,$3,'Archived','EUR',false)", other, ids.org_id, ids.client_id).execute(pool).await.unwrap();
+    time_entry(
+        pool,
+        &SeedIds {
+            project_id: other,
+            ..ids
+        },
+        EntryState::Open,
+    )
+    .await;
+    sqlx::query!("UPDATE clients SET active=false WHERE id=$1", ids.client_id)
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query!("UPDATE tasks SET active=false WHERE id=$1", ids.task_id)
+        .execute(pool)
+        .await
+        .unwrap();
+    ids
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn active_projects_only_narrows_detailed_rows_and_period_totals(pool: PgPool) {
+    let ids = active_projects_fixture(&pool).await;
+    for (active_projects_only, count) in [(false, 2), (true, 1)] {
+        let query = TimeReportQuery {
+            active_projects_only,
+            ..query()
+        };
+        let page = read(&pool, ids.org_id, ids.user_id, &query).await.unwrap();
+        assert_eq!(page.entries.len(), count);
+        assert_totals(
+            &page,
+            count as i64,
+            count as i64 * 60,
+            count as i64 * 60,
+            count as i64 * 60,
+        );
     }
 }
 

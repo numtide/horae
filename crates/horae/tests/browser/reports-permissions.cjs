@@ -346,6 +346,74 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
       await page.locator('#report-view-detailed').click();
       await expect(page.locator('tbody tr')).toHaveCount(500);
     }
+    sql(`BEGIN;
+      UPDATE projects SET active=false WHERE id='${project}';
+      INSERT INTO projects (id,org_id,client_id,name,currency) VALUES ('${id(9)}','${org}','${client}','Active report project','EUR');
+      INSERT INTO time_entries (id,org_id,user_id,project_id,task_id,spent_date,minutes,billable,notes) VALUES
+        ('${id(10)}','${org}','${actor.id}','${id(9)}','${task}','${date}',30,true,'Active own entry'),
+        ('${id(11)}','${org}','${person}','${id(9)}','${task}','${date}',180,true,'Private active entry');
+      COMMIT;`);
+    await page.locator('#report-refresh').click();
+    await expect(page.locator('dl')).toContainText('503.50');
+    const activeOnly = page.getByRole('checkbox', { name: 'Active projects only', exact: true });
+    await expect(activeOnly).toHaveAttribute('aria-checked', 'false');
+    await page.locator('#report-next').click();
+    await expect(page.locator('tbody tr')).toHaveCount(4);
+    await activeOnly.focus();
+    await page.keyboard.press('Space');
+    await expect(activeOnly).toHaveAttribute('aria-checked', 'true');
+    await expect(page.locator('tbody tr')).toHaveCount(1);
+    await expect(page.locator('tbody')).toContainText('Active own entry');
+    await expect(page.locator('#report-previous')).toBeDisabled();
+    await expect(page.locator('dl')).toContainText('0.50');
+    const checkActiveDownload = async grouped => {
+      for (const format of ['CSV', 'XLSX']) {
+        const link = page.getByRole('link', { name: `Export ${format}`, exact: true });
+        await expect(link).toHaveAttribute('href', /active_projects_only=true/);
+        const url = new URL(await link.getAttribute('href'), base);
+        const result = await context.request.get(url.href);
+        assert.equal(result.status(), 200);
+        if (format === 'CSV') {
+          const text = await result.text();
+          assert.ok(!text.includes('Private active entry') && !text.includes('<Report & note>'));
+          if (grouped) assert.ok(text.endsWith(',0.50,0.50,0.00\n'));
+          else assert.equal(text.match(/Active own entry/g).length, 1);
+        } else assert.ok((await result.body()).subarray(0, 2).equals(Buffer.from('PK')));
+        for (const invalid of ['', '1', 'yes', 'null']) {
+          const bad = new URL(url);
+          bad.searchParams.set('active_projects_only', invalid);
+          assert.equal((await context.request.get(bad.href)).status(), 400);
+        }
+        assert.equal((await context.request.get(`${url.href}&active_projects_only=false`)).status(), 400);
+        filteredLinks.push(`${url.pathname}${url.search}`);
+      }
+    };
+    await checkActiveDownload(false);
+    await page.locator('#report-view-time').click();
+    for (const [dimension, entity] of [['client', client], ['project', id(9)], ['task', task], ['person', actor.id]]) {
+      await page.locator(`#report-group-${dimension}`).click();
+      await expect(page.locator(`#report-hours-${entity}`)).toHaveText('0.50');
+      await checkActiveDownload(true);
+    }
+    await page.locator('#report-group-project').click();
+    await page.locator(`#report-name-${id(9)}`).click();
+    await expect(page.locator(`#report-expand-${task}`)).toBeVisible();
+    await page.locator(`#report-expand-${task}`).click();
+    await expect(page.locator(`#report-expanded-hours-${actor.id}`)).toHaveText('0.50');
+    await page.locator(`#report-expanded-hours-${actor.id}`).click();
+    await expect(page.locator('tbody tr')).toHaveCount(1);
+    await checkActiveDownload(false);
+    await page.locator('#report-clear-selection').click();
+    await expect(page.locator('#report-refresh')).toBeEnabled();
+    sql(`UPDATE projects SET active=false WHERE id='${id(9)}'`);
+    await page.locator('#report-refresh').click();
+    await expect(page.locator('tbody')).toHaveCount(0);
+    await expect(page.locator('dl')).toContainText('0.00');
+    const emptyCsv = await context.request.get(new URL(await page.getByRole('link', { name: 'Export CSV', exact: true }).getAttribute('href'), base).href);
+    assert.equal(emptyCsv.status(), 200);
+    assert.equal((await emptyCsv.text()).trim().split('\n').length, 1);
+    await activeOnly.click();
+    await expect(page.locator('dl')).toContainText('503.50');
     await page.locator('#report-view-time').click();
     await page.locator('#report-group-project').click();
     await expect(page.locator(`#report-hours-${project}`)).toBeVisible();
@@ -379,10 +447,10 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
       UPDATE users SET active=true WHERE id='${actor.id}';
       UPDATE organizations SET permission_policy_version=0 WHERE id='${org}';
       DELETE FROM person_permission_states WHERE id='${state}';
-      DELETE FROM time_entries WHERE project_id='${project}';
+      DELETE FROM time_entries WHERE project_id IN ('${project}','${id(9)}');
       DELETE FROM project_tag_links WHERE id='${id(8)}';
       DELETE FROM project_tags WHERE id='${id(7)}';
-      DELETE FROM projects WHERE id='${project}';
+      DELETE FROM projects WHERE id IN ('${project}','${id(9)}');
       DELETE FROM clients WHERE id='${client}';
       DELETE FROM tasks WHERE id='${task}';
       DELETE FROM users WHERE id='${person}'; COMMIT;`);

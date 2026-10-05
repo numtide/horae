@@ -3,6 +3,7 @@ use dioxus::prelude::*;
 use horae_core::duration::format_hours2 as hours;
 
 use crate::components::badge::Badge;
+use crate::components::controls::Checkbox;
 use crate::components::form::{FormGroup, Input};
 use crate::components::table::DataTable;
 use crate::models::permission_editor::PermissionRequester;
@@ -101,6 +102,7 @@ pub(super) fn ScopedReports(
     let mut from = use_signal(move || today.with_day(1).unwrap_or(today).to_string());
     let mut to = use_signal(move || today.to_string());
     let mut show_groups = use_signal(|| false);
+    let mut active_projects_only = use_signal(|| false);
     let mut group_dimension = use_signal(|| TimeReportGrouping::Client);
     let mut group_context = use_signal(|| None::<Selection>);
     let mut group_cursors = use_signal(|| vec![None::<TimeReportGroupCursor>]);
@@ -113,6 +115,7 @@ pub(super) fn ScopedReports(
             cursors.read().last().cloned().flatten(),
             selection(),
             show_groups(),
+            active_projects_only(),
         );
         let result = async {
             if key.4 {
@@ -122,6 +125,7 @@ pub(super) fn ScopedReports(
             let mut query = TimeReportQuery {
                 date_from,
                 date_to,
+                active_projects_only: key.5,
                 client_ids: vec![],
                 project_ids: vec![],
                 user_ids: vec![],
@@ -150,6 +154,7 @@ pub(super) fn ScopedReports(
         cursors.read().last().cloned().flatten(),
         selection(),
         show_groups(),
+        active_projects_only(),
     );
     let dates = period(&key.0, &key.1);
     let response = page.read();
@@ -162,7 +167,7 @@ pub(super) fn ScopedReports(
     let next = loaded.and_then(|page| page.next_after.clone());
     let download_query = loaded.and_then(|_| dates.ok()).map(|(date_from, date_to)| {
         let filter: String = key.3.iter().map(|selected| format!("&{}={}", selected.filter_key(), selected.id)).collect();
-        format!("from={date_from}&to={date_to}&expected_org_id={}&expected_user_id={}&expected_policy=scoped{filter}", requester.org_id, requester.user_id)
+        format!("from={date_from}&to={date_to}&active_projects_only={}&expected_org_id={}&expected_user_id={}&expected_policy=scoped{filter}", key.5, requester.org_id, requester.user_id)
     });
     let date_error_id = dates.err().map(|_| "report-date-error".to_string());
 
@@ -210,12 +215,20 @@ pub(super) fn ScopedReports(
                 }
             }
         }
+        div { class: "mb-4",
+            Checkbox { id: "report-active-projects-only", label: "Active projects only", checked: active_projects_only(),
+                onclick: move |_| {
+                    let next = !active_projects_only();
+                    cursors.set(vec![None]); group_cursors.set(vec![None]); active_projects_only.set(next);
+                }
+            }
+        }
         if !show_groups() { h2 { class: "text-lg mb-4", "Detailed time" } }
         if let Err(message) = dates {
             p { id: "report-date-error", class: "alert alert-danger", role: "alert", "{message}" }
         } else if show_groups() {
             grouped::GroupedTimeReport {
-                requester, from, to, dimension: group_dimension, cursors: group_cursors, context: group_context,
+                requester, from, to, active_projects_only, dimension: group_dimension, cursors: group_cursors, context: group_context,
                 on_detail: move |selected| { selection.set(selected); cursors.set(vec![None]); show_groups.set(false); }
             }
         } else if !ready {

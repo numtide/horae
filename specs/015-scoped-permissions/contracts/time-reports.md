@@ -100,8 +100,9 @@ handler-level invalid dates/cursors return 400. Correcting the framework-wide
 decode status is separate from report authority and must not loosen DTO parsing.
 
 This is an ordinary time grouping projection, not the complete Harvest Time
-report: financial amounts, active-only selection, drilldown and matching grouped
-exports remain required follow-through. UI changes must preserve requester/mode
+report: financial amounts and full filter candidates remain required follow-through.
+Grouping, drilldown, active-only results and matching grouped exports are
+implemented and verified by T219–T222. UI changes must preserve requester/mode
 binding and hide results while changing dates, grouping or cursor. They must not
 present detailed exports as exports of grouped rows. These obligations remain
 open until implemented and verified, rather than redefining T203 as this reader.
@@ -163,10 +164,34 @@ include the viewed grouping, period, context, requester and scoped policy, but
 no cursor. Do not fetch legacy catalogs to label or populate these reports.
 
 This implements the documented ordinary time navigation, not financial fields,
-full project analysis, active-only filtering, saved/custom reports, complete
+full project analysis, saved/custom reports, complete
 filter candidate discovery or policy activation. The guide does not specify
 deeper name-navigation semantics inside task/person reports; keep those row
 names plain rather than silently inventing a broader or narrower report.
+
+#### Active-project result filter
+
+The Member reports guide, reopened 2026-10-05, explicitly distinguishes
+**Active projects only** (result filtering) from **Include archived items in
+filters** (candidate discovery). Implement the former independently of the
+unresolved restricted candidate universe. `active_projects_only` is a boolean,
+default false for existing typed requests and download URLs. Missing means all
+otherwise authorized project history; malformed or repeated URL values are
+invalid, never silently unrestricted.
+
+When true, qualify the source project's `active` flag before page limits,
+grouping, totals and export size accounting. Do not require active clients,
+tasks or entry owners, and do not change current actor/grant checks. Carry the
+flag through individual contexts, inline breakdowns, detailed navigation and
+both formats of detailed/grouped downloads. Include it in resource keys; changing
+it resets cursors and suppresses old results until the new response is ready.
+The export source captures activity with the rest of its data snapshot; later
+archiving does not rewrite that source, while current authority must still pass
+the existing release checks. This adds no archive permission or mutation.
+
+Verify default inclusion, active-only rows/totals in all four dimensions,
+archived-client/task independence, unauthorized entries, empty filtered results,
+source snapshots, strict URL parsing and actual-session UI/download parity.
 
 Resolve a single authenticated report-access response before mounting any report
 or catalog resource. Reuse the export authority gate to read policy, active

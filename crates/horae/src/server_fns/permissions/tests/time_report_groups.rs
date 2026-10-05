@@ -9,6 +9,7 @@ fn query(group_by: TimeReportGrouping) -> TimeReportGroupQuery {
     TimeReportGroupQuery {
         date_from: "2026-09-01".parse().unwrap(),
         date_to: "2026-09-30".parse().unwrap(),
+        active_projects_only: false,
         client_ids: vec![],
         project_ids: vec![],
         user_ids: vec![],
@@ -17,6 +18,43 @@ fn query(group_by: TimeReportGrouping) -> TimeReportGroupQuery {
         group_by,
         after: None,
         expected_requester: None,
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn active_projects_only_narrows_every_grouping_before_totals(pool: PgPool) {
+    let ids = super::time_reports_tests::active_projects_fixture(&pool).await;
+    for group_by in [
+        TimeReportGrouping::Client,
+        TimeReportGrouping::Project,
+        TimeReportGrouping::Task,
+        TimeReportGrouping::Person,
+    ] {
+        for (active_projects_only, count) in [(false, 2), (true, 1)] {
+            let query = TimeReportGroupQuery {
+                active_projects_only,
+                ..query(group_by)
+            };
+            let page = read(&pool, ids.org_id, ids.user_id, &query).await.unwrap();
+            assert_eq!(
+                page.groups.len(),
+                if group_by == TimeReportGrouping::Project {
+                    count
+                } else {
+                    1
+                }
+            );
+            assert_eq!(page.totals.entry_count, count as i64);
+            assert_eq!(page.totals.rounded_minutes, count as i64 * 60);
+            assert_eq!(
+                page.groups
+                    .iter()
+                    .map(|g| g.totals.rounded_minutes)
+                    .sum::<i64>(),
+                count as i64 * 60
+            );
+        }
     }
 }
 

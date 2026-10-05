@@ -62,6 +62,7 @@ pub(crate) async fn read(
                OR EXISTS (SELECT 1 FROM project_management_assignments m
                  WHERE m.org_id=e.org_id AND m.manager_id=$2 AND m.project_id=e.project_id))))
              AND e.spent_date BETWEEN $6 AND $7
+             AND (NOT $17::bool OR p.active)
              AND (cardinality($8::uuid[])=0 OR p.client_id=ANY($8))
              AND (cardinality($9::uuid[])=0 OR e.project_id=ANY($9))
              AND (cardinality($10::uuid[])=0 OR e.user_id=ANY($10))
@@ -96,6 +97,7 @@ pub(crate) async fn read(
         query.after.as_ref().map(|cursor| cursor.project_name.as_str()),
         query.after.as_ref().map(|cursor| cursor.task_name.as_str()),
         query.after.as_ref().map(|cursor| cursor.id),
+        query.active_projects_only,
     ).fetch_all(&mut *tx).await?;
     let stats = records.first().ok_or(TimeReadError::Unavailable)?;
     let totals = TimeReportTotals {

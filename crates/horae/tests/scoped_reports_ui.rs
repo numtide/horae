@@ -60,6 +60,9 @@ mod models {
 #[path = "../src/components/badge.rs"]
 pub mod badge;
 #[allow(dead_code)]
+#[path = "../src/components/controls.rs"]
+pub mod controls;
+#[allow(dead_code)]
 #[path = "../src/components/form.rs"]
 pub mod form;
 #[path = "../src/components/icons.rs"]
@@ -67,7 +70,7 @@ pub mod icons;
 #[path = "../src/components/table.rs"]
 pub mod table;
 mod components {
-    pub use super::{badge, form, icons, table};
+    pub use super::{badge, controls, form, icons, table};
 }
 #[path = "../src/pages/reports.rs"]
 mod reports;
@@ -326,6 +329,69 @@ fn grouped(allowed: TimeReportAccess, name: &str) -> time_report::TimeReportGrou
         groups: vec![group],
         totals,
     }
+}
+
+#[tokio::test]
+async fn active_project_filter_resets_detail_paging_and_binds_grouped_downloads() {
+    let probe = Probe::default();
+    let own = queue(&probe.access);
+    let first = queue(&probe.reports);
+    let allowed = access(TimeReportPolicy::Scoped);
+    let mut dom = mount(&probe);
+    own.send(Ok(allowed)).unwrap();
+    settle(&mut dom);
+    first.send(Ok(report(allowed, "Old project"))).unwrap();
+    settle(&mut dom);
+    assert!(!probe.queries.borrow().last().unwrap().active_projects_only);
+    let late = queue(&probe.reports);
+    click(&mut dom, "report-next");
+    assert!(probe.queries.borrow().last().unwrap().after.is_some());
+    let filtered = queue(&probe.reports);
+    click(&mut dom, "report-active-projects-only");
+    assert_no_results(&dom);
+    let query = probe.queries.borrow().last().unwrap().clone();
+    assert!(query.active_projects_only && query.after.is_none());
+    assert_eq!(query.expected_requester, Some(allowed.requester));
+    let _ = late.send(Ok(report(allowed, "Old project")));
+    settle(&mut dom);
+    assert_no_results(&dom);
+    filtered
+        .send(Ok(report(allowed, "Active project")))
+        .unwrap();
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains("active_projects_only=true"));
+    let groups = queue(&probe.groups);
+    click(&mut dom, "report-view-time");
+    assert!(
+        probe
+            .group_queries
+            .borrow()
+            .last()
+            .unwrap()
+            .active_projects_only
+    );
+    let page = grouped(allowed, "Active client");
+    let id = page.groups[0].id;
+    groups.send(Ok(page)).unwrap();
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains("active_projects_only=true"));
+    let detail = queue(&probe.reports);
+    click(&mut dom, &format!("report-hours-{id}"));
+    let query = probe.queries.borrow().last().unwrap().clone();
+    assert!(query.active_projects_only);
+    assert_eq!(query.client_ids, vec![id]);
+    detail.send(Ok(report(allowed, "Active detail"))).unwrap();
+    settle(&mut dom);
+    let all = queue(&probe.reports);
+    click(&mut dom, "report-active-projects-only");
+    assert_no_results(&dom);
+    let query = probe.queries.borrow().last().unwrap().clone();
+    assert!(!query.active_projects_only);
+    assert_eq!(query.client_ids, vec![id]);
+    all.send(Ok(report(allowed, "Archived history"))).unwrap();
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains("active_projects_only=false"));
+    assert!(probe.legacy_reads.borrow().is_empty());
 }
 
 #[tokio::test]
@@ -677,6 +743,28 @@ async fn nested_breakdowns_bind_all_contexts_and_discard_late_or_mismatched_page
         let html = dioxus::ssr::render(&dom);
         assert!(html.contains("Current-period breakdown"));
         assert!(!html.contains("Old-period breakdown"));
+        let late = queue(&probe.groups);
+        click(&mut dom, "report-expanded-next");
+        let parent_response = queue(&probe.groups);
+        click(&mut dom, "report-active-projects-only");
+        assert_no_results(&dom);
+        let _ = late.send(Ok(grouped(allowed, "Old-filter breakdown")));
+        settle(&mut dom);
+        assert_no_results(&dom);
+        let response = queue(&probe.groups);
+        let mut row = grouped(allowed, "Active-project row");
+        row.groups[0].id = row_id;
+        parent_response.send(Ok(row)).unwrap();
+        settle(&mut dom);
+        expected.active_projects_only = true;
+        assert_eq!(probe.group_queries.borrow().last(), Some(&expected));
+        response
+            .send(Ok(grouped(allowed, "Active-project breakdown")))
+            .unwrap();
+        settle(&mut dom);
+        let html = dioxus::ssr::render(&dom);
+        assert!(html.contains("Active-project breakdown"));
+        assert!(!html.contains("Old-filter breakdown"));
         assert!(probe.legacy_reads.borrow().is_empty());
     }
 }

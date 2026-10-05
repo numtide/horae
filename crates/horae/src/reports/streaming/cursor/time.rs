@@ -52,6 +52,7 @@ pub(in crate::reports::streaming) async fn declare_entries(
                    OR EXISTS (SELECT 1 FROM project_management_assignments m
                      WHERE m.org_id=te.org_id AND m.manager_id=$2 AND m.project_id=te.project_id))))))
                AND te.spent_date BETWEEN $3 AND $4
+               AND (NOT $10::bool OR p.active)
                AND (cardinality($5::uuid[])=0 OR p.client_id=ANY($5))
                AND (cardinality($6::uuid[])=0 OR te.project_id=ANY($6))
                AND (cardinality($7::uuid[])=0 OR te.user_id=ANY($7))
@@ -63,6 +64,7 @@ pub(in crate::reports::streaming) async fn declare_entries(
            ORDER BY e.spent_date,e.project_name COLLATE "C",e.task_name COLLATE "C",e.id"#,
         org_id, actor_id, query.date_from as _, query.date_to as _, &query.client_ids,
         &query.project_ids, &query.user_ids, &query.task_ids, &query.tag_ids,
+        query.active_projects_only,
     ).execute(connection).await.map_err(database_error)?;
     Ok(())
 }
