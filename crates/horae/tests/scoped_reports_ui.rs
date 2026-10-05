@@ -73,12 +73,15 @@ mod reports;
 type AccessResponse = Result<TimeReportAccess, ServerFnError>;
 type IdentityResponse = Result<models::user::CurrentUser, ServerFnError>;
 type ReportResponse = Result<models::time_report::TimeReportPage, ServerFnError>;
+type GroupResponse = Result<models::time_report::TimeReportGroupPage, ServerFnError>;
 
 #[derive(Clone, Default)]
 struct Probe {
     access: Rc<RefCell<VecDeque<oneshot::Receiver<AccessResponse>>>>,
     identity: Rc<RefCell<VecDeque<oneshot::Receiver<IdentityResponse>>>>,
     reports: Rc<RefCell<VecDeque<oneshot::Receiver<ReportResponse>>>>,
+    groups: Rc<RefCell<VecDeque<oneshot::Receiver<GroupResponse>>>>,
+    group_queries: Rc<RefCell<Vec<time_report::TimeReportGroupQuery>>>,
     access_reads: Rc<Cell<usize>>,
     identity_reads: Rc<Cell<usize>>,
     legacy_reads: Rc<RefCell<Vec<&'static str>>>,
@@ -297,6 +300,170 @@ fn assert_no_results(dom: &VirtualDom) {
     }
 }
 
+fn grouped(allowed: TimeReportAccess, name: &str) -> time_report::TimeReportGroupPage {
+    let totals = report(allowed, "unused").totals;
+    let group = time_report::TimeReportGroup {
+        id: uuid::Uuid::now_v7(),
+        name: name.into(),
+        totals: time_report::TimeReportTotals {
+            entry_count: 7,
+            total_minutes: 419,
+            rounded_minutes: 420,
+            billable_minutes: 360,
+        },
+    };
+    time_report::TimeReportGroupPage {
+        requester: allowed.requester,
+        next_after: Some(time_report::TimeReportGroupCursor {
+            group_by: time_report::TimeReportGrouping::Client,
+            name: group.name.clone(),
+            id: group.id,
+        }),
+        groups: vec![group],
+        totals,
+    }
+}
+
+#[tokio::test]
+async fn grouped_tabs_reauthorize_and_hour_drilldown_binds_detail_and_download_filters() {
+    use time_report::TimeReportGrouping as Grouping;
+    let probe = Probe::default();
+    let own = queue(&probe.access);
+    let first = queue(&probe.reports);
+    let allowed = access(TimeReportPolicy::Scoped);
+    let mut dom = mount(&probe);
+    own.send(Ok(allowed)).unwrap();
+    settle(&mut dom);
+    first.send(Ok(report(allowed, "Old project"))).unwrap();
+    settle(&mut dom);
+    let clients = queue(&probe.groups);
+    click(&mut dom, "report-view-time");
+    assert_no_results(&dom);
+    assert_eq!(probe.group_queries.borrow()[0].group_by, Grouping::Client);
+    assert_eq!(
+        probe.group_queries.borrow()[0].expected_requester,
+        Some(allowed.requester)
+    );
+    clients.send(Ok(grouped(allowed, "Old project"))).unwrap();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains("503.00") && html.contains("7.00") && html.contains("6.00"));
+    assert!(
+        !html.contains("/api/reports/export/"),
+        "grouped view must not mislabel detailed downloads"
+    );
+    let projects = queue(&probe.groups);
+    click(&mut dom, "report-group-project");
+    assert_no_results(&dom);
+    let mut page = grouped(allowed, "<Project & name>");
+    page.next_after = None;
+    let project_id = page.groups[0].id;
+    projects.send(Ok(page)).unwrap();
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains("&#60;Project &#38; name&#62;"));
+    let detail = queue(&probe.reports);
+    click(&mut dom, &format!("report-hours-{project_id}"));
+    assert_no_results(&dom);
+    let query = probe.queries.borrow().last().unwrap().clone();
+    assert_eq!(query.project_ids, vec![project_id]);
+    assert!(query.client_ids.is_empty() && query.user_ids.is_empty() && query.task_ids.is_empty());
+    assert!(query.after.is_none());
+    detail
+        .send(Ok(report(allowed, "Selected project")))
+        .unwrap();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(
+        html.contains(&format!("project_ids={project_id}"))
+            && html.contains("expected_policy=scoped")
+    );
+    assert!(probe.legacy_reads.borrow().is_empty());
+    assert_eq!(probe.identity_reads.get(), 0);
+}
+
+#[tokio::test]
+async fn grouped_navigation_hides_stale_rows_and_rejects_changed_identity() {
+    use time_report::TimeReportGrouping as Grouping;
+    let probe = Probe::default();
+    let own = queue(&probe.access);
+    let first = queue(&probe.reports);
+    let allowed = access(TimeReportPolicy::Scoped);
+    let mut dom = mount(&probe);
+    own.send(Ok(allowed)).unwrap();
+    settle(&mut dom);
+    first.send(Ok(report(allowed, "Old project"))).unwrap();
+    settle(&mut dom);
+    let clients = queue(&probe.groups);
+    click(&mut dom, "report-view-time");
+    clients.send(Ok(grouped(allowed, "Old project"))).unwrap();
+    settle(&mut dom);
+    let pending = queue(&probe.groups);
+    click(&mut dom, "report-group-next");
+    assert_no_results(&dom);
+    assert!(probe.group_queries.borrow().last().unwrap().after.is_some());
+    let tasks = queue(&probe.groups);
+    click(&mut dom, "report-group-task");
+    assert_no_results(&dom);
+    let query = probe.group_queries.borrow().last().unwrap().clone();
+    assert_eq!(query.group_by, Grouping::Task);
+    assert!(query.after.is_none());
+    let _ = pending.send(Ok(grouped(allowed, "Old project")));
+    settle(&mut dom);
+    assert_no_results(&dom);
+    tasks
+        .send(Ok(grouped(access(TimeReportPolicy::Scoped), "Old project")))
+        .unwrap();
+    settle(&mut dom);
+    assert_no_results(&dom);
+    assert!(dioxus::ssr::render(&dom).contains("Your session changed"));
+    input(&mut dom, "report-from", "");
+    assert_eq!(probe.group_queries.borrow().len(), 3);
+    assert_no_results(&dom);
+    assert!(probe.legacy_reads.borrow().is_empty());
+}
+
+#[tokio::test]
+async fn grouped_period_changes_preserve_dimension_reset_cursor_and_replace_ready_data() {
+    use time_report::TimeReportGrouping as Grouping;
+    let probe = Probe::default();
+    let own = queue(&probe.access);
+    let first = queue(&probe.reports);
+    let allowed = access(TimeReportPolicy::Scoped);
+    let mut dom = mount(&probe);
+    own.send(Ok(allowed)).unwrap();
+    settle(&mut dom);
+    first.send(Ok(report(allowed, "Old project"))).unwrap();
+    settle(&mut dom);
+    let client = queue(&probe.groups);
+    click(&mut dom, "report-view-time");
+    client.send(Ok(grouped(allowed, "Old project"))).unwrap();
+    settle(&mut dom);
+    let person = queue(&probe.groups);
+    click(&mut dom, "report-group-person");
+    let mut person_page = grouped(allowed, "Old project");
+    person_page.next_after.as_mut().unwrap().group_by = Grouping::Person;
+    person.send(Ok(person_page.clone())).unwrap();
+    settle(&mut dom);
+    let second = queue(&probe.groups);
+    click(&mut dom, "report-group-next");
+    second.send(Ok(person_page)).unwrap();
+    settle(&mut dom);
+    assert!(probe.group_queries.borrow().last().unwrap().after.is_some());
+    let changed = queue(&probe.groups);
+    input(&mut dom, "report-to", "2099-12-31");
+    assert_no_results(&dom);
+    let query = probe.group_queries.borrow().last().unwrap().clone();
+    assert_eq!(query.date_to.to_string(), "2099-12-31");
+    assert_eq!(query.group_by, Grouping::Person);
+    assert!(query.after.is_none());
+    let mut changed_page = grouped(allowed, "New period");
+    changed_page.next_after = None;
+    changed.send(Ok(changed_page)).unwrap();
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains("New period"));
+    assert!(!dioxus::ssr::render(&dom).contains("Old project"));
+}
+
 #[tokio::test]
 async fn canonical_pages_use_current_identity_and_full_period_totals_without_legacy_reads() {
     let probe = Probe::default();
@@ -478,6 +645,19 @@ async fn a_mismatched_page_identity_never_displays_results_or_downloads() {
 #[allow(dead_code)]
 mod server_fns {
     use super::*;
+
+    pub async fn list_visible_time_report_groups(
+        query: time_report::TimeReportGroupQuery,
+    ) -> GroupResponse {
+        let probe = use_context::<Probe>();
+        probe.group_queries.borrow_mut().push(query);
+        let response = probe
+            .groups
+            .borrow_mut()
+            .pop_front()
+            .expect("unexpected grouped report read");
+        response.await.expect("group sender dropped")
+    }
 
     pub async fn get_time_report_access(
         expected: Option<permission_editor::PermissionRequester>,

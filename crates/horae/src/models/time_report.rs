@@ -100,13 +100,6 @@ pub struct TimeReportGroupCursor {
     pub id: Uuid,
 }
 
-#[cfg_attr(
-    not(feature = "server"),
-    expect(
-        dead_code,
-        reason = "Grouped Reports consumer integration is pending in T221."
-    )
-)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TimeReportGroupQuery {
@@ -130,13 +123,6 @@ pub struct TimeReportGroup {
     pub totals: TimeReportTotals,
 }
 
-#[cfg_attr(
-    not(feature = "server"),
-    expect(
-        dead_code,
-        reason = "Grouped Reports consumer integration is pending in T221."
-    )
-)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TimeReportGroupPage {

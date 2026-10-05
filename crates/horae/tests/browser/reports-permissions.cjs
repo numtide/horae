@@ -102,6 +102,65 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
     release = undefined;
     await expect(page.locator('tbody tr')).toHaveCount(500);
 
+    const filteredLinks = [];
+    for (const [dimension, entity, filter] of [
+      ['client', client, 'client_ids'], ['project', project, 'project_ids'],
+      ['task', task, 'task_ids'], ['person', actor.id, 'user_ids'],
+    ]) {
+      await page.locator('#report-view-time').click();
+      await page.locator(`#report-group-${dimension}`).click();
+      await expect(page.locator(`#report-hours-${entity}`)).toHaveText('503.00');
+      await expect(page.locator('tbody tr')).toHaveCount(1);
+      await expect(page.locator('tbody tr td:nth-child(3)')).toHaveText('503.00');
+      await expect(page.locator('tbody tr td:nth-child(4)')).toHaveText('0.00');
+      await expect(page.locator('tbody')).not.toContainText('Private colleague');
+      await expect(page.getByRole('link', { name: 'Export CSV', exact: true })).toHaveCount(0);
+      await page.locator(`#report-hours-${entity}`).focus();
+      await page.keyboard.press('Enter');
+      await expect(page.locator('tbody tr')).toHaveCount(500);
+      for (const format of ['CSV', 'XLSX']) {
+        const link = await page.getByRole('link', { name: `Export ${format}`, exact: true }).getAttribute('href');
+        const params = new URL(link, base).searchParams;
+        assert.equal(params.get(filter), entity);
+        assert.equal(params.get('from'), date);
+        assert.equal(params.get('to'), date);
+        assert.equal(params.get('expected_user_id'), actor.id);
+        assert.equal(params.get('expected_policy'), 'scoped');
+        for (const other of ['client_ids', 'project_ids', 'task_ids', 'user_ids'].filter(key => key !== filter)) {
+          assert.equal(params.has(other), false, 'a previous grouping must not leak into the drilldown');
+        }
+        const response = await context.request.get(`${base}${link}`);
+        assert.equal(response.status(), 200);
+        if (format === 'CSV') {
+          const body = await response.text();
+          assert.equal(body.match(/<Report & note>/g).length, 503);
+          assert.ok(!body.includes('Private report note'));
+        } else {
+          assert.ok((await response.body()).subarray(0, 2).equals(Buffer.from('PK')));
+        }
+        filteredLinks.push(link);
+      }
+      await page.locator('#report-clear-selection').click();
+      await expect(page.locator('tbody tr')).toHaveCount(500);
+      const cleared = new URL(await page.getByRole('link', { name: 'Export CSV', exact: true }).getAttribute('href'), base);
+      assert.equal(cleared.searchParams.has(filter), false);
+    }
+    await page.locator('#report-view-time').click();
+    await expect(page.locator(`#report-hours-${actor.id}`)).toBeVisible();
+    await page.locator('#report-from').fill('2040-01-01');
+    await expect(page.locator('#report-group-refresh')).toBeEnabled();
+    await page.locator('#report-to').fill('2040-01-01');
+    await expect(page.locator('#report-group-refresh')).toBeEnabled();
+    await expect(page.locator('tbody')).toHaveCount(0);
+    await expect(page.locator('dl')).toContainText('0.00');
+    await expect(page.locator('#report-group-person')).toHaveAttribute('aria-pressed', 'true');
+    await page.locator('#report-to').fill(date);
+    await expect(page.locator(`#report-hours-${actor.id}`)).toHaveText('503.00');
+    await page.locator('#report-from').fill(date);
+    await expect(page.locator('#report-group-refresh')).toBeEnabled();
+    await page.locator('#report-view-detailed').click();
+    await expect(page.locator('tbody tr')).toHaveCount(500);
+
     for (const [width, height, theme] of [[1440, 900, 'dark'], [390, 844, 'light']]) {
       await page.setViewportSize({ width, height });
       await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
@@ -124,13 +183,36 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
         mkdirSync(process.env.HORAE_BROWSER_ARTIFACTS, { recursive: true });
         await page.screenshot({ path: join(process.env.HORAE_BROWSER_ARTIFACTS, `reports-${width}-${theme}.png`) });
       }
+      await page.locator('#report-view-time').click();
+      await page.locator('#report-group-project').click();
+      await expect(page.locator(`#report-hours-${project}`)).toHaveText('503.00');
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, 'grouped viewport must not overflow');
+      const nameLines = await page.locator('tbody tr:first-child td:first-child').evaluate(cell => {
+        const range = document.createRange();
+        range.setStart(cell.firstChild, 0);
+        range.setEnd(cell.firstChild, 6);
+        return range.getClientRects().length;
+      });
+      assert.equal(nameLines, 1, 'group names must not break within individual words');
+      await page.locator(`#report-hours-${project}`).focus();
+      await expect(page.locator(`#report-hours-${project}`)).toBeFocused();
+      if (process.env.HORAE_BROWSER_ARTIFACTS) {
+        await page.screenshot({ path: join(process.env.HORAE_BROWSER_ARTIFACTS, `report-groups-${width}-${theme}.png`) });
+      }
+      await page.locator('#report-view-detailed').click();
+      await expect(page.locator('tbody tr')).toHaveCount(500);
     }
+    await page.locator('#report-view-time').click();
+    await expect(page.locator(`#report-hours-${project}`)).toBeVisible();
     // No grant change is needed: even an Admin's captured scoped link must not
     // adopt the wider policy-0 scope after the mode changes.
     sql(`UPDATE organizations SET permission_policy_version=0 WHERE id='${org}'`);
-    for (const link of [csvLink, xlsxLink]) {
+    for (const link of [csvLink, xlsxLink, ...filteredLinks]) {
       assert.equal((await context.request.get(`${base}${link}`)).status(), 403);
     }
+    await page.locator('#report-group-refresh').click();
+    await expect(page.getByRole('alert')).toContainText('Could not load the report');
+    await expect(page.locator('tbody')).toHaveCount(0);
     await page.locator('#reports-retry-access').click();
     await expect(page.getByRole('alert')).toContainText('session or report policy changed');
     await expect(page.locator('tbody')).toHaveCount(0);
@@ -143,7 +225,7 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
     await expect(page.locator('tbody')).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Export CSV', exact: true })).toHaveCount(0);
     assert.deepEqual(errors, []);
-    console.log(`PASS: scoped report paging, totals, exports, stale/invalid states and policy binding; Chromium ${browser.version()}`);
+    console.log(`PASS: scoped report paging, totals, four group drilldowns, filtered exports, stale/invalid states and policy binding; Chromium ${browser.version()}`);
   } finally {
     if (release) release();
     await page.unrouteAll({ behavior: 'wait' });

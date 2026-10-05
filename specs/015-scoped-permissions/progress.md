@@ -1,5 +1,53 @@
 # Scoped permissions investigation progress
 
+## 2026-10-05 — Grouped report consumer
+
+- Previous turn published verified `41ff137` to existing draft #212; remote HEAD
+  matched and the worktree was clean. That was implementation progress, not full
+  feature acceptance.
+- Reopened Harvest's Time-report guide and read the Reports handoff: the latter
+  depicts the custom report builder, not finished ordinary Time results. Preserve
+  its shared tables/controls and current Horae utility system; do not fabricate
+  builder controls, rates or financial-family data.
+- T221 starts with the four ordinary grouping tabs and hour-total drilldown into
+  the existing detailed reader. Dates, entity IDs and requester binding must
+  follow through to detailed CSV/XLSX. Grouped downloads and nested entity-name
+  reports remain required, and are not represented by detailed export links.
+- Added actual-component tests for grouped navigation, full-period totals,
+  pending/cancelled responses, identity rejection and bound drilldown. RED
+  `34642` failed the two new navigation tests because the controls did not exist.
+  The first build `99653` exposed the explicit-path child module layout; corrected
+  it without moving the existing Reports entry point.
+- Independent review found a stale-date risk in a singleton keyed child. Dates
+  now enter the resource as reactive signals and participate in its response key;
+  parent-owned pagination resets on date changes and preserves grouping. Added a
+  Ready-second-page regression. `68632` passed all 15 component tests. Follow-up
+  review confirmed the fix with no material findings; corrected its minor fixture
+  cursor observation too.
+- `64723` formatted the increment. Fresh full Dioxus build `37299` passed (73.97
+  seconds). Disposable Chromium run `93847` passed all four grouping tabs,
+  keyboard hour drilldown, entity-bound CSV/XLSX, cleared filters, empty/date
+  transitions, scoped data and policy-change rejection. The fixture has 503 own
+  entries plus a private colleague entry; no existing database was used.
+- Batched desktop-dark/mobile-light inspection found grouped names breaking
+  within words on mobile. Removed only that cell's `wrap-anywhere`, preserving
+  the shared scrolling table and all global CSS. Added a browser geometry check;
+  confirmation build `41625` passed (81.44 seconds). Confirmation Chromium
+  `71066` passed with the added word geometry assertion; inspected its desktop
+  and mobile grouped captures together, with no additional correction required.
+  Evidence lives in `.scratch/grouped-reports-browser-confirmation/`.
+- `55479` passed server/all-targets Clippy (93 seconds), WASM Clippy (17.16
+  seconds), both with warnings denied, and all 15 component tests (75-second
+  compilation). Final formatting `6138` completed with zero changes. No full
+  flake check or completed feature acceptance is claimed.
+- Actual Spec Kit prerequisites passed again; command skills remain absent, so
+  this is not a claim that unavailable specify/analyze commands were executed.
+  No SQL or migration changed, so the published SQLx cache remains applicable.
+
+Next: publish this verified consumer increment unsigned to draft #212, then complete matching
+grouped exports and nested entity-name reports. T221/T203, full pickers,
+financial families and policy activation remain open; do not merge.
+
 ## 2026-10-05 — Scoped group aggregates
 
 - Previous goal turn made implementation progress: published `7266abb` to draft

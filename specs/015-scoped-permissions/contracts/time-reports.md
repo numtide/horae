@@ -123,6 +123,20 @@ to override the approved custom-grant contract or captured built-in defaults.
 
 ### Ordinary consumer integration
 
+The canonical Time view has four grouping controls: Clients, Projects, Tasks and
+Team. Each group’s Hours control opens detailed time constrained to that entity
+ID, not its display name. Carry the selected period, requester and policy into
+the detailed request and both detailed downloads. Clearing the selection removes
+only the drilldown filter; switching grouping must not retain an unrelated ID.
+Do not display detailed download links while showing grouped results.
+
+The grouped resource identity includes dates, dimension and cursor. A date
+change resets both page stacks and retains the selected grouping; every request
+change hides old rows and totals until its matching response is ready. Treat
+identity mismatch and access failure as non-data states, with no legacy fallback.
+Group entity-name navigation and grouped exports remain separate required work;
+plain names must not imply that the nested reports already exist.
+
 Resolve a single authenticated report-access response before mounting any report
 or catalog resource. Reuse the export authority gate to read policy, active
 identity and current ordinary time authority under the same transaction fences.

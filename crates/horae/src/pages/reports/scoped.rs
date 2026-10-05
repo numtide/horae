@@ -6,8 +6,41 @@ use crate::components::badge::Badge;
 use crate::components::form::{FormGroup, Input};
 use crate::components::table::DataTable;
 use crate::models::permission_editor::PermissionRequester;
-use crate::models::time_report::{TimeReportCursor, TimeReportQuery};
+use crate::models::time_report::{
+    TimeReportCursor, TimeReportGroupCursor, TimeReportGrouping, TimeReportQuery,
+};
 use crate::server_fns;
+
+#[path = "scoped/grouped.rs"]
+mod grouped;
+
+#[derive(Clone, PartialEq)]
+struct Selection {
+    dimension: TimeReportGrouping,
+    id: uuid::Uuid,
+    name: String,
+}
+
+impl Selection {
+    fn filter_key(&self) -> &'static str {
+        match self.dimension {
+            TimeReportGrouping::Client => "client_ids",
+            TimeReportGrouping::Project => "project_ids",
+            TimeReportGrouping::Task => "task_ids",
+            TimeReportGrouping::Person => "user_ids",
+        }
+    }
+
+    fn apply(&self, query: &mut TimeReportQuery) {
+        let target = match self.dimension {
+            TimeReportGrouping::Client => &mut query.client_ids,
+            TimeReportGrouping::Project => &mut query.project_ids,
+            TimeReportGrouping::Task => &mut query.task_ids,
+            TimeReportGrouping::Person => &mut query.user_ids,
+        };
+        *target = vec![self.id];
+    }
+}
 
 fn period(from: &str, to: &str) -> Result<(NaiveDate, NaiveDate), &'static str> {
     let from = from.parse().map_err(|_| "Enter a valid start date.")?;
@@ -26,12 +59,25 @@ pub(super) fn ScopedReports(
     let today = chrono::Utc::now().date_naive();
     let mut from = use_signal(move || today.with_day(1).unwrap_or(today).to_string());
     let mut to = use_signal(move || today.to_string());
+    let mut show_groups = use_signal(|| false);
+    let group_dimension = use_signal(|| TimeReportGrouping::Client);
+    let mut group_cursors = use_signal(|| vec![None::<TimeReportGroupCursor>]);
+    let mut selection = use_signal(|| None::<Selection>);
     let mut cursors = use_signal(|| vec![None::<TimeReportCursor>]);
     let mut page = use_resource(move || async move {
-        let key = (from(), to(), cursors.read().last().cloned().flatten());
+        let key = (
+            from(),
+            to(),
+            cursors.read().last().cloned().flatten(),
+            selection(),
+            show_groups(),
+        );
         let result = async {
+            if key.4 {
+                return Ok(None);
+            }
             let (date_from, date_to) = period(&key.0, &key.1)?;
-            let loaded = server_fns::list_visible_time_report_entries(TimeReportQuery {
+            let mut query = TimeReportQuery {
                 date_from,
                 date_to,
                 client_ids: vec![],
@@ -41,28 +87,40 @@ pub(super) fn ScopedReports(
                 tag_ids: vec![],
                 after: key.2.clone(),
                 expected_requester: Some(requester),
-            })
-            .await
-            .map_err(|_| "Could not load the report. Check your access and retry.")?;
+            };
+            if let Some(selected) = &key.3 {
+                selected.apply(&mut query);
+            }
+            let loaded = server_fns::list_visible_time_report_entries(query)
+                .await
+                .map_err(|_| "Could not load the report. Check your access and retry.")?;
             if loaded.requester != requester {
                 return Err("Your session changed. Reload this page before viewing reports.");
             }
-            Ok(loaded)
+            Ok(Some(loaded))
         }
         .await;
         (key, result)
     });
-    let key = (from(), to(), cursors.read().last().cloned().flatten());
+    let key = (
+        from(),
+        to(),
+        cursors.read().last().cloned().flatten(),
+        selection(),
+        show_groups(),
+    );
     let dates = period(&key.0, &key.1);
     let response = page.read();
     let current = response.as_ref().filter(|(requested, _)| *requested == key);
     let ready = page.state()() == UseResourceState::Ready && current.is_some();
     let loaded = current
-        .filter(|_| ready && dates.is_ok())
-        .and_then(|(_, result)| result.as_ref().ok());
+        .filter(|_| ready && dates.is_ok() && !show_groups())
+        .and_then(|(_, result)| result.as_ref().ok())
+        .and_then(Option::as_ref);
     let next = loaded.and_then(|page| page.next_after.clone());
     let download_query = loaded.and_then(|_| dates.ok()).map(|(date_from, date_to)| {
-        format!("from={date_from}&to={date_to}&expected_org_id={}&expected_user_id={}&expected_policy=scoped", requester.org_id, requester.user_id)
+        let filter = key.3.as_ref().map(|selected| format!("&{}={}", selected.filter_key(), selected.id)).unwrap_or_default();
+        format!("from={date_from}&to={date_to}&expected_org_id={}&expected_user_id={}&expected_policy=scoped{filter}", requester.org_id, requester.user_id)
     });
     let date_error_id = dates.err().map(|_| "report-date-error".to_string());
 
@@ -74,35 +132,60 @@ pub(super) fn ScopedReports(
                     a { class: "btn btn-secondary", href: "/api/reports/export/csv?{query}", "Export CSV" }
                     a { class: "btn btn-secondary", href: "/api/reports/export/xlsx?{query}", "Export XLSX" }
                 }
-                button { id: "report-refresh", r#type: "button", class: "btn btn-secondary", disabled: !ready,
-                    onclick: move |_| { if ready { page.restart(); } }, "Refresh report"
+                if !show_groups() {
+                    button { id: "report-refresh", r#type: "button", class: "btn btn-secondary", disabled: !ready,
+                        onclick: move |_| { if ready { page.restart(); } }, "Refresh report"
+                    }
                 }
                 button { id: "reports-retry-access", r#type: "button", class: "btn btn-secondary",
                     onclick: move |_| on_check_access.call(()), "Refresh access"
                 }
             }
         }
+        div { class: "segmented flex-wrap mb-6", role: "group", aria_label: "Report views",
+            button { id: "report-view-time", r#type: "button",
+                class: if show_groups() { "segmented-item active" } else { "segmented-item" }, aria_pressed: show_groups(),
+                onclick: move |_| { selection.set(None); cursors.set(vec![None]); show_groups.set(true); }, "Time"
+            }
+            button { id: "report-view-detailed", r#type: "button",
+                class: if !show_groups() { "segmented-item active" } else { "segmented-item" }, aria_pressed: !show_groups(),
+                onclick: move |_| { selection.set(None); cursors.set(vec![None]); show_groups.set(false); }, "Detailed time"
+            }
+        }
         div { class: "flex flex-wrap items-end gap-4 mb-6",
             FormGroup { label: "From", id: "report-from",
                 Input { kind: "date", id: "report-from", value: from(), error_id: date_error_id.clone(),
-                    oninput: move |event: FormEvent| { cursors.set(vec![None]); from.set(event.value()); }
+                    oninput: move |event: FormEvent| { cursors.set(vec![None]); group_cursors.set(vec![None]); from.set(event.value()); }
                 }
             }
             FormGroup { label: "To", id: "report-to",
                 Input { kind: "date", id: "report-to", value: to(), error_id: date_error_id,
-                    oninput: move |event: FormEvent| { cursors.set(vec![None]); to.set(event.value()); }
+                    oninput: move |event: FormEvent| { cursors.set(vec![None]); group_cursors.set(vec![None]); to.set(event.value()); }
                 }
             }
         }
-        h2 { class: "text-lg mb-4", "Detailed time" }
+        if !show_groups() { h2 { class: "text-lg mb-4", "Detailed time" } }
         if let Err(message) = dates {
             p { id: "report-date-error", class: "alert alert-danger", role: "alert", "{message}" }
+        } else if show_groups() {
+            grouped::GroupedTimeReport {
+                requester, from, to, dimension: group_dimension, cursors: group_cursors,
+                on_detail: move |selected| { selection.set(Some(selected)); cursors.set(vec![None]); show_groups.set(false); }
+            }
         } else if !ready {
             p { role: "status", class: "text-secondary", "Loading detailed report…" }
         } else if let Some((_, Err(message))) = current {
             p { class: "alert alert-danger", role: "alert", "{message}" }
         }
         if let Some(loaded) = loaded {
+            if let Some(selected) = &key.3 {
+                div { class: "flex flex-wrap items-center gap-3 mb-4",
+                    p { class: "m-0 wrap-anywhere", "{selected.name}" }
+                    button { id: "report-clear-selection", r#type: "button", class: "btn btn-secondary btn-sm",
+                        onclick: move |_| { selection.set(None); cursors.set(vec![None]); }, "Clear selection"
+                    }
+                }
+            }
             dl { class: "flex flex-wrap gap-6 mb-6", aria_label: "Full-period totals",
                 div { dt { "Entries" } dd { class: "text-mono m-0", "{loaded.totals.entry_count}" } }
                 div { dt { "Total hours" } dd { class: "text-mono m-0", "{hours(loaded.totals.total_minutes)}" } }
@@ -145,13 +228,13 @@ pub(super) fn ScopedReports(
                 }
             }
         }
-        nav { class: "flex flex-wrap items-center gap-3 mt-4", aria_label: "Report pages",
+        if !show_groups() { nav { class: "flex flex-wrap items-center gap-3 mt-4", aria_label: "Report pages",
             button { id: "report-previous", r#type: "button", class: "btn btn-secondary", disabled: !ready || cursors.read().len() <= 1,
                 onclick: move |_| { if ready && cursors.read().len() > 1 { cursors.write().pop(); } }, "Previous"
             }
             button { id: "report-next", r#type: "button", class: "btn btn-secondary", disabled: !ready || next.is_none(),
                 onclick: move |_| { if ready && let Some(cursor) = next.clone() { cursors.write().push(Some(cursor)); } }, "Next"
             }
-        }
+        } }
     }
 }
