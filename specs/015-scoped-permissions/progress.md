@@ -1,5 +1,106 @@
 # Scoped permissions investigation progress
 
+## 2026-10-05 — Reports browser verification and disk recovery
+
+- Previous turn made concrete maintenance progress at the user's request: removed
+  only validated inactive build directories and two obsolete browser bundles,
+  recovering approximately 190 GiB. Source, worktrees, pending diffs, evidence and
+  databases were preserved; the active permission worktree retained its cache.
+- Dioxus 0.7.9's `cli/build.rs::into_targets` detects the explicit dependency
+  `fullstack` feature even with `--fullstack false`. Corrected the ignored runner
+  to use the project's normal single fullstack build, without a preliminary
+  native build. `50982` completed successfully in 223.69 seconds, including an
+  explicitly successful fresh client bundle (16.59 seconds).
+- Disposable Chromium run `38460` failed on a missing `billable` fixture value;
+  `86456` reached the delayed-request case but exposed an interceptor/unroute
+  race. Corrected both test defects without changing authorization behavior.
+  `76285` then passed in Chromium 148.0.7778.96: 503 authorized entries versus a
+  private other-person entry, full-period totals, 500/3 pagination, CSV/XLSX,
+  invalid dates, hidden pending results, policy changes and inactive-user denial.
+  It used the already-current native server and explicitly refreshed WASM.
+- Inspected desktop-dark and mobile-light captures together. Mobile names and
+  dates wrapped too aggressively; removed only the name cells' anywhere-wrap
+  utility and kept dates on one line. No shared CSS changed. Added geometric
+  word/date assertions and registered the browser suite in the default runner.
+- `22181` passed all twelve actual-component tests, then failed Clippy on the
+  nested Next-button condition. Applied the suggested let-chain without changing
+  its readiness guard. Final bundle `1062` and component/native/WASM checks
+  `82436` are running; second browser confirmation remains pending. These are
+  not full-feature acceptance. T203 and activation remain open.
+- Final bundle `1062` completed (125.73 seconds). Actual-component rerun `82436`
+  passed all twelve tests; lint continues in that same invocation. Browser
+  confirmation `23602` passed against both parts of the final Dioxus bundle,
+  including the new geometric assertions. Inspected the second desktop/mobile
+  pair: mobile dates stay intact, words wrap normally and horizontal overflow is
+  contained by the existing table wrapper. No further visual iteration needed.
+- Independent final static review found no material defect in the consumer/test
+  delta, including fixture cleanup and the held-request lifecycle. Verification
+  used disposable PostgreSQL and local headless Chromium, not authenticated
+  Harvest or Windows Chrome. No new Harvest product behavior was inferred.
+- `82436` completed successfully: all-target native Clippy (127 seconds) and
+  WASM Clippy (20.90 seconds), warnings denied. Formatting CI `8206` checked 554
+  files with zero changes. T216–T218 are complete; no new SQL or migration was
+  introduced after the successful backend/storage/HTTP/cache run `11622`.
+  Full `nix flake check` and full-feature acceptance are not claimed.
+
+Next: publish this verified increment unsigned on `feat/scoped-permissions` to
+existing draft #212 without merging. Continue T203's full candidate discovery,
+grouping and financial-family integration using the existing contracts and
+Harvest evidence. Do not infer Reports candidate policy from the separate
+Timesheet decision or repeat the unanswered zero-record candidate question.
+Independent C02/financial integration analysis remains available while those
+picker decisions are open. Scoped approvals, company locks, migration and full
+activation are still required; the goal remains active.
+
+## 2026-10-05 — Ordinary Reports consumer
+
+- Previous response only reconfirmed FR-033/B and made no implementation progress.
+  Revalidated clean published `a23804f` and reused the existing worktree/draft #212.
+- Actual Spec Kit prerequisites pass; command skills remain absent. Read Rust,
+  testing, async and interface-hardening guidance. Closed T216–T218's consumer
+  contract without deciding the pending Reports candidate question.
+- RED `63621` reproduces all six legacy catalog/report reads before admission;
+  three new isolation tests fail while existing monetary presentation tests pass.
+  An earlier harness compile error was corrected before claiming RED.
+- Independent review identified the unbound get-my-permissions/get-me handoff.
+  Reused the existing export authority transaction for one access response with
+  requester and mode. The route pins both across remount/retry; the scoped view
+  connects bounded rows, exact full-period totals and bound downloads.
+- Actual-component suite `71446` passes all twelve cases: legacy/canonical
+  isolation, pending/error states, cursor/date changes, cancelled responses,
+  escaped text, full-period totals and requester/mode continuity. HTTP `13191`
+  passes the first access-endpoint matrix (12.52s).
+- Review then identified a stale scoped link becoming a legacy-mode download.
+  Added optional strict `expected_policy` transport and checks before XLSX rows
+  or CSV DECLARE, preserving later release checks. Static re-review is clear.
+  Added same-session HTTP transitions in both directions and a browser fixture.
+- Export run `85126` passes 110 regressions but fails one new parser test because
+  its URI omitted required dates; corrected the fixture, not production behavior.
+  Final export/storage/HTTP/cache run is `54896`; no final result claimed yet.
+- `54896` failed during compilation with ENOSPC, before any test. A separate
+  font lookup used an unfiltered path flake and copied build artifacts into Nix.
+  Interrupted that process, verified the exact unreferenced source copy, then
+  removed only `/nix/store/p29g07awi53pcqpd7m2nfsgmw4wqgack-source` with Nix
+  (18 GiB recovered). The original worktree/data remain intact. Use the existing
+  Git-filtered flake's `checks.x86_64-linux.browser.FONTCONFIG_FILE` attribute
+  for fonts, never an unfiltered path `getFlake` here. Retry is `11622`.
+- `11622` passes 111 report/export regressions (43.28s; two existing manual
+  measurements ignored), eleven storage cases (2.17s), the actual-session suite
+  including both policy transitions (13.63s), and full SQLx preparation (96s).
+  No cache descriptors changed. The font derivation is available. Fresh native
+  browser server builds successfully (50.79s); current client build is `44838`.
+- User noticed the slow terminal. Process inspection showed that `dx build --web --fullstack false` was nevertheless building `server-dev` with the
+  `server` feature, duplicating the verified native build. Interrupted only
+  those identified Dioxus/Cargo processes. `44838` returned zero after the
+  interrupt, which is NOT evidence of a completed client build; the browser
+  bundle still contains stale client files and must not be used for acceptance.
+  Next: correct the client-only build invocation, then run the prepared browser
+  fixture and final native/WASM checks. No build process is intentionally left
+  running from this invocation.
+- Next: complete those gates, build a fresh browser bundle, run the disposable
+  report suite and inspect desktop/mobile captures. T203, full pickers, grouping,
+  financial families and activation remain open. No real data or shared CSS changed.
+
 ## 2026-10-05 — Full-period report totals
 
 - Previous goal turn was a verified wait on live Chrome client `81095` plus a

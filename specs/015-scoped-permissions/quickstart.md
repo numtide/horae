@@ -1,5 +1,63 @@
 # Permission verification
 
+## Ordinary Reports consumer (T216–T218)
+
+`Reports` first obtains `get_time_report_access`: requester and supported
+legacy/scoped mode are read together using the existing time-export authority
+transaction. No legacy catalog or monetary resource mounts before admission.
+The route keeps that identity/mode through retries and child remounts. Canonical
+results use `list_visible_time_report_entries`, not the legacy report functions.
+
+`scoped_reports_ui` imports the production route and shared controls. It checks
+pending/denied admission, legacy isolation, full-period totals on paged and empty
+results, escaped text, cursor/date changes, invalid date ranges, cancelled old
+responses, sanitized failures and requester/mode continuity through reloads.
+Only an exact-key successful ready response exposes rows, totals and links.
+
+Canonical CSV/XLSX links carry requester IDs and `expected_policy=scoped`, without
+the page cursor. The existing download routes reject mismatched mode before
+selecting rows and retain their subsequent release checks. Omitted mode preserves
+legacy/direct links; unknown, empty or repeated mode values are invalid. The
+registered-session suite checks both transitions with the same Admin identity,
+canonical Member grants, matching/stale links and unchanged unbound downloads.
+
+Run in the Nix shell, using disposable PostgreSQL for the server suite:
+
+```sh
+cargo test -p horae --features server --test scoped_reports_ui
+cargo test -p horae --features server --bin horae reports::
+cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization
+```
+
+The focused browser fixture is `run-design-checks.sh reports-permissions`, with
+the current packaged server/client and the pinned Playwright environment from
+`nix/checks/browser.nix`. It creates 503 authorized entries plus another person's
+private record in the runner's disposable database; it must never use an existing
+database. `HORAE_BROWSER_ARTIFACTS` selects an absolute `.scratch/` capture folder.
+Browser and final lint outcomes are recorded in `progress.md`, not implied by
+the existence of the fixture.
+
+The browser fixture passed with Chromium 148.0.7778.96 against the complete
+Dioxus debug bundle (`23602`). Desktop 1440×900/dark and mobile 390×844/light
+captures were reviewed in two bounded rounds; the only visual correction kept
+dates and individual name words intact without changing shared CSS. Geometric
+assertions preserve that behavior alongside viewport containment, labels and
+focus. The fixture is included in the default browser runner. These emulated
+viewports do not claim physical-device or Windows Chrome acceptance.
+
+Final actual-component tests pass 12/12; all-target native Clippy and WASM Clippy
+pass with warnings denied (`82436`). Backend verification `11622` passed 111
+report/export regressions, eleven storage cases, the actual-session suite and
+complete SQLx preparation without cache changes. Independent final static review
+found no material defect. T216–T218 are complete, not full Reports acceptance.
+
+The UI retains shared date controls, table, badges and utility styling without
+changing global CSS. This is the ordinary results consumer, not the handoff's
+custom report builder or completed full-picker/grouping/financial acceptance.
+Legacy catalog/financial APIs do not yet accept the new requester binding;
+their remaining canonical cutover requirements are not replaced by this gate.
+T203 and feature activation remain open.
+
 ## Full-period ordinary time totals (T213–T215)
 
 `list_visible_time_report_entries` returns `totals` with integer `entry_count`,

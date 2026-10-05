@@ -23,6 +23,9 @@ Ordinary detailed Reports integration follows `contracts/time-reports.md`:
 - [x] T213 Reproduce missing full-period time totals across bounded report pages, empty/exhausted cursors, filters and scoped identities (FR-008/018).
 - [x] T214 Return exact nonfinancial totals and the bounded page from one scoped SQL snapshot, retaining current authority and filter semantics.
 - [x] T215 Verify large sums, rounding, tenant/scope/revocation and registered-session payloads; refresh SQLx, native/WASM checks and adversarial review. This does not close the ordinary Reports consumer or full T203.
+- [x] T216 Reproduce report/catalog reads before access resolution using the actual Reports component; cover canonical/legacy denial, pending, error and retry states (FR-006/008/010/018).
+- [x] T217 Separate policy consumers and connect bounded ordinary time rows, full-period totals and requester-bound downloads; preserve binding and hide stale results across date/page/permission refreshes.
+- [x] T218 Verify real-component transitions and disposable-browser delivery, native/WASM lint and adversarial review; record full picker, grouping and financial-family work as open T203 dependencies.
 
 These tasks do not close T014/T015 or the full Reports parity surface alone.
 

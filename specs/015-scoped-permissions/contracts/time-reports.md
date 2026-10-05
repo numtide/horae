@@ -74,6 +74,44 @@ ordinary UI, complete pickers and matching delivery paths are connected.
 
 ## Required follow-through
 
+### Ordinary consumer integration
+
+Resolve a single authenticated report-access response before mounting any report
+or catalog resource. Reuse the export authority gate to read policy, active
+identity and current ordinary time authority under the same transaction fences.
+Return only requester and a supported legacy/scoped mode. Only explicit policy
+0 with eligible Manager/Admin authority mounts legacy catalogs or reports.
+Errors, unknown catalogs and canonical denial never fall back to legacy roles.
+Canonical ordinary time access requires a supported stored catalog and at least one
+`TimeReadOwn`, `TimeReadManaged` or `TimeReadAll` grant. Display gates do not
+replace independent server authorization, including the remaining C02 work.
+
+Connect the existing bounded ordinary reader with inclusive dates, cursor
+navigation and full-period totals. Keep the requester's identity in the route
+component across child remounts and permission retries, pinned by that first
+accepted access response. Also retain its policy; changing mode requires an
+explicit page reload, not a retry that mounts a different consumer. Canonical reads and
+CSV/XLSX links carry that binding; refresh cannot silently adopt another account.
+Only a successful, ready response for the exact current date/cursor request may
+display rows, totals or downloads. Hide stale data while pending, after denial,
+on invalid/reversed dates and on identity mismatch. Retry preserves the binding;
+changing dates resets pagination, not identity. Downloads omit the page cursor.
+Legacy report/catalog APIs still have their existing independent role checks and
+do not yet accept this requester binding; this gate does not claim to repair all
+legacy account-switch races or complete their canonical cutover.
+
+Use the incumbent detailed table, native labelled dates and shared controls;
+do not change shared CSS or copy the custom report-builder prototype into this
+different surface. The first connected result view does not define candidate
+eligibility: do not mount legacy catalogs, derive choices from result pages or
+fake unresolved pickers. Full multi-selection discovery, grouping and financial
+families remain required; this increment does not complete T203 or activate policy.
+
+Verify the actual component with controlled pending/error/success responses,
+canonical and legacy mount isolation, date/cursor changes, full-period totals,
+escaped labels and identity changes. Then exercise actual server delivery in
+disposable Chromium with desktop/mobile captures and legacy regression coverage.
+
 The new reader does not replace the legacy Reports component, grouped monetary
 report or downloads. Separate canonical and policy-0 consumers before cutover:
 the current page mounts legacy catalogs and financial summary reads before its
@@ -149,6 +187,14 @@ partial binding returns 400. Unrelated forged `org_id`/`actor_id` parameters
 remain ignored. Reject every `after` parameter, including a bare or empty one;
 downloads cover the selected period, never a paged suffix. Reject reversed or
 invalid dates. Preserve filenames, media types and bounded export behavior.
+
+Optional `expected_policy=legacy|scoped` binds the mode of the issuing screen.
+Reject unknown, empty or repeated values; reject a mismatch before selecting any
+export rows under the locked source authority. The canonical consumer always
+sends `scoped`. Omitting it preserves existing direct/legacy links. This closes
+the interval between a scoped screen load and a later download after policy
+changes; the existing source/release policy checks still protect changes during
+the download. Test actual CSV and XLSX links across both transition directions.
 
 Verify parsing and both registered HTTP routes, including mixed allowed/foreign
 filters, task/tag narrowing, unchanged scalar links, account changes and complete
