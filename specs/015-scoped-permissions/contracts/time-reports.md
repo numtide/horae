@@ -190,6 +190,21 @@ Do not reuse a manager-only release check for canonical downloads. Moving XLSX
 to READ COMMITTED also requires a single-statement size/payload snapshot, as in
 `limits::project::projects`, rather than retaining separate count/read queries.
 
+### Grouped CSV delivery
+
+`GET /api/reports/time/grouped/csv` accepts the same required grouping and strict
+date/filter/requester parameters as grouped XLSX, with canonical policy only.
+It returns `time-report.csv`, containing the dimension label, Hours, Billable
+Hours and Non-billable Hours. Reuse exact integer-based hour formatting and CSV
+escaping. Financial columns and private context identifiers are not part of this
+ordinary projection.
+
+Follow the grouped refinement in `csv-exports.md`: bounded native context
+fragments, a complete group under one current authority gate, output reservation
+before those gates and synchronous delivery after their successful release.
+Do not reuse XLSX's whole-file materialization or row/field caps. The route alone
+does not finish its requester-bound consumer link or nested report navigation.
+
 ### XLSX delivery
 
 The canonical grouped route is `GET /api/reports/time/grouped/xlsx`, with required

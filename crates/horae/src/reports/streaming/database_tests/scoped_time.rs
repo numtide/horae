@@ -1,6 +1,8 @@
 use super::*;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 
+mod grouped;
+
 async fn scoped(pool: &PgPool, role: OrgRole, selection: &[Permission]) -> SeedIds {
     let ids = seed(pool, role).await;
     sqlx::query!(

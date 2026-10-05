@@ -1,5 +1,51 @@
 # Scoped permissions investigation progress
 
+## 2026-10-05 — Grouped CSV delivery
+
+- Revalidated clean `ca170c0` and completed the pending remote check: #212 is
+  OPEN/DRAFT at that exact commit. The grouped workbook increment was published;
+  the previous section's publication-pending note is now superseded.
+- Reopened Harvest's Time-report guide and retained its viewed-report export
+  semantics. Executed Spec Kit prerequisites successfully; command skills remain
+  absent, so no unavailable specify/analyze execution is claimed.
+- RED `32504` failed all three initial grouped CSV tests with the stub's 501.
+  Added a canonical route, native pair-fragment cursor and bounded delivery.
+  Reused the existing worker, admission, deadlines and authorization predicates;
+  no dependency, migration or shared CSS change. Group totals do not escape until
+  every original context is authorized under one gate lifetime.
+- `25407` passed eight tests in 12.25 seconds: four dimensions and exact hours,
+  empty canonical authority, 10,001 source entries and groups, oversized quoted
+  Unicode, captured invalid state, frozen reassignment, last-of-129 scope
+  revocation and backpressure denial. Independent static review found no material
+  defects and requested explicit between-batch concurrency evidence.
+- Added a database-local third-fetch pause for a 257-context group, real lock
+  dependency assertions and normal/cancelled release with a one-connection pool.
+  Independent review identified a test-only cancellation timing assumption;
+  corrected it to release the artificial fetch blocker before waiting for cleanup.
+  The already compiled `8948` run passed 127 regressions but failed that old
+  cancellation wait, with two manual probes ignored; preparation did not run.
+  Corrected run `60045` passed 128 report tests (two existing manual probes
+  ignored, 54.57 seconds), all 11 storage tests and the existing registered
+  HTTP suite (12.29 seconds). This includes normal/cancelled between-batch
+  authority verification. Full SQLx preparation completed in 82 seconds with
+  ten new descriptors and no deletions. Browser
+  assertions now exercise the actual registered CSV route in all four dimensions
+  with all five filters, empty results, invalid queries, anonymity, wrong identity
+  and later policy changes. Disposable Chromium `24811` passed all of those
+  checks and the existing report regressions (version 148.0.7778.96); captures
+  are in `.scratch/grouped-csv-browser-evidence/`. No UI/CSS changed in this
+  increment, and no new visual-parity claim is made.
+- Fresh full server/WASM bundle `64061` passed in 75.52 seconds. `60662` passed
+  native all-target Clippy in 110 seconds and WASM Clippy in 18.62 seconds,
+  both with warnings denied. Format gate `80746` passed (564 files, zero changes).
+  The final independent review found no material production defects; its
+  cancellation-test concern was corrected and verified above. No full-flake
+  or full-feature completion is claimed.
+
+Next: publish the verified grouped CSV backend unsigned to existing draft #212,
+then connect its bound UI link and nested reports as required T221 work. T203,
+full pickers, financial families and policy activation remain open. Do not merge.
+
 ## 2026-10-05 — Grouped workbook delivery
 
 - Previous iteration published `e2e66fb` to existing draft #212; verified remote

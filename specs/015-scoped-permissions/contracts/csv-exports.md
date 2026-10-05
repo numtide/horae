@@ -73,6 +73,37 @@ all existing transport, timeout, cancellation and error-body guarantees.
 
 ## Bounded native transport
 
+### Canonical grouped time
+
+The grouped CSV source uses the same four dimensions, scope, rounding and five
+filter dimensions as grouped XLSX, but does not inherit workbook row or text
+limits. Preserve the native cursor and the download admission/deadlines above.
+Aggregate first by entity ID and original `(person, project)` pair; carry group
+totals and an explicit last-context marker on the bounded native fragments.
+Never collect all contexts of a group into an array or a Rust vector. Distinct
+people and projects cannot be validated independently: their correlation matters.
+
+Reserve output capacity before acquiring the current organization/actor gates.
+Keep those same gates through validation of every context fragment of the group,
+checking at most 128 pairs at once. Only after its last fragment may that group's
+CSV row be sent. Release the authorization savepoint successfully and send
+synchronously, without another await. A group is an output block; include the
+headers in the first block. An empty source still validates its captured state
+and current authority before releasing a header-only file. Releasing gates between
+fragments would allow earlier context checks to become stale before the total is
+disclosed. Waiting for output capacity with gates held would block revocation.
+
+The source cursor must outlive these savepoint rollbacks and retain its original
+scope even if entries are later changed or deleted. Labels and private authority
+metadata count toward the existing native byte threshold. As with detailed CSV,
+one oversized record is permitted; this is not a hard 64 KiB process-memory limit.
+No monetary columns, authority fields or private scope identifiers enter the file.
+
+Verify complete multi-context groups, partial revocation, authority stability
+across fragment batches, release before backpressure, frozen source changes,
+empty/invalid source authority, all dimensions/filters, exact rounding, oversized
+Unicode labels and more than 10,000 groups as well as contributing entries.
+
 Migration 0046 adds a SECURITY INVOKER, PUBLIC-revoked fixed-cursor helper that
 returns native records. Each invocation accepts 1–128 rows and stops after
 the row that reaches 64 KiB of logical projected payload. Each source computes

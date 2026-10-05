@@ -34,8 +34,10 @@ T221 progress: the four grouping tabs, Hours-to-detail navigation and grouped
 XLSX delivery are connected and verified through disposable Chromium. Detailed
 CSV/XLSX retain the chosen entity, dates and requester. Grouped XLSX retains every
 original person/project pair for final authorization, with group and payload
-limits applied after aggregation. Nested entity-name reports and grouped CSV
-remain pending; the task remains open.
+limits applied after aggregation. The grouped CSV backend is verified through
+the actual registered route in disposable Chromium, with bounded fragments,
+full-group authority, scope revocation and cancellation tests. Its bound UI link
+and nested entity-name reports remain pending; the task remains open.
 
 These tasks do not close T014/T015 or the full Reports parity surface alone.
 

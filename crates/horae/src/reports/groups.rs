@@ -11,6 +11,22 @@ pub struct GroupExportParams {
     filters: ExportParams,
 }
 
+pub async fn export_csv(
+    session: Session,
+    Query(params): Query<GroupExportParams>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let (user_id, org_id) = require_session(&session).await?;
+    let state = crate::state::global_state().await;
+    streaming::groups::download(
+        state.db.clone(),
+        org_id,
+        user_id,
+        params.filters,
+        params.group_by,
+    )
+    .await
+}
+
 pub async fn export_xlsx(
     session: Session,
     Query(params): Query<GroupExportParams>,
@@ -50,22 +66,23 @@ pub async fn export_xlsx(
     ))
 }
 
-pub(super) fn workbook(
-    rows: &[TimeReportGroup],
-    dimension: TimeReportGrouping,
-) -> Result<Vec<u8>, StatusCode> {
+pub(super) fn headers(dimension: TimeReportGrouping) -> [&'static str; 4] {
     let name = match dimension {
         TimeReportGrouping::Client => "Client",
         TimeReportGrouping::Project => "Project",
         TimeReportGrouping::Task => "Task",
         TimeReportGrouping::Person => "Teammate",
     };
+    [name, "Hours", "Billable Hours", "Non-billable Hours"]
+}
+
+pub(super) fn workbook(
+    rows: &[TimeReportGroup],
+    dimension: TimeReportGrouping,
+) -> Result<Vec<u8>, StatusCode> {
     let mut workbook = rust_xlsxwriter::Workbook::new();
     let sheet = workbook.add_worksheet();
-    for (column, label) in [name, "Hours", "Billable Hours", "Non-billable Hours"]
-        .into_iter()
-        .enumerate()
-    {
+    for (column, label) in headers(dimension).into_iter().enumerate() {
         sheet
             .write_string(0, column as u16, label)
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;

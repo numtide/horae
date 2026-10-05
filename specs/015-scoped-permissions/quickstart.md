@@ -1,5 +1,24 @@
 # Permission verification
 
+## Grouped CSV backend (T221 partial)
+
+Run `cargo test -p horae --features server --bin horae scoped_time::grouped::`
+against disposable PostgreSQL. The suite checks exact grouped hours, four
+dimensions, more than 10,000 groups/source entries, quoted Unicode exceeding a
+native chunk, captured authority, reassignment, partial revocation and
+backpressure. The concurrency probe replaces the cursor helper only inside its
+isolated test database, pauses the third fetch of a 257-context group and observes
+actual database lock dependencies. Its cancellation branch releases the probe
+blocker before asserting eventual connection/gate cleanup; it does not promise
+that cancelling Rust immediately interrupts a PostgreSQL statement.
+
+`reports-permissions.cjs` calls `/api/reports/time/grouped/csv` with the same
+grouping, period, requester and policy as the grouped workbook. It checks all
+five narrowing filter dimensions, exact fixture hours, empty files, malformed
+queries, anonymous/wrong-identity denial and policy changes. These are actual
+registered-route checks, not proof that the CSV link is exposed in the UI.
+The consumer link and nested report navigation remain T221 work.
+
 ## Grouped workbook delivery (T221 partial)
 
 In the Nix shell, run `cargo test -p horae --features server --bin horae reports::`
@@ -10,8 +29,8 @@ budgets, source reassignment and loss of only part of a group's captured scope.
 `reports-permissions.cjs` exercises the actual grouped XLSX route through each
 tab, requester/date binding, anonymous and malformed requests, empty results,
 policy changes and desktop/mobile layout. Its ZIP/HTTP assertions verify delivery;
-the Rust workbook assertions verify cells. Grouped CSV and nested report
-navigation remain required before T221 can close.
+the Rust workbook assertions verify cells. Grouped CSV consumer integration and
+nested report navigation remain required before T221 can close.
 
 ## Ordinary Reports consumer (T216–T218)
 

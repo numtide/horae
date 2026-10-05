@@ -41,6 +41,8 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
       INSERT INTO clients (id,org_id,name,currency) VALUES ('${client}','${org}','Report fixture client','EUR');
       INSERT INTO projects (id,org_id,client_id,name,currency) VALUES ('${project}','${org}','${client}','Report fixture project','EUR');
       INSERT INTO tasks (id,org_id,name) VALUES ('${task}','${org}','Report fixture task');
+      INSERT INTO project_tags (id,org_id,name) VALUES ('${id(7)}','${org}','Report export tag');
+      INSERT INTO project_tag_links (id,org_id,project_id,tag_id) VALUES ('${id(8)}','${org}','${project}','${id(7)}');
       INSERT INTO time_entries (id,org_id,user_id,project_id,task_id,spent_date,minutes,billable,notes)
         SELECT ('019f3000-0000-7000-8000-' || lpad((1000+n)::text,12,'0'))::uuid,'${org}','${actor.id}','${project}','${task}','${date}',60,true,'<Report & note> ' || n FROM generate_series(1,503) n;
       INSERT INTO time_entries (id,org_id,user_id,project_id,task_id,spent_date,minutes,billable,notes)
@@ -126,16 +128,46 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
       assert.equal(workbook.status(), 200);
       assert.ok((await workbook.body()).subarray(0, 2).equals(Buffer.from('PK')));
       filteredLinks.push(groupedLink);
+      // Exercise the registered CSV endpoint before exposing it in the UI.
+      const groupedCsv = new URL(groupedUrl.href);
+      groupedCsv.pathname = '/api/reports/time/grouped/csv';
+      const download = await context.request.get(groupedCsv.href);
+      assert.equal(download.status(), 200);
+      assert.equal(download.headers()['content-type'], 'text/csv');
+      assert.equal(download.headers()['content-disposition'], 'attachment; filename="time-report.csv"');
+      const groupedText = await download.text();
+      assert.equal(groupedText.split('\n').length, 3);
+      assert.ok(groupedText.endsWith(',503.00,503.00,0.00\n'));
+      assert.ok(!groupedText.includes('Private colleague') && !groupedText.includes(actor.id));
+      filteredLinks.push(`${groupedCsv.pathname}${groupedCsv.search}`);
+      const narrowed = new URL(groupedCsv.href);
+      for (const [field, value] of [['client_ids', client], ['project_ids', project], ['user_ids', actor.id], ['task_ids', task], ['tag_ids', id(7)]]) {
+        narrowed.searchParams.set(field, `${value},${id(99)},${value}`);
+      }
+      const filteredDownload = await context.request.get(narrowed.href);
+      assert.equal(filteredDownload.status(), 200);
+      assert.equal(await filteredDownload.text(), groupedText);
+      for (const field of ['client_ids', 'project_ids', 'user_ids', 'task_ids', 'tag_ids']) {
+        const empty = new URL(narrowed.href);
+        empty.searchParams.set(field, id(99));
+        const result = await context.request.get(empty.href);
+        assert.equal(result.status(), 200);
+        assert.equal(await result.text(), `${groupedText.split('\n')[0]}\n`);
+      }
       if (dimension === 'client') {
         for (const suffix of ['&group_by=person', '&from=2040-01-01', '&after=', '&user_ids=invalid']) {
           assert.equal((await context.request.get(`${groupedUrl.href}${suffix}`)).status(), 400);
+          assert.equal((await context.request.get(`${groupedCsv.href}${suffix}`)).status(), 400);
         }
         const mismatched = new URL(groupedUrl.href);
         mismatched.searchParams.set('expected_user_id', person);
         assert.equal((await context.request.get(mismatched.href)).status(), 403);
+        mismatched.pathname = groupedCsv.pathname;
+        assert.equal((await context.request.get(mismatched.href)).status(), 403);
         const anonymous = await browser.newContext();
         try {
           assert.equal((await anonymous.request.get(groupedUrl.href)).status(), 401);
+          assert.equal((await anonymous.request.get(groupedCsv.href)).status(), 401);
         } finally {
           await anonymous.close();
         }
@@ -262,6 +294,8 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
       UPDATE organizations SET permission_policy_version=0 WHERE id='${org}';
       DELETE FROM person_permission_states WHERE id='${state}';
       DELETE FROM time_entries WHERE project_id='${project}';
+      DELETE FROM project_tag_links WHERE id='${id(8)}';
+      DELETE FROM project_tags WHERE id='${id(7)}';
       DELETE FROM projects WHERE id='${project}';
       DELETE FROM clients WHERE id='${client}';
       DELETE FROM tasks WHERE id='${task}';
