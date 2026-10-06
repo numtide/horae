@@ -115,9 +115,10 @@ Clients MVP as canonical-permission acceptance.
 | Harvest connection change authority, [#235](https://github.com/numtide/horae/pull/235) | `fix/harvest-connection-authority`, `.worktrees/harvest-connection-authority` | #228 `0e1e675` | Draft at `2fcecd1`; 1,146 tests, SQLx, offline server/WASM Clippy, format and full local Nix passed; retarget after #227/#228 |
 | Import job command and download authority, [#236](https://github.com/numtide/horae/pull/236) | `fix/import-job-authority`, `.worktrees/import-job-authority` | Integration base `26d6159` combining #235/#231 | Draft at `95bdf4a`; 1,163 tests, SQLx, offline server/WASM Clippy, format and full local Nix passed; retarget to master after #227/#228/#235 and #231, not an integration-base merge |
 | Original import requester provenance, [#237](https://github.com/numtide/horae/pull/237) | `feat/import-job-requester`, `.worktrees/import-job-requester` | Integration base `cfb8240` combining #236/#219/#222 | Draft at `2242361`; 1,218 tests, schema upgrade, SQLx, offline server/WASM Clippy and format passed; full Nix passed on unchanged diagnostic rerun; initial inherited-menu failure retained; retarget after both prerequisite chains, no worker-policy activation |
-| Budget email preparation authority, [#238](https://github.com/numtide/horae/pull/238) | `fix/budget-email-authority`, `.worktrees/budget-email-authority` | Master `1b8fa4f` | Draft at `7a7cede`; 1,133 source-head tests, SQLx, format and cache-inclusive server/WASM Clippy passed; full current-head Nix running; no real mail or policy activation |
-| Approval tenant isolation, [#239](https://github.com/numtide/horae/pull/239) | `fix/approval-tenant-isolation`, `.worktrees/approval-tenant-isolation` | Master `1b8fa4f` | Draft at `66a256f`; three source/test files and complete cache patch preserved exactly; 1,124 source-head tests, source review, SQLx, format and offline server/WASM Clippy passed; full current-head Nix running |
-| Identity response projections, [#240](https://github.com/numtide/horae/pull/240) | `fix/identity-response-projections`, `.worktrees/identity-response-projections` | Master `1b8fa4f` | Draft at `1ce993f`; 1,122 source-head tests, cache provenance, bounded review and format passed; cache-inclusive server/WASM lint `38653` and full Nix `16586` running; no activation |
+| Budget email preparation authority, [#238](https://github.com/numtide/horae/pull/238) | `fix/budget-email-authority`, `.worktrees/budget-email-authority` | Master `1b8fa4f` | Draft at `7a7cede`; 1,133 source-head tests, SQLx, format and cache-inclusive server/WASM Clippy passed; full current-head local Nix passed; no real mail or policy activation |
+| Approval tenant isolation, [#239](https://github.com/numtide/horae/pull/239) | `fix/approval-tenant-isolation`, `.worktrees/approval-tenant-isolation` | Master `1b8fa4f` | Draft at `66a256f`; three source/test files and complete cache patch preserved exactly; 1,124 source-head tests, source review, SQLx, format and offline server/WASM Clippy passed; full current-head local Nix passed |
+| Identity response projections, [#240](https://github.com/numtide/horae/pull/240) | `fix/identity-response-projections`, `.worktrees/identity-response-projections` | Master `1b8fa4f` | Draft at `1ce993f`; 1,122 source-head tests, cache provenance, bounded review and format passed; cache-inclusive server/WASM lint passed; full Nix `16586` running; no activation |
+| Time-writer account activity, [#241](https://github.com/numtide/horae/pull/241) | `fix/time-write-activity`, `.worktrees/time-write-activity` | #228 `0e1e675` | Draft at `7820f8d`; 1,142 tests, cache provenance, bounded review, format and offline server/WASM lint passed; full Nix `85167` running; no delegated writes or activation |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -277,7 +278,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `05448a8` | Specify scoped roles and permissions | specification-history | Held in original backup; extraction pending |
 | `1d45191` | Require Harvest parity for permissions and scoped approvals | specification-history | Held in original backup; extraction pending |
 | `a7727f1` | Add record scope evaluation for permissions | scope-domain | Code/tests in #219; specification hunks retained for reconciliation |
-| `2abce9a` | Enforce approval isolation and record permission boundaries | approval-isolation | Three Rust/test files and original cache patch in independent #239 (`66a256f`); 1,124 tests, source review, SQLx, format and offline server/WASM lints passed; full Nix running; mixed specification hunks retained |
+| `2abce9a` | Enforce approval isolation and record permission boundaries | approval-isolation | Three Rust/test files and original cache patch in independent #239 (`66a256f`); 1,124 tests, source review, SQLx, format and offline server/WASM lints passed; full local Nix passed; mixed specification hunks retained |
 | `757f43d` | Enforce tenant and administrator boundaries for assignments | legacy-access-writers | Rust/test/cache changes in #228 with subsequent coordination repair; specification hunks retained |
 | `d3a4ff3` | Document profile reapplication and import permission boundaries | specification-history | Held in original backup; extraction pending |
 | `dcf21ef` | Specify permission migration safeguards and rate-scope verification | specification-history | Held in original backup; extraction pending |
@@ -340,7 +341,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `dc822a0` | Recheck manager authority before delivering exports | export-authority | Held in original backup; extraction pending |
 | `108594e` | Revalidate project scope before delivering exports | export-authority | Held in original backup; extraction pending |
 | `dcf4ac8` | Recheck current permissions during CSV downloads | export-authority | Held in original backup; extraction pending |
-| `0793ce7` | Revalidate budget email authority before delivery | budget-email-authority | Four source/test files byte-identical in #238 (`7a7cede`) on master `1b8fa4f`; 1,133 tests, SQLx, format and offline server/WASM lints passed; full Nix running; specification hunks retained |
+| `0793ce7` | Revalidate budget email authority before delivery | budget-email-authority | Four source/test files byte-identical in #238 (`7a7cede`) on master `1b8fa4f`; 1,133 tests, SQLx, format and offline server/WASM lints passed; full local Nix passed; specification hunks retained |
 | `8aac739` | Add read-only permission migration diagnostics | permission-preflight | Held in original backup; extraction pending |
 | `8c15bfe` | Show own permissions in Settings | own-permissions | Held in original backup; extraction pending |
 | `300d1e9` | Expose administrator permission history | permission-audit | Held in original backup; extraction pending |
@@ -359,15 +360,15 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `eb56af3` | Define scoped approval transaction and coverage gates | specification-history | Held in original backup; extraction pending |
 | `8d49421` | Add authorized permission editor subject discovery | permission-editor | Held in original backup; extraction pending |
 | `b735b3a` | Add safe person switching to permission editor | permission-editor | Held in original backup; extraction pending |
-| `7f14e4b` | Limit user directory responses to consumed fields | identity-projections | Source/tests together in #240 at `1ce993f`; 1,122 tests, regenerated cache and format passed; offline lints/full Nix running; canonical tests and mixed specification hunks separately preserved |
+| `7f14e4b` | Limit user directory responses to consumed fields | identity-projections | Source/tests together in #240 at `1ce993f`; 1,122 tests, regenerated cache, format and offline lints passed; full Nix running; canonical tests and mixed specification hunks separately preserved |
 | `1eb13ec` | Add scoped people directory reads | people-directory | Held in original backup; extraction pending |
-| `981d0e3` | Resolve approval names without directory access | identity-projections | Source/tests together in #240 at `1ce993f`; 1,122 tests, regenerated cache and format passed; offline lints/full Nix running; canonical tests and mixed specification hunks separately preserved |
+| `981d0e3` | Resolve approval names without directory access | identity-projections | Source/tests together in #240 at `1ce993f`; 1,122 tests, regenerated cache, format and offline lints passed; full Nix running; canonical tests and mixed specification hunks separately preserved |
 | `6b5dbae` | Authorize identity-only project team choices | project-team-choices | Held in original backup; extraction pending |
 | `4c00660` | Document project form permission integration boundaries | specification-history | Held in original backup; extraction pending |
-| `3bb62ac` | Limit session identity responses to display fields | identity-projections | Source/tests together in #240 at `1ce993f`; 1,122 tests, regenerated cache and format passed; offline lints/full Nix running; canonical tests and mixed specification hunks separately preserved |
+| `3bb62ac` | Limit session identity responses to display fields | identity-projections | Source/tests together in #240 at `1ce993f`; 1,122 tests, regenerated cache, format and offline lints passed; full Nix running; canonical tests and mixed specification hunks separately preserved |
 | `4ac30fa` | Add scoped time-entry reads without financial metadata | time-readers | Held in original backup; extraction pending |
 | `c80233b` | Keep invoice identities out of time-entry responses | time-readers | Held in original backup; extraction pending |
-| `5ec183a` | Fence time-entry writes against account deactivation | time-writer-activity | Held in original backup; extraction pending |
+| `5ec183a` | Fence time-entry writes against account deactivation | time-writer-activity | Source/tests and regenerated cache in #241 (`7820f8d`), original configuration SQL inlined without canonical module; 1,142 tests and both offline lints passed; full Nix running; specification hunks retained |
 | `228e151` | Clarify timesheet context and locked calendar behavior | specification-history | Held in original backup; extraction pending |
 | `4294aa3` | Isolate permission browser fixtures and retain test assets | browser-fixture-tooling | Held in original backup; extraction pending |
 | `3308926` | Keep permission profile name uniqueness independent of database locale | permission-storage | Migration/storage regressions in #222; command lookup changes remain with template commands |
@@ -1893,3 +1894,47 @@ recorded in their PRs. Next collect the live gates and continue the separately
 inventoried time-entry payload boundary without importing canonical reader setup.
 Remaining original feature/UI/specification/governance hunks and unfinished local
 Clients work still prevent completion of the overall separation goal.
+
+### 2026-10-06 — Time-entry response boundary
+
+Previous iteration classified as progress: #241 was published with suite/cache
+evidence and the preservation ledger pushed. Re-read the objective, confirmed
+#216 merged, fetched unchanged master `1b8fa4f` and revalidated all three live
+handles. Original tracked snapshot comparison still passes. #241 offline lint
+`74243` subsequently exited zero: server and WASM passed on `7820f8d`. Updated
+its PR body and the delivery/accounting tables, including #238/#239 full local
+Nix completion. #241 full Nix `85167` and #240 `16586` remain live.
+
+Created independent `fix/time-entry-payload` in `.worktrees/time-entry-payload`
+on master `1b8fa4f`. Unsigned source `3ff9b8818716473c1ec2a674480cd634ad532ae3`
+contains three source/test files, 128 additions, extracting `c80233b` T168–T170.
+The complete shared model matches both that commit and final `db3935d`, blob
+`cbfba91bba08e68f38be22b33cc643c423e177a8`. No later original commit modifies it.
+
+Preserved the original populated-invoice HTTP fixture and complete legacy-role
+loop in `authorization_tests/time_entry_payload.rs`, registered in the existing
+singleton HTTP matrix. Only the unrelated canonical import, unused actor-cookie
+lookup and subsequent canonical setup/checks were excluded. Those checks remain
+owned by the canonical time reader, not discarded. Session-only identity, foreign
+input, exact field omission, one returned owned entry and the unchanged stored
+invoice relationship are still asserted for all three legacy roles.
+
+Applied ponytail and Rust/test guidance. Bounded review traced shared response
+sites, SQLx decoding, model input/output and all invoice-id consumer references:
+the time UI uses state; plugin payloads and invoice/report/Harvest projections
+use separate models. No production query, schema, CSS, dependency, action grant
+or canonical activation changed. Existing contract and task provenance remains
+FR-008/018; this is not a fresh full-feature Spec Kit acceptance claim.
+
+Formatting `88301` passed unchanged; diff checks and model provenance pass.
+Workspace suite plus complete SQLx regeneration runs on disposable PostgreSQL
+in `37602`, using the shared local Cargo target now released by #241's lints.
+Do not start another local Cargo command until it finishes. Next verify cache
+provenance, run both offline lints, publish the independent draft and start Nix.
+
+Read-only subsequent-boundary inventory: project-manager delegation was introduced
+by `9a7e05d`, hardened by `202ee96`, exposed by `84d5352` and made composable
+with project editing by `2497dbe`. Final models/readers/commands and transaction
+tests must be reviewed together; `PermissionRequester` is a small shared DTO
+absent from the current #234 model. Actual organization-lock and schema dependencies
+must be resolved before extraction. No delegation code was changed or certified.
