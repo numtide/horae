@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "CREATE FUNCTION project_export_test.pause() RETURNS boolean LANGUAGE plpgsql AS $$\n        BEGIN PERFORM pg_advisory_xact_lock(715015); RETURN true; END $$",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "9e03a7f1c2ffee76a82e906678b99277124127c305b0e95757ebb512daa774c6"
+}

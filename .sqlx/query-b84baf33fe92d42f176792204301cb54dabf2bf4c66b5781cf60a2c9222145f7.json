@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "CREATE VIEW project_export_test.project_read_access AS\n        SELECT * FROM public.project_read_access WHERE project_export_test.pause()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "b84baf33fe92d42f176792204301cb54dabf2bf4c66b5781cf60a2c9222145f7"
+}
