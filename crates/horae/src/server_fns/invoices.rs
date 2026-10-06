@@ -106,7 +106,7 @@ pub async fn prepare_invoice(
         .transpose()?;
     preview::prepare_with_edits(
         &state.db,
-        manager.org_id,
+        (manager.org_id, manager.id),
         parse_uuid(&client_id, "client_id")?,
         (
             parse_date(&period_from, "period_from")?,
@@ -124,6 +124,9 @@ mod tests;
 
 #[cfg(all(test, feature = "server"))]
 mod fee_tests;
+
+#[cfg(all(test, feature = "server"))]
+mod snapshot_tests;
 
 // ── Invoices ──────────────────────────────────────────────────────────────────
 

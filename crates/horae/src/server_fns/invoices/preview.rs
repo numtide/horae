@@ -7,7 +7,7 @@ use std::collections::BTreeSet;
 #[cfg(test)]
 pub(super) async fn prepare(
     pool: &sqlx::PgPool,
-    org_id: uuid::Uuid,
+    identity: (uuid::Uuid, uuid::Uuid),
     client_id: uuid::Uuid,
     (from, to): (chrono::NaiveDate, chrono::NaiveDate),
     selected: Option<&[uuid::Uuid]>,
@@ -15,7 +15,7 @@ pub(super) async fn prepare(
 ) -> Result<InvoicePreparation, ServerFnError> {
     prepare_with_edits(
         pool,
-        org_id,
+        identity,
         client_id,
         (from, to),
         selected,
@@ -27,7 +27,7 @@ pub(super) async fn prepare(
 
 pub(super) async fn prepare_with_edits(
     pool: &sqlx::PgPool,
-    org_id: uuid::Uuid,
+    (org_id, actor_id): (uuid::Uuid, uuid::Uuid),
     client_id: uuid::Uuid,
     (from, to): (chrono::NaiveDate, chrono::NaiveDate),
     selected: Option<&[uuid::Uuid]>,
@@ -50,11 +50,7 @@ pub(super) async fn prepare_with_edits(
             .into_iter()
             .collect::<Vec<_>>()
     });
-    let mut tx = pool.begin().await.map_err(server_err)?;
-    sqlx::query!("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
-        .execute(&mut *tx)
-        .await
-        .map_err(server_err)?;
+    let mut tx = crate::server_fns::snapshot::manager(pool, org_id, actor_id).await?;
     sqlx::query_scalar!(
         "SELECT id FROM clients WHERE id = $1 AND org_id = $2",
         client_id,
