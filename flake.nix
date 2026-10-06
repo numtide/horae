@@ -32,16 +32,23 @@
       systems = [
         "x86_64-linux"
         "aarch64-linux"
-        "x86_64-darwin"
-        "aarch64-darwin"
       ];
 
-      blueprint = inputs.blueprint {
-        inherit inputs systems;
-        prefix = "nix";
-        # fenix provides the Rust toolchain used by nix/package.nix.
-        nixpkgs.overlays = [ inputs.fenix.overlays.default ];
-      };
+      mkBlueprint =
+        systems:
+        inputs.blueprint {
+          inherit inputs systems;
+          prefix = "nix";
+          # fenix provides the Rust toolchain used by nix/package.nix.
+          nixpkgs.overlays = [ inputs.fenix.overlays.default ];
+        };
+
+      blueprint = mkBlueprint systems;
+
+      # darwin is only for local development, kept out of `checks` so CI does
+      # not build it
+      darwinBlueprint = mkBlueprint [ "aarch64-darwin" ];
+      localSystems = systems ++ [ "aarch64-darwin" ];
 
       # Overlay that rebuilds horae against the consumer's nixpkgs (composing
       # fenix), so cross variants resolve. Used both as overlays.shared-nixpkgs
@@ -54,6 +61,8 @@
     in
     blueprint
     // {
+      devShells = blueprint.devShells // darwinBlueprint.devShells;
+
       # Expose horae as a nixpkgs overlay for downstream flakes:
       #   default        — reuse blueprint's prebuilt packages (cache-friendly)
       #   shared-nixpkgs — rebuild against the consumer's nixpkgs, so cross
@@ -68,14 +77,14 @@
       # nixpkgs instances with the shared-nixpkgs overlay applied, so horae and
       # its cross variants are reachable directly, e.g.
       # `nix build .#legacyPackages.aarch64-darwin.pkgsCross.aarch64-multiplatform.horae`.
-      legacyPackages = lib.genAttrs systems (system:
+      legacyPackages = lib.genAttrs localSystems (system:
         import inputs.nixpkgs {
           inherit system;
           overlays = [ sharedNixpkgsOverlay ];
         });
 
-      apps = lib.genAttrs systems (system:
-        (blueprint.apps.${system} or { }) //
+      apps = lib.genAttrs localSystems (system:
+        ((blueprint.apps or { }) // (darwinBlueprint.apps or { })).${system} or { } //
         (
           let
             hostPkgs = inputs.nixpkgs.legacyPackages.${system};
