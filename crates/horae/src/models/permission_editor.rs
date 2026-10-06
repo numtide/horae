@@ -1,6 +1,5 @@
-//! Permission command values; callers supply authenticated authority separately.
+//! Permission editor wire values; the server always reloads current authority.
 
-#[cfg(feature = "server")]
 use horae_core::permissions::catalog::{BuiltInProfile, Permission};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -13,8 +12,25 @@ pub struct PermissionRequester {
     pub user_id: Uuid,
 }
 
+/// Minimal person label for permission administration, not a general directory row.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PermissionSubject {
+    pub id: Uuid,
+    pub name: String,
+    pub active: bool,
+}
+
+/// Independently authorized page; a cursor does not preserve access or a snapshot.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PermissionSubjectPage {
+    pub requester: PermissionRequester,
+    pub subjects: Vec<PermissionSubject>,
+    pub next_after: Option<Uuid>,
+}
+
 /// Confirmed intent; actor identity is supplied separately by the server.
-#[cfg(feature = "server")]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TemplateCommand {
@@ -23,7 +39,6 @@ pub struct TemplateCommand {
     pub action: TemplateAction,
 }
 
-#[cfg(feature = "server")]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum TemplateAction {
@@ -37,7 +52,6 @@ pub enum TemplateAction {
     },
 }
 
-#[cfg(feature = "server")]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TemplateOutcome {
@@ -46,7 +60,6 @@ pub struct TemplateOutcome {
     pub detached_people: usize,
 }
 
-#[cfg(feature = "server")]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProfileCommand {
@@ -60,7 +73,6 @@ pub struct ProfileCommand {
     pub remove_people: Vec<Uuid>,
 }
 
-#[cfg(feature = "server")]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ProfileAction {
@@ -69,7 +81,6 @@ pub enum ProfileAction {
     Template { id: Uuid, expected_revision: i64 },
 }
 
-#[cfg(feature = "server")]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProfileOutcome {
@@ -80,7 +91,6 @@ pub struct ProfileOutcome {
 }
 
 /// Unsaved explicit proposal; revisions fence confirmation, not authority.
-#[cfg(feature = "server")]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProfileDraft {
@@ -89,4 +99,86 @@ pub struct ProfileDraft {
     pub expected_person_revision: i64,
     pub action: ProfileAction,
     pub grants: Vec<Permission>,
+}
+
+/// Display provenance, never accepted as authoritative permission state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    content = "value",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
+pub enum ProfileSource {
+    BuiltIn(BuiltInProfile),
+    Template { id: Uuid, applied_revision: i64 },
+    Individual,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PermissionSnapshot {
+    pub grants: Vec<Permission>,
+    pub is_administrator: bool,
+    pub source: ProfileSource,
+    pub revision: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TemplateChoice {
+    pub id: Uuid,
+    pub name: String,
+    pub grants: Vec<Permission>,
+    pub revision: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PermissionEditor {
+    pub requester: PermissionRequester,
+    pub user_id: Uuid,
+    pub name: String,
+    pub active: bool,
+    pub access_revision: i64,
+    pub permissions: PermissionSnapshot,
+    pub templates: Vec<TemplateChoice>,
+}
+
+/// Current display label; saves confirm relationship IDs, never names.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RelationshipRemoval {
+    pub id: Uuid,
+    pub subject_id: Uuid,
+    pub revision: i64,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProfilePreview {
+    pub user_id: Uuid,
+    pub access_revision: i64,
+    pub before: PermissionSnapshot,
+    pub after: PermissionSnapshot,
+    pub changed: bool,
+    pub remove_projects: Vec<RelationshipRemoval>,
+    pub remove_people: Vec<RelationshipRemoval>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TemplateAssignee {
+    pub user_id: Uuid,
+    pub name: String,
+    pub permissions: PermissionSnapshot,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TemplateDeletionPreview {
+    pub access_revision: i64,
+    pub template: TemplateChoice,
+    pub people: Vec<TemplateAssignee>,
 }

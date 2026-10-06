@@ -9,6 +9,7 @@ use crate::models::permissions::{PermissionSource, PermissionTemplate, PersonPer
 
 pub(crate) mod audit;
 pub(crate) mod directory;
+pub(crate) mod editor;
 pub(crate) mod own;
 pub(crate) mod profiles;
 pub(crate) mod project_management;
