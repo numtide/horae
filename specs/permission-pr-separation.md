@@ -115,6 +115,8 @@ Clients MVP as canonical-permission acceptance.
 | Harvest connection change authority, [#235](https://github.com/numtide/horae/pull/235) | `fix/harvest-connection-authority`, `.worktrees/harvest-connection-authority` | #228 `0e1e675` | Draft at `2fcecd1`; 1,146 tests, SQLx, offline server/WASM Clippy, format and full local Nix passed; retarget after #227/#228 |
 | Import job command and download authority, [#236](https://github.com/numtide/horae/pull/236) | `fix/import-job-authority`, `.worktrees/import-job-authority` | Integration base `26d6159` combining #235/#231 | Draft at `95bdf4a`; 1,163 tests, SQLx, offline server/WASM Clippy and format passed; full Nix running; retarget to master after #227/#228/#235 and #231, not an integration-base merge |
 | Original import requester provenance, [#237](https://github.com/numtide/horae/pull/237) | `feat/import-job-requester`, `.worktrees/import-job-requester` | Integration base `cfb8240` combining #236/#219/#222 | Draft at `2242361`; 1,218 tests, schema upgrade, SQLx, offline server/WASM Clippy and format passed; full Nix running; retarget after both prerequisite chains, no worker-policy activation |
+| Budget email preparation authority, [#238](https://github.com/numtide/horae/pull/238) | `fix/budget-email-authority`, `.worktrees/budget-email-authority` | Master `1b8fa4f` | Draft at `7a7cede`; 1,133 source-head tests, SQLx and format passed; offline lints and full current-head Nix pending; no real mail or policy activation |
+| Approval tenant isolation | `fix/approval-tenant-isolation`, `.worktrees/approval-tenant-isolation` | Master `1b8fa4f` | Local unsigned `d72b830`; three source/test files preserved exactly, source review and format passed; runtime/cache/lints/publication pending |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -274,7 +276,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `05448a8` | Specify scoped roles and permissions | specification-history | Held in original backup; extraction pending |
 | `1d45191` | Require Harvest parity for permissions and scoped approvals | specification-history | Held in original backup; extraction pending |
 | `a7727f1` | Add record scope evaluation for permissions | scope-domain | Code/tests in #219; specification hunks retained for reconciliation |
-| `2abce9a` | Enforce approval isolation and record permission boundaries | approval-isolation | Held in original backup; extraction pending |
+| `2abce9a` | Enforce approval isolation and record permission boundaries | approval-isolation | Three Rust/test files extracted byte-identically in independent `d72b830` on master `1b8fa4f`; source review and format passed; runtime/cache/lints/PR pending; mixed specification hunks retained |
 | `757f43d` | Enforce tenant and administrator boundaries for assignments | legacy-access-writers | Rust/test/cache changes in #228 with subsequent coordination repair; specification hunks retained |
 | `d3a4ff3` | Document profile reapplication and import permission boundaries | specification-history | Held in original backup; extraction pending |
 | `dcf21ef` | Specify permission migration safeguards and rate-scope verification | specification-history | Held in original backup; extraction pending |
@@ -337,7 +339,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `dc822a0` | Recheck manager authority before delivering exports | export-authority | Held in original backup; extraction pending |
 | `108594e` | Revalidate project scope before delivering exports | export-authority | Held in original backup; extraction pending |
 | `dcf4ac8` | Recheck current permissions during CSV downloads | export-authority | Held in original backup; extraction pending |
-| `0793ce7` | Revalidate budget email authority before delivery | budget-email-authority | Four source/test files byte-identical in isolated `8814949` on master `1b8fa4f`; format passed, old-head suite passed; current-head suite/cache running, lints/PR pending; specification hunks retained |
+| `0793ce7` | Revalidate budget email authority before delivery | budget-email-authority | Four source/test files byte-identical in #238 (`7a7cede`) on master `1b8fa4f`; 1,133 tests, SQLx and format passed; offline lints/full Nix pending; specification hunks retained |
 | `8aac739` | Add read-only permission migration diagnostics | permission-preflight | Held in original backup; extraction pending |
 | `8c15bfe` | Show own permissions in Settings | own-permissions | Held in original backup; extraction pending |
 | `300d1e9` | Expose administrator permission history | permission-audit | Held in original backup; extraction pending |
@@ -1589,3 +1591,40 @@ the remaining browser matrix and NixOS checks. Updated its PR verification recor
 This proves the local x86_64-linux gate for that head, not other architectures or
 a future retargeted commit. #236 (`65754`) and #237 (`63735`) remain live; neither
 is being restarted or counted as a completed full check.
+
+Notification SQLx preparation in `89138` completed successfully. Regenerated
+cache has 1,001 unchanged base descriptors, 54 byte-identical original additions
+and two obsolete removals, 1,055 total. All original cache changes are represented;
+ten additional descriptors already existed in the original parent through other
+code, but are required by this standalone source/tests (transaction settings,
+row locks and active-recipient fixtures). Therefore the entire cache patch ID
+differs from `0793ce7`, while its contents are individually preserved. Saved
+unsigned cache commit `7a7cede` and published independent draft
+[#238](https://github.com/numtide/horae/pull/238), 58 files / 1,985 insertions /
+53 deletions including generated metadata. Server offline lint `98267` and full
+Nix `24069` run on the cache-inclusive head; WASM follows the local server lint.
+
+Reviewed the next independent boundary: original `2abce9a`, tasks T021–T023.
+Read the complete approval implementation, shared server helpers, four new
+isolation tests and fixtures; traced every total/approve/reopen caller. The
+three source paths and fixtures before this original commit match current master.
+All external mutation routes still require the session's active Manager/Admin;
+the helper's organization comes from that trusted user. Only tenant-local
+submitted rows transition, only returned approval IDs select entries, foreign
+reopen returns not-found, and invoiced entries remain untouched. Transactions
+and post-commit plugin events retain their existing ordering. No new critical/high
+finding within the tenant repair; this is not transactional revocation or the
+future scoped/flexible approval policy.
+
+Created isolated `fix/approval-tenant-isolation` /
+`.worktrees/approval-tenant-isolation` on `1b8fa4f`, unsigned `d72b830`.
+All three source/test blobs match `2abce9a` exactly, 248 insertions/31 deletions;
+stable source patch ID is `3fad1ed12dbf8b71c61b579f56da244a39a7faf6` on both.
+Formatting passed unchanged (`18944`). The new isolation test file is unchanged
+through final `db3935d`. Later approval-name projection (`981d0e3`) and Timesheet
+submission context (`b8b1c60`) remain separately preserved, not silently discarded
+or folded into this invariant repair. Runtime suite/cache/lints/publication follow
+once notification lints release the shared local target.
+
+Recompared the original tracked backup and untracked archive: both remain intact.
+No merges, original PR closures, production-data changes or real emails occurred.
