@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE invoices SET number='PRIVATE-2',total_cents=2400 WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cfccbd25e4f5eab5cb4dd65d8e34073820ca885382c35bf94e75d5e2edcafeb4"
+}

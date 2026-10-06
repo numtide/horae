@@ -184,9 +184,10 @@ pub async fn report_detailed(
     // The CSV/XLSX exports must return exactly these rows, so the query lives
     // once in `crate::reports` and both surfaces call it.
     let state = crate::state::global_state().await;
-    crate::reports::fetch_entries(
+    fetch_detailed(
         &state.db,
         manager.org_id,
+        manager.id,
         (from_date, to_date),
         crate::reports::ReportFilters {
             client_id: client_filter,
@@ -196,7 +197,22 @@ pub async fn report_detailed(
         },
     )
     .await
-    .map_err(server_err)
+}
+
+#[cfg(feature = "server")]
+pub(super) async fn fetch_detailed(
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
+    period: (chrono::NaiveDate, chrono::NaiveDate),
+    filters: crate::reports::ReportFilters,
+) -> Result<Vec<DetailedReportRow>, ServerFnError> {
+    let mut tx = super::snapshot::manager(pool, org_id, actor_id).await?;
+    let rows = crate::reports::fetch_entries(&mut *tx, org_id, period, filters)
+        .await
+        .map_err(server_err)?;
+    tx.commit().await.map_err(server_err)?;
+    Ok(rows)
 }
 
 // ── Plugins ────────────────────────────────────────────────────────────────
