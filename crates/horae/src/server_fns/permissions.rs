@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use crate::models::permissions::{PermissionSource, PermissionTemplate, PersonPermissions};
 
+pub(crate) mod audit;
 pub(crate) mod own;
 pub(crate) mod preflight;
 pub(crate) mod profiles;
@@ -171,6 +172,10 @@ mod profile_tests;
 #[cfg(test)]
 #[path = "permissions/tests/preflight.rs"]
 mod preflight_tests;
+
+#[cfg(test)]
+#[path = "permissions/tests/audit.rs"]
+mod audit_tests;
 
 #[cfg(test)]
 #[path = "permissions/tests/project_management.rs"]
