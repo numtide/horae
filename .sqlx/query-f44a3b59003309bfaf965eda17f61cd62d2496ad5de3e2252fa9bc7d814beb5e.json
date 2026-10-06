@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO horae_jobs (id, org_id, kind, payload, status, checkpoint, report, claim_token, lease_until, account_generation)\n             VALUES ($1, $2, 'harvest_csv_import', '{\"legacy\":true}', $3, '{\"cursor\":500}', '{\"retained\":true}', $4, now() + interval '1 hour', 7)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f44a3b59003309bfaf965eda17f61cd62d2496ad5de3e2252fa9bc7d814beb5e"
+}

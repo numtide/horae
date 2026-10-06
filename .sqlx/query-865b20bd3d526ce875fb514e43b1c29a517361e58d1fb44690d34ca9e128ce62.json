@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT jsonb_build_array(\n            (SELECT jsonb_agg(to_jsonb(j) - 'original_requester_id' ORDER BY id) FROM horae_jobs j),\n            (SELECT jsonb_agg(to_jsonb(u) ORDER BY job_id) FROM horae_job_uploads u),\n            (SELECT jsonb_agg(to_jsonb(c) ORDER BY id) FROM horae_job_report_error_chunks c),\n            (SELECT jsonb_agg(to_jsonb(u) ORDER BY id) FROM users u)\n        ) AS \"content!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "content!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "865b20bd3d526ce875fb514e43b1c29a517361e58d1fb44690d34ca9e128ce62"
+}
