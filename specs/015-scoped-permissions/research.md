@@ -1,5 +1,11 @@
 # Permissions discovery
 
+**Historical research**: This material comes from PR #212 at `db3935d`.
+Observations, workflow execution and test results below retain their original
+dates and limitations. They are not fresh verification of an extracted branch.
+References to constitution 1.1.0 concern the proposal retained in original
+PR #212; this extraction leaves the authoritative constitution at 1.0.0.
+
 ## Timesheet integration evidence (2026-10-04)
 
 - Revalidated clean published `5ec183a` and traced `TimesheetContent`,
@@ -176,9 +182,10 @@
 - Decision: next refine OP21–OP24 into an executable canonical invoice contract,
   rather than treating another isolated legacy guard as six-profile delivery.
   Full T006 still blocks replacing active authorization; T007 separately gates
-  approved migration/activation. Constitution 1.1.0 already includes the target,
-  so T008's remaining work is reconciliation and transition design, not another
-  amendment adopting six profiles.
+  approved migration/activation. The constitution 1.1.0 proposal in original
+  PR #212 includes the target; it is not adopted by this extraction. T008 still
+  requires review/adoption of that proposal, reconciliation and transition design,
+  not a newly invented profile target.
 - Source inspection confirmed `generate_invoice_with_request`,
   `transition_invoice` and `invoices/editing::save` acquire the invoice advisory
   root before an organization gate. `fees::scheduled_fees` takes project/settings
@@ -567,10 +574,11 @@ already run or permission-policy activation.
 
 `design/project/app/08_Settings.dc.html` displays the six profiles. `09_Workspace.dc.html` explicitly describes three fixed roles with no per-person permissions. The new approved matrix must become authoritative for both screens; neither inconsistent mockup can silently settle the policy.
 
-The baseline constitution named three organization roles. The 2026-10-01 amendment
-to 1.1.0 in this branch records the approved extension and its migration gates;
-it grants no runtime access. The exact operation matrix and dependent feature
-acceptance remain to be reconciled before cutover.
+The baseline constitution names three organization roles. The 2026-10-01
+amendment proposal to 1.1.0 in original PR #212 records the approved extension
+and its migration gates; this extraction does not adopt it or grant runtime
+access. Constitution 1.0.0 remains authoritative. The exact operation matrix
+and dependent feature acceptance remain to be reconciled before cutover.
 
 ## Workflow
 

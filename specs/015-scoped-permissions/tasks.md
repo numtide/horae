@@ -1,5 +1,12 @@
 # Tasks: Scoped Roles and Permissions
 
+**Extraction context**: The task states below are preserved from PR #212 at
+`db3935d`. A checked task records work on that original branch, not a passing
+check or merged delivery on a new extraction. Open tasks remain open. Current
+PR ownership, dependencies and exact-head verification belong to the separation
+ledger in PR #218. This task list does not authorize completing unfinished
+features during the separation.
+
 **Input**: [spec.md](spec.md), [plan.md](plan.md), [research.md](research.md), [data-model.md](data-model.md), [record-scope contract](contracts/record-scope.md)
 
 Status: executable foundation tasks; later phases are required work packages to refine after reference verification. This is not a completed full-feature task breakdown. No user story is delivered by the foundation alone.

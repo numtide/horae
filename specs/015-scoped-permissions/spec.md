@@ -6,6 +6,12 @@
 
 **Status**: Draft — Harvest parity confirmed; detailed parity matrix and verification pending
 
+**Extraction context**: This specification is preserved from PR #212 at
+`db3935db364f2a8aa193f0e938ce40ecc01a2f92`. It describes the permission target,
+not functionality already merged into master. The separation changes no product
+decisions and does not activate policy. Constitution 1.0.0 remains authoritative;
+the 1.1.0 proposal is retained in the original branch for separate review.
+
 **Input**: Focus on permissions as a separate SpecKit feature before continuing the Settings/Workspace redesign, using Harvest's current permission model as a reference.
 
 ## Clarifications
@@ -337,5 +343,5 @@ These are target responsibilities, not a substitute for the operation-level matr
 - The user explicitly selected Harvest parity for both custom permissions and scoped approvals. These scope decisions are settled; remaining uncertainty concerns reference evidence and the detailed contract, not permission to simplify the feature.
 - The confirmed web scope requires expense, estimate, retainer and payment permission contracts even before those domains are implemented. Feature 016 owns expense behavior; its operation-level grants remain unresolved and must not be inferred from legacy role names. This permission feature does not implement those domains or authorize SaaS subscription billing, native applications, Forecast or new integrations. Existing imports and plugin/service access retain explicit regression coverage.
 - Current data is preserved even though the application is not in production. Verification uses disposable fixtures, not destructive changes to the user's account or Harvest.
-- Constitution 1.1.0 records the approved six-profile/custom-permission target and transition safeguards in this branch. Older feature permission statements still require reconciliation with the verified operation matrix; the amendment does not activate runtime access or approve migration mappings.
+- The constitution 1.1.0 proposal in original PR #212 records the approved six-profile/custom-permission target and transition safeguards. It is not adopted by this documentation extraction; constitution 1.0.0 remains authoritative. Older feature permission statements still require reconciliation with the verified operation matrix; the proposal does not activate runtime access or approve migration mappings.
 - This feature resolves permission dependencies of Project Detail, Clients, Settings and Workspace; it does not authorize their unrelated profile, notification, invitation, backup or deletion decisions.

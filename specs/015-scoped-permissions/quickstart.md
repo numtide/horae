@@ -1,5 +1,12 @@
 # Permission verification
 
+**Historical verification**: This document preserves requirements, commands and
+recorded results from PR #212 at `db3935d`. Referenced code and browser fixtures
+may not yet be present on master. Results prove only their recorded source
+revisions, not this documentation branch or any extracted PR. Consult the
+separation ledger in PR #218 for current exact-head verification and prerequisites;
+do not run historical next actions against real data.
+
 ## Report billability filtering (T235–T236)
 
 `billability=all|billable|non_billable` narrows ordinary time facts without

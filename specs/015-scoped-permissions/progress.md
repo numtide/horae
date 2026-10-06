@@ -1,5 +1,11 @@
 # Scoped permissions investigation progress
 
+**Historical record**: Entries below are preserved from PR #212 at `db3935d`.
+Their process handles, branch names, results and next actions refer to that
+original work, not live processes or instructions for the current separation.
+Do not append separation progress here: the single current record is the
+separation ledger in PR #218. Historical passes do not certify extracted heads.
+
 ## 2026-10-06 — Billability final verification
 
 - Previous goal turn made implementation progress: selector wiring, passing
