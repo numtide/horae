@@ -4,6 +4,134 @@ use crate::server_fns::test_seed::{time_entry, wait_for_blocked};
 use horae_core::permissions::catalog::PermissionSelection;
 use sqlx::PgPool;
 
+#[sqlx::test(migrations = false)]
+#[serial_test::serial]
+async fn project_task_activity_migration_preserves_legacy_and_archives_canonical_links(
+    pool: PgPool,
+) {
+    let mut previous = sqlx::migrate!("./migrations");
+    previous.migrations = std::borrow::Cow::Owned(
+        previous
+            .iter()
+            .filter(|migration| migration.version < 48)
+            .cloned()
+            .collect(),
+    );
+    previous.run(&pool).await.unwrap();
+    let legacy = crate::server_fns::test_seed::seed(&pool, OrgRole::Admin).await;
+    let (canonical, _) = fixture(
+        &pool,
+        OrgRole::Member,
+        PermissionSelection::new(&[Permission::TaskWriteAll]),
+    )
+    .await;
+    for ids in [&legacy, &canonical] {
+        sqlx::query!("UPDATE tasks SET active=false WHERE id=$1", ids.task_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query!("INSERT INTO project_tasks (project_id,task_id,billable,rate_cents) VALUES ($1,$2,true,1200)", ids.project_id, ids.task_id).execute(&pool).await.unwrap();
+        time_entry(&pool, ids, EntryState::Open).await;
+    }
+    let legacy_revision = sqlx::query_scalar!(
+        "SELECT edit_revision FROM projects WHERE id=$1",
+        legacy.project_id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    sqlx::migrate!("./migrations").run(&pool).await.unwrap();
+    for (ids, active) in [(&legacy, true), (&canonical, false)] {
+        let row = sqlx::query!("SELECT active,billable,rate_cents FROM project_tasks WHERE project_id=$1 AND task_id=$2", ids.project_id, ids.task_id).fetch_one(&pool).await.unwrap();
+        assert_eq!(
+            (row.active, row.billable, row.rate_cents),
+            (active, true, Some(1200))
+        );
+        assert_eq!(
+            sqlx::query_scalar!(
+                "SELECT sum(minutes)::bigint FROM time_entries WHERE org_id=$1",
+                ids.org_id
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+            Some(60)
+        );
+    }
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT edit_revision FROM projects WHERE id=$1",
+            legacy.project_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        legacy_revision
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn global_restore_does_not_restore_project_tracking_and_archive_invalidates_editor(
+    pool: PgPool,
+) {
+    let (ids, _) = fixture(
+        &pool,
+        OrgRole::Member,
+        PermissionSelection::new(&[Permission::TaskWriteAll]),
+    )
+    .await;
+    sqlx::query!("INSERT INTO project_tasks (project_id,task_id,billable,rate_cents) VALUES ($1,$2,true,1200)", ids.project_id, ids.task_id)
+        .execute(&pool).await.unwrap();
+    sqlx::query!(
+        "INSERT INTO assignments (id,project_id,user_id) VALUES ($1,$2,$3)",
+        uuid::Uuid::now_v7(),
+        ids.project_id,
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let revision = sqlx::query_scalar!(
+        "SELECT edit_revision FROM projects WHERE id=$1",
+        ids.project_id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let mut failures = Vec::new();
+    for active in [false, true] {
+        set_task_active_record(&pool, ids.org_id, ids.user_id, ids.task_id, active)
+            .await
+            .unwrap();
+        let trackable = sqlx::query_scalar!("SELECT EXISTS(SELECT 1 FROM time_entry_contexts WHERE user_id=$1 AND project_id=$2 AND task_id=$3)", ids.user_id, ids.project_id, ids.task_id)
+            .fetch_one(&pool).await.unwrap().unwrap();
+        if trackable {
+            failures.push("Global restore implicitly restored project tracking");
+        }
+        let current_revision = sqlx::query_scalar!(
+            "SELECT edit_revision FROM projects WHERE id=$1",
+            ids.project_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        if current_revision <= revision {
+            failures.push("Global archive did not invalidate the project editor");
+        }
+        let saved = sqlx::query!(
+            "SELECT billable,rate_cents FROM project_tasks WHERE project_id=$1 AND task_id=$2",
+            ids.project_id,
+            ids.task_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!((saved.billable, saved.rate_cents), (true, Some(1200)));
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]
 async fn activity_separates_session_rates_from_events_and_preserves_noops(pool: PgPool) {

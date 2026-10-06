@@ -118,6 +118,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         StatusCode::FORBIDDEN
     );
     let mut request = ProjectEditRequest {
+        task_activity: Vec::new(),
         id: Uuid::now_v7(),
         project_id: initial.id,
         expected_revision: initial.revision,

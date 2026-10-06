@@ -84,6 +84,7 @@ async fn every_project_entry_gates_before_actor_and_rechecks_revocation(pool: Pg
             .await
             .unwrap();
         let request = ProjectEditRequest {
+            task_activity: Vec::new(),
             id: Uuid::now_v7(),
             project_id: ids.project_id,
             expected_revision: editor.revision,

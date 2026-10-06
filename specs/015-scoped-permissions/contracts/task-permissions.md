@@ -283,7 +283,8 @@ The [timer restriction](https://support.getharvest.com/hc/en-us/articles/3600486
 also applies to task archival. Scope any error detail to the viewer's time-read
 authority; a warning must not disclose another person's otherwise hidden entry.
 
-Horae currently stores only `tasks.active`; `project_tasks` retains billable/rate
+At the activity-authority baseline `ac4c90c`, Horae stores only `tasks.active`;
+`project_tasks` retains billable/rate
 overrides but no independent lifecycle state. `set_task_active_record` therefore
 cannot preserve the documented global-versus-project restoration distinction.
 Deleting those links to simulate archive would lose configuration and is not an
@@ -292,7 +293,7 @@ acceptable substitute. The required retained-link state must be reconciled with
 time handling, editor projection/association saves and project revision triggers.
 Global archive changes tracking eligibility, so it needs the access-changing
 organization gate from the outset and a reviewed project/task lock order before
-the link-trigger writes. Current schema/UI do not implement this yet; adding a
+the link-trigger writes. That baseline schema/UI does not implement this; adding a
 grant guard alone does not complete lifecycle acceptance.
 
 The first lifecycle correction reuses the current task-write loader and requires
@@ -334,9 +335,9 @@ complete lifecycle acceptance is claimed. No schema or policy activation changed
 
 Source inspection identifies these coupled changes for the remainder of T233:
 
-- `ProjectTaskInput` and persisted project drafts currently have no link activity
-  field. Add an explicit representation with compatible decoding of older saved
-  drafts; do not interpret omission as an instruction to restore an archived link.
+- Keep `ProjectTaskInput` and persisted project drafts compatible. The separate
+  activity list on `ProjectEditRequest` supplies explicit lifecycle intent;
+  omission must not restore a link. Wire controls without changing saved drafts.
 - `editing::save_tasks` currently deletes an omitted link without time and rejects
   one with time. Keep archive distinct from destructive removal. Retain billable,
   rate, restriction, member and budget settings across archive/restore, including
@@ -351,10 +352,51 @@ Source inspection identifies these coupled changes for the remainder of T233:
   inherit that new-entry predicate.
 - Global restore must leave link state unchanged. A project restore must be an
   explicit project-authorized command, never an implied global task mutation or
-  a side effect of merely re-selecting a catalog identity. Reconcile its exact
-  behavior while the global task remains archived before exposing that control.
+  a side effect of merely re-selecting a catalog identity. Require global restore
+  first, as established by the unlocking guide below.
 
-The task guide still documents the two restoration levels, but does not settle
-that last order-of-restoration edge case. No browser observation is available
-from the loaded tools in this pass. These are remaining acceptance requirements,
-not a claim that the schema/editor migration is implemented or reviewed.
+The follow-up [unlocking archived time guide](https://support.getharvest.com/hc/en-us/articles/4408222060301-Unlocking-time-and-expenses-if-the-project-task-or-person-is-archived),
+checked on 2026-10-06, explicitly requires restoring the global task first. This
+resolves the ordering edge case: a project editor must not restore a globally
+archived task as a side effect of restoring its link. No browser observation is
+claimed; this is documented behavior, not an inferred product choice.
+
+The working representation uses a retained `project_tasks.active` column, plus
+an explicit task-activity list on the project edit request. An omitted list leaves
+link state alone; saved project drafts need no payload migration. Activity intent
+is included in canonical edit receipts, and existing empty-intent receipts retain
+their representation. The editor projection distinguishes globally inactive tasks
+from archived project links. Lifecycle commands require project-write authority;
+they never rewrite rates, budgets or task restrictions. Duplicate, foreign,
+unlinked or removed targets must reject the complete save.
+
+Migration 0048 defaults existing links to active, then archives the links of
+globally inactive tasks only in canonical-policy organizations. This keeps legacy
+policy behavior unchanged and preserves all business/configuration rows. Future
+policy activation must perform equivalent normalization for legacy accounts;
+the migration does not activate policy. Global archive locks linked project
+parents in ID order before the task and link updates; existing revision triggers
+invalidate open editors. Global restore does not write links. API import batches
+must join the organization fence before taking their parent/task locks to avoid
+an inverse dependency with multi-project archive. Both API and CSV paths use the
+shared import-transaction entry point. New links derive canonical activity from
+the global task; reimports do not modify an existing link's state or settings.
+Rollback-only previews retain explicit link activity in snapshots and derive the
+same initial state when restoring checkpoints predating this field.
+
+The import regressions first failed on implicit activation and checkpoint state
+loss (`84187`: 185 passed, two failed, eight existing scale tests ignored). The
+expanded run `72241` then exposed an invalid fixture assigning both hours and
+money budgets to one task. The fixture now exercises each separately without
+relaxing the schema or preservation assertions.
+
+Corrected verifier `87785` exited 0: compatibility, project, time-entry, editor,
+187 import tests and the registered-session matrix passed, followed by SQLx
+preparation, offline all-target test compilation and strict native/WASM lint.
+Coverage includes populated-schema migration, retained history/settings, omitted
+activity intent, explicit restore ordering and replay, invalid targets, running
+timers, import fencing and old/new preview snapshots. Scoped self-review checked
+the request/revision/receipt boundary, current project authority, protected-field
+preservation and parent-before-task ordering. No additional high/critical finding
+was identified in this increment; this is not independent review, browser
+acceptance or the full Nix gate. T233 and the task-management consumer remain open.

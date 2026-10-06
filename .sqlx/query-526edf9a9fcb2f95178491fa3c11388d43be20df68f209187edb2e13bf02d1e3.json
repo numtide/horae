@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT active,billable,rate_cents FROM project_tasks WHERE project_id=$1 AND task_id=$2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "billable",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "rate_cents",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "526edf9a9fcb2f95178491fa3c11388d43be20df68f209187edb2e13bf02d1e3"
+}

@@ -1,6 +1,9 @@
 //! Current task lifecycle authority through the registered session endpoint.
 
 use super::*;
+use crate::models::project_creation::{
+    EditableProject, ProjectEditRequest, ProjectTaskActivity, ProtectedProjectField,
+};
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
@@ -201,6 +204,120 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
                 assert_eq!(value["active"], json!(active));
                 assert!(value.get("default_rate_cents").is_none());
             }
+            assert_eq!(
+                api.call(
+                    "start_timer",
+                    json!({"project_id":ids.project_id,"task_id":ids.task_id,"notes":null}),
+                    Some(&cookie),
+                    false
+                )
+                .await
+                .status(),
+                StatusCode::CONFLICT
+            );
+            assert_eq!(
+                api.call(
+                    "load_project_editor",
+                    json!({"project_id":ids.project_id}),
+                    Some(&cookie),
+                    false
+                )
+                .await
+                .status(),
+                StatusCode::FORBIDDEN
+            );
+            let stored: Vec<String> = serde_json::from_value(json!(PermissionSelection::new(&[
+                Permission::ProjectWriteAll
+            ])))
+            .unwrap();
+            sqlx::query!(
+                "UPDATE person_permission_states SET grants=$2 WHERE user_id=$1",
+                ids.user_id,
+                &stored
+            )
+            .execute(pool)
+            .await
+            .unwrap();
+            let editor: EditableProject = serde_json::from_value(
+                api.json(
+                    "load_project_editor",
+                    json!({"project_id":ids.project_id}),
+                    &cookie,
+                )
+                .await,
+            )
+            .unwrap();
+            assert_eq!(editor.archived_task_ids, [ids.task_id]);
+            let mut unchanged = vec![
+                ProtectedProjectField::ProjectRate,
+                ProtectedProjectField::Budget,
+                ProtectedProjectField::Fees,
+                ProtectedProjectField::InvoiceDefaults,
+                ProtectedProjectField::PrivateNotes,
+            ];
+            unchanged.extend(
+                editor
+                    .form
+                    .tasks
+                    .iter()
+                    .map(|task| ProtectedProjectField::TaskRate(task.id)),
+            );
+            for person in &editor.form.team {
+                unchanged.extend([
+                    ProtectedProjectField::PersonRate(person.user_id),
+                    ProtectedProjectField::CostRate(person.user_id),
+                ]);
+            }
+            let restore = ProjectEditRequest {
+                id: Uuid::now_v7(),
+                project_id: editor.id,
+                expected_revision: editor.revision,
+                expected_requester: editor.access.as_ref().map(|access| access.requester),
+                managers: editor
+                    .access
+                    .as_ref()
+                    .map(|access| (&access.managers).into()),
+                form: editor.form,
+                unchanged,
+                task_activity: vec![ProjectTaskActivity {
+                    task_id: ids.task_id,
+                    active: true,
+                }],
+            };
+            for _ in 0..2 {
+                assert_eq!(
+                    api.call(
+                        "save_project_editor",
+                        json!({"request":restore}),
+                        Some(&cookie),
+                        false
+                    )
+                    .await
+                    .status(),
+                    StatusCode::OK
+                );
+            }
+            let timer = api
+                .call(
+                    "start_timer",
+                    json!({"project_id":ids.project_id,"task_id":ids.task_id,"notes":null}),
+                    Some(&cookie),
+                    false,
+                )
+                .await;
+            assert_eq!(timer.status(), StatusCode::OK);
+            let timer: Value = timer.json().await.unwrap();
+            assert_eq!(
+                api.call(
+                    "stop_timer",
+                    json!({"entry_id":timer["id"]}),
+                    Some(&cookie),
+                    false
+                )
+                .await
+                .status(),
+                StatusCode::OK
+            );
         }
     }
     assert!(

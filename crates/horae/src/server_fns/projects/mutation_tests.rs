@@ -54,6 +54,7 @@ mod project {
             .await
             .unwrap();
         ProjectEditRequest {
+            task_activity: Vec::new(),
             id: uuid::Uuid::now_v7(),
             project_id: project.id,
             expected_revision: project.revision,

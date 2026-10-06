@@ -1,5 +1,79 @@
 # Scoped permissions investigation progress
 
+## 2026-10-06 — Retained project-task activity
+
+- The last estimate reply made no implementation progress. Revalidated the
+  existing `ac4c90c` worktree and collected verifier `82493`: terminal exit 101
+  from ambiguous SQLx `begin` traits. Removed the redundant `Acquire` import;
+  no verification process was restarted while still live.
+
+- The retained-link implementation adds migration 0048, explicit editor activity
+  intent, archive metadata and both tracking-source predicates. Global archive
+  invalidates affected project editors and global restore leaves links archived.
+  Activity-only edits preserve rates, restrictions, budgets and recorded time.
+
+- Harvest's unlocking-time documentation resolves the restoration order: restore
+  the task globally before restoring its project link. The source and applicable
+  contract are recorded in `contracts/task-permissions.md`; no browser validation
+  is claimed. Earlier RED verifier `98213` exposed implicit project restoration
+  and missing editor invalidation before these changes.
+
+- Import batches now join the organization access gate before resource locks.
+  Review found two additional paths needing regression coverage: new links for
+  globally inactive imported tasks, and activity omitted during preview snapshot
+  restoration. Added failing assertions for canonical/legacy imports and old/new
+  snapshot formats. Verifier `84187` is compiling/running the import suite on an
+  isolated disposable database; Rust remains frozen until its terminal result.
+
+- T233/T234/T230 remain open: direct-link authorization, UI lifecycle controls,
+  broader consumers and complete acceptance are not finished. No real data,
+  live policy activation or merge is part of this iteration.
+
+- `84187` exited 101 with exactly the two intended archival failures (185 passed,
+  two failed, eight existing scale measurements ignored). Import insertion now
+  derives new-link activity from the current policy/global task, and checkpoint
+  restoration retains explicit state or derives it for pre-migration snapshots.
+  Existing links and their rate overrides remain untouched on reimport.
+
+- Formatting passed. Expanded verifier `72241` is running against the corrected
+  snapshot, with Rust frozen until its terminal result. The check includes the
+  new populated-schema migration test and the real-session explicit-restore flow.
+
+- `72241` terminated with exit 101 after the compatibility, project and time
+  suites passed. Editor tests had one invalid new fixture: it assigned both an
+  hours and a money budget to the same task, violating the schema's exclusivity
+  constraint before reaching the implementation. Corrected the test to exercise
+  hours and money separately, preserving all archive/restore/replay assertions.
+  The other 101 editor tests passed; later import/cache/lint stages did not run.
+
+- Corrected verifier `87785` is live; Rust is frozen until the handle terminates.
+
+- Its compatibility, project, time-entry and editor suites passed, followed by
+  all 187 import tests (eight pre-existing scale measurements ignored) and the
+  registered-session matrix, including explicit project restoration before a
+  timer can restart. SQLx preparation/offline compilation/native/WASM lint are
+  still running; their completion is not inferred from the passing tests.
+
+- Scoped review traced both import adapters through the shared organization gate,
+  checked absence of organization-lock upgrades in their production writes, and
+  checked editor request binding, bounded duplicate-free activity intent, receipt
+  compatibility, revision invalidation and retained protected fields. The direct
+  `link_project_task` endpoint still calls `require_manager`/`lock_creation_actor`;
+  its next increment must use current project-write scope independently from
+  global task-write and project-rate grants, including no-op/revocation cases.
+  This is not an independent review or full-feature acceptance.
+
+- `87785` exited 0. SQLx preparation, offline all-target test compilation (3m10s),
+  strict native/all-target Clippy (1m36s) and WASM Clippy (15.76s) passed. Scoped
+  self-review identified no additional high/critical finding in this increment;
+  this is not independent review, a browser run or the full Nix gate. All verifier
+  handles from this iteration are terminal. GitHub confirmed #212 remains
+  OPEN/DRAFT at `ac4c90c` before publication; no merge was requested or performed.
+
+Next: final formatting/diff checks and publish the retained-link increment, then
+finish direct-link authority and lifecycle UI acceptance. Full permissions and
+the goal remain incomplete.
+
 ## 2026-10-06 — Task activity authority and timer exclusion
 
 - The preceding estimate reply made no implementation progress. Revalidated
@@ -52,6 +126,10 @@
   strict native/all-target Clippy (1m46s) and WASM Clippy (15.78s) passed after the
   source/session suites. No new browser or full Nix check is claimed. T233 and
   T230 remain open; this verifies the activity authority/timer boundary only.
+- Format, CI-format and diff checks passed without source changes. Published
+  unsigned commit `ac4c90c`; push exited 0 and GitHub confirmed #212 OPEN/DRAFT
+  at `ac4c90c95f1f093602adacba0eeeda43e09c4855`. No merge occurred. All verifier
+  and publication handles in this iteration have terminated.
 
 Next: collect verification and review the activity boundary, then complete the
 retained-link state and editor/tracking integration still required by T233.

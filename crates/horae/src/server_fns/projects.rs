@@ -1194,6 +1194,20 @@ async fn set_task_active_record(
         OrganizationLock::AccessChange,
     )
     .await?;
+    if permissions.is_some() && !active {
+        // Link updates invalidate editors through their parent project trigger.
+        // Take every parent before the task/link locks, in stable order.
+        sqlx::query_scalar!(
+            "SELECT p.id FROM projects p JOIN project_tasks pt ON pt.project_id=p.id
+             JOIN tasks t ON t.id=pt.task_id AND t.org_id=p.org_id
+             WHERE p.org_id=$1 AND t.id=$2 ORDER BY p.id FOR NO KEY UPDATE OF p",
+            org_id,
+            task_id,
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(server_err)?;
+    }
     let before = lock_task(&mut tx, org_id, task_id).await?;
 
     if permissions.is_some() && !active {
@@ -1229,6 +1243,17 @@ async fn set_task_active_record(
     let transition = task.as_ref().and_then(|updated| {
         crate::plugin::event::active_transition(Some(before.active), updated.active)
     });
+    if permissions.is_some() && !active {
+        sqlx::query!(
+            "UPDATE project_tasks pt SET active=false FROM projects p
+             WHERE pt.project_id=p.id AND p.org_id=$1 AND pt.task_id=$2 AND pt.active",
+            org_id,
+            task_id,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(server_err)?;
+    }
     let mut task = task.unwrap_or(before);
     let event = transition.map(|transition| {
         let occurred_at = chrono::Utc::now();
@@ -1353,6 +1378,8 @@ async fn enable_project_task(
                   OR (p.project_type = 'time_and_materials' AND ps.rate_mode = 'task'))) AS "uses_task_rates!",
                 EXISTS(SELECT 1 FROM project_tasks pt
                        WHERE pt.project_id = p.id AND pt.task_id = t.id) AS "linked!",
+                (o.permission_policy_version=1 AND EXISTS(SELECT 1 FROM project_tasks pt
+                       WHERE pt.project_id=p.id AND pt.task_id=t.id AND NOT pt.active)) AS "archived!",
                 CASE WHEN ps.project_id IS NULL
                        OR (p.project_type = 'time_and_materials' AND ps.rate_mode = 'task')
                      THEN t.default_rate_cents ELSE NULL END AS default_rate_cents
@@ -1372,6 +1399,11 @@ async fn enable_project_task(
     .map_err(server_err)?
     .ok_or_else(|| not_found("Active project and task not found in this organization"))?;
     if task.linked {
+        if task.archived {
+            return Err(conflict(
+                "Restore this task explicitly in the project editor",
+            ));
+        }
         return Ok(());
     }
     let rate_cents = if let Some(rate) = explicit_rate {
