@@ -111,7 +111,7 @@ Clients MVP as canonical-permission acceptance.
 | Durable CSV preparation outside SQL transactions, [#231](https://github.com/numtide/horae/pull/231) | `fix/csv-batch-transaction-boundary`, `.worktrees/csv-batch-transaction-boundary` | `02f7b58` | Draft at `e9898ed`; 1,122 tests, SQLx, offline server/WASM Clippy and format passed; required CI pending |
 | Financial snapshot reader authority, [#232](https://github.com/numtide/horae/pull/232) | `fix/financial-snapshot-authority`, `.worktrees/financial-snapshot-authority` | #220 `bc0c7a0` | Draft at `0bb5721`; 1,141 tests, SQLx, offline server/WASM Clippy and format passed; full local Nix running; required CI after retargeting |
 | Invoice writer/revocation ordering, [#233](https://github.com/numtide/horae/pull/233) | `fix/invoice-write-authority`, `.worktrees/invoice-write-authority` | Integration base `0046dad` combining #227/#228 and #220/#232 | Draft at `8a6cb2a`; 1,162 tests, SQLx, offline server/WASM Clippy and format passed; full local Nix running; retarget to master after prerequisites, do not merge into integration base |
-| Internal person-profile commands, [#234](https://github.com/numtide/horae/pull/234) | `refactor/person-profile-commands`, `.worktrees/person-profile-commands` | Integration base `46f02f7` combining #226/#221 | Draft at `45d219e`; 1,245 tests, schema upgrade, SQLx, server Clippy and format passed; WASM/Nix running; retarget to master after prerequisites, no activation |
+| Internal person-profile commands, [#234](https://github.com/numtide/horae/pull/234) | `refactor/person-profile-commands`, `.worktrees/person-profile-commands` | Integration base `46f02f7` combining #226/#221 | Draft at `45d219e`; 1,245 tests, schema upgrade, SQLx, offline server/WASM Clippy and format passed; full Nix running; retarget to master after prerequisites, no activation |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -1236,3 +1236,9 @@ The PR requires #219, #221/#222 and #226 on master before rebase/retarget and
 fresh required CI. It must not merge into its integration review base. No merge,
 original-PR closure or policy activation was performed; remaining consumer and
 specification accounting is still incomplete.
+
+WASM Clippy passed (`13136`) with no code changes. #234 now has all local
+suite/cache/offline-lint/format gates passed; full Nix remains in `41624`.
+Next: collect existing Nix handles `80170` / `1215` / `41624` without reruns,
+then continue the retained import-authority boundary from its actual source
+dependencies, preserving #231's already-delivered cancellation adapter.
