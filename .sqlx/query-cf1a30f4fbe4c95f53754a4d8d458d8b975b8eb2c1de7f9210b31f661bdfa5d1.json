@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE time_entries SET notes=repeat('x',40000) WHERE org_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cf1a30f4fbe4c95f53754a4d8d458d8b975b8eb2c1de7f9210b31f661bdfa5d1"
+}
