@@ -1,0 +1,159 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT policy,actor_active,catalog_version,grants,is_administrator,\n                  permission_source,built_in_profile,template_id,applied_template_revision,revision,\n                  id,client_name,code,name,project_type AS \"project_type?: horae_core::types::ProjectType\",currency,\n                  budget_kind AS \"budget_kind?: horae_core::types::BudgetKind\",budget_amount_cents,budget_minutes,active\n           FROM fetch_csv_export_rows($1) AS source(policy integer,actor_active boolean,\n             catalog_version integer,grants text[],is_administrator boolean,permission_source text,\n             built_in_profile text,template_id uuid,applied_template_revision bigint,revision bigint,\n             id uuid,client_name text,code text,name text,project_type project_type,currency text,\n             budget_kind budget_kind,budget_amount_cents bigint,budget_minutes bigint,active boolean,export_bytes bigint)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "policy",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "actor_active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "catalog_version",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "grants",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 4,
+        "name": "is_administrator",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "permission_source",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "built_in_profile",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "template_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "applied_template_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 11,
+        "name": "client_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "project_type?: horae_core::types::ProjectType",
+        "type_info": {
+          "Custom": {
+            "name": "project_type",
+            "kind": {
+              "Enum": [
+                "time_and_materials",
+                "fixed_fee",
+                "non_billable",
+                "retainer"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "currency",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
+        "name": "budget_kind?: horae_core::types::BudgetKind",
+        "type_info": {
+          "Custom": {
+            "name": "budget_kind",
+            "kind": {
+              "Enum": [
+                "none",
+                "amount",
+                "hours"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 17,
+        "name": "budget_amount_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 18,
+        "name": "budget_minutes",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 19,
+        "name": "active",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "d1d2e5a96a63e3de8389a31cc11242e74993366e8726364c9902f80cebb348eb"
+}

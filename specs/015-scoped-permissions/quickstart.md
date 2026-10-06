@@ -1,5 +1,47 @@
 # Permission verification
 
+## Project read delivery (T223–T226)
+
+Run in the Nix shell against disposable PostgreSQL with the checked-in
+migrations, never against an agency or Harvest database:
+
+```sh
+cargo test -p horae --features server --locked --bin horae canonical_read_tests
+cargo test -p horae --features server --locked --bin horae project_canonical
+cargo test -p horae --features server --locked --bin horae project_permissions
+cargo test -p horae --features server --locked --bin horae job_endpoints_enforce_session_role_and_organization
+cargo test -p horae --features server --locked --test detail_navigation
+```
+
+Coverage includes ordinary versus tracking visibility, independent financial
+fields, private budget breakdowns, active actors, malformed policy, tenant
+parents and authority-wait races. Export tests additionally revoke only money
+access during XLSX rendering and CSV backpressure; retained project visibility
+must not release the old monetary payload. Compatibility tests assert one
+filtered count/page set, including out-of-range pages and direct IDs. Registered
+routes test requester bindings, not just internal helper calls.
+
+Build the Dioxus server/client bundle and use the pinned Playwright environment
+from `nix/checks/browser.nix` with the disposable browser runner:
+
+```sh
+bash crates/horae/tests/browser/run-design-checks.sh project-read-permissions project-editor-permissions project-task-rates action-errors projects-design project-bulk-recovery project-bulk-actions menu-popovers modals responsive-layout
+```
+
+All listed suites passed across the runs recorded in `progress.md`; this was
+not a single run of every default browser suite. The new read fixture verifies
+minimal project labels without global directories, withheld money, edit/read
+revocation, inactive actors and policy changes. Recovery checks cover pending
+and failed refreshes, retained operation receipts and keyboard focus without
+stealing deliberate navigation focus. Shared CSS was not changed.
+
+The latest full Rust-suite snapshot passed 1,830 tests before the late fee
+denial regression and focus correction. Subsequent registered-session and 34
+navigation tests, affected browser suites and strict native/WASM Clippy passed
+after those changes. SQLx preparation was checked by offline compilation.
+Desktop/mobile project-read captures were inspected; this is not full design
+parity, Windows Chrome acceptance, or canonical fee/lifecycle activation.
+
 ## Grouped CSV backend (T221 partial)
 
 Run `cargo test -p horae --features server --bin horae scoped_time::grouped::`

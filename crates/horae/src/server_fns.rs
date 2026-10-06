@@ -522,6 +522,8 @@ mod plugins;
 mod project_creation;
 mod project_managers;
 mod projects;
+#[cfg(feature = "server")]
+pub(crate) use projects::read_access::ReadAccess as ProjectReadAccess;
 mod reports;
 #[cfg(feature = "server")]
 pub(crate) mod snapshot;

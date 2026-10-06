@@ -2,6 +2,8 @@ use super::*;
 use crate::models::{permission_editor::PermissionRequester, time_report::TimeReportQuery};
 use uuid::Uuid;
 
+mod projects;
+
 fn parse(filters: &str) -> Result<TimeReportQuery, StatusCode> {
     let uri = format!("/api/reports/export/csv?from=2026-09-01&to=2026-09-30{filters}")
         .parse()

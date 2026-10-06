@@ -137,7 +137,7 @@ async fn legacy_members_retain_progress_without_new_settings(pool: PgPool) {
         .unwrap();
     assert_eq!(
         (totals[0].spent_minutes, totals[0].spent_cents),
-        (60, 12345)
+        (60, Some(12345))
     );
 }
 
@@ -181,7 +181,7 @@ async fn project_members_and_leads_receive_progress_without_rates(pool: PgPool) 
             .unwrap();
         assert_eq!(
             (progress[0].spent_minutes, progress[0].spent_cents),
-            (60, 12345)
+            (60, Some(12345))
         );
     }
 }

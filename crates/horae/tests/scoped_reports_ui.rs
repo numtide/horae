@@ -1095,7 +1095,9 @@ mod server_fns {
     pub async fn list_users(_: bool) -> Result<Vec<models::user::UserListItem>, ServerFnError> {
         legacy("users")
     }
-    pub async fn list_project_tags() -> Result<Vec<models::ProjectTagLink>, ServerFnError> {
+    pub async fn list_project_tags(
+        _expected: Option<permission_editor::PermissionRequester>,
+    ) -> Result<Vec<models::ProjectTagLink>, ServerFnError> {
         legacy("tags")
     }
     pub async fn list_projects(

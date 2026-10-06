@@ -19,13 +19,7 @@ impl Surface {
         match self {
             Self::Entries => entries(pool.clone(), org, actor, params()).await,
             Self::Projects => {
-                projects(
-                    pool.clone(),
-                    org,
-                    actor,
-                    ProjectsExportParams { scope: None },
-                )
-                .await
+                projects(pool.clone(), org, actor, ProjectsExportParams::default()).await
             }
             Self::Invoice => invoice(pool.clone(), org, actor, invoice_id).await,
         }
@@ -188,7 +182,7 @@ async fn streamed_projects_capture_scope_gained_during_initial_wait(pool: PgPool
         pool.clone(),
         ids.org_id,
         ids.user_id,
-        ProjectsExportParams { scope: None },
+        ProjectsExportParams::default(),
     ));
     wait_for_blocked(&pool, pid).await;
     sqlx::query!(
@@ -589,7 +583,7 @@ async fn streamed_project_release_refreshes_scope_after_parent_wait(pool: PgPool
             purpose: Purpose::Projects,
         };
         authority.begin(&mut tx).await?;
-        authority.check(&mut tx, &[ids.project_id], &[]).await
+        authority.check(&mut tx, &[ids.project_id], &[], &[]).await
     });
     wait_for_blocked(&pool, pid).await;
     sqlx::query!(
@@ -631,7 +625,7 @@ async fn streamed_authority_releases_successful_locks_and_overrides_inherited_se
     };
     authority.begin(&mut tx).await.unwrap();
     for _ in 0..10 {
-        authority.check(&mut tx, &[], &[]).await.unwrap();
+        authority.check(&mut tx, &[], &[], &[]).await.unwrap();
     }
     let settings=sqlx::query!("SELECT current_setting('transaction_isolation') isolation,current_setting('transaction_read_only') read_only,
         current_setting('lock_timeout') lock_timeout,current_setting('statement_timeout') statement_timeout,current_setting('idle_in_transaction_session_timeout') idle_timeout")

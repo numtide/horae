@@ -5,6 +5,7 @@ use crate::server_fns::test_seed::{SeedIds, seed, time_entry};
 use super::*;
 
 mod authorization;
+mod project_canonical;
 mod scoped_time;
 
 fn params() -> ExportParams {
@@ -31,7 +32,7 @@ async fn streamed_project_exports_deny_inactive_actors(pool: PgPool) {
         pool,
         ids.org_id,
         ids.user_id,
-        ProjectsExportParams { scope: None },
+        ProjectsExportParams::default(),
     )
     .await;
     assert_eq!(result.unwrap_err(), StatusCode::FORBIDDEN);
@@ -255,6 +256,7 @@ async fn streamed_projects_preserve_scope_budget_and_tenant_isolation(pool: PgPo
             ids.user_id,
             ProjectsExportParams {
                 scope: scope.map(str::to_owned),
+                ..Default::default()
             },
         )
         .await
@@ -287,6 +289,7 @@ async fn streamed_projects_preserve_scope_budget_and_tenant_isolation(pool: PgPo
             ids.user_id,
             ProjectsExportParams {
                 scope: Some("archived".to_owned()),
+                ..Default::default()
             },
         )
         .await

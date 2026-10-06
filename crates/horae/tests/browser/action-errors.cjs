@@ -24,7 +24,7 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated, seeded test instance');
       action: async () => page.getByRole('button', { name: 'Deactivate', exact: true }).first().click(),
     },
     {
-      name: 'project archive', path: '/projects', resource: 'list_projects',
+      name: 'project archive', path: '/projects', resource: 'get_project_overview',
       endpoint: 'set_project_active', form: /^Actions/,
       formEndpoint: 'save_project_editor', submit: 'Save changes', separatePage: true,
       openForm: async () => {
@@ -35,13 +35,6 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated, seeded test instance');
         await page.locator('.proj-row').getByRole('button', { name: /^Actions/ }).first().click();
         await page.getByRole('menuitem', { name: 'Archive', exact: true }).click();
       },
-    },
-    {
-      name: 'assignment removal',
-      path: '/projects/01950000-0000-7000-8000-000000000005',
-      resource: 'list_assignments', endpoint: 'delete_assignment', form: 'Assign User',
-      formEndpoint: 'create_assignment', submit: 'Assign',
-      action: async () => page.getByRole('button', { name: 'Remove', exact: true }).first().click(),
     },
   ];
   try {
@@ -130,6 +123,45 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated, seeded test instance');
         await page.unroute(formPattern);
       }
     }
+    // Team changes share the project editor's atomic save and recovery flow.
+    await page.goto(`${base}/projects/new`);
+    const newProject = page.locator('.np-page');
+    await newProject.getByRole('button', { name: 'Client', exact: true }).click();
+    await page.getByRole('dialog', { name: 'Choose Client', exact: true }).getByRole('option', { name: 'Acme Corp', exact: true }).click();
+    await newProject.getByLabel('Project name', { exact: true }).fill(`Team recovery ${Date.now()}`);
+    await newProject.getByRole('radio', { name: /^Non-Billable/ }).check();
+    await newProject.locator('#np-add-person').click();
+    await page.getByRole('dialog', { name: 'Choose teammate', exact: true }).locator('[role="option"]:not(:disabled)').first().click();
+    await newProject.getByRole('button', { name: 'Save project', exact: true }).click();
+    await expect(page).toHaveURL(/\/projects\/[0-9a-f-]{36}$/);
+    const projectPath = new URL(page.url()).pathname;
+    await page.getByRole('link', { name: 'Edit project', exact: true }).click();
+    const editor = page.locator('.np-page');
+    const remove = editor.getByRole('button', { name: /^Remove .+ from project$/ }).first();
+    await expect(remove).toBeVisible();
+    const label = await remove.getAttribute('aria-label');
+    const teammate = label.match(/^Remove (.+) from project$/)[1];
+    await remove.click();
+    await page.route('**/api/save_project_editor*', route => route.abort('failed'));
+    const failedSave = page.waitForEvent('requestfailed', r => r.url().includes('/api/save_project_editor'));
+    await editor.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await failedSave;
+    await expect(editor.getByRole('alert')).toBeVisible();
+    await expect(editor.getByRole('button', { name: label, exact: true })).toHaveCount(0);
+    await expect(editor.getByRole('button', { name: 'Cancel', exact: true })).toBeDisabled();
+    await page.unroute('**/api/save_project_editor*');
+    await editor.getByRole('button', { name: 'Retry request', exact: true }).click();
+    await expect(page).toHaveURL(`${base}${projectPath}`);
+    await page.getByRole('link', { name: 'Edit project', exact: true }).click();
+    await expect(editor.getByRole('heading', { name: 'Edit project', exact: true })).toBeVisible();
+    await expect(editor.getByRole('button', { name: label, exact: true })).toHaveCount(0);
+    await editor.locator('#np-add-person').click();
+    await page.getByRole('dialog', { name: 'Choose teammate', exact: true }).getByRole('option', { name: teammate, exact: true }).click();
+    await expect(editor.getByRole('button', { name: label, exact: true })).toBeVisible();
+    await editor.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect(page).toHaveURL(`${base}${projectPath}`);
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    console.log('PASS: failed team removal preserves the draft, safely retries and can be restored through the shared editor');
     assert.deepEqual(pageErrors, []);
     assert.deepEqual(failures, []);
   } finally {

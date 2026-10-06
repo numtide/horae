@@ -247,9 +247,23 @@ by an explicit hour-budget edit, has a failing-then-passing database regression
 and an independent browser reproduction against the old binary. Canonical
 hour-only intent now preserves that money; monetary transitions and their
 replays still require financial authority. Existing form, catalogs, manager
-selection and typed save intent are integrated. T161 remains open for the
-rebuilt browser/full regression and Nix gates; no full-policy activation or
-creation cutover is claimed. See `progress.md` for exact runs and limitations.
+selection and typed save intent are integrated. The rebuilt browser/full
+regression and frozen-snapshot Nix gates have now passed for `2497dbe`, which is
+published in the existing draft PR. The initial isolated mail transport failure
+did not reproduce in bounded diagnostics or the exact Nix repetition; no mail
+fix is claimed. T161 remains open for final cross-surface acceptance reconciliation;
+full-policy activation and creation cutover remain separate gates.
+See `progress.md` for exact runs and limitations.
+
+### Project list/detail read integration (OP08/09/32/34)
+
+Follow `contracts/project-read-permissions.md`. Existing-editor acceptance does
+not prove overview, shared-member budgets, exports or compatibility API coverage.
+
+- [x] T223 Trace the actual list/detail, budget, CSV/XLSX and compatibility readers; recheck official project visibility/budget references and record canonical versus legacy projection gaps without changing runtime policy.
+- [x] T224 Reproduce canonical reader rejection, legacy-role overexposure and protected monetary fields through production readers in `server_fns/projects/`; cover managed designations, shared-member budgets and independent tracking identity before completing the read contract.
+- [x] T225 Integrate current project row/field authority into the list/detail/tag/spend/budget readers, preserving trusted budget-service calculations and exact scoped aggregates; refresh SQLx and test unknown policy, malformed state and revocation.
+- [x] T226 Connect requester-bound list/detail consumers and equivalent project CSV/XLSX and read-only compatibility delivery; verify financial-only revocation, bounded transport, filter/count parity, real sessions/browser, native/WASM and adversarial review before publication. Full activation and separate lifecycle/invoice contracts remain required.
 
 ### Invoice writer participation in the organization gate (T039/T040/T042)
 

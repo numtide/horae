@@ -6,6 +6,7 @@ use horae_core::types::EntryState;
 use std::io::{Cursor, Read};
 
 mod csv;
+mod project_requester;
 mod projects;
 
 async fn download(api: &Api, path: &str, cookie: Option<&str>) -> reqwest::Response {
@@ -30,6 +31,7 @@ async fn denied(response: reqwest::Response, status: StatusCode) {
 }
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
+    project_requester::check(pool, api).await;
     projects::check(pool, api).await;
     csv::check(pool, api).await;
     let ids = seed(pool, OrgRole::Manager).await;

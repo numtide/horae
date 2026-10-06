@@ -2,17 +2,15 @@ use dioxus::prelude::*;
 use std::collections::{BTreeSet, HashMap};
 use uuid::Uuid;
 
-use super::{is_admin, is_manager, loaded, run_action};
+use super::{loaded, run_action};
 use crate::components::combobox::{ComboOption, Combobox};
 use crate::components::controls::Checkbox;
-use crate::components::form::{FormCard, FormGroup, Input, Select};
 use crate::components::icons::NavIcon;
 use crate::components::menu::{Menu, MenuDivider, MenuItem};
 use crate::components::modal::Modal;
-use crate::components::table::DataTable;
-use crate::models::{
-    Client, Project, ProjectBudgetProgress, ProjectDetails, ProjectTagLink, ProjectTaskRate,
-};
+use crate::models::permission_editor::PermissionRequester;
+use crate::models::project::ProjectOverview;
+use crate::models::{Project, ProjectBudgetOverview, ProjectDetails, ProjectTagLink};
 use crate::route::Route;
 use crate::server_fns;
 use horae_core::money::format_cents;
@@ -48,17 +46,17 @@ struct RowSpend {
     pct_label: Option<String>,
 }
 
-fn row_spend(p: &Project, spent_minutes: i64, spent_cents: i64) -> RowSpend {
+fn row_spend(p: &Project, spent_minutes: i64, spent_cents: Option<i64>) -> RowSpend {
     let (budget, spent) = match p.budget_kind {
         BudgetKind::Amount => (p.budget_amount_cents, spent_cents),
-        BudgetKind::Hours => (p.budget_minutes, spent_minutes),
+        BudgetKind::Hours => (p.budget_minutes, Some(spent_minutes)),
         BudgetKind::None => (None, spent_cents),
     };
     budget_display(
         p.budget_kind,
         &p.currency,
         budget,
-        Some(spent),
+        spent,
         p.project_type == ProjectType::Retainer,
     )
 }
@@ -93,28 +91,59 @@ fn budget_display(
     }
 }
 
-fn configured_row_spend(rows: &[ProjectBudgetProgress]) -> Option<RowSpend> {
-    let first = rows.first().filter(|row| row.kind != BudgetKind::None)?;
-    // A partially allocated budget is not a project-wide allowance. Overflow
-    // also stays unavailable rather than wrapping into a plausible total.
-    let budget = rows
-        .iter()
-        .try_fold(0_i64, |total, row| total.checked_add(row.budget?));
-    let spent = rows
-        .iter()
-        .try_fold(0_i64, |total, row| total.checked_add(row.consumed));
+fn configured_row_spend(progress: &ProjectBudgetOverview) -> Option<RowSpend> {
+    if progress.kind == BudgetKind::None {
+        return None;
+    }
     Some(budget_display(
-        first.kind,
-        &first.currency,
-        budget,
-        spent,
-        first.period_key != "lifetime",
+        progress.kind,
+        &progress.currency,
+        progress.budget,
+        progress.consumed,
+        progress.period_key != "lifetime",
     ))
 }
 
 #[cfg(test)]
 mod budget_display_tests {
     use super::*;
+    use crate::models::ProjectBudgetProgress;
+
+    #[test]
+    fn project_spend_keeps_withheld_money_distinct_from_zero_and_visible_hours() {
+        let mut project = Project {
+            id: Uuid::nil(),
+            org_id: Uuid::nil(),
+            client_id: Uuid::nil(),
+            code: None,
+            name: "Project".into(),
+            project_type: ProjectType::TimeAndMaterials,
+            currency: "EUR".into(),
+            rate_cents: None,
+            starts_on: None,
+            ends_on: None,
+            budget_kind: BudgetKind::Amount,
+            budget_amount_cents: Some(10000),
+            budget_minutes: Some(600),
+            active: true,
+            created_at: chrono::Utc::now(),
+        };
+        let hidden = row_spend(&project, 60, None);
+        assert_eq!(hidden.spent, "Unavailable");
+        assert_eq!(hidden.remaining, "—");
+        assert!(hidden.pct.is_none());
+        let zero = row_spend(&project, 60, Some(0));
+        assert_eq!(zero.spent, format_cents(0, "EUR"));
+        assert_eq!(zero.remaining, format_cents(10000, "EUR"));
+        assert_eq!(zero.pct, Some(0));
+        project.budget_kind = BudgetKind::Hours;
+        let hours = row_spend(&project, 60, None);
+        assert_eq!(
+            (hours.spent.as_str(), hours.remaining.as_str()),
+            ("1h", "9h")
+        );
+        assert_eq!(hours.pct, Some(10));
+    }
 
     #[test]
     fn tag_filter_matches_identity_without_duplicates_or_name_collisions() {
@@ -157,10 +186,24 @@ mod budget_display_tests {
         }
     }
 
+    fn summary(budget: Option<i64>, consumed: Option<i64>) -> ProjectBudgetOverview {
+        ProjectBudgetOverview {
+            project_id: Uuid::nil(),
+            scope: "person".into(),
+            kind: BudgetKind::Hours,
+            currency: "EUR".into(),
+            period_key: "2026-09".into(),
+            budget,
+            consumed,
+            breakdown: vec![],
+        }
+    }
+
     #[test]
-    fn configured_scopes_sum_without_hiding_an_individual_overrun() {
-        let rows = [scope(Some(60), 120), scope(Some(180), 0)];
-        let total = configured_row_spend(&rows).unwrap();
+    fn configured_summary_does_not_recompute_totals_from_private_breakdown() {
+        let mut progress = summary(Some(240), Some(120));
+        progress.breakdown.push(scope(Some(60), 120));
+        let total = configured_row_spend(&progress).unwrap();
         assert_eq!(
             (
                 total.budget.as_str(),
@@ -174,10 +217,10 @@ mod budget_display_tests {
             (Some(50), Some("(50%)"), true)
         );
         let first = budget_display(
-            rows[0].kind,
-            &rows[0].currency,
-            rows[0].budget,
-            Some(rows[0].consumed),
+            progress.breakdown[0].kind,
+            &progress.breakdown[0].currency,
+            progress.breakdown[0].budget,
+            Some(progress.breakdown[0].consumed),
             false,
         );
         assert_eq!(first.remaining, "-1h");
@@ -189,23 +232,22 @@ mod budget_display_tests {
 
     #[test]
     fn unallocated_zero_and_overflow_budgets_are_not_conflated() {
-        let unallocated = configured_row_spend(&[scope(Some(60), 30), scope(None, 60)]).unwrap();
+        let unallocated = configured_row_spend(&summary(None, Some(0))).unwrap();
         assert_eq!(
             (
                 unallocated.budget.as_str(),
                 unallocated.spent.as_str(),
                 unallocated.remaining.as_str()
             ),
-            ("—", "1.5h", "—")
+            ("—", "0h", "—")
         );
         assert_eq!(unallocated.pct, None);
-        let zero = configured_row_spend(&[scope(Some(0), 60)]).unwrap();
+        let zero = configured_row_spend(&summary(Some(0), Some(60))).unwrap();
         assert_eq!(
             (zero.budget.as_str(), zero.remaining.as_str(), zero.pct),
             ("0h", "-1h", None)
         );
-        let overflow =
-            configured_row_spend(&[scope(Some(i64::MAX), i64::MAX), scope(Some(1), 1)]).unwrap();
+        let overflow = configured_row_spend(&summary(None, None)).unwrap();
         assert_eq!(
             (
                 overflow.budget.as_str(),
@@ -214,10 +256,9 @@ mod budget_display_tests {
             ),
             ("—", "Unavailable", "—")
         );
-        assert!(configured_row_spend(&[]).is_none());
-        let mut no_budget = scope(None, 0);
+        let mut no_budget = summary(None, Some(0));
         no_budget.kind = BudgetKind::None;
-        assert!(configured_row_spend(&[no_budget]).is_none());
+        assert!(configured_row_spend(&no_budget).is_none());
     }
 
     #[test]
@@ -265,18 +306,81 @@ struct BulkProjectAction {
     projects: Vec<(Uuid, String)>,
 }
 
+fn restore_project_list_focus() {
+    document::eval(
+        "const active = document.activeElement;
+        if (!active || active === document.body ||
+            ['project-list-heading', 'projects-retry-access'].includes(active.id)) {
+            (document.getElementById('project-scope-menu-trigger') ||
+             document.getElementById('projects-retry-access') ||
+             document.getElementById('project-list-heading'))?.focus();
+        }",
+    );
+}
+
 #[component]
 pub fn ProjectList() -> Element {
-    // Management view: `include_inactive = true` also lists deactivated projects
-    // so managers can reactivate them; new-entry pickers pass `false`.
-    let mut projects = use_resource(|| async move { server_fns::list_projects(None, true).await });
-    // All clients so projects under deactivated clients still resolve their names.
-    let clients_res = use_resource(|| async move { server_fns::list_clients(true).await });
-    let mut tags_res = use_resource(|| async move { server_fns::list_project_tags().await });
-    let me = use_resource(|| async move { server_fns::get_me().await });
-    let mut spend_res = use_resource(|| async move { server_fns::list_project_spend().await });
-    let mut budget_res =
-        use_resource(|| async move { server_fns::list_project_budget_progress().await });
+    let mut binding = use_signal(|| None::<(PermissionRequester, bool)>);
+    let mut generation = use_signal(Uuid::now_v7);
+    let bulk_success = use_signal(|| None::<String>);
+    let mut projects = use_resource(move || async move {
+        let expected = *binding.peek();
+        let response =
+            server_fns::get_project_overview(expected.map(|(requester, _)| requester)).await?;
+        let current = (response.requester, response.canonical_permissions);
+        if expected.is_some_and(|expected| expected != current) {
+            return Err(ServerFnError::new(
+                "Your session or project policy changed. Reload this page to continue.",
+            ));
+        }
+        binding.set(Some(current));
+        generation.set(Uuid::now_v7());
+        Ok(response)
+    });
+    if projects.state()() != UseResourceState::Ready {
+        return rsx! {
+            div { class: "page-header mb-5",
+                onmounted: move |_| { if bulk_success.peek().is_some() { restore_project_list_focus(); } },
+                h1 { id: "project-list-heading", tabindex: "-1", class: "page-title text-4xl font-semibold text-strong tracking-tight", "Projects" }
+            }
+            if let Some(message) = bulk_success() {
+                div { class: "alert alert-success", role: "status", "{message}" }
+            }
+            p { class: "text-sm text-secondary", role: "status", "Loading projects…" }
+        };
+    }
+    match &*projects.read() {
+        Some(Ok(overview)) => rsx! {
+            ProjectListContent { key: "{generation}", overview: overview.clone(), projects, bulk_success }
+        },
+        _ => rsx! {
+            div { class: "page-header mb-5", h1 { class: "page-title text-4xl font-semibold text-strong tracking-tight", "Projects" } }
+            if let Some(message) = bulk_success() {
+                div { class: "alert alert-success", role: "status", "{message}" }
+            }
+            div { class: "alert alert-danger", role: "alert", "Project access is unavailable. Sign in again or reload this page if your account changed." }
+            button { id: "projects-retry-access", r#type: "button", class: "btn btn-secondary",
+                onmounted: move |_| { if bulk_success.peek().is_some() { restore_project_list_focus(); } },
+                onclick: move |_| projects.restart(), "Retry access"
+            }
+        },
+    }
+}
+
+#[component]
+fn ProjectListContent(
+    overview: ProjectOverview,
+    mut projects: Resource<Result<ProjectOverview, ServerFnError>>,
+    mut bulk_success: Signal<Option<String>>,
+) -> Element {
+    let requester = overview.requester;
+    let mut tags_res =
+        use_resource(move || async move { server_fns::list_project_tags(Some(requester)).await });
+    let mut spend_res =
+        use_resource(move || async move { server_fns::list_project_spend(Some(requester)).await });
+    let mut budget_res = use_resource(move || async move {
+        server_fns::list_project_budget_progress(Some(requester)).await
+    });
 
     let navigator = use_navigator();
     let action_error = use_signal(|| None::<String>);
@@ -292,23 +396,31 @@ pub fn ProjectList() -> Element {
     let mut bulk_action = use_signal(|| None::<BulkProjectAction>);
     let mut bulk_busy = use_signal(|| false);
     let mut bulk_error = use_signal(|| None::<String>);
-    let mut bulk_success = use_signal(|| None::<String>);
     // Export modal: open state + chosen scope and format.
     let mut export_open = use_signal(|| false);
     let mut export_scope = use_signal(|| "active".to_string());
     let mut export_fmt = use_signal(|| "csv".to_string());
 
-    let can_import = is_admin(&me);
-    let is_manager = is_manager(&me);
+    let can_import = overview.can_import;
+    let can_create = overview.can_create;
+    let is_manager = overview.can_change_legacy_status;
+    let editable: BTreeSet<Uuid> = overview
+        .projects
+        .iter()
+        .filter(|row| row.can_edit)
+        .map(|row| row.project.id)
+        .collect();
     let spend_ready = spend_res.state()() == UseResourceState::Ready
         && budget_res.state()() == UseResourceState::Ready
         && matches!(&*spend_res.read(), Some(Ok(_)))
         && matches!(&*budget_res.read(), Some(Ok(_)));
 
-    let client_names: HashMap<Uuid, String> = match &*clients_res.read() {
-        Some(Ok(cs)) => cs.iter().map(|c| (c.id, c.name.clone())).collect(),
-        _ => HashMap::new(),
-    };
+    let client_names: HashMap<Uuid, String> = overview
+        .projects
+        .iter()
+        .filter_map(|row| row.client.as_ref())
+        .map(|client| (client.id, client.name.clone()))
+        .collect();
     let query_lower = query().to_lowercase();
     // Resources retain their previous value while a restart is pending.
     let projects_loading = projects.state()() != UseResourceState::Ready;
@@ -339,9 +451,11 @@ pub fn ProjectList() -> Element {
         .read()
         .as_ref()
         .and_then(|result| result.as_ref().ok())
+        .map(|overview| &overview.projects)
         .into_iter()
         .filter(|_| !projects_loading)
         .flatten()
+        .map(|row| &row.project)
         .filter(|p| {
             matches_project_filters(p, &query_lower, &scope(), &client_filter(), &client_names)
                 && (tag_filter().is_none() || (tags_ready && tag_projects.contains(&p.id)))
@@ -386,30 +500,34 @@ pub fn ProjectList() -> Element {
     } else {
         "Archive"
     };
-    // project_id -> (spent_minutes, spent_cents); missing = no tracked time yet.
-    let spend_map: HashMap<Uuid, (i64, i64)> = match &*spend_res.read() {
+    // Missing/withheld money is not a zero. Empty authorized projects have explicit totals.
+    let spend_map: HashMap<Uuid, (i64, Option<i64>)> = match &*spend_res.read() {
         Some(Ok(v)) => v
             .iter()
             .map(|s| (s.project_id, (s.spent_minutes, s.spent_cents)))
             .collect(),
         _ => HashMap::new(),
     };
-    let mut budget_map: HashMap<Uuid, Vec<ProjectBudgetProgress>> = HashMap::new();
+    let mut budget_map: HashMap<Uuid, ProjectBudgetOverview> = HashMap::new();
     if spend_ready && let Some(Ok(rows)) = &*budget_res.read() {
         for row in rows {
-            budget_map
-                .entry(row.project_id)
-                .or_default()
-                .push(row.clone());
+            budget_map.insert(row.project_id, row.clone());
         }
     }
     let (active_count, budgeted_count, archived_count) = match &*projects.read() {
         Some(Ok(list)) => (
-            list.iter().filter(|p| p.active).count(),
-            list.iter()
-                .filter(|p| p.active && p.budget_kind != BudgetKind::None)
+            list.projects
+                .iter()
+                .filter(|row| row.project.active)
                 .count(),
-            list.iter().filter(|p| !p.active).count(),
+            list.projects
+                .iter()
+                .filter(|row| row.project.active && row.project.budget_kind != BudgetKind::None)
+                .count(),
+            list.projects
+                .iter()
+                .filter(|row| !row.project.active)
+                .count(),
         ),
         _ => (0, 0, 0),
     };
@@ -419,32 +537,59 @@ pub fn ProjectList() -> Element {
         _ => format!("Active projects ({active_count})"),
     };
     // Client options for the filter combobox, grouped Active / Archived.
-    let client_options: Vec<ComboOption> = match &*clients_res.read() {
-        Some(Ok(cs)) => {
-            let mut active: Vec<&Client> = cs.iter().filter(|c| c.active).collect();
-            let mut archived: Vec<&Client> = cs.iter().filter(|c| !c.active).collect();
-            let by_name =
-                |a: &&Client, b: &&Client| a.name.to_lowercase().cmp(&b.name.to_lowercase());
-            active.sort_by(by_name);
-            archived.sort_by(by_name);
-            active
-                .into_iter()
-                .map(|c| ComboOption::grouped(c.id.to_string(), c.name.clone(), "Active clients"))
-                .chain(archived.into_iter().map(|c| {
-                    ComboOption::grouped(c.id.to_string(), c.name.clone(), "Archived clients")
-                }))
-                .collect()
-        }
-        _ => Vec::new(),
+    let mut seen_clients = BTreeSet::new();
+    let mut clients: Vec<_> = overview
+        .projects
+        .iter()
+        .filter_map(|row| row.client.as_ref())
+        .filter(|client| seen_clients.insert(client.id))
+        .collect();
+    clients.sort_by_key(|client| (!client.active, client.name.to_lowercase(), client.id));
+    let client_options: Vec<ComboOption> = clients
+        .into_iter()
+        .map(|client| {
+            ComboOption::grouped(
+                client.id.to_string(),
+                client.name.clone(),
+                if client.active {
+                    "Active clients"
+                } else {
+                    "Archived clients"
+                },
+            )
+        })
+        .collect();
+
+    let denied = |error: &ServerFnError| {
+        matches!(
+            error,
+            ServerFnError::ServerError {
+                code: 401 | 403,
+                ..
+            }
+        )
     };
+    if matches!(&*tags_res.read(), Some(Err(error)) if denied(error))
+        || matches!(&*spend_res.read(), Some(Err(error)) if denied(error))
+        || matches!(&*budget_res.read(), Some(Err(error)) if denied(error))
+    {
+        return rsx! {
+            div { class: "page-header mb-5", h1 { class: "page-title text-4xl font-semibold text-strong tracking-tight", "Projects" } }
+            div { class: "alert alert-danger", role: "alert", "Your session or project access changed. Refresh access before continuing." }
+            button { id: "projects-refresh-access", r#type: "button", class: "btn btn-secondary", onclick: move |_| projects.restart(), "Refresh access" }
+        };
+    }
 
     rsx! {
         div {
+            onmounted: move |_| { if bulk_success.peek().is_some() { restore_project_list_focus(); } },
             div { class: "page-header mb-5",
                 h1 { class: "page-title text-4xl font-semibold text-strong tracking-tight", "Projects" }
                 div { class: "page-actions items-center gap-4",
-                    if is_manager {
+                    if can_create {
                         Link { to: Route::NewProject {}, class: "btn btn-primary py-2 px-4", "New project" }
+                    }
+                    if is_manager {
                         Menu {
                             id: "project-bulk-menu", label: "⚡ Actions", align_right: true,
                             trigger_class: "text-sm py-2 px-4",
@@ -571,7 +716,8 @@ pub fn ProjectList() -> Element {
                     }
                 }
             } else {
-            {loaded(&*projects.read(), |list| {
+            {loaded(&*projects.read(), |overview| {
+                    let list = &overview.projects;
                     let visible_ids: BTreeSet<Uuid> = visible.iter().map(|p| p.id).collect();
                     let all_selected = !visible_ids.is_empty() && selected_count == visible_ids.len();
                     let mut items = visible.clone();
@@ -601,7 +747,7 @@ pub fn ProjectList() -> Element {
                                 if list.is_empty() {
                                     h2 { class: "empty-state-title text-xl m-0", "No projects yet" }
                                     p { class: "empty-state-text empty-state-copy text-subtle m-0",
-                                        if is_manager {
+                                        if can_create {
                                             "Projects hold the tasks your team tracks against. Create one to get started."
                                         } else {
                                             "Projects hold the tasks your team tracks against. Ask a manager to create your first project."
@@ -663,9 +809,9 @@ pub fn ProjectList() -> Element {
                                     div { key: "grp-{group_name}", class: "proj-group py-3 px-5 text-sm font-semibold text-primary", "{group_name}" }
                                     for p in group {
                                         {
-                                            let (sm, sc) = spend_map.get(&p.id).copied().unwrap_or((0, 0));
-                                            let budget_rows = budget_map.get(&p.id).map(Vec::as_slice).unwrap_or_default();
-                                            let rs = configured_row_spend(budget_rows).unwrap_or_else(|| row_spend(&p, sm, sc));
+                                            let (sm, sc) = spend_map.get(&p.id).copied().unwrap_or((0, None));
+                                            let budget_config = budget_map.get(&p.id);
+                                            let rs = budget_config.and_then(configured_row_spend).unwrap_or_else(|| row_spend(&p, sm, sc));
                                             let pname = match &p.code {
                                                 Some(c) => format!("[{c}] {}", p.name),
                                                 None => p.name.clone(),
@@ -696,16 +842,16 @@ pub fn ProjectList() -> Element {
                                                     span { class: "badge badge-neutral", "Inactive" }
                                                 }
                                               }
-                                              if let Some(config) = budget_rows.first().filter(|row| row.kind != BudgetKind::None) {
+                                              if let Some(config) = budget_config.filter(|row| row.kind != BudgetKind::None) {
                                                 p { class: "text-xs text-muted mt-2",
                                                     if config.period_key != "lifetime" { "Budget period: {config.period_key} · " }
                                                     "Total tracked: {hours(sm)}"
                                                 }
-                                                if config.scope != "project" {
+                                                if config.scope != "project" && !config.breakdown.is_empty() {
                                                   details { class: "mt-2 text-xs",
                                                     summary { class: "cursor-pointer text-primary", "Budget by {config.scope}" }
                                                     ul { class: "mt-2",
-                                                      for row in budget_rows {
+                                                      for row in &config.breakdown {
                                                         {
                                                             let values = budget_display(row.kind, &row.currency, row.budget, Some(row.consumed), false);
                                                             let label = row.label.as_deref().unwrap_or("No allocated budget");
@@ -756,8 +902,9 @@ pub fn ProjectList() -> Element {
                                                 }
                                             }
                                             div { class: "flex justify-end",
-                                                if is_manager {
+                                                if editable.contains(&p.id) || is_manager {
                                                     Menu { id: "project-actions-{p.id}", label: "Actions", align_right: true,
+                                                        if editable.contains(&p.id) {
                                                         MenuItem {
                                                             onclick: {
                                                                 let id = p.id;
@@ -765,19 +912,22 @@ pub fn ProjectList() -> Element {
                                                             },
                                                             "Edit"
                                                         }
+                                                        }
+                                                        if is_manager {
                                                         MenuDivider {}
                                                         MenuItem {
                                                             onclick: {
                                                                 let id = p.id;
                                                                 let next_active = !p.active;
                                                                 move |_| run_action(
-                                                                    server_fns::set_project_active(id.to_string(), next_active),
+                                                                    server_fns::set_project_active(id.to_string(), next_active, Some(requester)),
                                                                     projects,
                                                                     action_error,
                                                                     || (),
                                                                 )
                                                             },
                                                             if p.active { "Archive" } else { "Unarchive" }
+                                                        }
                                                         }
                                                     }
                                                 } else {
@@ -829,7 +979,7 @@ pub fn ProjectList() -> Element {
                                 bulk_error.set(None);
                                 spawn(async move {
                                     let ids = action.projects.iter().map(|(id, _)| id.to_string()).collect();
-                                    match server_fns::set_projects_active(ids, action.activate).await {
+                                    match server_fns::set_projects_active(ids, action.activate, Some(requester)).await {
                                         Ok(_) => {
                                             let verb = if action.activate { "Reactivated" } else { "Archived" };
                                             let noun = if action.projects.len() == 1 { "project" } else { "projects" };
@@ -859,9 +1009,11 @@ pub fn ProjectList() -> Element {
                 on_dismiss: move |_| export_open.set(false),
                 {
                     let url = format!(
-                        "/api/projects/export/{}?scope={}",
+                        "/api/projects/export/{}?scope={}&expected_org_id={}&expected_user_id={}",
                         export_fmt(),
-                        export_scope()
+                        export_scope(),
+                        requester.org_id,
+                        requester.user_id,
                     );
                     rsx! {
                         div { id: "export-projects-title", class: "modal-title", "Export projects" }
@@ -916,189 +1068,83 @@ pub fn ProjectDetail(id: Uuid) -> Element {
 
 #[component]
 fn ProjectDetailContent(id: Uuid) -> Element {
-    let mut details =
-        use_resource(move || async move { server_fns::get_project_details(id.to_string()).await });
-    let me = use_resource(|| async move { server_fns::get_me().await });
-    let assignments = use_resource(move || {
-        let pid = id.to_string();
-        async move { server_fns::list_assignments(pid).await }
+    let mut binding = use_signal(|| None::<(PermissionRequester, bool)>);
+    let mut generation = use_signal(Uuid::now_v7);
+    let mut access_lost = use_signal(|| false);
+    let mut details = use_resource(move || async move {
+        let expected = *binding.peek();
+        let view = server_fns::get_project_detail_view(
+            id.to_string(),
+            expected.map(|(requester, _)| requester),
+        )
+        .await?;
+        let current = (view.requester, view.canonical_permissions);
+        if view.project.id != id || expected.is_some_and(|expected| expected != current) {
+            return Err(ServerFnError::new("Project access changed"));
+        }
+        binding.set(Some(current));
+        access_lost.set(false);
+        generation.set(Uuid::now_v7());
+        Ok(view)
     });
-    let users_res = use_resource(|| async move { server_fns::list_users(false).await });
-
-    let mut show_assign_form = use_signal(|| false);
-    let mut assign_user_id = use_signal(String::new);
-    let mut assign_role = use_signal(|| "freelancer".to_string());
-    let error = use_signal(|| None::<String>);
-    let action_error = use_signal(|| None::<String>);
-
-    let is_admin = is_admin(&me);
-
-    // Build a lookup from user_id -> user name
-    let users_map: std::collections::HashMap<uuid::Uuid, String> = match &*users_res.read() {
-        Some(Ok(users)) => users.iter().map(|u| (u.id, u.name.clone())).collect(),
-        _ => std::collections::HashMap::new(),
+    let ready = details.state()() == UseResourceState::Ready;
+    let view = if ready && !access_lost() {
+        details
+            .read()
+            .as_ref()
+            .and_then(|result| result.as_ref().ok())
+            .cloned()
+    } else {
+        None
     };
-
-    let assign_user_opts: Vec<(String, String)> =
-        std::iter::once((String::new(), "Select a user...".to_string()))
-            .chain(
-                users_res
-                    .read()
-                    .as_ref()
-                    .and_then(|r| r.as_ref().ok())
-                    .into_iter()
-                    .flatten()
-                    .map(|u| (u.id.to_string(), format!("{} ({})", u.name, u.email))),
-            )
-            .collect();
 
     rsx! {
         div {
             div { class: "page-header",
                 h1 { class: "page-title", "Project" }
-            }
-            section { class: "card p-5 wrap-anywhere", aria_label: "Project details",
-                if details.state()() != UseResourceState::Ready {
-                    p { role: "status", "Loading project details…" }
-                } else {
-                    match &*details.read() {
-                        Some(Ok(project)) => rsx! { SavedProjectDetails { project: project.clone() } },
-                        Some(Err(error)) => rsx! {
-                            p { class: "text-danger", role: "alert", "Could not load project details: {error}" }
-                            button { r#type: "button", class: "btn btn-secondary btn-sm", onclick: move |_| details.restart(), "Retry details" }
-                        },
-                        None => rsx! {},
-                    }
-                }
-            }
-
-            ProjectTasks {
-                project_id: id,
-                can_manage: is_manager(&me) && details.state()() == UseResourceState::Ready
-                    && matches!(&*details.read(), Some(Ok(_))),
-                task_rate_currency: details.read().as_ref().and_then(|result| result.as_ref().ok())
-                    .and_then(|project| project.task_rate_currency.clone()),
-            }
-
-            if is_manager(&me) && details.state()() == UseResourceState::Ready
-                && matches!(&*details.read(), Some(Ok(_))) {
-                fee_balances::ProjectFeeBalances { project_id: id }
-            }
-
-            // ── Assignments section ─────────────────────────────────────
-            div { class: "mt-6",
-                div { class: "page-header",
-                    h2 { class: "page-title text-xl", "Assignments" }
+                if let Some(view) = view.as_ref() {
                     div { class: "page-actions",
-                        if is_admin {
-                            button {
-                                class: "btn btn-primary",
-                                onclick: move |_| show_assign_form.set(!show_assign_form()),
-                                if show_assign_form() { "Cancel" } else { "Assign User" }
-                            }
+                        button { id: "project-detail-refresh", r#type: "button", class: "btn btn-secondary btn-sm",
+                            onclick: move |_| details.restart(), "Refresh details"
+                        }
+                        if view.can_edit {
+                            Link { class: "btn btn-primary", to: Route::EditProject { id }, "Edit project" }
                         }
                     }
                 }
-
-                if show_assign_form() && is_admin {
-                    FormCard { title: "Assign User", error,
-                        FormGroup { label: "User", id: "assign-user",
-                            Select {
-                                id: "assign-user",
-                                options: assign_user_opts,
-                                selected: assign_user_id(),
-                                onchange: move |e: FormEvent| assign_user_id.set(e.value()),
-                            }
-                        }
-                        FormGroup { label: "Role", id: "assign-role",
-                            Select {
-                                id: "assign-role",
-                                options: vec![
-                                    ("lead".to_string(), "Lead".to_string()),
-                                    ("freelancer".to_string(), "Freelancer".to_string()),
-                                    ("admin".to_string(), "Admin".to_string()),
-                                ],
-                                selected: assign_role(),
-                                onchange: move |e: FormEvent| assign_role.set(e.value()),
-                            }
-                        }
-                        button {
-                            class: "btn btn-primary",
-                            onclick: move |_| {
-                                let pid = id.to_string();
-                                let uid = assign_user_id();
-                                let r = assign_role();
-                                run_action(
-                                    server_fns::create_assignment(pid, uid, r),
-                                    assignments,
-                                    error,
-                                    move || {
-                                        assign_user_id.set(String::new());
-                                        assign_role.set("freelancer".to_string());
-                                        show_assign_form.set(false);
-                                    },
-                                );
-                            },
-                            "Assign"
+            }
+            if !ready {
+                p { role: "status", "Loading project details…" }
+            } else if let Some(view) = view {
+                section { class: "card p-5 wrap-anywhere", aria_label: "Project details",
+                    SavedProjectDetails { project: view.project }
+                }
+                section { class: "card mt-6 p-5 wrap-anywhere", aria_label: "Project tasks",
+                    h2 { class: "page-title text-xl", "Project tasks" }
+                    if view.tasks.is_empty() { p { class: "text-muted text-sm", "No tasks enabled yet." } }
+                    else { ul { for task in view.tasks { li { key: "{task.id}", "{task.name}" } } } }
+                }
+                section { class: "card mt-6 p-5 wrap-anywhere", aria_label: "Project team",
+                    h2 { class: "page-title text-xl", "Team" }
+                    if view.team.is_empty() { p { class: "text-muted text-sm", "No visible team members." } }
+                    else { ul { for person in view.team { li { key: "{person.id}", "{person.name}" } } } }
+                }
+                if !view.canonical_permissions && view.can_edit {
+                    for key in [generation()] {
+                        fee_balances::ProjectFeeBalances {
+                            key: "{key}",
+                            project_id: id,
+                            requester: view.requester,
+                            on_access_change: move |_| access_lost.set(true),
                         }
                     }
                 }
-
-                if let Some(message) = action_error() {
-                    div { class: "alert alert-danger", role: "alert", "Could not remove assignment: {message}" }
+            } else {
+                p { class: "text-danger", role: "alert",
+                    "Project details are unavailable. Your session or access may have changed."
                 }
-
-                div { class: "card",
-                    {loaded(&*assignments.read(), |list| {
-                        if list.is_empty() {
-                            return rsx! {
-                                p { class: "text-muted text-sm p-5", "No users assigned yet." }
-                            };
-                        }
-                        rsx! {
-                            DataTable {
-                                table {
-                                    thead {
-                                        tr {
-                                            th { "User" }
-                                            th { "Role" }
-                                            if is_admin {
-                                                th { "Actions" }
-                                            }
-                                        }
-                                    }
-                                    tbody {
-                                        for a in list.iter() {
-                                            {
-                                                let aid = a.id.to_string();
-                                                let user_name = users_map.get(&a.user_id).cloned().unwrap_or_else(|| a.user_id.to_string());
-                                                rsx! {
-                                                    tr { key: "{a.id}",
-                                                        td { "{user_name}" }
-                                                        td { "{a.role}" }
-                                                        if is_admin {
-                                                            td {
-                                                                button {
-                                                                    class: "btn btn-danger btn-sm",
-                                                                    onclick: move |_| run_action(
-                                                                        server_fns::delete_assignment(aid.clone()),
-                                                                        assignments,
-                                                                        action_error,
-                                                                        || (),
-                                                                    ),
-                                                                    "Remove"
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    })}
+                button { id: "project-detail-retry", r#type: "button", class: "btn btn-secondary btn-sm",
+                    onclick: move |_| details.restart(), "Retry details"
                 }
             }
         }
@@ -1137,103 +1183,6 @@ fn SavedProjectDetails(project: ProjectDetails) -> Element {
             div { class: "mt-4",
                 h3 { class: "text-sm text-subtle m-0 mb-2", "Administrator notes" }
                 for line in notes.lines() { p { class: "text-sm m-0", "{line}" } }
-            }
-        }
-    }
-}
-
-#[component]
-fn ProjectTasks(project_id: Uuid, can_manage: bool, task_rate_currency: Option<String>) -> Element {
-    let mut enabled = use_resource(move || async move {
-        server_fns::list_project_tasks(project_id.to_string()).await
-    });
-    let mut catalog = use_resource(|| async move { server_fns::list_tasks().await });
-    let mut selected = use_signal(String::new);
-    let mut rate = use_signal(String::new);
-    let mut name = use_signal(String::new);
-    let mut billable = use_signal(|| true);
-    let mut error = use_signal(|| None::<String>);
-    let mut saving = use_signal(|| false);
-    let enabled_ids: BTreeSet<_> = enabled
-        .read()
-        .as_ref()
-        .and_then(|result| result.as_ref().ok())
-        .into_iter()
-        .flatten()
-        .map(|task| task.id)
-        .collect();
-
-    rsx! {
-        div { class: "card mt-6 p-5",
-            h2 { class: "page-title text-xl", "Project tasks" }
-            {loaded(&*enabled.read(), |tasks| rsx! {
-                if tasks.is_empty() { p { "No tasks enabled yet." } }
-                ul { for task in tasks { li { key: "{task.id}", "{task.name}" } } }
-            })}
-            if let Some(message) = error() {
-                div { class: "alert alert-danger", role: "alert", "{message}" }
-            }
-            if can_manage {
-                FormGroup { label: "Enable an existing task", id: "project-task",
-                    {loaded(&*catalog.read(), |tasks| rsx! {
-                        select {
-                            id: "project-task", class: "form-select", value: "{selected}",
-                            disabled: saving(), onchange: move |e| {
-                                selected.set(e.value()); rate.set(String::new()); error.set(None);
-                            },
-                            option { value: "", "Select task…" }
-                            for task in tasks { option { value: "{task.id}", disabled: enabled_ids.contains(&task.id), "{task.name}" } }
-                        }
-                    })}
-                }
-                if let Some(currency) = task_rate_currency.as_deref() {
-                    FormGroup { label: "Task hourly rate ({currency})", id: "project-task-rate",
-                        hint: "For newly enabled tasks. Leave blank to inherit a compatible catalog rate; enter 0 for a zero rate.",
-                        Input { id: "project-task-rate", class: "w-30 max-w-full font-mono text-right",
-                            value: "{rate}", disabled: saving(), oninput: move |event: FormEvent| rate.set(event.value()) }
-                    }
-                }
-                button {
-                    class: "btn btn-secondary", disabled: saving() || selected().is_empty(),
-                    onclick: move |_| {
-                        let task_id = selected();
-                        let explicit_rate = task_rate_currency.as_ref().filter(|_| !rate().trim().is_empty())
-                            .map(|currency| ProjectTaskRate { amount: rate(), currency: currency.clone() });
-                        error.set(None);
-                        saving.set(true);
-                        spawn(async move {
-                            match server_fns::link_project_task(project_id.to_string(), task_id, explicit_rate).await {
-                                Ok(()) => { error.set(None); selected.set(String::new()); rate.set(String::new()); enabled.restart(); }
-                                Err(e) => error.set(Some(e.to_string())),
-                            }
-                            saving.set(false);
-                        });
-                    },
-                    "Enable task"
-                }
-                FormGroup { label: "New task name", id: "new-project-task",
-                    Input { id: "new-project-task", value: "{name}", oninput: move |e: FormEvent| name.set(e.value()) }
-                }
-                label { class: "form-label flex items-center gap-2",
-                    input { r#type: "checkbox", checked: billable(), onchange: move |e| billable.set(e.checked()) }
-                    "Billable on this project"
-                }
-                button {
-                    class: "btn btn-primary", disabled: saving() || name().trim().is_empty(),
-                    onclick: move |_| {
-                        let task_name = name();
-                        let task_billable = billable();
-                        saving.set(true);
-                        spawn(async move {
-                            match server_fns::create_task(task_name, task_billable, Some(project_id.to_string())).await {
-                                Ok(_) => { error.set(None); name.set(String::new()); enabled.restart(); catalog.restart(); }
-                                Err(e) => error.set(Some(e.to_string())),
-                            }
-                            saving.set(false);
-                        });
-                    },
-                    "Create and enable task"
-                }
             }
         }
     }

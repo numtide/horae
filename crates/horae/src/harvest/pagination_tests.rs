@@ -7,6 +7,8 @@ use std::sync::Arc;
 use tower::ServiceExt;
 use tower_sessions::{MemoryStore, Session};
 
+mod project_permissions;
+
 async fn signed_in(pool: &PgPool, user_id: Uuid) -> Router {
     let session = Session::new(None, Arc::new(MemoryStore::default()), None);
     crate::auth::session::set_session_user_id(&session, user_id)

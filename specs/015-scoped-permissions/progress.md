@@ -1,5 +1,818 @@
 # Scoped permissions investigation progress
 
+## 2026-10-06 — Project read delivery review
+
+- The preceding estimate-only turn was no implementation progress. Revalidated
+  the existing worktree and `2497dbe` base; no verifier is being resumed or
+  restarted from a stale handle.
+- Completed the scoped adversarial self-review across ordinary project reads,
+  current-authority transactions, source/release export checks, compatibility
+  count/page projection and actual list/detail consumers. Checked the financial
+  revocation tests, unchanged billing-value assertions, minimal label DTOs,
+  requester continuity and pending/error focus behavior against their code.
+  No additional high/critical defect was identified; this is not an independent
+  reviewer sign-off or evidence for unimplemented canonical consumers.
+- Clarified the read contract's historical baseline versus current acceptance
+  and added reproducible verification commands and snapshot limitations to
+  `quickstart.md`. T226 is complete with the prior recorded test/browser/lint
+  evidence and this review; full activation and Nix gates remain open.
+- Final `nix fmt -- --ci` passed without changes and `git diff --check` passed.
+  The removed SQLx descriptors belong to replaced queries; prior all-target
+  offline compilation verified the regenerated cache. No migration, dependency
+  or shared stylesheet was changed in this increment.
+
+Next: final formatting/diff checks, unsigned commit and publication to existing
+draft #212, without merge or real-data activation. Then continue the remaining
+canonical consumers and cross-command integration gates.
+
+## 2026-10-06 — Detail regression suite and fee-session acceptance
+
+- The preceding estimate/status turn was a verified wait: it polled the live
+  `69006` verifier without restarting it. This continuation collected exit 0:
+  185 core, 1,350 app and 295 integration/component tests passed (1,830 total),
+  with 11 existing manual measurements ignored. That snapshot includes the
+  bound detail reader/consumer, but predates the following test additions.
+
+- Removed the unused production role helper and obsolete inline-editor test
+  doubles. Added a controlled late 401/403 fee response to the actual routed
+  detail test: loaded labels and editing disappear, diagnostics remain hidden,
+  and retry retains the original requester. All 34 navigation tests passed.
+
+- Added legacy fee requester checks to the registered HTTP session matrix:
+  matching identity succeeds, anonymous access is denied, and account or
+  organization mismatch is forbidden. The complete session-matrix test passed
+  against a new socket-only temporary PostgreSQL cluster. Canonical fee scope
+  and policy activation remain separate, incomplete gates.
+
+- The native all-target Clippy pass found four complex controlled-response
+  field types in the test harness. Reused one test-only type alias; did not
+  suppress the lint. `1599` exited 101 at that lint, not at an acceptance test.
+  `83784` now runs native/WASM Clippy and the browser build after the correction.
+
+- Browser dependency paths resolve to the pinned Nix Playwright installation.
+  Added a disposable-database project-read scenario for minimal labels,
+  withheld fields, managed/edit revocation, inactive actors, pending state and
+  policy continuity at desktop/mobile widths. Migrated task-rate and team-error
+  checks to the existing editor rather than dropping their validation/recovery
+  assertions. Updated other project browser fixtures to the overview response
+  and separate budget summary/breakdown contract. Browser execution is pending;
+  syntax checks alone are not browser acceptance.
+
+- `83784` passed native all-target Clippy, then failed the WASM lint on one
+  server/test-only re-export and two retained endpoint DTOs no longer constructed
+  by the UI. Scoped the re-export and documented those two client-side dead-code
+  expectations without removing endpoints or changing their wire contracts.
+  `74539` passed strict WASM Clippy and built both browser client and server.
+
+- Browser `39197` exposed a fixture assumption: seeded projects legitimately
+  remain visible through shared membership. Added a separate unrelated private
+  project and checked management/edit scope independently of that membership.
+  `60210` then passed all new project-read scenarios and the existing canonical
+  editor-permission suite, including real revocation and recovery. Inspected
+  desktop/mobile captures under `.scratch/project-read-browser/`; no overflow.
+  Its later task-rate scenario failed on an outdated expected message, not a
+  missing rejection. Corrected the editor-specific message and teammate-picker
+  selector; `42839` runs the remaining affected browser suites. These browser
+  fixes do not yet prove full-suite compatibility or bulk focus recovery.
+
+- Follow-up browser runs corrected two test selectors (the save button changes
+  its label while pending; the teammate selector includes a disabled empty
+  option). `11168` passed task-rate/editor-mode/currency/budget/keyboard acceptance
+  at all three widths. `95312` passed action-error recovery, including team
+  removal/re-addition through the editor, and the complete projects-design
+  suite, including shared-control defaults, responsive budgets and bound links.
+
+- After distinguishing the success live region from progress loading, `1583`
+  reproduced a real regression: bulk success remounted the list but lost the
+  keyboard focus target. Added mounted-state focus restoration for loading,
+  failed and successful refreshes, preserving deliberate navigation focus and
+  the non-sensitive operation receipt while stale rows/actions stay unmounted.
+  Impeccable hardening guidance informed this scoped correction; no CSS or
+  shared component defaults changed. Extended the browser regression to cover
+  deliberate focus movement during a pending refresh. `84428` runs component
+  tests and rebuilds the browser for confirmation; the focus fix is not yet
+  verified.
+
+- `84428` passed 34 component tests and rebuilt both targets. `50897` exited 0:
+  all four bulk recovery cases passed, including pending/error receipts and
+  deliberate navigation focus; real bulk status/session/tenant/history checks,
+  menu/popover tests, modal recovery and responsive-layout checks also passed.
+  The layout suite covered projects and the existing client, invoice, report,
+  people, approval, settings, import and timesheet screens at five widths.
+
+- T225 is complete: refreshed SQLx/offline, current row/field scope, malformed/
+  unknown-policy and real revocation tests are green. T226 remains open for
+  final cross-delivery review/publication, not a claim of full permissions or
+  activation. Final native/WASM Clippy `4791` exited 0 with warnings denied.
+  Formatting `58850` and `git diff --check` passed after the focus correction.
+
+Next: review the complete project-read
+delivery diff before publishing the verified increment to existing draft #212.
+Continue the outstanding lifecycle/creation/invoice and full activation gates;
+no merge or real-data change is authorized by these results.
+
+## 2026-10-06 — Team suite passed; bound detail consumer implemented
+
+- The preceding turn made implementation progress. `9696` exited 0 after
+  all-target SQLx preparation (1m14s), offline test compilation (3m15s), 185
+  core, 1,347 app and 291 integration/component passes (1,823 total). Eleven
+  existing manual measurements remained ignored. This covers the assignment
+  reader and download additions, not the following detail-view changes.
+- Added a requester-bound detail response holding the existing organization
+  and actor fences across saved metadata, current edit affordance and minimal
+  team/task labels. Reused the same detail and assignment query paths inside
+  that transaction; no general people/task directory permission is required
+  merely to show the readable project's identities. Protected rates, emails,
+  costs and global/legacy role labels are not included in these label DTOs.
+- Connected the actual detail route to that response. Pending, denied and
+  mismatched project/requester/policy responses hide retained content. Refresh
+  keeps the initial binding and remounts dependent state. Replaced its duplicate
+  legacy task/assignment forms with the existing authorized project editor link;
+  no task, assignment or business records were deleted. Shared CSS is unchanged.
+- Existing policy-zero fee reads now carry the displayed requester; access
+  denial suppresses the parent view. Canonical fee/invoice delivery retains its
+  separate unresolved integration gate and is not inferred from project editing.
+  The legacy fee endpoint and remaining task/membership writes still require
+  their full canonical enforcement before activation.
+- Added production detail-view scope/identity/edit tests, extended the registered
+  session matrix and all four reader concurrency/cancellation cases, and added
+  four actual routed UI tests for labels/editor access, pending/denied payloads,
+  refresh identity/policy/project mismatch and edit revocation. Updated old
+  navigation assertions for the single editor and sanitized error states.
+- Formatting and diff checks passed; no inline styles or literal colors were
+  introduced. Started `69006` for all-target SQLx preparation and the complete
+  offline suite. New detail acceptance is pending, not established by `9696`.
+- The initial check reports obsolete navigation doubles/imports and the now
+  unused production `pages::is_admin` helper. Remove these after the current
+  compilation finishes; do not restart the verifier for warnings. Browser tool
+  discovery is still empty, so no browser acceptance is claimed.
+
+Next: collect `69006`, fix actual failures and obsolete test doubles, then verify
+fee-session denial, native/WASM and available browser behavior. Keep the whole
+permission goal and lifecycle/creation/invoice/activation gates open.
+
+## 2026-10-06 — Team reader uses current project and rate scope
+
+- `51878` exited 101 with the expected four regression failures: canonical
+  project readers were rejected, legacy Administrator access leaked team rows,
+  managed scope was ignored and a missing canonical state returned success.
+  The tenant/inactive-reader case passed. The test binary compiled in 2m36s;
+  these are observed failures, not inferred test outcomes.
+- Reused `ReadAccess` for assignments through materialization. Explicit
+  project-read scope controls the team; ordinary membership exposes only the
+  actor's own retained row. Assignment-rate fields follow the independent
+  project-owned rate grant. Tenant-consistent client and person joins exclude
+  foreign targets, including malformed legacy relationships. Inactive teammates
+  remain visible to authorized project readers. Legacy policy remains separate.
+- Added optional requester continuity to the registered assignment endpoint;
+  the detail page still omits it pending its parent-loader integration. Extended
+  the real-session matrix for matching/changed/foreign/anonymous requesters,
+  forged identity, same-session rate/read revocation and inactive actors.
+- Extended all four database-observed reader race/cancellation cases to team
+  reads, plus unknown-policy/malformed-grant and cross-tenant-target checks.
+  Formatting and diff checks passed. No CSS, membership write, invoice or task
+  authority changed. The added reader coverage does not complete detail UI
+  integration, browser acceptance or full-policy activation.
+
+`2132` exited 1 during all-target SQLx preparation: the navigation mock's newly
+added argument used an unqualified `PermissionRequester` outside its import
+scope. Qualified that test-only type using its existing module; no production
+authorization change was needed. This run did not execute the regression suite
+and does not prove cache completeness. Repeat preparation and offline tests.
+
+Next: collect `9696`, the replacement full SQLx/offline verifier, resolve actual failures,
+then continue requester-bound detail and workflow identities.
+
+## 2026-10-06 — Download verification passed; team-read regression started
+
+- The preceding user-status turn made no implementation progress. Revalidated
+  the specific `41827` process rather than restarting it: it exited 0 after
+  the download/session/export/component checks. Two core, ten parameter, one
+  registered-session matrix, two privacy, 53 streaming, 29 detail/overview and
+  19 report-component tests passed (116 total); one existing manual measurement
+  remained ignored. This covers the export identity addition, not browser or
+  whole-policy acceptance.
+- Inspected the actual detail consumer and assignment reader. The latter still
+  trusts legacy team/rate columns, denying canonical readers with a legacy
+  Member role and disclosing team/rates to a legacy Administrator without the
+  equivalent current grants. Recorded the own-membership versus project-team
+  boundary and its official reference evidence in the read contract.
+- Added five production-reader tests for current team scope, inactive retained
+  teammates, own-only membership, separate rate grants, tenant/actor denial and
+  malformed state. Started `51878` against a disposable PostgreSQL cluster to
+  establish the failure before changing the reader. No policy activation or
+  real-data mutation; the detail UI and task/invoice/membership-write gates remain.
+
+Next: collect `51878`, implement the team reader under the existing permission
+fence, cover revocation and registered sessions, and verify the new SQL cache.
+
+## 2026-10-06 — Full overview suite passed; download verification started
+
+- `14350` exited 0: 185 core, 1,338 app and 291 integration/component tests
+  passed (1,814 total); 11 pre-existing manual measurements stayed ignored.
+  The app tests finished in 165s. This includes the three new routed overview
+  cases and the expanded identity-bound auxiliary/lifecycle session checks.
+  It covers the prepared/offline overview snapshot, not the later export binding.
+- The known unused test import is removed in the subsequent source. No failure
+  was hidden or ignored. Browser, native/WASM/Nix acceptance, detail integration
+  and full canonical lifecycle/creation enforcement remain open.
+- Started `41827` (`.scratch/verify-project-consumers.sh`) after the full verifier ended.
+  It reuses the disposable-cluster reader verifier, checks download parameters,
+  the registered session matrix, project privacy and streaming regressions,
+  then runs actual detail/overview and report components. The export additions
+  introduce no new SQL; this pass need not regenerate the already complete cache.
+
+Next: collect `41827`, resolve actual failures,
+then continue the project detail/workflow identity boundary. Preserve OP13's
+unanswered decision and the broader permission/activation gates.
+
+## 2026-10-06 — Project download identity implementation
+
+- The preceding turn made implementation progress. Revalidated the live `14350`
+  run: all-target SQLx preparation completed in 1m17s, 185 core tests passed and
+  the offline all-target test build completed in 2m57s. Its compiled tests are
+  still running; the following export additions are not covered by that snapshot.
+- Added optional flat `expected_org_id`/`expected_user_id` bindings to project
+  CSV/XLSX downloads, matching the existing time-report convention. Both formats
+  reject changed identities before reserving generation capacity; partial pairs
+  and malformed/repeated UUID query values fail rather than disabling the check.
+  Unbound legacy links retain current authenticated authorization, not arbitrary
+  requester selection. Existing row/financial release fences are unchanged.
+- The actual project export link now supplies its displayed requester. Added
+  three parser/identity tests, real-session CSV/XLSX matching/same-tenant/foreign/
+  anonymous/malformed checks and rendered-link identity assertions. No new SQL
+  queries or transport implementation were added.
+- Removed the obsolete test-harness `Client` re-export after `14350` finished
+  compiling, without restarting its compiled suite. Formatting and diff checks
+  passed for the additions. Their own compile/test verification is pending.
+- Tool discovery still exposes no browser/MCP tools. Do not claim browser
+  acceptance from the routed component tests. Inspection of the detail page
+  confirms the remaining unbound global people/assignment/task/fee dependencies;
+  those must be reconciled independently of the now-bound list.
+
+Next: collect `14350`, resolve any actual consumer failures, then verify the
+new download binding and rendered links. Continue the detail/creation/lifecycle
+integration under the full goal; do not activate policy or infer the unanswered
+OP13 choice. No merge or real-data change.
+
+## 2026-10-06 — Overview consumer connected; identity-bound auxiliaries
+
+- The preceding turn made implementation progress. `36912` exited 0 after a
+  4m35s build: two core arithmetic, 102 project, 18 budget, 88 invoice, five
+  display, one registered-session matrix, four canonical XLSX, 12 legacy export
+  and 53 streaming tests passed (285 total). One pre-existing manual measurement
+  stayed ignored. This snapshot predates the following consumer changes.
+- Project detail, tags, spend, budget and single/bulk lifecycle endpoints now
+  accept an expected requester and reject identity changes before reading or
+  mutating records. The overview reuses the same identity check. Expanded the
+  real-session matrix to verify matching, same-tenant/foreign mismatch and no
+  lifecycle effects from a changed requester. This is not a replacement for
+  lifecycle authorization under OP13.
+- `ProjectList` now loads the requester-bound overview before mounting its
+  content. It retains the initial requester/policy across refreshes and remounts
+  dependent resources, selection and dialogs for each accepted response. Client
+  groups/search/options use only workflow client identities; the directory and
+  independent current-user resource were removed from this consumer.
+- Auxiliary reads and existing lifecycle requests carry the displayed requester.
+  Authentication/authorization failures suppress rows and actions until access
+  is refreshed. Per-project edit controls use the server affordance; creation
+  and import flags use current capability/administrator identity. Legacy status
+  controls remain explicitly limited to legacy policy: OP13's canonical rule
+  is still awaiting the user's decision and has not been silently inferred.
+- Added actual routed-component tests for client labels, bound auxiliary calls,
+  pending/denied access and same-page refresh changes of user, organization or
+  policy. The UI framework and CSS/tokens are unchanged. This does not constitute
+  browser acceptance. Canonical project creation enforcement, detail consumer
+  integration and requester-bound export intent remain separate open work.
+- Formatting and diff checks passed. `14350` is running full SQLx preparation
+  plus the offline core/app/integration suite. The initial check reported an
+  unused `client::Client` re-export in `tests/detail_navigation.rs`; remove that
+  obsolete test-harness import after collecting this frozen run. No new test
+  result or complete cache acceptance is claimed yet.
+
+Next: collect `14350`, address failures and the known test-harness warning,
+then complete the remaining project consumer/export identity and lifecycle
+contracts. Preserve the full permission goal, browser/native-WASM/Nix gates
+and activation review. No merge, policy activation or real-data modification.
+
+## 2026-10-06 — Full read suite passed; requester-bound overview implementation
+
+- `58485` exited 0. SQLx preparation and the offline full build passed; 185 core,
+  1,332 app and 288 integration/component tests passed (1,805 total). Eleven
+  existing manual measurements remained ignored. The app tests took 230.90s.
+  This proves the frozen read/export/compatibility snapshot, not the subsequent
+  overview addition or remaining browser/WASM/Nix/full-policy gates.
+- Added `get_project_overview`, binding expected session identity to the current
+  authenticated requester, including empty results. Unavailable actors and
+  mismatched identities fail closed. Reused `ReadAccess` and the existing project
+  query rather than fetching the client directory or adding a policy engine.
+- The query now also supplies only the visible project's client ID/name/active
+  context and its current edit affordance. Canonical editing uses project write
+  scope plus current management designation; legacy editing uses the stored
+  role under the actor fence. Existing list/tracking calls map back to their
+  unchanged `Project` wire shape. No lifecycle authority is inferred.
+- Registered the six prepared database tests and extended the real-session
+  endpoint matrix with anonymous denial, expected-requester checks across
+  same-tenant/foreign accounts, actor spoofing, protected fields and revocation.
+  Tests were authored before implementation; no pre-implementation assertion
+  failure is claimed for this new endpoint.
+- Formatting and `git diff --check` passed. `36912` is running
+  `verify-project-reads.sh`: all project cases plus budget, invoice, display,
+  real-session, materialized export and streaming regressions. The two pure
+  arithmetic cases passed; app compilation/test outcomes remain pending.
+
+Next: collect `36912` without launching a duplicate build; resolve actual
+failures, then connect the real overview consumer and requester-bound auxiliary
+reads/actions. The latest query still needs SQLx regeneration before offline
+acceptance. T225/T226 remain open for that latest state. No new UI/CSS changes,
+merge, policy activation or real-data modification in this iteration.
+
+## 2026-10-06 — Overview consumer contract and verification continuation
+
+- The preceding user-facing turn was a status estimate, not implementation
+  progress. Revalidated the worktree and continued the live `58485` verifier;
+  no replacement build was started. All-target SQLx preparation completed in
+  2m03s, 185 core tests passed, and the offline app/test build completed in
+  5m21s. The app suite is still running; its final result is pending.
+- Defined the next overview response in `contracts/project-read-permissions.md`:
+  authenticated requester continuity, minimal visible client identities and
+  per-project current edit affordances. Existing tracking payloads and separate
+  lifecycle/financial/creation authority stay unchanged.
+- Prepared six database tests in the currently unregistered
+  `projects/canonical_read_tests/overview.rs`: minimal client projection,
+  empty-result requester mismatch, scoped edit authority, inactive actor denial,
+  current legacy role and concurrent edit revocation. They are not compiled or
+  claimed as passing yet; registration and implementation follow the frozen
+  full-suite result.
+- The lifecycle investigation found that `set_project_active` and its bulk
+  sibling still use legacy manager authority. The user question about authorizing
+  archive/restore with current project editing permission remains unanswered.
+  Do not infer a decision or let it block independent read integration.
+
+Next: collect `58485`, resolve any actual failures, then register the overview
+tests and implement the requester-bound projection using the existing project
+read fence and query. Keep the actual consumer/auxiliary-resource and browser
+acceptance gates open. No merge, policy activation or real-data modification.
+
+## 2026-10-06 — Compatibility verification passed
+
+- `94252` exited 0: compile 4m25s, two pure arithmetic tests passed, then
+  218 tests matching `harvest::` passed in 18.56s; eight pre-existing manual
+  scale measurements stayed ignored. This filter includes both compatibility
+  API and import/connection regressions, not 218 API-only tests.
+- The five reproduced compatibility failures now pass, as do the expanded
+  malformed-state checks, current project-management scope, filtered counts
+  beyond the last page, shared hour budgets without money, tenant-consistent
+  client parents and actual-router concurrent permission/actor revocation.
+  Existing compatibility filters, pagination, historical reads and imports also
+  passed in the same run.
+- No UI code was changed during this verification. The interface inspection
+  documented requester continuity and unrelated directory prerequisites under
+  T226; it does not substitute for component or browser acceptance. Browser/MCP
+  tools are not currently loaded; existing local browser test assets remain
+  available for the later UI verification workflow.
+- Formatting and diff checks passed. Session `58485` is running
+  `verify-scoped-permissions-all.sh`: all-target SQLx preparation followed by
+  core and complete app/integration tests with `SQLX_OFFLINE=true`. This run is
+  not yet green; collect this handle rather than starting another build.
+
+Next: collect `58485` for the full offline suite and SQLx regeneration. Keep source frozen
+for that snapshot, then continue requester-bound project consumer integration.
+No merge, production migration, real-data modification or policy activation.
+
+## 2026-10-06 — Compatibility project read integration
+
+- Previous turn made implementation progress and passed export verification.
+  Continued `79370`, which compiled in 4m30s and exited 101: all five new
+  compatibility cases failed their intended authorization assertions. Canonical
+  legacy-Member reads were empty; legacy Admin and unassigned managed reads
+  disclosed projects; malformed canonical state returned 200; financial-only
+  revocation retained the budget. No compilation or fixture failure occurred.
+- Both compatibility project handlers now use one reader, reusing the existing
+  `ProjectReadAccess` organization/active-actor fence and strict stored grants.
+  The legacy `AuthUser.org_role` no longer supplies canonical project authority.
+  Missing/foreign direct IDs still return 404; unavailable current actors or
+  malformed policy return a closed authorization error.
+- Count and page share a single filtered materialized set and statement
+  snapshot, including empty/out-of-range pages. Scope includes current project
+  management and explicitly shared membership. Tenant-consistent client parents
+  are required, monetary budgets have independent ordinary-field authority,
+  and existing archive/date/client filters and pagination links are preserved.
+- Added route-level concurrent organization/actor revocation cases, filtered
+  out-of-range pagination, shared hours without money, private report loss and
+  foreign project/client-parent denial. Expanded invalid-state tests to missing
+  state, unknown grants and unknown policy with explicit 403 expectations.
+- `94252` is running all `harvest::` tests against disposable PostgreSQL after
+  the focused RED run. Its compile and test results are pending. The shared read
+  fence's visibility was widened only enough for its named internal re-export;
+  no authority logic, legacy policy activation or real data was changed.
+- Inspected the actual ProjectList/ProjectDetail resources using the existing
+  design context and the interface-hardening guidance. Recorded the concrete
+  global-client/global-user prerequisites, legacy action gating and requester
+  continuity gaps in `contracts/project-read-permissions.md`. No UI/CSS edit or
+  browser validation is claimed for this inspection. The previously unavailable
+  context launcher was not retried within the same session.
+
+Next: collect `94252`, correct actual failures, then regenerate all SQLx targets
+and run the complete offline suite. Requester-bound project UI, browser and
+native/WASM/full-Nix acceptance remain part of T226 and the full permission goal.
+
+## 2026-10-06 — Project export verification passed; compatibility regressions
+
+- `68138` exited 0 after a 4m04s compile. Passed: two core arithmetic tests,
+  96 project tests (12.08s), 18 budget/alert tests (0.84s), 88 invoice tests
+  (19.13s), five display tests, the real-session HTTP matrix (16.08s), all four
+  canonical materialized-export regressions (1.01s), 12 existing project-export
+  authorization tests (4.77s), and 53 streaming database tests (35.60s).
+  Total: 279 passed; one existing manual large-volume measurement stayed ignored.
+- The four previously reproduced XLSX failures are now green. All five new CSV
+  cases passed, including financial-only revocation after backpressure and the
+  invalid empty-source snapshot. Existing time/invoice streaming, cancellation,
+  size bounds and legacy project authorization also passed in this run.
+- Reconciled T224 against the executable canonical read, managed designation,
+  shared person/task budget and independent historical tracking cases. That
+  reproduction task is complete; T225 still requires refreshed SQLx and T226
+  retains actual consumer, compatibility, browser and whole-tree gates.
+- Prepared and registered five compatibility-route regressions in
+  `harvest/pagination_tests/project_permissions.rs`: canonical reader access,
+  legacy-Admin denial, financial-only revocation, current managed designation,
+  and malformed state. These use signed-in real router requests and pagination
+  helpers. They were registered only after `68138` ended, so are not covered by
+  its green result. The API implementation remains unchanged for their RED run.
+- Formatting and diff checks passed. Session `79370` is running those five
+  compatibility tests against disposable PostgreSQL; do not start a duplicate
+  build or count these tests as passed before collecting its result.
+
+Next: collect `79370`, then enforce canonical list/detail
+projection with count and page sharing one snapshot. Keep the source/cache and
+consumer acceptance gates open; no policy activation, merge or real-data change.
+
+## 2026-10-06 — Canonical project export capture and release
+
+- The preceding conversational turn was a status estimate, not implementation
+  progress. Revalidated the worktree and the incomplete delivery patch before
+  resuming; that failed patch had not changed its targets.
+- `13095` finished with the two arithmetic tests, all 96 project tests, 18
+  budget/alert tests, 88 invoice tests, five display tests and the real-session
+  HTTP matrix passing. Its four new export cases all reproduced the intended
+  authorization failures; none failed in compilation or fixture setup.
+- Materialized project exports now use canonical project and financial grants,
+  managed-project designations and shared-member visibility, retaining legacy
+  behavior only under policy zero. Source size limits and payload remain one
+  statement. Workbook release separately checks projects whose rendered cells
+  actually contain money, including explicit zero, after rendering completes.
+- CSV delivery records monetary project IDs as well as row IDs and revalidates
+  both after acquiring channel capacity. The shared project authority check
+  owns the organization/actor/parent fences; no authority lock spans backpressure.
+- Replaced the legacy project cursor with a canonical source snapshot. Stored
+  permission metadata is captured and strictly decoded with the rows, including
+  an empty-source sentinel, so repairing malformed authority before fetch cannot
+  legitimize an invalid captured source. Monetary masking uses the declaration
+  snapshot rather than initial or subsequent grants.
+- Added five CSV cases covering authorized legacy-Member export with blank
+  money, no inherited legacy-Admin scope, monetary snapshot changes, invalid
+  captured state for empty and populated sources, and financial-only revocation
+  while a channel is full. These additions have not yet been claimed as passing.
+- Formatting and `git diff --check` passed. Verification session `68138` is
+  running against a disposable socket-only PostgreSQL cluster. It includes the
+  existing project, budget, invoice, display and HTTP stages, materialized export
+  regressions, legacy export authorization and all streaming database tests.
+
+Next: collect `68138` and resolve actual failures. Expand export scope/field
+coverage where needed, then integrate compatibility list/detail/count and
+requester-bound UI under T226. SQLx cache regeneration and full-tree gates remain
+pending. No merge, real-data change or permission-policy activation.
+
+## 2026-10-06 — Budget regression correction; export release cases
+
+- Previous turn made progress implementing budget projection and its consumers.
+  Continued `81487` until its terminal result instead of starting a duplicate.
+  It compiled in 4m34s, then passed 95 of 96 project tests, including the seven
+  executable budget authorization/overflow cases and the five-reader races.
+- The remaining test failed during setup, not in the reader: its task settings
+  supplied both `budget_minutes` and `budget_cents`, violating migration 0030's
+  explicit mutual-exclusion check. Corrected both initial and zero-allowance
+  writes to populate only the active unit. No production constraint or assertion
+  was weakened. Because the verifier stops on failure, this run did not reach
+  legacy budget/alert, invoice, display or registered-session stages.
+- Traced current materialized/streamed project exports and the compatibility
+  API. Their legacy predicates remain a real integration gap. In particular,
+  workbook release and CSV blocks retain only project IDs: they cannot yet
+  distinguish captured monetary data from retained non-financial project access.
+  Keep capacity waits outside authority locks and revalidate protected fields
+  after rendering/backpressure, not just at initial query time.
+- Added four export regressions in `reports/limits/tests/project_canonical.rs`:
+  canonical legacy-Member read, legacy-Admin scope denial, monetary withholding,
+  and financial-only revocation while an actual XLSX renderer is paused through
+  explicit channels. Registered them only after `81487` had finished. They are
+  not yet claimed as executed or reproduced; production exports are unchanged.
+- `13095` is live. One compile first checks the corrected project/budget,
+  legacy alert, invoice, display and registered-session stages, then runs the
+  four next-increment export cases (RED expected). Formatting and diff checks
+  passed. SQLx cache still predates the budget/export-test queries.
+
+Next: collect each stage of `13095`, distinguish fixture/compiler failures from
+real authorization failures, then integrate captured project/monetary scope into
+XLSX and CSV with bounded release checks. Compatibility list/detail/count and
+requester-bound UI integration remain part of T226. No merge, real-data change,
+policy activation or verified-whole-goal claim.
+
+## 2026-10-06 — Configured-budget authority and summary implementation
+
+- Previous turn made progress by adding the configured-budget regressions.
+  Collected both live processes rather than restarting them.
+- `35327` exited 0: SQLx preparation and the offline all-target test build
+  succeeded; 183 core, 1,305 app and 288 integration/component/CLI tests passed
+  (1,776 total). Eleven pre-existing manual probes stayed ignored. The app
+  tests took 228.47s. This snapshot predates the budget implementation below.
+- `13714` compiled successfully in 4m43s and exited 101. Four assertions
+  reproduced actual gaps: authorized legacy-Member budget missing, unmanaged
+  legacy-Admin access, revoked allowance/consumption disclosure and another
+  person's allocation disclosure. The task-budget case failed in fixture setup
+  because `project_tasks.billable` was omitted; corrected that required column.
+  Do not count that setup failure as a reproduced authorization defect.
+- Added current read-fenced budget projection, reusing the same stored grants
+  and managed-project designations as list/detail/spend. The shared raw query
+  still serves trusted per-scope alerts; its service call has no user projection.
+  Ordinary monetary authority gates both budget and consumption, with arithmetic
+  skipped when hidden. Tenant-consistent invoice parents are now explicit.
+- `ProjectBudgetOverview` separates whole-project totals from permitted
+  breakdown rows. Canonical shared members retain their own person allowance
+  but not other-person or individual task allocations. Totals are calculated
+  before filtering; hidden money is omitted, including the entire breakdown.
+  Legacy policy retains its existing row/field visibility until cutover.
+- Added pure `allocated_totals` arithmetic: blank scoped allowances exclude
+  their usage, explicit zero includes it, and overflow remains unavailable.
+  The two new core tests have passed. The overview consumes the server summary
+  without summing permitted details. Existing display components/CSS are unchanged.
+- Extended deterministic authority/cancellation coverage to the budget reader
+  and the real-session matrix to budget reads, forged requester fields,
+  monetary-only revocation, no-project access and inactive/anonymous sessions.
+  Adapted legacy budget tests to inspect permitted breakdowns through the real
+  new reader; their trusted-alert assertions are unchanged.
+- `19433` passed the two new pure arithmetic tests, then exited 101 during app
+  compilation: the budget disclosure control still referenced the removed
+  `budget_rows` variable. Updated that actual consumer to use the overview's
+  permitted breakdown and hide an empty disclosure; no CSS/control defaults
+  changed. No app test execution is claimed for this failed build.
+- Added cases for hidden monetary overflow, managed financial scope independent
+  of project-read-all, and blank-versus-zero task allocations for both hours and
+  money. The latter also checks the unchanged trusted alert's per-scope values.
+  Unknown/malformed canonical-state coverage now includes configured budgets.
+- `81487` is the corrected focused verification against disposable PostgreSQL:
+  all project readers, legacy budgets/alerts, invoice arithmetic, display and
+  registered sessions. It is still live; formatting and diff checks passed.
+  SQLx regeneration and full current-source native/WASM, consumer, export/API
+  and browser gates remain open.
+
+Next: collect `81487`, resolve actual failures, add remaining adversarial budget
+edge cases and refresh SQLx once the query settles. Continue T225/T226 without
+confusing this read increment with full scoped-permissions completion. No real
+data mutation, policy activation, merge or new publication occurred.
+
+## 2026-10-06 — Offline cache built; configured-budget regressions added
+
+- Previous turn made progress by collecting the successful spend/session run
+  and starting the full verifier. Revalidated `35327`; it was compiling, not
+  stalled. SQLx preparation completed in 2m25s, all 183 core tests passed, and
+  the complete offline app/test-target compilation succeeded in 5m40s.
+- `35327` is now executing the 1,316-test app binary and will subsequently run
+  the separate integration/component/CLI binaries. Its final result remains
+  pending. The existing 11 manual/large-volume ignores are unchanged.
+- Added five configured-budget regressions in
+  `projects/canonical_read_tests/budgets.rs`: canonical reads with a legacy
+  Member role, current managed-project designation, monetary allowance and
+  consumption after financial-only revocation, other-person allowances and
+  individual task allowances for shared members. Keep authorized project
+  context after monetary revocation; absence is not a numeric zero.
+- Wrote the new file without registering it while the full build was compiling;
+  registered it only after `35327` reported compilation complete and started
+  its already-built test binary. Therefore that full run does not prove these
+  five next-increment cases. Their separate RED run is live in `13714`, using
+  the existing focused verifier and a distinct disposable database.
+- Formatting passed for both budget test files. No production configured-budget
+  query or DTO has changed yet. SQLx cache generation predates these new test
+  queries and must be refreshed again after the budget implementation settles.
+
+Next: collect `35327` and `13714`; preserve exact failure evidence, then implement
+the configured-budget projection under current read authority with a complete
+summary independent of allowed detail rows. Preserve trusted alert calculations
+and verify monetary withholding, monthly periods and unallocated-versus-zero
+budgets. No full-goal completion, publication, merge or activation is claimed.
+
+## 2026-10-06 — Spending regression and session verification passed
+
+- The preceding estimate turn was a verified wait: `49640` was still live.
+  Continued that process without restarting compilation.
+- `49640` exited 0: 88 project tests passed (10.00s), 88 invoice tests
+  passed (18.86s), five budget-display tests passed and the complete
+  registered-session authorization matrix passed (16.09s). This includes
+  spending's eight new regressions, the four-reader concurrency/cancellation
+  cases, exact invoice arithmetic and same-session financial-only revocation.
+  Compilation took 6m36s. These results do not cover configured-budget
+  permissions, exports, compatibility delivery or the whole permission goal.
+- Started `35327` using the existing `verify-scoped-permissions-all.sh`:
+  prepare every server/test SQLx target, then run the core and complete app
+  suite with offline SQL checking against a disposable socket-only database.
+  This also compiles the adjusted navigation-test DTO. No real data is used.
+  The run is not yet claimed green; no new source changes will be mixed into
+  its verification snapshot.
+- Traced configured-budget consumers: the overview is the only interactive
+  caller, while `configured_progress` independently supplies trusted alerts.
+  Preserve that service path and its per-scope threshold tests when adding
+  current-user projection. The present flat DTO cannot safely represent a
+  complete project summary by summing a member-filtered person/task breakdown.
+
+Next: collect `35327`, fix any actual cache/regression failures, and continue
+T224/T225 with configured-budget authorization and separate summary/breakdown
+semantics. Native/WASM lint, actual consumers and export/API verification remain
+required before publishing the read increment. No merge or policy activation.
+
+## 2026-10-06 — Project read delivery verified; spending regressions
+
+- Previous turn made progress by adding actual-session and deterministic
+  concurrency coverage. Revalidated `11584` and `52467`; no duplicate build.
+- `11584` exited 0: all 80 project tests passed (11.57s), including the foreign
+  client-parent case and the four concurrency/cancellation tests across all
+  three readers. The complete registered-session matrix also passed (37.04s),
+  including the new project list/detail/tag and protected-field revocations.
+  Compilation took 5m53s. This is not evidence for spend/budget/API/export or
+  full permissions completion; their tasks stay open.
+- Added five next-increment spending regressions for canonical legacy-Member
+  reads, financial-only revocation, managed project designation, no-entry
+  zero-versus-withheld values and report-only/shared-member separation. `40226`
+  is compiling their RED verification against the unchanged spend reader in a
+  disposable PostgreSQL cluster. No successful execution is claimed yet.
+- Clarified OP09's ordinary spending projection from existing FR-008/021 and
+  the operation matrix, without treating it as a new report-family grant.
+  Reuse current project visibility and preserve exact rate/rounding/invoice
+  precedence. UI must distinguish unavailable money from an actual zero.
+- Impeccable context launcher is unavailable because its engine is not
+  installed in a writable cache. Read the existing DESIGN.md and hardening
+  playbook directly; no engine install or design-system change. PRODUCT.md
+  is absent. UI changes will retain the incumbent utility classes/components.
+- `40226` exited 101 after successful compilation (5m47s): all five new
+  spending tests failed on their intended assertions. Current legacy Member
+  lost an authorized row; legacy Manager disclosed unmanaged progress; legacy
+  Admin and shared/report-only grants disclosed 12,345 cents; an empty project
+  had no explicit zero/withheld projection. No setup failures were substituted
+  for RED evidence.
+- Implemented current spending authority under the existing read fence,
+  tenant-consistent contributors and SQL aggregation. `spent_cents` is now
+  optional and omitted when withheld; monetary arithmetic is conditional so
+  hidden overflow cannot suppress authorized hours. Authorized empty projects
+  now receive explicit totals. The UI preserves absent money rather than
+  defaulting it to zero; no CSS, tokens or shared control defaults changed.
+- Extended coverage to financial-only concurrent revocation, foreign entry
+  parents, hidden/authorized overflow, all four-reader fence orderings and real
+  session spend responses. Kept invoice/rate arithmetic expectations exact while
+  adapting their DTO assertions. `49640` is compiling the combined project,
+  invoice, display and registered-session verification; no GREEN claim yet.
+- Exact Nix repetition `52467` exited 0: 183 core, 1,280 app and 288 separate
+  integration/component/CLI tests passed; 11 pre-existing manual probes remain
+  ignored. The original mail failure was not reproduced and no fix is claimed.
+  Together with the previously passed frozen-snapshot browser, Clippy, SQLx,
+  formatting and both VM checks, the editor verification gates are satisfied.
+- Verified the frozen Nix Rust/core source and SQLx blobs match commit
+  `2497dbe` (`30792`, exit 0), then pushed only that commit to the existing
+  `feat/scoped-permissions` branch (`23781`, exit 0). PR #212 remains a draft;
+  new read/spend work is uncommitted and unpublished. No merge or activation.
+- Reopened the official Harvest budget and Projects overview guides. Shared
+  members retain project-wide hour totals but only their own person allowance;
+  individual task/other-person budgets stay private. Recorded the need to
+  separate summary and permitted breakdown so filtering rows cannot distort
+  project totals. Also recorded the existing blank-allocation summary gap:
+  unallocated work must not consume allocated budget; preserve its detailed
+  row and the independent alert calculation. No new product rule was guessed.
+
+Next: collect `49640`, resolve genuine spend/invoice regressions, then continue
+configured-budget projection independently of trusted alerts. Regenerate SQLx
+and complete current-source consumer/export/API verification before publishing
+this next increment. The complete permissions goal remains unfinished.
+
+## 2026-10-06 — Project read concurrency and registered-session coverage
+
+- The preceding user-facing estimate was a status-only turn, not progress.
+  Revalidated the worktree and live `32222` before continuing. Its project run
+  passed 75 tests, including 11 canonical regressions; the later foreign-client
+  parent case was compiled by its next stage but had not yet executed.
+- The isolated mail loop was recompiling on successive Cargo invocations.
+  Stopped that diagnostic intentionally (`32222`, exit 130), rather than
+  waiting through 50 rebuilds. Its disposable database exited with the runner.
+  Running the already-built binary instead passed all 50 isolated repetitions
+  (`67261`, exit 0). No production notification code or assertion changed.
+- Thirty traced batches of the three sendmail tests also passed (`6667`,
+  exit 0; 90 executions). Expanding the trace to all nine non-database mail
+  tests produced a different failure: the verbose-output test exceeded its
+  five-second deadline under instrumentation (`26407`, exit 1; eight passed).
+  This does not reproduce or explain Nix's original `Transport` result.
+  The next trace excludes only that instrumentation-sensitive volume case;
+  its ordinary full-suite assertion remains unchanged.
+- Added deterministic lock-dependency tests for list/detail/tag reads:
+  organization-first grant revocation, actor-first deactivation, reader-first
+  materialization with organization/actor fences and cancellation release.
+  They use actual PostgreSQL waits, not timing sleeps.
+- Added a registered-session matrix to the existing single-AppState HTTP
+  harness: canonical reads despite legacy Member, restricted legacy Admin,
+  foreign direct IDs, anonymous/inactive sessions, forged viewer fields,
+  current monetary-field revocation and subsequent project-read revocation.
+  These additions are not yet claimed as passed.
+- Verification `11584` compiles once against a fresh disposable PostgreSQL,
+  then executes all project tests and the complete registered-session matrix
+  using that binary. This includes the previously unexecuted foreign-client
+  parent regression. Formatting passed; SQLx regeneration and broader delivery
+  integration are still pending.
+- The earlier independent Nix snapshot also passed both VM checks: deployed
+  application (88.16s) and OIDC (43.57s). Its overall result remains failed due
+  to the recorded notification test; there is no full-green Nix claim.
+- `98041` finished with exit 0: 30 batches of eight concurrent non-database
+  mail tests (240 executions). Traces are in
+  `/tmp/horae-mail-trace.Hf4VLT`; original three-test traces are in
+  `/tmp/horae-mail-trace.DpCO75`. The original transport failure remains
+  unreproduced, not fixed. A single controlled repeat of the exact failed Nix
+  derivation is live in `52467`; its frozen editor source is unchanged and
+  excludes the new project-reader work. Do not retry repeatedly until green.
+
+Next: collect `11584` and the exact Nix reproduction `52467`; resolve genuine
+failures without weakening acceptance. Continue scoped spend/budget projections,
+SQLx and actual consumers/export/API integration. Keep `2497dbe` unpublished until
+its independent gate failure is resolved. No real data/policy activation or merge.
+
+## 2026-10-06 — Canonical project reads corrected; independent mail-test failure
+
+- Previous turn made progress: saved `2497dbe`, traced the next read boundary
+  and reproduced five real-reader failures (`40067`). Continued from the same
+  worktree and live verification; no duplicate full Nix run.
+- Implemented current project-read loading under organization SHARE followed
+  by active actor SHARE, using strict stored grants and bounded transaction
+  settings. List/detail/tag queries now distinguish canonical managed/all and
+  shared-member visibility from legacy roles. Private notes use explicit
+  administrative identity; project rates and monetary budgets require current
+  project-owned financial grants. Tracking keeps its separate identity path.
+- `59405` passed all five original RED regressions (exit 0; compilation 4m13s,
+  tests 1.28s). Added six further tests for managed designation/revocation,
+  scoped tags, private fields, financial projection against the pure ownership
+  evaluator, invalid policy/grants and shared-report versus historical-tracking
+  identity. The expanded all-project run is live in `32222`, followed by 50
+  isolated executions of the failing mail test. These further tests are not
+  claimed as passed yet; complete SQLx and cross-surface acceptance remain open.
+- Nix `2994` terminated with exit 1. Browser, Clippy, SQLx cache validation and
+  formatting passed, but the app suite reported 1,279 passed, one failed and 11
+  existing ignored. The failure is
+  `notifications::tests::sendmail_failure_does_not_expose_program_output`:
+  expected `Rejected`, received `Transport`. Its script already uses the Nix
+  shell path and consumes stdin, so neither a missing `/bin/sh` nor an early
+  script exit is established as the cause. No assertion was weakened and no
+  speculative transport fix was applied. Core passed all 183 tests; the app
+  failure prevents claiming the later separate test binaries in this Nix run.
+- Nix continued through its other gates with `--keep-going`; the deployed
+  application VM test finished successfully. Preserve the failed check and
+  diagnose it before publishing `2497dbe`; no full Nix success is claimed.
+
+Next: collect `32222`, fix any genuine expanded-reader regression and obtain
+evidence for the mail transport failure. Finish project spend/budget projections,
+registered-session/revocation tests, SQLx and real consumers before considering
+T224–T226 complete. The editor commit remains local and no real policy/data is
+changed.
+
+## 2026-10-06 — Editor checkpoint and next project-read regressions
+
+- Previous goal turn was a verified wait: polled live Nix handle `2994` while
+  answering the estimate. Revalidated that handle; no build was restarted.
+- The complete independent release-package browser suite passed, including
+  permission recovery, scoped Reports, editor revocation/replay and hidden
+  inactive-budget preservation. Nix Clippy also passed. `2994` has moved to
+  SQLx preparation; remaining cache/tests/VM/format gates are not yet complete.
+- Saved the locally verified editor increment as unsigned commit `2497dbe`
+  (`Enforce scoped permissions in the project editor`). No push or merge.
+  Its application source matches the frozen editor increment under Nix
+  verification; subsequent project-read tests are separate uncommitted work.
+- Traced the actual `/projects/:id` route, overview resources, configured-budget
+  service reuse, project CSV/XLSX release and compatibility API list/detail.
+  Added `contracts/project-read-permissions.md` and T223–T226 with current
+  official sources and explicit gaps. Shared-member budget limits and
+  financial-only export revocation need more than changing the editor guard.
+- Added five production-reader regression tests for canonical Member reads,
+  legacy Manager overexposure and legacy Administrator financial disclosure.
+  `40067` exited 101: all five ran and failed on their expected assertions after
+  successful compilation (5m23s), not on setup or build errors. Canonical
+  `ProjectReadAll` with legacy Member returns an empty list/missing detail;
+  own-only canonical grants with legacy Manager disclose both; canonical
+  project-read-only with legacy Admin discloses rate and fee-budget values.
+  The disposable PostgreSQL fixture was stopped by its exit trap. No runtime
+  read implementation or real policy/data changed. T224 remains open for
+  managed/shared projection and full delivery-path acceptance.
+- Nix SQLx preparation/cache validation passed; `2994` is now building the
+  independent full Rust test derivation. Its verified snapshot predates these
+  deliberately RED next-increment tests. Do not report the current uncommitted
+  tree as green or publish those tests as a completed read integration.
+
+Next: implement the scoped list/detail/tag read boundary against these five RED
+cases, including current authority and protected-field projection; collect
+`2994` independently and resolve any actual editor gate failure before publishing
+`2497dbe`. Do not include unfinished reader tests in that publication or infer full
+permissions completion from either increment.
+
 ## 2026-10-06 — Full local regression passed; rebuilt browser verification
 
 - Previous turn made concrete progress by repairing complete offline SQLx

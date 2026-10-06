@@ -22,12 +22,6 @@ pub(crate) fn is_manager(me: &Resource<Result<CurrentUser, ServerFnError>>) -> b
     matches!(&*me.read(), Some(Ok(u)) if u.is_manager_or_above())
 }
 
-/// Whether the session user (from a `get_me` resource) is an admin.
-/// `false` while the resource is loading or errored.
-pub(crate) fn is_admin(me: &Resource<Result<CurrentUser, ServerFnError>>) -> bool {
-    matches!(&*me.read(), Some(Ok(u)) if u.is_admin())
-}
-
 /// Render a resource's loaded value, with the standard loading placeholder and
 /// error banner for the pending and failed states.
 pub(crate) fn loaded<T>(

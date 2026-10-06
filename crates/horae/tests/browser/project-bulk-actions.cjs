@@ -40,15 +40,20 @@ if (!selectionOnly && !fixturesOnly) {
       if (/\/(create|update|set|delete|start|stop|import|submit|approve|reopen|cancel|retry)/.test(path)) {
         throw new Error(`Unexpected mutation in fixture tests: ${path}`);
       }
-      if (path.startsWith('/api/list_projects')) {
+      if (path.startsWith('/api/get_project_overview')) {
+        const overview = await (await route.fetch()).json();
         if (!fixtures) {
-          const projects = await (await route.fetch()).json();
+          const projects = overview.projects.map(row => row.project);
           assert.ok(projects.length);
           fixtures = Array.from({ length: amount }, (_, i) => ({ ...projects[0],
             id: `01950000-0000-7000-8000-${String(i + 1).padStart(12, '0')}`,
             name: `Bulk project ${i + 1}`, code: null, active: true }));
         }
-        return route.fulfill({ json: fixtures });
+        return route.fulfill({ json: {
+          ...overview, can_create: role !== 'member', can_import: role === 'admin',
+          can_change_legacy_status: role !== 'member',
+          projects: fixtures.map(project => ({ ...overview.projects[0], project, can_edit: role !== 'member' })),
+        } });
       }
       if (path.startsWith('/api/get_me')) {
         return route.fulfill({ json: { ...await (await route.fetch()).json(), org_role: role } });
@@ -184,7 +189,7 @@ if (!selectionOnly && !fixturesOnly) {
     hold = false;
     release();
     await expect(dialog).not.toBeVisible();
-    await expect(page.getByRole('status')).toContainText('Archived 2 projects');
+    await expect(page.getByRole('status').filter({ hasText: 'Archived 2 projects' })).toBeVisible();
     await expect(page.locator('.proj-row')).toHaveCount(0);
     await page.getByRole('button', { name: /^Active projects/ }).click();
     await page.getByRole('menuitem', { name: /^Archived projects/ }).click();
@@ -192,7 +197,7 @@ if (!selectionOnly && !fixturesOnly) {
     await all.click();
     dialog = await confirmDialog('Reactivate');
     await dialog.getByRole('button', { name: 'Reactivate projects', exact: true }).click();
-    await expect(page.getByRole('status')).toContainText('Reactivated 2 projects');
+    await expect(page.getByRole('status').filter({ hasText: 'Reactivated 2 projects' })).toBeVisible();
     console.log('PASS: cancel/focus, failure retry, pending guard and archive/reactivate confirmation');
 
     amount = 101; fixtures = undefined;
@@ -232,7 +237,7 @@ if (!selectionOnly && !fixturesOnly) {
     await trigger.click();
     await bulkMenu.getByRole('menuitem', { name: 'Archive projects', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Archive projects', exact: true }).click();
-    await expect(page.getByRole('status')).toContainText('Archived 2 projects');
+    await expect(page.getByRole('status').filter({ hasText: 'Archived 2 projects' })).toBeVisible();
     assert.deepEqual(history(), originalHistory, 'Archiving changes status only, not billing/history/assignments');
     assert.deepEqual(revisions(), Object.fromEntries(Object.entries(originalRevisions).map(([id, revision]) => [id, revision + 1])),
       'Each archived project invalidates an open editor exactly once');

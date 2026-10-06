@@ -368,10 +368,31 @@ fn entries_xlsx(entries: &[crate::models::DetailedReportRow]) -> Result<Vec<u8>,
 
 // ── Projects export ───────────────────────────────────────────────────────────
 
-#[derive(Deserialize)]
+#[derive(Default, Deserialize)]
 pub struct ProjectsExportParams {
     /// "active" (default) | "budgeted" | "archived".
     pub scope: Option<String>,
+    pub expected_org_id: Option<uuid::Uuid>,
+    pub expected_user_id: Option<uuid::Uuid>,
+}
+
+impl ProjectsExportParams {
+    fn authorize_requester(
+        &self,
+        org_id: uuid::Uuid,
+        user_id: uuid::Uuid,
+    ) -> Result<(), StatusCode> {
+        match (self.expected_org_id, self.expected_user_id) {
+            (None, None) => Ok(()),
+            (Some(expected_org), Some(expected_user))
+                if expected_org == org_id && expected_user == user_id =>
+            {
+                Ok(())
+            }
+            (Some(_), Some(_)) => Err(StatusCode::FORBIDDEN),
+            _ => Err(StatusCode::BAD_REQUEST),
+        }
+    }
 }
 
 struct ProjectExportRow {
@@ -385,6 +406,13 @@ struct ProjectExportRow {
     budget_amount_cents: Option<i64>,
     budget_minutes: Option<i64>,
     active: bool,
+}
+
+impl ProjectExportRow {
+    fn has_monetary_budget(&self) -> bool {
+        self.budget_kind == horae_core::types::BudgetKind::Amount
+            && self.budget_amount_cents.is_some()
+    }
 }
 
 fn budget_cell(r: &ProjectExportRow) -> String {
@@ -455,6 +483,7 @@ pub async fn export_projects_xlsx(
     Query(params): Query<ProjectsExportParams>,
 ) -> Result<impl IntoResponse, StatusCode> {
     let (viewer_id, org_id) = require_session(&session).await?;
+    params.authorize_requester(org_id, viewer_id)?;
     let permit = bounded::ExportPermit::acquire()?;
 
     let scope = params.scope.as_deref().unwrap_or("active");
@@ -462,12 +491,18 @@ pub async fn export_projects_xlsx(
     let rows = limits::projects(&state.db, org_id, viewer_id, scope).await?;
 
     let project_ids = rows.iter().map(|row| row.id).collect();
+    let monetary_project_ids = rows
+        .iter()
+        .filter(|row| row.has_monetary_budget())
+        .map(|row| row.id)
+        .collect();
     let data = render_project_export(
         permit,
         &state.db,
         org_id,
         viewer_id,
         project_ids,
+        monetary_project_ids,
         move || projects_xlsx(&rows),
     )
     .await?;
@@ -493,12 +528,15 @@ async fn render_project_export(
     org_id: uuid::Uuid,
     actor_id: uuid::Uuid,
     mut project_ids: Vec<uuid::Uuid>,
+    mut monetary_project_ids: Vec<uuid::Uuid>,
     render: impl FnOnce() -> Result<Vec<u8>, StatusCode> + Send + 'static,
 ) -> Result<axum::body::Body, StatusCode> {
     project_ids.sort_unstable();
     project_ids.dedup();
+    monetary_project_ids.sort_unstable();
+    monetary_project_ids.dedup();
     let body = permit.render(render).await?;
-    limits::authorize_projects(pool, org_id, actor_id, &project_ids).await?;
+    limits::authorize_projects(pool, org_id, actor_id, &project_ids, &monetary_project_ids).await?;
     Ok(body)
 }
 

@@ -65,7 +65,7 @@ const sunday = new Date(monday.getTime() + 6 * 86400000).toISOString().slice(0, 
     await page.getByRole('button', { name: 'Sign in as Admin' }).click();
     await page.waitForURL(`${base}/`);
     for (const [path, resource] of [
-      ['/clients', 'list_clients'], ['/projects', 'list_projects'],
+      ['/clients', 'list_clients'], ['/projects', 'get_project_overview'],
       ['/invoices', 'list_invoices'], ['/reports', 'report_time'],
       ['/admin/users', 'list_users'], ['/approvals', 'list_approvals'],
       ['/settings', 'get_me'], ['/admin/importers', 'get_me'],
@@ -84,7 +84,7 @@ const sunday = new Date(monday.getTime() + 6 * 86400000).toISOString().slice(0, 
     }
     await check('project names and badges stay within aligned columns; scrolling to last-row actions opens editing', async () => {
       await page.setViewportSize({ width: 1280, height: 1000 });
-      await visit('/projects', 'list_projects');
+      await visit('/projects', 'get_project_overview');
       await expect(page.locator('.proj-row').first()).toBeVisible();
       if (process.env.HORAE_TEST_SCREENSHOT_DIR)
         await page.screenshot({ path: `${process.env.HORAE_TEST_SCREENSHOT_DIR}/responsive-projects.png` });

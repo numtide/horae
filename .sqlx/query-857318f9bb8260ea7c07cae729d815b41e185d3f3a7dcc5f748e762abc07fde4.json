@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE projects SET budget_kind='amount',budget_amount_cents=86753 WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "857318f9bb8260ea7c07cae729d815b41e185d3f3a7dcc5f748e762abc07fde4"
+}
