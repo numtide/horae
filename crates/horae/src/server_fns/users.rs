@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::models::people::{PeopleActivity, PeopleCursor, PeoplePage};
+use crate::models::user::UserListItem;
 
 // ── Users ─────────────────────────────────────────────────────────────────────
 
@@ -38,22 +39,11 @@ pub async fn list_people(
         })
 }
 
-/// Blank out the pay-sensitive fields for callers below manager: pickers and
-/// name lookups only need identities, while rates are manager/admin material
-/// (SPEC §6 keeps members away from other users' money).
-#[cfg(feature = "server")]
-fn hide_rates(users: &mut [User]) {
-    for u in users {
-        u.cost_rate_cents = None;
-        u.billable_rate_cents = None;
-    }
-}
-
-/// List users. Any authenticated user can list active users (for pickers), but
-/// only managers and admins see the rate fields; pass `include_inactive = true`
-/// to also see deactivated accounts (admin only).
+/// List identities for the current directory and workflow consumers, without
+/// financial or authentication metadata. Any active user can list active people;
+/// including deactivated accounts requires legacy administrator access.
 #[server]
-pub async fn list_users(include_inactive: bool) -> Result<Vec<User>, ServerFnError> {
+pub async fn list_users(include_inactive: bool) -> Result<Vec<UserListItem>, ServerFnError> {
     let viewer = if include_inactive {
         require_admin().await?
     } else {
@@ -61,12 +51,9 @@ pub async fn list_users(include_inactive: bool) -> Result<Vec<User>, ServerFnErr
     };
     let state = crate::state::global_state().await;
 
-    let mut users = sqlx::query_as!(
-        User,
-        r#"SELECT id, org_id, email, name, oidc_subject,
-                org_role as "org_role: OrgRole",
-                cost_rate_cents, billable_rate_cents, active,
-                created_at as "created_at: chrono::DateTime<chrono::Utc>"
+    sqlx::query_as!(
+        UserListItem,
+        r#"SELECT id, email, name, org_role as "org_role: OrgRole", active
          FROM users
          WHERE org_id = $2 AND ($1::bool OR active = true)
          ORDER BY name ASC"#,
@@ -75,12 +62,7 @@ pub async fn list_users(include_inactive: bool) -> Result<Vec<User>, ServerFnErr
     )
     .fetch_all(&state.db)
     .await
-    .map_err(server_err)?;
-
-    if !viewer.is_manager_or_above() {
-        hide_rates(&mut users);
-    }
-    Ok(users)
+    .map_err(server_err)
 }
 
 /// Create a new user account. Requires admin role.
@@ -358,23 +340,4 @@ mod tests {
 
     mod authority;
     mod concurrency;
-
-    #[test]
-    fn hide_rates_clears_both_rate_fields() {
-        let mut users = vec![User {
-            id: uuid::Uuid::now_v7(),
-            org_id: uuid::Uuid::now_v7(),
-            email: "a@test.com".into(),
-            name: "A".into(),
-            oidc_subject: None,
-            org_role: OrgRole::Member,
-            cost_rate_cents: Some(6000),
-            billable_rate_cents: Some(10000),
-            active: true,
-            created_at: chrono::Utc::now(),
-        }];
-        hide_rates(&mut users);
-        assert_eq!(users[0].cost_rate_cents, None);
-        assert_eq!(users[0].billable_rate_cents, None);
-    }
 }

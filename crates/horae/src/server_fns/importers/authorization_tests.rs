@@ -23,6 +23,7 @@ use uuid::Uuid;
 
 use super::*;
 
+mod approval_labels;
 mod cli;
 mod exports;
 mod financial_snapshots;
@@ -35,6 +36,8 @@ mod project_people;
 mod scoped_directory;
 mod scoped_time;
 mod time_reports;
+mod session_identity;
+mod user_directory;
 
 #[cfg(target_os = "linux")]
 mod report_stress;
@@ -331,6 +334,9 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     financial_snapshots::check(&pool, &api).await;
     exports::check(&pool, &api).await;
     permission_editor::check(&pool, &api).await;
+    session_identity::check(&pool, &api).await;
+    user_directory::check(&pool, &api).await;
+    approval_labels::check(&pool, &api).await;
     let admin = api.cookie(owner.user_id).await;
     let expired = api.cookie(owner.user_id).await;
     assert_eq!(
