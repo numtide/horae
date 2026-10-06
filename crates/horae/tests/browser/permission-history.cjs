@@ -11,20 +11,14 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
 assert.equal(database.pathname, '/horae');
 assert.match(database.searchParams.get('host') || '', /^\/tmp\/horae-browser\.[A-Za-z0-9]+$/);
 const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v', 'ON_ERROR_STOP=1', '-qAt', '-c', query], { encoding: 'utf8' }).trim();
-const actor = JSON.parse(sql("SELECT row_to_json(u) FROM (SELECT id, org_id FROM users WHERE email='admin@example.com' AND active AND org_role='admin') u"));
-const project = sql(`SELECT id FROM projects WHERE org_id='${actor.org_id}' AND active ORDER BY id LIMIT 1`);
-for (const id of [actor.id, actor.org_id, project]) assert.match(id, /^[0-9a-f-]{36}$/);
-assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${actor.org_id}'`), '0');
-for (const table of ['person_permission_states', 'permission_change_receipts', 'project_management_assignments']) {
-  assert.equal(sql(`SELECT count(*) FROM ${table} WHERE org_id='${actor.org_id}'`), '0');
-}
-const initialRevision = sql(`SELECT access_revision FROM organizations WHERE id='${actor.org_id}'`);
-assert.match(initialRevision, /^\d+$/);
 const stateId = '01960000-0000-7000-8000-000000000901';
 // Dioxus 0.7.9 appends a build-specific decimal hash to implicit endpoints.
 // Read the actual server's registered string; never hard-code a build's hash.
-const endpoints = [...new Set(readFileSync(process.env.HORAE_TEST_SERVER).toString('latin1').match(/\/api\/save_project_managers\d+/g))];
+const serverStrings = readFileSync(process.env.HORAE_TEST_SERVER).toString('latin1');
+const endpoints = [...new Set(serverStrings.match(/\/api\/save_project_managers\d+/g))];
 assert.equal(endpoints.length, 1, 'expected one compiled project-manager endpoint');
+const identityEndpoints = [...new Set(serverStrings.match(/\/api\/get_me\d+/g))];
+assert.equal(identityEndpoints.length, 1, 'expected one compiled session-identity endpoint');
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
@@ -33,6 +27,7 @@ assert.equal(endpoints.length, 1, 'expected one compiled project-manager endpoin
   page.setDefaultNavigationTimeout(30_000);
   const errors = [];
   let releaseRead;
+  let actor, project, initialRevision, fixtureStarted = false;
   page.on('pageerror', error => errors.push(error.stack || error.message));
   const history = page.getByRole('table', { name: 'Permission change history', exact: true });
   const receiptIds = () => history.locator('details p').filter({ hasText: /^Receipt: / }).allTextContents();
@@ -40,11 +35,27 @@ assert.equal(endpoints.length, 1, 'expected one compiled project-manager endpoin
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
     await page.waitForURL(`${base}/`);
+    // A preceding suite may create another admin selected by dev login.
+    const identity = await page.context().request.post(`${base}${identityEndpoints[0]}`, { data: {} });
+    assert.equal(identity.status(), 200, await identity.text());
+    actor = await identity.json();
+    for (const id of [actor.id, actor.org_id]) assert.match(id, /^[0-9a-f-]{36}$/);
+    assert.equal(actor.org_role, 'admin');
+    assert.equal(sql(`SELECT active FROM users WHERE id='${actor.id}' AND org_id='${actor.org_id}'`), 't');
+    project = sql(`SELECT id FROM projects WHERE org_id='${actor.org_id}' AND active ORDER BY id LIMIT 1`);
+    assert.match(project, /^[0-9a-f-]{36}$/);
+    assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${actor.org_id}'`), '0');
+    for (const table of ['person_permission_states', 'permission_change_receipts', 'project_management_assignments']) {
+      assert.equal(sql(`SELECT count(*) FROM ${table} WHERE org_id='${actor.org_id}'`), '0');
+    }
+    initialRevision = sql(`SELECT access_revision FROM organizations WHERE id='${actor.org_id}'`);
+    assert.match(initialRevision, /^\d+$/);
     sql(`BEGIN;
       INSERT INTO person_permission_states (id, org_id, user_id, catalog_version, grants, is_administrator, source)
       VALUES ('${stateId}', '${actor.org_id}', '${actor.id}', 1,
         ARRAY['time_read_own','time_write_own','expense_read_own','expense_write_own','project_read_managed','project_write_managed','project_read_all','project_write_all'], true, 'individual');
       UPDATE organizations SET permission_policy_version=1 WHERE id='${actor.org_id}'; COMMIT;`);
+    fixtureStarted = true;
     await page.goto(`${base}/admin/audit`);
     await expect(page.getByRole('status')).toContainText('No permission events recorded yet');
     await expect(page.locator('#audit-older')).toBeDisabled();
@@ -146,7 +157,7 @@ assert.equal(endpoints.length, 1, 'expected one compiled project-manager endpoin
   } finally {
     releaseRead?.();
     await browser.close();
-    sql(`BEGIN;
+    if (fixtureStarted) sql(`BEGIN;
       UPDATE users SET active=true, org_role='admin' WHERE id='${actor.id}';
       DELETE FROM project_management_assignments WHERE org_id='${actor.org_id}' AND manager_id='${actor.id}' AND project_id='${project}';
       DELETE FROM permission_change_receipts WHERE org_id='${actor.org_id}' AND actor_user_id='${actor.id}' AND request_id::text LIKE '01960000-0000-7000-8000-%';
