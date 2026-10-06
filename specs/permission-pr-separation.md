@@ -100,6 +100,8 @@ Clients MVP as canonical-permission acceptance.
 | Separation ledger | `docs/permission-pr-separation`, `.worktrees/permission-pr-separation` | `02f7b58` | Inventory recorded; no completed-extraction claim |
 | Legacy report/invoice readers from #217, [#220](https://github.com/numtide/horae/pull/220) | `fix/report-reader-authority-master`, `.worktrees/report-reader-authority-master` | `02f7b58` | Draft at `bc0c7a0`; 1,127 tests passed, 11 existing ignored; SQLx, offline server/WASM lint and formatting passed; CI pending |
 | Pure record scopes and grant catalog, [#219](https://github.com/numtide/horae/pull/219) | `refactor/permission-domain-foundation`, `.worktrees/permission-domain-foundation` | `02f7b58` | Draft at `ec7ddbd`; 158 core tests, core Clippy and formatting passed; full CI pending; no runtime integration |
+| Pure rate/management/approval rules, [#221](https://github.com/numtide/horae/pull/221) | `refactor/permission-domain-gates`, `.worktrees/permission-domain-gates` | #219 `ec7ddbd` | Draft at `539316c`; 187 core tests, core Clippy and formatting passed; full local Flake Check running |
+| Non-activating permission storage | `refactor/permission-storage-foundation`, `.worktrees/permission-storage-foundation` | #219 `ec7ddbd` | Extracted locally; full tests running; no runtime activation or new endpoints |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -300,8 +302,8 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `1105b75` | Record remaining permission decision gates | specification-history | Held in original backup; extraction pending |
 | `cf5d635` | Define rejection of person-management self-assignments | specification-history | Held in original backup; extraction pending |
 | `804b1d8` | Separate permission increment readiness from activation gates | specification-history | Held in original backup; extraction pending |
-| `6e61593` | Validate person-management grant compatibility and self-links | scope-domain | Held in original backup; extraction pending |
-| `ec35446` | Store versioned permission profiles without activating new policy | permission-storage | Held in original backup; extraction pending |
+| `6e61593` | Validate person-management grant compatibility and self-links | scope-domain | Code/tests in #221; specification hunks retained for reconciliation |
+| `ec35446` | Store versioned permission profiles without activating new policy | permission-storage | Storage/schema/name-validator hunks extracted locally; verification and specification reconciliation pending |
 | `d50c979` | Add audited permission template commands | permission-profile-transactions | Held in original backup; extraction pending |
 | `f5e0dde` | Apply permission profiles with atomic scope changes | permission-profile-transactions | Held in original backup; extraction pending |
 | `9a7e05d` | Add audited project manager delegation | project-manager-delegation | Held in original backup; extraction pending |
@@ -315,7 +317,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `e5fcc5a` | Prepare durable CSV batches before opening transactions | import-transaction-lifecycle | Held in original backup; extraction pending |
 | `482b7c5` | Retain the original requester of import jobs | import-requester-provenance | Held in original backup; extraction pending |
 | `e949e4c` | Drain interrupted import transactions before releasing reservations | import-transaction-lifecycle | Held in original backup; extraction pending |
-| `c0cfb8f` | Scope rate permissions to their owning resource | scope-domain | Held in original backup; extraction pending |
+| `c0cfb8f` | Scope rate permissions to their owning resource | scope-domain | Code/tests in #221; specification hunks retained for reconciliation |
 | `5d51b0e` | Expose the current person's permission snapshot | own-permissions | Held in original backup; extraction pending |
 | `22ffdab` | Recheck manager access for financial snapshots | manager-snapshot-consumers | Shared snapshot helper/queries in #220; original financial consumers and remaining hunks retained |
 | `15c82ef` | Recheck manager access in invoice editor snapshots | manager-snapshot-consumers | Held in original backup; extraction pending |
@@ -337,7 +339,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `1ecfa21` | Recover interrupted permission saves across reloads | permission-editor | Held in original backup; extraction pending |
 | `c88ca6d` | Exercise permission recovery in a real browser | permission-editor | Held in original backup; extraction pending |
 | `202ee96` | Protect project delegation against concurrent deactivation | project-manager-delegation | Held in original backup; extraction pending |
-| `3f45b7c` | Validate combined approval record coverage | scope-domain | Held in original backup; extraction pending |
+| `3f45b7c` | Validate combined approval record coverage | scope-domain | Code/tests in #221; specification hunks retained for reconciliation |
 | `eb56af3` | Define scoped approval transaction and coverage gates | specification-history | Held in original backup; extraction pending |
 | `8d49421` | Add authorized permission editor subject discovery | permission-editor | Held in original backup; extraction pending |
 | `b735b3a` | Add safe person switching to permission editor | permission-editor | Held in original backup; extraction pending |
@@ -352,7 +354,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `5ec183a` | Fence time-entry writes against account deactivation | time-writer-activity | Held in original backup; extraction pending |
 | `228e151` | Clarify timesheet context and locked calendar behavior | specification-history | Held in original backup; extraction pending |
 | `4294aa3` | Isolate permission browser fixtures and retain test assets | browser-fixture-tooling | Held in original backup; extraction pending |
-| `3308926` | Keep permission profile name uniqueness independent of database locale | permission-storage | Held in original backup; extraction pending |
+| `3308926` | Keep permission profile name uniqueness independent of database locale | permission-storage | Migration/storage regressions extracted locally; command lookup changes remain with template commands |
 | `8af562e` | Record passing permission regression gates | specification-history | Held in original backup; extraction pending |
 | `9b53182` | Verify profile capacity and confirm timesheet discovery | permission-editor, specification-history, time-readers | Held in original backup; extraction pending |
 | `60f60f9` | Add scoped Timesheet person discovery | time-readers | Held in original backup; extraction pending |
@@ -388,7 +390,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `2b59b58` | Stream grouped time reports with scoped authorization | time-report-exports | Held in original backup; extraction pending |
 | `ecac66b` | Add scoped individual time reports and nested breakdowns | time-report-consumer | Held in original backup; extraction pending |
 | `de8f9ad` | Filter time reports to active projects | time-report-consumer | Held in original backup; extraction pending |
-| `2497dbe` | Enforce scoped permissions in the project editor | project-editor-permissions | Held in original backup; extraction pending |
+| `2497dbe` | Enforce scoped permissions in the project editor | project-editor-permissions | Pure RateEdit code/tests in #221; project editor and remaining hunks retained |
 | `2631186` | Enforce scoped project reads across pages and exports | project-read-permissions | Held in original backup; extraction pending |
 | `1b81680` | Record project permission delivery acceptance | specification-history | Held in original backup; extraction pending |
 | `f6e8bf1` | Enforce task catalog and tracking read permissions | task-permissions-lifecycle | Held in original backup; extraction pending |
@@ -537,3 +539,43 @@ Next: collect the exact-head CI outcomes for #219/#220 without frequent polling.
 Continue with domain-dependent rules and storage extraction, keeping storage
 policy at zero and carrying the complete relevant tests. Reconcile the remaining
 specification hunks and every source group; the overall separation is unfinished.
+
+### 2026-10-06 — Dependent domain rules published; storage isolated
+
+#221 contains the six unchanged source/test files for person-management
+prerequisites, financial field gates (including explicit rate intent) and combined
+approval record coverage, plus their module exports. All source blobs match
+`db3935d`. Its 187 core tests passed, including the 158 tests of #219 and 29
+additional tests; core all-target Clippy and formatting passed. These predicates
+do not implement assignment writes, rate mutations or approval lifecycle.
+Their documented trusted-input, complete-selection and independent lock boundaries
+remain unchanged; source review found no high/critical issue within this scope.
+
+The repository Actions workflow filters pull requests to base `master`.
+Consequently #221 does not inherit #219's check result and cannot claim its own
+Actions run. Full `nix flake check -L --max-jobs 1 --cores 2` is running locally
+in session `98201` on committed head `539316c`. Required CI must run again after
+eventual retargeting; no workflow filter or required check was weakened.
+At the latest observation #219/#220 Format and nix-eval passed, while their
+full Flake Check/build jobs remained in progress.
+
+Storage is a separate sibling branch on #219, not dependent on #221. It carries
+unchanged migrations 0042/0047, the final strict storage loader/models and storage
+regressions, and the original profile-name validator. Command modules, transaction
+configuration helpers and runtime readers are deliberately excluded. The existing
+non-test dead-code expectation documents that this internal storage is not yet
+activated; no test is disabled or weakened. Serializer additions originate in
+`f5e0dde`; the native stored-row decoder originates in `09bd15f`. Those source
+commits' commands/export consumers remain separate pending work.
+
+The migration identities and checksums are retained. A private database first
+applied this subset (42/47), then the preserved original migration directory:
+43–46/48 applied successfully and all seven versions were verified present.
+This verifies deferred migration compatibility without renumbering migrations
+or modifying a real database. Full storage server/core tests are now running in
+session `96597`; formatting passed unchanged. SQLx/offline/lint/Nix acceptance
+for storage remains pending, and no storage PR has been published yet.
+
+Next: collect storage tests, regenerate its SQLx cache and verify offline/lint;
+collect the live local #221 Flake Check without restarting it. Then publish the
+storage extraction and continue command/read-consumer groups and spec reconciliation.
