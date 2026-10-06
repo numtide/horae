@@ -891,11 +891,9 @@ async fn list_users(
 }
 
 /// The org's people, pay rates included. Harvest's user object has no rate-free
-/// shape — a null `cost_rate` there means "no rate is configured" — so blanking
-/// the fields for a member, the way the SPA's `list_users` can, would misreport
-/// the org rather than protect it. The collection is gated whole instead, which
-/// keeps the rule the SPA states: rates are manager material (SPEC §6). A member
-/// still reads their own record from `/users/me`.
+/// shape — a null `cost_rate` there means "no rate is configured". Unlike the
+/// SPA's identity-only list, this financial projection requires the existing
+/// Manager/Admin boundary. A member still reads their own `/users/me` record.
 async fn users_page(
     db: &PgPool,
     caller: &AuthUser,

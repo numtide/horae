@@ -24,6 +24,7 @@ pub struct Approval {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ApprovalSummary {
     pub approval: Approval,
+    pub user_name: String,
     pub total_minutes: i64,
     pub billable_minutes: i64,
 }
