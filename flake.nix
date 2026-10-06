@@ -54,6 +54,10 @@
     in
     blueprint
     // {
+      # the shared aarch64-darwin CI builders are the bottleneck; darwin
+      # packages are still exposed, only their checks are skipped in CI
+      checks = removeAttrs blueprint.checks [ "aarch64-darwin" ];
+
       # Expose horae as a nixpkgs overlay for downstream flakes:
       #   default        — reuse blueprint's prebuilt packages (cache-friendly)
       #   shared-nixpkgs — rebuild against the consumer's nixpkgs, so cross
