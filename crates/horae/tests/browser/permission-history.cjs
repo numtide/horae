@@ -120,9 +120,9 @@ assert.equal(endpoints.length, 1, 'expected one compiled project-manager endpoin
       for (const id of ['audit-refresh', 'audit-newest', 'audit-older']) await expect(page.locator(`#${id}`)).toBeDisabled();
     } finally {
       releaseRead();
-      await page.unroute('**/api/list_permission_audit*', holdRead);
     }
     await expect(history.locator('tbody tr')).toHaveCount(25);
+    await page.unroute('**/api/list_permission_audit*', holdRead);
     sql(`UPDATE person_permission_states SET is_administrator=false WHERE id='${stateId}'`);
     await page.locator('#audit-refresh').click();
     await expect(page.getByRole('alert')).toContainText('Administrator access is required');
