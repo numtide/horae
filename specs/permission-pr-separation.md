@@ -1189,3 +1189,23 @@ in `7729` on private PostgreSQL. A separate disposable migration-upgrade check
 retained 0044, to verify actual delivery order without renumbering migrations.
 Next: collect both checks, regenerate SQLx, run offline server/WASM gates,
 review/publish the bounded draft and continue the remaining original accounting.
+
+The prerequisite-schema upgrade passed (`59932`), applying only original
+migration 0044 after the already-applied 0047. All four command/draft DTO blocks
+were compared byte-for-byte with the original and match. Template implementation
+and test files also match final `db3935d`; no substitute fixture commands are used.
+Saved the seven-file extraction as unsigned `9005b1b` (1,744 insertions, two
+deletions); cache generation and publication remain pending, not claimed ready.
+Source review found no critical/high issue within this inactive internal boundary;
+runtime verification remains mandatory. The full suite `7729` is still live in
+compilation; no duplicate local Cargo run has been started. #232's existing Nix
+run progressed through Clippy into browser checks, while #233 completed its SQLx
+derivation and client build; both full checks remain pending.
+
+Read-only inspection for a later import-authority extraction confirms `d7a5a21`
+requires the existing organization lock helper and threads the authenticated
+actor through connect/disconnect/account-switch commits, including original
+credential tests. `4fac6af` and `b4672a4` add command/status/download authority;
+later `482b7c5` adds requester provenance and has a separate storage dependency.
+Do not copy final import files blindly across those boundaries or duplicate
+the executor-based cancel change already extracted in #231.
