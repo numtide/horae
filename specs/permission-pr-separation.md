@@ -104,8 +104,8 @@ Clients MVP as canonical-permission acceptance.
 | Non-activating permission storage, [#222](https://github.com/numtide/horae/pull/222) | `refactor/permission-storage-foundation`, `.worktrees/permission-storage-foundation` | #219 `ec7ddbd` | Draft at `e9695fd`; 1,170 tests passed, 11 existing ignored; SQLx, offline server/WASM lint and formatting passed; full local Flake Check running |
 | Legacy import report conversion lock order, [#223](https://github.com/numtide/horae/pull/223) | `fix/import-report-lock-order`, `.worktrees/import-report-lock-order` | `02f7b58` | Draft at `c8f95ac`; 1,125 tests passed, 11 existing ignored; SQLx, offline server/WASM lint and format passed; CI pending |
 | Interrupted import session cleanup, [#224](https://github.com/numtide/horae/pull/224) | `fix/import-session-cleanup`, `.worktrees/import-session-cleanup` | `02f7b58` | Draft at `be57f0e`; 1,123 tests passed, 11 existing ignored; SQLx, offline server/WASM lint and format passed; CI pending |
-| Current authority for organization branding writes | `fix/branding-current-authority`, `.worktrees/branding-current-authority` | `02f7b58` | Both source/test files match `907bc88`; format passed; full runtime suite running |
-| Internal reusable-profile commands | `refactor/permission-template-commands`, `.worktrees/permission-template-commands` | #222 `e9695fd` | Source, all 19 tests and receipt migration extracted; format passed; runtime/SQLx/lint verification pending; no endpoints or activation |
+| Current authority for organization branding writes, [#225](https://github.com/numtide/horae/pull/225) | `fix/branding-current-authority`, `.worktrees/branding-current-authority` | `02f7b58` | Draft at `f2d6bd4`; full suite, SQLx, offline server/WASM lint and format passed; CI pending |
+| Internal reusable-profile commands | `refactor/permission-template-commands`, `.worktrees/permission-template-commands` | #222 `e9695fd` | Source, all 19 tests and receipt migration extracted; format passed; full runtime suite running; SQLx/lint pending; no endpoints or activation |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -309,12 +309,12 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `6e61593` | Validate person-management grant compatibility and self-links | scope-domain | Code/tests in #221; specification hunks retained for reconciliation |
 | `ec35446` | Store versioned permission profiles without activating new policy | permission-storage | Storage/schema/name-validator code/tests in #222; specification hunks retained for reconciliation |
 | `d50c979` | Add audited permission template commands | permission-profile-transactions | Command/test/receipt hunks extracted locally with later hardening; verification and specification reconciliation pending |
-| `f5e0dde` | Apply permission profiles with atomic scope changes | permission-profile-transactions | Model serialization in #222; profile commands and remaining hunks retained |
+| `f5e0dde` | Apply permission profiles with atomic scope changes | permission-profile-transactions | Model serialization in #222; strict template receipt comparison extracted locally; profile commands and remaining hunks retained |
 | `9a7e05d` | Add audited project manager delegation | project-manager-delegation | Held in original backup; extraction pending |
 | `fc85231` | Add administrator-only permission audit lookup | permission-audit | Held in original backup; extraction pending |
 | `c3d17cb` | Prevent deadlocks during legacy import report conversion | import-transaction-lifecycle | Conversion source/tests/SQLx in #223; specification hunks retained for reconciliation |
 | `3ae8e08` | Coordinate project access changes before locking resources | legacy-access-writers | Organization SHARE query reused in #220; writer/helper consumers and remaining hunks retained |
-| `907bc88` | Recheck authority when saving organization branding | branding-authority | Source/tests extracted locally; runtime verification and specification reconciliation pending |
+| `907bc88` | Recheck authority when saving organization branding | branding-authority | Source/test/cache hunks in #225; specification hunks retained for reconciliation |
 | `d7a5a21` | Revalidate administrator authority for Harvest connection changes | import-authority | Held in original backup; extraction pending |
 | `4fac6af` | Revalidate import job command and status authority | import-authority | Held in original backup; extraction pending |
 | `b4672a4` | Revalidate authority during import error downloads | import-authority | Held in original backup; extraction pending |
@@ -332,7 +332,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `8aac739` | Add read-only permission migration diagnostics | permission-preflight | Held in original backup; extraction pending |
 | `8c15bfe` | Show own permissions in Settings | own-permissions | Held in original backup; extraction pending |
 | `300d1e9` | Expose administrator permission history | permission-audit | Held in original backup; extraction pending |
-| `03e90b1` | Connect permission editor previews and commands | permission-editor | Held in original backup; extraction pending |
+| `03e90b1` | Connect permission editor previews and commands | permission-editor | Template DTOs, command hardening/tests and administration helpers extracted locally; editor/profile/remaining hunks retained |
 | `7f7fd1c` | Record permission editor delivery and UI follow-up | specification-history | Held in original backup; extraction pending |
 | `98b1692` | Add reviewed person permission editing | permission-editor | Held in original backup; extraction pending |
 | `9e6d8bd` | Record person editor delivery and template follow-up | specification-history | Held in original backup; extraction pending |
@@ -723,7 +723,30 @@ module registration. Only those DTOs are server-gated at this stage; editor
 screens, endpoints, profile application and policy activation are not included.
 Formatting passed unchanged (`42874`). Tests and SQLx are not yet accepted.
 
-Next: finish branding runtime/SQLx/offline/lint gates and publish its scoped PR;
-then verify the template commands together with #222. Continue collecting the
-live storage check. Reconcile remaining shared writers, consumers and all
-specification hunks before claiming this separation complete.
+Branding's complete workspace suite subsequently exited successfully (`45526`).
+SQLx preparation (`53498`) passed with all 1,003 base descriptors unchanged and
+six additions matching `907bc88` exactly. Offline server Clippy is now running in
+`50256`; WASM lint and publication are still pending. The template extraction's
+administration helpers were additionally compared byte-for-byte with `db3935d`.
+Source review checked authorization-before-replay, strict canonical intent,
+tenant/principal receipt separation, atomic count/name limits and deletion,
+grant/identity preservation, revision overflow and rollback. No high/critical
+source finding within the internal boundary; runtime acceptance is still pending.
+
+Branding offline workspace/server Clippy (`50256`) and WASM Clippy (`26523`)
+subsequently passed. Source files still match `907bc88` byte-for-byte. Unsigned
+commit `f2d6bd45a9ef0ac141797d8745430bb0d8260f3e` is published as draft #225 on
+master; required CI is pending. #224's exact remote head was confirmed; run
+[37482514740](https://github.com/numtide/horae/actions/runs/37482514740) has Format
+passed and Flake Check in progress (Nixbot evaluation passed, build in progress).
+
+The template-command full suite is running in session `60494`, through the
+existing private-database wrapper with quiet test output to keep complete result
+summaries. It tests the combined #219/#222 foundation and commands, not a mocked
+standalone command. No shared-target Cargo jobs are running concurrently.
+
+Next: collect template-command tests, regenerate SQLx and verify offline/lint
+before publishing the dependent PR. Continue collecting the live storage check
+(`50374`, now running app tests after browser checks). Reconcile remaining shared
+writers, consumers and all specification hunks before claiming this separation
+complete.
