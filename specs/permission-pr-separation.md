@@ -102,7 +102,9 @@ Clients MVP as canonical-permission acceptance.
 | Pure record scopes and grant catalog, [#219](https://github.com/numtide/horae/pull/219) | `refactor/permission-domain-foundation`, `.worktrees/permission-domain-foundation` | `02f7b58` | Draft at `ec7ddbd`; 158 core tests, core Clippy and formatting passed; full CI pending; no runtime integration |
 | Pure rate/management/approval rules, [#221](https://github.com/numtide/horae/pull/221) | `refactor/permission-domain-gates`, `.worktrees/permission-domain-gates` | #219 `ec7ddbd` | Draft at `539316c`; 187 core tests, core Clippy and formatting passed; full local Flake Check running |
 | Non-activating permission storage, [#222](https://github.com/numtide/horae/pull/222) | `refactor/permission-storage-foundation`, `.worktrees/permission-storage-foundation` | #219 `ec7ddbd` | Draft at `e9695fd`; 1,170 tests passed, 11 existing ignored; SQLx, offline server/WASM lint and formatting passed; full local Flake Check running |
-| Legacy import report conversion lock order | `fix/import-report-lock-order`, `.worktrees/import-report-lock-order` | `02f7b58` | Source/tests extracted locally from `c3d17cb`; full tests running; no schema or permission dependency |
+| Legacy import report conversion lock order, [#223](https://github.com/numtide/horae/pull/223) | `fix/import-report-lock-order`, `.worktrees/import-report-lock-order` | `02f7b58` | Draft at `c8f95ac`; 1,125 tests passed, 11 existing ignored; SQLx, offline server/WASM lint and format passed; CI pending |
+| Interrupted import session cleanup | `fix/import-session-cleanup`, `.worktrees/import-session-cleanup` | `02f7b58` | Original `e949e4c` production/test hunks extracted locally; 1,123 tests passed, 11 existing ignored; format passed; SQLx/offline/lint pending |
+| Current authority for organization branding writes | `fix/branding-current-authority`, `.worktrees/branding-current-authority` | `02f7b58` | Both source/test files match `907bc88`; format passed; runtime verification pending |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -309,15 +311,15 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `f5e0dde` | Apply permission profiles with atomic scope changes | permission-profile-transactions | Model serialization in #222; profile commands and remaining hunks retained |
 | `9a7e05d` | Add audited project manager delegation | project-manager-delegation | Held in original backup; extraction pending |
 | `fc85231` | Add administrator-only permission audit lookup | permission-audit | Held in original backup; extraction pending |
-| `c3d17cb` | Prevent deadlocks during legacy import report conversion | import-transaction-lifecycle | Conversion source/tests extracted locally; verification, SQLx and specification reconciliation pending |
+| `c3d17cb` | Prevent deadlocks during legacy import report conversion | import-transaction-lifecycle | Conversion source/tests/SQLx in #223; specification hunks retained for reconciliation |
 | `3ae8e08` | Coordinate project access changes before locking resources | legacy-access-writers | Organization SHARE query reused in #220; writer/helper consumers and remaining hunks retained |
-| `907bc88` | Recheck authority when saving organization branding | branding-authority | Held in original backup; extraction pending |
+| `907bc88` | Recheck authority when saving organization branding | branding-authority | Source/tests extracted locally; runtime verification and specification reconciliation pending |
 | `d7a5a21` | Revalidate administrator authority for Harvest connection changes | import-authority | Held in original backup; extraction pending |
 | `4fac6af` | Revalidate import job command and status authority | import-authority | Held in original backup; extraction pending |
 | `b4672a4` | Revalidate authority during import error downloads | import-authority | Held in original backup; extraction pending |
 | `e5fcc5a` | Prepare durable CSV batches before opening transactions | import-transaction-lifecycle | Held in original backup; extraction pending |
 | `482b7c5` | Retain the original requester of import jobs | import-requester-provenance | Held in original backup; extraction pending |
-| `e949e4c` | Drain interrupted import transactions before releasing reservations | import-transaction-lifecycle | Held in original backup; extraction pending |
+| `e949e4c` | Drain interrupted import transactions before releasing reservations | import-transaction-lifecycle | Production/test hunks extracted locally; runtime verification and specification reconciliation pending |
 | `c0cfb8f` | Scope rate permissions to their owning resource | scope-domain | Code/tests in #221; specification hunks retained for reconciliation |
 | `5d51b0e` | Expose the current person's permission snapshot | own-permissions | Held in original backup; extraction pending |
 | `22ffdab` | Recheck manager access for financial snapshots | manager-snapshot-consumers | Shared snapshot helper/queries in #220; original financial consumers and remaining hunks retained |
@@ -621,3 +623,64 @@ and offline/lint checks, and publish its independent draft PR. Collect the live
 #221/#222 Nix outcomes without restarting either process. Continue the remaining
 behavior groups and specification-hunk mapping; the overall separation is not
 complete and no merges or original-PR closures have been performed.
+
+### 2026-10-06 — Conversion repair published; session cleanup isolated
+
+Session `58270` passed the full conversion workspace suite: 824 app tests,
+180 integration tests and 121 core tests (1,125 total), with 11 pre-existing
+manual scale/stress tests ignored. All five original concurrency regressions
+passed, along with the existing legacy conversion, size-one pool and Clients
+regressions. Formatting (`33716`) passed unchanged. SQLx preparation (`62415`)
+preserved 1,002 base descriptors, removed the superseded locking-discovery
+descriptor and added 14 including its replacement (1,016 total). All 14 match
+the original `c3d17cb` source. Offline all-target server Clippy (`33078`) passed;
+WASM Clippy (`79587`) also passed. No Rust source changed after the full suite.
+
+Unsigned commit `c8f95ac5586dfed5549d4e394516f12b02339741` is published as draft
+#223 on master. Adversarial review traced the one-connection conversion and its
+archive/checkpoint, claim, cleanup and startup callers: exact tenant/job recheck,
+fresh post-wait payload, compatible organization SHARE versus worker FK KEY SHARE,
+no duplicate archive or invalidation of an already-converted live lease, and
+atomic failure rollback. No high/critical issue was found in this extraction.
+This accounts for T065–T067's code, not full T039/T040/T042 or policy activation.
+Required exact-head CI remains pending.
+
+The next independent branch carries exactly the `e949e4c` source/test hunks;
+stable patch ID `3168407d233c130834dd0fa7328552224993c1f9` matches the original.
+It drains abandoned SQLx responses, tolerates only disposal-time `3B001`, sends
+full ROLLBACK before advisory unlock and closes the reserved connection. The
+original tests cover one/two nested savepoints, an untracked server transaction,
+retained committed values, immediate single-connection retries and backend failure.
+Source review checked the pinned SQLx 0.8.6 flush/transaction implementation and
+both API/CSV worker-join paths against the existing T089–T091 contract. Format
+passed in `66687`; runtime/SQLx/lint acceptance is still pending.
+The full workspace server/core suite passed in session `31728` through
+`.scratch/verify-cleanup.sh` on a fresh private PostgreSQL cluster: 822 app,
+180 integration and 121 core tests (1,123 total), with 11 pre-existing ignored.
+All three cleanup regressions and existing API/CSV cancellation regressions
+passed. No source changed afterward; SQLx preparation is the next gate.
+
+Also isolated the independent branding-write repair on `02f7b58`. Both files
+match `907bc88` exactly, carrying all five new authority/rollback regressions and
+all prior field/no-op tests. The only production caller passes its authenticated
+actor ID; the transaction retains organization UPDATE before actor SHARE, checks
+current active same-tenant Manager/Admin authority even for no-ops, and commits
+before the unchanged conditional plugin event. Current role writers use the
+compatible organization-first order. This neither changes the branding read
+endpoint nor activates future CompanyWrite policy. Formatting (`81218`) passed;
+runtime, SQLx, lint and PR publication remain pending.
+
+The durable CSV preparation candidate `e5fcc5a` has a real test dependency on
+`4fac6af`'s executor-based `jobs::cancel`: master accepts only a pool, while the
+original cancellation race calls it inside its transaction barrier. Preserve
+that production-call regression; do not replace it with a weaker fixture write
+or copy unrelated import-authority commands merely to make the tests compile.
+Resolve the small shared helper or its dependency when extracting that candidate.
+
+Next: finish session-cleanup SQLx/offline/lint verification and its
+scoped PR; then verify the branding extraction. #223's exact remote head was
+confirmed and CI run [37479980256](https://github.com/numtide/horae/actions/runs/37479980256)
+has Format/nix-eval passed, with Flake Check/nix-build in progress.
+Keep collecting the live #221/#222 local
+Flake Checks (`98201`/`50374`) without restarting them. All remaining source and
+specification groups still require final mapping and verification.
