@@ -1336,3 +1336,44 @@ Next: retain `1215` / `41624` / `72580` until terminal, and extract the original
 #231 cancel adapter and actual test/base dependencies. No original work is lost
 or relabeled complete; broad original-code and specification accounting remains
 unfinished, so the overall goal remains active.
+
+### 2026-10-06 — Import job commands and bounded downloads
+
+The preceding iteration made progress: #235 was published, its local gates
+passed, and #232's full Nix result was recorded. Re-read the saved goal, verified
+#216 remains merged, and resumed the three existing Nix handles (`1215`, `41624`,
+`72580`) confirmed live. Repository instructions and the constitution are unchanged.
+
+Created isolated review base `integration/import-job-authority-prerequisites`
+at `26d6159`: #235 `2fcecd1` plus exact #231 `e9898ed`, replayed without conflict.
+The #231 executor-based cancel adapter is therefore inherited, not duplicated
+in this extraction. No prerequisite branch was changed. This integration base
+is not a delivery PR or merge target; #227 → #228 → #235 and #231 must reach
+master before rebasing/retargeting the bounded command/result diff and fresh CI.
+
+Created `fix/import-job-authority` in its own worktree on that base. The eight
+Rust/test files match original `b4672a4` byte-for-byte: both `4fac6af` command
+authority and the subsequent shared download guard are preserved together.
+Read T077–T082 and both transaction contracts. The six command/status helpers
+use trusted actor IDs and retain current same-tenant Administrator authority
+through the existing generation/job/upload operations and returned projection.
+Upload buffering precedes authorization locks. Duplicate/no-op paths still
+authorize; generation, payload, retry, upload retention and queue semantics remain.
+
+The shared guard also authorizes initial report preparation, each bounded page
+of up to 16 fragments and the captured inline/empty tail. Transactions commit
+before client-paced output. Already authorized buffered bytes may drain, but
+revocation aborts the next page/tail instead of producing successful truncated EOF.
+Snapshot boundaries, exact retained errors, headers and missing-fragment failures
+remain unchanged. Original HTTP tests revoke access after endpoint admission
+and before upload acceptance/first body consumption. Test-only queue adapters
+remain test-only; no worker policy, requester migration, UI or cutover is included.
+
+The final-original guard, download implementation and stream tests have no later
+changes; the command test root only later adds the separately retained requester
+module. Reviewed production callers, tenant/error projections, transaction and
+connection lifetimes, cancellation/retry, wait ordering and prerequisite ownership.
+No critical/high source finding in this bounded extraction; runtime evidence is
+still required. Formatting passed unchanged (`2345`); full combined workspace
+tests run on private PostgreSQL in `48997`. Next collect the suite, regenerate
+SQLx, run offline server/WASM gates and publish with the real dependency order.
