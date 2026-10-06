@@ -119,7 +119,8 @@ Clients MVP as canonical-permission acceptance.
 | Approval tenant isolation, [#239](https://github.com/numtide/horae/pull/239) | `fix/approval-tenant-isolation`, `.worktrees/approval-tenant-isolation` | Master `1b8fa4f` | Draft at `66a256f`; three source/test files and complete cache patch preserved exactly; 1,124 source-head tests, source review, SQLx, format and offline server/WASM Clippy passed; full current-head local Nix passed |
 | Identity response projections, [#240](https://github.com/numtide/horae/pull/240) | `fix/identity-response-projections`, `.worktrees/identity-response-projections` | Master `1b8fa4f` | Draft at `1ce993f`; 1,122 source-head tests, cache provenance, bounded review and format passed; cache-inclusive server/WASM lint passed; full Nix `16586` running; no activation |
 | Time-writer account activity, [#241](https://github.com/numtide/horae/pull/241) | `fix/time-write-activity`, `.worktrees/time-write-activity` | #228 `0e1e675` | Draft at `7820f8d`; 1,142 tests, cache provenance, bounded review, format and offline server/WASM lint passed; full Nix `85167` running; no delegated writes or activation |
-| Time-entry invoice identity boundary, [#242](https://github.com/numtide/horae/pull/242) | `fix/time-entry-payload`, `.worktrees/time-entry-payload` | Master `1b8fa4f` | Draft at `43337fc`; 1,122 tests, cache/source provenance, bounded review and format passed; offline lints `22698` and full Nix `73808` running; no policy or UI change |
+| Time-entry invoice identity boundary, [#242](https://github.com/numtide/horae/pull/242) | `fix/time-entry-payload`, `.worktrees/time-entry-payload` | Master `1b8fa4f` | Draft at `43337fc`; 1,122 tests, cache/source provenance, bounded review, format and offline server/WASM lint passed; full Nix `73808` running; no policy or UI change |
+| Session-bound project-manager delegation | `feat/project-manager-delegation`, `.worktrees/project-manager-delegation` | Review base `e44433e` combining #234/#228 | Source `be787ca`; six complete original files preserved exactly, formatting passed; workspace suite/cache `4502` running; not yet published or certified |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -324,7 +325,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `ec35446` | Store versioned permission profiles without activating new policy | permission-storage | Storage/schema/name-validator code/tests in #222; specification hunks retained for reconciliation |
 | `d50c979` | Add audited permission template commands | permission-profile-transactions | Command/test/receipt/cache hunks in #226 with later hardening; specification hunks retained for reconciliation |
 | `f5e0dde` | Apply permission profiles with atomic scope changes | permission-profile-transactions | Model serialization in #222; strict template receipt comparison in #226; profile commands, migration 0044 and tests/cache in #234 with later hardening; specification hunks retained |
-| `9a7e05d` | Add audited project manager delegation | project-manager-delegation | Held in original backup; extraction pending |
+| `9a7e05d` | Add audited project manager delegation | project-manager-delegation | Final command and all production-command tests extracted in `be787ca`, including later hardening and composition; verification running; specification hunks preserved separately |
 | `fc85231` | Add administrator-only permission audit lookup | permission-audit | Held in original backup; extraction pending |
 | `c3d17cb` | Prevent deadlocks during legacy import report conversion | import-transaction-lifecycle | Conversion source/tests/SQLx in #223; specification hunks retained for reconciliation |
 | `3ae8e08` | Coordinate project access changes before locking resources | legacy-access-writers | Rust/test/cache changes in #228; organization SHARE query also reused in #220; specification hunks retained |
@@ -353,10 +354,10 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `0f97cb2` | Add custom permission profile controls | permission-editor | Held in original backup; extraction pending |
 | `8db19ba` | Show affected names in permission reviews | permission-editor | Profile command's historical relationship-type reuse in #234; display names, editor/UI/tests and specification hunks retained |
 | `e7d8a36` | Protect permission drafts during navigation and dismissal | permission-editor | Held in original backup; extraction pending |
-| `6bba224` | Bind permission saves to the original requester | permission-editor | Held in original backup; extraction pending |
+| `6bba224` | Bind permission saves to the original requester | permission-editor | Exact shared requester DTO extracted in `be787ca`; editor/session/UI remainder retained for permission-editor delivery |
 | `1ecfa21` | Recover interrupted permission saves across reloads | permission-editor | Held in original backup; extraction pending |
 | `c88ca6d` | Exercise permission recovery in a real browser | permission-editor | Held in original backup; extraction pending |
-| `202ee96` | Protect project delegation against concurrent deactivation | project-manager-delegation | Held in original backup; extraction pending |
+| `202ee96` | Protect project delegation against concurrent deactivation | project-manager-delegation | Complete final command/activity tests extracted in `be787ca`; verification running; specification hunks preserved separately |
 | `3f45b7c` | Validate combined approval record coverage | scope-domain | Code/tests in #221; specification hunks retained for reconciliation |
 | `eb56af3` | Define scoped approval transaction and coverage gates | specification-history | Held in original backup; extraction pending |
 | `8d49421` | Add authorized permission editor subject discovery | permission-editor | Held in original backup; extraction pending |
@@ -368,7 +369,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `4c00660` | Document project form permission integration boundaries | specification-history | Held in original backup; extraction pending |
 | `3bb62ac` | Limit session identity responses to display fields | identity-projections | Source/tests together in #240 at `1ce993f`; 1,122 tests, regenerated cache, format and offline lints passed; full Nix running; canonical tests and mixed specification hunks separately preserved |
 | `4ac30fa` | Add scoped time-entry reads without financial metadata | time-readers | Held in original backup; extraction pending |
-| `c80233b` | Keep invoice identities out of time-entry responses | time-entry-payload | Exact final model and independently registered original legacy HTTP assertions in #242 (`43337fc`); 1,122 tests, complete SQLx and format passed; offline lints/full Nix running; canonical fixture remainder and specification hunks separately preserved |
+| `c80233b` | Keep invoice identities out of time-entry responses | time-entry-payload | Exact final model and independently registered original legacy HTTP assertions in #242 (`43337fc`); 1,122 tests, complete SQLx, format and offline lints passed; full Nix running; canonical fixture remainder and specification hunks separately preserved |
 | `5ec183a` | Fence time-entry writes against account deactivation | time-writer-activity | Source/tests and regenerated cache in #241 (`7820f8d`), original configuration SQL inlined without canonical module; 1,142 tests and both offline lints passed; full Nix running; specification hunks retained |
 | `228e151` | Clarify timesheet context and locked calendar behavior | specification-history | Held in original backup; extraction pending |
 | `4294aa3` | Isolate permission browser fixtures and retain test assets | browser-fixture-tooling | Held in original backup; extraction pending |
@@ -388,7 +389,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `68bbaae` | Fix Timesheet modal focus and long-label layout | timesheet-consumer-commands | Held in original backup; extraction pending |
 | `e29f4d8` | Reload Timesheet state when switching people | timesheet-consumer-commands | Held in original backup; extraction pending |
 | `5f7895c` | Preserve selected dates and drag offsets in Timesheet | timesheet-consumer-commands | Held in original backup; extraction pending |
-| `84d5352` | Expose authenticated project manager delegation | project-manager-delegation | Held in original backup; extraction pending |
+| `84d5352` | Expose authenticated project manager delegation | project-manager-delegation | DTOs, session wrappers, reader and tests extracted in `be787ca`; HTTP audit-visibility block and audit-fixture adaptation remain owned by permission-audit delivery; specification hunks retained |
 | `c4e83c8` | Record project delegation verification and next integration gate | specification-history | Held in original backup; extraction pending |
 | `a25e544` | Serialize invoice writes before user revocation | legacy-access-writers | Five Rust/test changes and eight SQLx additions in #233 on integrated #220/#227/#228/#232 prerequisites; suite/cache/offline lints/full Nix passed; specification hunks retained |
 | `774f60a` | Record invoice revocation verification and next integration gates | specification-history | Held in original backup; extraction pending |
@@ -408,7 +409,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `2b59b58` | Stream grouped time reports with scoped authorization | time-report-exports | Held in original backup; extraction pending |
 | `ecac66b` | Add scoped individual time reports and nested breakdowns | time-report-consumer | Held in original backup; extraction pending |
 | `de8f9ad` | Filter time reports to active projects | time-report-consumer | Held in original backup; extraction pending |
-| `2497dbe` | Enforce scoped permissions in the project editor | project-editor-permissions | Pure RateEdit code/tests in #221; project editor and remaining hunks retained |
+| `2497dbe` | Enforce scoped permissions in the project editor | project-editor-permissions | Pure RateEdit code/tests in #221; composable delegation and its transaction tests in `be787ca`; project editor and remaining hunks retained |
 | `2631186` | Enforce scoped project reads across pages and exports | project-read-permissions | Held in original backup; extraction pending |
 | `1b81680` | Record project permission delivery acceptance | specification-history | Held in original backup; extraction pending |
 | `f6e8bf1` | Enforce task catalog and tracking read permissions | task-permissions-lifecycle | Held in original backup; extraction pending |
@@ -1970,3 +1971,81 @@ This iteration is progress: #242 is isolated, source-accounted, suite/cache-veri
 and published. Next collect the four live checks without restarting them, then
 resolve and review the project-delegation boundary. Remaining canonical/UI/spec
 and unpublished Clients groups still require final ownership; goal not complete.
+
+### 2026-10-06 — Composable project delegation extraction
+
+The immediately preceding turn only supplied the requested goal text: no-progress
+for the existing separation goal. This iteration re-read that goal, reconfirmed
+#216 merged at `02f7b58`, and checked the three existing Nix handles live without
+restarting them. Original tracked snapshot and untracked archive comparisons both
+pass. #242 offline server/WASM lint `22698` completed successfully on `43337fc`;
+its PR body is updated. #240 `16586`, #241 `85167` and #242 `73808` remain live.
+
+Read the complete final delegation command, strict DTOs, session wrappers, all
+three PostgreSQL test files, HTTP fixture, shared transaction helper and the
+project-management command contract. The final command needs both #234's schema/
+profile-template foundations and #228's shared organization-lock helper. Created
+isolated review base `integration/project-delegation-prerequisites` at
+`e44433e3dea8ab92b26149f2b98a2af122086092`, combining exact #234 `45d219e` and
+#228 `0e1e675` without conflicts. This local integration base is not a delivery
+PR or a GitHub merge target. No existing branch was moved.
+
+Created `feat/project-manager-delegation` in its own worktree on that base.
+Unsigned source commit `be787cad1405ff42a3f93c0ef2604fa5bc3587eb` has 12 files,
+2,334 additions and one deletion. This is one coherent command/API boundary,
+mostly existing tests, not a new permissions feature. Original provenance:
+`9a7e05d`, `202ee96`, `84d5352`, composability hunks from `2497dbe`, and the
+eight-line requester DTO from `6bba224`.
+
+Six full files match final `db3935d` byte-for-byte: project-manager DTOs, session
+wrappers, command, command tests, read tests and transaction tests. Root module
+registrations are minimal. The requester DTO is shared on server/WASM; existing
+profile/template command types retain their server-only compilation boundary
+using item-level cfg attributes. No schema, dependency, UI, style or activation
+change was added. Legacy project saves remain unchanged.
+
+The original HTTP test is preserved except for its audit-endpoint block starting
+at `let request_id: Uuid` and ending immediately before the subsequent
+`grants(...ProjectWriteManaged...)` call. Its two forbidden assertions for
+`get_permission_audit` and `list_permission_audit` require the separately
+retained audit API and explicitly belong to that extraction/integration suite.
+They are not waived or reported passed here. The original file and its fixture
+remain recoverable unchanged. All delegation route, requester mismatch, payload,
+replay, stale revision, retained inactive target, self-removal, malformed-state,
+same-cookie revocation and receipt-count assertions are otherwise exact.
+
+Bounded adversarial review traced session identity through current policy/grant/
+designation checks, organization-first serialization, actor/added-target SHARE,
+project KEY SHARE NOWAIT, exact normalized intent, durable receipt/audit,
+overflow, no-op preservation and whole-transaction rollback. Current authority
+is checked before replay; retained targets are not silently removed for lost
+eligibility. Membership, rates, costs, history and other management relationships
+remain unchanged. Composition does not commit or change caller isolation.
+No critical/high finding in this extracted boundary; runtime tests remain gates.
+
+Ran Spec Kit analyze's prerequisite command once with
+`SPECIFY_FEATURE=015-scoped-permissions`, from the original worktree; required
+artifacts exist and no extension hooks are configured. Read its constitution,
+relevant specification/plan/task sections and full delegation contract, without
+editing original specs. Scoped report:
+
+| Requirements | Tasks | Coverage / limitation |
+| --- | --- | --- |
+| FR-005/011/026 | T059–T061, T189–T191 | Distinct scope, current project-edit authority, compatible additions; no grant promotion |
+| FR-010 | T133–T135, T189–T191 | Both activity race orders, revocation, cancellation and current replay authority |
+| FR-013 | T059–T061, T189–T191 | Atomic receipt/audit and sanitized payload; audit-reader assertions owned separately |
+| FR-017 | T059–T061 | Membership, money and history preserved; composition commit/rollback tested |
+
+Six scoped FRs, nine mapped tasks, 100% task coverage, zero unmapped tasks and
+zero critical/high specification findings in this boundary. SC-002/003/006 have
+corresponding payload/concurrency/regression tests but full-feature success is
+not claimed. Master constitution 1.0 and the original proposed 1.1 governance
+reconciliation remain separately inventoried; this extraction adopts no amendment.
+Next analysis action is to validate the extracted source, then restore audit
+integration assertions with their owning API; no speculative spec edits needed.
+
+Formatting `82393` passed unchanged and diff checks pass. Workspace suite plus
+complete SQLx regeneration `4502` is running on disposable PostgreSQL, occupying
+the shared local Cargo target. Next collect it, verify every generated descriptor,
+run offline server/WASM lint and full Nix, publish the bounded draft and update
+this record. Overall separation remains incomplete.
