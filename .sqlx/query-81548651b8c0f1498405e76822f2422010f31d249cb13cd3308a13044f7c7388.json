@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT jsonb_build_object('org',(SELECT to_jsonb(o) FROM organizations o WHERE id=$1),'state',(SELECT jsonb_agg(s ORDER BY user_id) FROM person_permission_states s WHERE org_id=$1),'people',(SELECT jsonb_agg(p ORDER BY id) FROM person_management_assignments p WHERE org_id=$1),'projects',(SELECT jsonb_agg(p ORDER BY id) FROM project_management_assignments p WHERE org_id=$1),'receipts',(SELECT count(*) FROM permission_change_receipts WHERE org_id=$1))",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "jsonb_build_object",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "81548651b8c0f1498405e76822f2422010f31d249cb13cd3308a13044f7c7388"
+}
