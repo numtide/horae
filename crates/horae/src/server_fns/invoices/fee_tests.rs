@@ -3,7 +3,7 @@ use crate::server_fns::test_seed::{SeedIds, seed};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-async fn single_fee(pool: &PgPool) -> SeedIds {
+pub(super) async fn single_fee(pool: &PgPool) -> SeedIds {
     let ids = seed(pool, OrgRole::Manager).await;
     sqlx::query!(
         "UPDATE projects SET project_type = 'fixed_fee', starts_on = '2026-09-01' WHERE id = $1",
@@ -72,9 +72,16 @@ async fn project_fee_context_matches_invoice_balances_and_current_authority(pool
         .unwrap();
     assert_eq!(over[0].balance.invoiced_cents, 13500);
     assert_eq!(over[0].balance.remaining_cents, -1000);
-    let preview = preview::prepare(&pool, ids.org_id, ids.client_id, period, None, None)
-        .await
-        .unwrap();
+    let preview = preview::prepare(
+        &pool,
+        (ids.org_id, ids.user_id),
+        ids.client_id,
+        period,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
     assert_eq!(Some(over[0].balance), preview.lines[0].fee_balance);
     transition_invoice(
         &pool,
@@ -267,9 +274,35 @@ async fn invoice_status_rechecks_authority_after_waiting_for_the_invoice_lock(po
             .unwrap();
         assert_eq!(stored.status, InvoiceStatus::Draft);
         assert_eq!(stored.total_cents, invoice.invoice.total_cents);
+        let denied = preview::prepare(
+            &pool,
+            (ids.org_id, ids.user_id),
+            ids.client_id,
+            ("2026-09-01".parse().unwrap(), "2026-09-30".parse().unwrap()),
+            None,
+            None,
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            matches!(
+                denied,
+                ServerFnError::ServerError {
+                    code: FORBIDDEN,
+                    ..
+                }
+            ),
+            "{denied}"
+        );
+        // Verify retained balances without restoring the revoked actor's access.
+        let reviewer = Uuid::now_v7();
+        sqlx::query!(
+            "INSERT INTO users (id, org_id, email, name, org_role) VALUES ($1,$2,$3,'Reviewer','admin')",
+            reviewer, ids.org_id, format!("{reviewer}@test.com")
+        ).execute(&pool).await.unwrap();
         let preview = preview::prepare(
             &pool,
-            ids.org_id,
+            (ids.org_id, reviewer),
             ids.client_id,
             ("2026-09-01".parse().unwrap(), "2026-09-30".parse().unwrap()),
             None,
@@ -292,7 +325,7 @@ async fn settled_fee_sources_remain_reviewable_without_automatic_charges(pool: P
         .unwrap();
     let settled = preview::prepare(
         &pool,
-        ids.org_id,
+        (ids.org_id, ids.user_id),
         ids.client_id,
         period,
         None,
@@ -309,7 +342,7 @@ async fn settled_fee_sources_remain_reviewable_without_automatic_charges(pool: P
     edits[0].amount_cents = 100;
     let review = preview::prepare_with_edits(
         &pool,
-        ids.org_id,
+        (ids.org_id, ids.user_id),
         ids.client_id,
         period,
         None,
@@ -337,7 +370,7 @@ async fn settled_fee_sources_remain_reviewable_without_automatic_charges(pool: P
     .unwrap();
     let overdrawn = preview::prepare(
         &pool,
-        ids.org_id,
+        (ids.org_id, ids.user_id),
         ids.client_id,
         period,
         None,
@@ -366,7 +399,7 @@ async fn reviewed_generation_bills_partial_fees_and_rejects_stale_balances(pool:
     let defaults = InvoiceDefaults::default();
     let initial = preview::prepare(
         &pool,
-        ids.org_id,
+        (ids.org_id, ids.user_id),
         ids.client_id,
         period,
         None,
@@ -382,7 +415,7 @@ async fn reviewed_generation_bills_partial_fees_and_rejects_stale_balances(pool:
     }];
     let review = preview::prepare_with_edits(
         &pool,
-        ids.org_id,
+        (ids.org_id, ids.user_id),
         ids.client_id,
         period,
         None,
@@ -476,7 +509,7 @@ async fn reviewed_generation_requires_exact_excess_and_current_authority(pool: P
     };
     let initial = preview::prepare(
         &pool,
-        ids.org_id,
+        (ids.org_id, ids.user_id),
         ids.client_id,
         period,
         None,
@@ -492,7 +525,7 @@ async fn reviewed_generation_requires_exact_excess_and_current_authority(pool: P
     }];
     let review = preview::prepare_with_edits(
         &pool,
-        ids.org_id,
+        (ids.org_id, ids.user_id),
         ids.client_id,
         period,
         None,
@@ -606,7 +639,7 @@ async fn reviewed_generation_does_not_materialize_unselected_months(pool: PgPool
     let defaults = InvoiceDefaults::default();
     let initial = preview::prepare(
         &pool,
-        ids.org_id,
+        (ids.org_id, ids.user_id),
         ids.client_id,
         period,
         None,
@@ -618,7 +651,7 @@ async fn reviewed_generation_does_not_materialize_unselected_months(pool: PgPool
     edits[1].selected = false;
     let review = preview::prepare_with_edits(
         &pool,
-        ids.org_id,
+        (ids.org_id, ids.user_id),
         ids.client_id,
         period,
         None,
@@ -658,7 +691,7 @@ async fn reviewed_generation_does_not_materialize_unselected_months(pool: PgPool
     );
     let remaining = preview::prepare(
         &pool,
-        ids.org_id,
+        (ids.org_id, ids.user_id),
         ids.client_id,
         period,
         None,
@@ -684,7 +717,7 @@ async fn reviewed_generation_rejects_changed_time_before_claiming_it(pool: PgPoo
     let defaults = InvoiceDefaults::default();
     let review = preview::prepare(
         &pool,
-        ids.org_id,
+        (ids.org_id, ids.user_id),
         ids.client_id,
         period,
         None,
@@ -746,7 +779,7 @@ async fn prepared_fee_selection_rejects_invalid_values_and_empty_generation(pool
     let defaults = InvoiceDefaults::default();
     let initial = preview::prepare(
         &pool,
-        ids.org_id,
+        (ids.org_id, ids.user_id),
         ids.client_id,
         period,
         None,
@@ -772,7 +805,7 @@ async fn prepared_fee_selection_rejects_invalid_values_and_empty_generation(pool
         assert!(
             preview::prepare_with_edits(
                 &pool,
-                ids.org_id,
+                (ids.org_id, ids.user_id),
                 ids.client_id,
                 period,
                 None,
@@ -789,7 +822,7 @@ async fn prepared_fee_selection_rejects_invalid_values_and_empty_generation(pool
     edits[0].amount_cents = 0;
     let review = preview::prepare_with_edits(
         &pool,
-        ids.org_id,
+        (ids.org_id, ids.user_id),
         ids.client_id,
         period,
         None,
@@ -843,7 +876,7 @@ async fn fee_preview_keeps_source_identity_and_reports_discounted_draft_balances
     };
     let initial = preview::prepare(
         &pool,
-        ids.org_id,
+        (ids.org_id, ids.user_id),
         ids.client_id,
         period,
         None,
@@ -877,7 +910,7 @@ async fn fee_preview_keeps_source_identity_and_reports_discounted_draft_balances
     .unwrap();
     let remaining = preview::prepare(
         &pool,
-        ids.org_id,
+        (ids.org_id, ids.user_id),
         ids.client_id,
         period,
         None,
@@ -907,7 +940,7 @@ async fn fee_preview_keeps_source_identity_and_reports_discounted_draft_balances
     .unwrap();
     let restored = preview::prepare(
         &pool,
-        ids.org_id,
+        (ids.org_id, ids.user_id),
         ids.client_id,
         period,
         None,
@@ -938,7 +971,7 @@ async fn fee_preview_discount_ties_follow_source_keys_not_display_dates(pool: Pg
     };
     let preview = preview::prepare(
         &pool,
-        ids.org_id,
+        (ids.org_id, ids.user_id),
         ids.client_id,
         period,
         None,
@@ -1044,9 +1077,16 @@ async fn draft_fee_edit_replaces_amount_and_preserves_source_and_retry_identity(
     assert_eq!(saved, retry);
     assert_eq!(saved.lines[0].id, invoice.lines[0].id);
     assert_eq!(saved.lines[0].description, "First installment");
-    let remaining = preview::prepare(&pool, ids.org_id, ids.client_id, (from, to), None, None)
-        .await
-        .unwrap();
+    let remaining = preview::prepare(
+        &pool,
+        (ids.org_id, ids.user_id),
+        ids.client_id,
+        (from, to),
+        None,
+        None,
+    )
+    .await
+    .unwrap();
     assert_eq!(remaining.subtotal_cents, 6500);
     assert_eq!(
         sqlx::query_scalar!(
@@ -1079,9 +1119,16 @@ async fn discounted_fee_leaves_a_balance_and_void_releases_only_its_contribution
     )
     .await
     .unwrap();
-    let remaining = preview::prepare(&pool, ids.org_id, ids.client_id, period, None, None)
-        .await
-        .expect("the discounted portion must remain invoiceable");
+    let remaining = preview::prepare(
+        &pool,
+        (ids.org_id, ids.user_id),
+        ids.client_id,
+        period,
+        None,
+        None,
+    )
+    .await
+    .expect("the discounted portion must remain invoiceable");
     assert_eq!(remaining.subtotal_cents, 1250);
     let second = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, period.0, period.1)
         .await
@@ -1117,9 +1164,16 @@ async fn discounted_fee_leaves_a_balance_and_void_releases_only_its_contribution
     )
     .await
     .unwrap();
-    let settled = preview::prepare(&pool, ids.org_id, ids.client_id, period, None, None)
-        .await
-        .unwrap();
+    let settled = preview::prepare(
+        &pool,
+        (ids.org_id, ids.user_id),
+        ids.client_id,
+        period,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
     assert!(settled.lines.iter().all(|line| !line.selected));
     assert_eq!(settled.subtotal_cents, 0);
     transition_invoice(
@@ -1131,9 +1185,16 @@ async fn discounted_fee_leaves_a_balance_and_void_releases_only_its_contribution
     )
     .await
     .unwrap();
-    let restored = preview::prepare(&pool, ids.org_id, ids.client_id, period, None, None)
-        .await
-        .unwrap();
+    let restored = preview::prepare(
+        &pool,
+        (ids.org_id, ids.user_id),
+        ids.client_id,
+        period,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
     assert_eq!(restored.subtotal_cents, 12500);
 }
 
@@ -1238,10 +1299,17 @@ async fn draft_fee_edit_requires_current_balance_and_exact_excess_confirmation(p
     .await
     .unwrap();
     assert_eq!(
-        preview::prepare(&pool, ids.org_id, ids.client_id, (from, to), None, None)
-            .await
-            .unwrap()
-            .subtotal_cents,
+        preview::prepare(
+            &pool,
+            (ids.org_id, ids.user_id),
+            ids.client_id,
+            (from, to),
+            None,
+            None
+        )
+        .await
+        .unwrap()
+        .subtotal_cents,
         6000
     );
 }
@@ -1414,7 +1482,7 @@ async fn concurrent_discounted_invoice_retries_return_one_invoice(pool: PgPool) 
     };
     let review = preview::prepare(
         &pool,
-        ids.org_id,
+        (ids.org_id, ids.user_id),
         ids.client_id,
         period,
         None,
@@ -1453,9 +1521,16 @@ async fn concurrent_discounted_invoice_retries_return_one_invoice(pool: PgPool) 
     assert_eq!(a.invoice.id, b.invoice.id);
     assert_ne!(created_a, created_b, "only one call may dispatch creation");
     assert_eq!(a.lines, b.lines);
-    let remaining = preview::prepare(&pool, ids.org_id, ids.client_id, period, None, None)
-        .await
-        .unwrap();
+    let remaining = preview::prepare(
+        &pool,
+        (ids.org_id, ids.user_id),
+        ids.client_id,
+        period,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
     assert_eq!(remaining.subtotal_cents, 1250);
     let changed = generate_invoice_with_request(
         &pool,
@@ -1527,7 +1602,7 @@ async fn mixed_time_and_fee_discount_conserves_cents_without_reopening_time(pool
     };
     let preview = preview::prepare(
         &pool,
-        ids.org_id,
+        (ids.org_id, ids.user_id),
         ids.client_id,
         period,
         None,
@@ -1578,9 +1653,16 @@ async fn mixed_time_and_fee_discount_conserves_cents_without_reopening_time(pool
         ),
         (3, 2, 1, 2)
     );
-    let remaining = preview::prepare(&pool, ids.org_id, ids.client_id, period, None, None)
-        .await
-        .unwrap();
+    let remaining = preview::prepare(
+        &pool,
+        (ids.org_id, ids.user_id),
+        ids.client_id,
+        period,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
     assert_eq!(remaining.lines.len(), 1);
     assert_eq!(remaining.subtotal_cents, 1);
     assert!(remaining.lines[0].minutes.is_none());
@@ -1643,9 +1725,16 @@ async fn zero_fee_is_invoiced_once_until_voided(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(invoice.invoice.total_cents, 0);
-    let settled = preview::prepare(&pool, ids.org_id, ids.client_id, period, None, None)
-        .await
-        .unwrap();
+    let settled = preview::prepare(
+        &pool,
+        (ids.org_id, ids.user_id),
+        ids.client_id,
+        period,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
     assert!(settled.lines.iter().all(|line| !line.selected));
     assert_eq!(settled.subtotal_cents, 0);
     transition_invoice(
@@ -1658,10 +1747,17 @@ async fn zero_fee_is_invoiced_once_until_voided(pool: PgPool) {
     .await
     .unwrap();
     assert_eq!(
-        preview::prepare(&pool, ids.org_id, ids.client_id, period, None, None)
-            .await
-            .unwrap()
-            .subtotal_cents,
+        preview::prepare(
+            &pool,
+            (ids.org_id, ids.user_id),
+            ids.client_id,
+            period,
+            None,
+            None
+        )
+        .await
+        .unwrap()
+        .subtotal_cents,
         0
     );
 }
@@ -1719,9 +1815,16 @@ async fn fee_balance_migration_allocates_discount_without_rewriting_invoice_snap
 async fn invoice_preview_does_not_materialize_fees_and_preserves_released_snapshots(pool: PgPool) {
     let ids = single_fee(&pool).await;
     let period = ("2026-09-01".parse().unwrap(), "2026-09-30".parse().unwrap());
-    let first = preview::prepare(&pool, ids.org_id, ids.client_id, period, None, None)
-        .await
-        .unwrap();
+    let first = preview::prepare(
+        &pool,
+        (ids.org_id, ids.user_id),
+        ids.client_id,
+        period,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
     assert_eq!(first.lines.len(), 1);
     assert_eq!(
         (
@@ -1745,9 +1848,16 @@ async fn invoice_preview_does_not_materialize_fees_and_preserves_released_snapsh
         generate_invoice_for_period(&pool, ids.org_id, ids.client_id, period.0, period.1)
             .await
             .unwrap();
-    let settled = preview::prepare(&pool, ids.org_id, ids.client_id, period, None, None)
-        .await
-        .unwrap();
+    let settled = preview::prepare(
+        &pool,
+        (ids.org_id, ids.user_id),
+        ids.client_id,
+        period,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
     assert!(settled.lines.iter().all(|line| !line.selected));
     assert_eq!(settled.subtotal_cents, 0);
     transition_invoice(
@@ -1766,9 +1876,16 @@ async fn invoice_preview_does_not_materialize_fees_and_preserves_released_snapsh
     .execute(&pool)
     .await
     .unwrap();
-    let released = preview::prepare(&pool, ids.org_id, ids.client_id, period, None, None)
-        .await
-        .unwrap();
+    let released = preview::prepare(
+        &pool,
+        (ids.org_id, ids.user_id),
+        ids.client_id,
+        period,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
     assert_eq!(released.lines, first.lines);
     assert_eq!(released.amounts.unwrap().total_cents, 12500);
 }
@@ -1790,13 +1907,20 @@ async fn invoice_defaults_apply_to_selected_fees_without_claiming_other_projects
         ..Default::default()
     };
     assert!(
-        preview::prepare(&pool, ids.org_id, ids.client_id, period, None, None)
-            .await
-            .is_err()
+        preview::prepare(
+            &pool,
+            (ids.org_id, ids.user_id),
+            ids.client_id,
+            period,
+            None,
+            None
+        )
+        .await
+        .is_err()
     );
     let estimate = preview::prepare(
         &pool,
-        ids.org_id,
+        (ids.org_id, ids.user_id),
         ids.client_id,
         period,
         Some(&[ids.project_id]),
@@ -1976,7 +2100,7 @@ async fn milestones_include_unbilled_overdue_fees_but_not_future_fees(pool: PgPo
     }
     let estimate = preview::prepare(
         &pool,
-        ids.org_id,
+        (ids.org_id, ids.user_id),
         ids.client_id,
         ("2026-09-01".parse().unwrap(), "2026-09-30".parse().unwrap()),
         None,
@@ -2013,7 +2137,7 @@ async fn monthly_fees_use_calendar_dates_and_skip_already_claimed_months(pool: P
     sqlx::query!("UPDATE project_settings SET fee_mode = 'monthly', monthly_day = 'last' WHERE project_id = $1", ids.project_id).execute(&pool).await.unwrap();
     let estimate = preview::prepare(
         &pool,
-        ids.org_id,
+        (ids.org_id, ids.user_id),
         ids.client_id,
         ("2028-02-16".parse().unwrap(), "2028-03-31".parse().unwrap()),
         None,
@@ -2057,7 +2181,7 @@ async fn monthly_fees_use_calendar_dates_and_skip_already_claimed_months(pool: P
     );
     let estimate = preview::prepare(
         &pool,
-        ids.org_id,
+        (ids.org_id, ids.user_id),
         ids.client_id,
         ("2028-02-01".parse().unwrap(), "2028-04-30".parse().unwrap()),
         None,

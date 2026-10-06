@@ -57,12 +57,7 @@ pub(super) async fn load(
     actor_id: Uuid,
     id: Uuid,
 ) -> Result<InvoiceEditor, ServerFnError> {
-    let mut tx = pool.begin().await.map_err(server_err)?;
-    sqlx::query!("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
-        .execute(&mut *tx)
-        .await
-        .map_err(server_err)?;
-    lock_actor(&mut tx, org_id, actor_id).await?;
+    let mut tx = crate::server_fns::snapshot::manager(pool, org_id, actor_id).await?;
     let (invoice, revision, mut rows) = snapshot(&mut tx, org_id, id).await?;
     let edit = InvoiceDraftEdit {
         revision,
@@ -100,12 +95,7 @@ pub(super) async fn review(
     id: Uuid,
     edit: &InvoiceDraftEdit,
 ) -> Result<InvoiceEditReview, ServerFnError> {
-    let mut tx = pool.begin().await.map_err(server_err)?;
-    sqlx::query!("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
-        .execute(&mut *tx)
-        .await
-        .map_err(server_err)?;
-    lock_actor(&mut tx, org_id, actor_id).await?;
+    let mut tx = crate::server_fns::snapshot::manager(pool, org_id, actor_id).await?;
     let (_, revision, mut rows) = snapshot(&mut tx, org_id, id).await?;
     if revision != edit.revision {
         return Err(conflict(

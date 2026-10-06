@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "CREATE VIEW snapshot_fault.organizations AS SELECT id FROM public.organizations WHERE snapshot_fault.fail()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "761ee9de6b303c3bec467e5be6753d635181c7a88dfac3f33702a8d75dcb6024"
+}

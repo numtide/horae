@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "CREATE SCHEMA snapshot_fault",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "4734253d833a0c48498dae42ccc4bdb1f0d005882d1964a9ea8fa95004a48658"
+}
