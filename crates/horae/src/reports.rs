@@ -421,18 +421,8 @@ fn projects_xlsx(rows: &[ProjectExportRow]) -> Result<Vec<u8>, StatusCode> {
 
 // ── Invoice export ────────────────────────────────────────────────────────────
 
-/// An invoice and its line items, org-scoped — shared with the `get_invoice`
-/// server fn so exports render exactly what the app serves. `None` when the
-/// org has no such invoice; each caller maps that to its own not-found error.
-pub(crate) async fn fetch_invoice_with_lines(
-    invoice_id: uuid::Uuid,
-    org_id: uuid::Uuid,
-) -> Result<Option<(crate::models::Invoice, Vec<crate::models::InvoiceLine>)>, sqlx::Error> {
-    let state = crate::state::global_state().await;
-    let mut connection = state.db.acquire().await?;
-    fetch_invoice_from(&mut connection, invoice_id, org_id).await
-}
-
+/// Shared org-scoped invoice projection. Callers authorize the actor and choose
+/// the transaction so metadata and lines belong to the same snapshot.
 pub(crate) async fn fetch_invoice_from(
     connection: &mut sqlx::PgConnection,
     invoice_id: uuid::Uuid,
