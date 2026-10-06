@@ -111,6 +111,7 @@ Clients MVP as canonical-permission acceptance.
 | Durable CSV preparation outside SQL transactions, [#231](https://github.com/numtide/horae/pull/231) | `fix/csv-batch-transaction-boundary`, `.worktrees/csv-batch-transaction-boundary` | `02f7b58` | Draft at `e9898ed`; 1,122 tests, SQLx, offline server/WASM Clippy and format passed; required CI pending |
 | Financial snapshot reader authority, [#232](https://github.com/numtide/horae/pull/232) | `fix/financial-snapshot-authority`, `.worktrees/financial-snapshot-authority` | #220 `bc0c7a0` | Draft at `0bb5721`; 1,141 tests, SQLx, offline server/WASM Clippy and format passed; full local Nix running; required CI after retargeting |
 | Invoice writer/revocation ordering, [#233](https://github.com/numtide/horae/pull/233) | `fix/invoice-write-authority`, `.worktrees/invoice-write-authority` | Integration base `0046dad` combining #227/#228 and #220/#232 | Draft at `8a6cb2a`; 1,162 tests, SQLx, offline server/WASM Clippy and format passed; full local Nix running; retarget to master after prerequisites, do not merge into integration base |
+| Internal person-profile commands, [#234](https://github.com/numtide/horae/pull/234) | `refactor/person-profile-commands`, `.worktrees/person-profile-commands` | Integration base `46f02f7` combining #226/#221 | Draft at `45d219e`; 1,245 tests, schema upgrade, SQLx, server Clippy and format passed; WASM/Nix running; retarget to master after prerequisites, no activation |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -314,7 +315,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `6e61593` | Validate person-management grant compatibility and self-links | scope-domain | Code/tests in #221; specification hunks retained for reconciliation |
 | `ec35446` | Store versioned permission profiles without activating new policy | permission-storage | Storage/schema/name-validator code/tests in #222; specification hunks retained for reconciliation |
 | `d50c979` | Add audited permission template commands | permission-profile-transactions | Command/test/receipt/cache hunks in #226 with later hardening; specification hunks retained for reconciliation |
-| `f5e0dde` | Apply permission profiles with atomic scope changes | permission-profile-transactions | Model serialization in #222; strict template receipt comparison in #226; profile commands and remaining hunks retained |
+| `f5e0dde` | Apply permission profiles with atomic scope changes | permission-profile-transactions | Model serialization in #222; strict template receipt comparison in #226; profile commands, migration 0044 and tests/cache in #234 with later hardening; specification hunks retained |
 | `9a7e05d` | Add audited project manager delegation | project-manager-delegation | Held in original backup; extraction pending |
 | `fc85231` | Add administrator-only permission audit lookup | permission-audit | Held in original backup; extraction pending |
 | `c3d17cb` | Prevent deadlocks during legacy import report conversion | import-transaction-lifecycle | Conversion source/tests/SQLx in #223; specification hunks retained for reconciliation |
@@ -337,12 +338,12 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `8aac739` | Add read-only permission migration diagnostics | permission-preflight | Held in original backup; extraction pending |
 | `8c15bfe` | Show own permissions in Settings | own-permissions | Held in original backup; extraction pending |
 | `300d1e9` | Expose administrator permission history | permission-audit | Held in original backup; extraction pending |
-| `03e90b1` | Connect permission editor previews and commands | permission-editor | Template DTOs, command hardening/tests and administration helpers in #226; editor/profile/remaining hunks retained |
+| `03e90b1` | Connect permission editor previews and commands | permission-editor | Template DTOs, hardening/tests and administration helpers in #226; profile DTOs, shared calculation and command hardening/tests in #234; editor/session/remaining hunks retained |
 | `7f7fd1c` | Record permission editor delivery and UI follow-up | specification-history | Held in original backup; extraction pending |
 | `98b1692` | Add reviewed person permission editing | permission-editor | Held in original backup; extraction pending |
 | `9e6d8bd` | Record person editor delivery and template follow-up | specification-history | Held in original backup; extraction pending |
 | `0f97cb2` | Add custom permission profile controls | permission-editor | Held in original backup; extraction pending |
-| `8db19ba` | Show affected names in permission reviews | permission-editor | Held in original backup; extraction pending |
+| `8db19ba` | Show affected names in permission reviews | permission-editor | Profile command's historical relationship-type reuse in #234; display names, editor/UI/tests and specification hunks retained |
 | `e7d8a36` | Protect permission drafts during navigation and dismissal | permission-editor | Held in original backup; extraction pending |
 | `6bba224` | Bind permission saves to the original requester | permission-editor | Held in original backup; extraction pending |
 | `1ecfa21` | Recover interrupted permission saves across reloads | permission-editor | Held in original backup; extraction pending |
@@ -1218,3 +1219,20 @@ app tests 120s; long-running notices were not failures or a reason to restart.
 Full SQLx preparation now runs in `56264` on another private temporary database.
 Next: compare the final cache with the prerequisite base and original descriptors,
 then serialize offline server/WASM lint before publishing the draft.
+
+SQLx preparation passed (`56264`): all 1,063 prerequisite descriptors unchanged,
+35 additions byte-identical to original `db3935d`, 1,098 total. Offline all-target
+workspace/server Clippy is running in `89503`; WASM must follow it sequentially.
+No source or test repair was needed after the full suite. Original migration
+checksums and prerequisite source remain intact.
+
+Published draft [#234](https://github.com/numtide/horae/pull/234) at `45d219e`
+against the explicitly documented review base `46f02f7`. Verified remote diff:
+42 files, 2,437 insertions and two deletions (seven source/schema/test paths plus
+35 query descriptors). Server Clippy passed (`89503`); WASM runs in `13136`.
+Full Nix runs on the clean committed head in `41624`. No new source changes
+followed the successful suite; the second commit only adds its verified cache.
+The PR requires #219, #221/#222 and #226 on master before rebase/retarget and
+fresh required CI. It must not merge into its integration review base. No merge,
+original-PR closure or policy activation was performed; remaining consumer and
+specification accounting is still incomplete.
