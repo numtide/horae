@@ -53,7 +53,7 @@ mod projects;
 #[path = "../src/models/task.rs"]
 mod task;
 #[path = "../src/models/user.rs"]
-mod user;
+pub mod user;
 mod models {
     pub use super::{client, invoice, project_creation};
     pub use super::{
@@ -774,11 +774,11 @@ async fn pending_or_failed_project_assignments_never_show_previous_assignments()
 
 // Dependency doubles for page helpers and endpoints. The component, data
 // models, form/table components, router and resource implementation are real.
-fn is_admin(me: &Resource<Result<user::User, ServerFnError>>) -> bool {
+fn is_admin(me: &Resource<Result<user::CurrentUser, ServerFnError>>) -> bool {
     matches!(&*me.read(), Some(Ok(user)) if user.is_admin())
 }
 
-fn is_manager(me: &Resource<Result<user::User, ServerFnError>>) -> bool {
+fn is_manager(me: &Resource<Result<user::CurrentUser, ServerFnError>>) -> bool {
     matches!(&*me.read(), Some(Ok(user)) if user.is_manager_or_above())
 }
 
@@ -809,7 +809,7 @@ mod server_fns {
     use invoice::{Invoice, InvoiceWithLines};
     use project::Project;
     use task::Task;
-    use user::User;
+    use user::CurrentUser;
 
     #[derive(Debug)]
     pub struct ProjectSpend {
@@ -818,22 +818,17 @@ mod server_fns {
         pub spent_cents: i64,
     }
 
-    fn user(id: u128, role: OrgRole) -> User {
-        User {
+    fn user(id: u128, role: OrgRole) -> CurrentUser {
+        CurrentUser {
             id: Uuid::from_u128(id),
             org_id: Uuid::nil(),
             email: format!("user-{id}@example.test"),
             name: format!("User-{id}"),
-            oidc_subject: None,
             org_role: role,
-            cost_rate_cents: None,
-            billable_rate_cents: None,
-            active: true,
-            created_at: chrono::DateTime::UNIX_EPOCH,
         }
     }
 
-    pub async fn get_me() -> Result<User, ServerFnError> {
+    pub async fn get_me() -> Result<CurrentUser, ServerFnError> {
         Ok(user(
             300,
             if consume_context::<Probe>().member {
@@ -902,8 +897,20 @@ mod server_fns {
         panic!("navigation must not change client status");
     }
 
-    pub async fn list_users(_archived: bool) -> Result<Vec<User>, ServerFnError> {
-        Ok(vec![user(101, OrgRole::Member), user(102, OrgRole::Member)])
+    pub async fn list_users(_archived: bool) -> Result<Vec<user::UserListItem>, ServerFnError> {
+        Ok([101, 102]
+            .into_iter()
+            .map(|id| {
+                let user = user(id, OrgRole::Member);
+                user::UserListItem {
+                    id: user.id,
+                    name: user.name,
+                    email: user.email,
+                    org_role: user.org_role,
+                    active: true,
+                }
+            })
+            .collect())
     }
 
     pub async fn list_assignments(id: String) -> AssignmentResponse {
