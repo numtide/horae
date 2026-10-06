@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "ALTER TABLE harvest_connection_generations DROP CONSTRAINT reject_connection_change",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "ad3ee767c40f7d176e620850d5963b2fde5ca1718b6d61669026ef3cc14e7de5"
+}
