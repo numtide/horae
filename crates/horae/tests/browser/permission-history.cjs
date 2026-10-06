@@ -43,7 +43,7 @@ assert.equal(endpoints.length, 1, 'expected one compiled project-manager endpoin
     sql(`BEGIN;
       INSERT INTO person_permission_states (id, org_id, user_id, catalog_version, grants, is_administrator, source)
       VALUES ('${stateId}', '${actor.org_id}', '${actor.id}', 1,
-        ARRAY['time_read_own','time_write_own','expense_read_own','expense_write_own','project_read_all','project_write_all'], true, 'individual');
+        ARRAY['time_read_own','time_write_own','expense_read_own','expense_write_own','project_read_managed','project_write_managed','project_read_all','project_write_all'], true, 'individual');
       UPDATE organizations SET permission_policy_version=1 WHERE id='${actor.org_id}'; COMMIT;`);
     await page.goto(`${base}/admin/audit`);
     await expect(page.getByRole('status')).toContainText('No permission events recorded yet');
