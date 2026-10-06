@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "ALTER TABLE horae_job_uploads ADD CONSTRAINT reject_command_upload CHECK (false) NOT VALID",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "b63be505cada22baad2cc2a979ea50ffacf1c37642d25b3f0573ef872e566893"
+}
