@@ -2922,3 +2922,55 @@ source dependencies; do not implement unfinished consumers to ease extraction.
 Unpublished Clients remains preserved separately, not delivered. Final per-change
 accounting, cross-PR integration/review and delivery order are still required.
 No merge, original PR closure, real-data operation or canonical activation occurred.
+
+### Editor server extraction and live PR-status checkpoint
+
+Previous iteration was PROGRESS: #249 publication, documentation ownership and
+exact-head checks were recorded. Re-read the saved objective and resumed the
+existing handles. #240 `99785` on `a19ea63`, #245 `56923` on `14ad9ca` and #247
+`32625` on `d9717e7` have now all exited zero with complete compatible local Nix
+checks. Their original failures remain historical evidence. #247 body update
+`76119` was started; #240/#245 body and table updates still need reconciliation.
+#248 `51945` and #249 `72947` remain running, not completed gates.
+
+Read the Rust best-practices chapters 1/2/4/5, async and testing skills and the
+Spec Kit analyze procedure. Reviewed the complete original editor API, internal
+reader, DTOs, 428-line editor tests, 305-line subject tests, 678-line HTTP matrix
+and editor contract. Existing profile/template command implementations already
+match the original. No page, CSS, navigation or recovery consumer was extracted.
+
+Ran feature-015 prerequisites with no extension hooks. Bounded analysis maps 13
+requirements (FR-002/004/006/010/011/012/013/015/018/025/029/030/032) to ten tasks
+(T126–T132 and T139–T141), with no unmapped task, ambiguity, duplication or
+critical/high specification finding in that boundary. T126 is already owned by
+the command foundation; UI portions of T131/T132 and full T018 remain separate.
+SC-006 is only a regression subset, and constitution 1.0 remains authoritative.
+
+Created `.worktrees/permission-editor-api`, `feat/permission-editor-api`, first
+on #234. Six complete source/test blobs matched original `db3935d` exactly;
+only four module/harness composition points differed. Initial source `ad590e5`
+passed formatting, but suite `99212` exited 101 at compilation: the strict
+historical `ProfileAudit` decoder used by an original assertion belongs to #245.
+An existing dead-code expectation also became unfulfilled after endpoint wiring.
+No test was removed, replaced or weakened, and SQLx preparation did not run.
+
+Preserved the initial extraction at `backup/permission-editor-api-before-audit`.
+Rebased with `--no-update-refs` onto exact #245 `14ad9ca`, retaining every existing
+audit/own/delegation module and test invocation, restoring the full original DTO
+and removing the obsolete dead-code expectation. The unsigned corrected source
+is `58b0c6f8131221e229f28f2f9a94ff965725f346`; worktree clean, not yet published.
+All six preserved blobs still match. The initial rebase continuation attempted
+an unavailable signing key; explicit unsigned commit completed the rebase without
+changing any original backup ref. Corrected suite/cache verification was started;
+collect its live handle before offline lints or validating a partial cache.
+Prepared `.scratch/verify-extraction.mjs` expects every #245 cache descriptor
+unchanged and every addition matching original `db3935d`; it has not run yet.
+
+The user's status request prompted a fresh GitHub read: 30 separation-related
+PRs including this ledger, all draft. Required Flake Check is failed on #239 and
+#242, running on #240/#248, and successful on #218/#219/#220/#223/#224/#225/#227/
+#231/#238. Numerous Nixbot checks also failed; their causes are not established
+by the local passes. Do not describe these PRs as merge-ready or bypass checks.
+Next prioritize diagnosis of #239/#242 remote failures alongside collecting
+already-running gates, then finish the editor API cache and publication. Remaining
+consumer/UI ownership, unpublished Clients and final cross-PR accounting are open.
