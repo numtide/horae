@@ -6,13 +6,6 @@ mod jobs;
 pub mod organization;
 pub mod own_permissions;
 pub(crate) mod permission_audit;
-#[cfg_attr(
-    not(feature = "server"),
-    expect(
-        dead_code,
-        reason = "Permission editor DTOs await their separate UI consumer"
-    )
-)]
 pub(crate) mod permission_editor;
 #[cfg(feature = "server")]
 pub(crate) mod permissions;
