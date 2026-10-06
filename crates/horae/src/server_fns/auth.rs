@@ -23,3 +23,31 @@ pub async fn logout() -> Result<(), ServerFnError> {
 pub async fn get_me() -> Result<User, ServerFnError> {
     require_user().await
 }
+
+/// Explain the session person's scoped permissions, or None before activation.
+/// This display snapshot cannot authorize later requests or select another user.
+#[server]
+pub async fn get_my_permissions()
+-> Result<Option<crate::models::own_permissions::OwnPermissions>, ServerFnError> {
+    let user = require_user().await.map_err(|error| match error {
+        error @ ServerFnError::ServerError {
+            code: UNAUTHORIZED, ..
+        } => error,
+        error => {
+            tracing::error!(%error, "Unable to authenticate own permission request");
+            server_err("Permission state is unavailable")
+        }
+    })?;
+    let state = crate::state::global_state().await;
+    super::permissions::own::read(&state.db, user.org_id, user.id)
+        .await
+        .map_err(|error| match error {
+            super::permissions::own::OwnPermissionsError::Forbidden => {
+                forbidden("Current active identity is required")
+            }
+            error => {
+                tracing::error!(%error, "Unable to load own permission state");
+                server_err("Permission state is unavailable")
+            }
+        })
+}
