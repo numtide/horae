@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT setting::bigint AS \"timeout!\" FROM pg_settings WHERE name='lock_timeout'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "timeout!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "be818e92f62cc3aa80bd46c5e701439151678f91f41b26b61cb7de107144195b"
+}

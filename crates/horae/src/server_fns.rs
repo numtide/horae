@@ -506,6 +506,8 @@ mod plugins;
 mod project_creation;
 mod projects;
 mod reports;
+#[cfg(feature = "server")]
+mod snapshot;
 mod time_entries;
 mod users;
 

@@ -24,6 +24,7 @@ use uuid::Uuid;
 use super::*;
 
 mod cli;
+mod legacy_readers;
 
 #[cfg(target_os = "linux")]
 mod report_stress;
@@ -122,7 +123,11 @@ impl Api {
                 .iter()
                 .filter(|route| {
                     explicit.map_or_else(
-                        || route.path().contains(&format!("/{name}")),
+                        || {
+                            route.path().split_once(&format!("/{name}")).is_some_and(
+                                |(_, suffix)| suffix.bytes().all(|byte| byte.is_ascii_digit()),
+                            )
+                        },
                         |path| route.path() == path,
                     )
                 })
@@ -275,6 +280,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     };
     let mut server = tokio::task::JoinSet::new();
     server.spawn(async move { axum::serve(listener, router).await.unwrap() });
+    legacy_readers::check(&pool, &api).await;
     let admin = api.cookie(owner.user_id).await;
     let expired = api.cookie(owner.user_id).await;
     assert_eq!(
