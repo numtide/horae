@@ -10,6 +10,9 @@ use horae_core::importers::harvest::types::{ConnectionStatus, ImportMode, SyncSc
 mod csv_upload;
 pub use csv_upload::CsvUpload;
 
+#[cfg(feature = "server")]
+mod commands;
+
 #[cfg(all(test, feature = "server"))]
 mod authorization_tests;
 
@@ -138,17 +141,16 @@ pub async fn start_harvest_api_import(
     if state.harvest.is_none() {
         return Err(err(NOT_FOUND, "Harvest is not configured"));
     }
-    let id = crate::jobs::enqueue_api(
+    commands::start_api(
         &state.db,
         admin.org_id,
+        admin.id,
         &payload,
         &key,
         state.job_policy,
         generation.unwrap_or(0),
     )
     .await
-    .map_err(map_enqueue_error)?;
-    required_import_job(&state.db, admin.org_id, id).await
 }
 
 /// Return a durable import's current state for the current organization.
@@ -158,9 +160,7 @@ pub async fn get_harvest_import_job(
 ) -> Result<Option<crate::models::JobStatus>, ServerFnError> {
     let admin = require_admin().await?;
     let state = crate::state::global_state().await;
-    crate::jobs::status(&state.db, admin.org_id, job_id)
-        .await
-        .map_err(server_err)
+    commands::status(&state.db, admin.org_id, admin.id, job_id).await
 }
 
 #[dioxus_fullstack::post("/api/import/harvest/history")]
@@ -170,9 +170,14 @@ pub async fn list_harvest_import_jobs(
 ) -> Result<Vec<crate::models::JobStatus>, ServerFnError> {
     let admin = require_admin().await?;
     let state = crate::state::global_state().await;
-    crate::jobs::list(&state.db, admin.org_id, limit.unwrap_or(20), before)
-        .await
-        .map_err(server_err)
+    commands::history(
+        &state.db,
+        admin.org_id,
+        admin.id,
+        limit.unwrap_or(20),
+        before,
+    )
+    .await
 }
 
 /// Buffer and enqueue a CSV import so the request body is not tied to the
@@ -188,28 +193,16 @@ pub async fn start_harvest_csv_import(
         .await
         .map_err(|_| err(BAD_REQUEST, "CSV upload is incomplete or exceeds 50 MiB"))?;
     let state = crate::state::global_state().await;
-    if !crate::jobs::request_exists(&state.db, admin.org_id, "harvest_csv_import", &key)
-        .await
-        .map_err(server_err)?
-    {
-        crate::importers::harvest::csv_source::validate_upload_headers(&body).map_err(|_| {
-            err(
-                BAD_REQUEST,
-                "Not a recognizable Harvest CSV; check required columns",
-            )
-        })?;
-    }
-    let id = crate::jobs::enqueue_csv(
+    commands::start_csv(
         &state.db,
         admin.org_id,
+        admin.id,
         mode,
         body.to_vec(),
         &key,
         state.job_policy,
     )
     .await
-    .map_err(map_enqueue_error)?;
-    required_import_job(&state.db, admin.org_id, id).await
 }
 
 #[dioxus_fullstack::post("/api/import/harvest/cancel")]
@@ -218,11 +211,7 @@ pub async fn cancel_harvest_import_job(
 ) -> Result<crate::models::JobStatus, ServerFnError> {
     let admin = require_admin().await?;
     let state = crate::state::global_state().await;
-    crate::jobs::cancel(&state.db, admin.org_id, job_id)
-        .await
-        .map_err(server_err)?;
-    // Completion can race cancellation; report the actual retained state.
-    required_import_job(&state.db, admin.org_id, job_id).await
+    commands::cancel(&state.db, admin.org_id, admin.id, job_id).await
 }
 
 #[dioxus_fullstack::post("/api/import/harvest/retry")]
@@ -231,14 +220,7 @@ pub async fn retry_harvest_import_job(
 ) -> Result<crate::models::JobStatus, ServerFnError> {
     let admin = require_admin().await?;
     let state = crate::state::global_state().await;
-    if crate::jobs::retry(&state.db, admin.org_id, job_id)
-        .await
-        .map_err(map_enqueue_error)?
-    {
-        required_import_job(&state.db, admin.org_id, job_id).await
-    } else {
-        Err(err(NOT_FOUND, "Import job not found or is not retryable"))
-    }
+    commands::retry(&state.db, admin.org_id, admin.id, job_id).await
 }
 
 #[cfg(feature = "server")]
@@ -303,18 +285,6 @@ fn map_enqueue_error(error: anyhow::Error) -> ServerFnError {
         tracing::error!(%error, "durable import submission failed");
         err(INTERNAL_ERROR, "Unable to submit import")
     }
-}
-
-#[cfg(feature = "server")]
-async fn required_import_job(
-    pool: &sqlx::PgPool,
-    org_id: uuid::Uuid,
-    job_id: uuid::Uuid,
-) -> Result<crate::models::JobStatus, ServerFnError> {
-    crate::jobs::status(pool, org_id, job_id)
-        .await
-        .map_err(server_err)?
-        .ok_or_else(|| err(NOT_FOUND, "Import job not found"))
 }
 
 /// The configured Harvest settings, or a clear error when the importer's API
