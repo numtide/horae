@@ -34,12 +34,22 @@
         "aarch64-linux"
       ];
 
-      blueprint = inputs.blueprint {
-        inherit inputs systems;
-        prefix = "nix";
-        # fenix provides the Rust toolchain used by nix/package.nix.
-        nixpkgs.overlays = [ inputs.fenix.overlays.default ];
-      };
+      mkBlueprint =
+        systems:
+        inputs.blueprint {
+          inherit inputs systems;
+          prefix = "nix";
+          # fenix provides the Rust toolchain used by nix/package.nix.
+          nixpkgs.overlays = [ inputs.fenix.overlays.default ];
+        };
+
+      blueprint = mkBlueprint systems;
+
+      # darwin only gets the devshell, so that it is not built by CI
+      darwinBlueprint = mkBlueprint [
+        "x86_64-darwin"
+        "aarch64-darwin"
+      ];
 
       # Overlay that rebuilds horae against the consumer's nixpkgs (composing
       # fenix), so cross variants resolve. Used both as overlays.shared-nixpkgs
@@ -52,6 +62,8 @@
     in
     blueprint
     // {
+      devShells = blueprint.devShells // darwinBlueprint.devShells;
+
       # Expose horae as a nixpkgs overlay for downstream flakes:
       #   default        — reuse blueprint's prebuilt packages (cache-friendly)
       #   shared-nixpkgs — rebuild against the consumer's nixpkgs, so cross
