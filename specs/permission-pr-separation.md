@@ -1807,3 +1807,64 @@ no time extraction has been created. `c80233b` separately repairs time-entry
 invoice-ID serialization, with legacy HTTP checks embedded in the canonical
 time matrix: retain those checks if extracting it independently, not the unrelated
 canonical setup. Neither inventory item is runtime verification or feature work.
+
+### 2026-10-06 — Time-writer activity extraction
+
+The intervening goal-prompt response made no separation progress. Revalidated
+the next safe action: #216 is merged at `02f7b58`, original tracked backup and
+untracked archive comparisons pass, and the next boundary has not been extracted.
+No original branch, worktree or #208 was changed.
+
+#238 full Nix `24069` exited zero on `7a7cede`: all local x86_64-linux checks,
+including browser and both NixOS VM suites, pass. Its PR description now records
+this result; kept draft for coordinated review. #239 `87204` and #240 `16586`
+were confirmed live. #240 offline server/WASM lint `38653` passed and PR-body
+update `1841` completed; the shared local Cargo target became available.
+
+Completed the time-writer caller/service/approval review. The existing submission
+path takes the exclusive user advisory barrier before entries and only compatible
+organization/user FK locks; the new interactive prefix never upgrades its
+organization SHARE lock. Legacy user deactivation and project access ordering
+are provided by #227/#228. Imports still use the unchanged lower-level advisory
+helper; no service execution is recast as a user operation.
+
+Created `fix/time-write-activity` in `.worktrees/time-write-activity` on #228
+`0e1e6759cff0b80a046ced4694a78022f096ab3d`. Unsigned source commit `3ea235f`
+extracts `5ec183a` T171–T173: four files, 402 insertions and 22 deletions.
+`db.rs` and `update_tests.rs` match the original commit. The 300-line activity
+test file matches both `5ec183a` and final `db3935d`, blob
+`2935efd06339ea75164a7708da637652c5c3ce81`. Every original assertion is retained.
+The time module differs only by preserving the base's absence of the unrelated
+canonical reader and inlining the original two transaction-configuration queries
+from `permissions::configure_administration`. SQL strings and behavior are
+unchanged; this avoids importing the complete canonical permissions module for
+one call. No schema, CSS, API surface, dependency or policy activation is added.
+
+Read and applied ponytail, Rust best-practice, testing and async guidance. Ran
+Spec Kit analyze's prerequisite command in the original worktree (015 resolves;
+no extension hooks), read the relevant spec/plan/tasks/contract and constitution.
+Bounded coverage: FR-010 and SC-003 map to T171/T172; FR-018 and SC-006 map to
+T171/T173. Four applicable requirement/criterion IDs, three tasks, all mapped;
+no ambiguity, duplication, constitutional conflict or critical/high finding in
+this boundary. This is not full-feature acceptance. Original specification
+hunks remain preserved for the documentation reconciliation, not silently lost.
+
+Formatting `46067` passed with zero changes; staged diff checks pass. Disposable
+PostgreSQL workspace suite followed by SQLx regeneration is live in `64428`.
+It owns the shared local Cargo target; do not start another local Cargo process.
+Next: inspect its result and regenerated cache provenance, then run offline
+server/WASM lint, publish the bounded draft stacked on #228 and start clean-head
+Nix. Original full cross-command/delegated-policy gates remain separate work.
+
+#239 full Nix `87204` subsequently exited zero on unchanged `66a256f`:
+all local x86_64-linux checks passed, including browser and both VM suites.
+The time extraction compiled successfully in `64428` and advanced to tests;
+the combined suite/cache process is not yet complete. #240 `16586` remains live.
+
+Next-boundary read-only inventory: `c80233b`'s complete time-entry model change
+is independent of canonical grants and UI. Its original real-session legacy
+matrix precedes policy setup inside `scoped_time.rs`; preserve the fixture and
+all assertions when registering it independently in the existing singleton
+HTTP harness. Current-master time UI uses state, not `invoice_id`; invoice
+recovery and the Harvest compatibility API use distinct models. No payload
+extraction has been created yet and this consumer inventory is not runtime proof.
