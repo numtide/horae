@@ -116,7 +116,7 @@ Clients MVP as canonical-permission acceptance.
 | Import job command and download authority, [#236](https://github.com/numtide/horae/pull/236) | `fix/import-job-authority`, `.worktrees/import-job-authority` | Integration base `26d6159` combining #235/#231 | Draft at `95bdf4a`; 1,163 tests, SQLx, offline server/WASM Clippy, format and full local Nix passed; retarget to master after #227/#228/#235 and #231, not an integration-base merge |
 | Original import requester provenance, [#237](https://github.com/numtide/horae/pull/237) | `feat/import-job-requester`, `.worktrees/import-job-requester` | Integration base `cfb8240` combining #236/#219/#222 | Draft at `2242361`; 1,218 tests, schema upgrade, SQLx, offline server/WASM Clippy and format passed; first full Nix failed in inherited menu browser assertion, unchanged diagnostic rerun running; retarget after both prerequisite chains, no worker-policy activation |
 | Budget email preparation authority, [#238](https://github.com/numtide/horae/pull/238) | `fix/budget-email-authority`, `.worktrees/budget-email-authority` | Master `1b8fa4f` | Draft at `7a7cede`; 1,133 source-head tests, SQLx, format and cache-inclusive server/WASM Clippy passed; full current-head Nix running; no real mail or policy activation |
-| Approval tenant isolation, [#239](https://github.com/numtide/horae/pull/239) | `fix/approval-tenant-isolation`, `.worktrees/approval-tenant-isolation` | Master `1b8fa4f` | Draft at `66a256f`; three source/test files and complete cache patch preserved exactly; 1,124 source-head tests, source review, SQLx and format passed; offline lints and full current-head Nix running |
+| Approval tenant isolation, [#239](https://github.com/numtide/horae/pull/239) | `fix/approval-tenant-isolation`, `.worktrees/approval-tenant-isolation` | Master `1b8fa4f` | Draft at `66a256f`; three source/test files and complete cache patch preserved exactly; 1,124 source-head tests, source review, SQLx, format and offline server/WASM Clippy passed; full current-head Nix running |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -276,7 +276,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `05448a8` | Specify scoped roles and permissions | specification-history | Held in original backup; extraction pending |
 | `1d45191` | Require Harvest parity for permissions and scoped approvals | specification-history | Held in original backup; extraction pending |
 | `a7727f1` | Add record scope evaluation for permissions | scope-domain | Code/tests in #219; specification hunks retained for reconciliation |
-| `2abce9a` | Enforce approval isolation and record permission boundaries | approval-isolation | Three Rust/test files and original cache patch in independent #239 (`66a256f`); 1,124 tests, source review, SQLx and format passed; offline lints/full Nix running; mixed specification hunks retained |
+| `2abce9a` | Enforce approval isolation and record permission boundaries | approval-isolation | Three Rust/test files and original cache patch in independent #239 (`66a256f`); 1,124 tests, source review, SQLx, format and offline server/WASM lints passed; full Nix running; mixed specification hunks retained |
 | `757f43d` | Enforce tenant and administrator boundaries for assignments | legacy-access-writers | Rust/test/cache changes in #228 with subsequent coordination repair; specification hunks retained |
 | `d3a4ff3` | Document profile reapplication and import permission boundaries | specification-history | Held in original backup; extraction pending |
 | `dcf21ef` | Specify permission migration safeguards and rate-scope verification | specification-history | Held in original backup; extraction pending |
@@ -1711,3 +1711,17 @@ successfully (3m13s) and advanced to WASM; do not count the combined process as
 finished until that second phase exits. #237 diagnostic `30447` is rebuilding
 only the three unfinished browser/VM derivations, reusing the successful compiled
 package and other checks rather than restarting its release compilation.
+
+#239's combined lint `79148` exited zero after WASM completed in 46.54s. Both
+offline targets pass on published `66a256f`; the shared local Cargo target is
+now free. Updated its PR body. #238's Nix test derivation completed successfully,
+but full Nix `24069` remains live. #239 `87204` and #237's unchanged diagnostic
+`30447` are also live. Keep the original #237 failure visible until the diagnostic
+result is known; a partial log without that assertion is not proof of success.
+
+Next independent work is the inventoried identity-projection group: complete
+its source/consumer review before extraction, preserve current-master Clients
+and invoice recovery, retain final HTTP/actual-page tests and avoid canonical
+permission dependencies. No identity code has yet been changed. Mixed spec hunks,
+governance and other UI/domain groups still require ownership and verification;
+the overall separation goal remains incomplete.
