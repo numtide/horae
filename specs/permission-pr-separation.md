@@ -102,10 +102,10 @@ Clients MVP as canonical-permission acceptance.
 | Pure record scopes and grant catalog, [#219](https://github.com/numtide/horae/pull/219) | `refactor/permission-domain-foundation`, `.worktrees/permission-domain-foundation` | `02f7b58` | Draft at `ec7ddbd`; 158 core tests, core Clippy, formatting and GitHub Flake Check passed; Nixbot build pending; no runtime integration |
 | Pure rate/management/approval rules, [#221](https://github.com/numtide/horae/pull/221) | `refactor/permission-domain-gates`, `.worktrees/permission-domain-gates` | #219 `ec7ddbd` | Draft at `539316c`; 187 core tests, core Clippy, formatting and full local Flake Check passed; CI required after retargeting |
 | Non-activating permission storage, [#222](https://github.com/numtide/horae/pull/222) | `refactor/permission-storage-foundation`, `.worktrees/permission-storage-foundation` | #219 `ec7ddbd` | Draft at `e9695fd`; 1,170 tests passed, 11 existing ignored; SQLx, offline server/WASM lint, formatting and full local Flake Check passed; remote checks pending |
-| Legacy import report conversion lock order, [#223](https://github.com/numtide/horae/pull/223) | `fix/import-report-lock-order`, `.worktrees/import-report-lock-order` | `02f7b58` | Draft at `c8f95ac`; 1,125 tests passed, 11 existing ignored; SQLx, offline server/WASM lint and format passed; CI pending |
-| Interrupted import session cleanup, [#224](https://github.com/numtide/horae/pull/224) | `fix/import-session-cleanup`, `.worktrees/import-session-cleanup` | `02f7b58` | Draft at `be57f0e`; 1,123 tests passed, 11 existing ignored; SQLx, offline server/WASM lint and format passed; CI pending |
-| Current authority for organization branding writes, [#225](https://github.com/numtide/horae/pull/225) | `fix/branding-current-authority`, `.worktrees/branding-current-authority` | `02f7b58` | Draft at `f2d6bd4`; full suite, SQLx, offline server/WASM lint and format passed; CI pending |
-| Internal reusable-profile commands, [#226](https://github.com/numtide/horae/pull/226) | `refactor/permission-template-commands`, `.worktrees/permission-template-commands` | #222 `e9695fd` | Draft at `82d15f3`; 1,189 tests, SQLx, offline server/WASM Clippy and format passed; full local Flake Check running; no endpoints or activation |
+| Legacy import report conversion lock order, [#223](https://github.com/numtide/horae/pull/223) | `fix/import-report-lock-order`, `.worktrees/import-report-lock-order` | `02f7b58` | Draft at `c8f95ac`; 1,125 tests passed, 11 existing ignored; SQLx, offline server/WASM lint format and current-head GitHub Flake Check passed; Nixbot pending |
+| Interrupted import session cleanup, [#224](https://github.com/numtide/horae/pull/224) | `fix/import-session-cleanup`, `.worktrees/import-session-cleanup` | `02f7b58` | Draft at `be57f0e`; 1,123 tests passed, 11 existing ignored; SQLx, offline server/WASM lint format and current-head GitHub Flake Check passed; Nixbot pending |
+| Current authority for organization branding writes, [#225](https://github.com/numtide/horae/pull/225) | `fix/branding-current-authority`, `.worktrees/branding-current-authority` | `02f7b58` | Draft at `f2d6bd4`; full suite, SQLx, offline server/WASM lint format and current-head GitHub Flake Check passed; Nixbot pending |
+| Internal reusable-profile commands, [#226](https://github.com/numtide/horae/pull/226) | `refactor/permission-template-commands`, `.worktrees/permission-template-commands` | #222 `e9695fd` | Draft at `82d15f3`; 1,189 tests, SQLx, offline server/WASM Clippy, format and full local Flake Check passed; CI required after retargeting; no endpoints or activation |
 | Current authority for user creation/role/activity, [#227](https://github.com/numtide/horae/pull/227) | `fix/user-mutation-authority`, `.worktrees/user-mutation-authority` | `02f7b58` | Draft at `142eda1`; 1,127 tests, SQLx, offline server/WASM Clippy and format passed; required CI pending |
 | Assignment authority and project writer coordination, [#228](https://github.com/numtide/horae/pull/228) | `fix/project-access-lock-order`, `.worktrees/project-access-lock-order` | #227 `142eda1` | Draft at `0e1e675`; 1,137 tests, SQLx, offline server/WASM Clippy and format passed; full local Flake Check pending |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
@@ -378,7 +378,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `5f7895c` | Preserve selected dates and drag offsets in Timesheet | timesheet-consumer-commands | Held in original backup; extraction pending |
 | `84d5352` | Expose authenticated project manager delegation | project-manager-delegation | Held in original backup; extraction pending |
 | `c4e83c8` | Record project delegation verification and next integration gate | specification-history | Held in original backup; extraction pending |
-| `a25e544` | Serialize invoice writes before user revocation | legacy-access-writers | Held in original backup; extraction pending |
+| `a25e544` | Serialize invoice writes before user revocation | legacy-access-writers | Five Rust/test changes isolated in `fix/invoice-write-authority`; not compilable until `22ffdab` preview dependency is integrated; specification hunks retained |
 | `774f60a` | Record invoice revocation verification and next integration gates | specification-history | Held in original backup; extraction pending |
 | `1879b8a` | Preserve requester identity when reloading permission editors | permission-editor | Held in original backup; extraction pending |
 | `dab6885` | Record editor reload verification and remaining directory integration | specification-history | Held in original backup; extraction pending |
@@ -946,3 +946,45 @@ Next: collect the CSV suite, regenerate its complete SQLx cache, verify both
 offline targets and publish only after these gates pass. Collect both live Nix
 checks. Many original source/specification groups still require extraction and
 reconciliation; the separation goal is not complete.
+
+#226's original full Nix check completed successfully (`46319`, exit 0,
+`all checks passed!`), including browser, SQLx, tests and NixOS end-to-end
+checks on the compatible host system. No restart was required. A single remote
+query confirmed current-head GitHub Flake Check and Format success for #223,
+#224 and #225; their Nixbot builds remain in progress. #227's Format passed
+and Flake Check remains running. These results do not waive master-targeted CI
+for stacked PRs after retargeting.
+
+Isolated the next writer boundary in `.worktrees/invoice-write-authority`,
+branch `fix/invoice-write-authority`, on #228 `0e1e675`. It contains exactly the
+five Rust/test changes from `a25e544`, not its earlier financial-reader changes.
+The new 564-line test file matches original blob `36ca710` byte-for-byte.
+Existing #216 invoice client filtering and #228 coordination tests remain.
+Formatting passed unchanged (`41998`); no runtime/cache acceptance yet.
+The real dependencies are #228's organization helper and #227's actor-aware
+user-role command. Original T192–T194 retain separate reader, source/fee/entry
+order and full T042 gates. Verify this boundary after the CSV local checks;
+do not replace its real opposing commands with fixture writes.
+
+Further signature tracing found an additional genuine invoice dependency:
+`a25e544`'s unchanged tests call `preview::prepare` with `(org_id, actor_id)`,
+introduced by `22ffdab`. Master/#228 still accepts only `org_id`. Therefore
+the isolated writer patch is not yet a compilable delivery and must not be
+published as ready or tested by dropping the actor argument. Preserve it in
+the new worktree until the financial snapshot consumer extraction and its
+shared #220 helper are integrated explicitly. `editing::load/review` also have
+separately retained `15c82ef` snapshot changes; do not copy whole invoice files
+and overwrite #216 filtering. CSV verification remains independent.
+
+The CSV workspace suite passed (`95407`): 821 app, 180 integration and 121 core
+tests, 1,122 total, with 11 existing manual tests ignored. Complete SQLx
+regeneration is running in `55336` on a fresh private PostgreSQL cluster.
+
+CSV SQLx regeneration passed (`55336`): 1,003 base descriptors unchanged, two
+additions matching `e5fcc5a` byte-for-byte, 1,005 total. Both new queries belong
+to the preserved transaction-observation/publication-barrier tests. Unsigned
+commit `e9898ed` contains exactly three Rust files and those two descriptors.
+Offline all-target workspace/server Clippy is running in `17809`; WASM lint
+and publication remain next. #228's original full Nix check is still live in
+`1662`, without a restart. The unfinished invoice worktree is preserved and
+must wait for its genuine financial-preview dependency before runtime checks.
