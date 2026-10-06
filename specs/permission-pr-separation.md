@@ -117,12 +117,13 @@ Clients MVP as canonical-permission acceptance.
 | Original import requester provenance, [#237](https://github.com/numtide/horae/pull/237) | `feat/import-job-requester`, `.worktrees/import-job-requester` | Integration base `cfb8240` combining #236/#219/#222 | Draft at `2242361`; 1,218 tests, schema upgrade, SQLx, offline server/WASM Clippy and format passed; full Nix passed on unchanged diagnostic rerun; initial inherited-menu failure retained; retarget after both prerequisite chains, no worker-policy activation |
 | Budget email preparation authority, [#238](https://github.com/numtide/horae/pull/238) | `fix/budget-email-authority`, `.worktrees/budget-email-authority` | Master `1b8fa4f` | Draft at `7a7cede`; 1,133 source-head tests, SQLx, format and cache-inclusive server/WASM Clippy passed; full current-head local Nix passed; no real mail or policy activation |
 | Approval tenant isolation, [#239](https://github.com/numtide/horae/pull/239) | `fix/approval-tenant-isolation`, `.worktrees/approval-tenant-isolation` | Master `1b8fa4f` | Draft at `66a256f`; three source/test files and complete cache patch preserved exactly; 1,124 source-head tests, source review, SQLx, format and offline server/WASM Clippy passed; full current-head local Nix passed |
-| Identity response projections, [#240](https://github.com/numtide/horae/pull/240) | `fix/identity-response-projections`, `.worktrees/identity-response-projections` | Master `1b8fa4f` | Draft at `1ce993f`; 1,122 source-head tests, cache provenance, bounded review and format passed; cache-inclusive server/WASM lint passed; full Nix `16586` running; no activation |
+| Identity response projections, [#240](https://github.com/numtide/horae/pull/240) | `fix/identity-response-projections`, `.worktrees/identity-response-projections` | Master `1b8fa4f` | Draft at `d2da193`; source suite/cache/lints passed on `1ce993f`; its Nix run was interrupted after a confirmed unbounded browser wait; diagnostic reproduction and exact bounded suite passed; final Nix `79480` running; no activation |
 | Time-writer account activity, [#241](https://github.com/numtide/horae/pull/241) | `fix/time-write-activity`, `.worktrees/time-write-activity` | #228 `0e1e675` | Draft at `7820f8d`; 1,142 tests, cache provenance, bounded review, format, offline server/WASM lint and full Nix `85167` passed; prerequisite integration/retarget/current-head CI still required; no delegated writes or activation |
 | Time-entry invoice identity boundary, [#242](https://github.com/numtide/horae/pull/242) | `fix/time-entry-payload`, `.worktrees/time-entry-payload` | Master `1b8fa4f` | Draft at `43337fc`; 1,122 tests, cache/source provenance, bounded review, format, offline server/WASM lint and full Nix `73808` passed; current-head GitHub checks/delivery review remain; no policy or UI change |
 | Session-bound project-manager delegation, [#243](https://github.com/numtide/horae/pull/243) | `feat/project-manager-delegation`, `.worktrees/project-manager-delegation` | Review base `e44433e` combining #234/#228 | Draft at `3404c85`; suite/cache, final WASM lint and full local Nix passed (cached result confirmed in `10972`); final server gate closed; no form wiring or activation |
 | Own-permission explanation and Settings, [#244](https://github.com/numtide/horae/pull/244) | `feat/own-permission-settings`, `.worktrees/own-permission-settings` | #234 `45d219e` | Draft at `6c4e4d1`; 1,273 Rust tests, SQLx, provenance, review/Spec Kit/format/detector, offline server/WASM lint and isolated Chromium passed; desktop/mobile captures inspected; full local Nix passed (cached result confirmed in `30710`); no activation |
-| Permission audit history, [#245](https://github.com/numtide/horae/pull/245) | `feat/permission-audit-history`, `.worktrees/permission-audit-history` | Review base `59d2798` combining #243 `3404c85` and #244 `6c4e4d1` | Draft at `065a96b`; production/cache head `533922a` has 1,356 Rust tests, SQLx provenance, bounded review, Spec Kit analysis, format/detector and offline server/WASM lint passed; its full Nix `61137` running; two test-only follow-ups add independent browser coverage with runtime/final-head gates pending |
+| Permission audit history, [#245](https://github.com/numtide/horae/pull/245) | `feat/permission-audit-history`, `.worktrees/permission-audit-history` | Review base `59d2798` combining #243 `3404c85` and #244 `6c4e4d1` | Draft at `93f230d`; production/cache head `533922a` has 1,356 Rust tests, SQLx, review, Spec Kit, format/detector and offline lints passed; independent Chromium suite and desktop/mobile capture review passed with final test; full final-head Nix `9966` running; older Nix `61137` remains historical evidence |
+| Read-only legacy permission diagnostics | `feat/permission-preflight`, `.worktrees/permission-preflight` | Review base `61c90bc` combining #237 `2242361` and #226 `82d15f3` | Source `b159184` published, no PR yet; reader and all seven original tests byte-preserved, bounded review/Spec Kit analysis passed; original base missed receipt-schema test dependency, corrected without dropping assertions; full disposable suite/cache `28480` running; no endpoint, UI, migration or activation |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -346,7 +347,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `108594e` | Revalidate project scope before delivering exports | export-authority | Held in original backup; extraction pending |
 | `dcf4ac8` | Recheck current permissions during CSV downloads | export-authority | Held in original backup; extraction pending |
 | `0793ce7` | Revalidate budget email authority before delivery | budget-email-authority | Four source/test files byte-identical in #238 (`7a7cede`) on master `1b8fa4f`; 1,133 tests, SQLx, format and offline server/WASM lints passed; full local Nix passed; specification hunks retained |
-| `8aac739` | Add read-only permission migration diagnostics | permission-preflight | Held in original backup; extraction pending |
+| `8aac739` | Add read-only permission migration diagnostics | permission-preflight | Reader and all seven original tests extracted byte-for-byte in `feat/permission-preflight` (`b159184`) on combined #237/#226 review base; full suite/cache pending; specification hunks retained |
 | `8c15bfe` | Show own permissions in Settings | own-permissions | Complete original component, shared descriptions, SSR and resource tests in #244 (`6c4e4d1`); suite/cache, isolated browser and full local Nix passed; no full T018 claim; specification hunks retained |
 | `300d1e9` | Expose administrator permission history | permission-audit | Complete historical DTO/HTTP/fencing tests in #245 (`533922a`); suite, complete cache provenance and offline lints passed; full Nix/browser pending; specification hunks retained |
 | `03e90b1` | Connect permission editor previews and commands | permission-editor | Template DTOs, hardening/tests and administration helpers in #226; profile DTOs, shared calculation and command hardening/tests in #234; editor/session/remaining hunks retained |
@@ -2371,3 +2372,78 @@ resolve any proven failure, and verify the final test-inclusive head. Continue
 remaining canonical consumer/editor and specification ownership afterward.
 This iteration is PROGRESS. No merges, original closures, real-data changes or
 policy activation occurred; the overall goal remains incomplete.
+
+### History browser verified; bounded action tests and preflight extraction
+
+The previous goal iteration was PROGRESS (published browser verification and
+updated authoritative check evidence). Re-read the attached objective; no scope
+or completion criteria changed.
+
+#245's built `533922a` package became available. Focused browser `56883`
+failed with `Route is already handled!`: the test released a held request and
+removed its interceptor before the handler finished. Preserved this failure;
+the application had not been shown faulty. Test-only `93f230d` moves interceptor
+removal after the released response renders. Complete focused run `36324`
+then exited zero in Chromium 148.0.7778.96. All real-writer, empty/no-op, exact
+25/3 paging, keyboard, pending suppression, revoke/recover, canonical navigation
+and deactivation assertions passed. Inspected the desktop-dark and narrow-light
+captures in `.scratch/browser-history-coordinated/`: no page overflow or overlap
+observed. No native text-zoom, touch, contrast or cross-browser certification.
+Format `79897` passed without changes. Final-head full Nix `9966` is running
+on `93f230d`; old `61137` on `533922a` continues but cannot substitute for it.
+
+#240's original Nix remained live in `action-errors.cjs`. An isolated diagnostic
+(`4807`) kept every assertion but set finite waits and logged request paths;
+it passed, so the original blocked wait/root cause is still unproven. Committed
+and published only `page.setDefaultTimeout(30_000)` as `d2da193`. This bounds
+previously infinite event waits rather than increasing assertion timeouts.
+Exact uninstrumented focused run `47505` passed all scenarios on the unchanged
+built application; format `50726` passed. Explicitly interrupted the superseded
+Nix PID `3032398`; handle `16586` exited 1 with interruption, not a green result.
+Final-head full Nix `79480` is running. PR descriptions retain the inconclusive
+history, bounded reproduction and pending final gates.
+
+Scoped Spec Kit analyze ran feature-015 prerequisites successfully with no
+extension hooks. Preflight coverage is five requirements (FR-006/010/014/017/018)
+and three mapped tasks (T117–T119), 100% scoped requirement coverage, no unmapped
+tasks, ambiguity, duplication or critical/high conflict in this diagnostic
+boundary. US5/SC-004 and T019 migration/activation remain incomplete; the proposed
+constitution amendment is not adopted. No specification was regenerated.
+
+Created isolated `feat/permission-preflight`. Source reader (91 lines) and full
+tests (451 lines, seven cases) match original `db3935d` blobs exactly:
+`ed8377fbd45dae76791c766ac14574b3f298220c` and
+`73d354d1bbbbfdae86ecb823ee329736581dee0b`. The only other change is module/test
+registration. Review covers current legacy Administrator before counts, policy
+zero, organization-then-actor locks, post-wait checks, one-statement snapshot,
+count-only tenant diagnostics, cancellation/lock failure and before/after full
+stored-value comparisons. Zero counts confer no activation readiness. No public
+endpoint, new schema, CLI, UI, product behavior or real-data inspection is added.
+
+Initial source `a88e849` used #237 alone. Compile-time SQLx in `26167` caught a
+missing prerequisite: the preservation test also snapshots
+`permission_change_receipts`, whose migration is in #226. Did not delete or
+conditionalize that assertion. Explicitly stopped the already-failed Cargo PID
+`3811415`; wrapper exited 101 after its interrupted child. No passing suite or
+cache was claimed from that attempt.
+
+Published review-only base `integration/permission-preflight-prerequisites`
+at `61c90bc`, combining exact #237 `2242361` and #226 `82d15f3`. Two composition
+conflicts retained #226's strict-storage superset and server-only template DTO
+registration; no #237 behavior was discarded. Rebased only the new extraction
+onto that base as `b159184`, preserving both preflight blobs and both test/module
+registrations, 3 files / 547 added lines. Updated only that new remote branch
+using an exact lease against `a88e849`; original branches/backups remain intact.
+The integration branch is not a delivery merge target. Both prerequisite chains
+must reach master before retargeting and repeating final-head gates there.
+
+Corrected full disposable suite and complete SQLx preparation are running in
+`28480`; the reusable local Cargo target is occupied. All worktree Rust-source
+timestamps were invalidated before preparation to avoid stale cached-target
+omissions. Original unpublished tracked work still exactly matches its saved
+snapshot. Next collect `28480`, prove complete cache provenance, run offline
+native/WASM and full final-head Nix, and publish the scoped draft. Also collect
+`9966`/#245 and `79480`/#240 without restarting live handles. Continue canonical
+consumer/editor and specification ownership after these deliveries. No GitHub
+merges, original closures, real-data writes or policy activation occurred.
+This iteration is PROGRESS; the overall goal remains incomplete.
