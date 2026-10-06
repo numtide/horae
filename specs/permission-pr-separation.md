@@ -122,7 +122,7 @@ Clients MVP as canonical-permission acceptance.
 | Time-entry invoice identity boundary, [#242](https://github.com/numtide/horae/pull/242) | `fix/time-entry-payload`, `.worktrees/time-entry-payload` | Master `1b8fa4f` | Draft at `43337fc`; 1,122 tests, cache/source provenance, bounded review, format, offline server/WASM lint and full Nix `73808` passed; current-head GitHub checks/delivery review remain; no policy or UI change |
 | Session-bound project-manager delegation, [#243](https://github.com/numtide/horae/pull/243) | `feat/project-manager-delegation`, `.worktrees/project-manager-delegation` | Review base `e44433e` combining #234/#228 | Draft at `3404c85`; 1,295 tests/cache passed before web-only lint adaptation; final WASM lint passed, current-head full Nix `87574` running; last offline server pass `9c6b121`, final-head server check pending; no form wiring or activation |
 | Own-permission explanation and Settings, [#244](https://github.com/numtide/horae/pull/244) | `feat/own-permission-settings`, `.worktrees/own-permission-settings` | #234 `45d219e` | Draft at `6c4e4d1`; 1,273 Rust tests, complete SQLx provenance, eight original-file comparisons, scoped review/Spec Kit analysis/format/detector passed; offline server/WASM lint `53333` and isolated Chromium `47268` passed; desktop/mobile captures inspected; full Nix `19313` running; no activation |
-| Permission audit history | `feat/permission-audit-history`, `.worktrees/permission-audit-history` | Review base `59d2798` combining #243 `3404c85` and #244 `6c4e4d1` | Published source branch `c96d787`; 1,356 Rust tests passed, SQLx preparation `96253` running; original provenance, bounded review, scoped Spec Kit analysis, format and detector passed; draft PR and browser/native/WASM/Nix gates pending |
+| Permission audit history, [#245](https://github.com/numtide/horae/pull/245) | `feat/permission-audit-history`, `.worktrees/permission-audit-history` | Review base `59d2798` combining #243 `3404c85` and #244 `6c4e4d1` | Draft at `533922a`; 1,356 Rust tests and complete SQLx provenance passed; original provenance, bounded review, scoped Spec Kit analysis, format and detector passed; offline lint `72147` and full Nix `61137` running, history browser verification pending |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -2288,3 +2288,31 @@ claim yet. Original tracked work still exactly matches its saved snapshot.
 
 This iteration is PROGRESS. No merges, original closures, real-data writes or
 policy activation occurred. The overall goal remains incomplete.
+
+### Audit cache recovered and draft published
+
+Cache-only `62209` exited zero but provenance correctly rejected its output:
+one existing CLI-restart query was missing. Touching only that test and preparing
+again (`6814`, exit zero) produced only three descriptors, proving that a
+successful command can reuse other targets without regenerating their caches.
+Neither incomplete result was committed. Invalidated timestamps for all Rust
+source files in this isolated worktree and ran the same complete preparation
+again (`69078`, exit zero). No source content changed and no successful test
+suite was repeated.
+
+Final provenance passed: all 1,195 base descriptors unchanged, 30 additions
+byte-identical to original `db3935d`, 1,225 total, zero removals/modifications or
+unmatched additions. Unsigned cache head
+`533922ad904b4d93abed4a1db917086bb15feeed` is published in draft
+[#245](https://github.com/numtide/horae/pull/245), on review base `59d2798`.
+Offline server/WASM lint `72147` and full clean-head Nix `61137` are running.
+The Nix formatting gate has passed; no full Nix result is claimed.
+
+Next collect these exact handles, preserve the original editor-dependent history
+browser assertions, and verify this historical consumer independently with real
+writer-produced receipts in disposable fixtures. #243 already exposes the
+session-bound project-manager command, so real history can be generated without
+extracting the unfinished editor merely to obtain browser fixtures. All existing
+template/profile historical tests and the original browser checks remain owned,
+not replaced or dropped. Continue remaining original ownership after this
+delivery's verification. No merges or activation.
