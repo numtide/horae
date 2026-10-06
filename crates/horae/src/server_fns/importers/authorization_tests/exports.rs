@@ -1,10 +1,11 @@
-//! Real session and response checks for the three materialized manager exports.
+//! Real session and response checks for materialized and streaming exports.
 
 use super::*;
 use crate::server_fns::test_seed::{seed, time_entry, wait_for_blocked};
 use horae_core::types::EntryState;
 use std::io::{Cursor, Read};
 
+mod csv;
 mod projects;
 
 async fn download(api: &Api, path: &str, cookie: Option<&str>) -> reqwest::Response {
@@ -30,6 +31,7 @@ async fn denied(response: reqwest::Response, status: StatusCode) {
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
     projects::check(pool, api).await;
+    csv::check(pool, api).await;
     let ids = seed(pool, OrgRole::Manager).await;
     let foreign = seed(pool, OrgRole::Admin).await;
     let own_entry = time_entry(pool, &ids, EntryState::Open).await;
@@ -68,6 +70,8 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         "/api/reports/export/xlsx?from=2026-09-07&to=2026-09-07".to_owned(),
         format!("/api/invoices/{invoice_id}/export/xlsx"),
         format!("/api/invoices/{invoice_id}/export/pdf"),
+        "/api/reports/export/csv?from=2026-09-07&to=2026-09-07".to_owned(),
+        format!("/api/invoices/{invoice_id}/export/csv"),
     ];
     for path in &paths {
         denied(download(api, path, None).await, StatusCode::UNAUTHORIZED).await;
@@ -98,9 +102,12 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             let response = download(api, &forged, Some(&cookie)).await;
             assert_eq!(response.status(), StatusCode::OK);
             let pdf = path.ends_with("/pdf");
+            let csv = path.contains("/csv");
             assert_eq!(
                 response.headers()["content-type"],
-                if pdf {
+                if csv {
+                    "text/csv"
+                } else if pdf {
                     "application/pdf"
                 } else {
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -111,13 +118,21 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
                     .to_str()
                     .unwrap()
                     .contains(if path.contains("/reports/") {
-                        "timesheet.xlsx"
+                        if csv {
+                            "timesheet.csv"
+                        } else {
+                            "timesheet.xlsx"
+                        }
                     } else {
                         "EXPORT-PRIVATE"
                     })
             );
             let bytes = response.bytes().await.unwrap();
-            if pdf {
+            if csv {
+                let text = std::str::from_utf8(&bytes).unwrap();
+                assert!(text.contains("Private export note"));
+                assert!(!text.contains("Other tenant secret"));
+            } else if pdf {
                 assert!(bytes.starts_with(b"%PDF-"));
             } else {
                 let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
@@ -147,15 +162,22 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             let filtered = format!("{path}&project_id={}", foreign.project_id);
             let response = download(api, &filtered, Some(&cookie)).await;
             assert_eq!(response.status(), StatusCode::OK);
-            let mut archive =
-                zip::ZipArchive::new(Cursor::new(response.bytes().await.unwrap())).unwrap();
-            let mut sheet = String::new();
-            archive
-                .by_name("xl/worksheets/sheet1.xml")
-                .unwrap()
-                .read_to_string(&mut sheet)
-                .unwrap();
-            assert_eq!(sheet.matches("<row ").count(), 1);
+            let bytes = response.bytes().await.unwrap();
+            if path.contains("/csv") {
+                assert_eq!(
+                    ::csv::Reader::from_reader(bytes.as_ref()).records().count(),
+                    0
+                );
+            } else {
+                let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
+                let mut sheet = String::new();
+                archive
+                    .by_name("xl/worksheets/sheet1.xml")
+                    .unwrap()
+                    .read_to_string(&mut sheet)
+                    .unwrap();
+                assert_eq!(sheet.matches("<row ").count(), 1);
+            }
         }
         sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
             .execute(pool)
