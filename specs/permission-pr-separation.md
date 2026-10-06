@@ -114,9 +114,10 @@ Clients MVP as canonical-permission acceptance.
 | Internal person-profile commands, [#234](https://github.com/numtide/horae/pull/234) | `refactor/person-profile-commands`, `.worktrees/person-profile-commands` | Integration base `46f02f7` combining #226/#221 | Draft at `45d219e`; 1,245 tests, schema upgrade, SQLx, offline server/WASM Clippy, format and full local Nix passed; retarget to master after prerequisites, no activation |
 | Harvest connection change authority, [#235](https://github.com/numtide/horae/pull/235) | `fix/harvest-connection-authority`, `.worktrees/harvest-connection-authority` | #228 `0e1e675` | Draft at `2fcecd1`; 1,146 tests, SQLx, offline server/WASM Clippy, format and full local Nix passed; retarget after #227/#228 |
 | Import job command and download authority, [#236](https://github.com/numtide/horae/pull/236) | `fix/import-job-authority`, `.worktrees/import-job-authority` | Integration base `26d6159` combining #235/#231 | Draft at `95bdf4a`; 1,163 tests, SQLx, offline server/WASM Clippy, format and full local Nix passed; retarget to master after #227/#228/#235 and #231, not an integration-base merge |
-| Original import requester provenance, [#237](https://github.com/numtide/horae/pull/237) | `feat/import-job-requester`, `.worktrees/import-job-requester` | Integration base `cfb8240` combining #236/#219/#222 | Draft at `2242361`; 1,218 tests, schema upgrade, SQLx, offline server/WASM Clippy and format passed; first full Nix failed in inherited menu browser assertion, unchanged diagnostic rerun running; retarget after both prerequisite chains, no worker-policy activation |
+| Original import requester provenance, [#237](https://github.com/numtide/horae/pull/237) | `feat/import-job-requester`, `.worktrees/import-job-requester` | Integration base `cfb8240` combining #236/#219/#222 | Draft at `2242361`; 1,218 tests, schema upgrade, SQLx, offline server/WASM Clippy and format passed; full Nix passed on unchanged diagnostic rerun; initial inherited-menu failure retained; retarget after both prerequisite chains, no worker-policy activation |
 | Budget email preparation authority, [#238](https://github.com/numtide/horae/pull/238) | `fix/budget-email-authority`, `.worktrees/budget-email-authority` | Master `1b8fa4f` | Draft at `7a7cede`; 1,133 source-head tests, SQLx, format and cache-inclusive server/WASM Clippy passed; full current-head Nix running; no real mail or policy activation |
 | Approval tenant isolation, [#239](https://github.com/numtide/horae/pull/239) | `fix/approval-tenant-isolation`, `.worktrees/approval-tenant-isolation` | Master `1b8fa4f` | Draft at `66a256f`; three source/test files and complete cache patch preserved exactly; 1,124 source-head tests, source review, SQLx, format and offline server/WASM Clippy passed; full current-head Nix running |
+| Identity response projections, [#240](https://github.com/numtide/horae/pull/240) | `fix/identity-response-projections`, `.worktrees/identity-response-projections` | Master `1b8fa4f` | Draft at `1ce993f`; 1,122 source-head tests, cache provenance, bounded review and format passed; cache-inclusive server/WASM lint `38653` and full Nix `16586` running; no activation |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -330,7 +331,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `4fac6af` | Revalidate import job command and status authority | import-authority | Exact executor-based `jobs::cancel` owned by #231; remaining command/status Rust changes with the subsequent shared guard in #236; specification hunks retained for reconciliation |
 | `b4672a4` | Revalidate authority during import error downloads | import-authority | All eight combined command/download Rust/test files byte-identical in #236, plus eight regenerated SQLx additions matching original; suite/cache/offline lints/format/full local Nix passed; specification hunks retained |
 | `e5fcc5a` | Prepare durable CSV batches before opening transactions | import-transaction-lifecycle | Two exact Rust blobs and regenerated cache in #231; local verification passed, CI pending; specification hunks retained |
-| `482b7c5` | Retain the original requester of import jobs | import-requester-provenance | Seven original source/schema/test paths and exact regenerated cache patch in #237 on combined #236/#222 prerequisites; 1,218 tests, schema order, cache, offline lints and format passed; first full Nix failed in inherited menu assertion, unchanged diagnostic rerun running; specification hunks retained |
+| `482b7c5` | Retain the original requester of import jobs | import-requester-provenance | Seven original source/schema/test paths and exact regenerated cache patch in #237 on combined #236/#222 prerequisites; 1,218 tests, schema order, cache, offline lints and format passed; full Nix passed on unchanged diagnostic rerun; initial inherited-menu failure retained; specification hunks retained |
 | `e949e4c` | Drain interrupted import transactions before releasing reservations | import-transaction-lifecycle | Production/test/cache hunks in #224; specification hunks retained for reconciliation |
 | `c0cfb8f` | Scope rate permissions to their owning resource | scope-domain | Code/tests in #221; specification hunks retained for reconciliation |
 | `5d51b0e` | Expose the current person's permission snapshot | own-permissions | Held in original backup; extraction pending |
@@ -358,12 +359,12 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `eb56af3` | Define scoped approval transaction and coverage gates | specification-history | Held in original backup; extraction pending |
 | `8d49421` | Add authorized permission editor subject discovery | permission-editor | Held in original backup; extraction pending |
 | `b735b3a` | Add safe person switching to permission editor | permission-editor | Held in original backup; extraction pending |
-| `7f14e4b` | Limit user directory responses to consumed fields | identity-projections | Held in original backup; extraction pending |
+| `7f14e4b` | Limit user directory responses to consumed fields | identity-projections | Source/tests together in #240 at `1ce993f`; 1,122 tests, regenerated cache and format passed; offline lints/full Nix running; canonical tests and mixed specification hunks separately preserved |
 | `1eb13ec` | Add scoped people directory reads | people-directory | Held in original backup; extraction pending |
-| `981d0e3` | Resolve approval names without directory access | identity-projections | Held in original backup; extraction pending |
+| `981d0e3` | Resolve approval names without directory access | identity-projections | Source/tests together in #240 at `1ce993f`; 1,122 tests, regenerated cache and format passed; offline lints/full Nix running; canonical tests and mixed specification hunks separately preserved |
 | `6b5dbae` | Authorize identity-only project team choices | project-team-choices | Held in original backup; extraction pending |
 | `4c00660` | Document project form permission integration boundaries | specification-history | Held in original backup; extraction pending |
-| `3bb62ac` | Limit session identity responses to display fields | identity-projections | Held in original backup; extraction pending |
+| `3bb62ac` | Limit session identity responses to display fields | identity-projections | Source/tests together in #240 at `1ce993f`; 1,122 tests, regenerated cache and format passed; offline lints/full Nix running; canonical tests and mixed specification hunks separately preserved |
 | `4ac30fa` | Add scoped time-entry reads without financial metadata | time-readers | Held in original backup; extraction pending |
 | `c80233b` | Keep invoice identities out of time-entry responses | time-readers | Held in original backup; extraction pending |
 | `5ec183a` | Fence time-entry writes against account deactivation | time-writer-activity | Held in original backup; extraction pending |
@@ -1725,3 +1726,84 @@ and invoice recovery, retain final HTTP/actual-page tests and avoid canonical
 permission dependencies. No identity code has yet been changed. Mixed spec hunks,
 governance and other UI/domain groups still require ownership and verification;
 the overall separation goal remains incomplete.
+
+### 2026-10-06 — Identity extraction and requester diagnostic result
+
+The intervening response drafted the requested goal but changed no repository
+state: classified as no progress. Re-read the attachment, confirmed #216 merged,
+fetched unchanged master `1b8fa4f` and revalidated the three live Nix handles.
+Tracked original backup and untracked archive comparisons both pass.
+
+#237 diagnostic `30447` exited zero on unchanged `2242361`: all local
+x86_64-linux Nix checks passed. Its browser log explicitly reports PASS for the
+exact scroll/resize assertion that failed in `63735`. Updated the PR without
+erasing the first failure or claiming a proven cause. Retargeted CI is still
+required. #238 `24069` and #239 `87204` remain live; #239's tests, SQLx and
+server-Clippy derivations completed, not its whole flake.
+
+Completed bounded identity review with ponytail and Rust skills: minimal session
+and directory fields, same-org approval-name join without excluding archived
+submitters, preserved totals/filters/actions, no policy activation. New Project's
+financial DTO and Harvest compatibility API stay separate. Current-master Clients
+and invoice recovery retain their consumed fields and navigation coverage.
+
+Correction to earlier inventory: the final directory HTTP file also includes
+`1eb13ec`'s canonical `check_scoped`. Extracted the original `7f14e4b` legacy
+matrix with exactly `3bb62ac`'s four superseded own-user assertions removed;
+the preserved session matrix replaces them. The canonical helper/call stays owned
+by `1eb13ec` in the original backup, not deleted or waived.
+
+Created independent branch/worktree `fix/identity-response-projections` /
+`.worktrees/identity-response-projections`, unsigned `6ff00f0`: 14 files,
+689 insertions/88 deletions. Six complete model/page/test blobs match both
+`3bb62ac` and final `db3935d`. Remaining production changes are selected original
+hunks; harness changes only register the three relevant matrices. Navigation
+fixture changes preserve master's member branch and expanded Clients tests.
+No new schema, CSS, dependency or canonical endpoint. Format `25858` passed
+unchanged. Suite followed by SQLx regeneration runs in `19675` on disposable
+PostgreSQL. The initial touch used a nonexistent core path; no file was created,
+and compiler output confirms actual `crates/core` and app are rebuilt here.
+
+Ran Spec Kit analyze's prerequisite command once in the original worktree;
+feature 015 resolves and no extension hooks exist. Applicable spec/plan/tasks,
+contracts and constitution 1.1.0 were read. Nine tasks T145–T147/T151–T153/
+T162–T164 map to FR-002/006/008/010/018 and the relevant SC-006 regressions.
+Six requirement IDs have bounded task coverage; no unmapped tasks or new
+ambiguity, duplication, critical/high or constitutional finding. One low note:
+historical T150→T151 sequencing is not a runtime dependency on the canonical
+directory. No feature artifact changed and no full-feature acceptance is claimed.
+
+Next: collect `19675`, verify cache provenance, run offline server/WASM lints,
+publish the draft and start clean-head full Nix. Do not use the shared local
+Cargo target until this suite/cache process finishes. Mixed specification hunks
+and remaining groups still need ownership; original worktrees and #208 untouched,
+no merges, original closures or real data changes.
+
+Identity suite/cache `19675` exited zero: 818 app, 183 integration and 121 core
+tests, 1,122 passed with 11 existing manual tests ignored. The production-page
+approval tests, real-session matrices and 44 detail-navigation tests passed.
+Regenerated cache has 1,001 unchanged base descriptors, eight byte-identical
+original additions and two obsolete removals, 1,009 total. Seven additions
+originated in the two selected query commits; one fixture descriptor already
+existed through `3ae8e08` in the original parent, with no related implementation
+imported. Unsigned cache commit `1ce993f75092ca5dc81eb5f96d2a51a6537a8d6d`.
+
+Published independent draft [#240](https://github.com/numtide/horae/pull/240).
+Remote inspection confirms master base, exact head, 23 files and 871 insertions/
+185 deletions including generated metadata (Git recognizes one cache rename).
+Offline server then WASM lint runs sequentially in `38653`; full clean-head
+Nix runs separately in `16586`. Both are live, not counted as passed. The shared
+local Cargo target remains occupied by `38653`.
+
+Read-only next-boundary inventory: `5ec183a` fences six interactive time
+transaction entry points against current account deactivation; original
+`activity_tests.rs` is unchanged through final `db3935d`. Its dependencies are
+the organization lock helper and bounded READ COMMITTED configuration, not the
+complete canonical permission module. Read its contract, source diff and all
+four activity tests. Later `60f60f9`, `5faed76`, `48a6533` and `02c4245`
+modify the shared time file and stay separately accounted. Complete caller,
+service-barrier and current-base review before choosing its smallest valid base;
+no time extraction has been created. `c80233b` separately repairs time-entry
+invoice-ID serialization, with legacy HTTP checks embedded in the canonical
+time matrix: retain those checks if extracting it independently, not the unrelated
+canonical setup. Neither inventory item is runtime verification or feature work.
