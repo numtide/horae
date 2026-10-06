@@ -116,17 +116,18 @@ Clients MVP as canonical-permission acceptance.
 | Import job command and download authority, [#236](https://github.com/numtide/horae/pull/236) | `fix/import-job-authority`, `.worktrees/import-job-authority` | Integration base `26d6159` combining #235/#231 | Draft at `95bdf4a`; 1,163 tests, SQLx, offline server/WASM Clippy, format and full local Nix passed; retarget to master after #227/#228/#235 and #231, not an integration-base merge |
 | Original import requester provenance, [#237](https://github.com/numtide/horae/pull/237) | `feat/import-job-requester`, `.worktrees/import-job-requester` | Integration base `cfb8240` combining #236/#219/#222 | Draft at `2242361`; 1,218 tests, schema upgrade, SQLx, offline server/WASM Clippy and format passed; full Nix passed on unchanged diagnostic rerun; initial inherited-menu failure retained; retarget after both prerequisite chains, no worker-policy activation |
 | Budget email preparation authority, [#238](https://github.com/numtide/horae/pull/238) | `fix/budget-email-authority`, `.worktrees/budget-email-authority` | Master `1b8fa4f` | Draft at `7a7cede`; 1,133 source-head tests, SQLx, format and cache-inclusive server/WASM Clippy passed; full current-head local Nix passed; no real mail or policy activation |
-| Approval tenant isolation, [#239](https://github.com/numtide/horae/pull/239) | `fix/approval-tenant-isolation`, `.worktrees/approval-tenant-isolation` | Master `1b8fa4f` | Draft at `66a256f`; three source/test files and complete cache patch preserved exactly; 1,124 source-head tests, source review, SQLx, format and offline server/WASM Clippy passed; full current-head local Nix passed |
+| Approval tenant isolation, [#239](https://github.com/numtide/horae/pull/239) | `fix/approval-tenant-isolation`, `.worktrees/approval-tenant-isolation` | Master `1b8fa4f` | Draft at `66a256f`; three source/test files and complete cache patch preserved exactly; 1,124 source-head tests, source review, SQLx, format and offline server/WASM Clippy passed; full current-head local Nix and required GitHub checks passed; initial remote browser failure and unchanged rerun retained |
 | Identity response projections, [#240](https://github.com/numtide/horae/pull/240) | `fix/identity-response-projections`, `.worktrees/identity-response-projections` | Master `1b8fa4f` | Draft at `a19ea63`; source suite/cache/lints, corrected Clients fixture, complete local Nix `99785` and GitHub Flake Check passed; original failures retained; remote Nixbot failures remain unresolved; no activation |
 | Time-writer account activity, [#241](https://github.com/numtide/horae/pull/241) | `fix/time-write-activity`, `.worktrees/time-write-activity` | #228 `0e1e675` | Draft at `7820f8d`; 1,142 tests, cache provenance, bounded review, format, offline server/WASM lint and full Nix `85167` passed; prerequisite integration/retarget/current-head CI still required; no delegated writes or activation |
-| Time-entry invoice identity boundary, [#242](https://github.com/numtide/horae/pull/242) | `fix/time-entry-payload`, `.worktrees/time-entry-payload` | Master `1b8fa4f` | Draft at `43337fc`; 1,122 tests, cache/source provenance, bounded review, format, offline server/WASM lint and full Nix `73808` passed; current-head GitHub checks/delivery review remain; no policy or UI change |
+| Time-entry invoice identity boundary, [#242](https://github.com/numtide/horae/pull/242) | `fix/time-entry-payload`, `.worktrees/time-entry-payload` | Master `1b8fa4f` | Draft at `43337fc`; 1,122 tests, cache/source provenance, bounded review, format, offline server/WASM lint and full Nix `73808` passed; required GitHub checks passed on unchanged rerun; initial cancellation-test failure retained; delivery review and Nixbot diagnosis remain; no policy or UI change |
 | Session-bound project-manager delegation, [#243](https://github.com/numtide/horae/pull/243) | `feat/project-manager-delegation`, `.worktrees/project-manager-delegation` | Review base `e44433e` combining #234/#228 | Draft at `3404c85`; suite/cache, final WASM lint and full local Nix passed (cached result confirmed in `10972`); final server gate closed; no form wiring or activation |
 | Own-permission explanation and Settings, [#244](https://github.com/numtide/horae/pull/244) | `feat/own-permission-settings`, `.worktrees/own-permission-settings` | #234 `45d219e` | Draft at `6c4e4d1`; 1,273 Rust tests, SQLx, provenance, review/Spec Kit/format/detector, offline server/WASM lint and isolated Chromium passed; desktop/mobile captures inspected; full local Nix passed (cached result confirmed in `30710`); no activation |
 | Permission audit history, [#245](https://github.com/numtide/horae/pull/245) | `feat/permission-audit-history`, `.worktrees/permission-audit-history` | Review base `59d2798` combining #243 `3404c85` and #244 `6c4e4d1` | Draft at `14ad9ca`; source suite/cache/lints, corrected session-actor fixture and complete final local Nix `56923` passed, including own/history browser suites; original failures retained; remote Nixbot failures, prerequisite integration and retargeted gates remain open |
 | Read-only legacy permission diagnostics, [#246](https://github.com/numtide/horae/pull/246) | `feat/permission-preflight`, `.worktrees/permission-preflight` | Review base `61c90bc` combining #237 `2242361` and #226 `82d15f3` | Draft at `ff482c8`; suite/cache/lints passed; full Nix `99711` failed on inherited editor loading timeout; unchanged focused transport/editor sequence and full unchanged-head rerun `41382` passed; initial root cause unproven; no endpoint, UI, migration or activation |
 | Materialized XLSX/PDF authorization, [#247](https://github.com/numtide/horae/pull/247) | `fix/materialized-export-authority`, `.worktrees/materialized-export-authority` | Review base `3edc0b8` combining existing `0046dad` (#227/#228 + #220/#232) and #222 `e9695fd` | Draft at `d9717e7`; 1,229 tests, full SQLx/provenance (1,135 descriptors), source review/Spec Kit/format, offline native/WASM lint and complete local Nix `32625` passed; remote Nixbot failures, prerequisite integration and retargeted gates remain open; no policy activation |
-| CSV delivery authorization, [#249](https://github.com/numtide/horae/pull/249) | `fix/csv-export-authority`, `.worktrees/csv-export-authority` | Exact #247 head `d9717e7` | Draft at `71232dc`; 1,245 source-head tests, full SQLx/provenance (1,174 descriptors), format/source review/scoped analysis and final-head offline native/WASM lint passed; complete Nix `72947` running; no canonical activation |
-| Existing permission specification and history, [#248](https://github.com/numtide/horae/pull/248) | `docs/permission-specification`, `.worktrees/permission-specification` | Master `1b8fa4f` | Draft at `49843b2`; all 54 original feature documents preserved, six contextualized; all 43 requirements/criteria and 236 task lines unchanged; original New Project transition and AGENTS cache guidance preserved; provenance/format passed, full Nix `51945` running and final reconciliation pending; no code or constitution adoption |
+| CSV delivery authorization, [#249](https://github.com/numtide/horae/pull/249) | `fix/csv-export-authority`, `.worktrees/csv-export-authority` | Exact #247 head `d9717e7` | Draft at `71232dc`; 1,245 source-head tests, full SQLx/provenance (1,174 descriptors), format/source review/scoped analysis and final-head offline native/WASM lint passed; complete local Nix `72947` passed; retargeted required checks remain; no canonical activation |
+| Existing permission specification and history, [#248](https://github.com/numtide/horae/pull/248) | `docs/permission-specification`, `.worktrees/permission-specification` | Master `1b8fa4f` | Draft at `49843b2`; all 54 original feature documents preserved, six contextualized; all 43 requirements/criteria and 236 task lines unchanged; original New Project transition and AGENTS cache guidance preserved; provenance/format passed, full local Nix `51945` and required GitHub checks passed; final reconciliation pending; no code or constitution adoption |
+| Requester-bound editor API, [#250](https://github.com/numtide/horae/pull/250) | `feat/permission-editor-api`, `.worktrees/permission-editor-api` | Exact #245 head `14ad9ca` | Draft at `c82a5b3`; full source suite, 1,239-descriptor cache/provenance, format and strict native/WASM lints passed; nine historical per-type web expectations restored; final Nix `90520` running; no UI or activation |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -364,21 +365,21 @@ Clients documents are separate and are not silently included in #248.
 | `8aac739` | Add read-only permission migration diagnostics | permission-preflight | Reader and all seven tests byte-preserved in #246 (`ff482c8`) on #237/#226 review base; 1,244 tests, full cache/provenance, offline lints and unchanged-head full Nix rerun passed; initial inherited browser timeout retained; specification hunks in #248 |
 | `8c15bfe` | Show own permissions in Settings | own-permissions | Complete original component, shared descriptions, SSR and resource tests in #244 (`6c4e4d1`); suite/cache, isolated browser and full local Nix passed; no full T018 claim; specification hunks retained |
 | `300d1e9` | Expose administrator permission history | permission-audit | Complete historical DTO/HTTP/fencing tests in #245 (`533922a`); suite, complete cache provenance and offline lints passed; full Nix/browser pending; specification hunks retained |
-| `03e90b1` | Connect permission editor previews and commands | permission-editor | Template DTOs, hardening/tests and administration helpers in #226; profile DTOs, shared calculation and command hardening/tests in #234; editor/session/remaining hunks retained |
+| `03e90b1` | Connect permission editor previews and commands | permission-editor | Template commands/helpers in #226 and person commands/calculation in #234; final editor DTOs, session API, reader and original DB/HTTP tests in #250, with #245 strict audit dependency; source suite/cache passed, final gates pending; specification in #248 |
 | `7f7fd1c` | Record permission editor delivery and UI follow-up | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
-| `98b1692` | Add reviewed person permission editing | permission-editor | Held in original backup; extraction pending |
+| `98b1692` | Add reviewed person permission editing | permission-editor | Final DTO runtime content in #250; historical web expectations must remain until its consumer arrives, so their removal, page/editor state, export wiring and UI tests remain preserved for separate UI extraction; specification in #248 |
 | `9e6d8bd` | Record person editor delivery and template follow-up | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
-| `0f97cb2` | Add custom permission profile controls | permission-editor | Held in original backup; extraction pending |
-| `8db19ba` | Show affected names in permission reviews | permission-editor | Profile command's historical relationship-type reuse in #234; display names, editor/UI/tests and specification hunks retained |
+| `0f97cb2` | Add custom permission profile controls | permission-editor | Template DTO runtime content in #250 using existing #226 commands; template UI controls and removal of their historical web expectations remain preserved for separate UI extraction; specification in #248 |
+| `8db19ba` | Show affected names in permission reviews | permission-editor | Profile command's relationship-type reuse in #234; final loss-label DTO/reader/DB/HTTP portions in #250; page/draft/rendering tests remain preserved for UI extraction; specification in #248 |
 | `e7d8a36` | Protect permission drafts during navigation and dismissal | permission-editor | Held in original backup; extraction pending |
-| `6bba224` | Bind permission saves to the original requester | permission-editor | Exact shared requester DTO extracted in `be787ca`; editor/session/UI remainder retained for permission-editor delivery |
+| `6bba224` | Bind permission saves to the original requester | permission-editor | Shared requester DTO already in prerequisites; final session-save binding and HTTP assertions in #250; editor/recovery UI portions remain preserved separately; specification in #248 |
 | `1ecfa21` | Recover interrupted permission saves across reloads | permission-editor | Held in original backup; extraction pending |
 | `c88ca6d` | Exercise permission recovery in a real browser | permission-editor | Held in original backup; extraction pending |
 | `202ee96` | Protect project delegation against concurrent deactivation | project-manager-delegation | Complete final command/activity tests in #243 (`3404c85`); suite/cache/format, final WASM lint and full local Nix passed; specification hunks preserved separately |
 | `3f45b7c` | Validate combined approval record coverage | scope-domain | Code/tests in #221; specification hunks retained for reconciliation |
 | `eb56af3` | Define scoped approval transaction and coverage gates | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
-| `8d49421` | Add authorized permission editor subject discovery | permission-editor | Held in original backup; extraction pending |
-| `b735b3a` | Add safe person switching to permission editor | permission-editor | Held in original backup; extraction pending |
+| `8d49421` | Add authorized permission editor subject discovery | permission-editor | Complete final subject DTO/API/reader, 305-line DB tests and HTTP assertions in #250; exact source/cache provenance and workspace suite passed; final gates pending; specification in #248 |
+| `b735b3a` | Add safe person switching to permission editor | permission-editor | Final subject DTO runtime content in #250; person-switching page/state consumer and removal of its historical web expectation remain preserved separately; specification in #248 |
 | `7f14e4b` | Limit user directory responses to consumed fields | identity-projections | Source/tests together in #240 at `1ce993f`; 1,122 tests, regenerated cache, format and offline lints passed; full Nix running; canonical tests and mixed specification hunks separately preserved |
 | `1eb13ec` | Add scoped people directory reads | people-directory | Held in original backup; extraction pending |
 | `981d0e3` | Resolve approval names without directory access | identity-projections | Source/tests together in #240 at `1ce993f`; 1,122 tests, regenerated cache, format and offline lints passed; full Nix running; canonical tests and mixed specification hunks separately preserved |
@@ -392,7 +393,7 @@ Clients documents are separate and are not silently included in #248.
 | `4294aa3` | Isolate permission browser fixtures and retain test assets | browser-fixture-tooling | Held in original backup; extraction pending |
 | `3308926` | Keep permission profile name uniqueness independent of database locale | permission-storage | Migration/storage regressions in #222; command lookup changes remain with template commands |
 | `8af562e` | Record passing permission regression gates | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
-| `9b53182` | Verify profile capacity and confirm timesheet discovery | permission-editor, specification-history, time-readers | Held in original backup; extraction pending |
+| `9b53182` | Verify profile capacity and confirm timesheet discovery | permission-editor, specification-history, time-readers | Original 50-contender HTTP capacity assertions retained in #250's exact final test file and passed in its workspace suite; specification/Timesheet discovery decision in #248, not a claim to deliver later Timesheet implementation |
 | `60f60f9` | Add scoped Timesheet person discovery | time-readers | Held in original backup; extraction pending |
 | `5faed76` | Bind Timesheet page reads to requester and subject | time-readers | Held in original backup; extraction pending |
 | `e1ddd9a` | Connect Timesheet to complete scoped page reads | timesheet-consumer-commands | Held in original backup; extraction pending |
@@ -3032,3 +3033,70 @@ these existing gates and the two Actions reruns, and retain unresolved inherited
 test failures explicitly. Canonical/UI consumer ownership, unfinished Clients,
 final per-change mapping and cross-PR integration remain open. No merge, original
 PR closure, real-data mutation or policy activation occurred.
+
+### Editor publication and completed remote/local checks
+
+The implementation iteration preceding the LTO question was PROGRESS: #250 was
+published, its web lint failure was corrected using existing historical
+annotations, and completed checks were collected. The LTO question made no goal
+code change. On resumption, the exact live handles were revalidated, not restarted.
+
+#239 run `37507170660` and #242 run `37513610808`, attempt 2, both completed
+successfully on the unchanged commits. Required `Format` also passed on both.
+Their initial failures remain above, not claimed fixed by a retry. #239's unchanged
+complete focused `new-project` browser suite `66596` also passed on its exact
+package. No assertion, timeout, runtime behavior or build profile changed.
+
+#248 complete compatible local Nix `51945` passed on `49843b2`, including browser
+and VM checks; required GitHub Flake Check and Format also passed on that head.
+#249 complete compatible local Nix `72947` passed on `71232dc`, including browser
+and both VM suites. Its stack still requires prerequisite integration and
+retargeted remote checks. PR bodies for #239/#242/#248/#249 record these results
+and distinguish required checks from unresolved Nixbot evidence.
+
+Nixbot #245 build 96 was inspected separately: Darwin VM scheduling lacks
+`apple-virt` on the selected builder; ARM Linux VM reports `Shell did not start in time`; Darwin tests fail an inherited credential-retry case with `Socket is not connected` (968 passed, one failed). These specific observations do not
+classify every remaining Nixbot failure or certify non-native platforms.
+
+Draft [#250](https://github.com/numtide/horae/pull/250) is published on exact #245
+`14ad9ca`. Initial cache-inclusive `72e97e1` passed native lint but WASM reported
+17 unused DTO types because the UI consumer is intentionally separate.
+The attempted module expectation in `fe7d2f8` was itself unfulfilled (`24445`);
+it is removed, not broadly allowed. Final unsigned/pushed
+`c82a5b397d61e961b4a336223c5b53412c499b65` restores the eight per-type transport
+expectations from original `03e90b1` and the subject-page expectation from
+`8d49421`. Their later removal belongs with the preserved UI consumers.
+
+Both final strict lint targets passed (`12387`): WASM first, then native workspace
+all-targets with warnings/performance lints denied. Provenance `53103` passed:
+five original files are exact; the model is exact after removing only those nine
+specified historical annotations, whose source text is checked against the
+historical commits. All 1,225 base descriptors and 14 original additions remain
+unchanged (1,239 total). Formatting passed with zero changes before commit.
+Final diff returns `models.rs` to its base; only four module/harness composition
+points remain alongside the preserved files and annotations. No query, test
+assertion, serialization field, endpoint semantics or policy activation changed.
+
+Superseded Nix handles `64324` and `22155` were deliberately interrupted after
+identifying their exact editor-worktree processes; both exited with interruption,
+not success. Final clean-head Nix `90520` on `c82a5b3` is confirmed live. Do not
+restart it or count the prior interrupted builds as gates. #250's PR body records
+the full failure/correction history, source suite/cache evidence and pending gate.
+The top delivery row and eight original-commit ownership rows now account for
+the API while explicitly retaining the editor UI and its removed lint annotations.
+
+Next collect `90520` and continue source-based ownership of the remaining
+canonical consumers, editor UI, browser tooling and unpublished Clients work.
+Final full original-change accounting and cross-PR integration remain incomplete.
+LTO was explained to the user but not changed; no merge, original PR closure,
+real-data operation or policy activation occurred.
+
+### Build performance priority
+
+The user explicitly requested release-profile optimization and Crane adoption,
+in isolated PRs, and authorized merging those build PRs after their checks pass.
+That priority precedes the remaining separation work; it does not authorize
+merging the extraction PRs or closing the preserved originals. Start from
+current `origin/master` (`1b8fa4f`) and retain all existing test gates. Measure
+build behavior and dependency reuse rather than claiming an unmeasured speedup.
+Resume the remaining ownership mapping above after the build PRs are merged.
