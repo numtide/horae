@@ -326,8 +326,8 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `e949e4c` | Drain interrupted import transactions before releasing reservations | import-transaction-lifecycle | Production/test/cache hunks in #224; specification hunks retained for reconciliation |
 | `c0cfb8f` | Scope rate permissions to their owning resource | scope-domain | Code/tests in #221; specification hunks retained for reconciliation |
 | `5d51b0e` | Expose the current person's permission snapshot | own-permissions | Held in original backup; extraction pending |
-| `22ffdab` | Recheck manager access for financial snapshots | manager-snapshot-consumers | Shared snapshot helper/queries in #220; original financial consumers and remaining hunks retained |
-| `15c82ef` | Recheck manager access in invoice editor snapshots | manager-snapshot-consumers | Held in original backup; extraction pending |
+| `22ffdab` | Recheck manager access for financial snapshots | manager-snapshot-consumers | Shared helper/queries in #220; consumer/test extraction in `fix/financial-snapshot-authority` passes full suite; cache/lint/Nix pending; specification hunks retained |
+| `15c82ef` | Recheck manager access in invoice editor snapshots | manager-snapshot-consumers | Consumer/test extraction in `fix/financial-snapshot-authority` passes full suite; fixture adaptations documented; cache/lint/Nix pending; specification hunks retained |
 | `dc822a0` | Recheck manager authority before delivering exports | export-authority | Held in original backup; extraction pending |
 | `108594e` | Revalidate project scope before delivering exports | export-authority | Held in original backup; extraction pending |
 | `dcf4ac8` | Recheck current permissions during CSV downloads | export-authority | Held in original backup; extraction pending |
@@ -1039,3 +1039,40 @@ Next: review exact source/fixture differences, collect the suite, regenerate
 SQLx, verify offline server/WASM and publish with #220 as its real dependency.
 The prepared invoice writer worktree remains untouched until this dependency
 can be composed without duplicating PR contents. The overall goal is incomplete.
+
+The full suite passed (`49719`): 840 app, 180 integration and 121 core tests,
+1,141 total, with 11 existing manual tests ignored. All 14 added snapshot tests
+and the extended registered-session matrix ran. Preview, editor implementation
+and fee-test files match `15c82ef` exactly; HTTP matrix/root snapshot tests also
+match their original blobs. The only original invoice-test block absent here is
+the assignment/FK regression already delivered in #228, not a removed test.
+Source review confirmed unchanged financial helpers/queries, all four current
+session identities, same-tenant resource predicates, no mutation guards changed
+and materialization/commit before delivery. No critical/high finding within this
+bounded extraction. Complete SQLx regeneration is the next running gate.
+
+SQLx regeneration passed (`29604`): all 1,021 #220 descriptors unchanged, 24
+additions (22 match `15c82ef`, two describe the documented `xmin`/no-op tuple
+fixtures), 1,045 total. Saved unsigned financial commit `0bb5721`; offline
+server Clippy runs in `85779`, full Nix checks on that committed head in `80170`.
+
+Resolved the invoice writer's multiple prerequisites without modifying or
+retargeting their PRs: `.worktrees/invoice-authority-prerequisites`, branch
+`integration/invoice-authority-prerequisites`, starts at #228 `0e1e675` (which
+includes #227) and replays #220 as `41e595d` and the financial reader extraction
+as `0046dad`. Existing identical SQLx descriptors are shared rather than
+duplicated. This branch is an integration/review base, not a separate delivery
+or a request to merge another PR. Its source must be verified together with the
+writer, and eventual master retargeting still requires all prerequisite PRs.
+
+Saved the prepared five-file writer patch as `a428015`, backed it up at
+`backup/invoice-write-extraction-before-integration`, then rebased only the new
+unpublished `fix/invoice-write-authority` onto that integration base (`680407c`).
+Its diff still consists of the five original `a25e544` source/test changes and
+the 564-line test blob remains exactly `36ca710`. Repository `rebase.updateRefs`
+also moved the new backup automatically; restored it immediately to `a428015`
+with a compare-and-swap ref update. Original #212/#217 backup refs were checked
+unchanged. Future extraction rebases must explicitly use `--no-update-refs`.
+No PR was merged and no real data was changed. Run writer integration tests
+after the financial reader local checks finish; do not run shared Cargo targets
+concurrently. Its additional SQLx descriptors are not prepared yet.
