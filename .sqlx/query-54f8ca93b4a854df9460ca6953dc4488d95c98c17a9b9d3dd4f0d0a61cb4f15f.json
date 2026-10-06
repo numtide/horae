@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "LOCK TABLE permission_change_receipts IN ACCESS EXCLUSIVE MODE",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "54f8ca93b4a854df9460ca6953dc4488d95c98c17a9b9d3dd4f0d0a61cb4f15f"
+}
