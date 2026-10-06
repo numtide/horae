@@ -3,6 +3,121 @@ use crate::server_fns::test_seed::{seed, wait_for_blocked};
 use sqlx::PgPool;
 use uuid::Uuid;
 
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn project_editor_and_user_revocation_commit_in_gate_order(pool: PgPool) {
+    use crate::models::project_creation::ProjectEditRequest;
+    use crate::server_fns::project_creation::editing::{
+        load_editable_project, save_editable_project,
+    };
+
+    for editor_first in [true, false] {
+        let ids = seed(&pool, OrgRole::Admin).await;
+        let manager = insert_user(
+            &pool,
+            ids.org_id,
+            ids.user_id,
+            &format!("{}@test.com", Uuid::now_v7()),
+            "Manager",
+            OrgRole::Manager,
+        )
+        .await
+        .unwrap();
+        let original = load_editable_project(&pool, manager.id, ids.org_id, ids.project_id)
+            .await
+            .unwrap();
+        let mut request = ProjectEditRequest {
+            id: Uuid::now_v7(),
+            project_id: ids.project_id,
+            expected_revision: original.revision,
+            form: original.form,
+        };
+        request.form.name = "Committed before revocation".into();
+        let mut barrier = pool.begin().await.unwrap();
+        let blocker = sqlx::query_scalar!("SELECT pg_backend_pid() AS \"pid!\"")
+            .fetch_one(&mut *barrier)
+            .await
+            .unwrap();
+        if editor_first {
+            sqlx::query!(
+                "SELECT id FROM projects WHERE id=$1 FOR UPDATE",
+                ids.project_id
+            )
+            .fetch_one(&mut *barrier)
+            .await
+            .unwrap();
+        } else {
+            sqlx::query!("SELECT id FROM users WHERE id=$1 FOR UPDATE", manager.id)
+                .fetch_one(&mut *barrier)
+                .await
+                .unwrap();
+        }
+        let mut operations = tokio::task::JoinSet::new();
+        for edit in [editor_first, !editor_first] {
+            let db = pool.clone();
+            let request = request.clone();
+            operations.spawn(async move {
+                let result = if edit {
+                    save_editable_project(&db, manager.id, ids.org_id, &request, false)
+                        .await
+                        .map(|_| ())
+                } else {
+                    change_user_role(&db, ids.org_id, ids.user_id, manager.id, OrgRole::Member)
+                        .await
+                        .map(|_| ())
+                };
+                (edit, result)
+            });
+            if edit == editor_first {
+                wait_for_blocked(&pool, blocker).await;
+            }
+        }
+        let first_pid = sqlx::query_scalar!(
+            "SELECT pid AS \"pid!\" FROM pg_stat_activity WHERE datname=current_database() AND $1=ANY(pg_blocking_pids(pid))",
+            blocker,
+        ).fetch_one(&pool).await.unwrap();
+        wait_for_blocked(&pool, first_pid).await;
+        barrier.commit().await.unwrap();
+        while let Some(outcome) =
+            tokio::time::timeout(std::time::Duration::from_secs(10), operations.join_next())
+                .await
+                .unwrap()
+        {
+            let (edit, result) = outcome.unwrap();
+            if edit && !editor_first {
+                assert!(
+                    matches!(
+                        result,
+                        Err(ServerFnError::ServerError { code: CONFLICT, .. })
+                    ),
+                    "{result:?}"
+                );
+            } else {
+                result.unwrap();
+            }
+        }
+        let name = sqlx::query_scalar!("SELECT name FROM projects WHERE id=$1", ids.project_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            name,
+            if editor_first {
+                "Committed before revocation"
+            } else {
+                "Widget"
+            }
+        );
+        assert!(matches!(
+            save_editable_project(&pool, manager.id, ids.org_id, &request, false).await,
+            Err(ServerFnError::ServerError {
+                code: FORBIDDEN,
+                ..
+            })
+        ));
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 enum Change {
     Create,
