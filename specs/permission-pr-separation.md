@@ -123,7 +123,7 @@ Clients MVP as canonical-permission acceptance.
 | Session-bound project-manager delegation, [#243](https://github.com/numtide/horae/pull/243) | `feat/project-manager-delegation`, `.worktrees/project-manager-delegation` | Review base `e44433e` combining #234/#228 | Draft at `3404c85`; suite/cache, final WASM lint and full local Nix passed (cached result confirmed in `10972`); final server gate closed; no form wiring or activation |
 | Own-permission explanation and Settings, [#244](https://github.com/numtide/horae/pull/244) | `feat/own-permission-settings`, `.worktrees/own-permission-settings` | #234 `45d219e` | Draft at `6c4e4d1`; 1,273 Rust tests, SQLx, provenance, review/Spec Kit/format/detector, offline server/WASM lint and isolated Chromium passed; desktop/mobile captures inspected; full local Nix passed (cached result confirmed in `30710`); no activation |
 | Permission audit history, [#245](https://github.com/numtide/horae/pull/245) | `feat/permission-audit-history`, `.worktrees/permission-audit-history` | Review base `59d2798` combining #243 `3404c85` and #244 `6c4e4d1` | Draft at `93f230d`; production/cache head `533922a` has 1,356 Rust tests, SQLx, review, Spec Kit, format/detector and offline lints passed; independent Chromium suite and desktop/mobile capture review passed with final test; full final-head Nix `9966` running; older Nix `61137` remains historical evidence |
-| Read-only legacy permission diagnostics | `feat/permission-preflight`, `.worktrees/permission-preflight` | Review base `61c90bc` combining #237 `2242361` and #226 `82d15f3` | Source `b159184` published, no PR yet; reader and all seven original tests byte-preserved, bounded review/Spec Kit analysis passed; original base missed receipt-schema test dependency, corrected without dropping assertions; full disposable suite/cache `28480` running; no endpoint, UI, migration or activation |
+| Read-only legacy permission diagnostics, [#246](https://github.com/numtide/horae/pull/246) | `feat/permission-preflight`, `.worktrees/permission-preflight` | Review base `61c90bc` combining #237 `2242361` and #226 `82d15f3` | Draft at `ff482c8`; 1,244 tests, full SQLx generation/provenance (1,138 descriptors), source preservation, bounded review/Spec Kit/format passed; offline native/WASM lint `86929` and full Nix `99711` running; no endpoint, UI, migration or activation |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -343,11 +343,11 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `5d51b0e` | Expose the current person's permission snapshot | own-permissions | Reader, DTO, complete DB/HTTP tests and registrations in #244 (`6c4e4d1`) on #234; suite, cache, offline lints, isolated browser and full local Nix passed; specification hunks retained |
 | `22ffdab` | Recheck manager access for financial snapshots | manager-snapshot-consumers | Shared helper/queries in #220; consumer/tests/cache in #232, local suite, both target lints and full Nix passed; specification hunks retained |
 | `15c82ef` | Recheck manager access in invoice editor snapshots | manager-snapshot-consumers | Consumer/tests/cache in #232; fixture adaptations documented, local suite, both target lints and full Nix passed; specification hunks retained |
-| `dc822a0` | Recheck manager authority before delivering exports | export-authority | Planned with `108594e` as legacy XLSX materialization/release authorization; snapshot visibility changes belong here; original preserved, extraction pending |
-| `108594e` | Revalidate project scope before delivering exports | export-authority | Planned with `dc822a0` as legacy XLSX delivery; preserve historical authorization and project HTTP tests, later canonical changes remain separately owned; extraction pending |
+| `dc822a0` | Recheck manager authority before delivering exports | export-authority | Planned with `108594e` as legacy materialized XLSX/PDF release authorization; shared snapshot visibility must be reconciled with #220's existing helper; original preserved, extraction pending |
+| `108594e` | Revalidate project scope before delivering exports | export-authority | Planned with `dc822a0` as legacy materialized XLSX/PDF delivery; preserve historical authorization and project HTTP tests, later canonical changes remain separately owned; extraction pending |
 | `dcf4ac8` | Recheck current permissions during CSV downloads | export-authority | Planned as dependent legacy CSV cursor/batch-release delivery with migration 0046; do not pull later canonical stream tests into this legacy boundary; original preserved, extraction pending |
 | `0793ce7` | Revalidate budget email authority before delivery | budget-email-authority | Four source/test files byte-identical in #238 (`7a7cede`) on master `1b8fa4f`; 1,133 tests, SQLx, format and offline server/WASM lints passed; full local Nix passed; specification hunks retained |
-| `8aac739` | Add read-only permission migration diagnostics | permission-preflight | Reader and all seven original tests extracted byte-for-byte in `feat/permission-preflight` (`b159184`) on combined #237/#226 review base; full suite/cache pending; specification hunks retained |
+| `8aac739` | Add read-only permission migration diagnostics | permission-preflight | Reader and all seven tests byte-preserved in #246 (`ff482c8`) on #237/#226 review base; 1,244 tests and full cache/provenance passed; offline/final Nix gates running; specification hunks retained |
 | `8c15bfe` | Show own permissions in Settings | own-permissions | Complete original component, shared descriptions, SSR and resource tests in #244 (`6c4e4d1`); suite/cache, isolated browser and full local Nix passed; no full T018 claim; specification hunks retained |
 | `300d1e9` | Expose administrator permission history | permission-audit | Complete historical DTO/HTTP/fencing tests in #245 (`533922a`); suite, complete cache provenance and offline lints passed; full Nix/browser pending; specification hunks retained |
 | `03e90b1` | Connect permission editor previews and commands | permission-editor | Template DTOs, hardening/tests and administration helpers in #226; profile DTOs, shared calculation and command hardening/tests in #234; editor/session/remaining hunks retained |
@@ -2461,10 +2461,11 @@ file has any later original commit changing it.
 
 Inventoried the remaining legacy export commits before the canonical consumers:
 
-- `dc822a0` and `108594e` form one XLSX boundary: bounded materialization,
-  rendering/release authorization, financial/project HTTP guards and retained
-  project-resource scope. The two snapshot visibility changes (`snapshot` module
-  and `manager` helper becoming `pub(crate)`) belong here, not to a new policy.
+- `dc822a0` and `108594e` form one materialized XLSX/PDF boundary: bounded
+  materialization, rendering/release authorization, financial/project HTTP guards
+  and retained project-resource scope. Include invoice PDF, not spreadsheets alone.
+  Reconcile the original snapshot visibility changes with #220's existing
+  `pub(crate)` manager helper rather than extracting that shared change twice.
   Reuse the already-recorded prerequisite composition `0046dad` as a candidate
   review base rather than creating redundant shared foundations. Its history
   contains #228 directly and equivalents `41e595d`/`0046dad` for #220/#232;
@@ -2484,3 +2485,44 @@ This is dependency/ownership inventory, not a completed source review or a claim
 that the export extractions are implemented. Next collect the ongoing preflight
 verification/cache, then prepare the first legacy export extraction while the
 final Nix gates finish. Original work, data and PR merge state remain unchanged.
+
+### Preflight suite/cache verified and draft published
+
+Corrected verification `28480` exited zero on source `b159184`: 904 app,
+180 integration and 160 core tests passed, 1,244 total; 11 existing manual tests
+ignored. Complete SQLx preparation then finished successfully. Provenance check
+`2054` confirmed all 1,119 base descriptors unchanged, 19 additions identical to
+original `db3935d`, 1,138 total, zero removals/modifications/unmatched additions.
+
+Original `8aac739` added 17 descriptors, one already present in this review base.
+The three other regenerated descriptors are original queries used by this exact
+reader/test slice: inherited repeatable-read fixture setting, fixture policy-zero
+update, and the policy-version organization SHARE read. Their original byte
+matches were verified; no unrelated implementation is introduced with them.
+
+Published unsigned cache head `ff482c847ab8d14cda15c8a3a56deafbf6acb4a0` and
+opened draft [#246](https://github.com/numtide/horae/pull/246). It has 22 files,
+947 additions: 547 source/test registration lines plus 400 SQLx lines. The actual
+reader remains the unchanged 91-line original. Offline native/WASM lint `86929`
+and full clean-head Nix `99711` are live; neither is claimed passed yet. The local
+Cargo target is occupied by that lint run.
+
+Old #245 source/cache-head Nix `61137` exited zero on `533922a`, all local
+x86_64-linux checks passed, including the inherited browser suite. Its later
+test-inclusive head `93f230d` still requires `9966`, which remains live; old
+results are not substituted. #240 final-head Nix `79480` also remains live.
+PR #245's body records the completed older gate and pending current one.
+
+Reading the retained export contracts clarified two inventory details: the
+materialized boundary includes invoice PDF as well as XLSX, and #220 already
+delivered the manager helper's `pub(crate)` visibility. The snapshot module
+itself remains private in candidate base `0046dad`; account for that remaining
+visibility hunk without duplicating the helper change. Use the historical
+`dcf4ac8` CSV contract for the legacy extraction, not later canonical refinements
+in the final original contract. No export source was changed in this iteration.
+
+Next collect the exact live final-head gates, then extract the materialized
+XLSX/PDF boundary with the preserved legacy tests and current master behavior.
+The original branches, unpublished work, real data and merge state are intact.
+This iteration is PROGRESS; full original ownership and the overall goal remain
+incomplete.
