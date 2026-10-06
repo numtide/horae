@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "CREATE FUNCTION csv_fetch_test.pause() RETURNS boolean LANGUAGE plpgsql AS $$\n        BEGIN PERFORM pg_advisory_xact_lock(715047); RETURN true; END $$",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "6a0657f03209265c9a41f9e93e138ad764ca28e368e481fea789f4202b24ae22"
+}

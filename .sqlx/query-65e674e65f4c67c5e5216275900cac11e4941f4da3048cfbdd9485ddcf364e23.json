@@ -1,0 +1,99 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id AS \"id!\",client_name AS \"client_name!\",code,name AS \"name!\",\n            project_type AS \"project_type!: horae_core::types::ProjectType\",currency AS \"currency!\",\n            budget_kind AS \"budget_kind!: horae_core::types::BudgetKind\",budget_amount_cents,\n            budget_minutes,active AS \"active!\"\n         FROM fetch_csv_export_rows($1) AS source(id uuid,client_name text,code text,name text,\n            project_type project_type,currency text,budget_kind budget_kind,budget_amount_cents bigint,\n            budget_minutes bigint,active boolean,export_bytes bigint)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "client_name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "project_type!: horae_core::types::ProjectType",
+        "type_info": {
+          "Custom": {
+            "name": "project_type",
+            "kind": {
+              "Enum": [
+                "time_and_materials",
+                "fixed_fee",
+                "non_billable",
+                "retainer"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "currency!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "budget_kind!: horae_core::types::BudgetKind",
+        "type_info": {
+          "Custom": {
+            "name": "budget_kind",
+            "kind": {
+              "Enum": [
+                "none",
+                "amount",
+                "hours"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "budget_amount_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "budget_minutes",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "active!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "65e674e65f4c67c5e5216275900cac11e4941f4da3048cfbdd9485ddcf364e23"
+}

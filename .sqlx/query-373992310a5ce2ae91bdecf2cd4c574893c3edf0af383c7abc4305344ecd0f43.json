@@ -1,0 +1,136 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT number AS \"number!\",currency AS \"currency!\",issued_on AS \"issued_on!: NaiveDate\",\n            due_on AS \"due_on!: NaiveDate\",terms_days AS \"terms_days!\",po_number AS \"po_number!\",\n            subtotal_cents AS \"subtotal_cents!\",discount_cents AS \"discount_cents!\",\n            tax1_cents AS \"tax1_cents!\",tax2_cents AS \"tax2_cents!\",total_cents AS \"total_cents!\",\n            discount_bps AS \"discount_bps!\",tax1_bps AS \"tax1_bps!\",tax2_name,tax2_bps,\n            line_id,description,minutes,rate_cents,amount_cents\n         FROM fetch_csv_export_rows($1) AS source(number text,currency text,issued_on date,due_on date,\n            terms_days integer,po_number text,subtotal_cents bigint,discount_cents bigint,tax1_cents bigint,\n            tax2_cents bigint,total_cents bigint,discount_bps smallint,tax1_bps smallint,tax2_name text,\n            tax2_bps smallint,line_id uuid,description text,minutes integer,rate_cents bigint,\n            amount_cents bigint,export_bytes bigint)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "number!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "currency!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "issued_on!: NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 3,
+        "name": "due_on!: NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 4,
+        "name": "terms_days!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "po_number!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "subtotal_cents!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "discount_cents!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "tax1_cents!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "tax2_cents!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "total_cents!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "discount_bps!",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 12,
+        "name": "tax1_bps!",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 13,
+        "name": "tax2_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "tax2_bps",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 15,
+        "name": "line_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 16,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 17,
+        "name": "minutes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 18,
+        "name": "rate_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 19,
+        "name": "amount_cents",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "373992310a5ce2ae91bdecf2cd4c574893c3edf0af383c7abc4305344ecd0f43"
+}
