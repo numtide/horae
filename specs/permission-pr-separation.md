@@ -107,8 +107,10 @@ Clients MVP as canonical-permission acceptance.
 | Current authority for organization branding writes, [#225](https://github.com/numtide/horae/pull/225) | `fix/branding-current-authority`, `.worktrees/branding-current-authority` | `02f7b58` | Draft at `f2d6bd4`; full suite, SQLx, offline server/WASM lint format and current-head GitHub Flake Check passed; Nixbot pending |
 | Internal reusable-profile commands, [#226](https://github.com/numtide/horae/pull/226) | `refactor/permission-template-commands`, `.worktrees/permission-template-commands` | #222 `e9695fd` | Draft at `82d15f3`; 1,189 tests, SQLx, offline server/WASM Clippy, format and full local Flake Check passed; CI required after retargeting; no endpoints or activation |
 | Current authority for user creation/role/activity, [#227](https://github.com/numtide/horae/pull/227) | `fix/user-mutation-authority`, `.worktrees/user-mutation-authority` | `02f7b58` | Draft at `142eda1`; 1,127 tests, SQLx, offline server/WASM Clippy and format passed; required CI pending |
-| Assignment authority and project writer coordination, [#228](https://github.com/numtide/horae/pull/228) | `fix/project-access-lock-order`, `.worktrees/project-access-lock-order` | #227 `142eda1` | Draft at `0e1e675`; 1,137 tests, SQLx, offline server/WASM Clippy and format passed; full local Flake Check pending |
+| Assignment authority and project writer coordination, [#228](https://github.com/numtide/horae/pull/228) | `fix/project-access-lock-order`, `.worktrees/project-access-lock-order` | #227 `142eda1` | Draft at `0e1e675`; 1,137 tests, SQLx, offline server/WASM Clippy, format and full local Flake Check passed; master-targeted CI required after retargeting |
 | Durable CSV preparation outside SQL transactions, [#231](https://github.com/numtide/horae/pull/231) | `fix/csv-batch-transaction-boundary`, `.worktrees/csv-batch-transaction-boundary` | `02f7b58` | Draft at `e9898ed`; 1,122 tests, SQLx, offline server/WASM Clippy and format passed; required CI pending |
+| Financial snapshot reader authority, [#232](https://github.com/numtide/horae/pull/232) | `fix/financial-snapshot-authority`, `.worktrees/financial-snapshot-authority` | #220 `bc0c7a0` | Draft at `0bb5721`; 1,141 tests, SQLx, offline server/WASM Clippy and format passed; full local Nix running; required CI after retargeting |
+| Invoice writer/revocation ordering, [#233](https://github.com/numtide/horae/pull/233) | `fix/invoice-write-authority`, `.worktrees/invoice-write-authority` | Integration base `0046dad` combining #227/#228 and #220/#232 | Draft at `8a6cb2a`; 1,162 tests, SQLx, offline server/WASM Clippy and format passed; full local Nix running; retarget to master after prerequisites, do not merge into integration base |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -326,8 +328,8 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `e949e4c` | Drain interrupted import transactions before releasing reservations | import-transaction-lifecycle | Production/test/cache hunks in #224; specification hunks retained for reconciliation |
 | `c0cfb8f` | Scope rate permissions to their owning resource | scope-domain | Code/tests in #221; specification hunks retained for reconciliation |
 | `5d51b0e` | Expose the current person's permission snapshot | own-permissions | Held in original backup; extraction pending |
-| `22ffdab` | Recheck manager access for financial snapshots | manager-snapshot-consumers | Shared helper/queries in #220; consumer/test extraction in `fix/financial-snapshot-authority` passes full suite; cache/lint/Nix pending; specification hunks retained |
-| `15c82ef` | Recheck manager access in invoice editor snapshots | manager-snapshot-consumers | Consumer/test extraction in `fix/financial-snapshot-authority` passes full suite; fixture adaptations documented; cache/lint/Nix pending; specification hunks retained |
+| `22ffdab` | Recheck manager access for financial snapshots | manager-snapshot-consumers | Shared helper/queries in #220; consumer/tests/cache in #232, local suite and both target lints passed, Nix pending; specification hunks retained |
+| `15c82ef` | Recheck manager access in invoice editor snapshots | manager-snapshot-consumers | Consumer/tests/cache in #232; fixture adaptations documented, local suite and both target lints passed, Nix pending; specification hunks retained |
 | `dc822a0` | Recheck manager authority before delivering exports | export-authority | Held in original backup; extraction pending |
 | `108594e` | Revalidate project scope before delivering exports | export-authority | Held in original backup; extraction pending |
 | `dcf4ac8` | Recheck current permissions during CSV downloads | export-authority | Held in original backup; extraction pending |
@@ -379,7 +381,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `5f7895c` | Preserve selected dates and drag offsets in Timesheet | timesheet-consumer-commands | Held in original backup; extraction pending |
 | `84d5352` | Expose authenticated project manager delegation | project-manager-delegation | Held in original backup; extraction pending |
 | `c4e83c8` | Record project delegation verification and next integration gate | specification-history | Held in original backup; extraction pending |
-| `a25e544` | Serialize invoice writes before user revocation | legacy-access-writers | Five Rust/test changes isolated in `fix/invoice-write-authority`; not compilable until `22ffdab` preview dependency is integrated; specification hunks retained |
+| `a25e544` | Serialize invoice writes before user revocation | legacy-access-writers | Five Rust/test changes and eight SQLx additions in #233 on integrated #220/#227/#228/#232 prerequisites; suite/cache/offline lints passed, Nix running; specification hunks retained |
 | `774f60a` | Record invoice revocation verification and next integration gates | specification-history | Held in original backup; extraction pending |
 | `1879b8a` | Preserve requester identity when reloading permission editors | permission-editor | Held in original backup; extraction pending |
 | `dab6885` | Record editor reload verification and remaining directory integration | specification-history | Held in original backup; extraction pending |
@@ -1076,3 +1078,70 @@ unchanged. Future extraction rebases must explicitly use `--no-update-refs`.
 No PR was merged and no real data was changed. Run writer integration tests
 after the financial reader local checks finish; do not run shared Cargo targets
 concurrently. Its additional SQLx descriptors are not prepared yet.
+
+#232 is published on #220 with clean head `0bb5721`. Offline server Clippy
+passed (`85779`), followed by WASM (`86132`). Full Nix remains live in `80170`;
+#228's original `1662` progressed through browser checks into test builds.
+`git range-diff` confirms the invoice writer's rebased `680407c` is patch-equal
+to saved `a428015`; its preview/snapshot sources are unchanged from #232 and its
+editor/test roots match original `a25e544`. Full combined workspace verification
+is now running in `37438` on private PostgreSQL. Next: collect that suite,
+regenerate its cache, run both offline target lints and publish the writer only
+with explicit prerequisite/retargeting instructions. Keep all live checks;
+do not duplicate their runs or claim the remaining original groups accounted.
+
+### 2026-10-06 — Invoice writer integration verification
+
+The immediately preceding conversational turn only supplied a proposed goal
+prompt (no authoritative progress). Re-read the active saved objective and
+revalidated the actual worktrees and process handles instead of restarting
+work. #216 is confirmed merged at `02f7b58`; the original worktrees remain
+preserved. The earlier extraction work did make progress as recorded above.
+
+The combined writer suite `37438` completed successfully on `680407c`: 861
+app, 180 integration and 121 core tests, 1,162 total, with 11 existing manual
+tests ignored. Formatting `92986` already passed unchanged. Complete SQLx
+regeneration now runs in `28714` on another fresh private PostgreSQL cluster;
+do not interpret its temporary cache removals as a final diff before it exits.
+
+#228's original full Nix handle `1662` exited successfully with `all checks passed!`, including browser, SQLx and the NixOS end-to-end test; incompatible
+platforms were omitted as reported by Nix. #232's `80170` is still live and
+has completed its client release build. No check was restarted or bypassed.
+Next: compare the writer's final SQLx cache with its integration base, run
+offline server/WASM lints, publish the narrowly scoped draft with its explicit
+prerequisites, and retain the single ledger as the accounting source.
+
+Writer SQLx preparation passed (`28714`): 1,069 integration-base descriptors
+unchanged and eight additions, all byte-identical to `a25e544`, 1,077 total.
+Committed only those descriptors as unsigned `8a6cb2a`; source/tests remain
+unchanged from the fully tested `680407c`. Offline all-target server Clippy
+passed (`8831`). Full Nix runs on the clean committed head in `1215`; WASM
+Clippy follows server lint without sharing concurrent Cargo work.
+The source review was rechecked against T192–T194 and the original invoice
+contract: current same-tenant actor before replay/write, common organization
+and invoice serialization prefix, test-only actorless adapters remain test-only,
+and events remain outside committed transactions. No broader policy or full
+resource-lock hierarchy acceptance is claimed.
+
+WASM Clippy passed (`75047`). Published the prerequisite review base `0046dad`
+and writer `8a6cb2a`, then opened draft [#233](https://github.com/numtide/horae/pull/233).
+Its diff is 13 files, 811 insertions and eight deletions: five original Rust/test
+changes plus eight query descriptors. The body explicitly prohibits merging
+into the integration base; first deliver #227 → #228 and #220 → #232, then
+retarget/rebase the writer-only change onto master and run current-head CI.
+No prerequisite branch was changed. #228's PR body now records its successful
+full Nix check. Original #212/#217 backup refs and all 18 unfinished local paths
+were rechecked unchanged; the writer's own pre-integration backup is `a428015`.
+
+Next-boundary inspection found that extracting only the first profile command
+commit `f5e0dde` would omit later actor/target/last-admin SHARE locks and bounded
+READ WRITE transactions from `03e90b1`. Preserve those repairs with the commands.
+Final `profiles.rs` also uses the shared `ProfileDraft`/command DTOs and the
+historical `RemovedRelationship` type (the latter moved in `8db19ba`); it does
+not require activating the editor UI. Final profile tests add unrelated child
+modules after `03e90b1`; separate their module wiring without dropping original
+profile cases. The next extraction must resolve #226 plus #221 prerequisites,
+retain migration 0044 and current profile behavior, and account separately for
+later editor/subject/directory tests. This is inspected dependency evidence,
+not a completed extraction. Keep Nix handles `80170` (#232) and `1215` (#233)
+without restarting them. The overall original-change reconciliation is incomplete.
