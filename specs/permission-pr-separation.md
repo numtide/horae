@@ -1209,3 +1209,12 @@ credential tests. `4fac6af` and `b4672a4` add command/status/download authority;
 later `482b7c5` adds requester provenance and has a separate storage dependency.
 Do not copy final import files blindly across those boundaries or duplicate
 the executor-based cancel change already extracted in #231.
+
+The full combined workspace suite passed (`7729`) on the unchanged `9005b1b`
+source: 876 app, 180 integration and 189 core tests, 1,245 total, with 11
+existing manual tests ignored. All 27 original profile tests ran alongside the
+template and domain prerequisites. The initial compilation took 4m25s and the
+app tests 120s; long-running notices were not failures or a reason to restart.
+Full SQLx preparation now runs in `56264` on another private temporary database.
+Next: compare the final cache with the prerequisite base and original descriptors,
+then serialize offline server/WASM lint before publishing the draft.
