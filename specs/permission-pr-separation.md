@@ -114,9 +114,9 @@ Clients MVP as canonical-permission acceptance.
 | Internal person-profile commands, [#234](https://github.com/numtide/horae/pull/234) | `refactor/person-profile-commands`, `.worktrees/person-profile-commands` | Integration base `46f02f7` combining #226/#221 | Draft at `45d219e`; 1,245 tests, schema upgrade, SQLx, offline server/WASM Clippy, format and full local Nix passed; retarget to master after prerequisites, no activation |
 | Harvest connection change authority, [#235](https://github.com/numtide/horae/pull/235) | `fix/harvest-connection-authority`, `.worktrees/harvest-connection-authority` | #228 `0e1e675` | Draft at `2fcecd1`; 1,146 tests, SQLx, offline server/WASM Clippy, format and full local Nix passed; retarget after #227/#228 |
 | Import job command and download authority, [#236](https://github.com/numtide/horae/pull/236) | `fix/import-job-authority`, `.worktrees/import-job-authority` | Integration base `26d6159` combining #235/#231 | Draft at `95bdf4a`; 1,163 tests, SQLx, offline server/WASM Clippy, format and full local Nix passed; retarget to master after #227/#228/#235 and #231, not an integration-base merge |
-| Original import requester provenance, [#237](https://github.com/numtide/horae/pull/237) | `feat/import-job-requester`, `.worktrees/import-job-requester` | Integration base `cfb8240` combining #236/#219/#222 | Draft at `2242361`; 1,218 tests, schema upgrade, SQLx, offline server/WASM Clippy and format passed; full Nix running; retarget after both prerequisite chains, no worker-policy activation |
+| Original import requester provenance, [#237](https://github.com/numtide/horae/pull/237) | `feat/import-job-requester`, `.worktrees/import-job-requester` | Integration base `cfb8240` combining #236/#219/#222 | Draft at `2242361`; 1,218 tests, schema upgrade, SQLx, offline server/WASM Clippy and format passed; first full Nix failed in inherited menu browser assertion, unchanged diagnostic rerun running; retarget after both prerequisite chains, no worker-policy activation |
 | Budget email preparation authority, [#238](https://github.com/numtide/horae/pull/238) | `fix/budget-email-authority`, `.worktrees/budget-email-authority` | Master `1b8fa4f` | Draft at `7a7cede`; 1,133 source-head tests, SQLx, format and cache-inclusive server/WASM Clippy passed; full current-head Nix running; no real mail or policy activation |
-| Approval tenant isolation | `fix/approval-tenant-isolation`, `.worktrees/approval-tenant-isolation` | Master `1b8fa4f` | Local unsigned `d72b830`; three source/test files preserved exactly, source review and format passed; runtime/cache running, lints/publication pending |
+| Approval tenant isolation, [#239](https://github.com/numtide/horae/pull/239) | `fix/approval-tenant-isolation`, `.worktrees/approval-tenant-isolation` | Master `1b8fa4f` | Draft at `66a256f`; three source/test files and complete cache patch preserved exactly; 1,124 source-head tests, source review, SQLx and format passed; offline lints and full current-head Nix running |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -276,7 +276,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `05448a8` | Specify scoped roles and permissions | specification-history | Held in original backup; extraction pending |
 | `1d45191` | Require Harvest parity for permissions and scoped approvals | specification-history | Held in original backup; extraction pending |
 | `a7727f1` | Add record scope evaluation for permissions | scope-domain | Code/tests in #219; specification hunks retained for reconciliation |
-| `2abce9a` | Enforce approval isolation and record permission boundaries | approval-isolation | Three Rust/test files extracted byte-identically in independent `d72b830` on master `1b8fa4f`; source review and format passed; runtime/cache/lints/PR pending; mixed specification hunks retained |
+| `2abce9a` | Enforce approval isolation and record permission boundaries | approval-isolation | Three Rust/test files and original cache patch in independent #239 (`66a256f`); 1,124 tests, source review, SQLx and format passed; offline lints/full Nix running; mixed specification hunks retained |
 | `757f43d` | Enforce tenant and administrator boundaries for assignments | legacy-access-writers | Rust/test/cache changes in #228 with subsequent coordination repair; specification hunks retained |
 | `d3a4ff3` | Document profile reapplication and import permission boundaries | specification-history | Held in original backup; extraction pending |
 | `dcf21ef` | Specify permission migration safeguards and rate-scope verification | specification-history | Held in original backup; extraction pending |
@@ -330,7 +330,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `4fac6af` | Revalidate import job command and status authority | import-authority | Exact executor-based `jobs::cancel` owned by #231; remaining command/status Rust changes with the subsequent shared guard in #236; specification hunks retained for reconciliation |
 | `b4672a4` | Revalidate authority during import error downloads | import-authority | All eight combined command/download Rust/test files byte-identical in #236, plus eight regenerated SQLx additions matching original; suite/cache/offline lints/format/full local Nix passed; specification hunks retained |
 | `e5fcc5a` | Prepare durable CSV batches before opening transactions | import-transaction-lifecycle | Two exact Rust blobs and regenerated cache in #231; local verification passed, CI pending; specification hunks retained |
-| `482b7c5` | Retain the original requester of import jobs | import-requester-provenance | Seven original source/schema/test paths and exact regenerated cache patch in #237 on combined #236/#222 prerequisites; 1,218 tests, schema order, cache, offline lints and format passed; full Nix running; specification hunks retained |
+| `482b7c5` | Retain the original requester of import jobs | import-requester-provenance | Seven original source/schema/test paths and exact regenerated cache patch in #237 on combined #236/#222 prerequisites; 1,218 tests, schema order, cache, offline lints and format passed; first full Nix failed in inherited menu assertion, unchanged diagnostic rerun running; specification hunks retained |
 | `e949e4c` | Drain interrupted import transactions before releasing reservations | import-transaction-lifecycle | Production/test/cache hunks in #224; specification hunks retained for reconciliation |
 | `c0cfb8f` | Scope rate permissions to their owning resource | scope-domain | Code/tests in #221; specification hunks retained for reconciliation |
 | `5d51b0e` | Expose the current person's permission snapshot | own-permissions | Held in original backup; extraction pending |
@@ -1680,3 +1680,34 @@ unchanged. Complete SQLx preparation continues in the same private-DB session.
 `95bdf4a`, including the completed browser matrix and NixOS e2e. Updated its PR
 record. This is the local x86_64-linux result on the combined review base; it does
 not replace future master-retargeted CI or authorize merging into that base.
+
+Approval SQLx preparation completed (`78215`): 997 unchanged base descriptors,
+eight byte-identical original additions and six superseded removals, 1,005 total.
+The complete cache stable patch ID `260a95e0438066d47c0ac3aaa5d30ae13776a730`
+matches original `2abce9a` exactly. Saved unsigned `66a256f8f2e8696e42d30eaca981b7e62dfbdfe4`
+and published independent draft [#239](https://github.com/numtide/horae/pull/239),
+11 files, 318 insertions/47 deletions including generated metadata. Offline
+server then WASM Clippy run sequentially in `79148`; full clean-head Nix runs
+independently in `87204`. No new schema or scoped approval activation.
+
+#237's first full Nix process `63735` terminated with exit 1 after a successful
+release build. Its browser derivation
+`/nix/store/rahz5l50fgmd9qsmnazjwyzm2x71kh2j-horae-browser-checks.drv`
+failed at `menu-popovers.cjs:204`: the last project-row menu remained visible
+five seconds after decrementing its table's horizontal scroll offset. Read the
+full failure log and the assertion/scroll handler. No pending request or browser
+error was reported. The test, menu JavaScript/component and CSS are byte-identical
+to #236, whose full browser suite just passed; requester code changes no UI path.
+That comparison does not establish the root cause or turn the failed run green.
+Updated #237's body and started one unchanged-head diagnostic full Nix rerun in
+`30447`, preserving the first failure. Do not weaken the assertion or claim a
+confirmed flaky cause. If reproduced, investigate with retained failure evidence
+while continuing independent extractions; no unrelated UI repair is authorized.
+
+Remote inspection confirms #239 is draft, targets master and contains exactly
+`66a256f8f2e8696e42d30eaca981b7e62dfbdfe4` with the 11-file bounded diff.
+Its combined lint process `79148` completed the offline workspace/server phase
+successfully (3m13s) and advanced to WASM; do not count the combined process as
+finished until that second phase exits. #237 diagnostic `30447` is rebuilding
+only the three unfinished browser/VM derivations, reusing the successful compiled
+package and other checks rather than restarting its release compilation.
