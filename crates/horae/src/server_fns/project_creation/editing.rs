@@ -24,7 +24,7 @@ pub(in crate::server_fns) async fn load_editable_project(
         .execute(&mut *tx)
         .await
         .map_err(storage_error)?;
-    let role = lock_creation_actor(&mut tx, actor_id, org_id).await?;
+    let role = lock_creation_actor(&mut tx, actor_id, org_id, OrganizationLock::Shared).await?;
     let project = load_project_form(&mut tx, org_id, project_id, role).await?;
     tx.commit().await.map_err(storage_error)?;
     Ok(project)

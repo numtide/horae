@@ -1,6 +1,8 @@
 //! Project, task, and assignment server functions.
 
 use super::*;
+#[cfg(feature = "server")]
+use crate::db::{OrganizationLock, lock_organization};
 use crate::models::project::ProjectFeeBalance;
 use crate::models::{ProjectDetails, ProjectTagLink, ProjectTaskRate};
 
@@ -18,6 +20,9 @@ mod mutation_tests;
 
 #[cfg(all(test, feature = "server"))]
 mod bulk_tests;
+
+#[cfg(all(test, feature = "server"))]
+mod assignment_tests;
 
 // ── Projects ─────────────────────────────────────────────────────────────────
 
@@ -591,6 +596,7 @@ pub async fn create_task(
     let task = create_task_for_project(
         &state.db,
         manager.org_id,
+        manager.id,
         &name,
         billable_default,
         project_id,
@@ -611,6 +617,7 @@ pub async fn create_task(
 async fn create_task_for_project(
     db: &sqlx::PgPool,
     org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
     name: &str,
     billable_default: bool,
     project_id: Option<uuid::Uuid>,
@@ -620,6 +627,12 @@ async fn create_task_for_project(
         return Err(conflict("Task name cannot be empty"));
     }
     let mut tx = db.begin().await.map_err(server_err)?;
+    let gate = if project_id.is_some() {
+        OrganizationLock::AccessChange
+    } else {
+        OrganizationLock::Shared
+    };
+    project_creation::lock_creation_actor(&mut tx, actor_id, org_id, gate).await?;
     let id = uuid::Uuid::now_v7();
     let task = sqlx::query_as!(
         Task,
@@ -808,8 +821,35 @@ pub async fn link_project_task(
     let project_id = parse_uuid(&project_id, "project_id")?;
     let task_id = parse_uuid(&task_id, "task_id")?;
 
-    let mut tx = state.db.begin().await.map_err(server_err)?;
-    enable_project_task(&mut tx, manager.org_id, project_id, task_id, rate.as_ref()).await?;
+    link_project_task_record(
+        &state.db,
+        manager.org_id,
+        manager.id,
+        project_id,
+        task_id,
+        rate.as_ref(),
+    )
+    .await
+}
+
+#[cfg(feature = "server")]
+async fn link_project_task_record(
+    db: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
+    project_id: uuid::Uuid,
+    task_id: uuid::Uuid,
+    rate: Option<&ProjectTaskRate>,
+) -> Result<(), ServerFnError> {
+    let mut tx = db.begin().await.map_err(server_err)?;
+    project_creation::lock_creation_actor(
+        &mut tx,
+        actor_id,
+        org_id,
+        OrganizationLock::AccessChange,
+    )
+    .await?;
+    enable_project_task(&mut tx, org_id, project_id, task_id, rate).await?;
     tx.commit().await.map_err(server_err)?;
     Ok(())
 }
@@ -822,6 +862,11 @@ async fn enable_project_task(
     task_id: uuid::Uuid,
     explicit_rate: Option<&ProjectTaskRate>,
 ) -> Result<(), ServerFnError> {
+    if !lock_project_revision(db, org_id, project_id).await? {
+        return Err(not_found(
+            "Active project and task not found in this organization",
+        ));
+    }
     // Validate before the idempotent insert, including already-linked pairs.
     // Hold these rows until commit so archiving cannot race task enablement.
     // Preserve legacy catalog inheritance, including non-billable projects,
@@ -838,11 +883,10 @@ async fn enable_project_task(
                      THEN t.default_rate_cents ELSE NULL END AS default_rate_cents
          FROM projects p JOIN clients c ON c.id = p.client_id AND c.org_id = p.org_id
          JOIN tasks t ON t.org_id = p.org_id
-         JOIN organizations o ON o.id = p.org_id
          LEFT JOIN project_settings ps ON ps.project_id = p.id AND ps.org_id = p.org_id
          WHERE p.id = $1 AND t.id = $2 AND p.org_id = $3
            AND p.active AND c.active AND t.active
-         FOR SHARE OF p, c, t, o"#,
+         FOR SHARE OF c, t"#,
         project_id,
         task_id,
         org_id,
@@ -943,24 +987,10 @@ pub async fn create_assignment(
 ) -> Result<Assignment, ServerFnError> {
     let admin = require_admin().await?;
     let state = crate::state::global_state().await;
-    let id = uuid::Uuid::now_v7();
     let project_id = parse_uuid(&project_id, "project_id")?;
     let user_id = parse_uuid(&user_id, "user_id")?;
     let pr: ProjectRole = parse_enum(&role, "role")?;
-    let assignment = sqlx::query_as!(
-        Assignment,
-        r#"INSERT INTO assignments (id, project_id, user_id, role)
-         VALUES ($1, $2, $3, $4)
-         RETURNING id, project_id, user_id, role as "role: ProjectRole", rate_cents,
-                   created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
-        id,
-        project_id,
-        user_id,
-        pr as ProjectRole,
-    )
-    .fetch_one(&state.db)
-    .await
-    .map_err(server_err)?;
+    let assignment = insert_assignment(&state.db, &admin, project_id, user_id, pr).await?;
 
     state
         .plugins
@@ -972,23 +1002,54 @@ pub async fn create_assignment(
     Ok(assignment)
 }
 
+#[cfg(feature = "server")]
+pub(super) async fn insert_assignment(
+    db: &sqlx::PgPool,
+    admin: &User,
+    project_id: uuid::Uuid,
+    user_id: uuid::Uuid,
+    role: ProjectRole,
+) -> Result<Assignment, ServerFnError> {
+    let mut tx = begin_assignment_change(db, admin).await?;
+    if !lock_project_revision(&mut tx, admin.org_id, project_id).await? {
+        return Err(not_found("Project or person not found"));
+    }
+    sqlx::query_scalar!(
+        "SELECT p.id FROM projects p JOIN users u ON u.org_id = p.org_id
+         WHERE p.id = $1 AND u.id = $2 AND p.org_id = $3 FOR SHARE OF u",
+        project_id,
+        user_id,
+        admin.org_id,
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(server_err)?
+    .ok_or_else(|| not_found("Project or person not found"))?;
+    let id = uuid::Uuid::now_v7();
+    let assignment = sqlx::query_as!(
+        Assignment,
+        r#"INSERT INTO assignments (id, project_id, user_id, role)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id, project_id, user_id, role as "role: ProjectRole", rate_cents,
+                   created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
+        id,
+        project_id,
+        user_id,
+        role as ProjectRole,
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(server_err)?;
+    tx.commit().await.map_err(server_err)?;
+    Ok(assignment)
+}
+
 #[server]
 pub async fn delete_assignment(assignment_id: String) -> Result<(), ServerFnError> {
     let admin = require_admin().await?;
     let state = crate::state::global_state().await;
     let id = parse_uuid(&assignment_id, "assignment_id")?;
-    // Delete and capture the row atomically so the event carries its details
-    // and a concurrent delete cannot double-notify.
-    let removed = sqlx::query_as!(
-        Assignment,
-        r#"DELETE FROM assignments WHERE id = $1
-         RETURNING id, project_id, user_id, role as "role: ProjectRole", rate_cents,
-                   created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
-        id,
-    )
-    .fetch_optional(&state.db)
-    .await
-    .map_err(server_err)?;
+    let removed = remove_assignment(&state.db, &admin, id).await?;
 
     if let Some(a) = removed {
         state
@@ -1000,4 +1061,93 @@ pub async fn delete_assignment(assignment_id: String) -> Result<(), ServerFnErro
             });
     }
     Ok(())
+}
+
+#[cfg(feature = "server")]
+pub(super) async fn remove_assignment(
+    db: &sqlx::PgPool,
+    admin: &User,
+    id: uuid::Uuid,
+) -> Result<Option<Assignment>, ServerFnError> {
+    let mut tx = begin_assignment_change(db, admin).await?;
+    let project_id = sqlx::query_scalar!(
+        "SELECT a.project_id FROM assignments a
+         JOIN projects p ON p.id=a.project_id JOIN users u ON u.id=a.user_id
+         WHERE a.id=$1 AND p.org_id=$2 AND u.org_id=$2",
+        id,
+        admin.org_id,
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(server_err)?;
+    let Some(project_id) = project_id else {
+        tx.commit().await.map_err(server_err)?;
+        return Ok(None);
+    };
+    if !lock_project_revision(&mut tx, admin.org_id, project_id).await? {
+        tx.commit().await.map_err(server_err)?;
+        return Ok(None);
+    }
+    // Delete and capture the row atomically so the event carries its details
+    // and a concurrent delete cannot double-notify.
+    let removed = sqlx::query_as!(
+        Assignment,
+        r#"DELETE FROM assignments a USING projects p, users u
+         WHERE a.id = $1 AND a.project_id = p.id AND a.user_id = u.id
+           AND p.org_id = $2 AND u.org_id = $2 AND a.project_id = $3
+         RETURNING a.id, a.project_id, a.user_id, a.role as "role: ProjectRole", a.rate_cents,
+                   a.created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
+        id,
+        admin.org_id,
+        project_id,
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(server_err)?;
+    tx.commit().await.map_err(server_err)?;
+    Ok(removed)
+}
+
+#[cfg(feature = "server")]
+async fn begin_assignment_change<'a>(
+    db: &'a sqlx::PgPool,
+    admin: &User,
+) -> Result<sqlx::Transaction<'a, sqlx::Postgres>, ServerFnError> {
+    let mut tx = db.begin().await.map_err(server_err)?;
+    lock_organization(&mut tx, admin.org_id, OrganizationLock::AccessChange)
+        .await
+        .map_err(server_err)?;
+    // Session admission can predate a demotion. Hold the current actor row
+    // until commit so a completed revocation cannot leave a stale writer.
+    sqlx::query_scalar!(
+        "SELECT id FROM users WHERE id = $1 AND org_id = $2
+           AND active AND org_role = $3 FOR SHARE",
+        admin.id,
+        admin.org_id,
+        OrgRole::Admin as OrgRole,
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(server_err)?
+    .ok_or_else(|| forbidden("Active administrator access required"))?;
+    Ok(tx)
+}
+
+#[cfg(feature = "server")]
+async fn lock_project_revision(
+    db: &mut sqlx::PgConnection,
+    org_id: uuid::Uuid,
+    project_id: uuid::Uuid,
+) -> Result<bool, ServerFnError> {
+    // Child revision triggers write this parent. Permit entry/invoice FK checks
+    // to finish before any dependent membership cascade waits for those writers.
+    sqlx::query_scalar!(
+        "SELECT id FROM projects WHERE id=$1 AND org_id=$2 FOR NO KEY UPDATE",
+        project_id,
+        org_id,
+    )
+    .fetch_optional(db)
+    .await
+    .map(|row| row.is_some())
+    .map_err(server_err)
 }
