@@ -6,6 +6,10 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// Session identity captured by an authorized read, not a source of authority.
+#[cfg_attr(
+    not(feature = "server"),
+    expect(dead_code, reason = "Permission editor UI integration is pending.")
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PermissionRequester {
