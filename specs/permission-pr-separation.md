@@ -111,9 +111,9 @@ Clients MVP as canonical-permission acceptance.
 | Durable CSV preparation outside SQL transactions, [#231](https://github.com/numtide/horae/pull/231) | `fix/csv-batch-transaction-boundary`, `.worktrees/csv-batch-transaction-boundary` | `02f7b58` | Draft at `e9898ed`; 1,122 tests, SQLx, offline server/WASM Clippy, format and current-head GitHub Flake Check passed; Nixbot build pending |
 | Financial snapshot reader authority, [#232](https://github.com/numtide/horae/pull/232) | `fix/financial-snapshot-authority`, `.worktrees/financial-snapshot-authority` | #220 `bc0c7a0` | Draft at `0bb5721`; 1,141 tests, SQLx, offline server/WASM Clippy, format and full local Flake Check passed; required CI after retargeting |
 | Invoice writer/revocation ordering, [#233](https://github.com/numtide/horae/pull/233) | `fix/invoice-write-authority`, `.worktrees/invoice-write-authority` | Integration base `0046dad` combining #227/#228 and #220/#232 | Draft at `8a6cb2a`; 1,162 tests, SQLx, offline server/WASM Clippy, format and full local Nix passed; retarget to master after prerequisites, do not merge into integration base |
-| Internal person-profile commands, [#234](https://github.com/numtide/horae/pull/234) | `refactor/person-profile-commands`, `.worktrees/person-profile-commands` | Integration base `46f02f7` combining #226/#221 | Draft at `45d219e`; 1,245 tests, schema upgrade, SQLx, offline server/WASM Clippy and format passed; full Nix running; retarget to master after prerequisites, no activation |
+| Internal person-profile commands, [#234](https://github.com/numtide/horae/pull/234) | `refactor/person-profile-commands`, `.worktrees/person-profile-commands` | Integration base `46f02f7` combining #226/#221 | Draft at `45d219e`; 1,245 tests, schema upgrade, SQLx, offline server/WASM Clippy, format and full local Nix passed; retarget to master after prerequisites, no activation |
 | Harvest connection change authority, [#235](https://github.com/numtide/horae/pull/235) | `fix/harvest-connection-authority`, `.worktrees/harvest-connection-authority` | #228 `0e1e675` | Draft at `2fcecd1`; 1,146 tests, SQLx, offline server/WASM Clippy and format passed; full Nix running; retarget after #227/#228 |
-| Import job command and download authority, [#236](https://github.com/numtide/horae/pull/236) | `fix/import-job-authority`, `.worktrees/import-job-authority` | Integration base `26d6159` combining #235/#231 | Draft at `95bdf4a`; 1,163 tests, SQLx and format passed; offline lints and full Nix pending; retarget to master after #227/#228/#235 and #231, not an integration-base merge |
+| Import job command and download authority, [#236](https://github.com/numtide/horae/pull/236) | `fix/import-job-authority`, `.worktrees/import-job-authority` | Integration base `26d6159` combining #235/#231 | Draft at `95bdf4a`; 1,163 tests, SQLx, offline server/WASM Clippy and format passed; full Nix running; retarget to master after #227/#228/#235 and #231, not an integration-base merge |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -325,7 +325,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `907bc88` | Recheck authority when saving organization branding | branding-authority | Source/test/cache hunks in #225; specification hunks retained for reconciliation |
 | `d7a5a21` | Revalidate administrator authority for Harvest connection changes | import-authority | Eight Rust/test files and regenerated cache in #235 on #228; suite/SQLx/offline lints/format passed, full Nix running; specification hunks retained for reconciliation |
 | `4fac6af` | Revalidate import job command and status authority | import-authority | Exact executor-based `jobs::cancel` owned by #231; remaining command/status Rust changes with the subsequent shared guard in #236; specification hunks retained for reconciliation |
-| `b4672a4` | Revalidate authority during import error downloads | import-authority | All eight combined command/download Rust/test files byte-identical in #236, plus eight regenerated SQLx additions matching original; suite/cache passed, lints/full Nix pending; specification hunks retained |
+| `b4672a4` | Revalidate authority during import error downloads | import-authority | All eight combined command/download Rust/test files byte-identical in #236, plus eight regenerated SQLx additions matching original; suite/cache/offline lints/format passed, full Nix running; specification hunks retained |
 | `e5fcc5a` | Prepare durable CSV batches before opening transactions | import-transaction-lifecycle | Two exact Rust blobs and regenerated cache in #231; local verification passed, CI pending; specification hunks retained |
 | `482b7c5` | Retain the original requester of import jobs | import-requester-provenance | Held in original backup; extraction pending |
 | `e949e4c` | Drain interrupted import transactions before releasing reservations | import-transaction-lifecycle | Production/test/cache hunks in #224; specification hunks retained for reconciliation |
@@ -1426,3 +1426,30 @@ base) plus #236; original migration 0045 relies on 0042's composite user key.
 Keep its five original requester tests, HTTP forgery checks and legacy report
 adaptations together. Test the actual upgrade from the combined base already
 containing 0047; no original migration renumbering, backfill or worker-policy grant.
+
+Offline server lint (`96055`) and WASM lint (`36645`) both passed on unchanged
+#236 source/cache. Its PR description records all local gates passed and full
+Nix still running (`65754`). Remote inspection confirms draft head `95bdf4a`,
+the intended review base and exactly the bounded 16-file diff.
+
+#234's original full Nix run (`41624`) completed with `all checks passed!` on
+unchanged `45d219e`, including browser and NixOS e2e checks; incompatible systems
+were omitted. Recorded the result without restarting the successful run.
+
+Created isolated review base `integration/import-requester-prerequisites` at
+`cfb8240`: #236 `95bdf4a` plus exact #219 `ec7ddbd` and #222 `e9695fd`, replayed
+without conflict. Created `feat/import-job-requester` in its own worktree and
+extracted only the seven source/schema/test paths from original `482b7c5`.
+Unsigned source commit `e0293d7` has 409 insertions and 14 deletions; stable patch
+ID `36ce831fe633f5e8882627d7785cbf49f501c28c` equals that original filtered patch.
+The report-test hunk is preserved without duplicating #223's separate lock-order
+tests. Migration 0045 and all five requester test bodies remain unchanged.
+
+Formatting passed unchanged (`77129`). Combined full workspace tests run in
+`49490` on private PostgreSQL. A separate private-database migration-order check
+(`73733`) applies the actual prerequisite schema including 0047, then 0045, and
+repeats migration execution. It passed with the exact applied set 0042/0045/0047;
+the populated historical-state fixture remains covered by the running Rust suite.
+Next: collect the suite result, regenerate requester SQLx, run offline lints and
+full Nix, then publish its bounded draft with both prerequisite chains. Continue
+the existing `72580` / `65754` Nix handles; no restart or merge is authorized.
