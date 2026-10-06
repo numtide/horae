@@ -108,7 +108,7 @@ Clients MVP as canonical-permission acceptance.
 | Internal reusable-profile commands, [#226](https://github.com/numtide/horae/pull/226) | `refactor/permission-template-commands`, `.worktrees/permission-template-commands` | #222 `e9695fd` | Draft at `82d15f3`; 1,189 tests, SQLx, offline server/WASM Clippy, format and full local Flake Check passed; CI required after retargeting; no endpoints or activation |
 | Current authority for user creation/role/activity, [#227](https://github.com/numtide/horae/pull/227) | `fix/user-mutation-authority`, `.worktrees/user-mutation-authority` | `02f7b58` | Draft at `142eda1`; 1,127 tests, SQLx, offline server/WASM Clippy, format and current-head GitHub Flake Check passed; Nixbot build pending |
 | Assignment authority and project writer coordination, [#228](https://github.com/numtide/horae/pull/228) | `fix/project-access-lock-order`, `.worktrees/project-access-lock-order` | #227 `142eda1` | Draft at `0e1e675`; 1,137 tests, SQLx, offline server/WASM Clippy, format and full local Flake Check passed; master-targeted CI required after retargeting |
-| Durable CSV preparation outside SQL transactions, [#231](https://github.com/numtide/horae/pull/231) | `fix/csv-batch-transaction-boundary`, `.worktrees/csv-batch-transaction-boundary` | `02f7b58` | Draft at `e9898ed`; 1,122 tests, SQLx, offline server/WASM Clippy and format passed; required CI pending |
+| Durable CSV preparation outside SQL transactions, [#231](https://github.com/numtide/horae/pull/231) | `fix/csv-batch-transaction-boundary`, `.worktrees/csv-batch-transaction-boundary` | `02f7b58` | Draft at `e9898ed`; 1,122 tests, SQLx, offline server/WASM Clippy, format and current-head GitHub Flake Check passed; Nixbot build pending |
 | Financial snapshot reader authority, [#232](https://github.com/numtide/horae/pull/232) | `fix/financial-snapshot-authority`, `.worktrees/financial-snapshot-authority` | #220 `bc0c7a0` | Draft at `0bb5721`; 1,141 tests, SQLx, offline server/WASM Clippy and format passed; full local Nix running; required CI after retargeting |
 | Invoice writer/revocation ordering, [#233](https://github.com/numtide/horae/pull/233) | `fix/invoice-write-authority`, `.worktrees/invoice-write-authority` | Integration base `0046dad` combining #227/#228 and #220/#232 | Draft at `8a6cb2a`; 1,162 tests, SQLx, offline server/WASM Clippy and format passed; full local Nix running; retarget to master after prerequisites, do not merge into integration base |
 | Internal person-profile commands, [#234](https://github.com/numtide/horae/pull/234) | `refactor/person-profile-commands`, `.worktrees/person-profile-commands` | Integration base `46f02f7` combining #226/#221 | Draft at `45d219e`; 1,245 tests, schema upgrade, SQLx, offline server/WASM Clippy and format passed; full Nix running; retarget to master after prerequisites, no activation |
@@ -1277,3 +1277,28 @@ bounded extraction; tests remain necessary evidence. Formatting passed unchanged
 (`43759`). The complete workspace suite runs in `5611` using private PostgreSQL;
 next regenerate SQLx, run offline server/WASM checks, then publish the bounded
 draft. Full original-change and specification reconciliation remains incomplete.
+
+Saved the exact source extraction as unsigned `fcffd12`; its stable patch ID
+matches the original Rust delta (`1d297236d8c4fa3a0abdd49c41ec2d53e682470a`).
+The full suite has finished compilation and is running tests. Original tracked
+edits still compare equal to the saved uncommitted snapshot, and all six untracked
+files compare equal to the recovery archive. #231's existing CI run `37490375038`
+now reports successful Flake Check and Format on unchanged `e9898ed`; its Nixbot
+build remains in progress. No rerun, merge or closure was requested.
+
+Read-only next-block inspection: `4fac6af` introduces the importer command
+transaction plus executor-based queue helpers, and `b4672a4` shares its authority
+guard with paged error downloads. They form a cohesive command/result boundary
+on the same organization helper. Later `482b7c5` only extends these callers for
+requester attribution and migration 0045's `(org_id, id)` user foreign key,
+which needs the #222 schema prerequisite. Preserve that distinction rather
+than silently carrying storage or activating worker policy. The cancel adapter
+already owned by #231 must be accounted as an identical shared prerequisite,
+not a second independent delivery of that change.
+
+The complete combined suite passed (`5611`): 845 app, 180 integration and 121
+core tests, 1,146 total, with 11 existing manual tests ignored. This exercises
+all seven retained authority tests and the #227/#228 prerequisite behaviors
+together. No source/test adaptation was needed. Full SQLx regeneration is next,
+then offline server/WASM lints and publication; old results are not used to claim
+these remaining checks passed.
