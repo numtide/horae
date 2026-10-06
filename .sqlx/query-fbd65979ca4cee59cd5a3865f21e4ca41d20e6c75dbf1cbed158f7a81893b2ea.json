@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DECLARE horae_csv NO SCROLL CURSOR FOR SELECT n::bigint AS value,\n        CASE WHEN n=2 THEN 65536::bigint ELSE 1::bigint END AS export_bytes FROM generate_series(1,260) n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "fbd65979ca4cee59cd5a3865f21e4ca41d20e6c75dbf1cbed158f7a81893b2ea"
+}

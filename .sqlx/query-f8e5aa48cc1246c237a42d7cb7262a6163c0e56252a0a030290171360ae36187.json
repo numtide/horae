@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "CREATE VIEW invoice_csv_test.invoice_line_items AS\n        SELECT * FROM public.invoice_line_items WHERE invoice_csv_test.pause()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "f8e5aa48cc1246c237a42d7cb7262a6163c0e56252a0a030290171360ae36187"
+}

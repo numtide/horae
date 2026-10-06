@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "CREATE VIEW csv_fetch_test.time_entries AS SELECT * FROM public.time_entries WHERE csv_fetch_test.pause()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "3636cede8794c0a7ce3b70652f736dc4c3b62427d6f031c40b57bf4720f9c152"
+}
