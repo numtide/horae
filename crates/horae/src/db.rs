@@ -108,7 +108,8 @@ pub async fn lock_time_entry_write(
     Ok(())
 }
 
-/// Open an interactive entry mutation under the shared submission barrier.
+/// Open only the submission barrier for tests that coordinate competing writers.
+#[cfg(test)]
 pub async fn begin_time_entry_write(
     pool: &PgPool,
     user_id: uuid::Uuid,
