@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "RELEASE SAVEPOINT _sqlx_savepoint_1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "b101cf8780c9575b764eb4bb31e02ea10a3b12be266995e9cc720fdf5345f822"
+}
