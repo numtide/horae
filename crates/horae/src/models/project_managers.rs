@@ -5,10 +5,6 @@ use uuid::Uuid;
 
 use super::permission_editor::PermissionRequester;
 
-#[cfg_attr(
-    not(feature = "server"),
-    expect(dead_code, reason = "Project-manager UI integration is pending.")
-)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectManager {
