@@ -25,6 +25,8 @@ use super::*;
 
 mod approval_labels;
 mod cli;
+mod financial_snapshots;
+mod legacy_readers;
 mod own_permissions;
 mod permission_audit;
 mod permission_editor;
@@ -33,7 +35,6 @@ mod project_people;
 mod scoped_directory;
 mod session_identity;
 mod user_directory;
-mod legacy_readers;
 
 #[cfg(target_os = "linux")]
 mod report_stress;
@@ -299,6 +300,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     user_directory::check(&pool, &api).await;
     approval_labels::check(&pool, &api).await;
     legacy_readers::check(&pool, &api).await;
+    financial_snapshots::check(&pool, &api).await;
     let admin = api.cookie(owner.user_id).await;
     let expired = api.cookie(owner.user_id).await;
     assert_eq!(

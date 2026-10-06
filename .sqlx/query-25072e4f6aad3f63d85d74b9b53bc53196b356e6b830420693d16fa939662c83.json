@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SET default_transaction_isolation='serializable'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "25072e4f6aad3f63d85d74b9b53bc53196b356e6b830420693d16fa939662c83"
+}

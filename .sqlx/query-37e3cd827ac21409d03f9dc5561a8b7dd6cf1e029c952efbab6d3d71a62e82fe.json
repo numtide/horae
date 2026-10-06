@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SET search_path = snapshot_fault, public",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "37e3cd827ac21409d03f9dc5561a8b7dd6cf1e029c952efbab6d3d71a62e82fe"
+}
