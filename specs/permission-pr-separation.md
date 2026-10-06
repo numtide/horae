@@ -117,14 +117,14 @@ Clients MVP as canonical-permission acceptance.
 | Original import requester provenance, [#237](https://github.com/numtide/horae/pull/237) | `feat/import-job-requester`, `.worktrees/import-job-requester` | Integration base `cfb8240` combining #236/#219/#222 | Draft at `2242361`; 1,218 tests, schema upgrade, SQLx, offline server/WASM Clippy and format passed; full Nix passed on unchanged diagnostic rerun; initial inherited-menu failure retained; retarget after both prerequisite chains, no worker-policy activation |
 | Budget email preparation authority, [#238](https://github.com/numtide/horae/pull/238) | `fix/budget-email-authority`, `.worktrees/budget-email-authority` | Master `1b8fa4f` | Draft at `7a7cede`; 1,133 source-head tests, SQLx, format and cache-inclusive server/WASM Clippy passed; full current-head local Nix passed; no real mail or policy activation |
 | Approval tenant isolation, [#239](https://github.com/numtide/horae/pull/239) | `fix/approval-tenant-isolation`, `.worktrees/approval-tenant-isolation` | Master `1b8fa4f` | Draft at `66a256f`; three source/test files and complete cache patch preserved exactly; 1,124 source-head tests, source review, SQLx, format and offline server/WASM Clippy passed; full current-head local Nix passed |
-| Identity response projections, [#240](https://github.com/numtide/horae/pull/240) | `fix/identity-response-projections`, `.worktrees/identity-response-projections` | Master `1b8fa4f` | Draft at `a19ea63`; source suite/cache/lints passed; final `d2da193` Nix failed on stale Clients `get_me.active` assertion; exact identity projection/activity fixture adaptation and complete focused Clients browser passed; new final Nix `99785` running; no activation |
+| Identity response projections, [#240](https://github.com/numtide/horae/pull/240) | `fix/identity-response-projections`, `.worktrees/identity-response-projections` | Master `1b8fa4f` | Draft at `a19ea63`; source suite/cache/lints, corrected Clients fixture, complete local Nix `99785` and GitHub Flake Check passed; original failures retained; remote Nixbot failures remain unresolved; no activation |
 | Time-writer account activity, [#241](https://github.com/numtide/horae/pull/241) | `fix/time-write-activity`, `.worktrees/time-write-activity` | #228 `0e1e675` | Draft at `7820f8d`; 1,142 tests, cache provenance, bounded review, format, offline server/WASM lint and full Nix `85167` passed; prerequisite integration/retarget/current-head CI still required; no delegated writes or activation |
 | Time-entry invoice identity boundary, [#242](https://github.com/numtide/horae/pull/242) | `fix/time-entry-payload`, `.worktrees/time-entry-payload` | Master `1b8fa4f` | Draft at `43337fc`; 1,122 tests, cache/source provenance, bounded review, format, offline server/WASM lint and full Nix `73808` passed; current-head GitHub checks/delivery review remain; no policy or UI change |
 | Session-bound project-manager delegation, [#243](https://github.com/numtide/horae/pull/243) | `feat/project-manager-delegation`, `.worktrees/project-manager-delegation` | Review base `e44433e` combining #234/#228 | Draft at `3404c85`; suite/cache, final WASM lint and full local Nix passed (cached result confirmed in `10972`); final server gate closed; no form wiring or activation |
 | Own-permission explanation and Settings, [#244](https://github.com/numtide/horae/pull/244) | `feat/own-permission-settings`, `.worktrees/own-permission-settings` | #234 `45d219e` | Draft at `6c4e4d1`; 1,273 Rust tests, SQLx, provenance, review/Spec Kit/format/detector, offline server/WASM lint and isolated Chromium passed; desktop/mobile captures inspected; full local Nix passed (cached result confirmed in `30710`); no activation |
-| Permission audit history, [#245](https://github.com/numtide/horae/pull/245) | `feat/permission-audit-history`, `.worktrees/permission-audit-history` | Review base `59d2798` combining #243 `3404c85` and #244 `6c4e4d1` | Draft at `14ad9ca`; source suite/cache/lints passed; `93f230d` Nix failed on seed-vs-session actor fixture mismatch; corrected actual-session fixture passed after New Project permission suite; final Nix `56923` running; older gates remain historical evidence |
+| Permission audit history, [#245](https://github.com/numtide/horae/pull/245) | `feat/permission-audit-history`, `.worktrees/permission-audit-history` | Review base `59d2798` combining #243 `3404c85` and #244 `6c4e4d1` | Draft at `14ad9ca`; source suite/cache/lints, corrected session-actor fixture and complete final local Nix `56923` passed, including own/history browser suites; original failures retained; remote Nixbot failures, prerequisite integration and retargeted gates remain open |
 | Read-only legacy permission diagnostics, [#246](https://github.com/numtide/horae/pull/246) | `feat/permission-preflight`, `.worktrees/permission-preflight` | Review base `61c90bc` combining #237 `2242361` and #226 `82d15f3` | Draft at `ff482c8`; suite/cache/lints passed; full Nix `99711` failed on inherited editor loading timeout; unchanged focused transport/editor sequence and full unchanged-head rerun `41382` passed; initial root cause unproven; no endpoint, UI, migration or activation |
-| Materialized XLSX/PDF authorization, [#247](https://github.com/numtide/horae/pull/247) | `fix/materialized-export-authority`, `.worktrees/materialized-export-authority` | Review base `3edc0b8` combining existing `0046dad` (#227/#228 + #220/#232) and #222 `e9695fd` | Draft at `d9717e7`; 1,229 tests, full SQLx/provenance (1,135 descriptors), source review/Spec Kit/format and offline native/WASM lint passed; full final-head Nix `32625` running; no policy activation |
+| Materialized XLSX/PDF authorization, [#247](https://github.com/numtide/horae/pull/247) | `fix/materialized-export-authority`, `.worktrees/materialized-export-authority` | Review base `3edc0b8` combining existing `0046dad` (#227/#228 + #220/#232) and #222 `e9695fd` | Draft at `d9717e7`; 1,229 tests, full SQLx/provenance (1,135 descriptors), source review/Spec Kit/format, offline native/WASM lint and complete local Nix `32625` passed; remote Nixbot failures, prerequisite integration and retargeted gates remain open; no policy activation |
 | CSV delivery authorization, [#249](https://github.com/numtide/horae/pull/249) | `fix/csv-export-authority`, `.worktrees/csv-export-authority` | Exact #247 head `d9717e7` | Draft at `71232dc`; 1,245 source-head tests, full SQLx/provenance (1,174 descriptors), format/source review/scoped analysis and final-head offline native/WASM lint passed; complete Nix `72947` running; no canonical activation |
 | Existing permission specification and history, [#248](https://github.com/numtide/horae/pull/248) | `docs/permission-specification`, `.worktrees/permission-specification` | Master `1b8fa4f` | Draft at `49843b2`; all 54 original feature documents preserved, six contextualized; all 43 requirements/criteria and 236 task lines unchanged; original New Project transition and AGENTS cache guidance preserved; provenance/format passed, full Nix `51945` running and final reconciliation pending; no code or constitution adoption |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
@@ -2974,3 +2974,61 @@ by the local passes. Do not describe these PRs as merge-ready or bypass checks.
 Next prioritize diagnosis of #239/#242 remote failures alongside collecting
 already-running gates, then finish the editor API cache and publication. Remaining
 consumer/UI ownership, unpublished Clients and final cross-PR accounting are open.
+
+### Remote failure diagnosis and completed editor source verification
+
+Previous goal turn was PROGRESS: it identified the concrete remote failing tests,
+not just a red status. Re-read the saved objective, AGENTS and constitution 1.0;
+reconfirmed #216 merged as `02f7b58`. Original refs and worktrees remain intact.
+
+Confirmed GitHub master rules require `Flake Check` and `Format`, plus its squash
+merge queue. Nixbot is not a required-status rule, but its failures remain evidence
+to classify, not something to discard. Stacked PRs do not receive the master-only
+Actions workflow until correctly retargeted. No rule or workflow was changed.
+
+- #239 Actions run `37507170660`, attempt 1, failed in the unchanged
+  `new-project.cjs` `chooseField` call: payment terms remained `Net 30` after
+  selecting `Custom days` (5-second assertion timeout). The test, menu script,
+  selector and New Project implementation have no diff against its master base.
+  The asynchronous popover opening focus is a candidate cause, not established
+  by this observation. Unchanged focused browser reproduction `66596` is running
+  against exact built package `lych8wdz3kwlzjjpc5vavn0v5mxjxqkc-horae-0.1.0`,
+  with a fresh disposable database and no real account or mail transport.
+- #242 Actions run `37513610808`, attempt 1, failed in unchanged
+  `cancelled_page_consumer_retains_lock_until_worker_exits_and_rolls_back`:
+  immediate reacquisition returned `ApiImportError::Busy`. Review traced the
+  cancellation path through dropped `streaming::run_inner`, worker-held session
+  and SQLx 0.8 close-on-drop. That path closes asynchronously, while the test
+  assumes a replacement pool slot proves PostgreSQL has released the old session
+  lock. The normal completion path explicitly awaits unlock for this reason.
+  This is an inherited synchronization assumption; no runtime or test patch has
+  been made, and eventual rollback/release has not been independently reproduced
+  in the failing schedule.
+- #242 Nixbot build 71 is distinct: x86 package build hit a 1,200-second timeout;
+  x86 tests failed three durable CSV timing cases and the CLI authorization matrix
+  (expected rejection exit 1, received indeterminate submission exit 6).
+  Browser/VM checks then report dependency failures. ARM tests passed on that
+  build. These logs do not prove all Nixbot failures share one cause.
+
+Started one unchanged-commit rerun of each failed Actions run; both are confirmed
+`in_progress`, attempt 2. Preserve attempt-1 evidence regardless of the outcome.
+No assertions, timeouts or required checks were removed or weakened. #240 now
+also has a passing remote Flake Check. Its and #245's PR bodies now correctly
+record final local Nix PASS and distinguish unresolved remote checks; top rows
+for #240/#245/#247 were reconciled with their completed handles.
+
+Corrected editor suite/cache handle `97735` exited zero on `58b0c6f`: full workspace
+suite passed, then complete all-target SQLx preparation succeeded. Provenance
+verifier `37593` passed: six original source files exact, 1,225 base descriptors
+unchanged, 14 additions matching original `db3935d`, no removed/modified/unmatched
+descriptors, 1,239 total. Formatting passed with zero changes. Unsigned cache
+commit is `72e97e16a051360ecaae7fc3dcba3457b6acf1a6`.
+
+Final-head offline native/WASM Clippy `19884` and full compatible Nix `64324` are
+running. Existing #248 `51945` and #249 `72947` remain live and have advanced into
+browser checks; #249's NixOS tests completed, not a substitute for the full gate.
+Next finish editor lint/publication and account its exact original hunks, collect
+these existing gates and the two Actions reruns, and retain unresolved inherited
+test failures explicitly. Canonical/UI consumer ownership, unfinished Clients,
+final per-change mapping and cross-PR integration remain open. No merge, original
+PR closure, real-data mutation or policy activation occurred.
