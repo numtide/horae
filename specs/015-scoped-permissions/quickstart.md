@@ -1,5 +1,37 @@
 # Permission verification
 
+## Task lifecycle and existing-task links (T233)
+
+Use the Nix shell and a disposable PostgreSQL database with all checked-in
+migrations. The production-helper and registered-session checks are:
+
+```sh
+cargo test -p horae --features server --locked --bin horae server_fns::projects::
+cargo test -p horae --features server --locked --bin horae server_fns::project_creation::
+cargo test -p horae --features server --locked --bin horae server_fns::time_entries::
+cargo test -p horae --features server --locked --bin horae importers::harvest::
+cargo test -p horae --features server --locked --bin horae job_endpoints_enforce_session_role_and_organization
+```
+
+| Boundary | Regression evidence |
+| --- | --- |
+| Project authority and independently managed/all explicit-rate authority | Registered-session `task_links::check`; `link_rechecks_project_rate_and_designation_after_organization_wait` |
+| No stale actor/policy fallback, including existing-link no-ops | `link_noops_reject_unavailable_authority_without_changing_storage`; anonymous, switched-requester and revoked-session cases |
+| Unknown/incompatible default denomination, including zero and projects without settings | `link_requires_matching_default_currency_even_without_project_settings`; existing policy-zero currency tests |
+| Existing overrides, archived links and foreign records remain unchanged | `link_does_not_restore_archived_associations_or_touch_foreign_records`; authorized currency recovery followed by repeated linking |
+| Global restore does not restore project tracking; archive invalidates editors | `global_restore_does_not_restore_project_tracking_and_archive_invalidates_editor` |
+| Explicit project lifecycle preserves hidden settings, history and replay | `project_task_archive_restore_preserves_hidden_configuration_history_and_replays`; omitted/invalid activity-intent cases |
+| Timer/archive exclusion and lock ordering | `archive_waits_for_existing_time_writer_and_observes_committed_timer`; `archive_excludes_new_tracking_writers_before_task_lock_and_commit`; `link_holds_authority_while_waiting_for_task` |
+| Archived links cannot supply new time or timer choices | `archived_project_task_excludes_choices_and_new_time_without_changing_global_task` |
+| Migration and import retention | Populated-schema `project_task_activity_migration_preserves_legacy_and_archives_canonical_links`; import gate, new-link and checkpoint regressions |
+
+The currency regression failed on the pre-fix helper (`10613`, exit 101), then
+passed in the expanded `11565` run alongside the affected suites and real-session
+matrix. That run exited 0 after SQLx preparation, offline all-target test
+compilation and strict native/WASM lint; details are in `progress.md`. This evidence
+does not replace T234's actual consumer and browser acceptance or full-feature
+policy activation, migration review and Nix gates. No production data is used.
+
 ## Project read delivery (T223–T226)
 
 Run in the Nix shell against disposable PostgreSQL with the checked-in

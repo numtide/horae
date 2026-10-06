@@ -1,5 +1,119 @@
 # Scoped permissions investigation progress
 
+## 2026-10-06 — Link currency boundary review
+
+- The preceding estimate turn was a verified wait: `75534` was polled live and
+  its registered-session matrix passed. It did not complete implementation.
+  The same handle remains active; SQLx preparation passed and offline all-target
+  compilation is in progress. Do not restart or edit Rust before it terminates.
+
+- Read-only review found `enable_project_task` checks copied default currency
+  only when `project_settings` exists. Canonical-policy organizations can still
+  contain older projects without that row. Cover unknown and incompatible
+  denominations, including zero, through the authorized link transaction before
+  correcting the shared helper. Keep policy-zero inheritance and existing stored
+  overrides unchanged; an authorized explicit project-currency override remains
+  the recovery path. This follows the existing exact-money invariant, not a new
+  currency-conversion feature.
+
+- Spec Kit skills remain absent from the available local skill directories;
+  continue against the existing reviewed T233 contract without claiming a skill
+  invocation. Rust/testing/async/Ponytail instructions were read for this change.
+
+- `75534` exited 0: affected API/project/time/editor/import and registered-session
+  tests, SQLx preparation, offline all-target test build and native/WASM lint
+  passed. Rust stayed frozen until terminal. No full Nix/browser gate is claimed.
+
+- Added a production-link regression crossing absent/task/person settings,
+  unknown/USD/EUR catalog denomination and zero/nonzero amounts. It checks
+  atomic denial, authorized explicit recovery and preservation on repeated
+  linking. RED verifier `10613` is running against unchanged currency logic.
+
+- RED verifier `10613` exited 101 with the intended failure: absent project
+  settings, unknown default currency and a zero amount incorrectly returned
+  success. The shared query now requires a known matching default denomination
+  for canonical policy as well as configured projects. No new helper, dependency
+  or migration; existing-link no-ops and policy-zero behavior are untouched.
+
+- Formatting `19757` exited 0. Expanded task verifier `11565` is running against
+  the corrected snapshot; keep Rust frozen until its terminal result. Its 29 API,
+  two transport, 154 project, 57 time-entry, 102 editor, 187 import and registered
+  session tests have passed (eight existing import scale tests remain ignored).
+
+- `11565` exited 0. SQLx preparation, offline all-target test compilation,
+  strict native lint and WASM lint passed after the functional suites. The cache
+  has seven new descriptions and one replaced description, with no unrelated
+  removal. Scoped self-review checked current requester/grants before no-ops,
+  independent managed-rate scope, organization-before-resource locks, retained
+  archived state and exact currency preservation. The reproduced currency issue
+  is fixed; no additional high/critical finding remains in this scoped review.
+  This is not an independent review or full-feature sign-off.
+
+- T233's backend lifecycle/link requirements are now verified and marked done;
+  `quickstart.md` maps each boundary to executable regressions. T234's actual
+  consumer/browser work and the encompassing T230 remain open. Final formatting
+  and publication follow; no policy activation, real-data mutation or merge.
+
+Next: publish this verified increment to PR #212, then implement T234's bound
+task-management UI using the existing design components and browser acceptance.
+The full permissions objective remains active and incomplete.
+
+## 2026-10-06 — Existing-task linking authority
+
+- Previous goal turn made progress: published and verified `0591407`. Revalidated
+  the worktree; only its publication record remained dirty. No live verifier was
+  inherited. T233/T234 and the full permissions goal remain incomplete.
+
+- Rechecked Harvest's current permissions and billable-rate guides and traced
+  the direct link endpoint, shared link helper, editor authority and pure rate
+  evaluator. Project edits, catalog writes and project-rate writes are distinct;
+  use the existing project editor's authorization rather than a new role hierarchy.
+
+- Added nine registered-session cases for all/managed project scope, missing
+  designation, global-task-only denial and independently scoped explicit rates.
+  Repeated calls also test current authorization, changed requester identity,
+  anonymous requests and equal-rate intent without financial authority.
+
+- First verifier `48688` exited 101 before tests because a new fixture referred
+  to a nonexistent `created_by` column. Corrected the fixture against migration
+  0044; production authorization remains unchanged for the RED verification.
+
+- Corrected RED verifier `55532` exited 101 with the intended failures: current
+  canonical Members were rejected, legacy administrators without the applicable
+  project/rate grants were accepted, and denied associations persisted.
+
+- The existing endpoint now binds the requester and uses session authentication;
+  its transaction reuses `editing::lock_editor_actor` under the access-changing
+  gate. Explicit rates use the pure project-owned rate evaluator before link
+  no-ops. No new permission loader, dependency, schema or legacy-role remapping.
+
+- Added production-helper tests for project/rate/designation revocation after
+  real waits, retained authority while waiting for the task, unavailable current
+  state before no-ops, archived association preservation and foreign targets.
+  Formatting passed; the expanded task verifier is now running on this snapshot.
+
+- Expanded verifier `2810` exited 101 after compatibility, 153 project tests,
+  time-entry, 102 editor and 187 import tests passed. The sole HTTP failure was
+  a new test expecting 409 for a changed requester; the existing task/project
+  requester contract correctly returns 403. Corrected that expectation without
+  changing the production denial. Added managed-rate designation revocation
+  independently from all-project editing to the real lock-wait test.
+
+- Corrected verifier `75534` is running. An initial invocation was denied access
+  to the Nix daemon socket before starting; the authorized retry uses only the
+  same disposable `/tmp` database. No live verifier was duplicated. Freeze Rust
+  until the active handle's terminal result.
+
+- Scoped review checked requester equality against the authenticated identity,
+  the shared strict editor loader before resource locks, project-owned financial
+  scope before no-op detection, unchanged legacy behavior and existing archive/
+  foreign-parent validation. No new consumer calls this direct endpoint, so the
+  new requester argument does not silently strand an existing browser control.
+  Browser delivery and full-feature acceptance remain outstanding.
+
+Next: collect `75534`, resolve any failures, record completed gates and publish
+the verified increment. No policy activation, live data or merge.
+
 ## 2026-10-06 — Retained project-task activity
 
 - The last estimate reply made no implementation progress. Revalidated the
@@ -70,9 +184,15 @@
   handles from this iteration are terminal. GitHub confirmed #212 remains
   OPEN/DRAFT at `ac4c90c` before publication; no merge was requested or performed.
 
-Next: final formatting/diff checks and publish the retained-link increment, then
-finish direct-link authority and lifecycle UI acceptance. Full permissions and
-the goal remain incomplete.
+- Final formatting, CI-format and diff checks passed. Published unsigned commit
+  `0591407`; push exited 0 and GitHub confirmed #212 OPEN/DRAFT at
+  `05914078ae1bc8277b4632e115503dda537e5bbe`. Publication handles also terminated.
+  SQLx preparation replaced obsolete generated descriptors, recoverable in Git;
+  no business data or user files were removed.
+
+Next: finish direct-link authority with session-bound project scope and independent
+rate intent, then lifecycle UI acceptance. T233/T234, full permissions and the goal
+remain incomplete. No merge or live policy activation occurred.
 
 ## 2026-10-06 — Task activity authority and timer exclusion
 

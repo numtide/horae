@@ -14,8 +14,17 @@ Task catalog integration follows `contracts/task-permissions.md`:
 - [ ] T230 Reconcile direct task mutation intent, current actor/field authority and project-link effects with the existing editor; add preservation, denied-write and race tests, then implement the reviewed writes and actual consumer affordances. Do not infer unresolved lifecycle or creation predicates.
 - [x] T231 Integrate current global task creation and optional destination project scope in `server_fns/projects.rs`; verify role-independent grants, strict policy, archived/foreign rollback, nonbillable links and revocation with real-session delivery. Published as `8dd61d4`; see `contracts/task-permissions.md` for acceptance evidence.
 - [x] T232 Replace ambiguous rate edits in `models/task.rs` and `server_fns/projects.rs` with explicit preserve/clear/set intent, bound requester identity and current resource/financial authority. Verify protected no-ops, currency, project/history preservation, revocation, event/response separation, strict transport and real sessions; regenerate SQLx and pass native/WASM checks before publication.
-- [ ] T233 Reconcile independent global/project-task lifecycle state, current archive/restore/link authority and running-timer exclusion across migrations, `server_fns/projects.rs`, `project_creation/editing/`, tracking contexts and `time_entries/commands.rs`. Review sorted parent/task locks and revision triggers before implementation; cover global restore without implicit project restore, preserved history/configuration and concurrent starts/revocation.
+- [x] T233 Reconcile independent global/project-task lifecycle state, current archive/restore/link authority and running-timer exclusion across migrations, `server_fns/projects.rs`, `project_creation/editing/`, tracking contexts and `time_entries/commands.rs`. Review sorted parent/task locks and revision triggers before implementation; cover global restore without implicit project restore, preserved history/configuration and concurrent starts/revocation.
 - [ ] T234 Connect the canonical task-management consumer to the verified reads/writes using current bound access, explicit protected-field intent and existing design components. Exercise allowed/denied controls, stale sessions/requests, archive/restore and project associations in disposable Chromium; do not treat service tests as UI delivery or close T230 before this acceptance.
+
+T233 verification: retained lifecycle/import work at `0591407` is completed by
+current project-scoped linking, independent explicit-rate authorization and the
+canonical default-currency guard for older projects. `11565` exited 0 with
+affected service/HTTP regressions, SQLx, offline all-target test compilation and
+strict native/WASM lint. The requirement-to-test mapping is in `quickstart.md`.
+Scoped self-review covered parent/task lock ordering, stale identity and grants,
+financial no-ops, existing settings/history and foreign targets. T234, T230,
+policy activation and full-feature review/Nix/browser acceptance remain open.
 
 Ordinary detailed Reports integration follows `contracts/time-reports.md`:
 
