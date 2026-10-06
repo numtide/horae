@@ -321,7 +321,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `c3d17cb` | Prevent deadlocks during legacy import report conversion | import-transaction-lifecycle | Conversion source/tests/SQLx in #223; specification hunks retained for reconciliation |
 | `3ae8e08` | Coordinate project access changes before locking resources | legacy-access-writers | Rust/test/cache changes in #228; organization SHARE query also reused in #220; specification hunks retained |
 | `907bc88` | Recheck authority when saving organization branding | branding-authority | Source/test/cache hunks in #225; specification hunks retained for reconciliation |
-| `d7a5a21` | Revalidate administrator authority for Harvest connection changes | import-authority | Held in original backup; extraction pending |
+| `d7a5a21` | Revalidate administrator authority for Harvest connection changes | import-authority | Eight Rust/test files extracted unchanged on #228 in `fix/harvest-connection-authority`; verification in progress; SQLx and specification reconciliation pending |
 | `4fac6af` | Revalidate import job command and status authority | import-authority | Exact executor-based `jobs::cancel` in #231 with CSV preparation; other command/status and specification hunks retained |
 | `b4672a4` | Revalidate authority during import error downloads | import-authority | Held in original backup; extraction pending |
 | `e5fcc5a` | Prepare durable CSV batches before opening transactions | import-transaction-lifecycle | Two exact Rust blobs and regenerated cache in #231; local verification passed, CI pending; specification hunks retained |
@@ -1242,3 +1242,38 @@ suite/cache/offline-lint/format gates passed; full Nix remains in `41624`.
 Next: collect existing Nix handles `80170` / `1215` / `41624` without reruns,
 then continue the retained import-authority boundary from its actual source
 dependencies, preserving #231's already-delivered cancellation adapter.
+
+### 2026-10-06 — Harvest connection authority extraction
+
+The intervening conversational turn drafted a goal but made no repository
+progress. Re-read the active saved objective and resumed the existing ledger;
+the last implementation iteration delivered #234. Confirmed #216 merged at
+`02f7b58` before editing, and verified all three existing Nix handles live
+(`80170`, `1215`, `41624`); none was restarted. #234's Nix SQLx derivation and
+client release build have now passed, but its full check is not yet terminal.
+
+Created `fix/harvest-connection-authority` in its isolated worktree on #228
+`0e1e675`. This dependency supplies the organization SHARE helper and coordinated
+legacy access writers; no duplicate helper or new integration branch is needed.
+The eight Rust/test files match original `d7a5a21` byte-for-byte, including the
+seven production-writer authority tests (`afc063dd8c8a64668475a4865a813619b6bffff4`).
+Read original T074–T076 and the connection-management contract. Later changes to
+the credential writer, account switch and this test module are absent; later
+job/streaming work in `harvest.rs` remains separately retained.
+
+The extracted path obtains the actor only from the authenticated wrapper or
+validated OAuth attempt, reserves the import nonblockingly, then checks the
+organization and active same-tenant Administrator under READ COMMITTED/SHARE
+before the existing generation gate. Authority remains locked through commit.
+External OAuth exchange stays outside that transaction; account binding,
+generation checks, encryption, import history and watermarks are unchanged.
+Safe forbidden projections cover both callback and server-function errors.
+No new policy activation, schema change, UI or external Harvest mutation.
+
+Adversarial source review covers admission-to-write races, actor-only waits,
+inherited REPEATABLE READ, missing/foreign/inactive actors, writer-first retention,
+rollback and reservation cleanup. No critical/high issue found within this
+bounded extraction; tests remain necessary evidence. Formatting passed unchanged
+(`43759`). The complete workspace suite runs in `5611` using private PostgreSQL;
+next regenerate SQLx, run offline server/WASM checks, then publish the bounded
+draft. Full original-change and specification reconciliation remains incomplete.
