@@ -123,7 +123,8 @@ Clients MVP as canonical-permission acceptance.
 | Session-bound project-manager delegation, [#243](https://github.com/numtide/horae/pull/243) | `feat/project-manager-delegation`, `.worktrees/project-manager-delegation` | Review base `e44433e` combining #234/#228 | Draft at `3404c85`; suite/cache, final WASM lint and full local Nix passed (cached result confirmed in `10972`); final server gate closed; no form wiring or activation |
 | Own-permission explanation and Settings, [#244](https://github.com/numtide/horae/pull/244) | `feat/own-permission-settings`, `.worktrees/own-permission-settings` | #234 `45d219e` | Draft at `6c4e4d1`; 1,273 Rust tests, SQLx, provenance, review/Spec Kit/format/detector, offline server/WASM lint and isolated Chromium passed; desktop/mobile captures inspected; full local Nix passed (cached result confirmed in `30710`); no activation |
 | Permission audit history, [#245](https://github.com/numtide/horae/pull/245) | `feat/permission-audit-history`, `.worktrees/permission-audit-history` | Review base `59d2798` combining #243 `3404c85` and #244 `6c4e4d1` | Draft at `93f230d`; production/cache head `533922a` has 1,356 Rust tests, SQLx, review, Spec Kit, format/detector and offline lints passed; independent Chromium suite and desktop/mobile capture review passed with final test; full final-head Nix `9966` running; older Nix `61137` remains historical evidence |
-| Read-only legacy permission diagnostics, [#246](https://github.com/numtide/horae/pull/246) | `feat/permission-preflight`, `.worktrees/permission-preflight` | Review base `61c90bc` combining #237 `2242361` and #226 `82d15f3` | Draft at `ff482c8`; 1,244 tests, full SQLx generation/provenance (1,138 descriptors), source preservation, bounded review/Spec Kit/format passed; offline native/WASM lint `86929` and full Nix `99711` running; no endpoint, UI, migration or activation |
+| Read-only legacy permission diagnostics, [#246](https://github.com/numtide/horae/pull/246) | `feat/permission-preflight`, `.worktrees/permission-preflight` | Review base `61c90bc` combining #237 `2242361` and #226 `82d15f3` | Draft at `ff482c8`; 1,244 tests, full SQLx generation/provenance (1,138 descriptors), source preservation, bounded review/Spec Kit/format and offline native/WASM lint `86929` passed; full Nix `99711` running; no endpoint, UI, migration or activation |
+| Materialized XLSX/PDF authorization | `fix/materialized-export-authority`, `.worktrees/materialized-export-authority` | Review base `3edc0b8` combining existing `0046dad` (#227/#228 + #220/#232) and #222 `e9695fd` | Local source `abdda60`; seven complete files exactly match historical `108594e`; corrected disposable suite/cache `20984` running; not yet published or verified |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -2526,3 +2527,83 @@ XLSX/PDF boundary with the preserved legacy tests and current master behavior.
 The original branches, unpublished work, real data and merge state are intact.
 This iteration is PROGRESS; full original ownership and the overall goal remain
 incomplete.
+
+### Materialized export extraction and schema dependency correction
+
+Re-read the active objective after the intervening goal-prompt conversation
+(that conversation alone made no repository progress). GitHub confirms #216
+merged as `02f7b58`. Revalidated live final-head Nix handles `99711`, `9966` and
+`79480`; no run was restarted. #240 and #245 have now built their final packages
+and reached real browser tests; the full gates remain pending. Recorded the
+previously completed offline native/WASM lint `86929` as passed for #246 and
+updated its PR description. Its handle is now closed, not an active wait.
+
+Created isolated `fix/materialized-export-authority` from existing review base
+`0046dad`, extracting original `dc822a0` and `108594e` together. This is one
+materialized-download responsibility, including invoice PDF. Seven complete
+files match historical `108594e` byte-for-byte: `reports/limits.rs`, its project
+reader and two authorization-test files, `reports/privacy_tests.rs`, and the
+two HTTP export-test files. Their later canonical changes remain separately
+owned. `reports.rs` retains #220's removal of the old global invoice loader;
+its only difference from the historical file is that already-reviewed base
+change. The remaining adaptations are export HTTP registrations and snapshot
+module visibility. The manager helper was already crate-visible in #220.
+
+Verified #220's snapshot source/test directory is identical to composition
+`41e595d`; #232's invoice reader/editor, fee tests, snapshot tests and HTTP
+financial checks are identical in `0046dad`. Differences elsewhere are the
+known #227/#228 writer coordination, including its invoice/assignment lock test.
+The recorded master update changes neither crates nor Cargo manifests/lockfile.
+
+Unsigned initial source `c216440` passed formatting (`17075`, zero changes),
+but disposable verification `93167` exited 101: three original test queries
+require `organizations.access_revision`, absent from `0046dad`. No test ran or
+cache succeeded in that attempt. Do not remove those assertions or substitute
+an unrelated organization edit. They verify revision refresh and unchanged
+revision across real finalization/editor writes.
+
+Created review-only `integration/materialized-export-prerequisites` at
+`3edc0b8be31ffc08acd9a17cfb3022da6b0a62fb`, merging exact #222 `e9695fd`
+into `0046dad` without conflicts. This supplies existing non-activating storage
+and its pure-domain prerequisite; no new migration or activation is invented.
+This local composition is not a delivery merge target. Rebased only the new
+extraction using `--no-update-refs` to `abdda6077fc35b76178a7d40bdae4facac9dbaea`.
+The extracted readers, tests and HTTP harness remain unchanged by the rebase.
+The source delta is 10 files, 2,237 additions and 102 removals; 1,935 added lines
+are the four preserved authorization/HTTP test files. Complete suite and SQLx
+preparation are now running in `20984` with a private PostgreSQL socket and
+invalidated Rust-source timestamps. The reusable local Cargo target is occupied.
+
+Scoped Spec Kit analyze ran the real prerequisite command against original 015,
+with no extension hooks. Read the retained spec/plan/tasks plus historical
+manager/project export contracts. Coverage within T104–T109:
+
+| Requirement | Tasks | Evidence boundary |
+| --- | --- | --- |
+| FR-006 | T104/T105/T107/T108 | Current active tenant actor; unchanged legacy manager/project scope |
+| FR-007 | T105/T106/T108/T109 | All four materialized HTTP handlers; CSV remains separate |
+| FR-010 | T104/T105/T107/T108 | Fresh checks after authority/parent waits and rendering |
+| FR-017 | T104/T105/T107/T108 | Exact existing values, no business writes or historical recalculation |
+| FR-018 | T104/T106/T107/T109 | Real reader, races, cleanup, size and session-cookie checks |
+
+Five requirements and six tasks mapped (100% bounded coverage); zero unmapped
+tasks, ambiguities, duplications or critical/high specification findings in this
+slice. SC-006 is a regression subset, not full acceptance. Full canonical US3,
+T039/T040/T042, CSV, activation and governance remain open. No original artifacts
+were edited or their checkboxes treated as proof of this extraction's tests.
+
+Source review read both complete database authorization-test files and both HTTP
+test files. Checked session-derived IDs, pre-query manager authorization,
+same-snapshot size/payload, one-statement project materialization, nullable
+sentinel handling, private captured IDs, sorted parent locks followed by a fresh
+visibility query, body/permit drop on denial, and no DB locks during rendering
+or client backpressure. Existing CSV transaction configuration remains unchanged
+in behavior. No critical/high source finding identified; executable verification
+and complete cache/offline/full-Nix gates are still mandatory and pending.
+
+Next collect `20984`, prove SQLx provenance (accounting for legitimately replaced
+legacy descriptors), then run offline native/WASM and final-head Nix before
+publishing the scoped draft. Collect `99711`/#246, `9966`/#245 and `79480`/#240
+without restarting live handles. The original tracked unpublished work still
+exactly matches its backup snapshot; original branches, #208 and real data are
+unchanged. This iteration is PROGRESS; the overall goal remains incomplete.
