@@ -201,10 +201,10 @@ independent sign-off or full-feature acceptance. Browser task management,
 requester-bound canonical controls and remaining writes stay open. No UI/CSS
 changed in this increment, and no new browser run or full Nix gate is claimed.
 
-### Next edit checks against the retained implementation
+### Edit gaps at the creation baseline
 
-The current `update_task_record` has no actor argument, locks the task before any
-organization gate, and treats `None` as a rate reset. Its no-op comparison cannot
+At `8dd61d4`, `update_task_record` had no actor argument, locked the task before any
+organization gate, and treated `None` as a rate reset. Its no-op comparison could not
 distinguish preserving a hidden rate from explicitly writing an equal value.
 `update_task` has no current UI caller; the legacy task section only creates and
 lists tasks. Replace that endpoint's ambiguous rate transport before wiring the
@@ -226,3 +226,71 @@ grants after lock waits, unknown denomination preservation, explicit equal/zero
 writes, foreign tasks, and unchanged project overrides/time history. Preserve
 the existing no-op/row-version and serialized activation/edit tests. A passing
 creation test is not evidence for any of these still-unimplemented edit cases.
+
+### Direct-edit working implementation
+
+`TaskRateEdit` uses required tagged preserve/clear/set input; set carries integer
+minor units and an explicit currency. `update_task` requires expected-requester
+identity and session authentication before the transactional actor/grant checks.
+The existing helper now reuses `authorize_task_write`, which selects strict stored
+policy and current actor authority under the organization fence before taking
+the task lock. No second unchecked mutation helper remains.
+
+The existing pure `RateEdit` authorizer rejects explicit edits without global
+rate write, including financial no-ops. Set checks the fresh organization
+denomination under the same gate; a concurrent currency change rejects the old
+input. SQL preserve retains both stored financial fields without reinterpreting
+unknown legacy denomination. The no-op predicate includes currency, so an
+explicit authorized denomination change is not swallowed by equal amounts.
+Project overrides and recorded entries are not updated.
+
+The helper separates its authorized session projection from the existing service
+event payload before commit. Withheld rates never become fake zeroes or cleared
+service events; the wrapper dispatches only a committed actual change. No-op
+requests are reauthorized before comparing storage and emit no event.
+
+The nine registered-session regressions failed as expected on the retained
+implementation (`78533`, exit 101). A separate transport test then caught tagged
+unit variants accepting ambiguous extra fields. Empty struct variants retain the
+same wire format and reject those fields; the assertion was not weakened.
+The corrected snapshot (`28245`) passed the two transport tests, 29 API tests,
+142 project tests including eight new edit cases, the registered-session matrix,
+SQLx preparation, offline all-target compilation and strict native lint. WASM
+flagged its unconsumed browser transport; the type now follows the repository's
+narrow explained expectation, inactive in server/test builds. The subsequent
+WASM check (`36639`) exited 0 without weakening global warnings or changing
+runtime behavior. Scoped adversarial self-review found no additional high/critical
+issue in this increment; it is not independent review or acceptance of the
+canonical catalog UI, lifecycle or full permission policy. This completes T232,
+not T230. No new browser or full Nix gate is claimed. The mutation transport is a
+deliberate replacement of the ambiguous internal server-function input, not a
+new public Harvest-compatible write API. No existing UI called this edit endpoint.
+
+### Lifecycle inventory for the next integration
+
+Rechecked the [task guide](https://support.getharvest.com/hc/en-us/articles/360048181332-Creating-editing-archiving-and-deleting-tasks)
+on 2026-10-06. Global archive also archives project assignments while retaining
+recorded time. Global restore does not restore those project assignments.
+Single-project archive/restore is a project-editor operation. Bulk archive/delete
+has a distinct rule: tasks without recorded time are deleted rather than merely
+archived. Common tasks and adding to all existing projects are separate commands,
+not implicit ordinary edit effects. These details must not be replaced with a
+global boolean shortcut. No restricted-account browser verification is claimed.
+
+The current [permissions reference](https://support.getharvest.com/hc/en-us/articles/44171549176077-Permissions)
+still distinguishes global task management from project editing and rate editing.
+The [timer restriction](https://support.getharvest.com/hc/en-us/articles/360048687651-Why-can-t-I-invoice-approve-or-archive-items-when-a-timer-is-running)
+also applies to task archival. Scope any error detail to the viewer's time-read
+authority; a warning must not disclose another person's otherwise hidden entry.
+
+Horae currently stores only `tasks.active`; `project_tasks` retains billable/rate
+overrides but no independent lifecycle state. `set_task_active_record` therefore
+cannot preserve the documented global-versus-project restoration distinction.
+Deleting those links to simulate archive would lose configuration and is not an
+acceptable substitute. The required retained-link state must be reconciled with
+`time_entry_contexts`, canonical `time_entries::commands::choices`, historical
+time handling, editor projection/association saves and project revision triggers.
+Global archive changes tracking eligibility, so it needs the access-changing
+organization gate from the outset and a reviewed project/task lock order before
+the link-trigger writes. Current schema/UI do not implement this yet; adding a
+grant guard alone does not complete lifecycle acceptance.

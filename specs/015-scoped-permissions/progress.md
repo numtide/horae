@@ -1,5 +1,78 @@
 # Scoped permissions investigation progress
 
+## 2026-10-06 — Explicit task-rate editing
+
+- Previous goal turn made progress: published and verified creation increment
+  `8dd61d4`. Revalidated the worktree; only its publication log remained dirty.
+- Added nine real-session edit scenarios against the retained endpoint. `78533`
+  exited 101 with the intended failures: canonical Member rejected, legacy Admin
+  allowed without current task authority, preserve intent clearing a hidden rate,
+  and explicit rate changes allowed without the global financial grant. No
+  implementation was changed while the RED verifier was running.
+- Replaced nullable edit input with required tagged preserve/clear/set intent
+  and an expected-requester identity. The existing helper now takes authenticated
+  actor identity and reuses the creation transaction's current task authority.
+  Pure `RateEdit` gates explicit financial intent; set validates integer amount
+  and current organization currency. Preserve leaves unknown denominations
+  untouched, clear removes both fields, and no-op comparisons include currency.
+  Redacted session results stay separate from unchanged service-event payloads;
+  dispatch remains after commit. No schema, policy activation or UI change.
+- Adapted existing mutation/no-op/concurrency tests to explicit intent rather
+  than retaining an unchecked helper. Added production tests for hidden/no-op
+  projection, unknown currency, unchanged project overrides/time history,
+  financial no-op denial, invalid inputs/foreign tasks, task/rate revocation,
+  stale currency after organization waits, held authority and actor deactivation.
+  Added transport round-trip/rejection cases and session identity/anonymous checks.
+- `37561` is compiling/running the full compatibility/project/session/cache/lint
+  verification on this snapshot. Keep Rust frozen until terminal output. The
+  new model transport tests also need an explicit test filter after compilation;
+  merely compiling them does not prove their assertions passed.
+- `37561` passed all 29 API tests, 142 project tests and the registered-session
+  matrix. The separately executed transport tests (`34556`) found that a tagged
+  unit variant accepted extra amount fields despite the enum's strict annotation.
+  Kept the rejection assertion and changed preserve/clear to empty struct
+  variants. No persistence or permission rule was relaxed to make it pass.
+- After that confirmed failure, stopped the isolated verifier process group;
+  `37561` terminated with exit 130, not a completed green gate. SQLx preparation
+  had passed before interruption; offline compilation/lint was not accepted.
+  Rust was edited only after terminal confirmation. Added the transport filter
+  directly to the local verification runner so this assertion gates later checks.
+- Corrected snapshot verifier `28245` is running. Rechecked official Harvest
+  lifecycle references and inventoried the missing independent project-task
+  activity state, both tracking sources, editor saves and revision triggers.
+  Recorded the evidence and integration boundary without adding a migration or
+  changing runtime lifecycle while the edit snapshot is being verified.
+- `28245` has passed 29 API tests, both strict rate-transport tests and all
+  142 project tests on the corrected snapshot. These include the eight new edit
+  transaction cases, preserved creation tests and adapted legacy mutation tests.
+  Remaining session/cache/lint stages are not yet accepted as complete.
+- The corrected run also passed the complete registered-session matrix and
+  all-target SQLx preparation. Offline test compilation is running. Refined
+  T230 into traceable creation (T231, accepted), edit (T232), lifecycle/link
+  (T233) and actual consumer/browser (T234) work without removing its full scope.
+- Adversarial self-review checked strict policy/active actor, required requester,
+  explicit financial intent before no-op detection, current currency after lock
+  waits, global versus managed/report grants, SQL no-op semantics, tenant IDs,
+  event/session payload separation and post-commit dispatch. The strict-transport
+  defect is corrected and verified. No additional high/critical issue is identified
+  in this edit increment; no independent sign-off or UI/lifecycle acceptance is
+  claimed. Used existing `RateEdit` and transaction helpers, with no new dependency.
+- `28245` passed offline all-target test compilation (3m01s) and native all-target
+  Clippy (1m45s), then exited 101 on WASM's unused transport warning: the task
+  editor has no browser caller yet. Added the repository's narrow, explained
+  `expect(dead_code)` pattern to this type only, excluding server and test builds.
+  It does not change transport/runtime behavior and will become an unfulfilled
+  expectation when the browser caller is wired. No global lint suppression.
+- WASM verification `36639` exited 0 (15.73s). Server/test runtime and query
+  semantics were unchanged by its conditional lint annotation. T232 is accepted
+  with the recorded source/session/transport/cache/native evidence; T230 remains
+  open for lifecycle and real consumer delivery.
+
+Next: format/check and publish the reviewed edit increment, then finalize the
+retained-link lifecycle contract and its failing tests under T233. Existing-task
+linking, bound catalog UI and full permission/Nix gates remain required.
+No merge or real-data mutation.
+
 ## 2026-10-06 — Current task-creation authority
 
 - The preceding estimate reply made no implementation progress. Revalidated the
@@ -47,9 +120,12 @@
   (15.68s) passed after the successful source/session/cache/offline stages.
   This snapshot is ready for formatting checks and publication. No new browser
   acceptance is claimed because this increment changed no UI/CSS consumer.
+- Formatting, CI-format and diff checks passed without source changes. Published
+  unsigned commit `8dd61d4`; push exited 0 and GitHub confirmed PR #212 OPEN/DRAFT
+  at `8dd61d4436b6266ae5d58c1091b11ada0315f337`. No merge occurred.
 
-Next: publish the verified creation increment after formatting/diff checks.
-Continue explicit rate-edit intent, task lifecycle, project
+Next: add failing direct-edit authority/preservation tests, then implement the
+reviewed explicit rate-edit transport and transaction. Continue task lifecycle, project
 association effects and actual catalog controls under T230. No full permissions
 completion, activation, merge or full Nix acceptance is claimed.
 

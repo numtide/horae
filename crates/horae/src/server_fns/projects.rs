@@ -7,6 +7,7 @@ use crate::models::permission_editor::PermissionRequester;
 use crate::models::project::{ProjectFeeBalance, ProjectOverview};
 #[cfg(feature = "server")]
 use crate::models::project::{ProjectOverviewClient, ProjectOverviewRow};
+use crate::models::task::TaskRateEdit;
 use crate::models::{ProjectDetails, ProjectTagLink, ProjectTaskRate};
 
 mod detail_view;
@@ -40,6 +41,9 @@ mod assignment_tests;
 
 #[cfg(all(test, feature = "server"))]
 mod task_write_tests;
+
+#[cfg(all(test, feature = "server"))]
+mod task_edit_tests;
 
 // ── Projects ─────────────────────────────────────────────────────────────────
 
@@ -917,12 +921,12 @@ pub async fn create_task(
 }
 
 #[cfg(feature = "server")]
-async fn authorize_task_creation(
+async fn authorize_task_write(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     org_id: uuid::Uuid,
     actor_id: uuid::Uuid,
     project_id: Option<uuid::Uuid>,
-) -> Result<(), ServerFnError> {
+) -> Result<Option<crate::models::permissions::PersonPermissions>, ServerFnError> {
     use crate::server_fns::permissions::{configure_administration, load_person_permissions};
 
     configure_administration(tx).await.map_err(server_err)?;
@@ -944,9 +948,9 @@ async fn authorize_task_creation(
     .fetch_optional(&mut **tx)
     .await
     .map_err(server_err)?
-    .ok_or_else(|| forbidden("Current task creation authority is required"))?;
+    .ok_or_else(|| forbidden("Current task editing authority is required"))?;
     match actor.permission_policy_version {
-        0 if actor.role.is_manager_or_above() => return Ok(()),
+        0 if actor.role.is_manager_or_above() => return Ok(None),
         0 => return Err(forbidden("Manager access required")),
         1 => {}
         _ => return Err(forbidden("Task permission state is unavailable")),
@@ -965,15 +969,15 @@ async fn authorize_task_creation(
         load_person_permissions(tx, org_id, actor_id)
             .await
             .map_err(|error| {
-                tracing::error!(%error, "Unable to load task creation permissions");
+                tracing::error!(%error, "Unable to load task editing permissions");
                 forbidden("Task permission state is unavailable")
             })?
             .ok_or_else(|| forbidden("Task permission state is unavailable"))?
     };
     if !permissions.grants.contains(Permission::TaskWriteAll) {
-        return Err(forbidden("Current task creation authority is required"));
+        return Err(forbidden("Current task editing authority is required"));
     }
-    Ok(())
+    Ok(Some(permissions))
 }
 
 #[cfg(feature = "server")]
@@ -990,7 +994,7 @@ async fn create_task_for_project(
         return Err(conflict("Task name cannot be empty"));
     }
     let mut tx = db.begin().await.map_err(server_err)?;
-    authorize_task_creation(&mut tx, org_id, actor_id, project_id).await?;
+    authorize_task_write(&mut tx, org_id, actor_id, project_id).await?;
     let id = uuid::Uuid::now_v7();
     let task = sqlx::query_as!(
         Task,
@@ -1018,27 +1022,31 @@ pub async fn update_task(
     task_id: String,
     name: String,
     billable_default: bool,
-    default_rate_cents: Option<i64>,
+    rate: TaskRateEdit,
+    expected_requester: PermissionRequester,
 ) -> Result<Task, ServerFnError> {
-    let manager = require_manager().await?;
+    let actor = require_user().await?;
+    project_requester(&actor, Some(expected_requester))
+        .map_err(|_| forbidden("Task requester has changed"))?;
     let state = crate::state::global_state().await;
     let task_id = parse_uuid(&task_id, "task_id")?;
-    let (task, changed) = update_task_record(
+    let (task, event) = update_task_record(
         &state.db,
-        manager.org_id,
+        actor.org_id,
+        actor.id,
         task_id,
         &name,
         billable_default,
-        default_rate_cents,
+        &rate,
     )
     .await?;
-    if changed {
+    if let Some(payload) = event {
         state
             .plugins
             .dispatch(crate::plugin::AppEvent::TaskUpdated {
                 occurred_at: chrono::Utc::now(),
-                org_id: manager.org_id,
-                task: task_payload(&task),
+                org_id: actor.org_id,
+                task: payload,
             });
     }
     Ok(task)
@@ -1048,38 +1056,98 @@ pub async fn update_task(
 async fn update_task_record(
     db: &sqlx::PgPool,
     org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
     task_id: uuid::Uuid,
     name: &str,
     billable_default: bool,
-    default_rate_cents: Option<i64>,
-) -> Result<(Task, bool), ServerFnError> {
+    rate: &TaskRateEdit,
+) -> Result<(Task, Option<crate::plugin::event::TaskPayload>), ServerFnError> {
+    use horae_core::permissions::rates::RateEdit;
+
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(conflict("Task name cannot be empty"));
+    }
     let mut tx = db.begin().await.map_err(server_err)?;
+    let permissions = authorize_task_write(&mut tx, org_id, actor_id, None).await?;
+    let intent = match rate {
+        TaskRateEdit::Preserve {} => RateEdit::Unchanged,
+        TaskRateEdit::Clear {} => RateEdit::Reset,
+        TaskRateEdit::Set { amount_cents, .. } => RateEdit::Set(*amount_cents),
+    };
+    intent
+        .authorize(
+            permissions
+                .as_ref()
+                .is_none_or(|p| p.grants.contains(Permission::BillableRateWriteAll)),
+        )
+        .map_err(|_| forbidden("Current global billable-rate editing authority is required"))?;
+    let (amount, currency) = if let TaskRateEdit::Set {
+        amount_cents,
+        currency,
+    } = rate
+    {
+        if *amount_cents < 0 {
+            return Err(err(BAD_REQUEST, "Task rate must not be negative"));
+        }
+        let current = sqlx::query_scalar!(
+            "SELECT upper(btrim(default_currency)) AS \"currency!\" FROM organizations WHERE id=$1",
+            org_id
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(server_err)?;
+        if current.len() != 3
+            || !current.bytes().all(|byte| byte.is_ascii_uppercase())
+            || !currency.trim().eq_ignore_ascii_case(&current)
+        {
+            return Err(conflict(
+                "Task rate currency changed. Reload the task and enter its rate again",
+            ));
+        }
+        (Some(*amount_cents), Some(current))
+    } else {
+        (None, None)
+    };
+    let preserve = matches!(intent, RateEdit::Unchanged);
     let before = lock_task(&mut tx, org_id, task_id).await?;
 
     let task = sqlx::query_as!(
         Task,
         "UPDATE tasks
-            SET name = $3, billable_default = $4, default_rate_cents = $5,
-                default_rate_currency = CASE
-                  WHEN default_rate_cents IS NOT DISTINCT FROM $5 THEN default_rate_currency
-                  WHEN $5::bigint IS NULL THEN NULL
-                  ELSE (SELECT upper(btrim(default_currency)) FROM organizations WHERE id = $2) END
+            SET name = $3, billable_default = $4,
+                default_rate_cents = CASE WHEN $5 THEN default_rate_cents ELSE $6 END,
+                default_rate_currency = CASE WHEN $5 THEN default_rate_currency ELSE $7 END
           WHERE id = $1 AND org_id = $2
-            AND (name, billable_default, default_rate_cents) IS DISTINCT FROM ($3, $4, $5)
+            AND (name, billable_default, default_rate_cents, default_rate_currency)
+                IS DISTINCT FROM ($3, $4,
+                    CASE WHEN $5 THEN default_rate_cents ELSE $6 END,
+                    CASE WHEN $5 THEN default_rate_currency ELSE $7 END)
          RETURNING id, org_id, name, billable_default, default_rate_cents, active",
         task_id,
         org_id,
         name,
         billable_default,
-        default_rate_cents,
+        preserve,
+        amount,
+        currency,
     )
     .fetch_optional(&mut *tx)
     .await
     .map_err(server_err)?;
 
-    let changed = task.is_some();
+    // Service events retain their committed payload; session responses must not
+    // inherit that service authority over a hidden global rate.
+    let event = task.as_ref().map(task_payload);
+    let mut task = task.unwrap_or(before);
+    if permissions
+        .as_ref()
+        .is_some_and(|p| !p.grants.contains(Permission::BillableRateReadAll))
+    {
+        task.default_rate_cents = None;
+    }
     tx.commit().await.map_err(server_err)?;
-    Ok((task.unwrap_or(before), changed))
+    Ok((task, event))
 }
 
 /// Activate or deactivate an org-level task. Deactivated tasks are hidden from
