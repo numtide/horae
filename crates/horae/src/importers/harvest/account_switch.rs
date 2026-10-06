@@ -85,6 +85,7 @@ pub async fn status<'e, E: sqlx::PgExecutor<'e>>(
 pub async fn change(
     pool: &PgPool,
     org_id: Uuid,
+    actor_id: Uuid,
     account: &str,
     generation: i64,
     revision: i64,
@@ -92,6 +93,7 @@ pub async fn change(
     let mut connection = super::lock_import(pool, org_id).await?;
     let result = async {
         let mut tx = connection.begin().await?;
+        super::credentials::authorize_change(&mut tx, org_id, actor_id).await?;
         let current = gate(&mut tx, org_id).await?;
         let inspected = status(&mut *tx, org_id, true).await?;
         let expected = Version { account_generation: generation, connection_revision: revision };
@@ -137,6 +139,10 @@ mod tests {
         .await
         .unwrap();
         sqlx::query!(
+            "INSERT INTO users (id, org_id, email, name, org_role) VALUES ($1, $1, $2, 'Connection admin', 'admin')",
+            id, format!("{id}@test.com"),
+        ).execute(pool).await.unwrap();
+        sqlx::query!(
             "INSERT INTO harvest_account_bindings (org_id, harvest_account_id) VALUES ($1, 'A')",
             id
         )
@@ -148,6 +154,29 @@ mod tests {
 
     const KEY: &str = "1111111111111111111111111111111111111111111111111111111111111111";
 
+    async fn administrator(pool: &PgPool, org: Uuid) -> Uuid {
+        sqlx::query_scalar!("SELECT id FROM users WHERE org_id = $1 AND active AND org_role = 'admin' ORDER BY id LIMIT 1", org)
+            .fetch_one(pool).await.unwrap()
+    }
+
+    async fn change(
+        pool: &PgPool,
+        org: Uuid,
+        account: &str,
+        generation: i64,
+        revision: i64,
+    ) -> anyhow::Result<()> {
+        super::change(
+            pool,
+            org,
+            administrator(pool, org).await,
+            account,
+            generation,
+            revision,
+        )
+        .await
+    }
+
     async fn connect(
         pool: &PgPool,
         org: Uuid,
@@ -155,7 +184,16 @@ mod tests {
         version: Version,
     ) -> anyhow::Result<()> {
         super::super::credentials::store_for_attempt(
-            pool, org, KEY, account, "access", "refresh", None, None, version,
+            pool,
+            org,
+            administrator(pool, org).await,
+            KEY,
+            account,
+            "access",
+            "refresh",
+            None,
+            None,
+            version,
         )
         .await
     }
@@ -378,7 +416,7 @@ mod tests {
             .await
             .unwrap();
         jobs::cancel(&pool, org, job).await.unwrap();
-        super::super::credentials::disconnect(&pool, org)
+        super::super::credentials::disconnect(&pool, org, administrator(&pool, org).await)
             .await
             .unwrap();
         assert!(connect(&pool, org, "A", pending).await.is_err());

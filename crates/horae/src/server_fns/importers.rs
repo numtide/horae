@@ -74,6 +74,7 @@ pub async fn harvest_change_account(
     crate::importers::harvest::account_switch::change(
         &state.db,
         admin.org_id,
+        admin.id,
         &expected_account,
         expected_generation,
         expected_revision,
@@ -84,7 +85,15 @@ pub async fn harvest_change_account(
 
 #[cfg(feature = "server")]
 fn map_connection_error(error: anyhow::Error) -> ServerFnError {
-    if let Some(policy) =
+    if matches!(
+        error.downcast_ref(),
+        Some(crate::importers::harvest::credentials::ConnectionError::Unauthorized)
+    ) {
+        err(
+            FORBIDDEN,
+            crate::importers::harvest::credentials::ConnectionError::Unauthorized,
+        )
+    } else if let Some(policy) =
         error.downcast_ref::<crate::importers::harvest::account_switch::ChangeError>()
     {
         err(CONFLICT, policy)
@@ -109,7 +118,7 @@ pub async fn harvest_disconnect() -> Result<(), ServerFnError> {
     let admin = require_admin().await?;
     let state = crate::state::global_state().await;
 
-    crate::importers::harvest::credentials::disconnect(&state.db, admin.org_id)
+    crate::importers::harvest::credentials::disconnect(&state.db, admin.org_id, admin.id)
         .await
         .map_err(map_api_error)
 }
@@ -331,6 +340,17 @@ fn map_api_error(e: crate::importers::harvest::ApiImportError) -> ServerFnError 
     match e {
         ApiImportError::NotConnected => err(NOT_FOUND, e),
         ApiImportError::ReconnectRequired | ApiImportError::Busy => err(CONFLICT, e),
+        ApiImportError::Other(ref inner)
+            if matches!(
+                inner.downcast_ref(),
+                Some(crate::importers::harvest::credentials::ConnectionError::Unauthorized)
+            ) =>
+        {
+            err(
+                FORBIDDEN,
+                crate::importers::harvest::credentials::ConnectionError::Unauthorized,
+            )
+        }
         ApiImportError::Other(inner) => server_err(inner),
     }
 }
@@ -338,6 +358,27 @@ fn map_api_error(e: crate::importers::harvest::ApiImportError) -> ServerFnError 
 #[cfg(all(test, feature = "server"))]
 mod tests {
     use super::*;
+
+    #[test]
+    fn revoked_connection_authority_maps_to_forbidden_without_private_context() {
+        use crate::importers::harvest::{ApiImportError, credentials::ConnectionError};
+        for disconnect in [false, true] {
+            let error = anyhow::Error::from(ConnectionError::Unauthorized)
+                .context("private connection context must not be returned");
+            let mapped = if disconnect {
+                map_api_error(ApiImportError::Other(error))
+            } else {
+                map_connection_error(error)
+            };
+            match mapped {
+                ServerFnError::ServerError { code, message, .. } => {
+                    assert_eq!(code, FORBIDDEN);
+                    assert_eq!(message, ConnectionError::Unauthorized.to_string());
+                }
+                other => panic!("unexpected error: {other:?}"),
+            }
+        }
+    }
 
     #[test]
     fn submission_identity_rejects_expired_future_and_non_v7_keys() {
