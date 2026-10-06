@@ -1,0 +1,3059 @@
+# Permission verification
+
+## Report billability filtering (T235–T236)
+
+`billability=all|billable|non_billable` narrows ordinary time facts without
+granting rates or invoice access. The shared Show selector carries the value
+through detailed/grouped pages, individual contexts, nested breakdowns and
+requester/policy-bound CSV/XLSX links. It uses existing form controls and CSS.
+
+Verification against disposable PostgreSQL and production components:
+
+| Requirement | Runnable evidence |
+| --- | --- |
+| Optional default, closed transport, malformed/empty/repeated rejection | `reports::export_params_tests` and `reports::groups::tests` billability tests; registered HTTP matrix in `authorization_tests/time_reports/export_filters.rs` |
+| Effective flags, invoice-linked history, exact rounding and totals before paging | `detailed_report_billability_preserves_billed_status_and_frozen_minutes_after_configuration_changes`; `billability_narrows_every_grouping_before_totals_and_cursor` |
+| Equivalent detailed/grouped CSV/XLSX source sets and own scope | `billability_matches_effective_rows_totals_and_all_download_sources` |
+| Captured CSV source after flags change; empty results still require active authority | `billability_csv_uses_the_captured_source_after_entry_changes`; `billability_empty_exports_still_require_active_authority` |
+| Both pager resets, stale-response suppression, requester/filter-bound exports | `billability_resets_both_pagers_and_binds_drilldown_and_downloads` in `tests/scoped_reports_ui.rs` |
+| Four nested contexts, late pages, filter propagation into detailed navigation | `nested_breakdowns_bind_all_contexts_and_discard_late_or_mismatched_pages` |
+| Real keyboard selection, effective project flags, four groupings and all download routes | Extended `tests/browser/reports-permissions.cjs`; passed in `7708` |
+
+RED `53040` failed on unfiltered readers/export rows; corrected implementation
+passed the Reports regression batch in `69065` (152 passed, 2 manual measurements
+ignored). Registered HTTP acceptance passed in `20608` after adding the missing
+production grouped handlers to the test router. Consumer RED `9856` failed on
+the missing selector; all 20 component tests passed in `84521` after integration.
+SQLx preparation, offline all-target compilation, strict native/WASM lint and
+both Dioxus build targets passed. Disposable Chromium `7708` exited 0 on the
+extended suite, including actual filtered downloads and policy changes. Desktop
+dark/mobile light captures were inspected in one batch with no follow-up visual
+changes. This is Linux Chromium 148.0.7778.96, not Windows MCP.
+
+Scoped adversarial self-review checked all six source predicates, filter-before-
+limit ordering, strict transport, requester/policy bindings, snapshot/release
+separation and stale nested responses. Spec Kit consistency analysis maps four
+affected obligations (FR-006/008/010/018) to T235–T236 and the evidence above:
+no new ambiguity, duplication, unmapped task or constitution conflict within
+this increment. This does not close T203, full picker/invoiced/financial parity,
+policy activation or independent full-feature review.
+
+## Task catalog consumer (T234, in progress)
+
+In the Nix shell, with disposable PostgreSQL and all migrations applied:
+
+```sh
+cargo test -p horae --features server --locked --bin horae server_fns::projects::task_catalog::tests::
+cargo test -p horae --features server --locked --bin horae job_endpoints_enforce_session_role_and_organization
+cargo test -p horae --features server --locked --test task_catalog_ui --test admin_shell
+```
+
+The catalog tests cover activity filters, duplicate-name pagination, tenant
+isolation and revocation after an actual organization-lock wait. Registered
+requests cover independent task/rate grants, omitted protected fields, requester
+changes and anonymous/revoked sessions. Actual-component tests cover pending and
+denied states, read-only navigation, stale editor disposal, preservation of hidden
+rates, exact zero/clear intent, validation recovery and archive confirmation.
+
+Verifier `88712` passed these checks, full SQLx preparation and strict native and
+WASM lint. `96671` and confirmation `63085` passed the `task-catalog` fixture in
+the disposable Chromium runner, including 1440px dark / 390px light layouts,
+Escape/focus, exact rates, protected-rate preservation, archive/restore and
+revoked editing. `63085` also reran the component tests after applying the
+existing nowrap utility to monetary cells. The fixture is now registered in
+the default browser suite; this is not a full default-suite run.
+
+Atomic initial-rate creation passed 159 project tests and registered-session
+delivery, SQLx preparation, offline all-target compilation and native/WASM strict
+lint in `3061`. Regressions include global versus managed financial authority,
+zero rates, current denomination, project-link rollback and real lock-wait
+revocation. The internal creation endpoint now requires loaded requester identity
+and explicit rate intent; the existing legacy form has been adapted.
+
+The shared catalog form now supports creation; `4106` passed ten component and
+transport tests, covering validation preservation, exact zero, denied/pending
+controls, duplicate-submit exclusion and identity/permission invalidation.
+Verifier `29161` passed strict native/WASM lint and the extended Chromium fixture:
+creation at 1440px dark / 390px light, keyboard dismissal and focus, empty-name
+and decimal validation, exact zero/positive initial rates, nonfinancial creation,
+and revoked creation without a persisted task. Existing edit/archive/restore
+checks passed too. The new creation-dialog captures were inspected in one batch;
+no further visual changes were needed. This is Linux Chromium, not Windows Chrome
+or a full browser-suite run.
+
+The existing canonical project editor now stages archive/restore for retained
+task links, independently of draft fields. An unchanged save sends no lifecycle
+intent; toggling back to the saved state clears the dirty state. New unsaved
+associations still remove locally. Global archive disables project restoration
+with an explanation to restore the catalog task first. Archived rows and bulk
+billable actions preserve their settings. Receipt retries retain the original
+activity list, requester and revision.
+
+Verifier `7595` passed the extended `project-editor-permissions` fixture plus
+`project-edit`, `new-project-task-errors` and `project-task-rates`. This covers
+keyboard focus, undo/cancel, hidden rates and retained restrictions, unrelated
+saves, lost acknowledgements, revoked authority, new unsaved associations and
+bulk billable exclusion, together with legacy creation/edit regressions. Native
+and WASM strict lint passed in `22206`. The 1440px dark and 390px light task-section
+captures were inspected together; no visual correction or shared CSS change was
+needed. Focused confirmation `45830` also passed actual running-timer rejection:
+the form keeps its pending activity and settings, storage remains unchanged,
+and saving succeeds once the test timer is removed.
+
+Full T234 acceptance remains open. The mobile catalog table stays horizontally scrollable and task names wrap
+narrowly; the two-pass visual review is not a claim of final mobile design parity.
+No Windows Chrome, policy activation or full task-management parity is claimed.
+
+## Task lifecycle and existing-task links (T233)
+
+Use the Nix shell and a disposable PostgreSQL database with all checked-in
+migrations. The production-helper and registered-session checks are:
+
+```sh
+cargo test -p horae --features server --locked --bin horae server_fns::projects::
+cargo test -p horae --features server --locked --bin horae server_fns::project_creation::
+cargo test -p horae --features server --locked --bin horae server_fns::time_entries::
+cargo test -p horae --features server --locked --bin horae importers::harvest::
+cargo test -p horae --features server --locked --bin horae job_endpoints_enforce_session_role_and_organization
+```
+
+| Boundary | Regression evidence |
+| --- | --- |
+| Project authority and independently managed/all explicit-rate authority | Registered-session `task_links::check`; `link_rechecks_project_rate_and_designation_after_organization_wait` |
+| No stale actor/policy fallback, including existing-link no-ops | `link_noops_reject_unavailable_authority_without_changing_storage`; anonymous, switched-requester and revoked-session cases |
+| Unknown/incompatible default denomination, including zero and projects without settings | `link_requires_matching_default_currency_even_without_project_settings`; existing policy-zero currency tests |
+| Existing overrides, archived links and foreign records remain unchanged | `link_does_not_restore_archived_associations_or_touch_foreign_records`; authorized currency recovery followed by repeated linking |
+| Global restore does not restore project tracking; archive invalidates editors | `global_restore_does_not_restore_project_tracking_and_archive_invalidates_editor` |
+| Explicit project lifecycle preserves hidden settings, history and replay | `project_task_archive_restore_preserves_hidden_configuration_history_and_replays`; omitted/invalid activity-intent cases |
+| Timer/archive exclusion and lock ordering | `archive_waits_for_existing_time_writer_and_observes_committed_timer`; `archive_excludes_new_tracking_writers_before_task_lock_and_commit`; `link_holds_authority_while_waiting_for_task` |
+| Archived links cannot supply new time or timer choices | `archived_project_task_excludes_choices_and_new_time_without_changing_global_task` |
+| Migration and import retention | Populated-schema `project_task_activity_migration_preserves_legacy_and_archives_canonical_links`; import gate, new-link and checkpoint regressions |
+
+The currency regression failed on the pre-fix helper (`10613`, exit 101), then
+passed in the expanded `11565` run alongside the affected suites and real-session
+matrix. That run exited 0 after SQLx preparation, offline all-target test
+compilation and strict native/WASM lint; details are in `progress.md`. This evidence
+does not replace T234's actual consumer and browser acceptance or full-feature
+policy activation, migration review and Nix gates. No production data is used.
+
+## Project read delivery (T223–T226)
+
+Run in the Nix shell against disposable PostgreSQL with the checked-in
+migrations, never against an agency or Harvest database:
+
+```sh
+cargo test -p horae --features server --locked --bin horae canonical_read_tests
+cargo test -p horae --features server --locked --bin horae project_canonical
+cargo test -p horae --features server --locked --bin horae project_permissions
+cargo test -p horae --features server --locked --bin horae job_endpoints_enforce_session_role_and_organization
+cargo test -p horae --features server --locked --test detail_navigation
+```
+
+Coverage includes ordinary versus tracking visibility, independent financial
+fields, private budget breakdowns, active actors, malformed policy, tenant
+parents and authority-wait races. Export tests additionally revoke only money
+access during XLSX rendering and CSV backpressure; retained project visibility
+must not release the old monetary payload. Compatibility tests assert one
+filtered count/page set, including out-of-range pages and direct IDs. Registered
+routes test requester bindings, not just internal helper calls.
+
+Build the Dioxus server/client bundle and use the pinned Playwright environment
+from `nix/checks/browser.nix` with the disposable browser runner:
+
+```sh
+bash crates/horae/tests/browser/run-design-checks.sh project-read-permissions project-editor-permissions project-task-rates action-errors projects-design project-bulk-recovery project-bulk-actions menu-popovers modals responsive-layout
+```
+
+All listed suites passed across the runs recorded in `progress.md`; this was
+not a single run of every default browser suite. The new read fixture verifies
+minimal project labels without global directories, withheld money, edit/read
+revocation, inactive actors and policy changes. Recovery checks cover pending
+and failed refreshes, retained operation receipts and keyboard focus without
+stealing deliberate navigation focus. Shared CSS was not changed.
+
+The latest full Rust-suite snapshot passed 1,830 tests before the late fee
+denial regression and focus correction. Subsequent registered-session and 34
+navigation tests, affected browser suites and strict native/WASM Clippy passed
+after those changes. SQLx preparation was checked by offline compilation.
+Desktop/mobile project-read captures were inspected; this is not full design
+parity, Windows Chrome acceptance, or canonical fee/lifecycle activation.
+
+## Grouped CSV backend (T221 partial)
+
+Run `cargo test -p horae --features server --bin horae scoped_time::grouped::`
+against disposable PostgreSQL. The suite checks exact grouped hours, four
+dimensions, more than 10,000 groups/source entries, quoted Unicode exceeding a
+native chunk, captured authority, reassignment, partial revocation and
+backpressure. The concurrency probe replaces the cursor helper only inside its
+isolated test database, pauses the third fetch of a 257-context group and observes
+actual database lock dependencies. Its cancellation branch releases the probe
+blocker before asserting eventual connection/gate cleanup; it does not promise
+that cancelling Rust immediately interrupts a PostgreSQL statement.
+
+`reports-permissions.cjs` calls `/api/reports/time/grouped/csv` with the same
+grouping, period, requester and policy as the grouped workbook. It checks all
+five narrowing filter dimensions, exact fixture hours, empty files, malformed
+queries, anonymous/wrong-identity denial and policy changes. These are actual
+registered-route checks, not proof that the CSV link is exposed in the UI.
+The consumer link and nested report navigation remain T221 work.
+
+## Grouped workbook delivery (T221 partial)
+
+In the Nix shell, run `cargo test -p horae --features server --bin horae reports::`
+against disposable PostgreSQL, then the `scoped_reports_ui` integration target.
+The grouped tests cover all four dimensions, exact worksheet cells, 10,001 source
+entries in one group, distinct IDs with equal names, the group/name/combined-scope
+budgets, source reassignment and loss of only part of a group's captured scope.
+`reports-permissions.cjs` exercises the actual grouped XLSX route through each
+tab, requester/date binding, anonymous and malformed requests, empty results,
+policy changes and desktop/mobile layout. Its ZIP/HTTP assertions verify delivery;
+the Rust workbook assertions verify cells. Grouped CSV consumer integration and
+nested report navigation remain required before T221 can close.
+
+## Ordinary Reports consumer (T216–T218)
+
+`Reports` first obtains `get_time_report_access`: requester and supported
+legacy/scoped mode are read together using the existing time-export authority
+transaction. No legacy catalog or monetary resource mounts before admission.
+The route keeps that identity/mode through retries and child remounts. Canonical
+results use `list_visible_time_report_entries`, not the legacy report functions.
+
+`scoped_reports_ui` imports the production route and shared controls. It checks
+pending/denied admission, legacy isolation, full-period totals on paged and empty
+results, escaped text, cursor/date changes, invalid date ranges, cancelled old
+responses, sanitized failures and requester/mode continuity through reloads.
+Only an exact-key successful ready response exposes rows, totals and links.
+
+Canonical CSV/XLSX links carry requester IDs and `expected_policy=scoped`, without
+the page cursor. The existing download routes reject mismatched mode before
+selecting rows and retain their subsequent release checks. Omitted mode preserves
+legacy/direct links; unknown, empty or repeated mode values are invalid. The
+registered-session suite checks both transitions with the same Admin identity,
+canonical Member grants, matching/stale links and unchanged unbound downloads.
+
+Run in the Nix shell, using disposable PostgreSQL for the server suite:
+
+```sh
+cargo test -p horae --features server --test scoped_reports_ui
+cargo test -p horae --features server --bin horae reports::
+cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization
+```
+
+The focused browser fixture is `run-design-checks.sh reports-permissions`, with
+the current packaged server/client and the pinned Playwright environment from
+`nix/checks/browser.nix`. It creates 503 authorized entries plus another person's
+private record in the runner's disposable database; it must never use an existing
+database. `HORAE_BROWSER_ARTIFACTS` selects an absolute `.scratch/` capture folder.
+Browser and final lint outcomes are recorded in `progress.md`, not implied by
+the existence of the fixture.
+
+The browser fixture passed with Chromium 148.0.7778.96 against the complete
+Dioxus debug bundle (`23602`). Desktop 1440×900/dark and mobile 390×844/light
+captures were reviewed in two bounded rounds; the only visual correction kept
+dates and individual name words intact without changing shared CSS. Geometric
+assertions preserve that behavior alongside viewport containment, labels and
+focus. The fixture is included in the default browser runner. These emulated
+viewports do not claim physical-device or Windows Chrome acceptance.
+
+Final actual-component tests pass 12/12; all-target native Clippy and WASM Clippy
+pass with warnings denied (`82436`). Backend verification `11622` passed 111
+report/export regressions, eleven storage cases, the actual-session suite and
+complete SQLx preparation without cache changes. Independent final static review
+found no material defect. T216–T218 are complete, not full Reports acceptance.
+
+The UI retains shared date controls, table, badges and utility styling without
+changing global CSS. This is the ordinary results consumer, not the handoff's
+custom report builder or completed full-picker/grouping/financial acceptance.
+Legacy catalog/financial APIs do not yet accept the new requester binding;
+their remaining canonical cutover requirements are not replaced by this gate.
+T203 and feature activation remain open.
+
+## Full-period ordinary time totals (T213–T215)
+
+`list_visible_time_report_entries` returns `totals` with integer `entry_count`,
+`total_minutes`, `rounded_minutes` and `billable_minutes`. The latter sums the
+effective rounded minutes of report-billable entries, without monetary fields.
+Totals use every authorized date/filter match before pagination; they remain
+nonzero on an exhausted cursor and zero on a genuinely empty matched set.
+The existing bounded page and totals share one scoped SQL statement/snapshot.
+Each request still reauthorizes and reads fresh data; no cross-page snapshot is
+promised. No picker discovery or permission widening follows from aggregate data.
+
+In a disposable PostgreSQL database with all migrations applied:
+
+```sh
+cargo test -p horae --features server --bin horae reports --config 'profile.dev.package.horae.debug=0' --config 'profile.dev.package.horae.strip="debuginfo"'
+cargo test -p horae --features server --bin horae server_fns::permissions::storage_tests:: --config 'profile.dev.package.horae.debug=0' --config 'profile.dev.package.horae.strip="debuginfo"'
+cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization --config 'profile.dev.package.horae.debug=0' --config 'profile.dev.package.horae.strip="debuginfo"'
+cargo sqlx prepare --workspace -- --features server --all-targets
+```
+
+After a disk-space compile failure and package-only artifact cleanup, RED `96539`
+executes eleven scoped cases: nine fail on absent totals; query/policy and actor
+denials pass. GREEN `34358` passes 136 report-related tests (44.87s; two existing
+manual measurements ignored), eleven storage tests (2.03s) and actual-session
+HTTP coverage (12.18s). Full SQLx preparation passes (89s), adding the new reader
+and three test descriptions and removing only the obsolete reader description.
+Offline all-target server Clippy (108s) and WASM Clippy (19.85s) pass with warnings
+denied (`91426`). Formatting `91995` updates only the two changed Rust test files.
+Final formatting CI `1692` checks 552 files with zero changes; diff checks pass.
+
+FR-006/007/008 map to identical scoped/filter sets for rows and sums; FR-010 to
+requester and active-session checks; FR-018 to empty/exhausted pages, 503-row
+pagination, duplicate/foreign filters, malformed tenant parents, own/managed/all
+scope unions, frozen zero and per-entry rounding, revoked authority and sums
+greater than `i32::MAX`. HTTP asserts exact payloads and full totals across 500/1
+pages, with foreign filters producing zeros. Independent static review found no
+material defect. The single-statement snapshot guarantee was inspected; no new
+forced concurrent-source-edit test is claimed. No browser or full Nix acceptance
+follows. UI, full picker discovery and financial-family reporting remain open.
+Rust/testing/async and simplicity guidance kept the implementation within the
+existing reader, typed DTO and SQLx macros, with no dependency, schema, CSS or
+new authorization abstraction. Spec Kit command skills are absent locally;
+the actual prerequisite script passes, and the existing contract/plan/tasks are
+updated without claiming unavailable commands were invoked.
+
+## Multi-ID download queries (T210–T212)
+
+Both ordinary time download routes accept comma-separated `client_ids`,
+`project_ids`, `user_ids`, `task_ids` and `tag_ids`. These only narrow authorized
+rows. Legacy scalar links still work, but mixing scalar/plural forms for the same
+dimension is rejected, including an empty plural value. Only a wholly empty
+list is unrestricted; invalid UUIDs or empty elements return 400 rather than
+silently widening the export. Known duplicate keys and all `after` parameters
+are rejected. The paired optional `expected_org_id`/`expected_user_id` values bind
+the download to its requesting account without supplying authority.
+
+Use the existing disposable PostgreSQL/Nix verification commands in the next
+section; the focused pure parser filter is `export_params_tests::`. Registered
+HTTP coverage lives in `authorization_tests/time_reports/export_filters.rs`.
+Its own/managed fixture includes independently identifiable excluded rows and
+compares actual CSV records and XLSX row counts/notes across all five dimensions,
+AND/OR combinations, duplicated IDs, foreign IDs, malformed parameters, legacy
+links and an actual switched session with independent export authority.
+
+RED `79204` reproduced four failing behavior groups while legacy links passed.
+`35028` passes 110 report/export tests (42.58s, two manual measurements ignored)
+and eleven storage tests (2.13s). HTTP setup initially omitted the required
+currency on a new test client; the fixture now supplies EUR. Final run `29148`
+passes all 110 report/export tests (42.36s), eleven storage tests (2.15s) and the
+actual-session HTTP suite (12.15s), including both formats and the new fixture.
+Complete SQLx preparation passes with five added test-query descriptions and no
+existing descriptions removed or changed. Offline all-target server Clippy
+(101s) and the unchanged WASM target pass with warnings denied (`29721`).
+Formatting checks 552 files with zero changes (`98173`). No full server, browser
+or Nix result is claimed for this increment.
+
+OP25/OP31 and FR-006/007/008 map to complete filter transport and scope narrowing;
+FR-010 maps to session-derived authority and requester binding; FR-018 maps to
+strict malformed-input and registered-route verification. Independent production
+and test review found no material defect. Rust/testing/async and simplicity
+guidance kept this in the existing `ExportParams` conversion, with no new parser
+dependency, SQL authority, schema, CSS or UI component. It does not close the
+Reports consumer, picker universe, financial reports, browser or full Nix gates.
+
+## Recorded-scope CSV delivery (T207–T209)
+
+The registered `/api/reports/export/csv` route now delegates ordinary time
+authorization to its source and delivery gates. Policy 0 retains Manager/Admin;
+policy 1 uses strict own/managed/all scope independently of the legacy role.
+The native cursor captures authority, relationships and rows in one source
+snapshot. Its constant identity sentinel preserves missing/invalid authority
+even when no entry is visible. No metadata enters the eight-column CSV.
+
+Each bounded output block retains its captured owner/project pairs. Capacity is
+reserved without authority locks, then current authority is reloaded and checked
+against those pairs before synchronous delivery. Prior queued bytes cannot be
+recalled; a later denial interrupts the body rather than returning truncated
+success. Source reassignment or deletion cannot replace captured scope.
+
+Use disposable PostgreSQL and the Nix dev shell:
+
+```sh
+cargo test -p horae --features server --bin horae reports:: --config 'profile.dev.package.horae.strip="debuginfo"'
+cargo test -p horae --features server --bin horae server_fns::permissions::storage_tests:: --config 'profile.dev.package.horae.strip="debuginfo"'
+cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization --config 'profile.dev.package.horae.strip="debuginfo"'
+cargo sqlx prepare --workspace -- --features server --all-targets
+```
+
+RED `94314` reproduced Member denial and legacy-role overexposure; `30494`
+passes those two initial tests after implementation. Final regression run `9111`
+passes 105 report/export tests (40.91s), including ten new scoped CSV tests; two
+manual measurements remain ignored. All eleven strict storage tests pass (1.96s)
+after the shared restoration extraction. The registered-session HTTP suite also
+passes (11.19s), including CSV forgery, foreign filtering, private-field exclusion,
+missing state, legacy denial and inactive sessions. Complete SQLx preparation
+passes with ten added cache files and only the obsolete time cursor/decoder
+descriptors removed. Offline all-target server and WASM Clippy pass with warnings
+denied (`22934`, 87s/17s). Formatting checks 550 files with zero changes. This is
+not a full server, browser or Nix acceptance claim.
+
+Requirement mapping: OP25/OP31 and FR-006/007/008 cover scoped source and narrowed
+filters; FR-010 covers independent actor/owner identities and per-block current
+authorization; FR-018 covers DECLARE handoff, restored invalid source state,
+backpressure, context clearing, historical capture, bounds and real HTTP.
+Independent static production/test review found no material defects. Rust,
+testing, async and simplicity guidance kept this within the existing cursor,
+strict storage and shared XLSX predicates: no new dependency, schema, CSS or
+queue. Multi-ID URL transport, Reports consumer/candidate discovery and separate
+financial reports remain mandatory T203 work.
+
+## Recorded-scope XLSX delivery (T204–T206)
+
+The existing `/api/reports/export/xlsx` route now applies canonical ordinary
+time-read scope when policy 1 is selected. Policy 0 preserves its Manager/Admin
+gate. It retains the eight-column workbook and existing limits/admission; the
+rendered file is released only after rechecking active identity, the original
+policy version and current authority over every captured person/project pair.
+Rendering retains neither database connection nor authority locks. Source
+reassignment/deletion does not change the scope of already captured bytes.
+
+Use disposable PostgreSQL and the Nix dev shell:
+
+```sh
+cargo test -p horae --features server --bin horae reports:: --config 'profile.dev.package.horae.strip="debuginfo"'
+cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization --config 'profile.dev.package.horae.strip="debuginfo"'
+cargo sqlx prepare --workspace -- --features server --all-targets
+```
+
+RED `70145` reproduces both initial canonical failures. The final regression run
+`42927` passes 95 report/export tests, including eleven new scoped XLSX tests;
+two manual performance measurements remain ignored. The registered-session HTTP
+suite also passes with the new XLSX checks. This is not the full server or Nix
+suite. Full SQLx preparation passes with ten added cache files and the obsolete
+size query removed. Offline all-target server Clippy (83s) and WASM Clippy (15s)
+pass with warnings denied (`60722`).
+Formatting `36144` checks 548 files with zero changes.
+
+Independent final static review found no material defect. The inherited snapshot
+test now permits an exact old result or coherent 413 for the READ COMMITTED
+time statement; invoice/PDF snapshot assertions remain unchanged. No new schema,
+dependencies, CSS or real-data changes. CSV authorization, multi-ID URL transport,
+the canonical Reports consumer and full candidate discovery remain open T203
+work, not replaced by this increment or by its internal multi-ID reader tests.
+
+## Ordinary detailed time-report reader (T201–T202)
+
+`list_visible_time_report_entries` is a canonical-policy session endpoint for
+nonfinancial report facts. Query lists narrow already authorized rows and do not
+grant candidate-discovery authority. Pages carry at most 500 rows and a bound
+requester; exhaust them before presenting all detailed rows. T213–T215 adds
+full-period time totals separately from the page. Report rounding
+and billability are not the raw Timesheet fields. See `contracts/time-reports.md`.
+
+Against a disposable, fully migrated PostgreSQL database in the Nix dev shell:
+
+```sh
+cargo test -p horae --features server --bin horae time_reports_tests:: --config 'profile.dev.package.horae.strip="debuginfo"'
+cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization --config 'profile.dev.package.horae.strip="debuginfo"'
+cargo test -p horae --features server --bin horae time_entries_tests:: --config 'profile.dev.package.horae.strip="debuginfo"'
+cargo sqlx prepare --workspace -- --features server --all-targets
+```
+
+RED `82050` reproduces the absent reader with both initial behavior tests.
+`98511` passes ten report tests, the registered-session HTTP suite (including the
+new endpoint) and eight shared time-reader regressions. These cover six-profile
+and custom scope, union deduplication, multi-ID narrowing, archived history,
+malformed tenant parents, frozen zero and current rounding, retained invoice
+billability, cursor ties, policy/requester rejection, revocation, direct actor
+deactivation, cancellation and one-connection reuse. The HTTP test checks exact
+fields against populated private data, forgery, missing/unsupported state and
+same-cookie deactivation. No browser result is claimed for this new endpoint.
+
+Independent static review found no material production defect; its cancellation
+test recommendation was applied before final execution. Full SQLx preparation
+passes after forcing fresh integration targets; offline all-target server and
+WASM Clippy pass with warnings denied. Formatting checks 546 files with no changes.
+The query/page DTOs carry temporary WASM-only dead-code expectations until T203.
+T203 remains required: connect the
+ordinary Reports consumer and corresponding CSV/XLSX delivery, resolve full
+picker candidates, and preserve separate financial-report requirements. The
+current legacy screen and downloads have not been replaced or certified here.
+
+## Canonical People consumer (T198–T200)
+
+The People route and sidebar now use supported own People-read grants. Only an
+explicit policy-0 response selects the legacy users/tasks editor. Canonical
+Administrator identity, not equivalent grants or a legacy Admin role, enables
+permission editing. Importers retains its independent legacy gate even when the
+canonical projection fails; audit remains canonical-Administrator-only.
+
+The directory uses its bounded server projection with active/archived/all filters
+and previous/next pages, without a fabricated total or legacy role column. Its
+first requester remains fixed across page/filter/refresh requests. Selecting a row
+passes `(target, requester)` into the editor before its first read; session or
+organization changes cannot retarget the form through a load or reload.
+
+Denied/failed People and policy-0 fallback retain the recovery-only dialog. That
+host locates the signed-in user's tab record without loading directory/editor
+targets, and does not submit automatically. Current server authority still governs
+replay. Acknowledged cleanup completes before authorization refresh unmounts the
+editor. Ordinary canonical invitation/activity/task writers are not implemented
+by this consumer and are not exposed as legacy actions.
+
+```sh
+nix develop --command env SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo test -p horae --features server --test admin_shell --test permission_editor_ui --config 'profile.dev.package.horae.strip="debuginfo"'
+```
+
+Original-shell execution reproduced both new admission failures. Restored-source
+verification `29224` passes 11 actual-shell and 55 actual editor/directory tests,
+plus offline all-target server and WASM Clippy with warnings denied. Native tests
+drive real controls/resources with controlled replies; they are not browser tests.
+
+The real `permission-editor-recovery` suite (`92963`, Chromium 148.0.7778.96)
+passes canonical Administrator/legacy Member navigation, managed-only scope,
+all-grants non-admin, legacy Admin denial, policy-0 isolation, 50-row paging,
+activity filters and keyboard navigation. A second tab switches the actual cookie;
+the first editor read and explicit retry both reject the new requester's successful
+server response. Complete People-grant revocation and return to policy 0 preserve
+the same recovery command. Existing audit, template, lost-response and acknowledged
+self-demotion cleanup cases remain included. All fixture writes use the runner's
+disposable PostgreSQL, never a reference Harvest or developer database.
+
+Desktop-dark/narrow-light captures exposed over-aggressive word wrapping in the
+new table cells; removed that local utility while preserving shared horizontal
+scrolling. Final `67362` passes all 66 tests, both lint targets and official
+server/WASM packaging; complete Chromium `98074` passes on that bundle. Inspected
+the final 1440-dark and 390-light captures under `.scratch/people-directory-final/`:
+names/emails remain readable and the table scrolls locally without page overflow.
+Formatting CI checks all 541 selected files with zero changes (`32073`). Independent
+review has no remaining high/medium finding. No CSS, SQL, migration or new
+dependency changed. Full Nix acceptance, ordinary
+people management, remaining operation predicates and real-policy cutover remain
+open; this is not completion of the permission feature.
+
+## Editor reload requester continuity (T195–T197)
+
+The editor pins its first accepted response's requester and preserves that pair
+across explicit reloads. A failed selection cannot become accepted under a
+different user or organization merely by retrying. Returning to the original
+requester still permits a fresh authorized load. Close and completed save/recovery
+release the binding; no server permission or durable-record format changes.
+
+```sh
+nix develop --command env SQLX_OFFLINE=true cargo test -p horae --features server --test permission_editor_ui
+```
+
+Both new requester tests fail on the original source (`12334`); all 52 tests pass
+after the fix (`83067`). They cover user and organization switches, rejected
+selection followed by reload, an initial response with invalid grants followed by
+reload, and restoration of the original requester. Existing recovery/template/
+navigation tests remain included. This is controlled component evidence.
+
+The `permission-editor-recovery` browser suite additionally switches the real
+session cookie in a second tab while the first editor stays open. It holds each
+tested editor read to assert pending state and stale-error suppression, checks a
+successful server response identifying the second Administrator, then requires
+local rejection. Restoring the original session allows a reload again. Its only
+role writes target the runner's disposable database. The complete suite passes
+(`83813`) with Chromium 148.0.7778.96 / Playwright 1.60.0, including existing
+audit history, lost-response recovery and self-demotion cleanup. This is Linux
+headless Chromium, not Windows Chrome/MCP evidence. Official Dioxus packaging
+also passes (`4188`, 279s); no new visual styles were introduced.
+Offline all-target server Clippy and WASM Clippy pass with warnings denied
+(`39182`, 75s and 14.34s). Independent re-review closes the browser-barrier
+finding and finds no remaining material defect in this delta. No SQL or migration
+changed, so SQLx regeneration was not needed. Full Nix/feature gates remain open.
+
+That earlier repair did not bind an external directory row before the first editor
+response. The canonical consumer above adds that binding and its route/navigation
+gates; neither increment alone completes T018 or full-feature acceptance.
+
+## Invoice writer and revocation ordering (T192–T194)
+
+The three invoice writers share organization SHARE → invoice advisory lock →
+current actor SHARE before their existing resource locks. The transaction uses
+READ COMMITTED/READ WRITE without changing session defaults. This repairs a
+reproduced deadlock against the actual user-role command; it does not replace
+legacy invoice authority with canonical permission grants.
+
+Run in the Nix shell against disposable PostgreSQL:
+
+```sh
+cargo test -p horae --features server --bin horae server_fns::invoices::tests::authority
+cargo test -p horae --features server --bin horae
+```
+
+The focused cases cover reviewed generation and real edit/transition commands,
+both revocation orders, denied replays, persisted invoices/receipts and unchanged
+amounts. All three writers run under inherited read-only/repeatable-read defaults.
+Cancellation while waiting for invoice serialization checks rollback and reuse
+of a one-connection pool after the blocking statement can finish, not immediate
+query cancellation or interruption halfway through a mutation.
+
+Independent static review found no material outstanding issue. Full server-binary
+run `11887` passes 1,154 tests with zero failures and 11 pre-existing ignored cases
+in 121.31s. This includes the four new authority tests and registered-session,
+user/project and financial regressions. The same run regenerates SQLx without
+removing any of the 1,520 existing descriptions and adds four. Offline all-target
+server Clippy passes in 1m12s and WASM Clippy in 14.51s, both with warnings denied.
+Formatting passes without changes. Full T042, canonical invoice scope, full Nix
+acceptance, policy activation and feature completion remain separate open
+requirements.
+
+## Authenticated project-manager delivery (T189–T191)
+
+The policy-1 `load_project_managers` and `save_project_managers` endpoints derive
+the actor and organization from the session and require current project-edit
+authority. Reads return the complete retained set with only ID/name/activity;
+saves pin the original requester and reuse the existing atomic replacement.
+Neither endpoint enables policy 1 or replaces the legacy project editor.
+
+Run in the Nix shell against disposable PostgreSQL:
+
+```sh
+cargo test -p horae --features server --bin horae project_management_tests::
+cargo test -p horae --features server --bin horae command_preserves_durable_intent
+cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization
+```
+
+Coverage includes exact retained identities, archived/incompatible managers,
+all/managed scope, requester binding, both revocation orders, cancellation,
+atomic invalid selections, replay, self-removal and administrator-only audit
+access. Registered HTTP testing exposed a command that serialized `kind` but
+rejected it on deserialization. The explicit single-variant discriminator keeps
+the durable JSON unchanged while rejecting missing/wrong kinds and extra fields.
+
+Full server-binary run `49140` passes 1,150 tests with 11 pre-existing ignored
+cases. Clean SQLx preparation preserves all 1,512 previous descriptions and adds
+eight; offline all-target server Clippy (`52861`) and WASM Clippy (`69854`) pass
+with warnings denied. This is backend/session evidence, not browser integration, policy
+activation, full Nix acceptance or permission feature completion. Complete
+project-form field predicates remain a separate integration gate.
+
+## Selected-person Timesheet browser acceptance (T187–T188)
+
+`run-design-checks.sh timesheet-permissions` uses the same built client/server and
+pinned Playwright environment as the existing disposable runner. It refuses
+non-runner database targets. Only its disposable organization enables policy 1;
+the legacy-admin login identity is deliberately not a canonical Administrator.
+
+Real Chromium checks cover project-scoped person selection, active teammates
+without hours, hidden unrelated work, back/forward navigation, Day/Week writes,
+revocation between click and commit with preserved draft/data, and relationship
+revocation without fallback to another person's sheet. The test exposed a
+singleton-key lifecycle defect: the URL changed while the old sheet remained.
+A keyed dynamic fragment now resets the route-specific resources and drafts;
+the parent still retains the admitted requester.
+
+Concurrent requester/delegate timers retain separate identities. After the
+subject loses project membership, a delegate's stop is disabled and a direct
+authenticated command returns the existing eligibility conflict (409), not an
+authority failure (403). Restoring membership permits delegated stop; a second
+real owner session can stop without restored membership under FR-033/B. SQL
+assertions verify the running states and unchanged unrelated time.
+
+Delegated mutation acceptance also creates entries through Day and Calendar,
+moves a timed block across days by exactly one hour, resizes it by 30 minutes,
+moves an untimed entry and inverts a two-entry order. SQL assertions verify the
+selected owner, project/task, dates, integer minutes and both sort positions.
+Modal deletion and one-command, two-ID Week row deletion preserve unrelated
+hours and the requester's running timer. Successful joint deletion is paired
+with the existing `timesheet-errors` stale-lock rollback/retry coverage.
+
+These tests reproduced two UI defects: nested labels distorted the timed drag's
+grab offset by 15 minutes, and Day's Add entry used the week default date.
+Noninteractive event labels now leave hit-testing to their container while the
+resize handle remains interactive. Single-day views use their visible date;
+Calendar Day view also has an explicit Tuesday-dialog regression.
+
+The eleven-scenario suite is registered in the default browser gate. Combined
+run `48723` passes it together with `modals`, `timesheet-errors` and
+`permission-editor-recovery`. This does not cover Windows Chrome, every input
+method or layout, submitted-entry parity, scoped approvals, real activation or
+full acceptance. No real database or Harvest account is used.
+
+## Timesheet modal and mutation regressions (T186)
+
+The default disposable browser runner includes `modals` and `timesheet-errors`.
+For focused iteration, use `run-design-checks.sh modals timesheet-errors` with
+the same built server and pinned Playwright environment as the other suites.
+Both reject non-runner database targets.
+
+Coverage includes atomic row deletion after a stale-client lock, unlock/retry,
+failed calendar move/resize/reorder, a committed reschedule with a lost response,
+timer-start failure, modal keyboard/inertness/backdrop/short-viewport behavior,
+pending dismissal guards, draft preservation and real create/update/delete.
+Both Timesheet dialogs also receive 200-character project/task labels while
+retaining real eligible IDs; their panels fit 390px and 320px short viewports.
+Cancel returns focus to an available opener; refresh-disabled or removed openers
+use the shared `app-main` fallback. Deletion is checked against the complete
+refreshed DTO, not a transient empty grid. The fixture uses legacy own-person
+mode: these regressions do not prove delegated browser acceptance, final
+submitted-editing parity, policy activation or full feature completion.
+
+## Browsable permission history (T182–T184)
+
+`/admin/audit` connects authenticated `list_permission_audit` to Workspace Data
+and Administrator Settings. It requires an active canonical Administrator;
+existing legacy People/Importers access is unchanged. Every page reauthorizes
+and remains bound to the first admitted requester. It presents only recorded
+permission changes and explicit no-op receipts, with native details for grants,
+provenance, Administrator identity and relationship changes. No raw command/replay
+payloads, fabricated names/events/counts or retention promises are shown.
+
+The production paging test first failed with `Forbidden` against the placeholder;
+the UI test first failed because no read was issued. The integrated server binary
+and affected shell/history/Settings/editor UI suites now pass (`94206`, exit 0).
+Tests cover stable timestamp ties, tenant-first bounds, all historical types,
+requester mismatch, empty/end states, refresh/retry, sanitized failures, malformed
+history, HTML escaping, revocation in both gate orders and cancellation cleanup.
+The independent review's shell-error disclosure finding has a passing regression.
+The same finding was then reproduced at the HTTP boundary: cancellation of the
+own-permission authentication query returned PostgreSQL diagnostics. Its wrapper
+now sanitizes that failure while retaining 401; the final registered-session
+matrix passes, injecting and recovering from authentication-query failure in
+all three readers.
+
+Run through Nix against disposable PostgreSQL only:
+
+```sh
+cargo test -p horae --features server --bin horae
+cargo test -p horae --features server --test permission_audit_ui --test admin_shell --test own_permissions_ui --test permission_editor_ui
+```
+
+Complete SQLx preparation preserves all existing descriptors and adds five.
+Final offline native/all-target and WASM Clippy pass with warnings denied;
+formatting and publication evidence are tracked in `progress.md`.
+
+T185 adds real Chromium acceptance to `permission-editor-recovery.cjs`, already
+included in the default browser gate. The existing fixture produces 29 actual
+person/template receipts through the editor. Checks cover empty history, exact
+25+4 paging, native keyboard expansion, deleted-template snapshots, a genuinely
+held refresh hiding previous data, revocation/restoration and Settings navigation
+for a canonical Administrator whose legacy role is Member. Earlier recovery,
+account-switching and self-demotion assertions still run. A theme-token and flex
+utility guard rejects an unstyled test bundle before layout assertions.
+
+Use the existing `run-design-checks.sh permission-editor-recovery` runner with
+the matching built server and `public/` directory, plus the pinned Playwright
+environment from `nix/checks/browser.nix`. The runner creates its own Unix-socket
+PostgreSQL, restores its fixture and stops only its owned services. Set
+`HORAE_BROWSER_ARTIFACTS` to an absolute `.scratch/` directory for captures.
+
+For low-disk local verification, the current native build can reuse `target/debug`:
+`cargo build -p horae --features server --locked`, with `SQLX_OFFLINE=true`.
+It still needs the current Dioxus-built client and **official asset processing**:
+`dx tools assets target/debug/horae target/dx/horae/debug/web/public/assets`.
+Expose that `public` beside the executable (a symlink avoids copying the bundle).
+A plain Cargo binary alone is not a correctly packaged browser application.
+The ordinary fullstack build remains the reproducible packaging path; do not
+assume `dx build` reuses Cargo's native profile, as it creates `server-dev`.
+
+The focused run passes in Chromium 148.0.7778.96 / Playwright 1.60.0, and the
+desktop-dark (1440×900) and narrow-light (390×844) captures were inspected.
+This is Linux headless Chromium and emulated viewport/keyboard evidence, not
+Windows Chrome/MCP, physical touch, screen-reader or full accessibility acceptance.
+Expanded grant lists make rows tall and center adjacent metadata vertically;
+that readability refinement remains part of the broader UI acceptance, not an
+overflow failure or a claim of pixel-identical design. Project-manager/operator
+detail rendering retains its existing server/controlled-DOM evidence, not a new
+browser probe. No real-data migration, runtime activation or full feature
+completion follows. The full browser gate outcome is recorded in `progress.md`.
+
+## Captured own-week submission (T014/T015 in progress)
+
+`submit_week` now requires the page's `TimesheetWriteContext`. Registered-session
+coverage rejects a changed session, subject, organization or expected policy;
+the transaction rejects a policy cutover or inactive owner under the organization
+and owner locks before taking the exclusive Timesheet barrier. The UI captures
+the context and refreshes its sheet after either outcome. No shared CSS changes.
+
+The HTTP regression first failed (404 for the changed session instead of 403).
+The full server run then passed 1,137 tests, zero failures, with 11 existing
+ignored cases. New PostgreSQL tests cover access-change commit/rollback and
+submission-first ordering; existing rounding, running-timer, cancellation and
+one-connection cases remain green. Independent static review found no material
+issue. Cache/lint completion is recorded in `progress.md`.
+
+Use the same Nix/disposable-PostgreSQL commands below; run complete SQLx preparation
+with `cargo sqlx prepare --workspace -- --features server --all-targets` after SQL
+changes. This is the existing legacy own-week flow, **not** flexible/delegated
+submission, submitted editing, browser acceptance or canonical policy activation.
+
+If incremental preparation omits still-used descriptors, invalidate both binary
+and all test entry-point timestamps together before rerunning the full prepare
+command. Invalidating only `main.rs` or only `tests/integration.rs` is insufficient;
+`tests/cli_restart.rs` also owns a SQL macro. Inspect removals against their source
+and verify offline targets; a successful incremental command alone is not proof
+of a complete cache.
+
+## Selected-person Timesheet commands (T014/T015 in progress)
+
+Use the existing isolated Nix shell and disposable PostgreSQL with CREATEDB.
+Keep the same build profile/target; do not create another dependency cache.
+
+```sh
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae -- --test-threads=4
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features server --all-targets -- -D warnings
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features web --target wasm32-unknown-unknown -- -D warnings
+node --test crates/horae/tests/browser/editor-navigation.cjs
+nix fmt -- --ci
+```
+
+The command boundary binds the authenticated requester, selected owner and
+explicit policy. Its 13 focused PostgreSQL cases cover the seven intents,
+source/destination scope, atomic sets, tracking restrictions, legacy history,
+FR-033 owner-only recovery, revocation commit/rollback orders and cancellation.
+The registered-session matrix checks both endpoints, exact minimal choices,
+400/401/403/409 errors and sanitized 500 responses. A real rejection removes
+coverage and permits ordinary writes again. These focused backend gates pass;
+complete SQLx generation adds 38 descriptors without deleting existing ones.
+
+The consumer carries `user` through Day/Week/Calendar routes, uses the atomic
+page context and writable owner-specific choices, and captures the context for
+each command. The shell timer stays session-owned. Node navigation tests pass
+10/10. The integrated server suite passes 1,135 tests, zero failures and 11
+pre-existing ignored cases, including all 41 consumer tests and five route
+cases. The five AdminShell regressions and final offline server/all-target and
+WASM Clippy checks pass with warnings denied. VDOM and HTTP tests do **not**
+replace browser/keyboard acceptance.
+
+This is not full Timesheet acceptance or policy activation. FR-019 remains open:
+commands temporarily reject approval-covered dates (including empty cells in a
+submitted week), non-Open entries and billed entries. Remove that boundary only
+after reconciling coverage storage, approval writers and frozen rounding.
+Legacy own submission remains a separate endpoint, not delegated submission.
+
+## Previous connected own Timesheet baseline (T014/T015 in progress)
+
+No database is needed for these consumer regressions; compile with the committed
+SQLx cache inside the Nix shell:
+
+```sh
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae pages::timesheet::
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features server --all-targets -- -D warnings
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features web --target wasm32-unknown-unknown -- -D warnings
+```
+
+The five original loader tests fail against the one-page stub, then pass with
+complete pagination. Coverage adds exact combined rows/minutes, continuation
+failure, requester/subject/policy changes, duplicate and out-of-window rows,
+non-decreasing cursors, empty sheets and old-week successes/errors before restart.
+
+Independent review identified grid-draft loss during refresh and the resource's
+old-week Ready window. A Dioxus VDOM regression fails before draft retention and
+passes after it; it drives the real Week renderer's input/blur listeners, hides
+and remounts the grid, and checks that the restored second-cell draft can still
+be committed without retyping. A focused test checks row discard does not remove
+drafts from other weeks/tasks. This is a component test, not a browser or network
+end-to-end test. Native browser focus/keyboard behavior remains to be exercised.
+
+The final run passes all 36 Timesheet tests. Offline server/all-target and WASM
+Clippy pass with warnings denied. The consumer changes no SQL, schema, shared CSS,
+shell timer ownership or legacy
+mutation authority. Selected-person navigation/commands and FR-033's delegated
+denial tests remain next; this is not full Timesheet or feature acceptance.
+
+## Selected Timesheet page context (T014/T015 in progress)
+
+In the same isolated Nix/PostgreSQL setup below, also run:
+
+```sh
+CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae timesheet_context_tests::
+```
+
+The initial three positive cases failed against the unimplemented page reader.
+The implemented boundary passes six transaction tests (6.35s), eight candidate
+tests (1.53s), eight scoped-entry tests (1.67s) and the real HTTP matrix (9.42s).
+It proves explicit legacy/scoped policy, separate requester/subject, empty managed
+participants, per-project entry limits, expected-identity/policy denial, 501-row
+continuation, invalid queries/state and both target-archive lock orders including
+cancellation. Exact HTTP payload assertions exclude financial/internal data.
+
+Complete SQLx generation preserves all 1,465 descriptors unchanged. Offline server
+all-target and WASM Clippy pass with warnings denied. A bounded self-review found
+no high/critical defect in this read boundary. The later connected own-sheet
+consumer above replaces the screen's old reader; this is not selected-person UI,
+delegated-write or full-feature acceptance.
+
+## Timesheet candidate discovery (T179–T181)
+
+Use the Nix shell and a disposable PostgreSQL database with CREATEDB. After other
+package builds finish, clean only this worktree's Horae package artifacts before
+SQLx preparation so Cargo cannot skip cached integration-test query expansion:
+
+```sh
+cargo clean -p horae
+CARGO_INCREMENTAL=0 cargo sqlx prepare --workspace -- --features server --all-targets
+CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae timesheet_people_tests::
+CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae time_entries_tests::
+CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features server --all-targets -- -D warnings
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features web --target wasm32-unknown-unknown -- -D warnings
+nix fmt -- --ci
+```
+
+The initial RED denied the candidate request at the unimplemented reader. The
+implemented reader passes all eight candidate tests (2.00s), all eight existing
+scoped-time tests (1.95s), and the registered-session HTTP matrix (10.66s).
+Coverage includes zero-entry project participants, direct management, retained
+history, six profiles/custom scope, deduplication, archived people/context,
+foreign parent links, 51-person pagination, literal/trimmed search, narrowing,
+revocation in both lock orders, cancellation and inherited pool defaults.
+The HTTP check compares the exact ID/name payload, rejects missing/inactive
+sessions, ignores forged outer authority, sanitizes storage failures and proves
+that selecting a participant exposes no hours from an unrelated project.
+
+The first SQLx preparation incorrectly omitted 90 unchanged integration-test
+descriptors because Cargo reused their prior compilation; offline Clippy caught
+the missing cache. Clean regeneration passed (1m10s), retaining all 1,460 prior
+descriptors unchanged and adding five. Offline all-targets server Clippy (1m28s)
+and WASM Clippy (47.95s) passed with warnings denied. Only 10.8 GiB of regenerable
+Horae package artifacts were cleaned; no source, user data or external cache.
+
+Adversarial self-review traced both public readers through the shared current
+policy/actor/grant fence. Candidate visibility is a union of time scopes, not
+directory or financial authority; search, cursor and selected ID only narrow it.
+Every historical parent is tenant-qualified, and inactive people are filtered
+without changing the general reader's historical records. Exact JSON assertions
+exclude email, rates and authentication metadata. Real database waiters establish
+both race orders without timing sleeps. No critical/high finding remains in this
+bounded implementation review. This is not
+an independent review, a browser/UI pass, delegated-write acceptance or activation
+of the complete policy. T014/T015/T018 remain open.
+
+## Authenticated template capacity (T178)
+
+Inside the Nix shell, use a disposable PostgreSQL database with CREATEDB:
+
+```sh
+CARGO_INCREMENTAL=0 cargo sqlx prepare --workspace -- --features server --all-targets
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae template_tests::
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features server --all-targets --locked -- -D warnings -W clippy::perf
+nix fmt -- --ci
+```
+
+The HTTP harness creates 49 templates through the registered endpoint, then
+observes two distinct authenticated Administrators waiting behind an organization
+lock. Exactly one creation succeeds; the stale contender conflicts. A request
+with the current revision still cannot create profile 51. Replaying the winner
+returns its exact outcome, with 50 templates and 50 receipts and unchanged person
+state. This supplies the authenticated-capacity part of T016/T017, not their full
+application/classification acceptance.
+
+The complete HTTP harness passed twice (10.54s and 10.47s). All 19 template
+regressions passed (3.99s). The repeat reused the exact newly compiled test binary
+against another disposable cluster, not cached results. All-targets offline
+server Clippy passed with warnings denied (1m26s). Non-incremental preparation
+retains all 1,459 prior descriptors unchanged and adds one observation query;
+temporary diagnostics and incomplete incremental output are not retained.
+
+Local adversarial review checked real routes/cookies, independent Administrator
+identities, distinct request keys, replay-before-stale behavior, both returned
+errors, exact persisted counts and bounded cleanup on failure. The initial
+direct-blocker observation failed because the second writer waited behind the
+first writer's tuple lock. The corrected test follows the blocker chain rather
+than weakening concurrency or adding sleeps. No production guard, UI, migration
+or real data changed. This is not an independent review or a new full-flake run;
+the prior complete Nix gate remains evidence for production revision `3308926`.
+
+## Interactive time-writer activity (T171–T173)
+
+Use the Nix shell and the owned disposable PostgreSQL database:
+
+```sh
+CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae --locked
+# After tests and other package compilations finish:
+cargo clean -p horae
+CARGO_INCREMENTAL=0 cargo sqlx prepare --workspace -- --features server --all-targets
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --no-default-features --features web --target wasm32-unknown-unknown -- -D warnings
+nix fmt -- --ci
+```
+
+The inactive-owner regression first reproduced a persisted 90-minute edit after
+deactivation. The complete server-binary suite now passes: 1,087 passed, zero
+failed, 11 ignored in 277.79s. All 43 time-entry tests pass. New cases exercise
+seven operations across all three legacy roles with inactive and missing users,
+exact record preservation, deactivation in both lock orders, rollback,
+cancellation and inherited pool defaults. The organization-gated race uses the
+shared access-change gate, not the complete user-administration command.
+
+The production prefix rechecks activity and holds organization/actor fences
+through commit. The service-import barrier, current ownership/task checks and
+existing business states are unchanged. Full SQLx preparation passes in 56.48s,
+adding five descriptors while retaining all 1,453 prior descriptors unchanged.
+Offline all-targets server Clippy (1m07s) and WASM Clippy (13.32s) pass with
+warnings denied. The disposable PostgreSQL is stopped. Formatting corrected
+Markdown list spacing; the final CI-format gate is repeated before publication.
+These checks do not establish browser, delegated-write, approval-policy or
+full-flake acceptance.
+
+## Shared time-entry payload (T168–T170)
+
+Use the Nix shell with the owned disposable PostgreSQL database:
+
+```sh
+cargo test -p horae --features server --bin horae models::time_entry::tests::
+cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization
+cargo test -p horae --features server --bin horae server_fns::time_entries::
+cargo test -p horae --features server --bin horae server_fns::invoices::tests::
+cargo test -p horae --features server --bin horae pages::timesheet::tests::
+# Once all compilations/tests have finished:
+cargo clean -p horae
+CARGO_INCREMENTAL=0 cargo sqlx prepare --workspace -- --features server --all-targets
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --no-default-features --features web --target wasm32-unknown-unknown -- -D warnings
+nix fmt -- --ci
+```
+
+The registered HTTP test first failed on a populated invoice identity in the
+legacy own-time response. After applying `serde(skip)` to the internal relation,
+the matrix passes (12.64s), including all three legacy roles, forged target
+identity and unchanged stored links. Both model tests pass: all other fields
+round-trip unchanged, and a supplied invoice identity is ignored. All 38
+time-entry regressions (18.46s), 35 invoice tests (8.43s) and 25 Timesheet unit
+tests pass. Complete SQLx preparation passes (57.08s) and retains all 1,453
+descriptors unchanged. Fresh offline all-targets server Clippy (1m07s) and WASM
+Clippy (13.75s) pass with warnings denied. The package-local clean removed only
+1.7 GiB of regenerable build artifacts; the disposable PostgreSQL is stopped.
+Formatting corrected one Markdown indentation; the final CI-format check is
+repeated before publication. T168–T170 close only this response boundary.
+
+The local adversarial review covers all model consumers, shared response
+envelopes, SQLx loading and separate plugin/Harvest projections. This repair
+changes no UI/CSS, database values, billing lifecycle, grants or policy version.
+It does not establish browser acceptance, teammate Timesheet integration or
+full-feature readiness, and is not a new independent review.
+
+## Scoped time-entry reads (T165–T167)
+
+Use the Nix shell and an isolated PostgreSQL database, never the agency database:
+
+```sh
+cargo test -p horae --features server --bin horae time_entries_tests::
+cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization
+cargo sqlx prepare --workspace -- --features server --all-targets
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --no-default-features --features web --target wasm32-unknown-unknown -- -D warnings
+nix fmt -- --ci
+```
+
+The scope suite covers effective defaults for all six profiles and custom
+permissions, independent managed-person/project union, membership denial,
+foreign entry parents, archived history, filtering, tied/deleted cursors, exact
+500-row pages, policy/identity denial, both revocation orders and cancellation.
+The registered HTTP harness adds exact JSON from populated sensitive data,
+session-only actor identity, foreign filters, same-cookie revocation and
+sanitized errors. Consult `progress.md` for actual execution results; listing a
+command here does not itself establish a passing gate.
+
+Verified 2026-10-04: all eight scope tests pass (5.17s) and the registered HTTP
+matrix passes (12.53s). WASM Clippy and fresh offline all-targets server Clippy
+pass with warnings denied. Full SQLx preparation adds 16 descriptors, leaving
+all 1,437 prior descriptors unchanged. The owned disposable database is stopped.
+Local adversarial review found no remaining critical/high read-boundary issue;
+this is not a new independent review or complete-feature acceptance.
+
+This contract deliberately excludes financial fields even when the actor also
+has financial grants. It delivers contextual names, not unrelated directory or
+invoice access. No assertion of Timesheet UI integration, approval authority,
+browser validation, activation readiness or full `nix flake check` follows.
+
+## Session identity projection (T162–T164)
+
+Against disposable PostgreSQL, run:
+
+```sh
+cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization
+cargo test -p horae --features server --test detail_navigation --test approval_labels_ui --test admin_shell --test permission_editor_ui
+cargo sqlx prepare --workspace -- --features server --all-targets
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --no-default-features --features web --target wasm32-unknown-unknown -- -D warnings
+nix fmt -- --ci
+```
+
+The real-route red test exposes non-null financial/provider fields in `get_me`.
+After replacing the response with `CurrentUser`, the registered HTTP matrix
+passes in 12.58s. Exact JSON covers every legacy role and forged foreign target
+fields; the same-cookie checks cover demotion, deactivation, missing identity
+and logout. The four selected consumer suites pass 81 tests. Server all-targets
+and WASM Clippy pass with warnings denied. Internal authentication, legacy gates,
+other user endpoints, database values and UI/CSS are unchanged.
+
+SQLx check passes but warns about potentially unused cached descriptions. A clean
+package rebuild and full preparation retain all 1,437 descriptors with no changes:
+the new test macros use already-cached queries, and production SQL is unchanged.
+The clean removes only 4.4 GiB of regenerable package artifacts. No source or data
+is deleted; the owned disposable database is stopped after verification.
+
+Focused adversarial review checks that the DTO contains no flattened database
+model, authority token or private nullable placeholders; the wrapper constructs
+only the five used fields after the existing activity check. Request IDs cannot
+select another identity. Legacy display helpers do not replace canonical policy.
+This is local review, not a new independent review or browser/whole-feature pass.
+Full scoped shell, project-form, approval and migration acceptance remain open.
+
+## Project-team identity choices (T154–T157)
+
+Run in the Nix shell against disposable PostgreSQL, never the agency database:
+
+```sh
+cargo test -p horae --features server --bin horae project_people_tests --locked
+cargo test -p horae --features server --bin horae server_fns::permissions:: --locked
+cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization --locked
+cargo sqlx prepare --workspace -- --features server --all-targets
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features web --target wasm32-unknown-unknown --locked -- -D warnings
+nix fmt -- --ci
+```
+
+The initial online RED build reports only the absent model/reader imports. The
+first five tests pass after implementation. The expanded run exposes invalid
+test revocations: an empty stored grant array violates the canonical member
+floor, so it produces an unavailable-state error rather than an ordinary denial.
+The fixtures now revoke to a normalized Member selection; malformed-state tests
+remain separate. This correction does not weaken the production validator.
+
+Database coverage targets create/exact-project edit grants, legacy-role denial,
+active tenant filtering, identity-only rows with populated sensitive fields,
+literal substring/Unicode/search limits, 50/51 keyset boundaries, missing/foreign
+cursors, selected-ID resolution and missing target permission states. Concurrent
+cases cover designation/grant removal, direct actor deactivation, reader-first
+authority retention, cancellation and one-connection pool defaults. Registered
+HTTP coverage uses session cookies, verifies exact payloads, ignores forged
+requester fields and checks same-session revocation plus sanitized failures.
+
+All 141 server permission tests pass (82.89s), including the nine new reader
+tests. The expanded registered HTTP matrix passes in 14.21s. WASM Clippy passes
+with warnings denied; three localized non-server dead-code expectations on DTO
+roots document the pending UI consumer and must leave with that integration.
+Bounded self-review checks grants rather than labels, exact project/tenant
+predicates, SQL scope before limits, organization/actor lock order and error
+sanitization. No new material issue is identified; this is not independent review.
+
+Complete SQLx preparation passes in 1m16s: 1,437 descriptions, ten additions and
+no removals. The initial cached preparation omitted 91 unchanged integration-test
+queries; cleaning 1.7 GiB of regenerable package artifacts corrected the result.
+Offline all-targets server Clippy passes in 1m14s with warnings denied.
+Formatting CI passes (510 files, zero changes) and whitespace checks pass. The
+owned disposable PostgreSQL is stopped; T154–T157 close only this reader. UI
+integration, financial preservation, assignment writes, browser acceptance and
+full-policy/full-flake gates are not established by these reader tests.
+
+## Approval label projection (T151–T153)
+
+Run in the Nix shell with `DATABASE_URL` pointing to disposable PostgreSQL:
+
+```sh
+cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization --locked
+cargo test -p horae --features server --test approval_labels_ui --locked
+cargo test -p horae --features server --bin horae server_fns::approvals:: --locked
+cargo sqlx prepare --workspace -- --features server --all-targets
+SQLX_OFFLINE=true cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features web --target wasm32-unknown-unknown --locked -- -D warnings
+```
+
+The registered HTTP test first fails on the absent name field; all three actual
+page tests first fail on an unnecessary directory request. After the repair,
+the HTTP matrix passes in 12.62s, all three page tests pass, and all 14 existing
+approval regressions pass in 3.89s. Two test expectations were corrected to the
+existing duration format (`1:30`) and Dioxus's numeric HTML entities.
+
+HTTP coverage checks manager/admin access, anonymous/member/inactive denial,
+same-session demotion, state filters, archived and active duplicate names,
+same-session renaming, foreign approvals and malformed foreign submitter links,
+exact summary fields and total/billable minutes. Actual-page VirtualDom/SSR
+coverage checks escaped Unicode/markup names, loading/error/empty/access-denied
+states, no directory calls and an approval click retaining its record ID.
+These are not browser tests or proof of canonical scoped-approval enforcement.
+
+Focused adversarial self-review checks the only summary producer and consumer,
+tenant-qualified join cardinality, archived retention, projection fields and
+unchanged filter/order/aggregation/mutation code. No material finding remains
+within this label repair; full approval coverage, expenses, lifecycle, revocation
+and policy activation remain open. Existing primitives and CSS are preserved.
+This is not an independent review or a whole-feature acceptance claim.
+
+Full non-incremental SQLx preparation passes in 1m14s with 1,427 descriptors:
+five additions and only the replaced list query removed. The first cached run
+omitted 91 unrelated test descriptions; cleaning 18.3 GiB of regenerable Horae
+artifacts and repeating preparation restores them. Offline all-targets server
+Clippy passes in 1m12s with warnings denied. No migration or dependency changes.
+Offline WASM Clippy also passes in 15.07s with warnings denied. Formatting and
+whitespace checks pass. T151–T153 close only this projection; the general
+requirements checklist remains 12/16. No full-flake or fresh browser run is claimed.
+
+## Canonical scoped directory (T148–T150)
+
+Run in the Nix shell against disposable PostgreSQL:
+
+```sh
+SQLX_OFFLINE=true cargo test -p horae --features server --bin horae directory_tests --locked
+SQLX_OFFLINE=true cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization --locked
+SQLX_OFFLINE=true cargo test -p horae --features server --bin horae permissions:: --locked
+SQLX_OFFLINE=true cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features web --target wasm32-unknown-unknown --locked -- -D warnings
+```
+
+The initial test compilation fails for missing directory/model imports. After
+implementation and a test-reference correction, seven PostgreSQL tests pass in
+4.35s and the expanded registered-session HTTP matrix passes in 11.97s. The
+reader exercises all six profiles, custom direct-person scope, tenant/activity
+denial, invalid or missing policy/state, minimal fields, name/UUID pagination,
+deleted/foreign cursors, authorization before empty results, revocation after
+lock waits, cancellation and reuse of a one-connection pool with READ ONLY /
+REPEATABLE READ defaults. HTTP coverage asserts exact basic-identity values even
+when rates/provider data are populated, ignored forged requester fields,
+activity filters, NUL-cursor validation and sanitized internal failures.
+
+The query cache preparation passes in 1m02s with 1,423 descriptors, adding 14 and
+removing none. Every new descriptor maps to the reader or its test fixtures.
+WASM initially reports the four DTOs as unused because UI cutover is not yet
+authorized. The two root types carry non-server `expect(dead_code)` annotations
+with that reason; redundant expectations on their nested row/cursor types were
+removed after Clippy reported them as unfulfilled. Remove the two remaining
+expectations when connecting the real directory consumer.
+
+Focused adversarial source review checks SQL scope-before-limit, current grants
+rather than labels/admin shortcuts, organization-then-actor locks against
+canonical writers, transaction-local defaults, cancellation rollback, cursor
+bounds without identity lookup and minimal/sanitized response paths. It finds
+no new material issue in this reader; it is not an independent review or full
+operation acceptance. New-model Harvest inactive/email behavior still needs
+reference acceptance; workflow identity rules and legacy shell integration stay
+open. No browser, UI, migration, production-data or full-flake claim is made.
+
+Final offline all-targets server Clippy passes in 1m13s and WASM Clippy in 13.38s,
+both with warnings denied. All 141 selected permission regressions pass in
+61.24s after offline-cache compilation (including the seven directory tests).
+This is not a rerun of the entire server suite. T148–T150 close only this reader;
+the general requirements checklist remains 12/16.
+
+## User directory payload (T145–T147)
+
+Run in the Nix shell with `DATABASE_URL` pointing only to disposable PostgreSQL:
+
+```sh
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization --locked
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo test -p horae --features server --test detail_navigation --test permission_editor_ui --test own_permissions_ui --test admin_shell --locked
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features web --target wasm32-unknown-unknown --locked -- -D warnings
+```
+
+The initial real-session test fails on ten response keys versus the five allowed
+by `contracts/people-directory.md`. The repaired registered HTTP matrix passes;
+the final offline-compiled run takes 12.81s after compilation. It exercises all
+three legacy roles, both inactive-filter values, unauthenticated/inactive denial,
+tenant isolation, duplicate names with distinct IDs, exact keys and values,
+unchanged own-user data and same-cookie demotion of inactive-directory access.
+The production query selects only the list fields, not a full `User` followed by
+redaction. The existing browser response shape changes together with its typed
+client; no compatibility API, authentication, mutation, schema or CSS changes.
+
+Full SQLx preparation with `--features server --all-targets` initially omits cached
+integration-test queries. Cleaning only rebuildable Horae artifacts and repeating
+preparation completes in 53.97s: 1,409 descriptors, replacing only the old list
+query and adding the non-null-sensitive-field fixture query. No unrelated query
+descriptor is lost. Focused source review checks every consumer, exact SQL/DTO
+fields, tenant/activity predicates, server-derived identity and unchanged legacy
+guards. This is not new-model directory/shell authorization, in-flight read
+revocation, fresh browser acceptance or a full-flake verification.
+
+All 89 selected consumer/permission tests pass (23 detail-navigation, 50 editor,
+11 own-permissions, five admin-shell). Offline all-targets server Clippy passes
+in 1m04s and WASM Clippy in 13.38s, both with warnings denied. Formatting and
+whitespace checks pass. The disposable PostgreSQL is stopped after verification.
+Spec Kit prerequisites pass; its unavailable skills were not executed. T145–T147
+are complete for this payload repair; full integration/acceptance remains open.
+
+## Permission-editor subject picker (T142–T144)
+
+Run inside the Nix shell:
+
+```sh
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo test -p horae --features server --test permission_editor_ui --test own_permissions_ui --test admin_shell --locked
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features web --target wasm32-unknown-unknown --locked -- -D warnings
+```
+
+Four initial handler tests fail for the missing picker. After implementation,
+66 selected tests pass (50 editor, 11 own-permissions, five admin shell), including
+the additional empty/error/retry case. Coverage includes cursor navigation,
+hidden stale pages, inactive/duplicate names identified by UUID, declined/failed
+dirty confirmation, independently loaded targets, changed requester rejection,
+pending previews and uncertain saves. Existing recovery and revocation tests
+remain green. The latter caught a picker retaining names after the form was
+denied; both now disappear together. Server/WASM Clippy pass (1m06s / 13.17s).
+
+The full server/WASM bundle builds in 78.82s. The extended
+`permission-editor-recovery` browser suite passes against its own disposable
+PostgreSQL on Chromium 148.0.7778.96 / Playwright 1.60.0. It checks keyboard menu
+opening, focus, Escape without dismissing the editor, cancelled/confirmed dirty
+person switches, a clean switch back and no selection-triggered mutation, then
+reruns the existing real-command/lost-response/recovery cases. Six captures of
+editor/menu/recovery at desktop-dark 1440 and mobile-light 390 were inspected in
+`.scratch/permission-subject-evidence/`. This is not Windows Chrome/MCP, full
+cross-browser, complete T018 or full-policy acceptance. Services stop on exit.
+
+The picker uses existing Menu, Modal and utilities; no CSS, shared-component,
+database, dependency or authority-policy change. The previously unused wire
+projection is consumed and its temporary lint expectation removed. Spec Kit
+prerequisites pass, but its skills are unavailable locally; no skill execution
+is claimed. Impeccable context/detector cannot run without its missing engine;
+source and screenshot checks substitute, without installing it.
+
+Fresh independent finish review returned `ship` for this extension, with no
+material findings in the changed code and six captures. Pagination/duplicate/
+inactive/error cases have handler evidence rather than rendered captures.
+The generic agent interface could not select the shipped reviewer type; it used
+the full reviewer packet in a fresh context. No full-feature verdict is implied.
+Independent documentation review confirms no new durable system rule or contract
+correction. Existing DESIGN.md path/tool-format drift is unchanged. Formatting
+and whitespace checks pass; T142–T144 close, while T018 remains open.
+
+## Permission-editor subject discovery (T139–T141)
+
+Run in the Nix shell against the owned disposable PostgreSQL:
+
+```sh
+CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae permissions:: -- --nocapture
+CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization -- --nocapture
+```
+
+The final selected run passes 134 tests, including six new subject-discovery
+cases, in 56.28s after compilation. The registered HTTP matrix passes in 11.67s.
+The first compilation failed for the absent reader; the first implemented run
+exposed a disposable-fixture FK assumption, not an authorization failure.
+
+Cases cover 53 local people across two pages, exact 50-row termination, inactive
+people without canonical state, duplicate names, missing/deleted/foreign cursors,
+empty pages, explicit Administrator versus all grants/legacy Admin, invalid
+policy/storage, concurrent revocation/deactivation and cancellation with immediate
+single-connection reuse. Inherited connection defaults remain unchanged. HTTP
+checks exercise the registered server function, session-derived identity,
+missing authentication, forged authority, policy denial, exact minimal fields
+and sanitized malformed-storage responses. No general-directory, UI/browser or
+activation acceptance is implied. Shared authority/transaction code is reused.
+
+Full SQLx preparation after package-only artifact cleanup preserves the cache
+and adds three descriptors (1,408 total, 54.24s). Offline all-targets server
+Clippy passes in 1m04s; final WASM Clippy passes in 12.69s. The new page response
+has one web-only `expect(dead_code)` because its picker is not connected yet;
+connecting the consumer must remove that now-unfulfilled expectation. No broad
+lint exemption or runtime fallback is added. No new full-flake, full server-suite
+or browser result is claimed, and the owned disposable PostgreSQL is stopped.
+
+## Combined-approval record guard (T136–T138)
+
+Pure FR-006/024 checks use existing canonical selections and record coverage.
+They are not a replacement for the pending database approval transaction. Run:
+
+```sh
+cargo test -p horae-core permissions::approvals --locked
+cargo test -p horae-core --locked
+cargo clippy -p horae-core --all-targets --locked -- -D warnings
+cargo check -p horae-core --target wasm32-unknown-unknown --locked
+```
+
+The first test run failed for the missing guard. After implementation, all 180
+core tests pass, including 11 new approval tests. A deliberate mutation changing
+the expense approval/read conjunction to OR makes the mixed-hidden-expense test
+fail. Restored the conjunction and reran all 180 successfully; final core Clippy
+and WASM compilation pass (0.66s / 9.21s), with formatting and whitespace checks.
+
+Coverage includes independent expense read/approval scope truth tables, every
+catalog grant's inability to substitute for approval or expense reads, inactive
+and foreign provenance, mixed visible/hidden inputs in both orders, both domains'
+out-of-scope rows, overlapping/removed assignments, duplicate/missing dimensions,
+empty domains and reevaluation after revocation. The canonical approval grants
+already require their matching time reads; the guard still checks both explicitly.
+No invalid stored selection or fabricated runtime authority is used as a fixture.
+
+Focused adversarial self-review checked the intersection of capabilities versus
+the union of managed scopes, own-read retention, empty-input identity checks and
+non-disclosing all-or-nothing output. No independent agent or backend/browser
+acceptance is claimed. Passing empty record slices does not authorize empty-date
+locks, and passing an own record does not settle self-approval. The caller must
+load the full intended set without visibility filtering and evaluate current
+facts inside the eventual atomic transaction. T012/T013, feature 016 expenses,
+T042 and full cutover gates remain open. No SQL, schema, UI or live data changed.
+
+## Project-delegation activity fences (T133–T135)
+
+Run in the Nix shell with the owned disposable PostgreSQL database, never the
+application database:
+
+```sh
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae permissions:: -- --nocapture
+```
+
+Three initial regressions failed on `c88ca6d`: actor and added-manager activity
+were not retained until receipt commit, and inherited READ ONLY rejected the
+organization lock. After sharing the administration setup and locking activity
+reads, all 128 selected permission tests pass (54.22s test execution).
+
+Six new cases cover both subjects in both race orders, local transaction defaults,
+and cancellation/rollback with immediate exact retry through a one-connection
+pool. Tests observe PostgreSQL blocker dependencies; they do not infer ordering
+from sleeps. Existing project tests also pass for retained inactive/incompatible
+managers, archived projects, no-ops, exact replay, revocation, audit failure,
+membership/history preservation and the project NOWAIT rollback.
+
+Focused source review checks authorization before replay, tenant-bound activity
+reads, sorted added-manager locks, compatible SHARE modes and absence of user or
+project-parent writes. The existing organization gate serializes canonical
+writers; direct SQL changing grants outside that protocol remains unsupported.
+The new command setup preserves stricter inherited statement/idle limits and
+does not change session defaults. No new grant, endpoint, migration or dependency
+is introduced. This is not global policy activation or browser acceptance.
+
+Complete SQLx regeneration after cleaning only Horae build artifacts produces
+1,405 descriptors. The sole removal is the replaced plain EXISTS activity query;
+its locking replacement already has a shared descriptor. The first cached run
+omitted still-used integration queries and was not accepted. Offline all-targets
+server Clippy passes with warnings denied (1m03s). Formatting and whitespace
+checks pass. No new WASM, browser, full server-suite or full-flake result is
+claimed for this internal server-only repair.
+
+## Real-browser request recovery (T018 subset)
+
+`permission-editor-recovery.cjs` runs against the design runner's disposable
+PostgreSQL and a complete Dioxus server/WASM bundle, not mocked server outcomes.
+It is included in the default browser check. To focus it, provide the same
+`HORAE_TEST_SERVER`, `PLAYWRIGHT_MODULE` and `PLAYWRIGHT_BROWSERS_PATH` inputs as
+`nix/checks/browser.nix`, then run in the Nix shell:
+
+```sh
+bash crates/horae/tests/browser/run-design-checks.sh permission-editor-recovery
+```
+
+The server needs its matching `public/` beside it. The verification bundle was
+built from application commit `1ecfa21` with `dx bundle --web --fullstack true --debug-symbols false --locked` in `crates/horae/` (164.14s). This is a complete
+local build, not a full `nix flake check` result. The test refuses ordinary app
+ports and database connections outside the runner's `/tmp/horae-browser.*` socket,
+requires empty canonical fixture state/history, and restores policy 0, legacy
+login candidates and fixture state under the organization gate before shutdown.
+
+The headless Chromium 148.0.7778.96 / Playwright 1.60.0 run verifies:
+
+- A real person command commits before its response is deliberately lost; reload
+  offers explicit recovery, sends nothing automatically and replays the identical
+  command/requester. PostgreSQL contains one receipt and the expected grant.
+- A real template creation remains recoverable after switching accounts and
+  returning to the original user through a new login session. The other user is
+  not offered the original slot. A later current-authority denial retains it;
+  restoring authority replays the same receipt without another template.
+- A deleted template is not required for recovery: its exact deletion request
+  replays successfully without recreating it or duplicating its receipt.
+- A browser storage quota failure prevents the first HTTP mutation. Failure to
+  remove a record after successful self-demotion offers cleanup, which sends no
+  second command under the now non-administrative identity. Local storage is
+  empty after acknowledged recovery.
+- Tab reaches enabled controls, the modal keeps background controls inert,
+  Escape respects dirty-discard refusal/confirmation, focus returns to the opener,
+  and Enter triggers recovery. Wide dark (1440×900) and narrow light (390×844)
+  checks find no horizontal dialog overflow; the panel fits each viewport.
+
+Optional `HORAE_BROWSER_ARTIFACTS` captures editor/recovery screenshots. Inspected
+captures live in this worktree's `.scratch/permission-browser-evidence/` with
+`permission-editor-*` and `permission-recovery-*` names. They use disposable
+fixture data only. Initial test failures came from addressing a closed native
+details section and over-specifying focus wrap order; the test now opens the
+section and checks actual keyboard access, inertness and focus restoration.
+No production UI/CSS change was required by this browser pass.
+
+This is Linux headless Chromium, not Windows Chrome/MCP or a physical mobile
+device. It establishes these recovery cases, not full permissions/Workspace
+acceptance, migration, canonical shell/directory integration or all browser engines.
+Full T018 remains open; the earlier unit-only limitation below is superseded only
+for the browser cases enumerated here.
+
+## Durable tab recovery (T018, in progress)
+
+Run in the Nix shell without a live database:
+
+```sh
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo test -p horae --features server --test permission_editor_ui --test own_permissions_ui --test admin_shell
+node --test crates/horae/tests/browser/editor-navigation.cjs crates/horae/tests/browser/permission-recovery-storage.cjs
+```
+
+All 61 selected UI tests pass (45 editor, 11 Settings, five admin shell; 39.56s
+build). All 14 shipped-script unit tests pass (eight navigation, six storage).
+Production handlers require acknowledged storage before server submission and
+retain the exact command/requester across a VirtualDom remount with no selected
+person. Cases cover person/template recovery, no automatic submission, duplicate
+clicks, session/read/write/acknowledgement failures, malformed/misbound/oversized
+records, account/workspace isolation, denied-retry retention, explicit checked
+discard, conditional cleanup and acknowledged cleanup without resubmission.
+
+Source review corrected permanent `aria-busy` during idle recovery and kept
+authentication diagnostics separate from public validation messages. The cached
+acknowledgement is bound to its whole command/requester; cleanup cannot erase a
+different record. Existing Modal, Checkbox and CSS are unchanged. Server commands,
+authorization, SQL and schema are unchanged, so no SQLx regeneration is needed.
+Final offline all-targets server Clippy (1m02s) and WASM Clippy (13.26s) pass with
+warnings denied. Formatting CI and whitespace checks also pass.
+
+These are controlled handler/remount and Node VM tests, not Chrome persistence,
+keyboard, focus, viewport or theme acceptance. No browser tool is loaded in this
+session. Full T018, full-flake verification and policy integration remain open;
+no real data or active policy changed. Spec Kit prerequisites pass, but its
+implement skill is not available through the current local catalog or tools;
+the existing contract/plan/task workflow was followed directly.
+
+## Original requester binding (T130–T132)
+
+Run in the Nix shell against the owned disposable PostgreSQL database:
+
+```sh
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization --locked
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae permissions::profile_tests --locked
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo test -p horae --features server --test permission_editor_ui --test own_permissions_ui --test admin_shell --locked
+```
+
+RED reproduced an HTTP 200 person save under a different Administrator's session
+instead of the required 403. After binding both save transports to the requester
+returned by the authorized load, the registered HTTP matrix passes (11.63s).
+Cases cover different users/organizations, omitted or forged binding, unchanged
+state after denial, success and exact historical replay after same-user
+reauthentication. Matching one's own identity is not authority: the non-admin
+negative-payload case still exercises canonical authorization, not only a
+mismatched pair. All 34 profile/editor PostgreSQL regressions pass (15.41s).
+
+All 48 selected UI tests pass; the production person/template controls supply the
+loaded requester on both initial submission and identical-command retry. Existing
+command intent, audit/receipt storage, policy checks and CSS are unchanged. New
+fixtures reuse existing checked SQL; no new query descriptor or migration is
+needed. This is a recovery prerequisite, not browser persistence or full T018.
+Offline all-targets server Clippy (1m02s), WASM Clippy (12.67s) and formatting CI
+(491 files, zero changes) pass.
+`cargo sqlx prepare --workspace --check -- --features server --all-targets`
+also succeeds (52.24s) with a potentially-unused-descriptor warning. Existing
+cache files are unchanged, not pruned on the basis of that warning.
+
+## Editor navigation and dismissal (T018, in progress)
+
+Run without a database in the Nix shell:
+
+```sh
+node crates/horae/tests/browser/editor-navigation.cjs
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo test -p horae --features server --test permission_editor_ui --test own_permissions_ui --test admin_shell --locked
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --no-default-features --features web --target wasm32-unknown-unknown --locked -- -D warnings
+```
+
+Observed: eight Node unit tests pass against the shipped history guard; 48 selected
+UI tests pass (editor 32, Settings 11, admin shell five). Node uses a simulated
+DOM/history, not a browser. Dioxus tests invoke production controls with controlled
+server replies and a test document provider for native confirmation responses.
+The default browser CI runner also includes the Node suite.
+Offline all-targets server Clippy (1m03s) and WASM Clippy (12.76s) pass with
+warnings denied. Formatting CI passes (491 files, zero changes).
+
+| Requirement | Increment evidence |
+| --- | --- |
+| FR-004 draft preservation | Grant reversal/dependency loss, source/template revision and independent identity; person edits survive template operations |
+| FR-012 distinct states | Initial/reload/preview/save pending; errors release read locks; uncertain saves remain pending; clean dismissal needs no confirmation |
+| FR-016 existing controls | Shared Modal unchanged; no CSS; Close/Cancel/native cancel/backdrop share discard confirmation, refusal/error preserves input |
+| FR-018 entry-point regression | Actual Rust handlers, permission/project/invoice push/replace/pop/unload cases, Dioxus scroll slots and legacy project attributes |
+
+RED reproduced missing navigation state and the unprotected initial load. Source
+review identified that read gap and existing unconfirmed modal dismissal; both
+were corrected and re-reviewed. Test-fixture corrections account for static
+Dioxus IDs, explicit pointer data and grant removal cascading to dependents.
+The source/documentation reviews found no further issue within this increment.
+They do not establish rendered acceptance. Full T018, browser keyboard/themes/
+viewports and durable same-request recovery after forced reload remain open.
+No SQL, migration, dependency, shared Modal or active-policy change is included.
+
+## Management-loss names (T018, in progress)
+
+Run in the Nix shell against the owned disposable database:
+
+```sh
+cargo test -p horae --features server --bin horae permissions::profile_tests --locked
+cargo test -p horae --features server --test permission_editor_ui --test own_permissions_ui --test admin_shell --locked
+cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization --locked
+cargo sqlx prepare --workspace -- --features server --all-targets
+```
+
+Observed: RED reproduced missing preview names; 34 database tests, 42 selected UI
+tests and the registered HTTP matrix passed. The first UI run exposed two test
+expectations for named rather than numeric HTML entities; corrected expectations
+now verify Dioxus's escaped output. Cached SQLx preparation omitted 91 unchanged
+integration-test descriptors despite passing offline lint; cleaning only Horae's
+rebuildable artifacts restored complete generation: 1,406 descriptors, five added
+and none removed or modified. Repeated offline all-targets server Clippy (1m02s)
+and WASM Clippy (12.74s) passed with warnings denied.
+
+FR-010/018 coverage includes other managers/tenants, inactive subjects and denied
+requesters. FR-013/025/029/030 coverage preserves exact confirmation, strict
+name-free historical decoding and preview/save effects. FR-012/016 coverage
+checks escaped names, hidden internal IDs and shared wrapping utilities.
+Independent source and design-documentation reviews found no actionable issue
+in their scope. Browser acceptance and full T018 remain open; no activation,
+real-data migration, new schema, dependency or global CSS change is included.
+
+## Reusable profile controls (T018, in progress)
+
+Use the same offline Nix UI/lint commands in the next section. The editor suite
+now contains 26 tests, including ten new control-level template scenarios.
+Initial RED failed on missing creation/deletion controls. After wiring both
+expected deletion revisions and the existing stable control-ID pattern, all 24
+passed (38.54s compilation, 0.02s execution). Selected regressions initially
+passed 40 tests, followed by offline native/WASM lint. Source review's pending
+deletion-preview lock and undefined margin-class findings are corrected and
+re-reviewed. Adding cancellation/reload coverage then passed 25/26, reproducing
+an unchanged-revision reload that retained the old form. The shared reload now
+changes a local component-generation key. Final post-fix selected regressions
+passed all 42 tests: editor 26, Settings 11, admin shell five (39.42s build).
+Offline all-targets server Clippy (1m02s) and WASM Clippy (12.53s) passed with
+warnings denied. The independent source verdict found the reload fix sound;
+the read-only documentation review confirmed existing design primitives suffice.
+
+The tests invoke production UI handlers with controlled server replies. They
+cover final grants, blank/duplicate/limit/validation failures, explicit identity,
+cancellation retaining the unsaved person draft, exact affected-person review,
+stale/mismatched previews, revoked authority and identical create/delete retries.
+Server preservation and real PostgreSQL/HTTP results remain the separate earlier
+backend evidence, not newly rerun or established by these UI tests.
+
+| Requirement subset | UI evidence |
+| --- | --- |
+| FR-004/015/032 explicit reusable selections and names | Final-grant capture, no person save, count/identity gates, server duplicate/limit/validation responses |
+| FR-010/011/018 current authority and recovery | Denial hiding, exact request retries, mismatch/stale rejection, pending-preview lock, explicit fresh reload |
+| FR-012/016 shared explanations and preservation | Shared grant descriptions, affected names, confirmation even for empty profiles, cancellation retaining person edits |
+
+No CSS, SQL, migration or dependency changed. A completed template mutation still
+requires an explicit reload/discard before editing the person again; navigation
+recovery and browser/theme/viewport/keyboard checks remain open. No full T018,
+canonical activation, migration acceptance or visual pass follows.
+
+## Person permission editor UI (T018, in progress)
+
+These checks need no running database. Run in the pinned Nix shell with the
+committed SQLx cache:
+
+```sh
+SQLX_OFFLINE=true cargo test -p horae --features server --test permission_editor_ui --test own_permissions_ui --test admin_shell --locked
+SQLX_OFFLINE=true cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+SQLX_OFFLINE=true cargo clippy -p horae --no-default-features --features web --target wasm32-unknown-unknown --locked -- -D warnings
+nix fmt -- --ci
+```
+
+The editor suite includes eight local draft tests, four SSR/error-state tests,
+the shared description test and three controlled-response VirtualDom tests. The
+latter mount the production dialog and invoke its actual event handlers, rather
+than a duplicate state machine. They verify double-click suppression, no writes
+during review, identical-command retry after a lost response, revocation hiding,
+explicit keep-project grants followed by a new review, independent confirmation
+of person losses and stale-save recovery. Controlled server replies complement
+the backend's registered HTTP/PostgreSQL tests; they are not browser evidence.
+
+Observed: the initial draft failed to compile before implementation, then six
+tests passed. Expanded native state/SSR coverage passed 12. The first interaction
+build exposed sibling module path resolution; explicit paths fixed it. The final
+selected regression run passed 32 tests: editor 16, own-permission Settings 11 and
+existing admin shell five. Clippy then requested a simpler equivalent boolean
+condition; that is corrected. The post-fix editor run passed all 16 tests, and
+offline all-targets server Clippy (1m01s) and WASM Clippy (12.60s) both passed
+with warnings denied. No full database suite or full flake check was rerun for
+this UI-only increment; the backend results below belong to its earlier run.
+
+No CSS or SQL changed. Full T018 remains open for template creation/deletion UI,
+readable management-loss names, navigation recovery and browser/keyboard/theme/
+viewport acceptance. The legacy AdminShell/directory still needs its reviewed
+canonical-policy integration; this consumer does not activate policy or make the
+full six-profile feature ready. Only isolated fixtures may enable policy 1.
+
+## Authenticated editor backend (T126–T129)
+
+Use the owned disposable PostgreSQL database and the Nix dev shell; never enable
+policy 1 on application data for these tests. The local contract is
+`contracts/permission-editor.md`. No UI, migration or activation acceptance follows.
+
+```sh
+cargo test -p horae --features server --bin horae server_fns::permissions:: --locked
+cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization --locked
+cargo test -p horae --features server --bin horae --locked
+cargo sqlx prepare --workspace -- --features server --all-targets
+SQLX_OFFLINE=true cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+SQLX_OFFLINE=true cargo clippy -p horae --no-default-features --features web --target wasm32-unknown-unknown --locked -- -D warnings
+nix fmt -- --ci
+```
+
+| Requirement subset | Production evidence |
+| --- | --- |
+| FR-010/011 current actor and last active Administrator | Profile/template command tests cover direct deactivation before replay, target activation, survivor deactivation in both orders and retention through receipt insertion |
+| FR-004/015 explicit final proposal and template lifecycle | `editor_tests` compare every built-in preview with actual saved state, exact no-op and template detachment with preserved grants/identity |
+| FR-025/029/030 confirmed relationship losses | `editor_preview_matches_saved_effects_without_writing` compares exact joint effects with save, rejects missing confirmation and stale revisions; existing keep-access regressions remain |
+| FR-013/018/032 authenticated delivery and errors | `authorization_tests/permission_editor.rs` uses registered routes/cookies for load, preview, save, create/apply/delete, historical replay, forged authority, policy denial and sanitized failures |
+
+Initial RED reproduced two direct-deactivation races and READ ONLY SQLSTATE 25006.
+The first command GREEN run passed nine selected tests. Missing editor modules
+then failed compilation; shared evaluation/read implementation passed the first
+104 permission tests (45.61s). Registered-route RED found zero editor endpoints
+before the wrappers were added. Final full-suite and cache/lint results follow
+when observed; these intermediate runs are not final acceptance.
+
+Read-only independent reviews found no high/critical implementation issue. Added
+their requested template-deletion preview/save/stale-set and demotion-winning
+survivor-lock cases. Scoped Spec Kit analysis maps all four new tasks to ten
+requirement subsets, with no unmapped task, ambiguity, duplication or constitutional
+conflict in this increment. Full T006/T042, UI and activation remain open.
+
+Full server-binary regression: 1,030 passed, zero failures, 11 pre-existing ignored
+manual measurements (250.14s). This includes all 15 new PostgreSQL cases and the
+registered editor lifecycle. No new test was ignored. WASM Clippy passed with
+warnings denied (12.72s); root transport DTOs explicitly document their pending
+Workspace consumer without silencing server warnings or unrelated modules.
+The expanded registered HTTP matrix passed separately (11.53s), including
+initial-authentication cancellation/recovery, denial of every new endpoint under
+legacy/future policy and invalid-command validation. Final cache/lint gates follow.
+
+Complete SQLx regeneration finished in 52.55s: 14 added descriptors, six obsolete
+profile-query descriptors removed, zero modified; 1,401 total. Each removal was
+checked against the replaced leaf-lock/activity query, not an unexplained cache
+loss. The preparatory package clean removed only 1.6 GiB of regenerable build
+artifacts. An overlapping format check saw SQLx's transient cache removal and
+formatted a new progress paragraph; rerun formatting after preparation, never
+restore obsolete descriptions or report that interrupted check as passing.
+
+Fresh offline all-targets server Clippy passed with warnings denied (1m01s).
+The subsequent formatting CI run passed with zero changed files; diff checks
+passed. T126–T129 are complete for the authenticated backend only. No real-data
+operation, browser/UI acceptance, full `nix flake check`, policy activation or
+merge was performed. Spec Kit and Rust/testing/async/simplicity guidance kept
+preview/save calculation shared, preserved wire intent and avoided dependencies
+or new persisted preview state.
+
+## Authenticated permission history (T123–T125)
+
+Use disposable PostgreSQL with the checked-in migrations, inside the Nix shell:
+
+```sh
+cargo test -p horae --features server --bin horae server_fns::permissions:: --locked
+cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization --locked
+```
+
+The second command exercises actual registered Dioxus routes and real session
+cookies, not a direct-function substitute. Its permission-audit submatrix covers
+canonical Administrator identity independent of legacy role, forged identity
+claims, foreign/missing IDs, expired/inactive sessions, typed writer-shape/no-op
+round-trips, operator attribution and omission of private replay data. Corrupt
+history/authority and a cancelled initial session-user query must produce the
+same sanitized unavailable message. The cancellation targets only that test
+database's query observed waiting behind its own table lock.
+
+| Requirement subset | Reader evidence |
+| --- | --- |
+| FR-010: deactivation winning / reader winning | `direct_deactivation_winning_user_lock_denies_audit_read`, `audit_reader_holds_requester_until_materialization_finishes` |
+| FR-011/013: current authority, exact historical projection | Existing `audit_tests` plus `authorization_tests/permission_audit.rs` |
+| FR-018: inherited settings, bounded waits, cancellation and connection reuse | `audit_reader_overrides_transaction_defaults_without_changing_connection`, `audit_timeout_preserves_stricter_limits_and_releases_locks`, `cancelled_audit_read_releases_both_gates_and_single_connection` |
+
+RED reproduced the missing registered route, unguarded direct-deactivation race
+and inherited READ ONLY failure. The implemented reader passes all 97 permission
+tests (45.19s). Independent re-review found an unsanitized initial user lookup;
+the new HTTP cancellation case reproduced that failure before the wrapper fix.
+Final HTTP and post-fix gates are recorded below when completed. No UI/history
+browser, policy activation, live-data migration or full-feature acceptance follows.
+
+Post-fix full server-binary run: 1,015 passed, zero failures, 11 existing ignored
+manual measurements (240.64s); no test was newly excluded. This includes all 97
+permission tests and the registered HTTP matrix with initial-query sanitization
+and recovery. Independent re-review closes the error-projection finding and
+reports no further blocking issue. This is not a full `nix flake check` result.
+
+Complete SQLx preparation passes (51.45s), adding 14 descriptors with none removed
+or changed (1,393 total). Final offline all-targets server Clippy passes (1m00s)
+and offline WASM Clippy passes (11.21s), both with warnings denied. The shared
+root DTO has a web-only unused-code expectation until the history UI consumes it;
+no runtime check or test is disabled. The disposable database is stopped with
+its data retained. No real data or policy mode was changed.
+Formatting and `git diff --check` pass; T123–T125 are complete for this delivery
+boundary. Full T041/history UI, activation, browser and flake acceptance remain open.
+
+## Legacy source preflight (T117–T119)
+
+Run `cargo test -p horae --features server --bin horae preflight_tests --locked`
+inside the Nix shell against disposable PostgreSQL with all checked-in migrations.
+No application server, Chrome, mail transport or real account is needed. Follow
+with `server_fns::permissions::` regressions, clean complete SQLx preparation,
+offline all-targets Clippy/WASM and formatting. The seven production-reader
+tests in `permissions/tests/preflight.rs` map to the bounded contract:
+
+| Requirement subset | Executable evidence |
+| --- | --- |
+| FR-006/014: tenant anomalies without foreign identities | `preflight_counts_cross_tenant_memberships_from_both_ends`, `preflight_approval_diagnostics_preserve_stored_history` |
+| FR-014/017: unknown requester versus source corruption, unchanged artifacts | `preflight_separates_unknown_import_requesters_without_changing_artifacts` |
+| FR-006/010: current legacy authority, not staged canonical privileges | `preflight_requires_current_legacy_administrator_not_staged_grants`, `preflight_rechecks_revocation_after_organization_and_actor_waits` |
+| FR-017/018: cancellation/failure cleanup and size-one pool | `preflight_cancellation_releases_organization_and_single_connection`, `preflight_lock_failure_releases_organization_without_mutating_data` |
+
+The initial count test fails against the empty reader (0 versus 1 cross-tenant
+membership). The first implemented snapshot passes six tests. The subsequent
+snapshot adds historical inactive-approver and lock-timeout coverage; its final
+results are recorded separately below. Counts are neither unique combined totals
+nor approval to activate. Full M01–M08, reviewed mappings and T019 remain open.
+
+Final permission regression: 92 passed, zero failures/ignored (40.77s), including
+all seven preflight tests and the inactive historical approver. Independent
+static re-review found no blocking defect; it suggested an additional isolated
+approver-only inbound fixture, beyond the existing combined inbound fixture.
+The fixed numeric type and one aggregate statement are also source-reviewed;
+no full migration or full-feature acceptance is inferred from this suite.
+
+Clean SQLx preparation passes (51.94s): 17 new descriptors, none removed or
+modified, 1,379 total. Offline all-targets server Clippy with denied warnings
+passes (1m00s); denied-warning WASM passes (9.71s). This isolated internal reader
+has no runtime callers or public surface; the affected permission suite above,
+not a new full-server or `nix flake check` run, is this increment's regression
+evidence. Full merge gates remain required before making the draft PR ready.
+
+## Budget email preparation (T114–T116)
+
+Run `cargo test -p horae --features server --bin horae notifications:: --locked`
+inside the Nix shell against disposable PostgreSQL; no configured real mail
+transport is used. `notifications/tests/authority.rs` exercises production
+delivery with local executable stubs. Map current identity/eligibility to
+FR-006/007, lock-wait revocation and late claim fencing to FR-010, unchanged
+message/retry/disabled behavior to FR-017 and all concurrency/cleanup/regression
+checks to FR-018 and SC-006. The exact cases are in
+`contracts/budget-email-authority.md`. Follow with outbox/full server regression,
+clean complete SQLx preparation, offline all-targets Clippy/WASM and formatting.
+Record actual outcomes here and in `progress.md`; planned cases are not passes.
+
+| Requirement subset | Executable evidence |
+| --- | --- |
+| FR-006/007/010: current recipient, project and relationship eligibility | `budget_delivery_waits_for_organization_and_rechecks_recipient`, `budget_delivery_refreshes_after_recipient_and_project_waits`, `budget_delivery_observes_winning_activation_and_alert_enable` |
+| FR-007/010: trusted claim and actual lease after waits | `budget_delivery_rechecks_claim_and_clock_after_final_wait`, `budget_delivery_uses_current_payload_after_recipient_wait` |
+| FR-007/010: no disclosure or terminal mutation on identity drift | `budget_delivery_skips_retargeted_notification_without_terminalizing`, `budget_delivery_skips_project_drift_or_disappearance`, `budget_delivery_skips_notification_appearing_after_discovery` |
+| FR-017: preserved recipient rules and terminal behavior | `budget_delivery_rejects_missing_settings_without_waiting_on_child_locks`, `budget_delivery_terminal_rejections_preserve_existing_reasons`, existing retry/identity/disabled-worker tests |
+| FR-018 / SC-006 subset: settings, cancellation and transport lock lifetime | `budget_preparation_overrides_read_only_without_leaking_transaction_settings`, `budget_preparation_cancellation_and_deadline_release_single_connection`, `budget_delivery_releases_all_gates_before_blocked_transport` |
+
+The initial organization-wait test reproduced the missing preparation gate.
+The corrected focused suite passes 30 notification tests, including all 13 new
+authority tests (2.86s). Independent review's cancellation-observer and FIFO
+lifetime findings are fixed and included in that pass. Full server-binary
+regression passes 993 tests, zero failures and 11 existing exclusions (238.69s).
+Clean SQLx preparation passes (52.89s): 44 new descriptors and only the two
+replaced notification queries removed, 1,362 total. Offline all-targets Clippy
+passes (1m00s), as does denied-warning WASM (9.48s). Formatting passes. Scoped
+analysis covers six requirement subsets through three tasks with no unmapped
+task or unresolved local critical/high review finding. No real mail or canonical
+activation occurred; full feature acceptance and merge gates remain separate.
+
+## CSV delivery (T110–T113)
+
+Use the Nix shell and the owned disposable PostgreSQL only. Run the server
+binary's `streamed_` tests, then `job_endpoints_enforce_session_role_and_organization`
+and the full server regression. The cases in `contracts/csv-exports.md` cover
+FR-006/007 (current actor and project scope), FR-010 (revocation under waits and
+backpressure), FR-017 (unchanged source snapshot/CSV amounts), FR-018 and SC-006
+(all three real routes, native transport, limits and cancellation). Follow with
+complete SQLx preparation, offline Clippy/WASM and formatting. Actual outcomes
+are recorded below and in `progress.md`; full permission activation is separate.
+
+| Requirement subset | Executable evidence |
+| --- | --- |
+| FR-006/007: active same-tenant actor and correct operation predicate | `streamed_project_exports_deny_inactive_actors`, `streamed_exports_require_current_tenant_bound_actors_even_when_empty`, real-cookie export matrix |
+| FR-010: fresh checks after organization, actor and parent waits | `streamed_exports_refresh_after_organization_or_actor_wait`, `streamed_projects_capture_scope_gained_during_initial_wait`, `streamed_project_release_refreshes_scope_after_parent_wait` |
+| FR-007/010: current release authority without backpressure locks | `streamed_timesheet_rechecks_after_backpressure_without_retaining_locks`, `streamed_pending_project_block_checks_all_captured_ids_after_capacity`, `streamed_header_and_total_blocks_recheck_manager_after_capacity` |
+| FR-017: exact frozen source values across new authority checks | `streamed_source_stays_frozen_across_batches_while_authority_is_fresh`, `streamed_invoice_metadata_and_lines_share_one_snapshot`, `streamed_invoice_keeps_original_metadata_lines_and_totals_between_batches`, existing escaping/fee/integer tests |
+| FR-018: native transport and bounded buffering | `streamed_native_batches_keep_crossing_rows_and_reject_invalid_limits`, `streamed_compressible_unicode_payload_bounds_native_prefetch`, `streamed_native_projection_mismatch_fails_instead_of_coercing`, existing 10,001-row production export |
+| FR-018 / SC-006: settings, cleanup and regression | `streamed_authority_releases_successful_locks_and_overrides_inherited_settings`, `streamed_cancelled_authorization_reclaims_its_single_connection`, `streamed_cancelled_fetch_reclaims_connection_without_authority_locks`, existing body-drop/deadline tests, HTTP and full server suites |
+
+RED reproduced inactive-actor HTTP 200. Initial CSV regression passed nine tests;
+the expanded report family passed 84 with two existing manual exclusions.
+The real-cookie matrix passed (11.46s). Final-snapshot server regression passes
+980 tests with zero failures and 11 existing exclusions (257.91s), including
+the strengthened mixed-block and empty-response checks from adversarial review.
+The first expanded build's generated-column fixture error was corrected, not
+suppressed. Clean SQLx regeneration passes (56.54s; 1,320 descriptors, 41 new
+and two obsolete), followed by offline all-target Clippy (1m05s) and
+denied-warning WASM (10.41s). The initial cached preparation omitted unchanged
+integration-test descriptors; cleaning only rebuildable Horae artifacts restored
+them. This increment has no unresolved local critical/high review finding and
+does not imply full canonical policy, UI or migration acceptance.
+
+## Materialized project exports (T107–T109)
+
+Use disposable PostgreSQL and the Nix shell. Run the `project_exports` subset
+of the server-binary tests, the registered HTTP matrix
+`job_endpoints_enforce_session_role_and_organization`, and then the full server
+suite. The required cases in `contracts/project-exports.md` map to FR-006/007
+(tenant/actor/current project scope), FR-010 (both race orders and scope gains),
+FR-017 (unchanged exact payload) and FR-018 / SC-006 (limits, cleanup and HTTP).
+Record actual outcomes below or in `progress.md`; planning is not a test pass.
+
+| Requirement subset | Executable evidence |
+| --- | --- |
+| FR-006/007: current tenant-bound actor and project scope | `project_exports_require_current_tenant_bound_actor`, `project_exports_preserve_membership_visibility_and_history_rules`, `project_exports_reject_missing_foreign_and_unreadable_captured_ids` |
+| FR-010: fresh scope after either authority wait | `project_exports_refresh_scope_after_winning_relationship_changes`, `project_exports_deny_actor_revoked_during_either_authority_wait`, real finalize/editor HTTP races in `exports::projects::check` |
+| FR-010: current captured scope and both parent-lock race orders | `project_exports_refresh_release_scope_after_parent_wait`, `project_exports_retain_parent_authority_until_release_check_finishes`, `project_exports_release_every_captured_project_without_render_locks` |
+| FR-017/018: coherent bounded payload and preservation | `project_exports_bound_rows_and_text_after_scope_filtering`, `project_exports_share_one_size_and_payload_snapshot`, existing privacy/format/filter/export regressions |
+| FR-018 / SC-006 subset: cancellation, settings and real delivery | `project_exports_release_cancelled_and_timed_out_checks`, `project_exports_cancel_loading_without_retaining_authority`, registered real-cookie HTTP matrix and server suite |
+
+RED reproduced invalid-actor acceptance. The corrected HTTP matrix passes
+(12.71s), including actual finalize/editor writers; report regression passes
+68 tests with zero failures and two existing manual exclusions (50.80s),
+including all twelve project cases. Full server-binary regression passes:
+964 passed, zero failed and 11 existing exclusions (327.07s). All four
+adversarial findings were corrected and re-reviewed; scoped analysis has no
+unmapped task or local consistency/constitution finding. Final verification and
+publication are recorded in `progress.md`. Complete SQLx preparation passes
+(1,281 descriptors, 33 new/two obsolete), as do corrected offline Clippy (2m12s),
+WASM (21.70s), the twelve affected tests (12.64s), and formatting. Clippy's initial
+failure was confined to redundant test dereferences and was fixed, not silenced.
+This is not canonical policy, CSV or full-feature acceptance.
+
+## Materialized export authorization (T104–T106)
+
+Use the pinned Nix shell and disposable PostgreSQL only:
+
+```sh
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae materialized_exports --locked
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization --locked
+```
+
+| Requirement subset | Executable check |
+| --- | --- |
+| FR-006/007: trusted, current same-tenant actor | `materialized_exports_deny_revoked_managers`, `materialized_exports_require_same_tenant_active_actor`, real export HTTP sessions |
+| FR-010: winning revocation and revision refresh | `materialized_exports_deny_winning_legacy_revocations`, `materialized_exports_refresh_after_access_revision_change` |
+| FR-010/018: reader-first authority, cancellation and pool reuse | `materialized_exports_retain_authority_and_release_cancelled_reads`, `materialized_exports_release_rendered_body_when_final_check_is_interrupted` |
+| FR-017/018: exact coherent checked payload, existing limits/deadlines | `materialized_exports_preserve_checked_snapshots`, `materialized_exports_keep_deadlines_and_restore_pool_defaults`, existing bounded exports and streaming regressions |
+| FR-007/010: current authority after rendering, no locks during rendering | `materialized_exports_recheck_after_render_without_retaining_authority` |
+| FR-018 / SC-006 subset: real delivery, non-disclosure and preservation | `authorization_tests::exports::check` plus full server-binary regressions |
+
+RED reproduced entries still being returned after the fixture Manager was
+demoted. Both authorization boundaries preserve the current Manager/Admin rule;
+this is not canonical policy activation or complete CSV/Member-scope acceptance.
+The final check authorizes response release, not continuous revocation while the
+browser consumes bytes. Focused GREEN passes all nine tests (14.96s), and the
+real-cookie HTTP matrix passes (12.66s). Full server-binary regression passes:
+952 passed, zero failed and 11 existing exclusions (333.10s). Independent
+adversarial review's fixture-source correction and final-check interruption
+coverage are included in that passing run; no remaining local blocker was found.
+Scoped analysis maps the five FR subsets and SC-006 regression subset to all
+three tasks, with no unmapped task or local consistency/constitution finding.
+Complete SQLx regeneration passes (1m52s), adding 15 descriptors with none
+modified/deleted, 1,250 total. Offline all-targets Clippy (2m13s) and web/WASM
+check (22.21s) pass with warnings denied. Final formatting, cleanup and
+publication are recorded in `progress.md`. Full flake/browser and feature
+acceptance remain open.
+
+## Invoice editor snapshots (T101–T103)
+
+Run in the pinned Nix shell against disposable PostgreSQL:
+
+```sh
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae snapshot_tests --locked
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae --locked -- --quiet
+```
+
+| Requirement subset | Executable evidence |
+| --- | --- |
+| FR-006/007: current same-tenant active actor and session-derived identity | `editor_snapshots_preserve_rows_and_override_inherited_read_only` and editor cases in registered-route `authorization_tests::financial_snapshots::check` |
+| FR-010: revocation wins or reader retains authority until materialization | `editor_snapshots_deny_winning_legacy_revocation`, `editor_snapshots_retain_authority_and_release_cancelled_reads` |
+| FR-010/017: consistent metadata/revision/lines and no stale-edit rebasing | `editor_snapshots_refresh_after_revision_change_without_rebasing_edits`, `editor_snapshots_keep_invoice_metadata_revision_and_lines_together` |
+| FR-017/018: unchanged business rows, inherited settings and pool reuse | Full-row preservation, inherited READ ONLY/SERIALIZABLE and single-connection assertions in the editor tests; existing shared-prelude retry/timeout tests |
+| FR-018 / SC-006 subset: non-disclosing HTTP errors and financial regression | Registered HTTP checks for missing/foreign invoices, inactive/member sessions, forged identity, stale edits and non-draft conflicts; full server-binary suite |
+
+RED reproduced `cannot execute SELECT FOR SHARE in a read-only transaction`.
+The implementation replaces only the two reader preludes with the existing
+helper; save/generation/status mutation guards and arithmetic are unchanged.
+Focused GREEN passes all 14 snapshot tests (12.63s). Independent adversarial
+review found no blocker or missing discriminating case. Cancellation proves
+eventual rollback after the blocked query is released, not immediate query
+cancellation. Full server-binary regression passes: 943 passed, zero failed,
+11 existing exclusions (271.23s). Complete SQLx regeneration added seven
+descriptors, with none modified/deleted (1m41s); offline all-targets Clippy
+(1m52s) and web/WASM check (21s) pass with warnings denied. Formatting passes
+with zero changes (3.668s). Scoped analysis maps all five FR subsets to the
+three tasks with no unmapped task or local consistency/constitution finding.
+Publication and cleanup results are recorded in `progress.md`.
+This is not canonical policy activation or whole-feature acceptance.
+
+## Materialized financial snapshots (T098–T100)
+
+Run inside the Nix shell against the disposable PostgreSQL instance. No browser,
+reference-account mutation, schema change or policy activation is required.
+
+```sh
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae financial_snapshots --locked
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization --locked
+```
+
+| Requirement subset | Executable evidence |
+| --- | --- |
+| FR-006/007: same-tenant active Manager/Admin, no request-supplied authority | `financial_snapshots_require_current_same_tenant_manager` and registered-route `authorization_tests::financial_snapshots::check` |
+| FR-010: revocation before reading, including legacy writes without revision changes | `financial_snapshots_deny_winning_actor_revocation_without_revision_change`, both reader types and organization-gated/direct actor updates |
+| FR-010/017: reader-first authority retention and consistent financial values | `financial_snapshots_hold_authority_until_materialization`, `financial_snapshots_keep_fee_values_from_their_initial_snapshot`, `financial_snapshots_retry_revision_change_and_refresh_amounts` |
+| FR-018: bounded retry, non-disclosing errors and connection cleanup | `financial_snapshots_retry_only_serialization_failures_and_stop_after_three`, `financial_snapshots_override_isolation_but_restore_connection_settings`, `financial_snapshots_honor_stricter_lock_timeout_during_authorization`, `financial_snapshots_release_cancelled_reads_for_one_connection` |
+
+RED reproduced an absent actor accepted by invoice preparation. Initial GREEN:
+all eight snapshot tests passed (5.45s). The retry fixture uses a test-only view
+and non-transactional sequence to count real attempts; production has no injected
+test hook. Cancellation verifies eventual rollback and pool reuse after releasing
+the blocked query, not instantaneous cancellation of PostgreSQL execution.
+
+Independent adversarial review found no blocker; both suggested timeout checks
+were added. The settings matrix includes all three inherited isolation levels
+and 0/250ms/10s timeouts. Holding the actual organization gate verifies that the
+stricter timeout applies during authorization, not only after it. Scoped Spec Kit
+analysis maps all five FR subsets to T098–T100 with no unmapped task, ambiguity,
+duplication or constitutional conflict. Full feature analysis remains open.
+
+The existing invoice-transition test now checks the revoked actor's preview is
+denied, then uses a separate same-tenant administrator to verify the reserved
+balance is unchanged. Its focused rerun passed (1.15s). Final server-binary
+regression passes: 938 passed, zero failed, 11 pre-existing exclusions (258.34s),
+including the nine snapshot cases, HTTP matrix and existing financial fixtures.
+The offline WASM check with warnings denied passed (43.95s). Complete SQLx
+regeneration added 22 descriptors without modifying/deleting existing ones
+(1m18s). Offline all-targets Clippy passes with warnings denied (1m41s). After
+Clippy's equivalent boolean simplification, all nine snapshot tests passed
+again using the offline cache (8.19s). Final formatting/publication results are
+recorded in the progress register.
+This increment preserves legacy Manager/Admin authority; it is not full scoped
+policy, report streaming, Member export or invoice-editor acceptance.
+
+## Own-permission Settings consumer (T120–T122)
+
+Run in the pinned Nix shell without a database:
+
+```sh
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo test -p horae --features server --test own_permissions_ui --locked
+SQLX_OFFLINE=true cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+RUSTFLAGS="-D warnings" cargo check -p horae --features web --target wasm32-unknown-unknown --locked
+nix fmt -- --ci
+```
+
+| Requirement subset | Executable evidence |
+| --- | --- |
+| FR-012: own explanation, exact grants and independent administrative identity | `own_permissions_view_preserves_exact_grants_without_profile_inference`, `own_permissions_view_admin_identity_is_explicit_not_derived_from_grants`, exhaustive distinct description test |
+| FR-012/016: loading, legacy, empty, forbidden, error and recovery | Remaining `own_permissions_view_*` SSR tests and `refresh_uses_a_fresh_read_hides_stale_grants_and_recovers_from_errors` |
+| FR-018: presentation disclosure and real resource wiring | Internal-field omission test, pending stale-content suppression and production-component refresh with controlled responses |
+
+Nine SSR tests failed against the empty view, then passed against the
+implementation. The final interaction binary passes 11 tests, zero failures or
+exclusions (38.16s compilation). This uses the actual component/resource but
+controlled server responses; it does not replace the existing endpoint's real
+cookie/authorization tests or prove browser accessibility/visual acceptance.
+Final lint/build/format results are recorded in `progress.md`.
+
+Design boundary: reuse the handoff permission heading and administrator callout
+with existing classes; preserve General/Plugins and the shell. Exact configured
+grants replace the prototype's unbacked profile radios/update button. Counts
+explain management relationships without fabricating names or exposing UUIDs.
+No claim of full handoff alignment, Workspace integration or policy activation.
+The saved-report labels describe inactive owners, not inactive report features.
+
+## Authenticated own-access explanation (T095–T097)
+
+Use the pinned Nix shell and the owned disposable PostgreSQL database; only
+fixtures enable policy 1. No reference-account or deployment mutation is needed.
+
+```sh
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae own_permissions --locked
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization --locked
+```
+
+| Requirement subset | Executable evidence |
+| --- | --- |
+| FR-006/012: exact own grants and relationships, no implied directory access | `own_permissions_preserve_exact_grants_and_independent_identity`, `own_permissions_scope_is_sorted_and_excludes_membership_and_other_managers` |
+| FR-007/017: preserve legacy policy, tenant/activity boundary and state | `own_permissions_legacy_mode_never_discloses_staging`, `own_permissions_deny_invalid_identity_policy_and_state`, unchanged-state snapshot in the scope test |
+| FR-010: current authority across both race orders | `own_permissions_wait_for_current_actor_deactivation`, `own_permissions_reload_after_winning_gate_under_repeatable_read_defaults`, `own_permissions_reader_retains_actor_activity_until_snapshot_is_loaded` |
+| FR-018: registered delivery, session-only selection and non-disclosing errors | `authorization_tests::own_permissions::check` within the existing HTTP matrix; absent/expired/inactive cookies, forged selectors, unsupported catalog and malformed grants |
+
+RED: the legacy-mode test failed against the unavailable stub. Initial GREEN:
+seven reader tests passed in 3.71s and the HTTP matrix passed in 9.11s. Independent
+adversarial review found no blocker; its two-project ordering and HTTP catalog
+error coverage suggestions were added before final regression.
+
+Scoped Spec Kit analysis: six FRs above map to T095–T097, with no unmapped task,
+local ambiguity, duplication or constitutional conflict. SC-002/003/006 gain
+reader/HTTP evidence only; SC-005 and full US4 acceptance still need rendering
+and browser checks. The general requirements checklist remains 12/16, and full
+operation/migration/activation analysis is not declared complete. Final build,
+regression, cache and formatting results belong in the progress register.
+
+Final verification: all 929 server-binary tests passed, zero failed, 11
+pre-existing exclusions (202.37s). Complete SQLx regeneration added 26 descriptors
+without changing/deleting existing ones (51.20s); fresh offline all-targets server
+Clippy with warnings denied passed (59.74s). The offline WASM build with warnings
+denied passed (41.00s). Only the shared DTO carries a non-server dead-code
+expectation for the pending T018 consumer; no global warning suppression exists.
+
+This endpoint supplies display facts, never later request authority. It neither
+replaces legacy guards nor completes other-person administration or the UI.
+
+## Pure rate-field policy (T092–T094)
+
+Run in the pinned Nix shell; no database or reference account is required:
+
+```sh
+cargo test -p horae-core permissions::rates --locked
+cargo test -p horae-core --locked
+cargo clippy -p horae-core --all-targets --locked -- -D warnings
+```
+
+`permissions::rates::tests` maps FR-021 to the action/owner table, cross-dimension
+and grant-removal tests; FR-022 to independent costs and six-profile defaults;
+FR-006/010 to foreign/inactive/provenance denial and changed grants/relationships;
+FR-008 to every unrelated catalog grant, including combined report permissions.
+The mixed all-read/managed-write case must allow unrelated reads but deny writes.
+Read-prerequisite removal must deny both actions. These borrowed, I/O-free
+checks preserve FR-017 by making no data or permission changes.
+
+RED: five positive-behavior tests failed against deny-all stubs; two negative
+tests passed. GREEN before the review addition: all 168 core tests passed, zero
+failed/ignored; core all-targets Clippy passed with warnings denied. Independent
+review found no blocker and requested the added prerequisite-revocation case.
+After adding that case, all 169 core tests pass, zero failed/ignored (0.02s),
+and all-targets core Clippy passes with warnings denied (0.62s). Final formatting
+and publication results are recorded in the progress register.
+
+This covers the financial dimension only. T014/T015 still require authenticated
+consumer projections, independent resource checks, actual overrides/history and
+transactional revocation; no endpoint or UI enforcement is claimed here. No SQL
+or schema changed, so cache regeneration is unnecessary for this increment.
+
+## Interrupted import cleanup (T089–T091)
+
+Run against the owned disposable PostgreSQL instance in the Nix shell:
+
+```sh
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae import_cleanup --locked
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae --locked -- --quiet
+```
+
+The focused fixture deliberately releases a server-side savepoint while keeping
+SQLx's transaction objects alive, then drops the objects. This constructs the
+pending rollback failure at depths two and three without depending on scheduler
+timing. Require successful cleanup, unchanged previously committed content,
+rolled-back current writes and immediate reservation acquisition with a
+one-connection pool. Also exercise untracked server transactions and propagate
+nonrecoverable backend errors. Full regressions must retain API/CSV producer
+joins, cancellation, lease fencing, resume and preview guarantees.
+
+| Requirement subset | Executable evidence |
+| --- | --- |
+| FR-007/010 cleanup prerequisite, FR-017 preservation | `import_cleanup_recovers_unacknowledged_savepoint_release` and `import_cleanup_rolls_back_an_untracked_server_transaction` |
+| FR-018 explicit failure, no success on broken transport | `import_cleanup_does_not_hide_a_backend_failure` |
+| SC-006 import subset: actual API producer join and committed pages | `durable_api_cancel_waits_for_the_producer_before_acknowledging`, `durable_api_cancellation_preserves_confirmed_pages_for_manual_retry` and the corresponding preview case |
+| SC-006 import subset: actual CSV producer join and committed batches | `durable_csv_cancel_joins_parser_and_preserves_committed_rows`, `durable_csv_cancel_preserves_its_completed_batches_for_manual_retry` and the corresponding preview case |
+
+RED reproduced the exact missing-savepoint cleanup error in 0.34 seconds.
+After the shared correction, the three focused tests pass in 1.07 seconds.
+Independent review found no critical/high production issue and corrected a
+backend-termination fixture race: its timeout overload now confirms actual
+termination before cleanup. Full server-binary verification after that correction
+passes: 922 passed, zero failed, 11 pre-existing exclusions, 933 discovered,
+189.83 seconds. This includes the actual adapter cancellation and preservation
+regressions above, not just the constructed savepoint state.
+
+Complete SQLx regeneration passes in 51.47 seconds with seven added descriptors
+and no existing cache changes/deletions. Fresh offline all-targets Clippy passes
+with warnings denied in 59.11 seconds. The disposable PostgreSQL instance is
+stopped. Final Nix formatting passes with zero changes in 2.092 seconds;
+T089–T091 are complete. No full-flake/browser acceptance is claimed.
+
+This is disposal verification, not a timed driver-race reproduction, worker
+permission activation, a library upgrade or permission to change real data.
+
+## Original import requester (T086–T088)
+
+Run in the Nix shell against the owned disposable PostgreSQL instance with
+migrations through 0045. No real deployment migration or Harvest mutation is
+needed. The upgrade fixture creates its own pre-0045 database.
+
+```sh
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae server_fns::importers:: --locked
+```
+
+| Requirement / boundary | Regression |
+| --- | --- |
+| FR-007/010 prerequisite: retain trusted original identity, not client authority | `new_import_jobs_record_the_authorized_original_requester` and HTTP `job_endpoints_enforce_session_role_and_organization` |
+| FR-017: concurrent duplicate cannot replace the first actor | `waiting_duplicate_keeps_the_first_committed_requester` uses a real blocked enqueue |
+| FR-017/018: preserve known or unknown attribution, independent of current actor activity | `duplicates_and_job_lifecycle_never_replace_or_invent_the_original_requester` covers second-admin replay, cancel/retry and claim/completion |
+| FR-007/017: tenant-bound identity and no cascade/erasure | `original_requester_foreign_key_preserves_tenant_and_known_identity` |
+| FR-017: populated old states, payload/checkpoint/report/lease and artifacts unchanged | `requester_migration_preserves_unknown_authors_in_all_job_states` checks upgrade and repeated migration |
+| FR-017: earlier report conversion preserves metadata and cannot invent a requester | `legacy_upgrade_preserves_job_states_and_existing_archives` compares old fields and separately asserts NULL provenance |
+| FR-017/018: conflicts, failed upload insertion and revocation remain atomic | Existing complete-row snapshot tests in `commands/tests.rs` |
+
+The RED command test observed missing attribution before the column/insertion
+change. Initial importer verification passes 22 tests with one existing stress
+exclusion, 17.46 seconds. The HTTP fixture now actually sends forged CSV metadata
+as query parameters, as well as forged JSON on the API path; SQL must still record
+the session actor. Full server verification initially exposed an old metadata
+comparison that included the new NULL field only after upgrade. It now compares
+all old fields and explicitly checks NULL provenance. After correction, the full
+server-binary suite passes: 919 passed, zero failed, 11 existing exclusions,
+930 discovered, 195.85 seconds. This includes the concurrent duplicate case and
+corrected HTTP fixture. The historical fixture checks storage preservation,
+not execution of its intentionally synthetic payloads.
+
+Complete SQLx regeneration passes in 57.02 seconds (four replaced descriptors,
+nine additional test queries, no unrelated removal). Fresh offline all-targets
+Clippy passes with warnings denied in 66 seconds. Scoped analysis maps all three
+tasks to the stated requirement subsets; adversarial review finds no remaining
+critical/high issue in this increment. Full-flake and browser acceptance are
+not claimed for this storage-only change.
+
+Nix formatting passes with zero changes in 2.908 seconds; the owned disposable
+PostgreSQL cluster is stopped. T086–T088 are complete.
+
+This increment does not activate current-authority worker checks, choose retry
+delegation or resolve unknown historical requesters. Original identity is not a
+stored authorization grant and remains absent from external job DTOs.
+
+## Durable CSV preparation (T083–T085)
+
+Run in the Nix shell against the owned disposable PostgreSQL instance:
+
+```sh
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae importers::harvest::engine_tests::csv_streaming:: --locked
+```
+
+| Requirement / boundary | Regression |
+| --- | --- |
+| FR-007/010 prerequisite: no transaction across durable input waits | `durable_csv_waits_for_input_without_an_open_transaction`: first/subsequent batch, Commit/DryRun, exact reserved backend PID |
+| FR-017: incomplete prepared input cannot advance domain or checkpoint state | `durable_csv_discards_incomplete_preparation_and_resumes_its_checkpoint`: transport failure before/after checkpoint, both modes, exact resumed counts |
+| FR-017/018: cancellation and expired lease cannot publish an applied batch | `durable_csv_cancel_joins_parser_and_preserves_committed_rows`, `durable_csv_stale_commit_is_fenced_without_a_heartbeat`: SQL job-row barriers before publication |
+| FR-017/018: absolute offsets, row-error boundaries and preview recovery | Existing six `interrupted_csv_batches` cases and single-connection preview tests |
+| FR-017/018 and SC-006 import subset: reports, legacy adapter and SQL backpressure | Existing report-size, whole-run rollback and backpressure regressions |
+
+The initial RED observed a live transaction during a parser wait. The bounded
+preparation collects at most 500 normalized rows, not a fixed-byte memory budget.
+It neither changes accepted upload size nor collects the whole source. The first
+post-change run exposed a duplicate-email fixture and two old tests waiting for
+one-row application before EOF. Unique emails and explicit publication barriers
+retain their original denial/rollback assertions under the prepared-batch flow.
+The focused suite passed 18 tests with four existing stress exclusions. The
+adversarial follow-up found a possible fixture-only SKIP LOCKED reclaim race;
+wait for the expired attempt's cleanup before reclaiming. Separate token-reclaim
+tests retain concurrent coverage. The full server-binary run after this correction
+passes: 914 passed, zero failed, 11 pre-existing exclusions, 925 discovered,
+174.14 seconds. Complete SQLx regeneration passes in 44.08 seconds with one added
+test query and no existing cache changes/deletions. Fresh offline all-targets
+Clippy passes with warnings denied in 51.62 seconds. Nix formatting passes with
+zero changes in 2.752 seconds; the owned PostgreSQL cluster is stopped. No
+critical/high review finding remains in this increment. This is not worker
+permission activation, browser/full-flake verification or full feature acceptance.
+
+## Bounded import error downloads (T080–T082)
+
+Use the Nix shell and owned disposable PostgreSQL instance. No real account or
+Harvest data is changed. The focused stream tests call the production response
+builder/body; the importer matrix uses registered HTTP and remote CLI paths.
+
+```sh
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae jobs::report::stream_tests:: --locked
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae server_fns::importers:: --locked
+```
+
+| Requirement / boundary | Regression |
+| --- | --- |
+| FR-007/010: current authority before report preparation | `download_preparation_denies_revoked_authority` |
+| FR-010: recheck before first page, captured tail and empty EOF | `download_denies_revocation_before_first_page_and_inline_tail` |
+| FR-010: only the already authorized bounded page may drain | `download_rechecks_after_buffered_pages_and_before_the_captured_tail` |
+| FR-007/018: tenant-bound actor/job, malformed metadata and single-connection rollback | `download_preparation_is_tenant_bound_and_releases_failed_transactions` |
+| FR-010: current authority after organization/actor waits under inherited REPEATABLE READ | `download_boundaries_recheck_after_organization_and_actor_waits` |
+| FR-010: reader retains authority until the bounded read completes | `download_readers_retain_authority_through_their_bounded_reads` |
+| FR-017: append-only worker progress cannot alter the captured response | `download_keeps_its_snapshot_when_later_progress_archives_the_inline_tail` |
+| FR-017/018: missing retained fragments fail instead of truncated success | `download_reports_missing_fragments_after_its_buffered_page` |
+| FR-017: lazy 16-fragment buffering with no connection held for client consumption | `download_reads_only_when_consumed_and_releases_its_connection` |
+| FR-007/010/018: registered HTTP abort after preparation-time revocation; headers and CLI preserved | `job_endpoints_enforce_session_role_and_organization` |
+
+Initial RED reproduced preparation/tail disclosure. Expanded verification found
+one malformed-report fixture targeting the wrong source: status prefers the
+checkpoint. The fixture now clears that checkpoint before corrupting the final
+report. The full post-fix server-binary run passes: 912 passed, zero failed,
+11 pre-existing exclusions, 923 discovered, 176.57 seconds. It includes all nine
+stream tests, the HTTP abort case and existing importer/CLI checks. Complete SQLx
+regeneration passes in 43.26 seconds: three new test-query descriptions, no
+existing cache changes/deletions. Fresh offline all-targets Clippy passes with
+warnings denied in 52.05 seconds. Nix formatting passes with zero changes in
+2.139 seconds after Rust/Markdown formatting. The owned test cluster is stopped.
+No worker authority, canonical policy activation, browser, full flake or complete
+feature acceptance is claimed.
+
+## Import job control and status authority (T077–T079)
+
+Run in the Nix shell with the owned disposable PostgreSQL instance. The tests
+invoke the production helpers and registered HTTP/remote CLI surface, not a copy
+of the authorization SQL. No live Harvest mutation is required.
+
+```sh
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae server_fns::importers:: --locked
+```
+
+| Requirement / boundary | Regression |
+| --- | --- |
+| FR-007/010: active tenant-bound Administrator on all six operations | `commands_and_status_require_current_active_tenant_administrator` |
+| FR-010: replay, malformed upload and no-op paths cannot bypass revocation | `duplicate_submission_and_noop_cancellation_do_not_bypass_revocation` |
+| FR-010: fresh checks after organization/actor waits, including inherited REPEATABLE READ | `import_access_rechecks_revocation_after_organization_and_actor_waits` |
+| FR-010: command and result remain authorized through commit | `import_commands_and_results_hold_actor_authority_until_commit` |
+| FR-007/018: no foreign/missing-record disclosure or writes | `foreign_and_missing_jobs_never_reveal_or_change_another_tenant` |
+| FR-017: retained state, idempotency and single-connection operation | `authorized_job_lifecycle_and_duplicate_retention_work_with_one_connection` |
+| FR-017: late failure rolls back job/upload and releases locks | `failed_upload_insert_rolls_back_the_job_and_releases_authority` |
+| FR-017: payload conflicts and connection-generation fencing | `conflicting_and_stale_commands_preserve_payload_policy_and_retained_state` |
+| FR-017: submission can queue while an import owns its reservation | `authorized_submissions_do_not_wait_for_the_running_import_reservation` |
+| FR-007/010/018: registered HTTP rejects revocation during body reading; existing CLI remains covered | `job_endpoints_enforce_session_role_and_organization` |
+
+The initial RED reproduced API and duplicate-CSV acceptance after demotion.
+Initial importer verification passed 11 tests with one existing stress exclusion;
+the expanded run passed 17 with the same exclusion. Final server-binary regressions
+after the reservation and malformed-CSV additions pass: 906 passed, zero failed,
+11 pre-existing exclusions, 917 discovered, 172.52 seconds. Complete SQLx
+regeneration passes in 43.97 seconds: four new test-query descriptions, no existing
+cache changes or deletions. Fresh offline all-targets Clippy passes with warnings
+denied in 51.89 seconds. Nix formatting passes with zero changes in 2.076 seconds
+after applying Markdown spacing. The owned test cluster is stopped. No full-feature acceptance,
+worker execution authority, report-download reauthorization, browser or flake
+result follows from this increment.
+
+## Harvest connection transaction authority (T074–T076)
+
+Use the Nix shell and owned disposable database; SQLx creates an isolated database
+per test. No external Harvest mutation or real-data migration is required.
+
+```sh
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false cargo test -p horae --features server --bin horae credentials::authority_tests --locked
+```
+
+| Boundary | Production-writer regression |
+| --- | --- |
+| Active same-org Administrator; Member/Manager/inactive/foreign/missing denial for all three writers | `connection_changes_require_current_tenant_bound_administrator` |
+| Repeated disconnect still needs authority; no generation side effect | `disconnected_noop_still_requires_authority` |
+| Denied first connect and missing organization produce no connection state | `denied_first_connection_creates_no_binding_credentials_or_generation` |
+| Fresh authority after organization wait with an inherited REPEATABLE READ default | `connection_changes_recheck_authority_after_organization_wait` |
+| Demotion/deactivation during actor-only wait | `connection_changes_recheck_authority_after_actor_only_wait` |
+| Authorized writer finishes before concurrent revocation; next request denied | `connection_changes_hold_authority_until_commit` |
+| Late revision-write failure rolls back secrets/binding/generation and releases locks/reservation for retry | `failed_connection_changes_roll_back_and_release_authority_and_reservation` |
+| Safe forbidden response without private error context | `revoked_callback_authority_returns_only_a_safe_forbidden_message`, `revoked_connection_authority_maps_to_forbidden_without_private_context` |
+
+RED reproduced successful connect/disconnect by an unauthorized Member. The first
+focused run passed 20/21; the failing test was its temporary rollback constraint
+validating earlier fixture rows. NOT VALID restricts only subsequent writes.
+After correction, the Harvest-filtered suite passes: 204 passed, zero failed,
+8 existing scale-test exclusions, 34.52 seconds. After Rust formatting the full
+server binary suite passes: 897 passed, zero failed, 11 pre-existing exclusions,
+908 discovered, 164.51 seconds. This includes the server-function forbidden-error
+mapping and authenticated importer-route tests. Complete nonincremental SQLx
+regeneration adds eight test-query descriptions and removes only the obsolete
+post-HTTP authority query (`3e9078ea…`); no other existing description changes.
+Fresh offline all-targets Clippy passes with warnings denied in 50.24 seconds.
+Nix formatting initially inserted a blank line in the progress log; the repeated
+CI check passes with zero changes in 2.214 seconds. The owned test cluster is
+stopped. No separate integration binary, browser or full-flake result is claimed.
+
+The session actor comes from existing authenticated server wrappers or the
+validated OAuth attempt. The guard reuses organization SHARE, explicit READ
+COMMITTED and actor SHARE before generation locks, retaining authority through
+commit. Reservation and HTTP ordering remain unchanged. Legacy Administrator
+semantics remain active; this does not activate the six-profile system or finish
+service import/refresh authorization, full OP28/T042, browser or full-flake gates.
+
+## Branding transaction authority (T071–T073)
+
+Run through the Nix shell against the owned disposable compilation database;
+SQLx creates a separate database for each test. No real account or schema change
+is required. The existing Manager/Admin policy remains active.
+
+```sh
+DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage SQLX_OFFLINE=false CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae server_fns::organization::tests:: --locked
+```
+
+| Boundary | Production-helper regression |
+| --- | --- |
+| Active same-tenant authority before both change and no-op disclosure | `branding_requires_current_tenant_bound_authority_even_for_noops` |
+| Revocation after organization wait, even with a REPEATABLE READ connection default | `branding_rechecks_authority_after_the_organization_wait` |
+| Demotion/deactivation committed during actor-row wait | `branding_rechecks_authority_after_an_actor_only_wait` |
+| Writer retains authority until commit; later request denied | `branding_holds_actor_authority_until_its_write_commits` |
+| Failed UPDATE preserves row, releases locks and permits a later valid change/no-op | `failed_branding_write_rolls_back_and_releases_authority` |
+| Every branding field, NULL/empty values and competing no-op behavior | Five existing organization tests |
+
+RED: the first two tests returned successful branding to unauthorized callers,
+including after observed concurrent demotion. GREEN: all ten organization tests
+passed. The final rollback probe uses a bounded wait, not a scheduling-dependent
+NOWAIT assertion, because SQLx transaction drop queues the rollback.
+
+Focused self-review traced the sole authenticated wrapper, organization-first
+UPDATE, current actor SHARE, explicit READ COMMITTED, all commit/error paths and
+post-commit event dispatch. No public signature, CSS, dependency, profile mapping,
+business state or new-policy activation changed. These tests use real helper SQL
+and observed PostgreSQL blockers, not a duplicate implementation or timed sleeps.
+Revocation fixtures update the actor directly; this is not an end-to-end browser
+or complete cross-command acceptance claim. Full regression/cache/Clippy/formatting
+results are recorded after execution below; full T042 and OP27 remain open.
+
+Full server binary verification after the rollback-test hardening: 888 passed,
+zero failed and 11 pre-existing ignored in 180.24 seconds. All 161 core tests
+pass; formatting CI passes with zero changes. No separate integration-binary,
+browser or full-flake run is claimed for this bounded repair.
+
+Complete non-incremental SQLx preparation adds three test-query descriptions and
+changes/deletes no existing cache entry. Fresh offline all-targets Clippy passes
+with warnings denied (50.43 seconds). Cleaning removed only 1.5 GiB of regenerable
+package artifacts. Bounded adversarial self-review found no remaining critical/
+high defect in this repair; it is not independent full-feature acceptance.
+
+## Legacy report lock integration (T065–T067)
+
+Run in the Nix shell against the owned disposable PostgreSQL compilation DB:
+
+```sh
+CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae jobs::report:: --locked
+CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae --locked
+```
+
+New production-path concurrency coverage in `jobs/report/tests.rs`:
+
+- `legacy_upgrade_preserves_a_concurrently_archived_workers_lease`: organization-first
+  worker versus converter; preserve the exact saved checkpoint, claim and archive.
+- `concurrent_legacy_converters_archive_each_error_once`: both discover before
+  the organization gate opens; job recheck prevents duplicate conversion/chunks.
+- `legacy_converter_rediscovers_after_candidate_deletion`: remove the discovered
+  job while waiting and continue with another organization's oversized report.
+- `legacy_converter_uses_replaced_payload_after_waiting`: convert the current
+  replacement with a connection default of REPEATABLE READ and a size-one pool.
+- `legacy_converter_gate_allows_a_job_locked_workers_chunk_foreign_keys`: an
+  ungated worker holding the job can obtain organization FK KEY SHARE and finish
+  while the converter holds SHARE and waits; its bounded checkpoint keeps its claim.
+
+Existing migration fixtures cover bounded paging, oversized Unicode errors,
+rollback of chunk inserts, lease invalidation for actual conversions, all job
+states, existing archive prefixes, size-one pools and repeated startup. These
+tests do not prove the full permission hierarchy or authorize policy activation.
+
+RED: the first test failed with PostgreSQL `deadlock detected` before the repair.
+The first focused run after repair passed that case and the simultaneous/replaced
+cases; one deletion assertion incorrectly used a current-schema status reader on
+the pre-0028 fixture. Replaced that assertion with a tenant-scoped existence query,
+without changing production behavior or weakening archive checks.
+
+Focused verification now passes 11/11, including all five new races. Local
+adversarial review traced the one-connection lifetime, exact tenant/predicate
+recheck, compatible chunk FK mode and commit-before-rediscovery paths. Tests use
+observed PostgreSQL blockers, not sleeps; JoinSet aborts remaining test tasks on
+failure. Existing malformed/archive rollback and lease-fencing cases still pass.
+No critical/high finding remains in this bounded repair. This is self-review
+supported by earlier independent design research, not independent code review or
+complete T042 acceptance. No browser, separate integration binary or full flake
+run is claimed by these results.
+
+Final verification: 878 server binary tests passed, zero failed and 11 pre-existing
+ignored (185.13 seconds); all 161 core tests passed. Complete non-incremental SQLx
+preparation added 11 descriptions and replaced only the obsolete discovery query
+(one deletion). Fresh offline all-targets Clippy passed with warnings denied.
+Formatting passed with zero changes. The package clean removed only 1.4 GiB of
+regenerable worktree artifacts. No schema or real data was changed.
+
+## Foundation (no database)
+
+From this worktree:
+
+```sh
+nix develop --command cargo test -p horae-core permissions
+nix develop --command cargo test -p horae-core
+nix develop --command cargo clippy -p horae-core --all-targets -- -D warnings
+nix fmt -- --ci
+```
+
+The evaluator is not connected to application authorization yet. A green core suite is not evidence of six-profile or approval parity.
+
+### Foundation evidence (2026-09-30)
+
+- RED: the focused test command failed with unresolved scope types before implementation (exit 101).
+- GREEN: `cargo test -p horae-core` through the Nix shell passed all 121 tests, including six new permission tests. The coverage table exercises 16 scope combinations against 12 resource cases.
+- `cargo clippy -p horae-core --all-targets -- -D warnings` through the Nix shell passed.
+- `nix fmt -- --ci` passed after normalizing Markdown code fences; `git diff --check` passed.
+- No database, browser, application integration or full-flake validation is claimed for this isolated foundation. Runtime guards, role types and schema are unchanged.
+
+### Incremental analysis
+
+The foundation contract covers FR-006 record union, identity activation and organization isolation, with explicit limits for capability resolution, locks and freshness. No foundation contract inconsistency was found. Full-feature gaps remain: FR-002's operation matrix, FR-015's exact custom dependency/lifecycle contract, FR-019's remaining reference edge cases, and FR-014's reviewed migration/governance. All twenty functional requirements map to the required later work packages in `tasks.md`, but those packages are not yet a complete executable runtime plan. The requirements checklist remains 12/16; no full-story or outcome acceptance is claimed.
+
+## Full-feature acceptance (pending implementation)
+
+### Person-management prerequisites — verified 2026-10-03
+
+T050–T052 implement `contracts/person-management-validation.md`. Run from this
+worktree:
+
+```sh
+nix develop --command cargo test -p horae-core permissions::person_management --locked
+nix develop --command cargo test -p horae-core --locked
+nix develop --command cargo clippy -p horae-core --all-targets -- -D warnings
+nix fmt -- --ci
+```
+
+- RED: focused command failed with unresolved new functions/error (exit 101).
+- GREEN: seven new tests pass; all 159 core tests pass. The fixtures enumerate
+  all 50 grants and 2,500 ordered pairs against an independent 19-grant expected
+  set; the own-work floor and combined unrelated grants do not qualify.
+- Loss/restoration uses the real selection edit methods; a remaining read-only
+  grant suffices. Self-links fail alone or at any position in a mixed proposal.
+  Empty removals and other-person sets pass the identity prerequisite. Borrowed
+  selections and ID lists remain unchanged; no relationship is implicitly changed.
+- Mutation checks: excluding `ApprovalWithdrawManaged` caused three failures;
+  checking only the first proposed person caused the self-link test to fail.
+  Both mutations were restored before the final successful suite.
+- Core/all-targets Clippy with warnings denied and Nix formatting pass. Focused
+  adversarial self-review checked false authority inference, caller/manager
+  identity confusion, removal eligibility, full-batch rejection and the complete
+  grant classification. Renamed the identity helper to
+  `validate_no_self_management` so its name does not imply complete validation.
+  An exhaustive match forces new catalog variants to be classified explicitly.
+- No new dependencies, schema, server consumer, legacy guard or real data changed.
+  No PostgreSQL/browser/full-flake or complete US2 result is claimed. Current
+  authority, tenancy, revision, confirmation and atomic audit remain server work.
+
+### Planned persistence/transaction fixtures
+
+Cases in [permission-state.md](contracts/permission-state.md#executable-acceptance-cases-to-add-after-the-gates)
+map to T035–T041. They are not implemented or passed. After the gates and test
+modules exist, use isolated PostgreSQL and the Nix dev shell:
+
+```sh
+cargo test -p horae --features server --bin horae server_fns::permissions:: --locked
+cargo test -p horae --features server --test integration --locked
+```
+
+A filter matching zero tests is not success: check that storage, changes and
+audit cases ran. Verify two organizations, explicit administrative identity,
+grant-equivalent custom profiles, stale revisions, both revoke/write orders,
+rollback and replay disclosure. Full acceptance also requires the operation
+matrix, business regressions and Nix gate; these commands alone are insufficient.
+
+### Confirmed grant catalog evidence (2026-10-02)
+
+Run `nix develop --command cargo test -p horae-core permissions::catalog --locked`
+for the focused increment. The same full-core and Clippy commands above apply.
+
+- RED: initial tests failed with unresolved catalog/profile/selection types (101).
+- GREEN: all 143 core tests pass, including 22 new catalog tests and the six
+  existing scope tests. Direct defaults are independently enumerated for all six
+  profiles; all 50 grants, 33 prerequisite-bearing nodes and 2,500 ordered grant
+  pairs are covered. Unknown wire names, floor removal and unrelated escalation
+  are checked without adding a test dependency.
+- Mutation check: temporarily removing the managed-invoice → draft-write edge
+  caused three tests to fail (catalog completeness, exact prerequisite graph and
+  dependent removal). Restored the edge and reran all 143 tests successfully.
+- Core/all-targets Clippy with warnings denied and full `nix fmt -- --ci` passed.
+  Focused adversarial review checked unknown grants, floor/prerequisite invariants,
+  finite graph traversal, separate profile identity and lack of runtime consumers.
+- No new dependency, schema, SQLx cache, legacy role conversion or runtime guard
+  changes. No browser/DB/full-flake or cross-surface authorization result is claimed.
+  Passing selection tests is not proof of administrative identity or persisted
+  access enforcement. T006–T020 and the full feature remain open.
+
+### Strict saved-grant restoration evidence (2026-10-02)
+
+- RED: the nine new `permissions::catalog::stored_tests` failed to compile before
+  the restoration API existed (exit 101).
+- GREEN: all 152 core tests pass. New checks cover six built-ins, custom grants,
+  changed/revoked selections, arbitrary input order, unsupported versions, every
+  missing floor/dependency and every duplicated catalog grant. The pair exercise
+  covers 2,500 ordered grant pairs and their valid removal outcomes.
+- Mutation check: bypassing the prerequisite-closure check made the negative test
+  fail on `TimeWriteManaged` without `TimeReadManaged`. Restored the check and
+  reran all 152 tests successfully.
+- Core/all-targets Clippy with warnings denied passed. Formatting and diff
+  whitespace checks passed. Self-review verified no editor normalization in the
+  loader, no default-profile lookup and no runtime callers. No independent-agent
+  review is claimed for this increment.
+- No schema, SQLx query/cache, app authorization, data or dependency changes.
+  T035/T036 and full feature acceptance remain open; this is a pure structural
+  boundary, not authenticated PostgreSQL loading or new-policy enforcement.
+
+Run with `nix develop --command cargo test -p horae-core permissions::catalog::stored_tests --locked`.
+
+### Remaining full-feature scenarios
+
+For FR-023 use the acceptance matrix in [company locks](contracts/company-locks.md)
+and T043–T046. Verification uses disposable data and an injected clock, not a
+real lock or settings change in Harvest. Include retained protections and
+concurrent disable/reconfigure cases; owner-visible controls alone are not a pass.
+
+The [current access inventory](contracts/current-access.md), [Harvest evidence register](contracts/harvest-evidence.md) and [observed profiles](contracts/reference-profiles.md) now guide the remaining checks. Browser configuration/source inspection is not a substitute for saved-permission enforcement tests.
+
+1. Complete the documented/observed parity matrix and confirm custom dependencies using disposable Harvest fixtures.
+1. Exercise each profile and custom configuration through direct server calls, screens, exports, API, jobs and downloads; verify redacted payloads and cross-organization denial.
+1. Verify approved C02 locally with report-only, ordinary-rate-only, both and neither configurations. Report-only access includes the report's defined financial fields and corresponding exports within its scope, not direct rate/history/source access or edits. Rate-only access does not open financial reports. Check unrelated report families, forged report selectors, foreign/out-of-scope rows and revocation before generation/download. This is an approved Horae rule, not a claim of restricted-user Harvest verification.
+1. Revoke authority between preview, execution and download; race revocation against mutation and concurrent administrator changes.
+1. Verify C04/FR-022: Accounting/Executive read organization costs but cannot write; Administrator has both; other unchanged built-ins have neither. Exercise custom grants and per-person adjustments, cost history and supported project overrides, independent resource checks, revocation and foreign organizations. Cost read must not grant unrelated person/project writes, and report-only amounts retain FR-008's separate boundary.
+1. Verify approved C03/FR-021 with managed person B, unrelated person C, managed project P and unmanaged Q. General person rates follow person management; project/person/task overrides follow project management, with independent read/write rate grants. Check inherited-rate display without unrelated history, global task defaults, read-only denial, loss of either grant or relationship and foreign organizations. A permitted person-default change may flow to inheriting projects but must not change overrides or expose unauthorized project identities.
+1. Submit mixed-project dates, approve only A, verify B remains pending and approved empty cells reject new entries. Exercise filters, another approver, self-approval settings and scoped/whole-week withdrawal against independent locks.
+1. Verify approved C06/FR-024 using every case in [approval visibility](contracts/approval-visibility.md): deny the whole approval if any selected time/expense record is unreadable, without private error details or silent time-only filtering. Check authorized combined approval, absent approval authority, expense-free selections and revocation/new-record races. Feature 016 expense fixtures are required; do not claim combined acceptance from current time-only tests or infer withdrawal behavior.
+1. Verify the approved C01 deletion behavior locally: unchanged effective grants/scope for ordinary and individually adjusted assignees, person-specific configuration after detachment, deleted template unavailable for new applications, confirmation explaining preservation and cancellation without writes. Verify migration preserves records and import/identity linking never overwrites privileges. Actual Harvest deletion remains unverified; the local contract is a user-approved decision.
+1. Verify Settings/Workspace themes, keyboard, narrow/short viewports and enlarged text; run database integration tests and the full flake gate before merge.
+1. Verify C07/FR-025 with existing project-manager designations and managed/all project reads: removing editing retains the designation without restoring editing; removing project read previews losses and requires confirmation. Exercise every retention case in `contracts/current-account-investigation.md`, including cancel, stale/direct requests, audit, unchanged membership/history and independent scopes. This does not validate new-assignment/promotion authority or Harvest enforcement.
+1. Verify FR-026 separately: project editors can add/remove manager designations only within authorized projects; read-only actors cannot. Add to compatible managed-read targets with no prior designation and all-project readers; deny incompatible, foreign/inactive targets. Remove without requiring the target's read grants. Check direct/editor and multi-person saves, authority/eligibility races, no partial writes, scope-only audit, no full target-grant disclosure and no changes to profiles, global grants, membership or history. These are local acceptance obligations, not completed tests or proof of Harvest custom-profile enforcement.
+
+## Independent approval tenant-isolation repair
+
+Run PostgreSQL with the repository development stack and migrations applied. Tests use SQLx-created throwaway databases; the database role needs `CREATEDB`.
+
+```sh
+nix develop
+process-compose up postgres migrate
+# In a second development shell, with DATABASE_URL pointing to that stack:
+cargo test -p horae --features server --bin horae server_fns::approvals:: -- --nocapture
+cargo sqlx prepare --workspace -- --features server --all-targets
+SQLX_OFFLINE=true cargo clippy -p horae --features server --all-targets -- -D warnings
+```
+
+Evidence from 2026-09-30:
+
+- Tests invoked the actual approval/reopen transactions. Before adding tenant filters, three isolation tests failed: foreign approval returned, bulk returned two tenants, and foreign reopening succeeded. The same-org invoice-lock preservation case passed.
+- After the correction, all 14 approval-module tests passed, including existing submission concurrency tests and four new isolation tests.
+- SQLx preparation completed against a separate development database on port 55415. Generated cache entries replace the obsolete query hashes; no application data or migrations changed.
+- Server/all-targets Clippy passed with `SQLX_OFFLINE=true` and warnings denied. Formatting and diff whitespace checks passed.
+- Existing same-org whole-week semantics and bulk skip/count behavior are retained. Scoped project/date approvals, atomic full-selection policy and transactional permission revocation remain pending; this repair does not claim those outcomes.
+
+The browser preview on port 8092 and the user's Harvest account were not changed by these database tests. The whole feature remains draft; no full-flake or end-to-end permission acceptance is claimed here.
+
+## Person-management writer authority acceptance
+
+After the full implementation gates pass, verify FR-027 through the UI and direct
+requests: an active same-org Administrator can commit valid add/remove/replace
+operations; People Admin, Executive Manager and custom all-people writers cannot,
+including when editing their own managed-person set. Revoke administrative status
+between preview and save and change relationship revisions concurrently; no stale
+or partially authorized batch may commit. Check scope-change audit and unchanged
+profiles, global grants, project membership and historical work. Ordinary permitted
+person editing and own-access explanations remain available to non-administrators.
+FR-028 now settles new-assignment grant eligibility. Test each compatible family
+(including read-only time/expense/people/billable access and scoped withdrawal),
+the corresponding organization-wide grants, and custom combinations without
+people-directory/edit access. Reject own-only and unrelated-only grants, including
+mixed replacement batches with invalid new relationships. Recheck after concurrent
+grant removal; do not add privileges or mutate history. The first assignment must
+not require a pre-existing managed-person set. For FR-029 test retention with any
+compatible grant; last-grant loss with confirmed atomic removal; cancel, missing
+confirmation, stale/changed affected sets, revoked actor and audit/write failure;
+preserved people, incoming relationships, project memberships and history; and
+no automatic restoration when grants return. Test simultaneous FR-025/029 losses:
+confirm both affected sets and commit all changes atomically, preserving tracking
+membership and history. For FR-031 reject direct and mixed-batch self-links even
+for Administrators with compatible grants; preserve own/all access and allow
+otherwise valid edits to an Administrator's own set of other people. Do not infer
+self-approval or delete historical data. These are test obligations, not executed
+tests or Harvest parity proof.
+
+## Planned keep-project-access acceptance
+
+Before accepting the permission editor, run every FR-030 case in
+[keep-project-access](contracts/keep-project-access.md) against production
+permission and assignment commands and the shared browser flow. These are pending
+tests, not proof of Harvest persistence or of implemented Horae behavior.
+
+## Independent assignment isolation and revocation repair
+
+Using the same isolated PostgreSQL stack:
+
+```sh
+cargo test -p horae --features server --bin horae server_fns::projects::assignment_tests::
+cargo test -p horae --features server --bin horae server_fns::projects::
+CARGO_INCREMENTAL=0 cargo sqlx prepare --workspace -- --features server --all-targets
+SQLX_OFFLINE=true cargo clippy -p horae --features server --all-targets -- -D warnings
+```
+
+Evidence from 2026-09-30:
+
+- RED: four tests failed against the extracted production SQL: foreign assignment creation, foreign removal, stale administrator admission and failure to wait for concurrent revocation. The same-org lifecycle test passed before the fix.
+- GREEN: all five assignment tests passed; all 63 project-module tests then passed, including existing privacy, bulk-action and lifecycle regressions.
+- Complete SQLx regeneration passed: five new cache entries replace one obsolete query. Server/all-targets Clippy passed with `SQLX_OFFLINE=true` and warnings denied; `nix fmt -- --ci` and `git diff --check` passed.
+- Creation validates both project and person organization. Removal returns no foreign/malformed assignment data and preserves those rows. Missing/repeated removal remains an idempotent no-op for an authorized administrator.
+- Both mutations reload and lock the active administrator until transaction commit. The concurrency test observes an actual PostgreSQL lock dependency, commits demotion and checks that the waiting mutation fails with `FORBIDDEN`; it does not rely on sleeps.
+- No profile, schema, CSS or existing data migration is included. Current administrator-only assignment authority is preserved. Full assignment parity, schema provenance, other entry-point revocation and HTTP/plugin end-to-end checks remain separate work.
+
+The initial incremental SQLx preparation omitted cached integration-test queries even with `--all-targets`. Regeneration disables incremental compilation so the complete target set emits query metadata; do not commit the incomplete intermediate cache.
+
+## User-administration transactional revocation
+
+Using the isolated PostgreSQL stack on port 55415, through the Nix dev shell:
+
+```sh
+cargo test -p horae --features server --bin horae server_fns::users::tests:: --locked
+cargo test -p horae --features server --bin horae --locked
+cargo test -p horae-core --locked
+CARGO_INCREMENTAL=0 cargo sqlx prepare --workspace -- --features server --all-targets
+SQLX_OFFLINE=true cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+```
+
+Evidence from 2026-10-02:
+
+- RED: four negative tests failed against the extracted production helpers;
+  revoked/foreign/unknown actors and concurrent revocations could still create
+  users. Nine existing/positive checks passed. Each negative test now exercises
+  creation, role changes and deactivation, not just one mutation path.
+- GREEN: the initial 13 user tests passed. Added rollback/lock-lifetime cases;
+  the full server binary suite passed 795 tests with 11 pre-existing manual
+  measurement tests ignored, including all 15 user checks. All 143 core tests
+  passed. This is not the separate integration binary or full Nix flake suite.
+- Creation, role and activation helpers take actor IDs from the authenticated
+  wrapper, serialize on the organization, reload active administrator authority
+  and retain its row lock through commit. Revocation is checked after waiting
+  for either organization or actor locks; foreign/unknown actors fail without
+  changes. Concurrent self-demotions/deactivations retain one active admin.
+- Tests observe actual PostgreSQL blocking relationships, not sleeps. A separate
+  case proves revocation waits until the access transaction commits. Duplicate
+  creation rolls back and releases locks so a subsequent authorized change works.
+- Complete SQLx regeneration adds only two test-query cache files and removes
+  none. The production actor-lock query already exists in the cache. No schema,
+  UI, CSS, legacy-role mapping or real account data changed.
+- Server/all-targets offline Clippy and full formatting passed. Clippy's initial
+  redundant-dereference finding in a test was corrected, not suppressed.
+- Focused adversarial review traced all three authenticated wrappers and helpers,
+  organization-before-actor locking, commit/error paths and event dispatch after
+  successful commit. No unresolved high/critical finding in this increment.
+  Durable audit, stale-form revisions, six-profile runtime enforcement and the
+  complete operation matrix remain pending; this is not full SC-003 acceptance.
+
+## Operation/lock-contract checks — 2026-10-02
+
+At `b7e730c`, a source-to-document check found all 80 public async symbols under
+`crates/horae/src/server_fns/` (excluding test fixtures) in
+`contracts/operation-matrix.md`. Authentication, exports, the compatibility API,
+jobs, plugins and operator paths are separately listed. This checks inventory
+coverage, not whether an operation's target predicate is settled or enforced.
+
+The isolated development PostgreSQL on port 55415 was reachable. Through the
+Nix shell, this diagnostic against its existing organization table:
+
+```sh
+nix develop --command psql -X 'postgres://horae@127.0.0.1:55415/horae' \
+  -v ON_ERROR_STOP=1 \
+  -c 'BEGIN READ ONLY; SELECT 1 FROM organizations LIMIT 1 FOR SHARE; ROLLBACK;'
+```
+
+returned `cannot execute SELECT FOR SHARE in a read-only transaction` and
+nonzero exit status, as expected. The failed transaction was rolled back on
+connection close; no business record or schema was modified. This demonstrates
+why existing READ ONLY report/preview transactions cannot accept the proposed
+row gate unchanged. It is not a concurrency test of the future permission layer.
+
+The concrete inventory in `contracts/permission-state.md` also records the
+snapshot/revision-fence and network-paced import cases that T039 must test against
+the actual production helpers after T006–T009/T042 are settled. No Rust suite,
+browser acceptance or full-flake result is claimed for this documentation-only
+increment; the runtime results above remain those of the preceding code changes.
+
+## Non-activating permission storage — 2026-10-03
+
+Use a disposable PostgreSQL cluster, not the user's application database.
+The run below used a newly initialized UTF-8 cluster on port 55416, a fresh
+`horae_storage` compilation database and SQLx-created per-test databases.
+The migration was not applied to any existing application database.
+
+```sh
+nix develop
+export DATABASE_URL=postgres://horae@127.0.0.1:55416/horae_storage
+sqlx migrate run --source crates/horae/migrations
+cargo test -p horae --features server --bin horae server_fns::permissions:: --locked
+cargo test -p horae-core --locked
+cargo sqlx prepare --workspace -- --features server --all-targets
+SQLX_OFFLINE=true cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+SQLX_OFFLINE=true cargo test -p horae --features server --bin horae --locked
+nix fmt -- --ci
+```
+
+- RED: the new tests failed compilation because permission tables, policy columns,
+  typed loaders and name validation did not exist. No passing placeholder API.
+- GREEN: nine real PostgreSQL storage tests passed. They cover empty state/legacy
+  mode, installation over populated legacy records, six built-ins and adjusted
+  selections, independent identity/provenance, strict malformed-grant rejection,
+  tenant constraints/lookups, invalid source shapes/revisions, direct-delete
+  protection and unchanged grants/identity on fixture detachment.
+- FR-032: ASCII and accented case collisions are tested against PostgreSQL's
+  single `lower(name)` comparison, including concurrent inserts. Other tenants
+  may reuse names. Two pure core tests cover outside Unicode whitespace,
+  preserved display/internal spacing, blank input and 100/101 Unicode scalars.
+  All 161 core tests and core/all-targets Clippy passed.
+- SQLx regeneration added 18 cache files and removed none. Server/all-targets
+  offline Clippy passed with warnings denied, checking the complete cached query
+  set. Full server binary regression passed: 804 tests passed, zero failed and
+  11 pre-existing manual checks remained ignored (815 total). Formatting and
+  `git diff --check` passed. The separate integration binary and full Nix flake
+  suite were not run; compilation of all targets is not execution of all tests.
+- Bounded adversarial design review corrected an unsupported coupling of
+  administrative identity to provenance and complete Administrator grants.
+  Focused implementation self-review checked SQL NULL/source-shape constraints,
+  restrictive composite tenant FKs, current catalog decoding, case-index atomicity
+  and every loader caller. Only tests call these helpers; no guard is replaced.
+  The typed read models are server-only and not deserializable authority inputs.
+- Template detachment and arbitrary identity/source combinations are storage
+  fixtures, not successful authenticated commands. Command authority, 50-profile
+  races, revisions/audit/replay, runtime activation, browser parity and the full
+  flake gate remain pending. No UI, CSS, external account or real data changed.
+
+## Internal template commands — 2026-10-03
+
+T053–T055 implement the create/delete subset of US4 under
+`contracts/template-commands.md`, not a publicly accessible permissions editor.
+Only disposable PostgreSQL fixtures enable policy version 1. The compile database
+on port 55416 is likewise disposable; no application database was migrated.
+
+```sh
+cargo test -p horae --features server --bin horae template_tests --locked
+CARGO_INCREMENTAL=0 cargo sqlx prepare --workspace -- --features server --all-targets
+SQLX_OFFLINE=true cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+cargo test -p horae-core --locked
+SQLX_OFFLINE=true cargo test -p horae --features server --bin horae --locked
+nix fmt -- --ci
+```
+
+Observed focused evidence:
+
+- The initial tests failed compilation for the missing command API and an
+  incorrect test enum variant, which was corrected. The first five tests passed
+  after implementation. Expanded coverage then passed all 17 command tests.
+- A deliberate mutation replaced affected-person validation with template grants.
+  `malformed_assignee_aborts_all_detachments` failed, proving it detects this
+  unsafe shortcut. The original strict validation was restored immediately.
+- Production helpers, not duplicated test SQL, perform create/delete/replay.
+  Schema fixtures separately verify tenant FKs, mutually exclusive user/operator
+  attribution and principal-scoped unique request identities. No operator command
+  endpoint is provided.
+
+| Contract boundary | Executable evidence |
+| --- | --- |
+| Canonical creation and exact historical replay | `create_canonical_retry_returns_one_historical_change`, `concurrent_exact_retry_creates_one_receipt_without_changing_people` |
+| Current explicit administrator, tenant and policy checks | `legacy_future_missing_foreign_and_non_admin_authority_deny`, `invalid_stored_authority_and_template_grants_fail_closed` |
+| Confirmed grants, prerequisite closure and FR-032 names | `equivalent_names_and_invalid_confirmed_selections_roll_back`, `unknown_grants_and_authority_fields_cannot_deserialize_as_commands`; storage tests also cover concurrent case collisions |
+| Limit under concurrent creation | `concurrent_creators_never_exceed_fifty_profiles` |
+| Exact grant/identity preservation, revisions and audit | `delete_preserves_adjusted_grants_identity_and_business_rows`, `malformed_assignee_aborts_all_detachments` |
+| Deleted-source retries and same-name replacements | `delete_replay_does_not_touch_a_same_name_replacement` |
+| Stale/foreign/exhausted revisions | `stale_foreign_and_exhausted_revisions_never_partially_delete` |
+| Fresh authority after waiting, including replay | `revocation_winning_org_gate_denies_pending_replay_and_new_command` |
+| Atomic audit failure and compatible user locks | `failed_audit_insert_rolls_back_creation_and_detachment`, `actor_share_lock_does_not_block_template_command` |
+| Tenant/principal/version-scoped history | `receipts_enforce_tenant_exclusive_principal_and_request_uniqueness`, `command_receipts_are_not_shared_between_administrators`, `unsupported_receipt_version_fails_without_repeating_the_change` |
+
+The first incremental SQLx preparation omitted 91 existing cache entries despite
+`--all-targets`. Non-incremental preparation recovered them: the final cache adds
+36 entries and deletes none. Offline all-targets server Clippy passed with
+incremental compilation disabled and warnings denied. All 161 core tests passed;
+the restored-code server binary suite passed 821 tests with zero failures and
+11 pre-existing ignored checks in 152.48 seconds. Formatting and diff checks
+passed; the separate integration binary, browser and full flake suite were not run.
+
+Focused adversarial self-review checked authorization before replay, historical
+outcomes after deletion, canonical request equivalence, complete affected-set
+validation before writes, revision overflow, tenant/principal constraints,
+rollback and the local lock order including FK locks. Expanded the initial
+coverage to test malformed assignees (not only templates), full-floor duplicate
+and missing-prerequisite selections, receipt principal isolation and unsupported
+receipt versions. No high/critical finding remains in this bounded implementation;
+this is not independent implementation review or full-feature security acceptance.
+No new dependency, generic service layer, public endpoint, UI/CSS change or real
+data operation was introduced. Full T042, profile application, permission editing
+UI, cross-surface enforcement, migration and full-feature acceptance remain open.
+
+## Internal person-profile commands (T056–T058)
+
+Use only an owned disposable PostgreSQL cluster with `CREATEDB`; the application
+database and Harvest accounts are not test targets. Migration 0044 is additive,
+has no legacy backfill and leaves the permission policy inactive. Fixtures alone
+explicitly enable version 1. The command and schema contract is
+`contracts/person-profile-commands.md`; no public endpoint is delivered here.
+
+```sh
+# Set DATABASE_URL to the disposable compilation DB, then enter the Nix shell.
+cargo sqlx migrate run --source crates/horae/migrations
+cargo test -p horae --features server --bin horae profile_tests --locked
+CARGO_INCREMENTAL=0 cargo sqlx prepare --workspace -- --features server --all-targets
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo test -p horae --features server --bin horae --locked
+cargo test -p horae-core --locked
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+nix fmt -- --ci
+```
+
+| Contract boundary | Production-command regression |
+| --- | --- |
+| Confirmed adjusted grants and exact replay | `explicit_application_and_adjustments_preserve_confirmed_grants` |
+| Unchanged state, timestamps, provenance and no change event | `unchanged_edit_preserves_identity_source_timestamp_and_revisions` |
+| Independent identity, inactive targets and invalid Administrator proposals | `explicit_identity_changes_and_inactive_targets_do_not_change_activation`, `reduced_administrator_and_stale_person_proposals_are_rejected` |
+| Actual active explicit Administrator count, including concurrent demotions | `last_active_administrator_cannot_be_demoted_or_replaced_by_equivalent_grants`, `concurrent_self_demotions_leave_one_active_explicit_administrator` |
+| Exact joint loss confirmation, history/incoming preservation and no restoration | `simultaneous_losses_require_exact_confirmation_preserve_history_and_never_restore_links` |
+| Read-only retention and explicit final keep-access grants | `read_only_retention_and_explicit_keep_project_access_preserve_independent_person_losses` |
+| Template adjustment/reset, deletion replay and shared request namespace | `adjusted_template_reset_and_replay_after_deletion_use_explicit_intent`, `all_grant_template_cannot_confer_identity_and_cross_command_keys_conflict` |
+| Current authority after a real gate wait, including replay | `revocation_winning_gate_denies_new_and_replayed_changes` |
+| Atomic rollback and compatible legacy user locks | `audit_failure_rolls_back_profile_and_both_relationship_sets`, `existing_user_share_lock_does_not_block_profile_command` |
+| Tenant/self/duplicate schema boundaries and caller/target isolation | `management_schema_rejects_foreign_parents_self_links_and_duplicate_pairs`, `canonical_actor_policy_tenant_and_target_checks_precede_mutation` |
+| Strict saved/input validation, stale references and overflow | `malformed_person_or_remaining_administrator_state_fails_closed`, `invalid_confirmations_and_noncanonical_grants_are_not_silently_repaired`, `stale_template_and_org_revision_and_exhausted_revisions_roll_back` |
+| No accidental historical cleanup and remove/recreate fencing | `unchanged_and_unrelated_edits_do_not_clean_up_preexisting_incompatible_links`, `recreated_relationship_invalidates_waiting_confirmation_without_partial_removal` |
+
+Read-only independent contract-to-code review found no high/security defect in
+the bounded transaction. It requested the final two regressions above and clearer
+wording for the earlier generic organization-revision test; both were added.
+Relationship replacement in the fencing test is fixture SQL under the required
+gate, not an implemented assignment-addition endpoint. The pending profile save
+uses the actual production command. Full T042/mixed-policy safety is not proved.
+
+The initial SQLx-offline RED run also lacked new query entries; the corrected
+live-disposable-DB run failed solely on the absent command module. After
+implementation, 5, 13 and 18 focused tests passed; the final 20-test suite also
+passed with no failures or ignored cases. The full server binary regression
+suite passed (852 tests discovered, 11 pre-existing ignored), followed by all
+161 core tests. No separate integration-binary execution, browser run or full
+flake acceptance is claimed.
+
+SQLx preparation can omit unchanged integration-target metadata even with
+`CARGO_INCREMENTAL=0`: this run initially removed 91 integration query entries
+despite successful preparation and warm offline Clippy. A warm compilation is
+not proof of a complete cache. If this occurs, first finish other Cargo tasks,
+then clean **only this worktree's package build artifacts** with
+`cargo clean -p horae`, repeat the non-incremental all-targets preparation above,
+and verify deleted-cache count plus a fresh offline all-targets check. Do not
+delete source, database state or manually fabricate missing query descriptions.
+
+The clean-package regeneration recovered all 91 omitted entries: final cache
+adds 30 descriptions with zero changed or deleted existing entries. Fresh offline
+all-targets server Clippy then passed with warnings denied. No source/database
+data was removed; only regenerable package build artifacts were cleaned.
+Formatting CI and diff checks also passed. T056–T058 are complete for this
+internal boundary; full T037/T038, authenticated wrappers and runtime acceptance
+remain open. Rust/testing/async/simplicity guidance kept this in existing modules,
+dependencies and SQLx transactions, with no generic policy framework or UI change.
+
+## Internal project delegation (T059–T061)
+
+Use the same owned disposable PostgreSQL compilation database and test role with
+CREATEDB as above. No new migration is introduced; fixtures alone enable policy 1.
+The internal command is not wired to the existing project editor or a public
+endpoint. See `contracts/project-management-commands.md` for its closed boundary.
+
+```sh
+cargo test -p horae --features server --bin horae project_management_tests --locked
+cargo test -p horae --features server --bin horae --locked
+cargo test -p horae-core --locked
+# Finish other Cargo processes before refreshing the complete cache.
+cargo clean -p horae
+CARGO_INCREMENTAL=0 cargo sqlx prepare --workspace -- --features server --all-targets
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+nix fmt -- --ci
+```
+
+| Contract | Production-command regression |
+| --- | --- |
+| Project editing grants, current managed designation, no legacy membership or identity bypass | `project_editor_delegates_existing_read_grants_without_promotion`, `canonical_actor_grants_activity_tenant_and_policy_are_required`, `managed_scope_never_uses_another_project_or_legacy_membership` |
+| Entire-set eligibility and strict tenant/target validation | `mixed_invalid_addition_preserves_entire_previous_set`, `foreign_missing_inactive_and_malformed_additions_fail_without_disclosure` |
+| Retained identities, no-op audit, archived projects and eligible removal | `retained_ineligible_managers_and_archived_projects_allow_noop_and_removal` |
+| Exact audit delta; preserve membership, cost override, hours and unrelated scopes | `replacement_audits_exact_delta_and_preserves_membership_history_and_other_scopes` |
+| Reordered/historical replay, cross-command intent, version rejection and self-removal | `historical_replay_does_not_reapply_removed_or_now_ineligible_designations`, `receipt_conflicts_precede_decoding_and_replay_requires_current_authority`, `actual_template_command_receipt_cannot_be_reused_for_project_delegation`, `designation_is_required_before_managed_editor_can_delegate` |
+| Stale/duplicate/overflow denial and concurrent replacements | `stale_duplicate_and_exhausted_revisions_never_replace_the_set`, `concurrent_replacements_commit_only_one_current_revision` |
+| Revocation after an actual gate wait | `revocation_winning_gate_denies_waiting_delegation` |
+| Legacy project-parent lock conflict, whole rollback and identical retry | `legacy_project_lock_returns_busy_instead_of_forming_an_org_fk_cycle` |
+| Actor/target FK compatibility and audit failure rollback | `legacy_user_share_locks_allow_manager_and_receipt_foreign_keys`, `audit_failure_rolls_back_removal_addition_and_revision` |
+
+Initial RED compilation failed because the command module did not exist. The
+first implementation run failed in fixture setup because its INSERT omitted
+non-null administrative identity; fixed the fixture to insert explicit false.
+All 17 focused tests then passed. Independent read-only review found no high
+security defect in the production command and requested four additional coverage
+cases; all are included in the passing suite above. This does not prove T042 or
+mixed-policy safety. Full server binary regressions passed with 858 passing tests,
+zero failures and 11 pre-existing ignored cases; all 161 core tests passed.
+Formatting CI passed with zero changes. Clean-package, non-incremental SQLx
+preparation adds 28 query descriptions and changes/deletes no existing entries.
+Fresh offline all-targets server Clippy passed with warnings denied. Cleaning
+removed 5.7 GiB of regenerable package artifacts only, not source or database data.
+No separate integration-binary execution, browser or full flake run is claimed.
+T059–T061 are complete for this internal command; full user-story and activation
+gates remain open. No new crate, dependency, schema migration or UI/CSS change.
+
+## Internal historical audit lookup (T062–T064)
+
+Reuse the owned disposable PostgreSQL cluster and compilation database above.
+Fixtures alone enable policy 1; no current application database is migrated or
+activated. `contracts/audit-lookup.md` owns this receipt-ID read boundary.
+
+```sh
+cargo test -p horae --features server --bin horae audit_tests --locked
+cargo test -p horae --features server --bin horae --locked
+cargo test -p horae-core --locked
+# After all test/build processes have finished:
+cargo clean -p horae
+CARGO_INCREMENTAL=0 cargo sqlx prepare --workspace -- --features server --all-targets
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+nix fmt -- --ci
+```
+
+| Contract | Reader/decoder regression |
+| --- | --- |
+| Current explicit Administrator, not legacy role or grant equivalence | `legacy_admin_and_all_grants_without_explicit_identity_cannot_read_audit` |
+| Tenant, activity, policy and strict authority precede receipt decoding | `tenant_activity_and_policy_checks_precede_receipt_existence_and_decode` |
+| Other authors, later inactivity and missing current permission state | `current_administrator_reads_inactive_authors_history_without_live_state` |
+| Deleted templates and exact historic projection without private request data | `administrator_reads_historical_template_without_intent_or_replay_result`, `template_detachment_history_preserves_exact_grants_and_provenance` |
+| Real profile/project changes, no-ops and removed scopes survive later changes | `profile_and_project_history_decode_exact_changes_and_noops`, `profile_history_keeps_removed_relationships_after_grants_change_again` |
+| Distinct operator attribution, no intent or private replay outcome | `operator_attribution_is_not_a_user_and_excludes_private_replay_payload` |
+| Failed command has no successful receipt; reads do not mutate | `failed_mutation_has_no_success_audit_and_reads_do_not_write` |
+| Real lock waits in both revocation orders | `revocation_winning_gate_denies_waiting_historical_reader`, `reader_winning_gate_finishes_before_revocation_and_later_reads_fail` |
+| Required nullable fields, supported formats, strict grants/provenance and revisions | The four `historical_*` decoder tests in `permissions/tests/audit.rs` |
+
+Initial RED compilation failed on the missing reader module. Implementation
+compilation caught the timestamp type inference and additional fixture schema/PID
+mismatches; these were corrected without changing schema or weakening assertions.
+The first focused GREEN run passed all 15 tests. A subsequent real stored malformed
+document check was added before the full regression run, which passed 873 tests
+with zero failures and 11 pre-existing ignored cases (172.11 seconds). All 161
+core tests passed. Clean-package, non-incremental SQLx preparation added 14 query
+descriptions and changed/deleted no existing entries. Fresh offline all-targets
+Clippy passed with warnings denied; formatting CI passed with zero changes.
+Cleaning removed 5.8 GiB of regenerable package build artifacts only. T062–T064
+are complete for the internal lookup; T041 remains open for authenticated history
+delivery and integration. No separate integration-binary, browser or full flake
+execution is claimed.
+
+Adversarial self-review traced all three production writers to the projected
+historical shapes, verified authorization precedes receipt lookup/decoding, and
+checked that the organization gate remains held until projection and commit.
+Historical reads perform no FK inserts or later row locks. Coverage gaps for
+reader-first revocation, inactive authors and actual removed/detached snapshots
+were closed with production-reader tests. No critical/high defect was identified
+in this bounded review; this is not an independent full-feature review or proof
+of runtime activation, HTTP authentication, audit browsing or UI acceptance.
+
+## Project-family organization-first integration (T068–T070)
+
+Reuse the owned disposable PostgreSQL on 55416. No real database, permission
+activation, UI/CSS, external service or migration is changed by this increment.
+All commands run in the Nix shell with the disposable `DATABASE_URL` above.
+
+```sh
+cargo test -p horae --features server --bin horae gate --locked
+cargo test -p horae --features server --bin horae --locked
+# After all test/build processes have finished:
+cargo clean -p horae
+CARGO_INCREMENTAL=0 cargo sqlx prepare --workspace -- --features server --all-targets
+SQLX_OFFLINE=true CARGO_INCREMENTAL=0 cargo clippy -p horae --features server --all-targets --locked -- -D warnings
+nix fmt -- --ci
+```
+
+| Requirement / boundary | Production-path acceptance |
+| --- | --- |
+| FR-007/010: all ten draft/editor entry points gate before actor/resource locks; no writes after revocation | `every_project_entry_gates_before_actor_and_rechecks_revocation`, including fresh retries and unchanged draft/client/project/receipt counts |
+| FR-010: editor-first commits before revocation; revocation-first rejects the stale snapshot and fresh retry | `project_editor_and_user_revocation_commit_in_gate_order`, calling actual editor and user-change transactions |
+| FR-007/010: assignment add/remove, task link and creation with/without a project reload active authority | `project_membership_and_task_callers_wait_before_authorizing`, preserving assignment/task/link counts on denial |
+| FR-017: assignment cascade permits an already-authorized entry FK to finish and denies the next entry | `assignment_cascade_allows_an_inflight_entry_project_fk_to_finish` |
+| FR-017: exclusive organization gate permits an in-flight invoice's FK writes | `assignment_gate_allows_inflight_invoice_organization_fks_to_finish` |
+| FR-018: legacy tenant, malformed-link, archived-task, rate, draft replay and editor concurrency behavior remains | Existing assignment/project/creation, invoice, entry and user regressions |
+
+RED reproduced the inverse actor/organization order in actual inline-client
+creation: the actor NOWAIT assertion failed with PostgreSQL 55P03. After the
+implementation, the focused `gate` filter passed 12 tests, including both actual
+editor/revocation orders and invoice FK compatibility. A subsequent strengthening
+checks that finalization/editor changes exclude SHARE readers. The complete
+server binary regression, including the strengthened gate assertion and all five
+new tests, passed: 883 passed, zero failed and 11 pre-existing ignored cases
+(168.58 seconds). All 161 core tests passed. Fresh complete SQLx preparation
+adds 26 query descriptions and removes the five replaced queries; no unrelated
+cache descriptions change. Offline all-targets server Clippy passed with warnings
+denied. The first formatting CI check inserted one missing Markdown blank line;
+the corrected files are checked again before publication. The package-local
+clean removed 1.5 GiB of regenerable build artifacts, not source or data. The owned
+PostgreSQL cluster is stopped. No separate integration-binary, browser or full
+flake execution is claimed.
+
+The bounded review covers all callers of the changed helpers, tenant rechecks,
+gate modes, actor snapshot checks, revision triggers and the two FK counterexamples.
+No new dependency or grant rule is introduced. This is not full-feature analysis,
+browser acceptance, a deadlock-free proof of all writers or completed T042.
+T068–T070 close this named integration boundary only. The remaining policy,
+authenticated surfaces, approvals, UI, migration and full acceptance work remains.
