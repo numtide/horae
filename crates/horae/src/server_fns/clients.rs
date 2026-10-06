@@ -220,8 +220,8 @@ pub async fn get_client_details(client_id: String) -> Result<ClientDetails, Serv
 }
 
 #[cfg(feature = "server")]
-async fn client_details_for_viewer(
-    db: &sqlx::PgPool,
+async fn client_details_for_viewer<'e>(
+    db: impl sqlx::Executor<'e, Database = sqlx::Postgres>,
     org_id: uuid::Uuid,
     viewer_id: uuid::Uuid,
     client_id: uuid::Uuid,
@@ -277,11 +277,13 @@ async fn client_invoices_for_viewer(
     viewer_id: uuid::Uuid,
     client_id: uuid::Uuid,
 ) -> Result<Vec<Invoice>, ServerFnError> {
-    let detail = client_details_for_viewer(db, org_id, viewer_id, client_id).await?;
-    if detail.billing.is_none() {
-        return Err(forbidden("Manager access required"));
-    }
-    super::invoices::fetch_invoices(db, org_id, None, Some(client_id)).await
+    let mut tx = db.begin().await.map_err(server_err)?;
+    client_details_for_viewer(&mut *tx, org_id, viewer_id, client_id).await?;
+    // Keep current authority locked through materialization, not just its check.
+    lock_client_manager(&mut tx, org_id, viewer_id).await?;
+    let invoices = super::invoices::fetch_invoices(&mut *tx, org_id, None, Some(client_id)).await?;
+    tx.commit().await.map_err(server_err)?;
+    Ok(invoices)
 }
 
 /// Project counts and currency filters use the same progress access as Projects.

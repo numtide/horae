@@ -654,6 +654,122 @@ async fn client_invoices_require_manager_authority_even_without_invoices(pool: P
 }
 
 #[sqlx::test(migrations = "./migrations")]
+async fn client_invoices_reject_a_winning_concurrent_revocation(pool: PgPool) {
+    for (revoked_role, active) in [(OrgRole::Member, true), (OrgRole::Manager, false)] {
+        let ids = seed(&pool, OrgRole::Manager).await;
+        sqlx::query!(
+            "INSERT INTO invoices (id,org_id,client_id,number,issued_on,due_on,currency,total_cents)
+             VALUES ($1,$2,$3,'REVOCATION','2026-09-01','2026-09-15','EUR',12345)",
+            uuid::Uuid::now_v7(), ids.org_id, ids.client_id,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let mut revocation = pool.begin().await.unwrap();
+        let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
+            .fetch_one(&mut *revocation)
+            .await
+            .unwrap()
+            .unwrap();
+        // Prevent invoice materialization until the pending revocation commits,
+        // even if a reader checks authority without locking the user's row.
+        sqlx::query!("LOCK TABLE invoices IN ACCESS EXCLUSIVE MODE")
+            .execute(&mut *revocation)
+            .await
+            .unwrap();
+        sqlx::query!(
+            "UPDATE users SET org_role = $2, active = $3 WHERE id = $1",
+            ids.user_id,
+            revoked_role as OrgRole,
+            active,
+        )
+        .execute(&mut *revocation)
+        .await
+        .unwrap();
+        let run_pool = pool.clone();
+        let mut run = tokio::task::JoinSet::new();
+        run.spawn(async move {
+            client_invoices_for_viewer(&run_pool, ids.org_id, ids.user_id, ids.client_id).await
+        });
+        wait_for_blocked(&pool, blocker).await;
+        revocation.commit().await.unwrap();
+        let error = tokio::time::timeout(Duration::from_secs(5), run.join_next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap()
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            ServerFnError::ServerError {
+                code: FORBIDDEN,
+                ..
+            }
+        ));
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn client_invoices_hold_authority_until_the_read_finishes(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    let mut invoice_blocker = pool.begin().await.unwrap();
+    let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
+        .fetch_one(&mut *invoice_blocker)
+        .await
+        .unwrap()
+        .unwrap();
+    sqlx::query!("LOCK TABLE invoices IN ACCESS EXCLUSIVE MODE")
+        .execute(&mut *invoice_blocker)
+        .await
+        .unwrap();
+    let run_pool = pool.clone();
+    let mut run = tokio::task::JoinSet::new();
+    run.spawn(async move {
+        client_invoices_for_viewer(&run_pool, ids.org_id, ids.user_id, ids.client_id).await
+    });
+    wait_for_blocked(&pool, blocker).await;
+
+    let mut revocation = pool.begin().await.unwrap();
+    sqlx::query!("SET LOCAL lock_timeout = '100ms'")
+        .execute(&mut *revocation)
+        .await
+        .unwrap();
+    let result = sqlx::query!(
+        "UPDATE users SET org_role = 'member' WHERE id = $1",
+        ids.user_id,
+    )
+    .execute(&mut *revocation)
+    .await;
+    revocation.rollback().await.unwrap();
+    invoice_blocker.commit().await.unwrap();
+    let invoices = tokio::time::timeout(Duration::from_secs(5), run.join_next())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert!(invoices.is_empty());
+    assert_eq!(
+        result
+            .unwrap_err()
+            .as_database_error()
+            .unwrap()
+            .code()
+            .as_deref(),
+        Some("55P03"),
+        "revocation must wait while the authorized reader is materializing invoices",
+    );
+    // A completed read must release its authority lock.
+    sqlx::query!(
+        "UPDATE users SET org_role = 'member' WHERE id = $1",
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn client_invoices_keep_exact_client_scope_statuses_and_currencies(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
     let foreign = seed(&pool, OrgRole::Admin).await;

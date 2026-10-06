@@ -12,6 +12,9 @@ client IDs share not-found; malformed IDs give safe validation errors.
 - Detail includes inactive clients. Rates require manager authority and are absent
   from member payloads. Reuse project/invoice reads; never rely on UI hiding.
   Unknown fields show “Not set” or em dash, not zero.
+- Client invoice reads recheck and retain the active manager's row lock until
+  invoice materialization finishes. A winning demotion/deactivation denies the
+  read; a later revocation waits for it. This retains the existing role policy.
 - Key resources by client ID to avoid stale data under a new identity. A failed
   independent panel has error/retry, not an empty state.
 

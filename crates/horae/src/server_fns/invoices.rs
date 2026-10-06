@@ -141,8 +141,8 @@ pub async fn list_invoices(status: Option<String>) -> Result<Vec<Invoice>, Serve
 }
 
 #[cfg(feature = "server")]
-pub(super) async fn fetch_invoices(
-    db: &sqlx::PgPool,
+pub(super) async fn fetch_invoices<'e>(
+    db: impl sqlx::Executor<'e, Database = sqlx::Postgres>,
     org_id: uuid::Uuid,
     status_filter: Option<InvoiceStatus>,
     client_id: Option<uuid::Uuid>,

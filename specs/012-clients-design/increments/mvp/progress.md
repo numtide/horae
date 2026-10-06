@@ -841,3 +841,27 @@ recorded in the linked PR description/checks, avoiding another source commit
 solely to record that source commit's check result. If a real check fails,
 investigate and record the correction here before republishing. No more feature
 work or merge is authorized by this goal.
+
+## 2026-10-06 — Client invoice read authorization follow-up
+
+Scoped follow-up authorized during the open-PR review; the broader permissions
+work remains paused. This addresses MVP-003 without activating feature 015.
+
+- Reproduced a concurrent revocation leak before changing production code:
+  the reader returned the synthetic 12,345-cent invoice after demotion committed.
+- Reused `lock_client_manager` and retained its lock through client invoice
+  materialization in one transaction. The existing detail and invoice query
+  helpers accept a transaction executor; SQL, filters, ordering and role policy
+  are unchanged. Existing missing/foreign/inactive-client access tests still pass.
+- Added deterministic database regressions for winning demotion/deactivation
+  and a winning reader holding authority until completion. All 35 client tests
+  pass. Tests use disposable PostgreSQL clusters, never real records.
+- Production changes are limited to the client reader and the invoice query
+  helper's executor signature. No UI, migration, dependency or PR #212 change.
+- Verification: the compiled server harness passed 819 tests with the existing
+  11 ignored cases unchanged. `cargo sqlx prepare --workspace -- --features server --all-targets` added three test-query descriptors without deleting any cache
+  entries. Offline server all-target Clippy (`--locked -- -D warnings`) and
+  `nix fmt -- --ci` passed. Browser/deployment checks are not claimed as rerun
+  locally for this follow-up; the new full Nix CI remains required.
+- Next: publish one unsigned correction commit to PR #216 and require its new
+  CI result before merge. Earlier green checks do not validate this follow-up.
