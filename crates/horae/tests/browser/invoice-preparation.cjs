@@ -210,6 +210,16 @@ const feesBefore = Number(sql('SELECT count(*) FROM project_fee_occurrences'));
     await page.reload();
     await expect(page.getByRole('button', { name: 'Recover invoice request', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'New Invoice', exact: true })).toHaveCount(0);
+    const recoveryBeforeContext = await page.evaluate(() => Object.entries(sessionStorage));
+    const otherClient = sql("SELECT id FROM clients WHERE name = 'TechStart Inc'");
+    for (const client of [otherClient, 'not-a-client']) {
+      page.once('dialog', dialog => dialog.accept());
+      await page.goto(`${base}/invoices/new/client/${client}`);
+      await expect(page.getByRole('button', { name: 'Recover invoice request', exact: true })).toBeVisible();
+      await expect(page.locator('#inv-client')).toHaveCount(0);
+      assert.deepEqual(await page.evaluate(() => Object.entries(sessionStorage)), recoveryBeforeContext);
+      assert.equal(Number(sql('SELECT count(*) FROM invoices')), invoicesBefore + 1);
+    }
     await page.evaluate(() => {
       window.originalInvoiceRemoveItem = Storage.prototype.removeItem;
       Storage.prototype.removeItem = function(key) {

@@ -46,14 +46,33 @@ fn is_reviewed(current: Option<&InvoiceRequest>, reviewed: Option<&InvoiceReques
         .is_some_and(|(current, reviewed)| current == reviewed)
 }
 
+pub(super) fn initial_client(
+    options: &[(String, String)],
+    context: Option<&str>,
+) -> Result<String, &'static str> {
+    let Some(context) = context else {
+        return Ok(String::new());
+    };
+    let id = context
+        .parse::<Uuid>()
+        .map_err(|_| "Invalid client link.")?
+        .to_string();
+    if options.iter().any(|(value, _)| value == &id) {
+        Ok(id)
+    } else {
+        Err("This client is unavailable for a new invoice.")
+    }
+}
+
 #[component]
 pub(super) fn PrepareInvoice(
     client_opts: Vec<(String, String)>,
+    #[props(default)] initial_client: String,
     mut busy: Signal<bool>,
     oncreated: EventHandler<Uuid>,
 ) -> Element {
     let storage = use_context::<RecoveryStorage>();
-    let mut client = use_signal(String::new);
+    let mut client = use_signal(|| initial_client);
     let mut from = use_signal(String::new);
     let mut to = use_signal(String::new);
     let mut projects = use_signal(Vec::<Project>::new);
@@ -432,6 +451,31 @@ fn PreparedLines(estimate: InvoicePreparation) -> Element {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn invoice_context_selects_only_the_exact_available_client() {
+        let first = Uuid::now_v7().to_string();
+        let second = Uuid::now_v7().to_string();
+        let options = vec![
+            (String::new(), "Select a client…".into()),
+            (first, "Same name".into()),
+            (second.clone(), "Same name".into()),
+        ];
+        assert_eq!(initial_client(&options, None), Ok(String::new()));
+        assert_eq!(initial_client(&options, Some(&second)), Ok(second));
+    }
+
+    #[test]
+    fn unavailable_or_malformed_invoice_context_never_uses_the_first_client() {
+        let options = vec![(Uuid::now_v7().to_string(), "Available".into())];
+        for context in [
+            String::new(),
+            "not-a-client".into(),
+            Uuid::now_v7().to_string(),
+        ] {
+            assert!(initial_client(&options, Some(&context)).is_err());
+        }
+    }
 
     #[test]
     fn invoice_review_requires_matching_sources_and_valid_values() {

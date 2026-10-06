@@ -10,6 +10,10 @@
 
 ## Clarifications
 
+### Session 2026-10-02 — Authorized implementation increment
+
+- Q: May the existing client journeys ship before the complete permission/contact/lifecycle package? → A: The user explicitly authorized the [Clients MVP increment](increments/mvp/spec.md): name search, lifecycle/currency filters, real detail, existing-field create/edit and contextual project/invoice navigation, preserving current runtime authorization and existing lifecycle behavior. Contacts, new archive policy, deletion, bulk actions and activation of feature 015 remain outside this increment. This does not complete or remove any full-feature requirement below.
+
 ### Session 2026-10-01
 
 - Q: Does client access retain the three-role boundary or use the confirmed Harvest permission model? → A: Reuse the user's 2026-09-30 decision recorded in feature 015: six built-in profiles, custom profiles, individual adjustments and applicable scopes. This is propagation of an existing answer, not a new scope approval. Contact cardinality and archive policy remain unresolved.

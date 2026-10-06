@@ -132,6 +132,8 @@
   --width-project-code: 10rem;
   --width-tag-entry: 8.75rem;
   --width-form-select: 20rem;
+  --width-client-editor: 35rem;
+  --width-client-name: 16.25rem;
   --width-assignment-picker: 16.25rem;
   --width-milestone-amount: 8.75rem;
   --height-form-control: 2.75rem;
@@ -1854,6 +1856,17 @@ tbody tr:hover { background: var(--color-row-hover); }
 }
 .imp-icon-csv { color: var(--color-text-secondary); }
 .imp-icon-muted { color: var(--color-text-muted); }
+/* Keep names readable inside scrolling tables; never widen the page itself. */
+.client-table :is(th, td):first-child { min-width: var(--width-client-name); }
+.client-search::placeholder { color: var(--color-text-secondary); }
+/* Stack when the available content width or enlarged text needs more room. */
+.client-detail { container: client-detail / inline-size; }
+.client-detail-grid { grid-template-columns: minmax(0, 1fr); }
+#client-editor-dialog > .modal { width: var(--width-client-editor); }
+@container client-detail (min-width: 56rem) {
+  .client-detail-grid { grid-template-columns: minmax(0, 1fr) var(--width-form-select); }
+}
+
 /* The Tailwind-style utility layer + responsive variants live in the GENERATED
    horae-utils.css — regenerated automatically by crates/horae/build.rs on build.
    It is loaded alongside this file (see src/app.rs). */

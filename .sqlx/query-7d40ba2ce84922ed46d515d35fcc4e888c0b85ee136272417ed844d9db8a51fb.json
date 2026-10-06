@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE clients SET currency = 'USD', default_rate_cents = 0 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7d40ba2ce84922ed46d515d35fcc4e888c0b85ee136272417ed844d9db8a51fb"
+}

@@ -59,6 +59,103 @@ async fn fixture(pool: &PgPool) -> (SeedIds, User) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
+async fn client_project_filter_preserves_progress_access_and_rate_redaction(pool: PgPool) {
+    let (ids, viewer) = fixture(&pool).await;
+    let foreign = seed(&pool, OrgRole::Admin).await;
+    let other_client = Uuid::now_v7();
+    let other_project = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO clients (id,org_id,name,currency) VALUES ($1,$2,'Other','USD')",
+        other_client,
+        ids.org_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO projects (id,org_id,client_id,name,currency) VALUES ($1,$2,$3,'Other','USD')",
+        other_project,
+        ids.org_id,
+        other_client
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO assignments (id,project_id,user_id) VALUES ($1,$2,$3)",
+        Uuid::now_v7(),
+        other_project,
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let filter = Some(ids.client_id);
+    assert!(
+        projects_for_viewer(&pool, &viewer, filter, true, ProjectRead::Overview)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    sqlx::query!(
+        "UPDATE project_settings SET report_visibility = 'project_members' WHERE project_id = $1",
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let visible = projects_for_viewer(&pool, &viewer, filter, true, ProjectRead::Overview)
+        .await
+        .unwrap();
+    assert_eq!(visible.len(), 1);
+    assert_eq!(visible[0].id, ids.project_id);
+    let payload = serde_json::to_value(&visible[0]).unwrap();
+    assert!(payload.get("rate_cents").is_none());
+    assert!(
+        projects_for_viewer(
+            &pool,
+            &viewer,
+            Some(foreign.client_id),
+            true,
+            ProjectRead::Overview
+        )
+        .await
+        .unwrap()
+        .is_empty()
+    );
+    sqlx::query!(
+        "UPDATE projects SET active = false WHERE id = $1",
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(
+        projects_for_viewer(&pool, &viewer, filter, false, ProjectRead::Overview)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        projects_for_viewer(&pool, &viewer, filter, true, ProjectRead::Overview)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+    sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(
+        projects_for_viewer(&pool, &viewer, filter, true, ProjectRead::Overview)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn private_progress_does_not_prevent_tracking_or_reveal_financial_fields(pool: PgPool) {
     let (ids, viewer) = fixture(&pool).await;
     assert!(

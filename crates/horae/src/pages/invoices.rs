@@ -21,7 +21,7 @@ mod editing;
 mod recovery;
 
 /// The badge class for an invoice status — one convention for list and detail.
-fn invoice_badge_class(status: InvoiceStatus) -> &'static str {
+pub(super) fn invoice_badge_class(status: InvoiceStatus) -> &'static str {
     match status {
         InvoiceStatus::Paid => "badge badge-success",
         InvoiceStatus::Sent => "badge badge-info",
@@ -31,15 +31,20 @@ fn invoice_badge_class(status: InvoiceStatus) -> &'static str {
 }
 
 #[component]
-pub fn InvoiceList() -> Element {
-    rsx! { recovery::RecoveryGate { InvoiceListContent {} } }
+pub fn NewInvoiceForClient(client: String) -> Element {
+    rsx! { for client in [client] { InvoiceList { key: "{client}", client_context: Some(client.clone()) } } }
 }
 
 #[component]
-fn InvoiceListContent() -> Element {
+pub fn InvoiceList(#[props(default)] client_context: Option<String>) -> Element {
+    rsx! { recovery::RecoveryGate { InvoiceListContent { client_context } } }
+}
+
+#[component]
+fn InvoiceListContent(client_context: Option<String>) -> Element {
     let storage = use_context::<recovery::RecoveryStorage>();
     let invoices = use_resource(|| async move { server_fns::list_invoices(None).await });
-    let clients = use_resource(|| async move { server_fns::list_clients(false).await });
+    let mut clients = use_resource(|| async move { server_fns::list_clients(false).await });
 
     let client_names: HashMap<Uuid, String> = clients
         .read()
@@ -62,7 +67,7 @@ fn InvoiceListContent() -> Element {
             )
             .collect();
 
-    let mut show_form = use_signal(|| false);
+    let mut show_form = use_signal(|| client_context.is_some());
     let busy = use_signal(|| false);
     let navigator = use_navigator();
 
@@ -84,15 +89,31 @@ fn InvoiceListContent() -> Element {
                 }
             }
 
-            if show_form() {
-                {loaded(&*clients.read(), |_| rsx! {
-                    preparation::PrepareInvoice { client_opts: client_opts.clone(), busy,
-                        oncreated: move |id| {
-                            show_form.set(false);
-                            navigator.push(Route::InvoiceDetail { id });
+            if storage.ready() && show_form() {
+                if clients.state()() != UseResourceState::Ready {
+                    p { role: "status", "Loading clients…" }
+                } else if matches!(&*clients.read(), Some(Err(_))) {
+                    div { class: "alert alert-danger", role: "alert",
+                        "Could not load clients for invoicing. "
+                        button { class: "btn btn-secondary btn-sm", onclick: move |_| clients.restart(), "Retry clients" }
+                    }
+                } else {
+                {loaded(&*clients.read(), |_| match preparation::initial_client(&client_opts, client_context.as_deref()) {
+                    Ok(initial_client) => rsx! {
+                        preparation::PrepareInvoice { client_opts: client_opts.clone(), initial_client, busy,
+                            oncreated: move |id| {
+                                show_form.set(false);
+                                navigator.push(Route::InvoiceDetail { id });
+                            }
                         }
+                    },
+                    Err(message) => rsx! {
+                        div { class: "alert alert-danger", role: "alert", "{message}" }
+                        button { class: "btn btn-secondary", onclick: move |_| clients.restart(), "Retry" }
+                        Link { to: Route::InvoiceList {}, class: "btn btn-ghost", "Back to Invoices" }
                     }
                 })}
+                }
             }
 
             div { class: "card",
