@@ -114,6 +114,7 @@ Clients MVP as canonical-permission acceptance.
 | Internal person-profile commands, [#234](https://github.com/numtide/horae/pull/234) | `refactor/person-profile-commands`, `.worktrees/person-profile-commands` | Integration base `46f02f7` combining #226/#221 | Draft at `45d219e`; 1,245 tests, schema upgrade, SQLx, offline server/WASM Clippy, format and full local Nix passed; retarget to master after prerequisites, no activation |
 | Harvest connection change authority, [#235](https://github.com/numtide/horae/pull/235) | `fix/harvest-connection-authority`, `.worktrees/harvest-connection-authority` | #228 `0e1e675` | Draft at `2fcecd1`; 1,146 tests, SQLx, offline server/WASM Clippy and format passed; full Nix running; retarget after #227/#228 |
 | Import job command and download authority, [#236](https://github.com/numtide/horae/pull/236) | `fix/import-job-authority`, `.worktrees/import-job-authority` | Integration base `26d6159` combining #235/#231 | Draft at `95bdf4a`; 1,163 tests, SQLx, offline server/WASM Clippy and format passed; full Nix running; retarget to master after #227/#228/#235 and #231, not an integration-base merge |
+| Original import requester provenance, [#237](https://github.com/numtide/horae/pull/237) | `feat/import-job-requester`, `.worktrees/import-job-requester` | Integration base `cfb8240` combining #236/#219/#222 | Draft at `2242361`; 1,218 tests, schema upgrade, SQLx and format passed; offline lints and full Nix pending; retarget after both prerequisite chains, no worker-policy activation |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -327,16 +328,16 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `4fac6af` | Revalidate import job command and status authority | import-authority | Exact executor-based `jobs::cancel` owned by #231; remaining command/status Rust changes with the subsequent shared guard in #236; specification hunks retained for reconciliation |
 | `b4672a4` | Revalidate authority during import error downloads | import-authority | All eight combined command/download Rust/test files byte-identical in #236, plus eight regenerated SQLx additions matching original; suite/cache/offline lints/format passed, full Nix running; specification hunks retained |
 | `e5fcc5a` | Prepare durable CSV batches before opening transactions | import-transaction-lifecycle | Two exact Rust blobs and regenerated cache in #231; local verification passed, CI pending; specification hunks retained |
-| `482b7c5` | Retain the original requester of import jobs | import-requester-provenance | Held in original backup; extraction pending |
+| `482b7c5` | Retain the original requester of import jobs | import-requester-provenance | Seven original source/schema/test paths and exact regenerated cache patch in #237 on combined #236/#222 prerequisites; 1,218 tests, schema order, cache and format passed; lints/full Nix pending; specification hunks retained |
 | `e949e4c` | Drain interrupted import transactions before releasing reservations | import-transaction-lifecycle | Production/test/cache hunks in #224; specification hunks retained for reconciliation |
 | `c0cfb8f` | Scope rate permissions to their owning resource | scope-domain | Code/tests in #221; specification hunks retained for reconciliation |
 | `5d51b0e` | Expose the current person's permission snapshot | own-permissions | Held in original backup; extraction pending |
-| `22ffdab` | Recheck manager access for financial snapshots | manager-snapshot-consumers | Shared helper/queries in #220; consumer/tests/cache in #232, local suite and both target lints passed, Nix pending; specification hunks retained |
-| `15c82ef` | Recheck manager access in invoice editor snapshots | manager-snapshot-consumers | Consumer/tests/cache in #232; fixture adaptations documented, local suite and both target lints passed, Nix pending; specification hunks retained |
+| `22ffdab` | Recheck manager access for financial snapshots | manager-snapshot-consumers | Shared helper/queries in #220; consumer/tests/cache in #232, local suite, both target lints and full Nix passed; specification hunks retained |
+| `15c82ef` | Recheck manager access in invoice editor snapshots | manager-snapshot-consumers | Consumer/tests/cache in #232; fixture adaptations documented, local suite, both target lints and full Nix passed; specification hunks retained |
 | `dc822a0` | Recheck manager authority before delivering exports | export-authority | Held in original backup; extraction pending |
 | `108594e` | Revalidate project scope before delivering exports | export-authority | Held in original backup; extraction pending |
 | `dcf4ac8` | Recheck current permissions during CSV downloads | export-authority | Held in original backup; extraction pending |
-| `0793ce7` | Revalidate budget email authority before delivery | budget-email-authority | Held in original backup; extraction pending |
+| `0793ce7` | Revalidate budget email authority before delivery | budget-email-authority | Four source/test files byte-identical in isolated `bf22776` on master; format passed; runtime/cache/lints/PR pending; specification hunks retained |
 | `8aac739` | Add read-only permission migration diagnostics | permission-preflight | Held in original backup; extraction pending |
 | `8c15bfe` | Show own permissions in Settings | own-permissions | Held in original backup; extraction pending |
 | `300d1e9` | Expose administrator permission history | permission-audit | Held in original backup; extraction pending |
@@ -1453,3 +1454,69 @@ the populated historical-state fixture remains covered by the running Rust suite
 Next: collect the suite result, regenerate requester SQLx, run offline lints and
 full Nix, then publish its bounded draft with both prerequisite chains. Continue
 the existing `72580` / `65754` Nix handles; no restart or merge is authorized.
+
+### 2026-10-06 — Requester verification and next independent boundary
+
+The preceding iteration made progress: #236 was published with passing local
+gates, #234's full Nix result was recorded, and the original requester increment
+was extracted with its migration-order check passed. Re-read the attached goal,
+confirmed #216 merged, and verified repository/skill instructions unchanged.
+The three existing verification handles (`49490`, `72580`, `65754`) remain live;
+no process was restarted because of quiet compilation. Published review base
+`cfb8240` unchanged. Requester suite compilation finished in 4m28s and began the
+889-test app binary; completion is not yet claimed.
+
+Read-only next-boundary inventory: `0793ce7` changes four notification source/test
+paths plus cache/specification material, with 13 authority tests. Those four
+paths have no later original changes through `db3935d`; the two pre-existing
+notification files match master before that commit. The preparation contract
+preserves the existing recipient predicate, bounded send, attempts and stable
+message identity; OP37 canonical mapping and enqueue integration remain open.
+Inspect the complete implementation and test dependencies before extracting.
+This looks independent of the permission-schema chains, but no completed review
+or runtime acceptance is claimed. Use disposable databases and executable local
+sender stubs only; never send real budget mail during verification.
+
+Requester suite `49490` passed: 878 app, 180 integration and 160 core tests,
+1,218 total, with 11 existing manual tests ignored. This includes all five
+original requester cases, HTTP forged-identity assertions and the populated
+historical migration fixture on the combined prerequisite code. No source or
+test changes were needed. Complete SQLx regeneration runs in `92846`; offline
+server/WASM lints must finish before reusing the shared local Cargo target.
+
+Read the complete notification preparation/delivery implementation, 13 new
+authority tests, existing sender stub/lifecycle tests, outbox claim/acknowledgement
+helpers and migration 0039's parent revision triggers. Actual prerequisites are
+already on master: there is no permission-state storage, new grant, actor helper
+or external transport dependency to import. Tests use only local executable
+stubs and temporary databases. The transaction takes organization, recipient,
+project then outbox locks, rechecks stored claim/payload/attempt/clock and current
+eligibility in fresh statements, and commits before external delivery. Retargeted
+or replaced claims skip without corrupting replacement state; terminal rejection
+stays under the claim lock. No critical/high source finding in this bounded
+review; full runtime evidence remains necessary, and post-release recall or
+exactly-once transport is not claimed.
+
+Created independent branch/worktree `fix/budget-email-authority` /
+`.worktrees/budget-email-authority` on `02f7b58`. Unsigned `bf22776` contains four
+source/test files, 1,015 insertions and 49 deletions. All four file blobs match
+`0793ce7` (and final `db3935d`) exactly; stable patch ID
+`48c6efde7e99c4a446dfb2991f1a40563a7d6385` matches the original filtered patch.
+Formatting passed unchanged (`29642`). Do not run its local Cargo suite until
+the requester SQLx and offline gates release the shared target. No real mail,
+new schema, worker activation or original branch changes occurred.
+
+Requester SQLx preparation passed (`92846`): 1,065 prerequisite descriptors
+unchanged, thirteen additions byte-identical to `482b7c5`, and four superseded
+descriptors removed, 1,078 total. The entire regenerated cache patch has the
+same stable ID as the original (`1f6cf80b1a0b38424bf0f7aa109e6eedffc157af`).
+Saved unsigned cache commit `2242361` and published draft
+[#237](https://github.com/numtide/horae/pull/237) on review base `cfb8240`.
+Bounded diff: 22 files, 629 insertions and 75 deletions. The original source and
+five requester tests are unchanged. Offline server lint runs in `16577`; WASM
+follows. Full Nix runs on clean `2242361` in `63735`. No merge into the review
+base is authorized; deliver both prerequisite chains, then retarget and rerun CI.
+
+#235's existing Nix run (`72580`) completed its server release build and advanced
+to browser/NixOS checks. #236 (`65754`) completed its Nix test derivation and is
+still running remaining checks. Neither full result is yet claimed successful.
