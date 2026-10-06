@@ -343,9 +343,9 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `5d51b0e` | Expose the current person's permission snapshot | own-permissions | Reader, DTO, complete DB/HTTP tests and registrations in #244 (`6c4e4d1`) on #234; suite, cache, offline lints, isolated browser and full local Nix passed; specification hunks retained |
 | `22ffdab` | Recheck manager access for financial snapshots | manager-snapshot-consumers | Shared helper/queries in #220; consumer/tests/cache in #232, local suite, both target lints and full Nix passed; specification hunks retained |
 | `15c82ef` | Recheck manager access in invoice editor snapshots | manager-snapshot-consumers | Consumer/tests/cache in #232; fixture adaptations documented, local suite, both target lints and full Nix passed; specification hunks retained |
-| `dc822a0` | Recheck manager authority before delivering exports | export-authority | Held in original backup; extraction pending |
-| `108594e` | Revalidate project scope before delivering exports | export-authority | Held in original backup; extraction pending |
-| `dcf4ac8` | Recheck current permissions during CSV downloads | export-authority | Held in original backup; extraction pending |
+| `dc822a0` | Recheck manager authority before delivering exports | export-authority | Planned with `108594e` as legacy XLSX materialization/release authorization; snapshot visibility changes belong here; original preserved, extraction pending |
+| `108594e` | Revalidate project scope before delivering exports | export-authority | Planned with `dc822a0` as legacy XLSX delivery; preserve historical authorization and project HTTP tests, later canonical changes remain separately owned; extraction pending |
+| `dcf4ac8` | Recheck current permissions during CSV downloads | export-authority | Planned as dependent legacy CSV cursor/batch-release delivery with migration 0046; do not pull later canonical stream tests into this legacy boundary; original preserved, extraction pending |
 | `0793ce7` | Revalidate budget email authority before delivery | budget-email-authority | Four source/test files byte-identical in #238 (`7a7cede`) on master `1b8fa4f`; 1,133 tests, SQLx, format and offline server/WASM lints passed; full local Nix passed; specification hunks retained |
 | `8aac739` | Add read-only permission migration diagnostics | permission-preflight | Reader and all seven original tests extracted byte-for-byte in `feat/permission-preflight` (`b159184`) on combined #237/#226 review base; full suite/cache pending; specification hunks retained |
 | `8c15bfe` | Show own permissions in Settings | own-permissions | Complete original component, shared descriptions, SSR and resource tests in #244 (`6c4e4d1`); suite/cache, isolated browser and full local Nix passed; no full T018 claim; specification hunks retained |
@@ -2447,3 +2447,40 @@ native/WASM and full final-head Nix, and publish the scoped draft. Also collect
 consumer/editor and specification ownership after these deliveries. No GitHub
 merges, original closures, real-data writes or policy activation occurred.
 This iteration is PROGRESS; the overall goal remains incomplete.
+
+### Legacy export delivery boundaries inventoried
+
+Re-read the active objective and confirmed the previous iteration was PROGRESS.
+Existing verification handles `28480`, `9966`, `79480` and `61137` remained live;
+the disposable Rust compiler was consuming CPU, not merely leaving a stale lock.
+No build was restarted. Prepared the preflight draft description locally;
+publication awaits its complete cache proof so no known-broken offline head is
+submitted as a ready delivery. The corrected preflight base has 1,119 SQLx
+descriptors; original `8aac739` added 17, and neither preserved preflight source
+file has any later original commit changing it.
+
+Inventoried the remaining legacy export commits before the canonical consumers:
+
+- `dc822a0` and `108594e` form one XLSX boundary: bounded materialization,
+  rendering/release authorization, financial/project HTTP guards and retained
+  project-resource scope. The two snapshot visibility changes (`snapshot` module
+  and `manager` helper becoming `pub(crate)`) belong here, not to a new policy.
+  Reuse the already-recorded prerequisite composition `0046dad` as a candidate
+  review base rather than creating redundant shared foundations. Its history
+  contains #228 directly and equivalents `41e595d`/`0046dad` for #220/#232;
+  those are not the original PR commit IDs, so ancestry alone is not proof of
+  equivalence. Check the selected source diff before extraction.
+- `dcf4ac8` is a dependent CSV boundary: connection-local cursor, bounded batches,
+  release checks and migration 0046's `SECURITY INVOKER` fetch function. Its
+  public execution privilege is revoked; separate deployment migration owners
+  must explicitly grant the runtime role. Preserve that existing deployment
+  contract, and do not introduce real-database migration or grants in this goal.
+- The authorization-test files were later changed by canonical commits
+  `cbc78a8`, `09bd15f` and `2631186`. Do not copy their final versions wholesale
+  into a legacy-only extraction. Preserve both the historical legacy assertions
+  and the separately owned canonical additions; account for both in final mapping.
+
+This is dependency/ownership inventory, not a completed source review or a claim
+that the export extractions are implemented. Next collect the ongoing preflight
+verification/cache, then prepare the first legacy export extraction while the
+final Nix gates finish. Original work, data and PR merge state remain unchanged.
