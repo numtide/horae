@@ -110,9 +110,10 @@ Clients MVP as canonical-permission acceptance.
 | Assignment authority and project writer coordination, [#228](https://github.com/numtide/horae/pull/228) | `fix/project-access-lock-order`, `.worktrees/project-access-lock-order` | #227 `142eda1` | Draft at `0e1e675`; 1,137 tests, SQLx, offline server/WASM Clippy, format and full local Flake Check passed; master-targeted CI required after retargeting |
 | Durable CSV preparation outside SQL transactions, [#231](https://github.com/numtide/horae/pull/231) | `fix/csv-batch-transaction-boundary`, `.worktrees/csv-batch-transaction-boundary` | `02f7b58` | Draft at `e9898ed`; 1,122 tests, SQLx, offline server/WASM Clippy, format and current-head GitHub Flake Check passed; Nixbot build pending |
 | Financial snapshot reader authority, [#232](https://github.com/numtide/horae/pull/232) | `fix/financial-snapshot-authority`, `.worktrees/financial-snapshot-authority` | #220 `bc0c7a0` | Draft at `0bb5721`; 1,141 tests, SQLx, offline server/WASM Clippy, format and full local Flake Check passed; required CI after retargeting |
-| Invoice writer/revocation ordering, [#233](https://github.com/numtide/horae/pull/233) | `fix/invoice-write-authority`, `.worktrees/invoice-write-authority` | Integration base `0046dad` combining #227/#228 and #220/#232 | Draft at `8a6cb2a`; 1,162 tests, SQLx, offline server/WASM Clippy and format passed; full local Nix running; retarget to master after prerequisites, do not merge into integration base |
+| Invoice writer/revocation ordering, [#233](https://github.com/numtide/horae/pull/233) | `fix/invoice-write-authority`, `.worktrees/invoice-write-authority` | Integration base `0046dad` combining #227/#228 and #220/#232 | Draft at `8a6cb2a`; 1,162 tests, SQLx, offline server/WASM Clippy, format and full local Nix passed; retarget to master after prerequisites, do not merge into integration base |
 | Internal person-profile commands, [#234](https://github.com/numtide/horae/pull/234) | `refactor/person-profile-commands`, `.worktrees/person-profile-commands` | Integration base `46f02f7` combining #226/#221 | Draft at `45d219e`; 1,245 tests, schema upgrade, SQLx, offline server/WASM Clippy and format passed; full Nix running; retarget to master after prerequisites, no activation |
 | Harvest connection change authority, [#235](https://github.com/numtide/horae/pull/235) | `fix/harvest-connection-authority`, `.worktrees/harvest-connection-authority` | #228 `0e1e675` | Draft at `2fcecd1`; 1,146 tests, SQLx, offline server/WASM Clippy and format passed; full Nix running; retarget after #227/#228 |
+| Import job command and download authority, [#236](https://github.com/numtide/horae/pull/236) | `fix/import-job-authority`, `.worktrees/import-job-authority` | Integration base `26d6159` combining #235/#231 | Draft at `95bdf4a`; 1,163 tests, SQLx and format passed; offline lints and full Nix pending; retarget to master after #227/#228/#235 and #231, not an integration-base merge |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -323,8 +324,8 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `3ae8e08` | Coordinate project access changes before locking resources | legacy-access-writers | Rust/test/cache changes in #228; organization SHARE query also reused in #220; specification hunks retained |
 | `907bc88` | Recheck authority when saving organization branding | branding-authority | Source/test/cache hunks in #225; specification hunks retained for reconciliation |
 | `d7a5a21` | Revalidate administrator authority for Harvest connection changes | import-authority | Eight Rust/test files and regenerated cache in #235 on #228; suite/SQLx/offline lints/format passed, full Nix running; specification hunks retained for reconciliation |
-| `4fac6af` | Revalidate import job command and status authority | import-authority | Exact executor-based `jobs::cancel` in #231 with CSV preparation; other command/status and specification hunks retained |
-| `b4672a4` | Revalidate authority during import error downloads | import-authority | Held in original backup; extraction pending |
+| `4fac6af` | Revalidate import job command and status authority | import-authority | Exact executor-based `jobs::cancel` owned by #231; remaining command/status Rust changes with the subsequent shared guard in #236; specification hunks retained for reconciliation |
+| `b4672a4` | Revalidate authority during import error downloads | import-authority | All eight combined command/download Rust/test files byte-identical in #236, plus eight regenerated SQLx additions matching original; suite/cache passed, lints/full Nix pending; specification hunks retained |
 | `e5fcc5a` | Prepare durable CSV batches before opening transactions | import-transaction-lifecycle | Two exact Rust blobs and regenerated cache in #231; local verification passed, CI pending; specification hunks retained |
 | `482b7c5` | Retain the original requester of import jobs | import-requester-provenance | Held in original backup; extraction pending |
 | `e949e4c` | Drain interrupted import transactions before releasing reservations | import-transaction-lifecycle | Production/test/cache hunks in #224; specification hunks retained for reconciliation |
@@ -383,7 +384,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `5f7895c` | Preserve selected dates and drag offsets in Timesheet | timesheet-consumer-commands | Held in original backup; extraction pending |
 | `84d5352` | Expose authenticated project manager delegation | project-manager-delegation | Held in original backup; extraction pending |
 | `c4e83c8` | Record project delegation verification and next integration gate | specification-history | Held in original backup; extraction pending |
-| `a25e544` | Serialize invoice writes before user revocation | legacy-access-writers | Five Rust/test changes and eight SQLx additions in #233 on integrated #220/#227/#228/#232 prerequisites; suite/cache/offline lints passed, Nix running; specification hunks retained |
+| `a25e544` | Serialize invoice writes before user revocation | legacy-access-writers | Five Rust/test changes and eight SQLx additions in #233 on integrated #220/#227/#228/#232 prerequisites; suite/cache/offline lints/full Nix passed; specification hunks retained |
 | `774f60a` | Record invoice revocation verification and next integration gates | specification-history | Held in original backup; extraction pending |
 | `1879b8a` | Preserve requester identity when reloading permission editors | permission-editor | Held in original backup; extraction pending |
 | `dab6885` | Record editor reload verification and remaining directory integration | specification-history | Held in original backup; extraction pending |
@@ -1377,3 +1378,51 @@ No critical/high source finding in this bounded extraction; runtime evidence is
 still required. Formatting passed unchanged (`2345`); full combined workspace
 tests run on private PostgreSQL in `48997`. Next collect the suite, regenerate
 SQLx, run offline server/WASM gates and publish with the real dependency order.
+
+Saved the eight-file extraction as unsigned `c384d48` (1,519 insertions,
+111 deletions); all eight hashes match `b4672a4`. The inherited CSV preparation,
+connection authority and account-switch files remain unchanged from the review
+base. No new lower-level queue bypass or worker grant was introduced.
+
+Read-only inspection of the next original increment confirms `482b7c5` has five
+requester tests, a four-line migration 0045 and focused command/HTTP/historical
+report adaptations. It needs migration 0042's `users_org_id_id_key`, supplied
+by #222, in addition to these command helpers. Both the requester test module
+and migration remain unchanged at final `db3935d`. Preserve their historical
+NULL and duplicate-first-author rules, private DTOs and NO ACTION tenant FK;
+this is attribution only, not authority to execute jobs for a revoked requester.
+An eventual extraction must test the actual prerequisite-schema upgrade order,
+including already-delivered migration 0047, without renumbering original migrations.
+
+### 2026-10-06 — Command/download verification and publication
+
+The preceding user-facing turn only supplied the requested goal text (no
+implementation progress); the existing extraction remained preserved. Re-read
+the attached objective and repository instructions, confirmed #216 merged at
+`02f7b58`, and resumed existing verification handles rather than restarting them.
+The command/download suite (`48997`) finished successfully: 862 app, 180
+integration and 121 core tests, 1,163 total, with 11 existing manual tests ignored.
+All eight source/test files remain at `c384d48`. Complete SQLx regeneration runs
+in `73391` against private PostgreSQL; offline server/WASM lints follow.
+
+The previously observed terminal result for #233's full Nix run (`1215`) was
+successful on `8a6cb2a`, including browser and NixOS checks; incompatible systems
+were omitted. Recorded this in the delivery table and PR description. Its original
+handle is now closed, not a reason to restart the completed check. #234 (`41624`)
+and #235 (`72580`) were confirmed still live; neither is counted as complete.
+
+Full SQLx regeneration passed (`73391`): all 1,042 inherited descriptors unchanged
+plus eight additions byte-identical to `b4672a4`, 1,050 total. Unsigned cache commit
+`95bdf4a` leaves the eight source/test files unchanged. Published draft
+[#236](https://github.com/numtide/horae/pull/236) on review base `26d6159`:
+16 files, 1,632 insertions and 111 deletions. All added lines are original code,
+tests or regenerated cache, not new functionality. Offline server lint runs in
+`96055`; WASM follows. Full Nix runs on clean `95bdf4a` in `65754`.
+
+Rechecked preservation: original tracked work matches saved snapshot
+`backup/pr212-split-20261006-uncommitted` and the untracked archive comparison
+passed unchanged. The next attribution increment requires #222 (and its #219
+base) plus #236; original migration 0045 relies on 0042's composite user key.
+Keep its five original requester tests, HTTP forgery checks and legacy report
+adaptations together. Test the actual upgrade from the combined base already
+containing 0047; no original migration renumbering, backfill or worker-policy grant.
