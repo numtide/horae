@@ -101,11 +101,11 @@ Clients MVP as canonical-permission acceptance.
 | Legacy report/invoice readers from #217, [#220](https://github.com/numtide/horae/pull/220) | `fix/report-reader-authority-master`, `.worktrees/report-reader-authority-master` | `02f7b58` | Draft at `bc0c7a0`; 1,127 tests passed, 11 existing ignored; SQLx, offline server/WASM lint, formatting and GitHub Flake Check passed; Nixbot build pending |
 | Pure record scopes and grant catalog, [#219](https://github.com/numtide/horae/pull/219) | `refactor/permission-domain-foundation`, `.worktrees/permission-domain-foundation` | `02f7b58` | Draft at `ec7ddbd`; 158 core tests, core Clippy, formatting and GitHub Flake Check passed; Nixbot build pending; no runtime integration |
 | Pure rate/management/approval rules, [#221](https://github.com/numtide/horae/pull/221) | `refactor/permission-domain-gates`, `.worktrees/permission-domain-gates` | #219 `ec7ddbd` | Draft at `539316c`; 187 core tests, core Clippy, formatting and full local Flake Check passed; CI required after retargeting |
-| Non-activating permission storage, [#222](https://github.com/numtide/horae/pull/222) | `refactor/permission-storage-foundation`, `.worktrees/permission-storage-foundation` | #219 `ec7ddbd` | Draft at `e9695fd`; 1,170 tests passed, 11 existing ignored; SQLx, offline server/WASM lint and formatting passed; full local Flake Check running |
+| Non-activating permission storage, [#222](https://github.com/numtide/horae/pull/222) | `refactor/permission-storage-foundation`, `.worktrees/permission-storage-foundation` | #219 `ec7ddbd` | Draft at `e9695fd`; 1,170 tests passed, 11 existing ignored; SQLx, offline server/WASM lint, formatting and full local Flake Check passed; remote checks pending |
 | Legacy import report conversion lock order, [#223](https://github.com/numtide/horae/pull/223) | `fix/import-report-lock-order`, `.worktrees/import-report-lock-order` | `02f7b58` | Draft at `c8f95ac`; 1,125 tests passed, 11 existing ignored; SQLx, offline server/WASM lint and format passed; CI pending |
 | Interrupted import session cleanup, [#224](https://github.com/numtide/horae/pull/224) | `fix/import-session-cleanup`, `.worktrees/import-session-cleanup` | `02f7b58` | Draft at `be57f0e`; 1,123 tests passed, 11 existing ignored; SQLx, offline server/WASM lint and format passed; CI pending |
 | Current authority for organization branding writes, [#225](https://github.com/numtide/horae/pull/225) | `fix/branding-current-authority`, `.worktrees/branding-current-authority` | `02f7b58` | Draft at `f2d6bd4`; full suite, SQLx, offline server/WASM lint and format passed; CI pending |
-| Internal reusable-profile commands | `refactor/permission-template-commands`, `.worktrees/permission-template-commands` | #222 `e9695fd` | Source, all 19 tests and receipt migration extracted; format passed; full runtime suite running; SQLx/lint pending; no endpoints or activation |
+| Internal reusable-profile commands, [#226](https://github.com/numtide/horae/pull/226) | `refactor/permission-template-commands`, `.worktrees/permission-template-commands` | #222 `e9695fd` | Draft at `82d15f3`; 1,189 tests, SQLx, offline server/WASM Clippy and format passed; full local Flake Check running; no endpoints or activation |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -308,8 +308,8 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `804b1d8` | Separate permission increment readiness from activation gates | specification-history | Held in original backup; extraction pending |
 | `6e61593` | Validate person-management grant compatibility and self-links | scope-domain | Code/tests in #221; specification hunks retained for reconciliation |
 | `ec35446` | Store versioned permission profiles without activating new policy | permission-storage | Storage/schema/name-validator code/tests in #222; specification hunks retained for reconciliation |
-| `d50c979` | Add audited permission template commands | permission-profile-transactions | Command/test/receipt hunks extracted locally with later hardening; verification and specification reconciliation pending |
-| `f5e0dde` | Apply permission profiles with atomic scope changes | permission-profile-transactions | Model serialization in #222; strict template receipt comparison extracted locally; profile commands and remaining hunks retained |
+| `d50c979` | Add audited permission template commands | permission-profile-transactions | Command/test/receipt/cache hunks in #226 with later hardening; specification hunks retained for reconciliation |
+| `f5e0dde` | Apply permission profiles with atomic scope changes | permission-profile-transactions | Model serialization in #222; strict template receipt comparison in #226; profile commands and remaining hunks retained |
 | `9a7e05d` | Add audited project manager delegation | project-manager-delegation | Held in original backup; extraction pending |
 | `fc85231` | Add administrator-only permission audit lookup | permission-audit | Held in original backup; extraction pending |
 | `c3d17cb` | Prevent deadlocks during legacy import report conversion | import-transaction-lifecycle | Conversion source/tests/SQLx in #223; specification hunks retained for reconciliation |
@@ -332,7 +332,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `8aac739` | Add read-only permission migration diagnostics | permission-preflight | Held in original backup; extraction pending |
 | `8c15bfe` | Show own permissions in Settings | own-permissions | Held in original backup; extraction pending |
 | `300d1e9` | Expose administrator permission history | permission-audit | Held in original backup; extraction pending |
-| `03e90b1` | Connect permission editor previews and commands | permission-editor | Template DTOs, command hardening/tests and administration helpers extracted locally; editor/profile/remaining hunks retained |
+| `03e90b1` | Connect permission editor previews and commands | permission-editor | Template DTOs, command hardening/tests and administration helpers in #226; editor/profile/remaining hunks retained |
 | `7f7fd1c` | Record permission editor delivery and UI follow-up | specification-history | Held in original backup; extraction pending |
 | `98b1692` | Add reviewed person permission editing | permission-editor | Held in original backup; extraction pending |
 | `9e6d8bd` | Record person editor delivery and template follow-up | specification-history | Held in original backup; extraction pending |
@@ -750,3 +750,54 @@ before publishing the dependent PR. Continue collecting the live storage check
 (`50374`, now running app tests after browser checks). Reconcile remaining shared
 writers, consumers and all specification hunks before claiming this separation
 complete.
+
+### 2026-10-06 — Template command verification and storage integration gates
+
+Previous iteration made progress: #224/#225 were published and the next internal
+command extraction was isolated. Resumed its live suite (`60494`), which passed
+849 app, 180 integration and 160 core tests (1,189 total), with 11 existing manual
+scale/stress tests ignored. The 19 original command tests are included unchanged.
+SQLx preparation (`86502`) passed with all 1,022 base descriptors unchanged and
+41 additions matching `db3935d` (1,063 total).
+
+The first offline Clippy run (`33332`) failed to resolve `horae_core::permissions`.
+The source and committed core root both export it and were unchanged; this shared
+target had previously compiled the master-only branding branch without that
+module. Forcing recompilation by touching only `crates/core/src/lib.rs` made the
+same all-target workspace/server command pass (`58343`), with no source, cache or
+lint changes. Treat this as stale shared-target build evidence, not a product
+fix or a reason to weaken checks. WASM lint is the next gate; the independent
+Nix build will also verify the committed source in a clean build environment.
+
+#222's live full Flake Check (`50374`) completed with `all checks passed!` on
+`e9695fd`, including its #219 foundation, browser checks and NixOS end-to-end
+checks. The PR body records that compatible-system result. Its master-targeted
+Actions checks remain required after retargeting; Nixbot is still in progress.
+One remote query confirmed #223–#225 have Format passed and Flake Check running;
+no CI rerun or merge was requested.
+
+Dependency inspection for subsequent deliveries: profile-application commands
+consume the template commands and #221's `has_person_management_grant`; their
+tests also exercise real template commands. Preserve that dependency rather
+than replacing it with fixtures or duplicating the domain predicate. The next
+independent legacy-writer extraction is `b80f8ab` (user creation/role/activity
+reauthorization), followed by assignment/project writer coordination. Later
+`a25e544` only broadens `change_user_role` visibility for invoice race tests; it
+does not change this helper's organization query. Keep its invoice-specific
+tests and wiring with that later delivery.
+
+WASM Clippy passed (`21514`). Unsigned commit
+`82d15f33d2b7376c0a0973367ad012fbac5e752d` is published as draft #226 against
+#222, with 6 source/test/schema paths and 41 generated query descriptors. The
+production command, receipt migration and complete test file still match the
+original blobs. Full `nix flake check -L --max-jobs 1 --cores 2` is running in
+session `46319` on this clean committed head. Required Actions checks will also
+be needed after master retargeting; none were weakened.
+
+Next: isolate the three Rust files of `b80f8ab` on master, review all original
+user-authority and last-administrator regressions, then verify the extraction.
+Their pre-change source matches `02f7b58` exactly, so no unrelated directory or
+invoice code is needed. Collect the live #226 Nix check without restarting it.
+Profile application still needs both the template stack and #221; resolve that
+integration explicitly before extracting its consumers. The goal remains
+incomplete: many source groups and specification hunks still lack final PRs.
