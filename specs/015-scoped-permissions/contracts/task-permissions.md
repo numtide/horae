@@ -492,3 +492,41 @@ stale-requester transitions and mutation failures, real registered requests and
 disposable-browser keyboard/desktop/mobile checks. No loaded browser MCP is
 available in this session; the repository's pinned Chromium runner remains an
 available test path. T234 stays open until the actual consumer is verified.
+
+### Atomic initial rate
+
+The creation endpoint now requires the same explicit `TaskRateEdit` and loaded
+`PermissionRequester` as task editing. On a new record, preserve means no initial
+rate; explicit clear/set still require global rate-write authority, including
+zero. This replaces the internal server-function transport; the existing legacy
+form binds its loaded identity and explicitly preserves the no-rate default.
+No alternate unbound creation endpoint is retained.
+
+Reuse the edit validator inside the existing creation transaction, after fresh
+task/project authority and before insertion. A set validates the current workspace
+currency under the organization fence. Insert the amount and denomination with
+the task, then validate/link the optional project before commit. An unavailable
+or currency-incompatible destination rolls back the task as well as the link.
+Existing associations and recorded time remain untouched. Service event data is
+captured separately from session projection and dispatched only after commit.
+
+The stored permission catalog requires rate read as a prerequisite of global
+rate write. Test valid normalized grants, not a fictional write-only profile;
+response filtering remains explicit and ordinary task creation returns no
+financial fields. The current registered-session regression first failed because
+the old endpoint silently ignored the supplied initial rate (`2521`, exit 101).
+Verifier `3061` passed transaction/registered-session tests, SQLx preparation,
+offline all-target compilation and strict native/WASM lint. The shared dialog
+now implements creation using the loaded catalog identity and financial
+affordances, preserving validation input and closing on denied authority. It
+distinguishes blank from zero, excludes archive controls for new records, blocks
+repeat submissions while pending and reloads the first active page on success.
+It does not offer common-task or add-to-all-project commands.
+
+Actual-component tests (`4106`) and the extended disposable Chromium fixture
+(`29161`, including repeated strict lint) passed. The latter exercises desktop/
+mobile creation, keyboard focus, real server validation and revoked writes;
+creation-dialog captures were inspected without further visual changes. This
+completes the initial-rate creation path, not T234's project-editor lifecycle,
+full task-management parity or activation. Independent full-feature review and
+final Nix gates remain outstanding.

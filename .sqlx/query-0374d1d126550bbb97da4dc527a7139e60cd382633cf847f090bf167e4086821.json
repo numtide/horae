@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO tasks (id, org_id, name, billable_default)\n         VALUES ($1, $2, $3, $4)\n         RETURNING id, org_id, name, billable_default, default_rate_cents, active",
+  "query": "INSERT INTO tasks (id, org_id, name, billable_default, default_rate_cents, default_rate_currency)\n         VALUES ($1, $2, $3, $4, $5, $6)\n         RETURNING id, org_id, name, billable_default, default_rate_cents, active",
   "describe": {
     "columns": [
       {
@@ -39,7 +39,9 @@
         "Uuid",
         "Uuid",
         "Text",
-        "Bool"
+        "Bool",
+        "Int8",
+        "Text"
       ]
     },
     "nullable": [
@@ -51,5 +53,5 @@
       false
     ]
   },
-  "hash": "3d7824113571dcc940076a9273c0dedec8a8c1b66c20d6420299d9b028512ab7"
+  "hash": "0374d1d126550bbb97da4dc527a7139e60cd382633cf847f090bf167e4086821"
 }

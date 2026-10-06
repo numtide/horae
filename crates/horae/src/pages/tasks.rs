@@ -57,8 +57,19 @@ pub fn TaskCatalog() -> Element {
         section { aria_labelledby: "tasks-title", class: "min-w-0",
             div { class: "flex flex-wrap items-center justify-between gap-3 mb-4",
                 h1 { id: "tasks-title", class: "text-2xl font-semibold", "Tasks" }
-                button { id: "tasks-refresh", r#type: "button", class: "btn btn-secondary btn-sm", disabled: pending,
-                    onclick: move |_| { selected.set(None); notice.set(None); catalog.restart(); }, "Refresh tasks"
+                div { class: "flex flex-wrap gap-3",
+                    if let Some(Ok(page)) = current && page.can_edit {
+                        button { id: "tasks-new", r#type: "button", class: "btn btn-primary btn-sm",
+                            onclick: {
+                                let selection = editor::Selection { task: None, requester: page.requester,
+                                    rate_currency: page.rate_currency.clone().filter(|_| page.can_edit_rates) };
+                                move |_| { notice.set(None); selected.set(Some(selection.clone())); }
+                            }, "New task"
+                        }
+                    }
+                    button { id: "tasks-refresh", r#type: "button", class: "btn btn-secondary btn-sm", disabled: pending,
+                        onclick: move |_| { selected.set(None); notice.set(None); catalog.restart(); }, "Refresh tasks"
+                    }
                 }
             }
             div { class: "flex flex-wrap items-center gap-3 mb-4",
@@ -106,7 +117,7 @@ pub fn TaskCatalog() -> Element {
                                         button { id: "tasks-edit-{task.id}", r#type: "button", class: "btn btn-secondary btn-sm",
                                             aria_label: "Edit {task.name}",
                                             onclick: {
-                                                let selection = editor::Selection { task: task.clone(), requester: page.requester,
+                                                let selection = editor::Selection { task: Some(task.clone()), requester: page.requester,
                                                     rate_currency: page.rate_currency.clone().filter(|_| page.can_edit_rates) };
                                                 move |_| { notice.set(None); selected.set(Some(selection.clone())); }
                                             }, "Edit"
@@ -127,7 +138,12 @@ pub fn TaskCatalog() -> Element {
                 }
             }
             editor::TaskEditor { selected,
-                on_saved: move |message| { notice.set(Some(message)); selected.set(None); catalog.restart(); },
+                on_saved: move |message| {
+                    let created = selected.peek().as_ref().is_some_and(|selection| selection.task.is_none());
+                    notice.set(Some(message)); selected.set(None);
+                    if created { activity.set(TaskActivity::Active); cursors.set(vec![None]); }
+                    catalog.restart();
+                },
                 on_denied: move |_| { notice.set(Some("Your session or task permissions changed. The editor was closed; check your access before retrying.".into())); selected.set(None); catalog.restart(); }
             }
         }

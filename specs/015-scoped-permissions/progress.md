@@ -1,5 +1,103 @@
 # Scoped permissions investigation progress
 
+## 2026-10-06 — Catalog creation form
+
+- Previous goal turn made progress: atomic initial-rate creation and its real-
+  session/transaction tests were implemented. Revalidated the existing verifier;
+  `3061` exited 0 after 159 project tests, registered sessions, SQLx preparation,
+  offline all-target compilation and strict native/WASM lint. Cache changes are
+  five new descriptions and replacement of the old four-column task insertion;
+  no unrelated cache deletion. Formatting `87009` passed with zero changes.
+- Reuse the existing catalog editor and native modal for creation. There is no
+  Tasks-specific handoff; the established Workspace form components/tokens remain
+  the visual authority. Added actual-component tests for allowed/denied creation,
+  exact rates, validation preservation, duplicate-submit exclusion, successful
+  refresh and requester/permission invalidation. RED run `77661` is in progress.
+
+Next: observe RED, wire the shared editor's creation state, then run component
+and disposable-browser acceptance. Project-editor lifecycle, prior narrow-table
+limitation and the full permissions goal remain open; no merge or activation.
+
+- RED `77661` failed on the three absent creation controls while the seven
+  existing component/transport tests passed. Connected creation through the same
+  keyed native dialog, preserving bound identity and shared controls. Empty
+  initial rates remain absent; explicit zero is exact money. Creation success
+  resets to the first active page; permission loss discards the form. Unknown
+  save errors advise checking persisted state before retrying.
+- Initial verification `24574` found a Dioxus key syntax error; corrected the
+  formatted-string key without changing its identity semantics. Corrected run
+  `4106` is active. Extended the guarded disposable browser suite with real
+  creation, validation, exact rates, missing financial grants and revoked writes.
+  Its new assertions/captures have not run yet; no browser acceptance claimed.
+
+Next: poll `4106`, then run strict native/WASM checks and the extended browser
+suite. Keep Rust stable while the current compile runs.
+
+- `4106` exited 0 with all ten component/transport tests passing. Strict verifier
+  `34629` exited 101 on the new harness response's type complexity. Introduced a
+  named response alias rather than suppressing the lint. Corrected verifier
+  `29161` is running native/WASM lint followed by the extended disposable-browser
+  suite. No browser result yet, and the previous table-polish limit is unchanged.
+
+- `29161` exited 0: native/WASM strict lint, current server/WASM build and the
+  extended `task-catalog` browser suite passed. Inspected the two new creation
+  validation captures at 1440px dark and 390px light together. No visual fixes
+  were needed; shared CSS and the previously recorded mobile table limitation
+  are unchanged. This is one creation-form inspection, not another table-polish
+  loop or Windows Chrome/full-suite acceptance.
+
+- Added component assertions for blank financial-editor rates and creation from
+  the archived filter returning to the first active page. `20096` passed all ten
+  component/transport tests and strict test lint. Scoped self-review checked
+  optional versus zero amounts, requester lifetime, duplicate submit, denied
+  cleanup, success refresh, transaction rollback and post-commit events. No new
+  high/critical finding identified; independent full-feature review remains open.
+
+Next: format and publish this verified creation increment to the existing draft
+PR #212 without merging. Then wire explicit project task archive/restore into
+the existing project editor; T234, T230 and the full permissions goal stay open.
+
+## 2026-10-06 — Atomic task creation
+
+- The preceding estimate turn made no implementation progress. Revalidated
+  `5561f14` and the existing worktree; only the prior publication note was dirty.
+  Available disk space is 152 GiB, so no cleanup or unrelated process stop is
+  needed. The next safe action remains T234 initial-rate creation.
+- Rechecked Harvest's task-management guide: account-level creation accepts a
+  default rate. Added registered-session regressions for independent rate-write
+  authority, requester identity, stale currency, invalid amounts, project failure
+  rollback and response redaction. RED verification is running as `2521` against
+  a disposable socket-only PostgreSQL; no real data or policy was changed.
+
+Next: observe the RED result, extend the existing creation transaction and reuse
+the edit-rate validator; verify both creation and existing edits before wiring
+the catalog create form. The full permissions goal remains open.
+
+- RED `2521` exited 101 as expected: the old endpoint ignored the initial-rate
+  input and returned success without requiring its authority. Extended the
+  existing endpoint with required identity/rate intent; reused the edit validator
+  and kept creation, initial rate and optional project link in one transaction.
+  Adapted every helper caller and the legacy form, with no unbound fallback.
+- Added production tests for task versus global/managed financial grants, exact
+  zero/positive values, event payload, project-currency rollback, and current
+  authority/currency after actual lock waits. Corrected an unexecuted test premise:
+  the normalized catalog requires global rate read when granting global rate
+  write, so a valid writer is not a write-only actor. No permission rule changed.
+- Rust formatting passed (`82097`). Verifier `3061` is running: project tests,
+  registered sessions, SQLx preparation, offline all-target compilation and
+  strict native/WASM lint. Source is held stable during verification.
+
+Next: poll `3061`, fix any demonstrated failures, then connect and browser-test
+the catalog create form. Project-editor lifecycle and full permissions acceptance
+remain open. No merge, policy activation or real-data mutation.
+
+- `3061` passed all 159 project tests and the registered-session matrix, including
+  the new atomic creation cases. It is still running SQLx preparation, offline
+  compilation and lint; do not infer a terminal green result from the functional
+  tests alone. Scoped source review checked every creation caller, organization-
+  first authorization, current financial intent, rollback and post-commit events.
+  No independent review or new browser acceptance is claimed.
+
 ## 2026-10-06 — Task consumer verification
 
 - Previous goal turn made progress: implemented the bound reader and actual
@@ -55,6 +153,17 @@ evidence, then address creation and project-editor lifecycle integration.
 
 Next: format and publish this verified consumer increment on draft PR #212,
 then implement atomic catalog creation and project-editor lifecycle integration.
+
+- Formatting and formatting-CI (`7186`) passed. Published unsigned commit
+  `5561f14` (`Add permission-aware task catalog management`) on the existing
+  branch; push `30431` exited 0. Worktree was clean before this publication note.
+  No merge or policy activation. No process remains from local verification.
+
+Next: extend the existing task creation transaction with bound requester and
+independently authorized initial rate, add failing atomicity/preservation tests,
+then connect the create form. Keep T234, T230 and the full permissions goal open;
+project-editor task lifecycle and the recorded narrow-name wrapping still need
+completion before full consumer sign-off.
 
 ## 2026-10-06 — Bound task catalog delivery
 

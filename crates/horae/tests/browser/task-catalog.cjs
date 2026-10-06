@@ -15,6 +15,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
 const actor = JSON.parse(sql("SELECT row_to_json(u) FROM (SELECT id,org_id FROM users WHERE email='admin@example.com' AND active) u"));
 const task = '019f4300-0000-7000-8000-000000000001';
 const state = '019f4300-0000-7000-8000-000000000002';
+const createdTasks = [];
 const floor = ['time_read_own', 'time_write_own', 'expense_read_own', 'expense_write_own'];
 const grants = ['task_read_all', 'task_write_all', 'billable_rate_read_managed', 'billable_rate_read_all', 'billable_rate_write_managed', 'billable_rate_write_all'];
 const array = values => `ARRAY[${values.map(value => `'${value}'`).join(',')}]`;
@@ -49,6 +50,30 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
     for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height: 900 });
       await page.evaluate(theme => document.documentElement.setAttribute('data-theme', theme), width === 1440 ? 'dark' : 'light');
+      await page.getByRole('button', { name: 'New task', exact: true }).click();
+      const creation = page.getByRole('dialog', { name: 'New task', exact: true });
+      await expect(creation.getByLabel('Task name', { exact: true })).toBeFocused();
+      await expect(creation.locator('#task-activity')).toHaveCount(0);
+      await page.keyboard.press('Escape');
+      await expect(creation).not.toBeVisible();
+      await expect(page.getByRole('button', { name: 'New task', exact: true })).toBeFocused();
+      await page.getByRole('button', { name: 'New task', exact: true }).click();
+      await creation.getByRole('button', { name: 'Save task', exact: true }).click();
+      await expect(creation.getByRole('alert')).toHaveText('Enter a task name.');
+      await creation.getByLabel('Task name', { exact: true }).fill(`Browser new task ${width}`);
+      await creation.getByLabel('Hourly rate (EUR)', { exact: true }).fill('12.345');
+      await creation.getByRole('button', { name: 'Save task', exact: true }).click();
+      await expect(creation.getByRole('alert')).toContainText('at most two decimal places');
+      await expect(creation.getByLabel('Task name', { exact: true })).toHaveValue(`Browser new task ${width}`);
+      if (evidence) await page.screenshot({ path: join(evidence, `task-create-validation-${width}.png`), fullPage: true });
+      await creation.getByLabel('Hourly rate (EUR)', { exact: true }).fill(width === 1440 ? '0' : '125.50');
+      await creation.getByRole('button', { name: 'Save task', exact: true }).click();
+      await expect(creation).not.toBeVisible();
+      const created = JSON.parse(sql(`SELECT row_to_json(t) FROM (SELECT id,default_rate_cents,default_rate_currency FROM tasks WHERE org_id='${actor.org_id}' AND name='Browser new task ${width}') t`));
+      createdTasks.push(created.id);
+      assert.equal(created.default_rate_cents, width === 1440 ? 0 : 12550);
+      assert.equal(created.default_rate_currency, 'EUR');
+      await expect(page.getByRole('row').filter({ hasText: `Browser new task ${width}` })).toHaveCount(1);
       await row.getByRole('button', { name: 'Edit Catalog browser task', exact: true }).click();
       const dialog = page.getByRole('dialog', { name: 'Edit task', exact: true });
       await expect(dialog).toBeVisible();
@@ -76,6 +101,16 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
     authorize(['task_read_all', 'task_write_all']);
     await page.getByRole('button', { name: 'Refresh tasks', exact: true }).click();
     await expect(page.getByRole('columnheader', { name: 'Default hourly rate', exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: 'New task', exact: true }).click();
+    const creation = page.getByRole('dialog', { name: 'New task', exact: true });
+    await expect(creation.locator('#task-rate')).toHaveCount(0);
+    await creation.getByLabel('Task name', { exact: true }).fill('Browser task without rate');
+    await creation.getByRole('button', { name: 'Save task', exact: true }).click();
+    await expect(creation).not.toBeVisible();
+    const withoutRate = JSON.parse(sql(`SELECT row_to_json(t) FROM (SELECT id,default_rate_cents,default_rate_currency FROM tasks WHERE org_id='${actor.org_id}' AND name='Browser task without rate') t`));
+    createdTasks.push(withoutRate.id);
+    assert.equal(withoutRate.default_rate_cents, null);
+    assert.equal(withoutRate.default_rate_currency, null);
     await row.getByRole('button').click();
     await expect(dialog.locator('#task-rate-action')).toHaveCount(0);
     await dialog.getByLabel('Task name', { exact: true }).fill('Catalog browser renamed');
@@ -96,6 +131,16 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
     await dialog.getByRole('button', { name: 'Confirm restore', exact: true }).click();
     await expect(dialog).not.toBeVisible();
     await page.getByLabel('Show', { exact: true }).selectOption('active');
+    await page.getByRole('button', { name: 'New task', exact: true }).click();
+    await creation.getByLabel('Task name', { exact: true }).fill('Forbidden browser task');
+    authorize(['task_read_all']);
+    await creation.getByRole('button', { name: 'Save task', exact: true }).click();
+    await expect(creation).not.toBeVisible();
+    await expect(page.getByText('You have read-only access to tasks.', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'New task', exact: true })).toHaveCount(0);
+    assert.equal(sql(`SELECT count(*) FROM tasks WHERE org_id='${actor.org_id}' AND name='Forbidden browser task'`), '0');
+    authorize(['task_read_all', 'task_write_all']);
+    await page.getByRole('button', { name: 'Refresh tasks', exact: true }).click();
     await renamed.getByRole('button').click();
     authorize(['task_read_all']);
     await dialog.getByRole('button', { name: 'Save task', exact: true }).click();
@@ -103,9 +148,13 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
     await expect(page.getByText('You have read-only access to tasks.', { exact: true })).toBeVisible();
     await expect(renamed.getByRole('button')).toHaveCount(0);
     assert.deepEqual(errors, []);
-    console.log('PASS: task catalog desktop/mobile keyboard, exact rates, hidden-rate preservation, archive/restore and revoked editing');
+    console.log('PASS: task catalog desktop/mobile creation, keyboard, validation, exact rates, hidden-rate preservation, archive/restore and revoked writes');
   } finally {
     await browser.close();
+    for (const id of createdTasks) {
+      assert.match(id, /^[0-9a-f-]{36}$/);
+      sql(`DELETE FROM tasks WHERE org_id='${actor.org_id}' AND id='${id}'`);
+    }
     sql(`BEGIN; UPDATE organizations SET permission_policy_version=0 WHERE id='${actor.org_id}';
       DELETE FROM person_permission_states WHERE id='${state}'; DELETE FROM tasks WHERE id='${task}'; COMMIT;`);
   }

@@ -4,6 +4,7 @@ use super::{loaded, run_action};
 use crate::components::badge::Badge;
 use crate::components::form::{FormCard, FormGroup, Input, Select};
 use crate::components::table::DataTable;
+use crate::models::{permission_editor::PermissionRequester, task::TaskRateEdit};
 use crate::server_fns;
 
 mod people;
@@ -67,6 +68,7 @@ pub(crate) fn PermissionRecovery(on_saved: EventHandler<bool>) -> Element {
 
 #[component]
 fn LegacyAdminUsers() -> Element {
+    let requester = use_resource(server_fns::get_me);
     let mut users = use_resource(|| async move { server_fns::list_users(true).await });
     let tasks = use_resource(|| async move { server_fns::list_tasks().await });
 
@@ -81,6 +83,14 @@ fn LegacyAdminUsers() -> Element {
     let mut task_name = use_signal(String::new);
     let mut task_billable = use_signal(|| true);
     let task_error = use_signal(|| None::<String>);
+    let task_requester = requester
+        .read()
+        .as_ref()
+        .and_then(|result| result.as_ref().ok())
+        .map(|user| PermissionRequester {
+            org_id: user.org_id,
+            user_id: user.id,
+        });
 
     rsx! {
         div {
@@ -276,12 +286,14 @@ fn LegacyAdminUsers() -> Element {
                             onclick: move |_| {
                                 let n = task_name();
                                 let b = task_billable();
-                                run_action(server_fns::create_task(n, b, None), tasks, task_error, move || {
+                                let Some(requester) = task_requester else { return; };
+                                run_action(server_fns::create_task(n, b, None, TaskRateEdit::Preserve {}, requester), tasks, task_error, move || {
                                     task_name.set(String::new());
                                     task_billable.set(true);
                                     show_task_form.set(false);
                                 });
                             },
+                            disabled: task_requester.is_none(),
                             "Create Task"
                         }
                     }

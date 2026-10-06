@@ -30,10 +30,18 @@ mod page;
 use permission_editor::PermissionRequester;
 use task::*;
 type Response = Result<TaskCatalogPage, ServerFnError>;
+type TaskResponse = Result<Task, ServerFnError>;
 type Request = (
     TaskActivity,
     Option<TaskCursor>,
     Option<PermissionRequester>,
+);
+type Creation = (
+    String,
+    bool,
+    Option<String>,
+    TaskRateEdit,
+    PermissionRequester,
 );
 #[derive(Clone, Default)]
 struct Probe {
@@ -42,6 +50,8 @@ struct Probe {
     updates: Rc<RefCell<Vec<(String, TaskRateEdit, PermissionRequester)>>>,
     activity: Rc<RefCell<Vec<(String, bool, PermissionRequester)>>>,
     mutation_error: Rc<RefCell<Option<ServerFnError>>>,
+    creations: Rc<RefCell<Vec<Creation>>>,
+    creation_reply: Rc<RefCell<Option<oneshot::Receiver<TaskResponse>>>>,
 }
 impl Probe {
     fn reply(&self) -> oneshot::Sender<Response> {
@@ -172,12 +182,14 @@ async fn pending_denied_and_read_only_catalogs_do_not_offer_mutations_or_hidden_
     let reply = probe.reply();
     let mut ui = Harness::new(&probe);
     assert!(ui.html().contains("Loading tasks"));
+    assert!(!ui.html().contains("tasks-new"));
     assert!(!ui.html().contains("Task catalog</"));
     reply.send(Ok(catalog(false, false))).unwrap();
     ui.settle();
     let html = ui.html();
     assert!(html.contains("A private task") && html.contains("read-only"));
     assert!(!html.contains("tasks-edit-") && !html.contains("Default hourly rate"));
+    assert!(!html.contains("tasks-new"));
     let reply = probe.reply();
     ui.click("tasks-refresh");
     assert!(!ui.html().contains("A private task"));
@@ -192,6 +204,147 @@ async fn pending_denied_and_read_only_catalogs_do_not_offer_mutations_or_hidden_
     let html = ui.html();
     assert!(html.contains("Task access is unavailable"));
     assert!(!html.contains("private SQL detail"));
+}
+
+#[tokio::test]
+async fn creation_without_rates_keeps_validation_input_and_refreshes_after_success() {
+    let probe = Probe::default();
+    let reply = probe.reply();
+    let mut ui = Harness::new(&probe);
+    let mut page = catalog(true, false);
+    page.tasks.clear();
+    let requester = page.requester;
+    reply.send(Ok(page.clone())).unwrap();
+    ui.settle();
+    let archived = probe.reply();
+    ui.form_event("tasks-activity", "change", "archived");
+    archived.send(Ok(page.clone())).unwrap();
+    ui.settle();
+    ui.click("tasks-new");
+    assert!(ui.html().contains("New task"));
+    assert!(!ui.html().contains("task-rate") && !ui.html().contains("task-activity"));
+    ui.form_event("task-edit-form", "submit", "");
+    assert!(probe.creations.borrow().is_empty());
+    assert!(ui.html().contains("Enter a task name"));
+    ui.form_event("task-name", "input", "New consulting task");
+    *probe.mutation_error.borrow_mut() = Some(ServerFnError::ServerError {
+        code: 409,
+        message: "Reload and retry".into(),
+        details: None,
+    });
+    ui.form_event("task-edit-form", "submit", "");
+    assert_eq!(
+        probe.creations.borrow()[0],
+        (
+            "New consulting task".into(),
+            true,
+            None,
+            TaskRateEdit::Preserve {},
+            requester,
+        )
+    );
+    assert!(ui.html().contains("Reload and retry") && ui.html().contains("New consulting task"));
+    let (send, receive) = oneshot::channel();
+    *probe.creation_reply.borrow_mut() = Some(receive);
+    let reload = probe.reply();
+    ui.form_event("task-edit-form", "submit", "");
+    send.send(Ok(Task {
+        id: Uuid::now_v7(),
+        org_id: requester.org_id,
+        name: "New consulting task".into(),
+        billable_default: true,
+        default_rate_cents: None,
+        active: true,
+    }))
+    .unwrap();
+    ui.settle();
+    assert!(!ui.html().contains("task-name"));
+    assert!(ui.html().contains("Task created."));
+    assert_eq!(
+        probe.requests.borrow().last().unwrap(),
+        &(TaskActivity::Active, None, Some(requester))
+    );
+    reload.send(Ok(page)).unwrap();
+    ui.settle();
+}
+
+#[tokio::test]
+async fn creation_validates_exact_rate_blocks_duplicate_submit_and_discards_revoked_form() {
+    let probe = Probe::default();
+    let reply = probe.reply();
+    let mut ui = Harness::new(&probe);
+    let page = catalog(true, true);
+    let requester = page.requester;
+    reply.send(Ok(page.clone())).unwrap();
+    ui.settle();
+    ui.click("tasks-new");
+    assert!(!ui.html().contains("Current default") && !ui.html().contains("task-rate-action"));
+    ui.form_event("task-name", "input", "Exact initial rate");
+    ui.form_event("task-edit-form", "submit", "");
+    assert_eq!(
+        probe.creations.borrow_mut().pop().unwrap().3,
+        TaskRateEdit::Preserve {},
+        "A financial editor may leave the initial rate blank without setting zero"
+    );
+    for invalid in ["1.234", "-1", "NaN"] {
+        ui.form_event("task-rate", "input", invalid);
+        ui.form_event("task-edit-form", "submit", "");
+        assert!(probe.creations.borrow().is_empty(), "{invalid}");
+    }
+    ui.form_event("task-rate", "input", "0");
+    let (send, receive) = oneshot::channel();
+    *probe.creation_reply.borrow_mut() = Some(receive);
+    ui.form_event("task-edit-form", "submit", "");
+    ui.form_event("task-edit-form", "submit", "");
+    assert_eq!(
+        &*probe.creations.borrow(),
+        &[(
+            "Exact initial rate".into(),
+            true,
+            None,
+            TaskRateEdit::Set {
+                amount_cents: 0,
+                currency: "EUR".into()
+            },
+            requester,
+        )]
+    );
+    assert!(ui.html().contains("Saving…"));
+    let reload = probe.reply();
+    send.send(Err(ServerFnError::ServerError {
+        code: 403,
+        message: "Revoked".into(),
+        details: None,
+    }))
+    .unwrap();
+    ui.settle();
+    assert!(!ui.html().contains("task-name"));
+    assert!(!ui.html().contains("Task created."));
+    let mut read_only = page;
+    read_only.can_edit = false;
+    read_only.can_edit_rates = false;
+    reload.send(Ok(read_only)).unwrap();
+    ui.settle();
+    assert!(!ui.html().contains("tasks-new"));
+}
+
+#[tokio::test]
+async fn refresh_discards_new_form_and_rejects_another_accounts_catalog() {
+    let probe = Probe::default();
+    let reply = probe.reply();
+    let mut ui = Harness::new(&probe);
+    reply.send(Ok(catalog(true, true))).unwrap();
+    ui.settle();
+    ui.click("tasks-new");
+    ui.form_event("task-name", "input", "Unsaved task");
+    let reload = probe.reply();
+    ui.click("tasks-refresh");
+    assert!(!ui.html().contains("task-name"));
+    reload.send(Ok(catalog(true, true))).unwrap();
+    ui.settle();
+    assert!(ui.html().contains("Task access is unavailable"));
+    assert!(!ui.html().contains("tasks-new"));
+    assert!(probe.creations.borrow().is_empty());
 }
 
 #[tokio::test]
@@ -309,6 +462,28 @@ async fn financial_editor_sends_explicit_zero_in_current_currency_and_explicit_c
 
 mod server_fns {
     use super::*;
+    pub async fn create_task(
+        name: String,
+        billable: bool,
+        project_id: Option<String>,
+        rate: TaskRateEdit,
+        requester: PermissionRequester,
+    ) -> Result<Task, ServerFnError> {
+        let probe = consume_context::<Probe>();
+        probe
+            .creations
+            .borrow_mut()
+            .push((name, billable, project_id, rate, requester));
+        let receive = probe.creation_reply.borrow_mut().take();
+        if let Some(receive) = receive {
+            return receive.await.unwrap();
+        }
+        Err(probe
+            .mutation_error
+            .borrow_mut()
+            .take()
+            .unwrap_or_else(|| ServerFnError::new("Unexpected creation")))
+    }
     pub async fn load_task_catalog(
         activity: TaskActivity,
         cursor: Option<TaskCursor>,

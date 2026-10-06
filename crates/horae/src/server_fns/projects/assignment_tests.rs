@@ -94,14 +94,21 @@ async fn project_membership_and_task_callers_wait_before_authorizing(pool: PgPoo
                     "Blocked task",
                     true,
                     Some(ids.project_id),
+                    &TaskRateEdit::Preserve {},
                 )
                 .await
                 .map(|_| ()),
-                "create_task" => {
-                    create_task_for_project(&db, ids.org_id, actor.id, "Blocked task", true, None)
-                        .await
-                        .map(|_| ())
-                }
+                "create_task" => create_task_for_project(
+                    &db,
+                    ids.org_id,
+                    actor.id,
+                    "Blocked task",
+                    true,
+                    None,
+                    &TaskRateEdit::Preserve {},
+                )
+                .await
+                .map(|_| ()),
                 _ => unreachable!(),
             }
         });

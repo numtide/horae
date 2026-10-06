@@ -25,8 +25,25 @@ revoked editing. `63085` also reran the component tests after applying the
 existing nowrap utility to monetary cells. The fixture is now registered in
 the default browser suite; this is not a full default-suite run.
 
-Atomic catalog creation, project association controls and full T234 acceptance
-remain open. The mobile table stays horizontally scrollable and task names wrap
+Atomic initial-rate creation passed 159 project tests and registered-session
+delivery, SQLx preparation, offline all-target compilation and native/WASM strict
+lint in `3061`. Regressions include global versus managed financial authority,
+zero rates, current denomination, project-link rollback and real lock-wait
+revocation. The internal creation endpoint now requires loaded requester identity
+and explicit rate intent; the existing legacy form has been adapted.
+
+The shared catalog form now supports creation; `4106` passed ten component and
+transport tests, covering validation preservation, exact zero, denied/pending
+controls, duplicate-submit exclusion and identity/permission invalidation.
+Verifier `29161` passed strict native/WASM lint and the extended Chromium fixture:
+creation at 1440px dark / 390px light, keyboard dismissal and focus, empty-name
+and decimal validation, exact zero/positive initial rates, nonfinancial creation,
+and revoked creation without a persisted task. Existing edit/archive/restore
+checks passed too. The new creation-dialog captures were inspected in one batch;
+no further visual changes were needed. This is Linux Chromium, not Windows Chrome
+or a full browser-suite run.
+
+Project association controls and full T234 acceptance remain open. The mobile table stays horizontally scrollable and task names wrap
 narrowly; the two-pass visual review is not a claim of final mobile design parity.
 No Windows Chrome, policy activation or full task-management parity is claimed.
 
