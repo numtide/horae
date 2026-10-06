@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users SET name='Renamed archived teammate' WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f637c8de578d46bd5782a9aef9c46f11e8d8d74bba55edc86d872385dfe4c6fd"
+}
