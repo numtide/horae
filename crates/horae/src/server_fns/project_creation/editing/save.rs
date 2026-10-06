@@ -18,7 +18,8 @@ pub(super) async fn save(
         .execute(&mut *tx)
         .await
         .map_err(storage_error)?;
-    let role = lock_creation_actor(&mut tx, actor_id, org_id).await?;
+    let role =
+        lock_creation_actor(&mut tx, actor_id, org_id, OrganizationLock::AccessChange).await?;
     let payload = validate_draft_form(&request.form, role == OrgRole::Admin)?;
     let revision = sqlx::query_scalar!(
         "SELECT edit_revision FROM projects WHERE id = $1 AND org_id = $2 FOR UPDATE",

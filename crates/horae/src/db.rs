@@ -60,6 +60,40 @@ pub async fn run_migrations(pool: &PgPool) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[derive(Clone, Copy)]
+pub(crate) enum OrganizationLock {
+    Shared,
+    AccessChange,
+}
+
+/// Acquire the final gate mode before actor/resource locks, never by upgrading.
+/// Access changes exclude SHARE readers but allow existing writers' FK checks.
+pub(crate) async fn lock_organization(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    org_id: uuid::Uuid,
+    mode: OrganizationLock,
+) -> Result<(), sqlx::Error> {
+    match mode {
+        OrganizationLock::Shared => {
+            sqlx::query!(
+                "SELECT id FROM organizations WHERE id = $1 FOR SHARE",
+                org_id
+            )
+            .fetch_one(&mut **tx)
+            .await?;
+        }
+        OrganizationLock::AccessChange => {
+            sqlx::query!(
+                "SELECT id FROM organizations WHERE id = $1 FOR NO KEY UPDATE",
+                org_id
+            )
+            .fetch_one(&mut **tx)
+            .await?;
+        }
+    }
+    Ok(())
+}
+
 /// Join the user's time-entry write barrier before acquiring entry row locks.
 /// Writers share this lock; submitting a week takes the same key exclusively.
 /// The user-wide key also covers moves between weeks without a racy date lookup.
