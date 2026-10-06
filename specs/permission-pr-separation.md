@@ -1642,3 +1642,31 @@ commit generated metadata unsigned, publish an independent draft and start its
 clean-head Nix gate. Do not start another local Cargo process before `78215`
 terminates. The original branches/backups and remaining specification/UI/domain
 groups are not changed or declared complete by this progress.
+
+### 2026-10-06 — Approval verification and identity-boundary inventory
+
+The previous iteration made progress: #238 was published with local gates passed
+and approval isolation was extracted without changing its original source/tests.
+Re-read the goal, confirmed #216 merged and revalidated the four existing live
+handles (`78215`, `65754`, `63735`, `24069`). No restarted builds or old-head
+claims. Repository instructions and original working state remain unchanged.
+
+Read-only next-boundary inventory groups `7f14e4b`, `981d0e3` and `3bb62ac` by
+their shared identity-projection responsibility, rather than making three tiny
+deliveries. The first introduces a legacy identity-only user-list DTO; the second
+returns approval names in the authorized result instead of fetching a directory;
+the third restricts the account-menu session DTO. The final user model, approval
+model/page/UI tests and three HTTP test modules remain unchanged through `db3935d`.
+The directory HTTP test must use its final version: `3bb62ac` replaces its former
+expectation of sensitive own-user fields with the explicit session-identity
+regressions. Do not restore those superseded expectations or drop the replacement
+checks. Keep compatibility API financial projections outside this payload repair.
+
+Current-master caller inventory includes Clients and invoice recovery added after
+the original branch fork; preserve those consumers and compile them against the
+narrowed identity. New Project's rate-bearing person DTO is a separate endpoint,
+not permission to retain unnecessary rates in the directory response. Existing
+registered-session test helpers are present on master: carry only the three
+relevant modules/calls, not the original parent harness's unrelated canonical
+authorization tests. This is dependency inventory, not a completed source review
+or runtime acceptance, and no identity extraction has been created yet.
