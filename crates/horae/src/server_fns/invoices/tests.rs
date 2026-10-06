@@ -108,7 +108,7 @@ async fn invoice_preview_keeps_time_rates_and_defaults_in_one_snapshot(pool: PgP
     let task = tokio::spawn(async move {
         preview::prepare(
             &task_pool,
-            ids.org_id,
+            (ids.org_id, ids.user_id),
             ids.client_id,
             (day, day),
             None,
@@ -146,17 +146,31 @@ async fn invoice_preview_rejects_large_results_instead_of_truncating_them(pool: 
         &entries, ids.org_id, ids.user_id, ids.project_id, ids.task_id).execute(&pool).await.unwrap();
     let day = "2026-09-07".parse().unwrap();
     assert_eq!(
-        preview::prepare(&pool, ids.org_id, ids.client_id, (day, day), None, None)
-            .await
-            .unwrap()
-            .lines
-            .len(),
+        preview::prepare(
+            &pool,
+            (ids.org_id, ids.user_id),
+            ids.client_id,
+            (day, day),
+            None,
+            None
+        )
+        .await
+        .unwrap()
+        .lines
+        .len(),
         10000
     );
     time_entry(&pool, &ids, EntryState::Open).await;
-    let error = preview::prepare(&pool, ids.org_id, ids.client_id, (day, day), None, None)
-        .await
-        .unwrap_err();
+    let error = preview::prepare(
+        &pool,
+        (ids.org_id, ids.user_id),
+        ids.client_id,
+        (day, day),
+        None,
+        None,
+    )
+    .await
+    .unwrap_err();
     assert!(matches!(
         error,
         ServerFnError::ServerError { code: CONFLICT, .. }
@@ -184,7 +198,7 @@ async fn invoice_preview_requires_explicit_resolution_and_scopes_selected_projec
     let selected = [ids.project_id, other, ids.project_id];
     let preview = preview::prepare(
         &pool,
-        ids.org_id,
+        (ids.org_id, ids.user_id),
         ids.client_id,
         (day, day),
         Some(&selected),
@@ -206,7 +220,7 @@ async fn invoice_preview_requires_explicit_resolution_and_scopes_selected_projec
     };
     let resolved = preview::prepare(
         &pool,
-        ids.org_id,
+        (ids.org_id, ids.user_id),
         ids.client_id,
         (day, day),
         Some(&selected),
@@ -217,9 +231,16 @@ async fn invoice_preview_requires_explicit_resolution_and_scopes_selected_projec
     assert_eq!(resolved.due_on, Some(resolved.issued_on));
     assert_eq!(resolved.amounts.unwrap().total_cents, 0);
     assert_eq!(resolved.lines[0].net_before_tax_cents, Some(0));
-    let inherited = preview::prepare(&pool, ids.org_id, ids.client_id, (day, day), None, None)
-        .await
-        .unwrap();
+    let inherited = preview::prepare(
+        &pool,
+        (ids.org_id, ids.user_id),
+        ids.client_id,
+        (day, day),
+        None,
+        None,
+    )
+    .await
+    .unwrap();
     assert_eq!(inherited.defaults, Some(InvoiceDefaults::default()));
     assert_eq!(inherited.projects.len(), 1);
     for selected in [
@@ -230,7 +251,7 @@ async fn invoice_preview_requires_explicit_resolution_and_scopes_selected_projec
     ] {
         let error = preview::prepare(
             &pool,
-            ids.org_id,
+            (ids.org_id, ids.user_id),
             ids.client_id,
             (day, day),
             Some(&selected),
@@ -246,9 +267,16 @@ async fn invoice_preview_requires_explicit_resolution_and_scopes_selected_projec
         assert!(matches!(error, ServerFnError::ServerError { code, .. } if code == expected));
     }
     assert!(
-        preview::prepare(&pool, foreign.org_id, ids.client_id, (day, day), None, None)
-            .await
-            .is_err()
+        preview::prepare(
+            &pool,
+            (foreign.org_id, foreign.user_id),
+            ids.client_id,
+            (day, day),
+            None,
+            None
+        )
+        .await
+        .is_err()
     );
 }
 
@@ -275,7 +303,7 @@ async fn invoice_preview_matches_generation_without_claiming_time(pool: PgPool) 
     };
     let preview = preview::prepare(
         &pool,
-        ids.org_id,
+        (ids.org_id, ids.user_id),
         ids.client_id,
         (day, day),
         Some(&[ids.project_id]),
@@ -333,9 +361,16 @@ async fn invoice_preview_matches_generation_without_claiming_time(pool: PgPool) 
         generated.lines[0].amount_cents
     );
     assert!(
-        preview::prepare(&pool, ids.org_id, ids.client_id, (day, day), None, None)
-            .await
-            .is_err()
+        preview::prepare(
+            &pool,
+            (ids.org_id, ids.user_id),
+            ids.client_id,
+            (day, day),
+            None,
+            None
+        )
+        .await
+        .is_err()
     );
 }
 
