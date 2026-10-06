@@ -1,5 +1,35 @@
 # Permission verification
 
+## Task catalog consumer (T234, in progress)
+
+In the Nix shell, with disposable PostgreSQL and all migrations applied:
+
+```sh
+cargo test -p horae --features server --locked --bin horae server_fns::projects::task_catalog::tests::
+cargo test -p horae --features server --locked --bin horae job_endpoints_enforce_session_role_and_organization
+cargo test -p horae --features server --locked --test task_catalog_ui --test admin_shell
+```
+
+The catalog tests cover activity filters, duplicate-name pagination, tenant
+isolation and revocation after an actual organization-lock wait. Registered
+requests cover independent task/rate grants, omitted protected fields, requester
+changes and anonymous/revoked sessions. Actual-component tests cover pending and
+denied states, read-only navigation, stale editor disposal, preservation of hidden
+rates, exact zero/clear intent, validation recovery and archive confirmation.
+
+Verifier `88712` passed these checks, full SQLx preparation and strict native and
+WASM lint. `96671` and confirmation `63085` passed the `task-catalog` fixture in
+the disposable Chromium runner, including 1440px dark / 390px light layouts,
+Escape/focus, exact rates, protected-rate preservation, archive/restore and
+revoked editing. `63085` also reran the component tests after applying the
+existing nowrap utility to monetary cells. The fixture is now registered in
+the default browser suite; this is not a full default-suite run.
+
+Atomic catalog creation, project association controls and full T234 acceptance
+remain open. The mobile table stays horizontally scrollable and task names wrap
+narrowly; the two-pass visual review is not a claim of final mobile design parity.
+No Windows Chrome, policy activation or full task-management parity is claimed.
+
 ## Task lifecycle and existing-task links (T233)
 
 Use the Nix shell and a disposable PostgreSQL database with all checked-in

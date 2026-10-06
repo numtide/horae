@@ -51,7 +51,7 @@ pub mod project_managers;
 #[path = "../src/pages/projects.rs"]
 mod projects;
 #[path = "../src/models/task.rs"]
-mod task;
+pub mod task;
 #[path = "../src/models/user.rs"]
 pub mod user;
 mod models {

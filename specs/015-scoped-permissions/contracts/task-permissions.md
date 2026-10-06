@@ -451,3 +451,44 @@ import scale tests were ignored. Scoped self-review checked every changed helper
 caller, authorization before no-ops, sorted parent/task locks and protected
 configuration/history. This completes T233's backend lifecycle/link boundary,
 not T234's browser consumer, T230, independent full-feature review or activation.
+
+### Task-management consumer (T234)
+
+The only existing task UI is nested in the legacy People page. Canonical task
+read/write must be reachable independently from people administration. Add a
+Tasks destination within the existing Workspace shell; keep legacy People
+behavior separate. Neither `08_Settings.dc.html` nor `09_Workspace.dc.html`
+contains a Tasks screen, so reuse Workspace typography, table, form and existing
+shared components instead of claiming pixel parity with a nonexistent mockup.
+
+The current active-only `list_tasks` response cannot support archive recovery or
+safe financial editing: it omits the requester's binding and stored denomination.
+The consumer therefore needs a bounded, requester-bound catalog page, with
+active/archived/all filters and name/ID ordering, current write/rate affordances,
+and protected stored currency. Reuse `ReadAccess`; do not infer catalog authority
+from People, project membership, legacy roles or report/rate-only grants. Return
+permission errors distinctly from an authorized empty result. Page cursors are
+ordering bounds, never authorization or identity lookups. Scope stays tenant-wide
+only for `TaskReadAll`, with independent global-rate read/write checks.
+
+Refresh/filter/page changes must hide stale rows and close stale editors. Bind
+commands to the loaded requester, preserve form input on ordinary validation
+failure and invalidate it on authentication/permission loss. Ordinary edits keep
+hidden rates; explicit set/clear actions require current global rate write. Show
+unknown stored denomination honestly, never as the current workspace currency.
+Archive confirmation explains its project-wide effect; restore explains the
+separate project restoration. Reuse the existing transactional commands.
+
+Harvest's task-management guide was rechecked on 2026-10-06: it documents new-task
+default rates, common tasks, add-to-all-projects and bulk archive/delete as well
+as ordinary edits and restoration. Those broader behaviors are not implied by
+the existing create/link commands; do not expose fake controls or declare full
+task-management parity while they remain unimplemented. Initial-rate creation
+must be atomic, not create-then-edit with partial success. Project association
+lifecycle belongs in the existing project editor, not a competing settings UI.
+
+Acceptance includes actual-component loading/denial/read-only/financial states,
+stale-requester transitions and mutation failures, real registered requests and
+disposable-browser keyboard/desktop/mobile checks. No loaded browser MCP is
+available in this session; the repository's pinned Chromium runner remains an
+available test path. T234 stays open until the actual consumer is verified.

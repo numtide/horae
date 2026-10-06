@@ -13,6 +13,9 @@ use crate::models::{ProjectDetails, ProjectTagLink, ProjectTaskRate};
 mod detail_view;
 pub use detail_view::get_project_detail_view;
 
+mod task_catalog;
+pub use task_catalog::load_task_catalog;
+
 #[cfg(feature = "server")]
 pub(super) mod read_access;
 #[cfg(feature = "server")]

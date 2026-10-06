@@ -14,6 +14,7 @@ pub mod permission_audit;
 pub mod projects;
 pub mod reports;
 pub mod settings;
+pub mod tasks;
 pub mod timesheet;
 
 /// Whether the session user (from a `get_me` resource) is a manager or admin.

@@ -15,6 +15,7 @@ use crate::pages::{
     projects::{ProjectDetail, ProjectList},
     reports::Reports,
     settings::Settings,
+    tasks::TaskCatalog,
     timesheet::{Anchor, CalSpan, Timesheet, ViewMode},
 };
 
@@ -77,6 +78,8 @@ pub enum Route {
     #[layout(AdminShell)]
     #[route("/admin/users")]
     AdminUsers {},
+    #[route("/admin/tasks")]
+    TaskCatalog {},
     #[route("/admin/importers")]
     HarvestImport {},
     #[route("/admin/audit")]

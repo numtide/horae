@@ -51,6 +51,9 @@ pub fn NavIcon(name: String, #[props(default)] class: String) -> Element {
             line { x1: "5.8", y1: "8", x2: "10.2", y2: "8" }
             line { x1: "5.8", y1: "10.5", x2: "8.5", y2: "10.5" }
         },
+        "tasks" => rsx! {
+            path { d: "M2 4 L3 5 L5 3 M7 4 H14 M2 8 L3 9 L5 7 M7 8 H14 M2 12 L3 13 L5 11 M7 12 H14" }
+        },
         "approvals" => rsx! {
             circle { cx: "8", cy: "8", r: "6" }
             path { d: "M5.4 8 L7 9.6 L10.6 6" }

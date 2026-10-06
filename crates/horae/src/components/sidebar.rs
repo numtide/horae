@@ -99,15 +99,16 @@ fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
             false,
         ),
     };
-    let (people, administrator, role) =
+    let (people, tasks, administrator, role) =
         match (own.state()() == UseResourceState::Ready, &*own.read()) {
-            (true, Some(Ok(None))) => (is_admin, is_admin, legacy_role),
+            (true, Some(Ok(None))) => (is_admin, false, is_admin, legacy_role),
             (true, Some(Ok(Some(access))))
                 if access.catalog_version == PERMISSION_CATALOG_VERSION =>
             {
                 (
                     access.grants.contains(&Permission::PeopleReadAll)
                         || access.grants.contains(&Permission::PeopleReadManaged),
+                    access.grants.contains(&Permission::TaskReadAll),
                     access.is_administrator,
                     if access.is_administrator {
                         "Administrator".into()
@@ -116,7 +117,7 @@ fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
                     },
                 )
             }
-            _ => (false, false, String::new()),
+            _ => (false, false, false, String::new()),
         };
     let role_class = if administrator {
         "badge badge-info badge-sm"
@@ -146,12 +147,16 @@ fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
                             "Settings"
                         }
                     }
-                    if people || is_admin {
+                    if people || tasks || is_admin {
                         div { class: "sidebar-menu-list",
                             div { class: "menu-group", "Workspace" }
                             if people { Link { to: Route::AdminUsers {}, class: "menu-item", onclick: move |_| { open.set(false); on_navigate.call(()); },
                                 span { class: "menu-item-icon", NavIcon { name: "users" } }
                                 "People"
+                            } }
+                            if tasks { Link { to: Route::TaskCatalog {}, class: "menu-item", onclick: move |_| { open.set(false); on_navigate.call(()); },
+                                span { class: "menu-item-icon", NavIcon { name: "tasks" } }
+                                "Tasks"
                             } }
                             if is_admin { Link { to: Route::HarvestImport {}, class: "menu-item", onclick: move |_| { open.set(false); on_navigate.call(()); },
                                 span { class: "menu-item-icon", NavIcon { name: "import" } }

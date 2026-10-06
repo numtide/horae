@@ -1,5 +1,119 @@
 # Scoped permissions investigation progress
 
+## 2026-10-06 — Task consumer verification
+
+- Previous goal turn made progress: implemented the bound reader and actual
+  Tasks consumer; production catalog and real-session tests passed. Revalidated
+  the dirty worktree and polled `91625`: terminal exit 101. All 12 Workspace
+  tests passed; five consumer tests failed in the harness's event lookup, not
+  authorization assertions. Static DOM IDs are stored in Dioxus templates rather
+  than attribute mutations. Reused the mounted-target lookup pattern from the
+  existing Reports/permission-editor harnesses; no production ID workaround.
+
+Next: rerun component tests, SQLx/native/WASM checks, then the disposable-browser
+suite. Atomic task creation and project-editor lifecycle integration remain open.
+
+- `36640` passed the two production catalog tests, registered-session matrix,
+  12 Workspace tests and seven Tasks/transport tests. It exited 101 at strict
+  lint because the existing detail-navigation harness imported the expanded task
+  model privately. Matched that harness's public model-module convention; no
+  production dead-code suppression. SQLx's cached-target omission was corrected
+  by invalidating the test entry points before regenerating, as in the existing
+  full task verifier.
+- `88712` exited 0: those functional/component checks, complete SQLx preparation
+  and strict native/all-target and WASM lint passed. The cache contains three new
+  descriptions and no deleted descriptions. Browser suite syntax and whitespace
+  checks pass. No browser execution result or full-feature acceptance yet.
+- Resolved pinned browser tools from the Git flake. Cancelled only the initial
+  path-flake evaluation (`14133`, exit 1) to avoid copying build artifacts; the
+  Git-source evaluation (`98830`) passed. No unrelated process was stopped.
+
+Next: build the app and run `task-catalog` with
+`.scratch/run-task-catalog-browser.sh`, inspect its batched desktop/mobile
+evidence, then address creation and project-editor lifecycle integration.
+
+- `96671` exited 0: built the current server/WASM bundle and passed the guarded
+  disposable Chromium task-catalog suite. It verified 1440px dark / 390px light
+  keyboard dismissal/focus, exact zero currency, hidden-rate preservation,
+  archive/restore and loss of editing authority. Four captures under
+  `.scratch/task-catalog-browser/` were inspected together. The narrow table
+  scrolls inside its container; monetary cells need the existing nowrap utility.
+  Applied that one local utility and added a browser assertion. Confirmation is
+  pending; no shared CSS change, no claim of Windows Chrome or full T234 parity.
+
+- `63085` exited 0: component checks and the second disposable-browser round
+  passed after the money-cell utility change. Inspected the confirmation mobile
+  capture; horizontal scrolling is contained, monetary units stay together, and
+  narrow task-name wrapping remains a visual limitation. Stopped the bounded
+  visual passes; do not call the mobile design final. Registered the verified
+  fixture in the default suite (no full-suite result implied).
+
+- Scoped self-review checked requester binding, fresh task/rate authorization,
+  SQL-side omission of protected fields, name/ID pagination and preserved hidden
+  rate intent. No extra permission loader, dependencies, migrations or shared
+  CSS changes. This is not independent full-feature review or T234 sign-off.
+
+Next: format and publish this verified consumer increment on draft PR #212,
+then implement atomic catalog creation and project-editor lifecycle integration.
+
+## 2026-10-06 — Bound task catalog delivery
+
+- The preceding estimate turn was no progress toward implementation. Revalidated
+  the existing worktree and polled inherited verifier `83689`: terminal exit 101,
+  with the intended missing `load_task_catalog` registration failure. No restart
+  was inferred from silence.
+- Added the typed, bounded catalog reader using the existing `ReadAccess`
+  transaction, independent financial grants and current-requester binding.
+  Canonical access is explicit; legacy roles do not grant catalog access.
+  No schema, dependencies, activation or real-data changes.
+
+Next: verify the registered delivery and pagination/isolation, then connect the
+actual Tasks consumer. T234 and the full permissions goal remain open.
+
+- `52201` passed the real-session matrix with the new catalog reader (exit 0).
+  Added production pagination/activity/isolation and lock-wait revocation tests.
+  Connected Workspace/rail navigation and the Tasks list/edit/archive/restore
+  consumer using existing controls, exact money parsing and bound commands.
+
+- Actual-component tests cover hidden/pending/denied/read-only/financial states,
+  account switches, editor disposal and explicit archive confirmation. Initial
+  UI verification `24310` exited 101 on an input callback type annotation; fixed
+  that and the explicit child-module path needed by external component tests.
+  Removed an unused binding and an undefined footer class during local review.
+  Browser acceptance, atomic creation and project-editor restoration remain open.
+
+- Corrected verifier `91625` is running. Its two production catalog tests and
+  real-session matrix passed; it is now compiling/running the actual Tasks and
+  Workspace component tests, then SQLx preparation and native/WASM lint. Keep
+  Rust unchanged until its terminal result. The preceding formatter passed.
+
+- Added `tests/browser/task-catalog.cjs`, guarded to the existing disposable
+  browser runner. It exercises desktop/mobile keyboard focus, stored currency,
+  zero rate, hidden-rate preservation, archive/restore and revoked writes. It has
+  not run yet and is not registered in the default suite until validated.
+
+Next: poll `91625`; address any terminal failures, then build the pinned browser
+artifact and run `task-catalog` against the disposable runner. Complete atomic
+initial-rate creation and project-editor lifecycle controls before T234 sign-off.
+No commit, push, merge, policy activation or real-data mutation in this iteration.
+
+## 2026-10-06 — Task-management consumer integration
+
+- Previous turn made progress: published `979a594`, closed verified backend T233,
+  and left only its publication note dirty. No live verifier was inherited.
+- Read the design/Rust/testing/Ponytail skills and existing Workspace/Settings
+  sources. Impeccable's context launcher could not install its engine outside
+  permitted cache paths; followed its direct-context fallback without installing
+  anything. No task prototype exists; preserve the existing Workspace system.
+- Traced the task readers, commands, People consumer and Workspace/sidebar gates.
+  The active-only unbound task list cannot deliver archived recovery or correct
+  currency editing. Record the needed bound catalog projection and actual UI
+  acceptance under T234 rather than treating backend completion as delivery.
+
+Next: reproduce the missing bound catalog delivery through the real session
+route, implement its current-authority projection, then wire and test the Tasks
+consumer and project lifecycle controls. No activation, live data or merge.
+
 ## 2026-10-06 — Link currency boundary review
 
 - The preceding estimate turn was a verified wait: `75534` was polled live and
@@ -54,8 +168,13 @@
   consumer/browser work and the encompassing T230 remain open. Final formatting
   and publication follow; no policy activation, real-data mutation or merge.
 
-Next: publish this verified increment to PR #212, then implement T234's bound
-task-management UI using the existing design components and browser acceptance.
+- Final formatting and formatting-CI checks (`69128`) passed. Published unsigned
+  commit `979a594` to the existing branch; push `4782` exited 0 and GitHub confirms
+  the exact head `979a594e74de7f0a94aba321293f1dcb757ce2eb` on open draft PR #212.
+  No merge. The worktree was clean before this publication record was added.
+
+Next: implement T234's bound task-management UI using the existing design
+components and browser acceptance.
 The full permissions objective remains active and incomplete.
 
 ## 2026-10-06 — Existing-task linking authority
