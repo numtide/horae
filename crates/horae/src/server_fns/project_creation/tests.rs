@@ -3,7 +3,7 @@ use horae_core::types::OrgRole;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use super::{lock_creation_actor, lock_creation_client, validate_draft_form};
+use super::{OrganizationLock, lock_creation_actor, lock_creation_client, validate_draft_form};
 use crate::models::project_creation::{ProjectForm, ProjectMemberInput};
 
 #[sqlx::test(migrations = "./migrations")]
@@ -1079,20 +1079,35 @@ async fn creation_actor_is_revalidated_inside_the_transaction(pool: PgPool) {
     let member = seed(&pool, OrgRole::Member).await;
     let mut tx = pool.begin().await.unwrap();
     assert_eq!(
-        lock_creation_actor(&mut tx, admin.user_id, admin.org_id)
-            .await
-            .unwrap(),
+        lock_creation_actor(
+            &mut tx,
+            admin.user_id,
+            admin.org_id,
+            OrganizationLock::Shared
+        )
+        .await
+        .unwrap(),
         OrgRole::Admin
     );
     assert!(
-        lock_creation_actor(&mut tx, member.user_id, member.org_id)
-            .await
-            .is_err()
+        lock_creation_actor(
+            &mut tx,
+            member.user_id,
+            member.org_id,
+            OrganizationLock::Shared
+        )
+        .await
+        .is_err()
     );
     assert!(
-        lock_creation_actor(&mut tx, admin.user_id, member.org_id)
-            .await
-            .is_err()
+        lock_creation_actor(
+            &mut tx,
+            admin.user_id,
+            member.org_id,
+            OrganizationLock::Shared
+        )
+        .await
+        .is_err()
     );
     tx.rollback().await.unwrap();
     sqlx::query!(
@@ -1104,9 +1119,14 @@ async fn creation_actor_is_revalidated_inside_the_transaction(pool: PgPool) {
     .unwrap();
     let mut tx = pool.begin().await.unwrap();
     assert!(
-        lock_creation_actor(&mut tx, admin.user_id, admin.org_id)
-            .await
-            .is_err()
+        lock_creation_actor(
+            &mut tx,
+            admin.user_id,
+            admin.org_id,
+            OrganizationLock::Shared
+        )
+        .await
+        .is_err()
     );
 }
 

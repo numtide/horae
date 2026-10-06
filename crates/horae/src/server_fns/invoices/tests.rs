@@ -6,6 +6,84 @@ mod imported_rates;
 
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]
+async fn assignment_gate_allows_inflight_invoice_organization_fks_to_finish(pool: PgPool) {
+    use crate::server_fns::test_seed::wait_for_blocked;
+    let ids = seed(&pool, OrgRole::Admin).await;
+    let entry = time_entry(&pool, &ids, EntryState::Open).await;
+    sqlx::query!(
+        "UPDATE projects SET rate_cents=10000 WHERE id=$1",
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let actor = sqlx::query_as!(User,
+        r#"SELECT id, org_id, email, name, oidc_subject, org_role AS "org_role: OrgRole",
+        cost_rate_cents, billable_rate_cents, active, created_at AS "created_at: chrono::DateTime<chrono::Utc>"
+        FROM users WHERE id=$1"#, ids.user_id,
+    ).fetch_one(&pool).await.unwrap();
+    let mut barrier = pool.begin().await.unwrap();
+    let blocker = sqlx::query_scalar!("SELECT pg_backend_pid() AS \"pid!\"")
+        .fetch_one(&mut *barrier)
+        .await
+        .unwrap();
+    sqlx::query!("SELECT id FROM time_entries WHERE id=$1 FOR UPDATE", entry)
+        .fetch_one(&mut *barrier)
+        .await
+        .unwrap();
+    let mut requests = tokio::task::JoinSet::new();
+    let db = pool.clone();
+    requests.spawn(async move {
+        let day = "2026-09-07".parse().unwrap();
+        generate_invoice_with_request(
+            &db,
+            ids.org_id,
+            ids.client_id,
+            (day, day),
+            Some(&[ids.project_id]),
+            None,
+            None,
+        )
+        .await
+        .map(|(invoice, _)| assert_eq!(invoice.lines.len(), 1))
+    });
+    wait_for_blocked(&pool, blocker).await;
+    let writer = sqlx::query_scalar!(
+        "SELECT pid AS \"pid!\" FROM pg_stat_activity WHERE datname=current_database() AND $1=ANY(pg_blocking_pids(pid))", blocker,
+    ).fetch_one(&pool).await.unwrap();
+    let db = pool.clone();
+    requests.spawn(async move {
+        crate::server_fns::projects::insert_assignment(
+            &db,
+            &actor,
+            ids.project_id,
+            ids.user_id,
+            ProjectRole::Freelancer,
+        )
+        .await
+        .map(|_| ())
+    });
+    wait_for_blocked(&pool, writer).await;
+    barrier.commit().await.unwrap();
+    while let Some(result) =
+        tokio::time::timeout(std::time::Duration::from_secs(10), requests.join_next())
+            .await
+            .unwrap()
+    {
+        result.unwrap().unwrap();
+    }
+    let state = sqlx::query_scalar!(
+        r#"SELECT state AS "state: EntryState" FROM time_entries WHERE id=$1"#,
+        entry
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(state, EntryState::Invoiced);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
 async fn invoice_preview_keeps_time_rates_and_defaults_in_one_snapshot(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
