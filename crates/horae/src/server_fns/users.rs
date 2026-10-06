@@ -54,32 +54,8 @@ pub async fn list_users(include_inactive: bool) -> Result<Vec<User>, ServerFnErr
 pub async fn create_user(email: String, name: String, role: String) -> Result<User, ServerFnError> {
     let admin = require_admin().await?;
     let state = crate::state::global_state().await;
-    let id = uuid::Uuid::now_v7();
     let org_role: OrgRole = parse_enum(&role, "role (use admin, manager, or member)")?;
-
-    let user = sqlx::query_as!(
-        User,
-        r#"INSERT INTO users (id, org_id, email, name, org_role)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING id, org_id, email, name, oidc_subject,
-                   org_role as "org_role: OrgRole",
-                   cost_rate_cents, billable_rate_cents, active,
-                   created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
-        id,
-        admin.org_id,
-        email,
-        name,
-        org_role as OrgRole,
-    )
-    .fetch_one(&state.db)
-    .await
-    .map_err(|e| {
-        if e.to_string().contains("users_email_key") {
-            conflict("A user with this email already exists")
-        } else {
-            server_err(e)
-        }
-    })?;
+    let user = insert_user(&state.db, admin.org_id, admin.id, &email, &name, org_role).await?;
 
     state
         .plugins
@@ -92,9 +68,47 @@ pub async fn create_user(email: String, name: String, role: String) -> Result<Us
 }
 
 #[cfg(feature = "server")]
+async fn insert_user(
+    db: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
+    email: &str,
+    name: &str,
+    org_role: OrgRole,
+) -> Result<User, ServerFnError> {
+    let mut tx = begin_user_access_change(db, org_id, actor_id).await?;
+    let user = sqlx::query_as!(
+        User,
+        r#"INSERT INTO users (id, org_id, email, name, org_role)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id, org_id, email, name, oidc_subject,
+                   org_role as "org_role: OrgRole",
+                   cost_rate_cents, billable_rate_cents, active,
+                   created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
+        uuid::Uuid::now_v7(),
+        org_id,
+        email,
+        name,
+        org_role as OrgRole,
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|e| {
+        if e.to_string().contains("users_email_key") {
+            conflict("A user with this email already exists")
+        } else {
+            server_err(e)
+        }
+    })?;
+    tx.commit().await.map_err(server_err)?;
+    Ok(user)
+}
+
+#[cfg(feature = "server")]
 async fn begin_user_access_change(
     db: &sqlx::PgPool,
     org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
 ) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, ServerFnError> {
     let mut tx = db.begin().await.map_err(server_err)?;
     // Both role and activation changes must serialize before counting admins;
@@ -107,6 +121,19 @@ async fn begin_user_access_change(
     .await
     .map_err(server_err)?
     .ok_or_else(|| not_found("Organization not found"))?;
+    // Recheck after the organization lock: authority may have been revoked
+    // while this request waited. Keep the actor locked through commit.
+    sqlx::query_scalar!(
+        "SELECT id FROM users WHERE id = $1 AND org_id = $2
+           AND active AND org_role = $3 FOR SHARE",
+        actor_id,
+        org_id,
+        OrgRole::Admin as OrgRole,
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(server_err)?
+    .ok_or_else(|| forbidden("Active administrator access required"))?;
     Ok(tx)
 }
 
@@ -168,7 +195,8 @@ pub async fn set_user_role(user_id: String, role: String) -> Result<User, Server
     let user_id = parse_uuid(&user_id, "user_id")?;
     let org_role: OrgRole = parse_enum(&role, "role (use admin, manager, or member)")?;
 
-    let (user, previous) = change_user_role(&state.db, admin.org_id, user_id, org_role).await?;
+    let (user, previous) =
+        change_user_role(&state.db, admin.org_id, admin.id, user_id, org_role).await?;
     if let Some(prev) = previous.filter(|p| *p != user.org_role) {
         state
             .plugins
@@ -186,10 +214,11 @@ pub async fn set_user_role(user_id: String, role: String) -> Result<User, Server
 async fn change_user_role(
     db: &sqlx::PgPool,
     org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
     user_id: uuid::Uuid,
     org_role: OrgRole,
 ) -> Result<(User, Option<OrgRole>), ServerFnError> {
-    let mut tx = begin_user_access_change(db, org_id).await?;
+    let mut tx = begin_user_access_change(db, org_id, actor_id).await?;
     // Read the prior role/active so the event reports the transition (a no-op
     // role change emits nothing, FR-012) and so we can refuse demoting the last
     // active admin — including an admin dropping their own role.
@@ -232,7 +261,8 @@ pub async fn set_user_active(user_id: String, active: bool) -> Result<User, Serv
     let state = crate::state::global_state().await;
     let user_id = parse_uuid(&user_id, "user_id")?;
 
-    let (user, was_active) = change_user_active(&state.db, admin.org_id, user_id, active).await?;
+    let (user, was_active) =
+        change_user_active(&state.db, admin.org_id, admin.id, user_id, active).await?;
     // FR-005 defines only a deactivation event (no user_reactivated).
     if crate::plugin::event::active_transition(was_active, active)
         == Some(crate::plugin::event::ActiveTransition::Deactivated)
@@ -252,10 +282,11 @@ pub async fn set_user_active(user_id: String, active: bool) -> Result<User, Serv
 async fn change_user_active(
     db: &sqlx::PgPool,
     org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
     user_id: uuid::Uuid,
     active: bool,
 ) -> Result<(User, Option<bool>), ServerFnError> {
-    let mut tx = begin_user_access_change(db, org_id).await?;
+    let mut tx = begin_user_access_change(db, org_id, actor_id).await?;
     let current = user_active_role(&mut tx, user_id, org_id).await?;
     let was_active: Option<bool> = current.map(|(active, _)| active);
 
@@ -291,6 +322,7 @@ async fn change_user_active(
 mod tests {
     use super::*;
 
+    mod authority;
     mod concurrency;
 
     #[test]
