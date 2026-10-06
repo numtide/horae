@@ -106,6 +106,7 @@ Clients MVP as canonical-permission acceptance.
 | Interrupted import session cleanup, [#224](https://github.com/numtide/horae/pull/224) | `fix/import-session-cleanup`, `.worktrees/import-session-cleanup` | `02f7b58` | Draft at `be57f0e`; 1,123 tests passed, 11 existing ignored; SQLx, offline server/WASM lint and format passed; CI pending |
 | Current authority for organization branding writes, [#225](https://github.com/numtide/horae/pull/225) | `fix/branding-current-authority`, `.worktrees/branding-current-authority` | `02f7b58` | Draft at `f2d6bd4`; full suite, SQLx, offline server/WASM lint and format passed; CI pending |
 | Internal reusable-profile commands, [#226](https://github.com/numtide/horae/pull/226) | `refactor/permission-template-commands`, `.worktrees/permission-template-commands` | #222 `e9695fd` | Draft at `82d15f3`; 1,189 tests, SQLx, offline server/WASM Clippy and format passed; full local Flake Check running; no endpoints or activation |
+| Current authority for user creation/role/activity, [#227](https://github.com/numtide/horae/pull/227) | `fix/user-mutation-authority`, `.worktrees/user-mutation-authority` | `02f7b58` | Draft at `142eda1`; 1,127 tests, SQLx, offline server/WASM Clippy and format passed; required CI pending |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -276,7 +277,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `b8b105e` | Document current-account permission research and evidence gaps | specification-history | Held in original backup; extraction pending |
 | `6443d56` | Record current Harvest permission evidence and reference conflicts | specification-history | Held in original backup; extraction pending |
 | `e8dcb77` | Add typed permission catalog and built-in profile selections | scope-domain | Code/tests in #219; specification hunks retained for reconciliation |
-| `b80f8ab` | Recheck administrator authority during user access changes | legacy-access-writers | Held in original backup; extraction pending |
+| `b80f8ab` | Recheck administrator authority during user access changes | legacy-access-writers | Three exact Rust blobs and regenerated cache in #227; specification hunks retained for reconciliation |
 | `b7e730c` | Define permission persistence and transactional access contracts | specification-history | Held in original backup; extraction pending |
 | `412035d` | Map permission operations and transaction constraints | specification-history | Held in original backup; extraction pending |
 | `324084c` | Clarify permission boundaries for jobs and authentication | specification-history | Held in original backup; extraction pending |
@@ -801,3 +802,67 @@ invoice code is needed. Collect the live #226 Nix check without restarting it.
 Profile application still needs both the template stack and #221; resolve that
 integration explicitly before extracting its consumers. The goal remains
 incomplete: many source groups and specification hunks still lack final PRs.
+
+### 2026-10-06 — User mutation authority extraction
+
+The preceding response only supplied goal text and made no repository progress.
+Revalidated the actual goal, #216's merge and the original preserved worktree;
+the original 18 unpublished paths remain untouched. Resumed live #226 full Nix
+check `46319` rather than restarting it; its client release build passed and
+the overall check is still running.
+
+Created `fix/user-mutation-authority` in `.worktrees/user-mutation-authority`
+from `02f7b58`. Its three Rust files match `b80f8ab` exactly: user transaction
+helpers, seven new authority regressions and the updated last-admin tests.
+The two existing files at `b80f8ab^` are identical to the extraction base.
+No directory DTOs, invoice-test visibility change, new policy or schema was
+included. This extracts the implementation of original T030/T031; T032 requires
+fresh evidence, not the original quickstart's historical results. Associated
+specification hunks remain preserved for reconciliation.
+
+Source review traced the authenticated actor IDs through all three wrappers,
+organization-before-actor locking, same-organization target queries, last-admin
+serialization, duplicate rollback and event dispatch only after commit. Tests
+exercise completed/concurrent revocation for all three commands, foreign/missing
+actors, authority lock lifetime and all existing last-admin cases using actual
+PostgreSQL lock observations. Directory/rate exposure and later project-writer
+coordination remain outside this boundary. No high/critical source finding in
+this extraction; runtime gates are not yet accepted.
+
+Formatting passed unchanged (`57627`). Complete workspace tests are running in
+`59860` through the existing private temporary PostgreSQL wrapper. Forced local
+source recompilation by touching core/app/test entrypoints before reusing the
+shared target; no source change resulted. Next: collect this suite, regenerate
+the complete SQLx cache, verify offline server/WASM lint and publish the scoped
+PR. Continue collecting #226's existing Nix handle; do not restart it.
+
+The full workspace suite subsequently passed (`59860`): 826 app, 180 integration
+and 121 core tests, 1,127 total, with 11 existing manual checks ignored. Complete
+SQLx preparation is running in `39314`. #226's release server/client build has
+passed; its full check has moved on to Clippy and remains live in `46319`.
+
+Next-boundary review: `757f43d`'s assignment repair adds an actor lock before
+resource/FK work. Preserve its later `3ae8e08` organization/project lock-order
+repair together with the affected project-editor, invoice and time-entry race
+regressions; do not call the early assignment commit alone the finished writer
+boundary. Most pre-change paths of `3ae8e08` match the current base; the project
+creation helper differs because #216 introduced shared client validation, which
+must be retained. Its user/editor race additionally depends on this user-write
+extraction. These dependencies were inspected, not implemented or certified.
+
+SQLx preparation passed (`39314`): all 1,003 base descriptors unchanged, four
+additions byte-identical to `b80f8ab`. Offline all-target workspace/server Clippy
+passed (`19350`) with warnings and performance lints denied. Unsigned commit
+`142eda198f8c3aa94eef17285cfe6b19ca2f4b05` is published as draft #227 on master;
+its three Rust files are unchanged from the tested extraction. WASM Clippy is
+running in `59244`; required CI remains pending. #226's existing full check
+continues through browser checks in `46319`.
+
+WASM Clippy subsequently passed (`59244`). #227's remote head and draft/master
+base were confirmed; [CI run 37486457726](https://github.com/numtide/horae/actions/runs/37486457726)
+has Flake Check/Format running, Nixbot evaluation passed and build running. No
+merge or rerun was requested. Next: extract the assignment/project coordination
+boundary (`757f43d` plus `3ae8e08`) with its original race tests on #227, retaining
+#216's client validation; verify that combined stack. Keep collecting #226's
+live full check without restarting it. Remaining source/specification groups
+still require mapping and verification; the goal is not complete.
