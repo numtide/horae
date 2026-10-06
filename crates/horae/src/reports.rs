@@ -110,9 +110,8 @@ impl ExportParams {
     }
 }
 
-/// The rows behind both the CSV/XLSX exports and the manager-only
-/// `report_detailed` server fn — one query, so a download always matches what
-/// the Reports page shows.
+/// Shared rows for materialized exports and the manager-only detailed report.
+/// The streaming cursor preserves this projection, filtering and ordering.
 pub(crate) async fn fetch_entries<'e>(
     executor: impl sqlx::PgExecutor<'e> + 'e,
     org_id: uuid::Uuid,
@@ -170,10 +169,10 @@ pub async fn export_csv(
 ) -> Result<impl IntoResponse, StatusCode> {
     // Same rows as the manager-only `report_detailed` server fn (every user's
     // hours and notes), so the same gate applies.
-    let (_, org_id) = require_manager(&session).await?;
+    let (actor_id, org_id) = require_manager(&session).await?;
 
     let state = crate::state::global_state().await;
-    streaming::entries(state.db.clone(), org_id, params).await
+    streaming::entries(state.db.clone(), org_id, actor_id, params).await
 }
 
 const ENTRY_EXPORT_HEADERS: [&str; 8] = [
@@ -344,6 +343,7 @@ async fn fetch_projects_export<'e>(
         .await
 }
 
+#[cfg(test)]
 fn stream_projects_export<'e>(
     executor: impl sqlx::PgExecutor<'e> + 'e,
     org_id: uuid::Uuid,
@@ -553,10 +553,10 @@ pub async fn export_invoice_csv(
     session: Session,
     Path(invoice_id): Path<uuid::Uuid>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let (_, org_id) = require_manager(&session).await?;
+    let (actor_id, org_id) = require_manager(&session).await?;
 
     let state = crate::state::global_state().await;
-    streaming::invoice(state.db.clone(), org_id, invoice_id).await
+    streaming::invoice(state.db.clone(), org_id, actor_id, invoice_id).await
 }
 
 pub async fn export_invoice_xlsx(
@@ -603,12 +603,28 @@ const INVOICE_HEADERS: [&str; 9] = [
 ];
 
 fn invoice_export_metadata(invoice: &crate::models::Invoice) -> [String; 5] {
+    invoice_metadata(
+        &invoice.currency,
+        invoice.issued_on,
+        invoice.due_on,
+        invoice.terms_days,
+        &invoice.po_number,
+    )
+}
+
+fn invoice_metadata(
+    currency: &str,
+    issued_on: chrono::NaiveDate,
+    due_on: chrono::NaiveDate,
+    terms_days: i32,
+    po_number: &str,
+) -> [String; 5] {
     [
-        invoice.currency.trim().into(),
-        invoice.issued_on.to_string(),
-        invoice.due_on.to_string(),
-        invoice.terms_days.to_string(),
-        invoice.po_number.clone(),
+        currency.trim().into(),
+        issued_on.to_string(),
+        due_on.to_string(),
+        terms_days.to_string(),
+        po_number.into(),
     ]
 }
 

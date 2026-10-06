@@ -10,8 +10,10 @@ use axum::{
     http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
-use futures_util::{Stream, StreamExt, TryStreamExt};
-use sqlx::{Connection, PgPool};
+use futures_util::StreamExt;
+#[cfg(test)]
+use futures_util::{Stream, TryStreamExt};
+use sqlx::{Connection, PgConnection, PgPool};
 use tokio::{
     sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot},
     task::JoinHandle,
@@ -20,10 +22,15 @@ use uuid::Uuid;
 
 use super::{
     ExportParams, ProjectsExportParams,
-    limits::{configure_transaction, database_error},
+    limits::{configure_deadlines, database_error},
 };
 
+mod cursor;
+mod delivery;
+use delivery::{Authority, CsvBuffer, Purpose};
+
 const CHUNK_BYTES: usize = 64 * 1024;
+const CHUNK_ROWS: usize = 128;
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(60);
 static EXPORTS: LazyLock<Arc<Semaphore>> = LazyLock::new(|| Arc::new(Semaphore::new(4)));
 
@@ -114,6 +121,7 @@ where
 pub(super) async fn entries(
     pool: PgPool,
     org_id: Uuid,
+    actor_id: Uuid,
     params: ExportParams,
 ) -> Result<Response, StatusCode> {
     let from = params.from.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
@@ -127,15 +135,27 @@ pub(super) async fn entries(
             // pool. SQLx retains its pool slot while closing it on cancellation.
             connection.close_on_drop();
             let mut tx = connection.begin().await.map_err(database_error)?;
-            configure_transaction(&mut tx).await?;
+            let authority = Authority {
+                org_id,
+                actor_id,
+                purpose: Purpose::Manager,
+            };
+            authority.begin(&mut tx).await?;
+            cursor::declare_entries(&mut tx, org_id, (from, to), params.filters()).await?;
             let _ = filename.send("timesheet.csv".to_owned());
-            write_rows(
-                &sender,
-                super::stream_entries(&mut *tx, org_id, (from, to), params.filters()),
-                &super::ENTRY_EXPORT_HEADERS,
-                |writer, row| super::write_entry_csv(writer, &row),
-            )
-            .await?;
+            let mut output = CsvBuffer::new(&super::ENTRY_EXPORT_HEADERS)?;
+            loop {
+                let rows = cursor::entries(&mut tx, output.fetch_limit()).await?;
+                if rows.is_empty() {
+                    break;
+                }
+                for row in rows {
+                    super::write_entry_csv(&mut output.writer, &row)
+                        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                    output.record(&sender, &mut tx, &authority, None).await?;
+                }
+            }
+            output.flush(&sender, &mut tx, &authority).await?;
             tx.commit().await.map_err(database_error)
         },
     )
@@ -155,30 +175,45 @@ pub(super) async fn projects(
             let mut connection = pool.acquire().await.map_err(database_error)?;
             connection.close_on_drop();
             let mut tx = connection.begin().await.map_err(database_error)?;
-            configure_transaction(&mut tx).await?;
-            let _ = filename.send("projects.csv".to_owned());
-            write_rows(
-                &sender,
-                super::stream_projects_export(
-                    &mut *tx,
-                    org_id,
-                    viewer_id,
-                    params.scope.as_deref().unwrap_or("active"),
-                ),
-                &super::PROJECT_EXPORT_HEADERS,
-                |writer, row| {
-                    writer.write_record([
-                        row.client_name.as_str(),
-                        row.code.as_deref().unwrap_or(""),
-                        &row.name,
-                        row.project_type.label(),
-                        row.currency.trim(),
-                        &super::budget_cell(&row),
-                        if row.active { "Active" } else { "Archived" },
-                    ])
-                },
+            let authority = Authority {
+                org_id,
+                actor_id: viewer_id,
+                purpose: Purpose::Projects,
+            };
+            authority.begin(&mut tx).await?;
+            cursor::declare_projects(
+                &mut tx,
+                org_id,
+                viewer_id,
+                params.scope.as_deref().unwrap_or("active"),
             )
             .await?;
+            let _ = filename.send("projects.csv".to_owned());
+            let mut output = CsvBuffer::new(&super::PROJECT_EXPORT_HEADERS)?;
+            loop {
+                let rows = cursor::projects(&mut tx, output.fetch_limit()).await?;
+                if rows.is_empty() {
+                    break;
+                }
+                for row in rows {
+                    output
+                        .writer
+                        .write_record([
+                            row.client_name.as_str(),
+                            row.code.as_deref().unwrap_or(""),
+                            &row.name,
+                            row.project_type.label(),
+                            row.currency.trim(),
+                            &super::budget_cell(&row),
+                            if row.active { "Active" } else { "Archived" },
+                        ])
+                        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                    output
+                        .record(&sender, &mut tx, &authority, Some(row.id))
+                        .await?;
+                }
+            }
+            output.flush(&sender, &mut tx, &authority).await?;
             tx.commit().await.map_err(database_error)
         },
     )
@@ -188,6 +223,7 @@ pub(super) async fn projects(
 pub(super) async fn invoice(
     pool: PgPool,
     org_id: Uuid,
+    actor_id: Uuid,
     invoice_id: Uuid,
 ) -> Result<Response, StatusCode> {
     response(
@@ -197,54 +233,56 @@ pub(super) async fn invoice(
             let mut connection = pool.acquire().await.map_err(database_error)?;
             connection.close_on_drop();
             let mut tx = connection.begin().await.map_err(database_error)?;
-            configure_transaction(&mut tx).await?;
-            let invoice = super::fetch_invoice_metadata(&mut *tx, invoice_id, org_id)
-                .await
-                .map_err(database_error)?
+            let authority = Authority {
+                org_id,
+                actor_id,
+                purpose: Purpose::Manager,
+            };
+            authority.begin(&mut tx).await?;
+            cursor::declare_invoice(&mut tx, org_id, invoice_id).await?;
+            let invoice = cursor::invoice(&mut tx, 1)
+                .await?
+                .pop()
                 .ok_or(StatusCode::NOT_FOUND)?;
             let _ = filename.send(format!("invoice-{}.csv", invoice.number));
-            let metadata = super::invoice_export_metadata(&invoice);
-            write_rows(
-                &sender,
-                super::stream_invoice_lines(&mut *tx, invoice_id),
-                &super::INVOICE_HEADERS,
-                |writer, line| {
-                    writer.write_record(
-                        [
-                            line.description.as_str(),
-                            &line
-                                .minutes
-                                .map(|minutes| super::format_hours2(minutes.into()))
-                                .unwrap_or_default(),
-                            &line
-                                .rate_cents
-                                .map(super::format_cents_plain)
-                                .unwrap_or_default(),
-                            &super::format_cents_plain(line.amount_cents),
-                        ]
-                        .into_iter()
-                        .chain(metadata.iter().map(String::as_str)),
-                    )
-                },
-            )
-            .await?;
-            let mut total = csv::Writer::from_writer(Vec::new());
-            for (label, cents) in invoice.breakdown() {
-                total
+            let metadata = invoice.metadata();
+            let totals = invoice.breakdown();
+            let mut output = CsvBuffer::new(&super::INVOICE_HEADERS)?;
+            if invoice.line_id.is_some() {
+                invoice.write(&mut output.writer, &metadata)?;
+                output.record(&sender, &mut tx, &authority, None).await?;
+            }
+            drop(invoice);
+            loop {
+                let rows = cursor::invoice(&mut tx, CHUNK_ROWS as i32).await?;
+                if rows.is_empty() {
+                    break;
+                }
+                for line in rows {
+                    line.write(&mut output.writer, &metadata)?;
+                    output.record(&sender, &mut tx, &authority, None).await?;
+                }
+            }
+            output.flush(&sender, &mut tx, &authority).await?;
+            for (label, cents) in totals {
+                output
+                    .writer
                     .write_record(
                         [label.as_str(), "", "", &super::format_cents_plain(cents)]
                             .into_iter()
                             .chain(metadata.iter().map(String::as_str)),
                     )
                     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                output.record(&sender, &mut tx, &authority, None).await?;
             }
-            flush(&sender, total).await?;
+            output.flush(&sender, &mut tx, &authority).await?;
             tx.commit().await.map_err(database_error)
         },
     )
     .await
 }
 
+#[cfg(test)]
 async fn flush(
     sender: &mpsc::Sender<Vec<u8>>,
     writer: csv::Writer<Vec<u8>>,
@@ -261,6 +299,7 @@ async fn flush(
     Ok(())
 }
 
+#[cfg(test)]
 async fn write_rows<T>(
     sender: &mpsc::Sender<Vec<u8>>,
     rows: impl Stream<Item = Result<T, sqlx::Error>>,
