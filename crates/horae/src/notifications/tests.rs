@@ -4,6 +4,8 @@ use super::*;
 use crate::config::MailConfig;
 use uuid::Uuid;
 
+mod authority;
+
 struct Stub {
     _directory: tempfile::TempDir,
     program: PathBuf,
