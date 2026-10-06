@@ -4,6 +4,8 @@ pub mod client;
 pub mod invoice;
 mod jobs;
 pub mod organization;
+#[cfg(feature = "server")]
+pub(crate) mod permissions;
 pub mod project;
 pub mod project_creation;
 pub mod task;
