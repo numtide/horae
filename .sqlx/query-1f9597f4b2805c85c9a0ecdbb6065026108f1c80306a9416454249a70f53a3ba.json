@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, org_id FROM horae_jobs\n               WHERE octet_length(report::text) > $1\n                  OR octet_length((checkpoint->'report')::text) > $1\n               ORDER BY id LIMIT 1 FOR UPDATE",
+  "query": "SELECT id, org_id FROM horae_jobs\n               WHERE octet_length(report::text) > $1\n                  OR octet_length((checkpoint->'report')::text) > $1\n               ORDER BY id LIMIT 1",
   "describe": {
     "columns": [
       {
@@ -24,5 +24,5 @@
       false
     ]
   },
-  "hash": "59a299a0f9d9cf3af27ae9d7e4e74dd69566f6bf480e7d6de1cdc746c12f20bf"
+  "hash": "1f9597f4b2805c85c9a0ecdbb6065026108f1c80306a9416454249a70f53a3ba"
 }
