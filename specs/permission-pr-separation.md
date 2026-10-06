@@ -107,6 +107,7 @@ Clients MVP as canonical-permission acceptance.
 | Current authority for organization branding writes, [#225](https://github.com/numtide/horae/pull/225) | `fix/branding-current-authority`, `.worktrees/branding-current-authority` | `02f7b58` | Draft at `f2d6bd4`; full suite, SQLx, offline server/WASM lint and format passed; CI pending |
 | Internal reusable-profile commands, [#226](https://github.com/numtide/horae/pull/226) | `refactor/permission-template-commands`, `.worktrees/permission-template-commands` | #222 `e9695fd` | Draft at `82d15f3`; 1,189 tests, SQLx, offline server/WASM Clippy and format passed; full local Flake Check running; no endpoints or activation |
 | Current authority for user creation/role/activity, [#227](https://github.com/numtide/horae/pull/227) | `fix/user-mutation-authority`, `.worktrees/user-mutation-authority` | `02f7b58` | Draft at `142eda1`; 1,127 tests, SQLx, offline server/WASM Clippy and format passed; required CI pending |
+| Assignment authority and project writer coordination, [#228](https://github.com/numtide/horae/pull/228) | `fix/project-access-lock-order`, `.worktrees/project-access-lock-order` | #227 `142eda1` | Draft at `0e1e675`; 1,137 tests, SQLx, offline server/WASM Clippy and format passed; full local Flake Check pending |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -267,7 +268,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `1d45191` | Require Harvest parity for permissions and scoped approvals | specification-history | Held in original backup; extraction pending |
 | `a7727f1` | Add record scope evaluation for permissions | scope-domain | Code/tests in #219; specification hunks retained for reconciliation |
 | `2abce9a` | Enforce approval isolation and record permission boundaries | approval-isolation | Held in original backup; extraction pending |
-| `757f43d` | Enforce tenant and administrator boundaries for assignments | legacy-access-writers | Held in original backup; extraction pending |
+| `757f43d` | Enforce tenant and administrator boundaries for assignments | legacy-access-writers | Rust/test/cache changes in #228 with subsequent coordination repair; specification hunks retained |
 | `d3a4ff3` | Document profile reapplication and import permission boundaries | specification-history | Held in original backup; extraction pending |
 | `dcf21ef` | Specify permission migration safeguards and rate-scope verification | specification-history | Held in original backup; extraction pending |
 | `b3ee8da` | Align authorization governance with scoped permission profiles | specification-history | Held in original backup; extraction pending |
@@ -314,12 +315,12 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `9a7e05d` | Add audited project manager delegation | project-manager-delegation | Held in original backup; extraction pending |
 | `fc85231` | Add administrator-only permission audit lookup | permission-audit | Held in original backup; extraction pending |
 | `c3d17cb` | Prevent deadlocks during legacy import report conversion | import-transaction-lifecycle | Conversion source/tests/SQLx in #223; specification hunks retained for reconciliation |
-| `3ae8e08` | Coordinate project access changes before locking resources | legacy-access-writers | Organization SHARE query reused in #220; writer/helper consumers and remaining hunks retained |
+| `3ae8e08` | Coordinate project access changes before locking resources | legacy-access-writers | Rust/test/cache changes in #228; organization SHARE query also reused in #220; specification hunks retained |
 | `907bc88` | Recheck authority when saving organization branding | branding-authority | Source/test/cache hunks in #225; specification hunks retained for reconciliation |
 | `d7a5a21` | Revalidate administrator authority for Harvest connection changes | import-authority | Held in original backup; extraction pending |
-| `4fac6af` | Revalidate import job command and status authority | import-authority | Held in original backup; extraction pending |
+| `4fac6af` | Revalidate import job command and status authority | import-authority | Exact executor-based `jobs::cancel` isolated with CSV preparation; other command/status and specification hunks retained |
 | `b4672a4` | Revalidate authority during import error downloads | import-authority | Held in original backup; extraction pending |
-| `e5fcc5a` | Prepare durable CSV batches before opening transactions | import-transaction-lifecycle | Held in original backup; extraction pending |
+| `e5fcc5a` | Prepare durable CSV batches before opening transactions | import-transaction-lifecycle | Two exact Rust blobs isolated in `fix/csv-batch-transaction-boundary`; verification pending; specification hunks retained |
 | `482b7c5` | Retain the original requester of import jobs | import-requester-provenance | Held in original backup; extraction pending |
 | `e949e4c` | Drain interrupted import transactions before releasing reservations | import-transaction-lifecycle | Production/test/cache hunks in #224; specification hunks retained for reconciliation |
 | `c0cfb8f` | Scope rate permissions to their owning resource | scope-domain | Code/tests in #221; specification hunks retained for reconciliation |
@@ -866,3 +867,82 @@ boundary (`757f43d` plus `3ae8e08`) with its original race tests on #227, retain
 #216's client validation; verify that combined stack. Keep collecting #226's
 live full check without restarting it. Remaining source/specification groups
 still require mapping and verification; the goal is not complete.
+
+### 2026-10-06 — Project writer coordination extraction
+
+The preceding iteration made progress: #227 was published with its full local
+suite, SQLx and both target lints passed. Reconfirmed #216's merge and resumed
+#226's live `46319` check; browser checks continue, without a restart.
+
+Created `fix/project-access-lock-order` in `.worktrees/project-access-lock-order`
+on #227 `142eda1`. Applied the Rust changes of `757f43d` and `3ae8e08` together.
+Fourteen of fifteen files match `3ae8e08` byte-for-byte; the sole difference is
+the client validation already merged in #216, which remains intact. Original
+assignment, task, editor, invoice-FK, entry-cascade and user-revocation tests are
+preserved. No UI, schema, policy activation or real-data change is included.
+
+The dependency on #227 is real: the editor/revocation race exercises its actual
+actor-aware user creation and role-change helpers. This delivers original
+T024–T026 assignment work and T068–T070 project-family coordination, not the
+complete T042 lock hierarchy or canonical-permission enforcement. Specification
+hunks remain preserved in the originals pending reconciliation.
+
+Formatting passed unchanged (`6430`). Full workspace tests for this combined
+stack are running in `75426` on a fresh private PostgreSQL cluster. Next: finish
+source/trigger/caller review, collect tests, regenerate SQLx and verify offline
+server/WASM lint before publication; retain #226's live full-check handle.
+
+The suite passed (`75426`): 836 app, 180 integration and 121 core tests, 1,137
+total, with 11 existing manual tests ignored. This includes all ten added
+regressions and the dependent #227 tests. Source review traced every production
+creation-actor/task-enablement caller, checked the retained editor isolation and
+parent lock mode, the existing revision triggers/member cascades, tenant-safe
+assignment recheck and post-commit events. No high/critical finding in this
+bounded extraction; full canonical/historical-writer integration is not claimed.
+
+Complete SQLx regeneration passed (`30003`): 28 additions match `3ae8e08`, four
+superseded descriptors were removed and 1,003 base descriptors are unchanged
+(1,031 total). The removed queries are the replaced unscoped assignment deletion,
+two late currency SHARE reads and task-link resource query, not lost test cache.
+Unsigned commit `0e1e6759cff0b80a046ced4694a78022f096ab3d` is published as draft
+#228 against #227. Offline server lint runs in `17183`; full Nix check runs on
+the clean committed stack in `1662`. WASM lint remains to run. Master-targeted
+Actions will also be required after retargeting.
+
+Meanwhile isolated the independent CSV preparation work in
+`.worktrees/csv-batch-transaction-boundary`, branch
+`fix/csv-batch-transaction-boundary`, based on `02f7b58`. Both parser/test files
+match `e5fcc5a`; the only additional source hunk is the exact generic
+`jobs::cancel` from `4fac6af`, needed by the original cancellation barrier test.
+No other import admission/status commands were copied and no test was weakened.
+Formatting passed (`26556`); runtime/cache/lint gates are not yet accepted.
+Do not run concurrent local Cargo checks in the shared target; start its suite
+after #228's server/WASM checks finish. #226's full check remains live in `46319`.
+
+### 2026-10-06 — Resume extraction verification
+
+The preceding response restated a goal rather than advancing repository state
+(no progress). Read the actual saved objective and revalidated #216 as merged
+at `02f7b58`. Existing extraction branches and unpublished changes remain in
+place. Both original Nix handles (`46319`, `1662`) were confirmed live and
+resumed, not restarted. #226 has passed SQLx preparation and its test derivation;
+the overall check remains pending. #228's client release build has passed.
+
+#228's offline all-target workspace/server Clippy passed (`17183`), followed by
+WASM Clippy (`40125`); neither required source changes. Its full Nix check and
+master-targeted Actions after retargeting remain acceptance gates.
+
+Rechecked the CSV extraction against `e5fcc5a`: both original source/test blobs
+are unchanged. The sole `jobs.rs` adaptation is the original executor-generic
+cancellation helper, keeping its SQL predicates unchanged and allowing the
+original test to cancel through its held publication barrier. Reviewed the
+preparation loop, first/subsequent batch boundaries, preview rollback/resume,
+parser shutdown and unchanged pool callers. No high/critical source finding in
+this bounded extraction; runtime verification remains pending. Started the full
+workspace suite on a fresh private PostgreSQL cluster after #228's local lint
+finished; no concurrent local Cargo command uses the shared target.
+
+Next: collect the CSV suite, regenerate its complete SQLx cache, verify both
+offline targets and publish only after these gates pass. Collect both live Nix
+checks. Many original source/specification groups still require extraction and
+reconciliation; the separation goal is not complete.
