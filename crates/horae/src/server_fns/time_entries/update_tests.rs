@@ -292,6 +292,106 @@ async fn grant_task(pool: &PgPool, entry: &TimeEntry) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn assignment_cascade_allows_an_inflight_entry_project_fk_to_finish(pool: PgPool) {
+    let entry = editable_entry(&pool, true).await;
+    restrict_task(&pool, &entry).await;
+    grant_task(&pool, &entry).await;
+    let actor = sqlx::query_as!(User,
+        r#"SELECT id, org_id, email, name, oidc_subject, org_role AS "org_role: OrgRole",
+        cost_rate_cents, billable_rate_cents, active, created_at AS "created_at: chrono::DateTime<chrono::Utc>"
+        FROM users WHERE id=$1"#, entry.user_id,
+    ).fetch_one(&pool).await.unwrap();
+    let assignment = sqlx::query_scalar!(
+        "SELECT id FROM assignments WHERE project_id=$1 AND user_id=$2",
+        entry.project_id,
+        entry.user_id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let mut barrier = pool.begin().await.unwrap();
+    let blocker = sqlx::query_scalar!("SELECT pg_backend_pid() AS \"pid!\"")
+        .fetch_one(&mut *barrier)
+        .await
+        .unwrap();
+    sqlx::query!("LOCK TABLE time_entries IN SHARE MODE")
+        .execute(&mut *barrier)
+        .await
+        .unwrap();
+    let mut requests = tokio::task::JoinSet::new();
+    let db = pool.clone();
+    requests.spawn(async move {
+        insert_time_entry(
+            &db,
+            entry.user_id,
+            NewTimeEntry {
+                project_id: entry.project_id,
+                task_id: entry.task_id,
+                spent_date: entry.spent_date,
+                minutes: 15,
+                notes: None,
+                billable: true,
+                is_running: false,
+                start_minute: None,
+            },
+        )
+        .await
+        .map(|_| ())
+    });
+    wait_for_blocked(&pool, blocker).await;
+    let writer = sqlx::query_scalar!(
+        "SELECT pid AS \"pid!\" FROM pg_stat_activity WHERE datname=current_database() AND $1=ANY(pg_blocking_pids(pid))", blocker,
+    ).fetch_one(&pool).await.unwrap();
+    let db = pool.clone();
+    requests.spawn(async move {
+        crate::server_fns::projects::remove_assignment(&db, &actor, assignment)
+            .await
+            .map(|removed| assert!(removed.is_some()))
+    });
+    wait_for_blocked(&pool, writer).await;
+    barrier.commit().await.unwrap();
+    while let Some(result) = tokio::time::timeout(Duration::from_secs(10), requests.join_next())
+        .await
+        .unwrap()
+    {
+        result.unwrap().unwrap();
+    }
+    let remaining = sqlx::query!(
+        "SELECT (SELECT count(*) FROM time_entries WHERE project_id=$1) AS entries,
+                (SELECT count(*) FROM assignments WHERE project_id=$1) AS assignments,
+                (SELECT count(*) FROM project_task_members WHERE project_id=$1) AS members",
+        entry.project_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        (remaining.entries, remaining.assignments, remaining.members),
+        (Some(2), Some(0), Some(0))
+    );
+    let denied = insert_time_entry(
+        &pool,
+        entry.user_id,
+        NewTimeEntry {
+            project_id: entry.project_id,
+            task_id: entry.task_id,
+            spent_date: entry.spent_date,
+            minutes: 15,
+            notes: None,
+            billable: true,
+            is_running: false,
+            start_minute: None,
+        },
+    )
+    .await;
+    assert!(
+        denied.is_err(),
+        "removed task allowance must deny the next entry"
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn restricted_task_rejects_reschedule_and_delete(pool: PgPool) {
     let entry = editable_entry(&pool, true).await;
     restrict_task(&pool, &entry).await;

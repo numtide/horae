@@ -13,14 +13,15 @@ enum Change {
 async fn remove_admin(
     pool: &PgPool,
     org: Uuid,
+    actor: Uuid,
     user: Uuid,
     change: Change,
 ) -> Result<User, ServerFnError> {
     match change {
-        Change::Demote => change_user_role(pool, org, user, OrgRole::Member)
+        Change::Demote => change_user_role(pool, org, actor, user, OrgRole::Member)
             .await
             .map(|(user, _)| user),
-        Change::Deactivate => change_user_active(pool, org, user, false)
+        Change::Deactivate => change_user_active(pool, org, actor, user, false)
             .await
             .map(|(user, _)| user),
     }
@@ -58,7 +59,8 @@ async fn concurrent_changes_keep_an_admin(pool: &PgPool, first: Change, second: 
 
     let mut changes = JoinSet::new();
     let db = pool.clone();
-    changes.spawn(async move { remove_admin(&db, ids.org_id, ids.user_id, first).await });
+    changes
+        .spawn(async move { remove_admin(&db, ids.org_id, ids.user_id, ids.user_id, first).await });
 
     timeout(std::time::Duration::from_secs(10), async {
         while blocked_connections(pool).await < 1 {
@@ -69,7 +71,7 @@ async fn concurrent_changes_keep_an_admin(pool: &PgPool, first: Change, second: 
     .expect("first change must reach the held user lock");
 
     let db = pool.clone();
-    changes.spawn(async move { remove_admin(&db, ids.org_id, other, second).await });
+    changes.spawn(async move { remove_admin(&db, ids.org_id, other, other, second).await });
 
     // The second request either waits behind the first transaction or commits
     // while the first is paused. Observe that boundary, not a timing assumption.
@@ -139,7 +141,7 @@ async fn the_last_admin_cannot_be_demoted_or_deactivated(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     for change in [Change::Demote, Change::Deactivate] {
         assert!(matches!(
-            remove_admin(&pool, ids.org_id, ids.user_id, change).await,
+            remove_admin(&pool, ids.org_id, ids.user_id, ids.user_id, change).await,
             Err(ServerFnError::ServerError { code: CONFLICT, .. })
         ));
     }
@@ -148,11 +150,12 @@ async fn the_last_admin_cannot_be_demoted_or_deactivated(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn unchanged_admin_access_is_allowed(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
-    let (user, role) = change_user_role(&pool, ids.org_id, ids.user_id, OrgRole::Admin)
-        .await
-        .unwrap();
+    let (user, role) =
+        change_user_role(&pool, ids.org_id, ids.user_id, ids.user_id, OrgRole::Admin)
+            .await
+            .unwrap();
     assert_eq!(role, Some(user.org_role));
-    let (user, active) = change_user_active(&pool, ids.org_id, ids.user_id, true)
+    let (user, active) = change_user_active(&pool, ids.org_id, ids.user_id, ids.user_id, true)
         .await
         .unwrap();
     assert_eq!(active, Some(user.active));
@@ -164,7 +167,7 @@ async fn access_changes_cannot_target_another_organization(pool: PgPool) {
     let foreign = seed(&pool, OrgRole::Admin).await;
     for change in [Change::Demote, Change::Deactivate] {
         assert!(matches!(
-            remove_admin(&pool, ids.org_id, foreign.user_id, change).await,
+            remove_admin(&pool, ids.org_id, ids.user_id, foreign.user_id, change).await,
             Err(ServerFnError::ServerError {
                 code: NOT_FOUND,
                 ..
