@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use crate::models::permissions::{PermissionSource, PermissionTemplate, PersonPermissions};
 
+pub(crate) mod own;
 pub(crate) mod profiles;
 pub(crate) mod project_management;
 pub(crate) mod templates;
@@ -165,6 +166,10 @@ mod template_tests;
 #[cfg(test)]
 #[path = "permissions/tests/profiles.rs"]
 mod profile_tests;
+
+#[cfg(test)]
+#[path = "permissions/tests/own.rs"]
+mod own_tests;
 
 #[cfg(test)]
 #[path = "permissions/tests/project_management.rs"]
