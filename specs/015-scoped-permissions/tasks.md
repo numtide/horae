@@ -6,6 +6,13 @@ Status: executable foundation tasks; later phases are required work packages to 
 
 ## Phase 1: Setup
 
+Task catalog integration follows `contracts/task-permissions.md`:
+
+- [x] T227 Reproduce canonical task catalog denial/overexposure, independent global-rate scope and tracking-history preservation through existing production readers (OP14, FR-006/007/008/010/018/021).
+- [x] T228 Enforce the reviewed catalog/project/tracking read predicates with strict current authority, tenant-consistent identities and protected rates; preserve legacy policy and existing time-context validation.
+- [x] T229 Integrate equivalent compatibility list/count/direct-ID delivery and real-session tests; verify concurrency/revocation, SQLx completeness, native/WASM and affected browser consumers before publication.
+- [ ] T230 Reconcile direct task mutation intent, current actor/field authority and project-link effects with the existing editor; add preservation, denied-write and race tests, then implement the reviewed writes and actual consumer affordances. Do not infer unresolved lifecycle or creation predicates.
+
 Ordinary detailed Reports integration follows `contracts/time-reports.md`:
 
 - [x] T201 Reproduce and implement scoped detailed report reads with historical labels, exact report rounding, narrowing multi-ID filters, requester binding and bounded keyset pages.

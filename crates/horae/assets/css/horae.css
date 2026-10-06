@@ -713,6 +713,9 @@ h1, h2, h3, h4, h5, h6 {
    to drag the rail back open. */
 .app-shell.collapsed .sidebar-resize { left: calc(68px - 3px); }
 .sidebar-resize:hover { background: var(--color-primary-border); }
+/* The sticky rail is a stacking context: its popovers cannot out-rank the
+   sibling resize handle. Suspend dragging while either rail popover is open. */
+.app-sidebar:has(.sidebar-timer-pop, .sidebar-menu) ~ .sidebar-resize { pointer-events: none; }
 .resize-overlay { position: fixed; inset: 0; z-index: 40; cursor: col-resize; user-select: none; }
 
 /* Mobile navigation is an in-flow disclosure, sharing the desktop rail's

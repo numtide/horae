@@ -808,7 +808,12 @@ async fn tasks_for_viewer(
     purpose: TaskRead,
 ) -> Result<Vec<Task>, ServerFnError> {
     let tracking = matches!(purpose, TaskRead::Tracking);
-    sqlx::query_as!(
+    let Some(mut access) = read_access::ReadAccess::begin(pool, viewer.org_id, viewer.id).await?
+    else {
+        return Ok(Vec::new());
+    };
+    let rows = if access.legacy() {
+        sqlx::query_as!(
         Task,
         "SELECT t.id, t.org_id, t.name, t.billable_default, t.active,
                 CASE WHEN NOT $4 AND access.can_view_rates THEN t.default_rate_cents END AS default_rate_cents
@@ -824,9 +829,59 @@ async fn tasks_for_viewer(
         project_id,
         tracking,
     )
-    .fetch_all(pool)
+    .fetch_all(&mut *access.tx)
     .await
-    .map_err(server_err)
+    .map_err(server_err)?
+    } else {
+        sqlx::query_as!(
+            Task,
+            "SELECT t.id,t.org_id,t.name,t.billable_default,t.active,
+               CASE WHEN NOT $4 AND $6 THEN t.default_rate_cents END AS default_rate_cents
+             FROM tasks t
+             CROSS JOIN LATERAL (
+               SELECT EXISTS (
+                 SELECT 1 FROM time_entries te
+                 JOIN projects p ON p.id=te.project_id AND p.org_id=te.org_id
+                 JOIN clients c ON c.id=p.client_id AND c.org_id=p.org_id
+                 WHERE te.org_id=t.org_id AND te.task_id=t.id AND te.user_id=$1
+               ) AS own_history,
+               EXISTS (
+                 SELECT 1 FROM project_tasks pt
+                 JOIN projects p ON p.id=pt.project_id AND p.org_id=t.org_id
+                 JOIN clients c ON c.id=p.client_id AND c.org_id=p.org_id
+                 JOIN assignments member ON member.project_id=p.id AND member.user_id=$1
+                 WHERE pt.task_id=t.id
+               ) AS member_task
+             ) context
+             WHERE t.org_id=$2 AND (t.active OR ($4 AND context.own_history))
+               AND CASE WHEN $4 THEN $5 OR context.own_history OR context.member_task
+                 WHEN $3::uuid IS NULL THEN $5 ELSE true END
+               AND ($3::uuid IS NULL OR EXISTS (
+                 SELECT 1 FROM project_tasks pt
+                 JOIN projects p ON p.id=pt.project_id AND p.org_id=t.org_id
+                 JOIN clients c ON c.id=p.client_id AND c.org_id=p.org_id
+                 LEFT JOIN project_management_assignments management ON management.org_id=p.org_id
+                   AND management.project_id=p.id AND management.manager_id=$1
+                 LEFT JOIN assignments member ON member.project_id=p.id AND member.user_id=$1
+                 WHERE pt.task_id=t.id AND p.id=$3
+                   AND ($7 OR ($8 AND management.id IS NOT NULL) OR member.id IS NOT NULL)
+               ))
+             ORDER BY t.name,t.id",
+            viewer.id,
+            viewer.org_id,
+            project_id,
+            tracking,
+            access.has(Permission::TaskReadAll),
+            access.has(Permission::BillableRateReadAll),
+            access.has(Permission::ProjectReadAll),
+            access.has(Permission::ProjectReadManaged),
+        )
+        .fetch_all(&mut *access.tx)
+        .await
+        .map_err(server_err)?
+    };
+    access.tx.commit().await.map_err(server_err)?;
+    Ok(rows)
 }
 
 #[server]

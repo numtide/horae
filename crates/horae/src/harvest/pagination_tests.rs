@@ -8,6 +8,7 @@ use tower::ServiceExt;
 use tower_sessions::{MemoryStore, Session};
 
 mod project_permissions;
+mod task_permissions;
 
 async fn signed_in(pool: &PgPool, user_id: Uuid) -> Router {
     let session = Session::new(None, Arc::new(MemoryStore::default()), None);

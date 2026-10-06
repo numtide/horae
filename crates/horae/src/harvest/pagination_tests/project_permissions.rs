@@ -4,7 +4,7 @@ use horae_core::permissions::catalog::{Permission, PermissionSelection};
 
 mod concurrency;
 
-async fn selection(pool: &PgPool, user_id: Uuid, permissions: &[Permission]) {
+pub(super) async fn selection(pool: &PgPool, user_id: Uuid, permissions: &[Permission]) {
     let grants: Vec<String> = serde_json::from_value(
         serde_json::to_value(PermissionSelection::new(permissions)).unwrap(),
     )
@@ -19,7 +19,11 @@ async fn selection(pool: &PgPool, user_id: Uuid, permissions: &[Permission]) {
     .unwrap();
 }
 
-async fn canonical(pool: &PgPool, role: OrgRole, permissions: &[Permission]) -> (SeedIds, Router) {
+pub(super) async fn canonical(
+    pool: &PgPool,
+    role: OrgRole,
+    permissions: &[Permission],
+) -> (SeedIds, Router) {
     let ids = seed(pool, role).await;
     sqlx::query!(
         "INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)

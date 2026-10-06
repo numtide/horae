@@ -1,5 +1,149 @@
 # Scoped permissions investigation progress
 
+## 2026-10-06 — Task read acceptance and write integration
+
+- Previous turn made progress: added source/browser coverage, corrected the
+  real-pointer resize interception and completed all six affected browser suites.
+  Revalidated `93182` without restarting it. It exited 0: 29 API tests, 123 project
+  tests, registered-session matrix, all-target SQLx preparation, offline test
+  compilation and strict native/WASM Clippy passed on the final Rust snapshot.
+- Completed the scoped adversarial self-review against the actual task reader,
+  compatibility query, session tests, actor fences and consumer wiring. No
+  additional high/critical finding remains identified for this read increment;
+  this is not independent review or acceptance of unimplemented writers.
+- T228/T229 are complete. The contract now separates historical baseline,
+  accepted reads and remaining write/UI requirements. Recorded the next concrete
+  write sequence: ordinary global creation, composite project checks, explicit
+  preserve/clear/set rate intent, response redaction and separate lifecycle
+  effects. Existing editor and global-default semantics remain authoritative.
+
+Next: publish the verified read increment after formatting, then reproduce
+canonical task-creation authorization failures in the existing mutation path.
+T230, full permissions activation and complete Nix acceptance remain open. No
+merge or real-data changes.
+
+## 2026-10-06 — Task browser delivery and adversarial checks
+
+- The preceding estimate turn was a verified wait: it polled live `65693` and
+  collected successful compatibility/project/session tests and SQLx preparation.
+  Resumed the same handle; it exited 0 with offline all-target test compilation
+  and strict native/WASM Clippy also passing. No duplicate verifier was started
+  while that source snapshot was active.
+
+- Reviewed task SQL projections, strict actor loading, compatibility totals,
+  actual timer consumers and the editor's separate minimal catalog. Added two
+  source regressions for current manager designation and corrupt cross-tenant
+  client parents in both historical and membership identities. `93182` is
+  verifying the extended source snapshot with the full task runner; collect its
+  result before claiming those cases passed.
+
+- Added the real Chromium `task-read-permissions` suite and included it in the
+  default browser runner. It checks archived own-timer labels, global catalog
+  denial, rate-free tracking despite financial grants, enabled-task selection,
+  and persisted start/stop with disposable fixtures only.
+
+- Browser build `90382` passed. Browser run `86817` reached all permission and
+  timer assertions, then failed a real Cancel click: the sibling sidebar resize
+  handle intercepted the button. No forced click or skipped assertion was used.
+  The localized stylesheet fix suspends that handle only while a timer/account
+  popover exists, without changing menu components, geometry, tokens or layering.
+  Added assertions that closing restores dragging and that account menus obey
+  the same boundary. Rebuilt bundle `23475` passed; `29067` is confirming task,
+  mobile/menu, project-editor/rate and Timesheet browser regressions.
+
+- Rechecked official task management and running-timer documentation. Recorded
+  separate global/project restoration, running-timer archive refusal and the
+  difference between public API versus web task permissions in the task contract.
+  These findings constrain T230; no global restore shortcut or implicit public
+  API policy change is authorized by this read increment.
+
+- Extended verification `93182` has now passed all 29 API and 123 project tests,
+  including both new adversarial cases; the remaining session/cache/lint stages
+  are still running. Browser `29067` has passed the new task suite, mobile
+  navigation, all menu checks, scoped editor and task-rate suites; its Timesheet
+  suite is still running. Do not restart either live handle.
+
+- `29067` exited 0: all six browser suites passed, including Timesheet delegated
+  commands, revocation and owner-only recovery. `93182` also passed the complete
+  session matrix and has moved on to SQLx/cache/native/WASM checks. T228 is
+  complete; T229 awaits the final source snapshot gates and publication review.
+
+Next: collect `93182`, address actual failures and record exact
+acceptance before publishing. Continue direct task writes and canonical catalog
+controls under T230 afterward. Full permissions activation remains incomplete;
+no merge or real-data changes have occurred.
+
+## 2026-10-06 — Task compatibility delivery integration
+
+- Previous turn made progress: corrected the ordinary reader and passed all
+  121 project tests, then started independent compatibility regressions.
+  Revalidated and collected the same `59836` handle; it exited 101 after
+  2m41s compilation with all five expected API failures. The unchanged API
+  rejected canonical readers, inherited legacy scope/rates and accepted unknown
+  policy. No duplicate verifier was launched.
+- Replaced the separate task count/list/detail SQL with one authorized
+  count/page query, reusing the existing strict organization/actor read fence.
+  Canonical catalog visibility and global-rate projection are independent;
+  legacy policy, filters, stable ordering and direct-ID not-found semantics
+  remain intact. Empty and exhausted pages retain the authorized total.
+- Added actual-router tests for financial-only versus whole-catalog revocation
+  after an organization wait, deactivation after session lookup and malformed
+  state. Added registered Dioxus session-cookie coverage for catalog/tracking
+  fields, anonymous/foreign/restricted users, revocation and inactive sessions.
+- `65693` is running the compatibility suite, project regressions and complete
+  session matrix, followed by all-target SQLx preparation, offline test
+  compilation and strict native/WASM Clippy. Its PostgreSQL is temporary and
+  socket-only. Keep Rust unchanged while this verification snapshot is running;
+  no new result or completed API gate is claimed yet.
+
+Next: collect `65693` and fix actual failures. Finish adversarial task-source
+coverage and affected browser consumers, then publish only after the cache and
+lint gates pass. Direct task writes, catalog controls and full activation remain
+required; this read increment does not complete the permissions goal.
+
+## 2026-10-06 — Task catalog authority regressions
+
+- Previous turn made progress: reviewed and published project read delivery in
+  `2631186`, followed by acceptance bookkeeping in `1b81680`. Revalidated the
+  clean worktree at that head before beginning this increment; no old verifier
+  was restarted.
+- Traced catalog, tracking, retained project-task endpoints, the existing editor
+  catalog, compatibility API and direct mutations. Reopened official Harvest
+  permissions/rate guidance and recorded sources, scope and limitations in
+  `contracts/task-permissions.md`. No interactive restricted-user Harvest
+  observation or Spec Kit command execution is claimed; the local skill search
+  still exposes no `speckit-*` instruction files.
+- Added six production-reader regressions. `38679` completed compilation in
+  2m56s and exited 101: five intended failures reproduce rejected canonical
+  readers, inherited legacy catalog/rate authority and unknown-policy fallback;
+  the existing archived-own-history behavior passed. T227 is complete.
+- Reused the current read transaction and strict permission loader for task
+  readers. Canonical global catalog scope now requires `TaskReadAll`, global
+  default rates require all-rate read and tracking remains rate-free. Project
+  labels retain independent linked-project/membership scope. Policy-zero SQL is
+  preserved and both paths hold current actor/organization authority through
+  materialization; no new policy, migration or dependency was added.
+- Expanded tests to project-versus-catalog scope, private-progress membership,
+  foreign/inactive actors and financial revocation after a real organization
+  lock wait. `78824` is running formatting and all project tests against a new
+  socket-only PostgreSQL cluster. No successful result is claimed yet. The new
+  SQL cache has not been regenerated and this increment is not published.
+- `78824` exited 0 after 2m44s compilation: all 121 project tests passed in
+  13.07s, including the ten task regressions and unchanged legacy privacy,
+  membership, financial and lifecycle tests. This does not prove equivalent
+  compatibility delivery. Added five real-router task API regressions for
+  catalog scope, count/direct IDs, global-rate revocation, archived filtering
+  and unknown policy before replacing its independent legacy queries.
+- The unchanged-API verification is live in `59836`, using the same isolated
+  runner. Keep its Rust snapshot unchanged until compilation finishes; do not
+  launch a duplicate build or claim those five tests have passed.
+
+Next: collect `59836` for the new regressions against the unchanged API, then
+integrate its count/page/direct-ID query with current authority and extend
+session/race coverage before preparing SQLx and native/WASM gates. Direct writes
+and actual catalog consumer affordances remain required; no merge or real-data
+activation.
+
 ## 2026-10-06 — Project read delivery review
 
 - The preceding estimate-only turn was no implementation progress. Revalidated
