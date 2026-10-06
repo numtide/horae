@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, actor_user_id, operator_id, operator_command, format_version, audit,\n                created_at as \"created_at: DateTime<Utc>\"\n        FROM permission_change_receipts WHERE org_id = $1 AND id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "actor_user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "operator_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "operator_command",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "format_version",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "audit",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "3293bd519278cbe3ed3c63214de93938dfc54800b465d7c37ebc585bb2892397"
+}

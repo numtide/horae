@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE permission_change_receipts SET created_at='2026-09-07 12:00:00+00' WHERE org_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "291ab6311e071932f954411057d9a30fa9e369c9c7996f5252641de7b711fc29"
+}
