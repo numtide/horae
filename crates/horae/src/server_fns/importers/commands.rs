@@ -15,7 +15,7 @@ pub(super) async fn start_api(
     generation: i64,
 ) -> Result<JobStatus, ServerFnError> {
     let mut tx = begin_access(pool, org_id, actor_id).await?;
-    let id = jobs::enqueue_api_in(&mut tx, org_id, payload, key, policy, generation)
+    let id = jobs::enqueue_api_in(&mut tx, org_id, payload, key, policy, generation, actor_id)
         .await
         .map_err(map_enqueue_error)?;
     let result = required_job(&mut tx, org_id, id).await?;
@@ -44,7 +44,7 @@ pub(super) async fn start_csv(
             )
         })?;
     }
-    let id = jobs::enqueue_csv_in(&mut tx, org_id, mode, body, key, policy)
+    let id = jobs::enqueue_csv_in(&mut tx, org_id, mode, body, key, policy, actor_id)
         .await
         .map_err(map_enqueue_error)?;
     let result = required_job(&mut tx, org_id, id).await?;
