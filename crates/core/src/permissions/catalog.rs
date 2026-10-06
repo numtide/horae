@@ -8,6 +8,23 @@ use serde::{Deserialize, Serialize};
 /// Changes to these persisted semantics require an explicit migration review.
 pub const PERMISSION_CATALOG_VERSION: u32 = 1;
 
+/// Invalid reusable-profile display name; uniqueness is enforced by storage.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("Profile names must contain between 1 and 100 characters")]
+pub struct InvalidTemplateName;
+
+/// Trims outside whitespace, preserving display case and internal spacing.
+///
+/// # Errors
+/// Rejects blank names and names exceeding 100 Unicode scalar characters.
+pub fn validate_template_name(name: &str) -> Result<&str, InvalidTemplateName> {
+    let name = name.trim();
+    if name.is_empty() || name.chars().count() > 100 {
+        return Err(InvalidTemplateName);
+    }
+    Ok(name)
+}
+
 /// Known grant identifiers. Ordering only provides deterministic set iteration.
 ///
 /// A catalog entry does not enable a product or define its record/field scope.
