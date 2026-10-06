@@ -9,6 +9,7 @@ use crate::models::permissions::{PermissionSource, PermissionTemplate, PersonPer
 
 pub(crate) mod preflight;
 pub(crate) mod profiles;
+pub(crate) mod project_management;
 pub(crate) mod templates;
 
 /// Bound authorization transactions independently of pooled connection defaults.
@@ -169,3 +170,7 @@ mod profile_tests;
 #[cfg(test)]
 #[path = "permissions/tests/preflight.rs"]
 mod preflight_tests;
+
+#[cfg(test)]
+#[path = "permissions/tests/project_management.rs"]
+mod project_management_tests;
