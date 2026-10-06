@@ -3,7 +3,9 @@ use horae_core::duration::format_hours2 as hours;
 
 use super::{Selection, period};
 use crate::models::permission_editor::PermissionRequester;
-use crate::models::time_report::{TimeReportGroupCursor, TimeReportGroupQuery, TimeReportGrouping};
+use crate::models::time_report::{
+    TimeReportBillability, TimeReportGroupCursor, TimeReportGroupQuery, TimeReportGrouping,
+};
 use crate::server_fns;
 
 #[component]
@@ -14,6 +16,7 @@ pub(super) fn ExpandedTimeReport(
     dimension: ReadSignal<TimeReportGrouping>,
     filters: ReadSignal<Vec<Selection>>,
     active_projects_only: ReadSignal<bool>,
+    billability: ReadSignal<TimeReportBillability>,
     on_detail: EventHandler<Vec<Selection>>,
 ) -> Element {
     let mut cursors = use_signal(|| vec![None::<TimeReportGroupCursor>]);
@@ -25,6 +28,7 @@ pub(super) fn ExpandedTimeReport(
             filters(),
             cursors.read().last().cloned().flatten(),
             active_projects_only(),
+            billability(),
         );
         let result = async {
             let (date_from, date_to) = period(&key.0, &key.1)?;
@@ -32,6 +36,7 @@ pub(super) fn ExpandedTimeReport(
                 date_from,
                 date_to,
                 active_projects_only: key.5,
+                billability: key.6,
                 group_by: key.2,
                 after: key.4.clone(),
                 client_ids: vec![],
@@ -62,6 +67,7 @@ pub(super) fn ExpandedTimeReport(
         filters(),
         cursors.read().last().cloned().flatten(),
         active_projects_only(),
+        billability(),
     );
     let response = page.read();
     let current = response.as_ref().filter(|(requested, _)| *requested == key);

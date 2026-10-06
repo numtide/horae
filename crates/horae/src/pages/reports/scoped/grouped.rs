@@ -1,11 +1,13 @@
 use dioxus::prelude::*;
 use horae_core::duration::format_hours2 as hours;
 
-use super::{Selection, expanded::ExpandedTimeReport, period};
+use super::{Selection, billability_value, expanded::ExpandedTimeReport, period};
 use crate::components::icons::NavIcon;
 use crate::components::table::DataTable;
 use crate::models::permission_editor::PermissionRequester;
-use crate::models::time_report::{TimeReportGroupCursor, TimeReportGroupQuery, TimeReportGrouping};
+use crate::models::time_report::{
+    TimeReportBillability, TimeReportGroupCursor, TimeReportGroupQuery, TimeReportGrouping,
+};
 use crate::server_fns;
 
 const DIMENSIONS: [(TimeReportGrouping, &str, &str); 4] = [
@@ -21,6 +23,7 @@ pub(super) fn GroupedTimeReport(
     from: Signal<String>,
     to: Signal<String>,
     active_projects_only: Signal<bool>,
+    billability: Signal<TimeReportBillability>,
     mut dimension: Signal<TimeReportGrouping>,
     mut cursors: Signal<Vec<Option<TimeReportGroupCursor>>>,
     mut context: Signal<Option<Selection>>,
@@ -35,6 +38,7 @@ pub(super) fn GroupedTimeReport(
             to(),
             context(),
             active_projects_only(),
+            billability(),
         );
         let result = async {
             let (date_from, date_to) = period(&key.2, &key.3)?;
@@ -42,6 +46,7 @@ pub(super) fn GroupedTimeReport(
                 date_from,
                 date_to,
                 active_projects_only: key.5,
+                billability: key.6,
                 client_ids: vec![],
                 project_ids: vec![],
                 user_ids: vec![],
@@ -72,6 +77,7 @@ pub(super) fn GroupedTimeReport(
         to(),
         context(),
         active_projects_only(),
+        billability(),
     );
     let response = page.read();
     let current = response.as_ref().filter(|(requested, _)| *requested == key);
@@ -88,7 +94,7 @@ pub(super) fn GroupedTimeReport(
             TimeReportGrouping::Person => "person",
         };
         let filter = key.4.as_ref().map(|selected| format!("&{}={}", selected.filter_key(), selected.id)).unwrap_or_default();
-        format!("group_by={group_by}&from={}&to={}&active_projects_only={}&expected_org_id={}&expected_user_id={}&expected_policy=scoped{filter}", key.2, key.3, key.5, requester.org_id, requester.user_id)
+        format!("group_by={group_by}&from={}&to={}&active_projects_only={}&billability={}&expected_org_id={}&expected_user_id={}&expected_policy=scoped{filter}", key.2, key.3, key.5, billability_value(key.6), requester.org_id, requester.user_id)
     });
     let expansion = key
         .4
@@ -203,6 +209,7 @@ pub(super) fn GroupedTimeReport(
                                             ExpandedTimeReport {
                                                 requester, from: key.2.clone(), to: key.3.clone(), dimension: group_by,
                                                 active_projects_only: key.5,
+                                                billability: key.6,
                                                 filters: {
                                                     let mut filters: Vec<_> = key.4.clone().into_iter().collect();
                                                     filters.push(Selection { dimension: key.0, id: group.id, name: group.name.clone() });

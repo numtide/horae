@@ -193,6 +193,31 @@ Verify default inclusion, active-only rows/totals in all four dimensions,
 archived-client/task independence, unauthorized entries, empty filtered results,
 source snapshots, strict URL parsing and actual-session UI/download parity.
 
+#### Billability result filter
+
+The detailed-report guide, rechecked 2026-10-06, documents filtering billable
+versus non-billable hours independently of identity selection. Use a closed
+`billability=all|billable|non_billable` value, defaulting to `all` when absent
+in typed requests or download URLs. Reject unknown, empty, null or repeated
+values rather than silently broadening the requested result.
+
+Filter the existing effective report-billable expression, not merely the entry's
+raw flag: project type and task override/default apply unless the existing
+invoice-linked rule preserves billability. This is an ordinary time fact, not
+authority to expose rates, invoice identities or financial reports. Apply the
+predicate to the authorized source before totals, pagination, grouping and
+export limits, consistently across detailed/grouped readers and CSV/XLSX.
+Keep the current captured-scope release checks and source-snapshot semantics.
+
+The consumer must carry this value through contexts, expansions, drilldown and
+download links. Include it in resource keys, reset cursors on change and hide
+stale results. Verify all three selections, raw/effective flag differences,
+frozen invoice-linked billability, rounding, scope restrictions, empty results,
+strict transport and actual-session/browser download parity. Reuse existing
+controls without changing shared CSS. Invoiced/uninvoiced filtering, full
+candidate discovery and financial-family projections remain separate required
+follow-through; this filter does not close T203 or activate policy.
+
 Resolve a single authenticated report-access response before mounting any report
 or catalog resource. Reuse the export authority gate to read policy, active
 identity and current ordinary time authority under the same transaction fences.

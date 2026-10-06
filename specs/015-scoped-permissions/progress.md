@@ -1,5 +1,149 @@
 # Scoped permissions investigation progress
 
+## 2026-10-06 — Billability final verification
+
+- Previous goal turn made implementation progress: selector wiring, passing
+  component tests and current client-path reconciliation. Reused `84521` without
+  restarting. It exited 0: all 20 component tests, offline all-target test
+  compilation, strict native/all-target and WASM lint, and both Dioxus build
+  targets passed. No Rust changes followed these checks.
+- Actual PR query `36975` confirms #212 is open/draft on
+  `feat/scoped-permissions`, targeting master. No merge or activation.
+- Started Chromium fixture `7708` with the new server and an isolated temporary
+  PostgreSQL. Captures go to `.scratch/billability-browser-20261006`. No Windows
+  MCP retry or real-data access. Browser acceptance is not yet claimed.
+
+Next: observe `7708`, inspect the desktop/mobile batch, obtain formatting results,
+and publish only after scoped review and actual browser acceptance. Then address
+the recorded client authorization gap rather than starting another report filter.
+
+- `7708` exited 0 on Chromium 148.0.7778.96. Reviewed detailed/grouped desktop
+  dark and detailed/nested mobile light captures together; no visual change
+  required. Keyboard selection, all three values, effective project flags,
+  cursor resets, nested navigation, empty results and actual CSV/XLSX routes pass.
+- Formatting and formatting CI `56605` exited 0. Scoped self-review and read-only
+  Spec Kit analysis found no new critical/high issue in T235–T236; all four
+  affected FR obligations have traced tests, with full-feature gates explicitly
+  retained. Marked only T235–T236 complete and updated acceptance evidence.
+  No verifier remains live. Next: format the final tracking changes and publish
+  unsigned to the existing draft, then close the recorded client access contract.
+
+## 2026-10-06 — Connected billability selector and closure priority
+
+- Previous user-facing explanation was no implementation progress. Revalidated
+  `9856`: SQLx preparation passed, then the new consumer test failed on the
+  expected missing selector. Cache changes replace six source descriptors and
+  add six fixture descriptors; no schema change or broad cache deletion.
+- Connected the shared labelled Select to detailed, grouped and nested reports.
+  The closed filter participates in exact request/response keys and both download
+  URLs. Changing it resets the parent pagers; pending parent results unmount old
+  breakdowns. Unknown client values are ignored, not broadened to All. Server
+  parsing remains strict and independently authorized.
+- Started stable-change verification `84521`: full Reports component suite,
+  offline all-target compilation, strict native/WASM lint, then both browser
+  build targets. Do not edit Rust while it runs or restart it without observing
+  a terminal result. Browser fixture execution and visual inspection remain
+  pending; T235/T236 are not yet closed.
+- `84521` passed all 20 actual-component report tests, including both new filter
+  cases and all existing access/identity/financial-redaction regressions. It is
+  now compiling all offline test targets; subsequent lint and browser build are
+  still pending. This is a verified live process, not an assumed background job.
+- Added a closure-priority section to the plan after the user's duration concern:
+  finish this in-flight work, then reconcile T006/T042 against current code and
+  prioritize existing-route enforcement gaps. Domain parity and expense/approval
+  dependencies remain required; no safety or acceptance gate was removed.
+- Read-only reconciliation identified the next existing-route gap in OP17/18/34:
+  client management/address/tax payloads and compatibility reads still rely on
+  active identity/legacy roles, and standalone writes do not carry canonical
+  actor authority into their transactions. Recorded exact production symbols
+  and shared invoice/report consumers in `operation-matrix.md`; no runtime
+  change or acceptance claim. This is the next scoped enforcement candidate,
+  not another cosmetic report increment.
+
+Next: observe `84521`; if successful, run `reports-permissions` with the newly
+built server in disposable Chromium, inspect its desktop/mobile captures in
+one batch, format/review and publish the verified change unsigned to draft
+#212. No merge, real-data migration, or policy activation.
+
+## 2026-10-06 — Billability verification and consumer continuation
+
+- Previous status turn was no implementation progress. Revalidated the existing
+  worktree and observed live verifier `69065`; it subsequently exited 101.
+- Corrected RED run `53040` had 9 passing and 3 intended failures: detailed and
+  grouped readers and the export source still returned unfiltered rows. Added
+  the effective-billability predicate to all six sources before totals/limits.
+- `69065` passed the report regression batch (152 passed, 2 manual measurements
+  ignored), including new frozen-source and revoked/empty export checks. Its
+  subsequent real-session test failed with 404: the test router omitted the
+  grouped download routes already registered in production. Registered the same
+  production handlers in the fixture; no production routing change.
+- SQLx preparation and native/WASM lint were not reached. T235 remains open;
+  T236's real selector and browser checks remain pending. No merge, live policy
+  activation, or changes to real organization data.
+
+Next: verify the corrected HTTP fixture, then connect billability through the
+existing detailed/grouped/expanded report controls, exact response keys and
+bound downloads. Preserve full permission scope and all remaining acceptance gates.
+
+- Corrected HTTP run `20608` exited 0. Actual sessions now exercise all three
+  filters through readers and all four download routes, including malformed
+  input and the own/managed scope union. Added failing-first consumer tests for
+  both pager resets, request identity, context propagation and late nested
+  responses, plus a browser extension using only the disposable fixture.
+- Read the report handoff: its implemented prototype is the custom builder,
+  not an ordinary billability selector. Preserve the incumbent ordinary-report
+  layout and shared labelled Select instead of copying builder-only controls.
+  Spec Kit local checklists remain 7/7; full requirements remain 12/16 under
+  the existing closed-increment authorization. No hooks are configured.
+- `9856` is preparing SQLx against disposable PostgreSQL before the consumer RED
+  test. The selector is not implemented yet. Next: obtain the expected missing
+  control failure, connect the filter, and run component/browser/native/WASM gates.
+
+## 2026-10-06 — Billability filtering across report delivery
+
+- Previous turn was an estimate/status answer, not implementation progress.
+  Revalidated clean `8c1bf9b` in the existing feature worktree. The project-task
+  lifecycle publication is complete; no merge or policy activation occurred.
+- Reused the live Windows MCP client `73917`. Its pending `browser_tabs` call
+  timed out without returning browser evidence. Requested graceful exit; when
+  the client remained live, interrupted only that client (exit 1). No tabs were
+  closed and no Harvest data/settings were changed. Do not retry this connection
+  without new connection evidence.
+- Spec Kit prerequisites identify feature 015. Seven local readiness checklists
+  remain 7/7; full requirements remain 12/16 under the existing authorization
+  for closed increments. No extension hooks exist. Retained the unanswered
+  Reports candidate question rather than repeating it or inferring an answer.
+- Company-lock calendar rules remain unresolved; targeted official-site searches
+  supplied no new month-end/DST evidence. Continued independent, documented
+  billability filtering instead. Reopened the official detailed-report guide
+  and refined `time-reports.md`, the plan and T235–T236. These changes preserve
+  full Reports scope; they do not settle pickers or financial-family grants.
+- Added a failing-first download-parser test for invalid/empty/repeated
+  billability values. Offline Nix test run `30855` is compiling; no result yet.
+
+Next: observe `30855`, then implement the closed typed filter and add actual
+reader/export RED cases before changing the six SQL source predicates. Preserve
+effective billability, full-period totals, current scope and frozen source
+authorization. T236 requires subsequent real-component and browser integration;
+T203 and the full permission/activation gates remain open.
+
+- `30855` exited 101 on the intended assertion: an empty billability parameter
+  was silently ignored and returned an unrestricted query. Added the closed
+  enum/default to typed requests and both URL extractors, with malformed/default
+  and flattened-group transport tests. Existing UI requests explicitly retain
+  the default until T236 connects the actual control; no new UI acceptance.
+- Added effective-billability/rounding/own-scope export fixtures and reader
+  total/exhausted-cursor checks. First compile `28216` failed because the export
+  test attempted to import the private permission module. Kept production
+  visibility unchanged and placed reader assertions in their existing test
+  modules; export assertions stay with the export helpers. Corrected RED run
+  `53040` is compiling against disposable PostgreSQL. SQL filtering is not yet
+  implemented, and these behavioral tests are not yet claimed to pass.
+
+Next: obtain `53040`; on the intended behavioral failures, apply the predicate
+to all six source queries before their aggregation/limits, then rerun the
+affected reports, real-session tests and complete SQLx/native/WASM validation.
+
 ## 2026-10-06 — Project task lifecycle consumer
 
 - Previous turn was a status-only answer (no progress). Revalidated `dcadcee`

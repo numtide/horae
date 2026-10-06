@@ -4,6 +4,54 @@ use uuid::Uuid;
 
 mod projects;
 
+#[test]
+fn billability_filter_defaults_and_serializes_without_ambiguous_booleans() {
+    use crate::models::time_report::TimeReportBillability;
+    assert_eq!(parse("").unwrap().billability, TimeReportBillability::All);
+    for (value, expected) in [
+        ("all", TimeReportBillability::All),
+        ("billable", TimeReportBillability::Billable),
+        ("non_billable", TimeReportBillability::NonBillable),
+    ] {
+        let query = parse(&format!("&billability={value}")).unwrap();
+        assert_eq!(query.billability, expected);
+        assert_eq!(serde_json::to_value(&query).unwrap()["billability"], value);
+    }
+    let mut wire = serde_json::to_value(parse("").unwrap()).unwrap();
+    wire.as_object_mut().unwrap().remove("billability");
+    assert_eq!(
+        serde_json::from_value::<TimeReportQuery>(wire.clone())
+            .unwrap()
+            .billability,
+        TimeReportBillability::All
+    );
+    for value in [
+        serde_json::Value::Null,
+        serde_json::json!(true),
+        serde_json::json!("unknown"),
+    ] {
+        wire["billability"] = value;
+        assert!(serde_json::from_value::<TimeReportQuery>(wire.clone()).is_err());
+    }
+}
+
+#[test]
+fn billability_filter_rejects_unknown_empty_and_repeated_values() {
+    for value in [
+        "",
+        "true",
+        "null",
+        "unknown",
+        "billable&billability=non_billable",
+    ] {
+        assert_eq!(
+            parse(&format!("&billability={value}")),
+            Err(StatusCode::BAD_REQUEST),
+            "billability={value}"
+        );
+    }
+}
+
 fn parse(filters: &str) -> Result<TimeReportQuery, StatusCode> {
     let uri = format!("/api/reports/export/csv?from=2026-09-01&to=2026-09-30{filters}")
         .parse()

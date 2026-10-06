@@ -280,4 +280,103 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             StatusCode::FORBIDDEN
         );
     }
+
+    // The entry flags remain true: filter effective project billability while
+    // preserving the managed-person/own union and excluding the hidden user.
+    sqlx::query!(
+        "UPDATE projects SET project_type='non_billable' WHERE id=$1",
+        ids.project_id
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    for (billability, expected) in [
+        ("all", &NOTES[..3]),
+        ("billable", &NOTES[1..3]),
+        ("non_billable", &NOTES[..1]),
+    ] {
+        let count = expected.len() as i64;
+        let mut grouped_request = grouped.clone();
+        grouped_request["query"]["billability"] = json!(billability);
+        let report = api
+            .json(
+                "list_visible_time_report_groups",
+                grouped_request.clone(),
+                &cookie,
+            )
+            .await;
+        assert_eq!(report["totals"]["entry_count"], count);
+        assert_eq!(report["totals"]["rounded_minutes"], count * 60);
+        grouped_request["query"]
+            .as_object_mut()
+            .unwrap()
+            .remove("group_by");
+        let report = api
+            .json("list_visible_time_report_entries", grouped_request, &cookie)
+            .await;
+        assert_eq!(report["totals"]["entry_count"], count);
+        let mut actual: Vec<_> = report["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|entry| entry["notes"].as_str().unwrap())
+            .collect();
+        actual.sort_unstable();
+        assert_eq!(actual, expected);
+        for format in ["csv", "xlsx"] {
+            let filters = format!("{all}{binding}&billability={billability}");
+            assert_download(
+                download(api, Some(&cookie), format, &filters).await,
+                format,
+                expected,
+            )
+            .await;
+            let response = api.client.get(format!(
+                "{}/api/reports/time/grouped/{format}?from=2026-09-01&to=2026-09-30&group_by=client{filters}", api.base
+            )).header("cookie", &cookie).send().await.unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            let data = response.bytes().await.unwrap();
+            let groups = if billability == "all" { 2 } else { 1 };
+            if format == "csv" {
+                let records = csv::Reader::from_reader(data.as_ref())
+                    .records()
+                    .collect::<Result<Vec<_>, _>>()
+                    .unwrap();
+                assert_eq!(records.len(), groups);
+                let hours: Vec<_> = records.iter().map(|row| &row[1]).collect();
+                assert_eq!(
+                    hours,
+                    match billability {
+                        "all" => vec!["1.00", "2.00"],
+                        "billable" => vec!["2.00"],
+                        _ => vec!["1.00"],
+                    }
+                );
+            } else {
+                let mut archive = zip::ZipArchive::new(Cursor::new(data)).unwrap();
+                let mut sheet = String::new();
+                archive
+                    .by_name("xl/worksheets/sheet1.xml")
+                    .unwrap()
+                    .read_to_string(&mut sheet)
+                    .unwrap();
+                assert_eq!(sheet.matches("<row ").count(), groups + 1);
+            }
+        }
+    }
+    for format in ["csv", "xlsx"] {
+        for invalid in ["", "true", "null", "unknown", "all&billability=billable"] {
+            let filters = format!("&billability={invalid}");
+            assert_eq!(
+                download(api, Some(&cookie), format, &filters)
+                    .await
+                    .status(),
+                StatusCode::BAD_REQUEST
+            );
+            let response = api.client.get(format!(
+                "{}/api/reports/time/grouped/{format}?from=2026-09-01&to=2026-09-30&group_by=client{filters}", api.base
+            )).header("cookie", &cookie).send().await.unwrap();
+            assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        }
+    }
 }

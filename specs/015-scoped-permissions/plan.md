@@ -63,6 +63,30 @@ crates/horae/tests/integration.rs
 
 ## Execution and Dependencies
 
+### Closure priority (2026-10-06)
+
+The user challenged the duration of this work. Preserve the full accepted scope,
+but stop treating additional report parity as the default next security task.
+Finish the in-flight T235–T236 filter before opening another implementation.
+Then reconcile the operation matrix and lock inventory with the current code
+(T006/T042), distinguishing missing evidence from missing enforcement; their
+baseline inventories predate many completed increments. Do not close a parent
+task merely by counting its completed children.
+
+Prioritize the resulting enforcement gaps on existing routes, protected fields,
+ordinary writes and alternate delivery paths (T014/T015/T039/T040). Separately
+track domain dependencies: full picker/invoiced-report parity, approval coverage,
+company scheduling, and actual feature 016 expense transactions. These remain
+required work, not approved omissions. In particular, approval/lock behavior and
+financial report authority cannot be removed from activation gates just because
+their implementation crosses feature boundaries.
+
+After those contracts and delivery paths are complete, finish the preserved-data
+transition (T007/T019), then full story/matrix acceptance and Nix gates (T020).
+Batch verification for one stable change set; do not rerun completed suites or
+reference searches without changed code or new evidence. No calendar estimate,
+policy activation, live migration or merge is authorized by this ordering.
+
 ### Increment readiness versus activation
 
 The 2026-10-03 user authorization repairs planning dependencies without reducing
@@ -74,6 +98,7 @@ passing full-feature runtime outcomes. Unrelated open predicates remain open.
 | --- | --- | --- |
 | Ordinary Reports consumer, T216–T218 | `contracts/time-reports.md`: explicit policy gate before resources, current time grants, route-lifetime requester binding and exact-key ready responses | Actual-component isolation/race tests and disposable-browser results/downloads; preserve incumbent components without shared CSS changes. Full pickers, grouping, C02 and T203 acceptance remain open; no activation |
 | Active-project result filter, T222 | `contracts/time-reports.md`: default-false project activity filter before aggregation, pagination and export limits, independent of archived candidate choices | Detailed/all-four-group PostgreSQL and CSV/XLSX source tests; strict direct/flattened URL parsing; frozen-source and empty/denied exports; component cursor/late-response checks and disposable-browser keyboard/navigation/download parity. Reuse the shared Checkbox; no new authority, schema or CSS |
+| Billability result filter, T235–T236 | `contracts/time-reports.md`: documented billable/non-billable time filtering, using the existing effective report expression and unchanged time-read scope | Strict/default typed and URL transport, detailed/grouped totals and CSV/XLSX parity, captured-source preservation, component and browser checks. Reuse existing SQL, controls and dependencies; no schema, new grant, shared CSS or activation. Full picker and financial requirements remain open |
 | Ordinary detailed reports, T201–T203 | OP25/OP31, FR-006/007/008/010/018 and `contracts/time-reports.md`: reuse confirmed time scope and report facts independently of candidate discovery or financial C02 grants | PostgreSQL/session/tenant/rounding/pagination/revocation tests, SQLx and native/WASM review; reader alone does not close the connected consumer, matching CSV/XLSX release checks, full picker or financial reports, nor authorize activation |
 | Recorded-scope XLSX delivery, T204–T206 | Same OP25/OP31 contract: canonical time scopes, explicit legacy policy, bounded single-statement size/payload and private captured person/project pairs | Reauthorize after rendering; test both source reassignment directions, deletion, grant/scope/activity/policy changes, empty files, cancellation and real HTTP. CSV, multi-ID URL transport and consumer remain T203 work |
 | Recorded-scope CSV delivery, T207–T209 | Same OP25/OP31 and `contracts/csv-exports.md`: source authority and data share the native cursor snapshot; constant identity metadata survives an empty or invalid source | Strict source decoding and current captured-context authorization after channel capacity; test DECLARE handoff, restored invalid state, bounded metadata, backpressure, source movement/deletion and registered HTTP. Reuse XLSX authority and strict storage; no new transport, schema or CSS. Multi-ID URL transport and Reports consumer remain T203 work |

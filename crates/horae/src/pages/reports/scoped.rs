@@ -4,12 +4,12 @@ use horae_core::duration::format_hours2 as hours;
 
 use crate::components::badge::Badge;
 use crate::components::controls::Checkbox;
-use crate::components::form::{FormGroup, Input};
+use crate::components::form::{FormGroup, Input, Select};
 use crate::components::table::DataTable;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::time_report::{
-    TimeReportCursor, TimeReportGroupCursor, TimeReportGroupQuery, TimeReportGrouping,
-    TimeReportQuery,
+    TimeReportBillability, TimeReportCursor, TimeReportGroupCursor, TimeReportGroupQuery,
+    TimeReportGrouping, TimeReportQuery,
 };
 use crate::server_fns;
 
@@ -93,6 +93,14 @@ fn period(from: &str, to: &str) -> Result<(NaiveDate, NaiveDate), &'static str> 
     Ok((from, to))
 }
 
+fn billability_value(value: TimeReportBillability) -> &'static str {
+    match value {
+        TimeReportBillability::All => "all",
+        TimeReportBillability::Billable => "billable",
+        TimeReportBillability::NonBillable => "non_billable",
+    }
+}
+
 #[component]
 pub(super) fn ScopedReports(
     requester: PermissionRequester,
@@ -103,6 +111,7 @@ pub(super) fn ScopedReports(
     let mut to = use_signal(move || today.to_string());
     let mut show_groups = use_signal(|| false);
     let mut active_projects_only = use_signal(|| false);
+    let mut billability = use_signal(|| TimeReportBillability::All);
     let mut group_dimension = use_signal(|| TimeReportGrouping::Client);
     let mut group_context = use_signal(|| None::<Selection>);
     let mut group_cursors = use_signal(|| vec![None::<TimeReportGroupCursor>]);
@@ -116,6 +125,7 @@ pub(super) fn ScopedReports(
             selection(),
             show_groups(),
             active_projects_only(),
+            billability(),
         );
         let result = async {
             if key.4 {
@@ -126,6 +136,7 @@ pub(super) fn ScopedReports(
                 date_from,
                 date_to,
                 active_projects_only: key.5,
+                billability: key.6,
                 client_ids: vec![],
                 project_ids: vec![],
                 user_ids: vec![],
@@ -155,6 +166,7 @@ pub(super) fn ScopedReports(
         selection(),
         show_groups(),
         active_projects_only(),
+        billability(),
     );
     let dates = period(&key.0, &key.1);
     let response = page.read();
@@ -167,7 +179,7 @@ pub(super) fn ScopedReports(
     let next = loaded.and_then(|page| page.next_after.clone());
     let download_query = loaded.and_then(|_| dates.ok()).map(|(date_from, date_to)| {
         let filter: String = key.3.iter().map(|selected| format!("&{}={}", selected.filter_key(), selected.id)).collect();
-        format!("from={date_from}&to={date_to}&active_projects_only={}&expected_org_id={}&expected_user_id={}&expected_policy=scoped{filter}", key.5, requester.org_id, requester.user_id)
+        format!("from={date_from}&to={date_to}&active_projects_only={}&billability={}&expected_org_id={}&expected_user_id={}&expected_policy=scoped{filter}", key.5, billability_value(key.6), requester.org_id, requester.user_id)
     });
     let date_error_id = dates.err().map(|_| "report-date-error".to_string());
 
@@ -214,6 +226,26 @@ pub(super) fn ScopedReports(
                     oninput: move |event: FormEvent| { cursors.set(vec![None]); group_cursors.set(vec![None]); to.set(event.value()); }
                 }
             }
+            FormGroup { label: "Show", id: "report-billability",
+                Select {
+                    id: "report-billability",
+                    selected: billability_value(billability()),
+                    options: vec![
+                        ("all".into(), "All hours".into()),
+                        ("billable".into(), "Billable hours".into()),
+                        ("non_billable".into(), "Non-billable hours".into()),
+                    ],
+                    onchange: move |event: FormEvent| {
+                        let next = match event.value().as_str() {
+                            "all" => TimeReportBillability::All,
+                            "billable" => TimeReportBillability::Billable,
+                            "non_billable" => TimeReportBillability::NonBillable,
+                            _ => return,
+                        };
+                        cursors.set(vec![None]); group_cursors.set(vec![None]); billability.set(next);
+                    }
+                }
+            }
         }
         div { class: "mb-4",
             Checkbox { id: "report-active-projects-only", label: "Active projects only", checked: active_projects_only(),
@@ -228,7 +260,7 @@ pub(super) fn ScopedReports(
             p { id: "report-date-error", class: "alert alert-danger", role: "alert", "{message}" }
         } else if show_groups() {
             grouped::GroupedTimeReport {
-                requester, from, to, active_projects_only, dimension: group_dimension, cursors: group_cursors, context: group_context,
+                requester, from, to, active_projects_only, billability, dimension: group_dimension, cursors: group_cursors, context: group_context,
                 on_detail: move |selected| { selection.set(selected); cursors.set(vec![None]); show_groups.set(false); }
             }
         } else if !ready {

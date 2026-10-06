@@ -300,6 +300,9 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
       await page.evaluate(() => new Promise(requestAnimationFrame));
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, 'viewport must not overflow');
       assert.equal(await page.locator('#report-from').evaluate(el => el.labels.length), 1);
+      assert.equal(await page.locator('#report-billability').evaluate(el => el.labels.length), 1);
+      await page.getByRole('combobox', { name: 'Show', exact: true }).focus();
+      await expect(page.locator('#report-billability')).toBeFocused();
       for (const [column, characters] of [[1, 10], [2, 6], [3, 6]]) {
         const lines = await page.locator(`tbody tr:first-child td:nth-child(${column})`).evaluate((cell, length) => {
           const range = document.createRange();
@@ -413,6 +416,83 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
     assert.equal(emptyCsv.status(), 200);
     assert.equal((await emptyCsv.text()).trim().split('\n').length, 1);
     await activeOnly.click();
+    await expect(page.locator('dl')).toContainText('503.50');
+    // Effective billability changes without changing any entry's raw flag.
+    sql(`UPDATE projects SET project_type='non_billable' WHERE id='${project}'`);
+    const billability = page.getByRole('combobox', { name: 'Show', exact: true });
+    await expect(billability).toHaveValue('all');
+    await billability.focus();
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Enter');
+    await expect(billability).toHaveValue('billable');
+    await expect(page.locator('tbody tr')).toHaveCount(1);
+    await expect(page.locator('tbody')).toContainText('Active own entry');
+    const checkBillabilityDownload = async (grouped, filter, hours) => {
+      for (const format of ['CSV', 'XLSX']) {
+        const link = page.getByRole('link', { name: `Export ${format}`, exact: true });
+        await expect(link).toHaveAttribute('href', new RegExp(`billability=${filter}`));
+        const url = new URL(await link.getAttribute('href'), base);
+        assert.equal(url.searchParams.get('expected_user_id'), actor.id);
+        assert.equal(url.searchParams.get('expected_policy'), 'scoped');
+        const response = await context.request.get(url.href);
+        assert.equal(response.status(), 200);
+        if (format === 'CSV') {
+          const text = await response.text();
+          assert.ok(!text.includes('Private report note') && !text.includes('Private active entry'));
+          if (grouped) {
+            const billable = filter === 'billable' ? hours : '0.00';
+            const nonBillable = filter === 'non_billable' ? hours : '0.00';
+            assert.ok(text.endsWith(`,${hours},${billable},${nonBillable}\n`));
+          } else {
+            assert.equal(text.includes('Active own entry'), filter === 'billable');
+            assert.equal(text.includes('<Report & note>'), filter === 'non_billable');
+          }
+        } else assert.ok((await response.body()).subarray(0, 2).equals(Buffer.from('PK')));
+        for (const invalid of ['', 'true', 'null', 'unknown']) {
+          const bad = new URL(url);
+          bad.searchParams.set('billability', invalid);
+          assert.equal((await context.request.get(bad.href)).status(), 400);
+        }
+        assert.equal((await context.request.get(`${url.href}&billability=all`)).status(), 400);
+        filteredLinks.push(`${url.pathname}${url.search}`);
+      }
+    };
+    await checkBillabilityDownload(false, 'billable', '0.50');
+    await billability.selectOption('non_billable');
+    await expect(page.locator('tbody tr')).toHaveCount(500);
+    await expect(page.locator('dl')).toContainText('503.00');
+    await checkBillabilityDownload(false, 'non_billable', '503.00');
+    await page.locator('#report-next').click();
+    await expect(page.locator('tbody tr')).toHaveCount(3);
+    await billability.selectOption('billable');
+    await expect(page.locator('tbody tr')).toHaveCount(1);
+    await expect(page.locator('#report-previous')).toBeDisabled();
+    await page.locator('#report-view-time').click();
+    for (const [dimension, entity] of [['client', client], ['project', id(9)], ['task', task], ['person', actor.id]]) {
+      await page.locator(`#report-group-${dimension}`).click();
+      await expect(page.locator(`#report-hours-${entity}`)).toHaveText('0.50');
+      await checkBillabilityDownload(true, 'billable', '0.50');
+    }
+    await billability.selectOption('non_billable');
+    await expect(page.locator(`#report-hours-${actor.id}`)).toHaveText('503.00');
+    await checkBillabilityDownload(true, 'non_billable', '503.00');
+    await page.locator('#report-group-project').click();
+    await page.locator(`#report-name-${project}`).click();
+    await page.locator(`#report-expand-${task}`).click();
+    await expect(page.locator(`#report-expanded-hours-${actor.id}`)).toHaveText('503.00');
+    await page.locator(`#report-expanded-hours-${actor.id}`).click();
+    await expect(page.locator('tbody tr')).toHaveCount(500);
+    await expect(billability).toHaveValue('non_billable');
+    await checkBillabilityDownload(false, 'non_billable', '503.00');
+    await billability.selectOption('billable');
+    await expect(page.locator('tbody')).toHaveCount(0);
+    await expect(page.locator('dl')).toContainText('0.00');
+    const noBillable = await context.request.get(new URL(await page.getByRole('link', { name: 'Export CSV', exact: true }).getAttribute('href'), base).href);
+    assert.equal(noBillable.status(), 200);
+    assert.equal((await noBillable.text()).trim().split('\n').length, 1);
+    await page.locator('#report-clear-selection').click();
+    await expect(page.locator('tbody tr')).toHaveCount(1);
+    await billability.selectOption('all');
     await expect(page.locator('dl')).toContainText('503.50');
     await page.locator('#report-view-time').click();
     await page.locator('#report-group-project').click();

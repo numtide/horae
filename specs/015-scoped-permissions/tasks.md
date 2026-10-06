@@ -50,6 +50,16 @@ Ordinary detailed Reports integration follows `contracts/time-reports.md`:
 - [x] T220 Implement the typed grouped reader and authenticated endpoint using current time authority; verify registered-session payloads, revocation, tenant isolation, totals and pagination; refresh SQLx and run native/WASM checks and adversarial review.
 - [x] T221 Connect grouped results, drilldown and equivalent grouped CSV/XLSX delivery to the bound ordinary consumer; verify browser transitions without legacy catalogs or financial leakage. Full picker and financial-family acceptance remains required by T203.
 - [x] T222 Implement the documented Active projects only result filter across detailed/grouped reads, totals, CSV/XLSX and nested UI requests; verify strict/default transport, authorization, historical snapshot behavior, cursor resets and browser parity. This is distinct from archived-item candidate discovery and does not close T203.
+- [x] T235 Implement the documented billability result filter in `models/time_report.rs`, `server_fns/permissions/time_reports.rs` and its grouped reader, plus all detailed/grouped CSV/XLSX sources. Add failing strict-transport and actual-reader tests first; preserve effective billability, exact totals, scope and source snapshots. Regenerate SQLx and verify native/WASM checks (FR-006/008/010/018; `contracts/time-reports.md`).
+- [x] T236 Connect the billability filter to `pages/reports/scoped.rs` and its grouped/expanded consumers using shared controls; verify exact-key pending states, cursor resets, context/drilldown propagation and bound download URLs through component and disposable-browser tests. Complete scoped adversarial review without closing T203's remaining pickers/financial-family work.
+
+T235–T236 evidence is mapped in `quickstart.md`: report regression and real HTTP
+acceptance, regenerated SQLx, all 20 report component tests, offline all-target
+compilation, strict native/WASM lint and browser build passed. Disposable
+Chromium `7708` passed the extended report suite; desktop dark/mobile light
+captures were inspected together. Scoped adversarial self-review and Spec Kit
+consistency analysis found no new critical/high issue in this filter. This is
+not independent full-feature review, activation or completion of T203.
 
 T222 verification: six scoped source queries filter project activity before
 aggregation/pagination/export limits; default requests retain archived history.

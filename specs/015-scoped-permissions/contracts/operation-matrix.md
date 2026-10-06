@@ -117,6 +117,35 @@ OP47 and OP48 below are newly inventoried target surfaces, not current endpoints
 | OP47 | Person-management relationship administration | User-approved FR-027 restricts add/remove/replace to active same-org Administrators, not PeopleWriteAll, People Admin, Executive Manager or custom ordinary grants. This includes changes to one's own managed-person set; restricted-user Harvest enforcement remains unverified. FR-028 requires at least one existing compatible managed-person grant for the receiving manager before new relationships are added; no dormant additions, inferred grants or people-directory prerequisite. Evaluate proposed scope and current eligibility at commit, including new edges in a replacement. Separate reading one's effective scope, relationship writes and global grants. Legacy API full-set replacement and `people_manager` side effects cannot silently redefine Horae grants. FR-029 retains existing relationships while any compatible grant remains, otherwise requires preview and confirmation for atomic permission/removal/revision/audit changes. Preserve incoming relationships, independent project scope and history; cancel/stale/revoked/failing commands write nothing. Restoring grants does not restore assignments. FR-031 rejects responsible-person equals managed-person links in add/replace requests, including mixed batches, without affecting independent own/all access. Actor equals responsible-person is not itself invalid; self-approval remains separate. T012/T013 cover complete-set authorization, organization isolation, revision/revocation, audit and preservation of history; existing project delegation FR-026 does not settle this operation. |
 | OP48 | Project duplication and permanent deletion, including bulk delete | Separate domain obligations under full web parity, not feature 010's delivered archive/reactivate increment. The lifecycle guide distinguishes retained archived records from destructive removal; invoices survive deletion while losing project links. Duplication requires source projection and separately authorized creation/fields, not project read/write alone. Exact custom grants, dependent financial/expense/retainer effects and domain acceptance remain open. T006/T009/T014/T015 must bind owning-domain requirements and transactional tests before implementation; no data deletion is authorized by this inventory. |
 
+## Current client-path reconciliation (2026-10-06)
+
+Read-only inspection of `8c1bf9b` plus the in-flight billability change identifies
+an existing-route enforcement gap, not additional report parity:
+
+- OP17 `server_fns::clients::list_clients` calls `require_user` and returns the
+  organization's client management projection including address and tax ID.
+  `require_user` checks active session identity, not canonical `ClientReadAll`.
+  The shared DTO is consumed by Clients, legacy Reports and invoice pickers.
+  Management authorization and minimal workflow identities must be reconciled
+  together; changing the Clients page alone would leave direct calls exposed.
+- OP34 `harvest::list_clients` and `get_client` similarly use tenant/activity
+  checks without canonical client-read authority. `AuthUser` loads identity and
+  legacy role only; it is not an implicit canonical gate. List count, rows and
+  direct-ID disclosure must follow the same reviewed client policy.
+- OP18 standalone create/update/activity wrappers use `require_manager`, which
+  checks legacy role rather than the stored policy. Update/activity helpers lock
+  the client without carrying the actor into their transaction. Inline project
+  client creation separately uses `lock_creation_actor` and can write a default
+  rate. Its resource/rate authority and policy behavior must be reviewed with
+  standalone writes, not inferred from project-form visibility.
+
+These are source findings, not passing canonical acceptance or a claim that the
+new policy is deployed. Prioritize an allowed/denied actual-session reproduction
+and caller/field contract for OP17/18/34 after T235–T236, then connect existing
+consumers and equivalent routes in one scoped change. Preserve legacy behavior
+explicitly and never resolve missing canonical authorization with a legacy-role
+fallback. Lifecycle/rate predicates still require their own verified contract.
+
 ## Completion rule
 
 T006 remains open until the C/U cells have verified operation predicates or an

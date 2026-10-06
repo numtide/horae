@@ -92,6 +92,8 @@ pub struct ExportParams {
     pub to: String,
     #[serde(default, deserialize_with = "query_bool")]
     pub active_projects_only: bool,
+    #[serde(default)]
+    pub billability: crate::models::time_report::TimeReportBillability,
     pub client_id: Option<uuid::Uuid>,
     pub project_id: Option<uuid::Uuid>,
     pub user_id: Option<uuid::Uuid>,
@@ -141,6 +143,7 @@ impl ExportParams {
             date_from,
             date_to,
             active_projects_only: self.active_projects_only,
+            billability: self.billability,
             client_ids: Self::ids(self.client_id, self.client_ids.as_deref())?,
             project_ids: Self::ids(self.project_id, self.project_ids.as_deref())?,
             user_ids: Self::ids(self.user_id, self.user_ids.as_deref())?,

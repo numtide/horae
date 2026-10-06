@@ -263,6 +263,15 @@ fn input(dom: &mut VirtualDom, name: &str, value: &str) {
     );
 }
 
+fn select_billability(dom: &mut VirtualDom, value: &str) {
+    event(
+        dom,
+        "report-billability",
+        "change",
+        Box::new(SerializedFormData::new(value.into(), vec![])),
+    );
+}
+
 fn report(allowed: TimeReportAccess, name: &str) -> time_report::TimeReportPage {
     let entry = time_report::TimeReportEntry {
         id: uuid::Uuid::now_v7(),
@@ -329,6 +338,104 @@ fn grouped(allowed: TimeReportAccess, name: &str) -> time_report::TimeReportGrou
         groups: vec![group],
         totals,
     }
+}
+
+#[tokio::test]
+async fn billability_resets_both_pagers_and_binds_drilldown_and_downloads() {
+    use time_report::TimeReportBillability as Billability;
+    let probe = Probe::default();
+    let own = queue(&probe.access);
+    let first = queue(&probe.reports);
+    let allowed = access(TimeReportPolicy::Scoped);
+    let mut dom = mount(&probe);
+    own.send(Ok(allowed)).unwrap();
+    settle(&mut dom);
+    first.send(Ok(report(allowed, "Old project"))).unwrap();
+    settle(&mut dom);
+    assert_eq!(
+        probe.queries.borrow().last().unwrap().billability,
+        Billability::All
+    );
+    let late = queue(&probe.reports);
+    click(&mut dom, "report-next");
+    assert!(probe.queries.borrow().last().unwrap().after.is_some());
+    let filtered = queue(&probe.reports);
+    select_billability(&mut dom, "billable");
+    assert_no_results(&dom);
+    let query = probe.queries.borrow().last().unwrap().clone();
+    assert_eq!(query.billability, Billability::Billable);
+    assert!(query.after.is_none());
+    assert_eq!(query.expected_requester, Some(allowed.requester));
+    let _ = late.send(Ok(report(allowed, "Old project")));
+    settle(&mut dom);
+    assert_no_results(&dom);
+    filtered
+        .send(Ok(report(allowed, "Billable project")))
+        .unwrap();
+    settle(&mut dom);
+    assert_eq!(
+        dioxus::ssr::render(&dom)
+            .matches("billability=billable")
+            .count(),
+        2
+    );
+    let groups = queue(&probe.groups);
+    click(&mut dom, "report-view-time");
+    assert_eq!(
+        probe.group_queries.borrow().last().unwrap().billability,
+        Billability::Billable
+    );
+    groups
+        .send(Ok(grouped(allowed, "Billable client")))
+        .unwrap();
+    settle(&mut dom);
+    let late = queue(&probe.groups);
+    click(&mut dom, "report-group-next");
+    assert!(probe.group_queries.borrow().last().unwrap().after.is_some());
+    let groups = queue(&probe.groups);
+    select_billability(&mut dom, "non_billable");
+    assert_no_results(&dom);
+    let query = probe.group_queries.borrow().last().unwrap().clone();
+    assert_eq!(query.billability, Billability::NonBillable);
+    assert!(query.after.is_none());
+    let _ = late.send(Ok(grouped(allowed, "Old project")));
+    settle(&mut dom);
+    assert_no_results(&dom);
+    let page = grouped(allowed, "Non-billable client");
+    let id = page.groups[0].id;
+    groups.send(Ok(page)).unwrap();
+    settle(&mut dom);
+    assert_eq!(
+        dioxus::ssr::render(&dom)
+            .matches("billability=non_billable")
+            .count(),
+        2
+    );
+    let detail = queue(&probe.reports);
+    click(&mut dom, &format!("report-hours-{id}"));
+    let query = probe.queries.borrow().last().unwrap().clone();
+    assert_eq!(query.billability, Billability::NonBillable);
+    assert_eq!(query.client_ids, vec![id]);
+    detail
+        .send(Ok(report(allowed, "Non-billable detail")))
+        .unwrap();
+    settle(&mut dom);
+    let all = queue(&probe.reports);
+    select_billability(&mut dom, "all");
+    assert_no_results(&dom);
+    let query = probe.queries.borrow().last().unwrap().clone();
+    assert_eq!(query.billability, Billability::All);
+    assert_eq!(query.client_ids, vec![id]);
+    all.send(Ok(report(allowed, "All client time"))).unwrap();
+    settle(&mut dom);
+    let reads = probe.queries.borrow().len();
+    select_billability(&mut dom, "invalid");
+    assert_eq!(probe.queries.borrow().len(), reads);
+    assert_eq!(
+        dioxus::ssr::render(&dom).matches("billability=all").count(),
+        2
+    );
+    assert!(probe.legacy_reads.borrow().is_empty());
 }
 
 #[tokio::test]
@@ -765,6 +872,46 @@ async fn nested_breakdowns_bind_all_contexts_and_discard_late_or_mismatched_page
         let html = dioxus::ssr::render(&dom);
         assert!(html.contains("Active-project breakdown"));
         assert!(!html.contains("Old-filter breakdown"));
+        let late = queue(&probe.groups);
+        click(&mut dom, "report-expanded-next");
+        let parent_response = queue(&probe.groups);
+        select_billability(&mut dom, "non_billable");
+        assert_no_results(&dom);
+        let _ = late.send(Ok(grouped(allowed, "Old-billability breakdown")));
+        settle(&mut dom);
+        assert_no_results(&dom);
+        let response = queue(&probe.groups);
+        let mut row = grouped(allowed, "Non-billable row");
+        row.groups[0].id = row_id;
+        parent_response.send(Ok(row)).unwrap();
+        settle(&mut dom);
+        expected.billability = time_report::TimeReportBillability::NonBillable;
+        assert_eq!(probe.group_queries.borrow().last(), Some(&expected));
+        let leaf = grouped(allowed, "Non-billable breakdown");
+        let leaf_id = leaf.groups[0].id;
+        response.send(Ok(leaf)).unwrap();
+        settle(&mut dom);
+        let html = dioxus::ssr::render(&dom);
+        assert!(html.contains("Non-billable breakdown"));
+        assert!(!html.contains("Old-billability breakdown"));
+        let detail = queue(&probe.reports);
+        click(&mut dom, &format!("report-expanded-hours-{leaf_id}"));
+        let query = probe.queries.borrow().last().unwrap().clone();
+        assert_eq!(
+            query.billability,
+            time_report::TimeReportBillability::NonBillable
+        );
+        assert!(query.active_projects_only);
+        detail
+            .send(Ok(report(allowed, "Filtered nested detail")))
+            .unwrap();
+        settle(&mut dom);
+        assert_eq!(
+            dioxus::ssr::render(&dom)
+                .matches("billability=non_billable")
+                .count(),
+            2
+        );
         assert!(probe.legacy_reads.borrow().is_empty());
     }
 }

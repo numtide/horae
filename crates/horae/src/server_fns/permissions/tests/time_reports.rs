@@ -10,6 +10,7 @@ fn query() -> TimeReportQuery {
         date_from: "2026-09-01".parse().unwrap(),
         date_to: "2026-09-30".parse().unwrap(),
         active_projects_only: false,
+        billability: Default::default(),
         client_ids: vec![],
         project_ids: vec![],
         user_ids: vec![],
@@ -536,7 +537,7 @@ async fn detailed_report_excludes_malformed_tenant_parents(pool: PgPool) {
 
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]
-async fn detailed_report_preserves_billed_status_and_frozen_minutes_after_configuration_changes(
+async fn detailed_report_billability_preserves_billed_status_and_frozen_minutes_after_configuration_changes(
     pool: PgPool,
 ) {
     let ids = fixture(&pool).await;
@@ -615,6 +616,30 @@ async fn detailed_report_preserves_billed_status_and_frozen_minutes_after_config
     let open_row = rows.iter().find(|row| row.id == open).unwrap();
     assert!(!open_row.billable);
     assert_eq!(open_row.rounded_minutes, 30);
+    use crate::models::time_report::TimeReportBillability;
+    for (billability, count, actual, rounded) in [
+        (TimeReportBillability::All, 3, 51, 30),
+        (TimeReportBillability::Billable, 1, 17, 0),
+        (TimeReportBillability::NonBillable, 2, 34, 30),
+    ] {
+        let mut query = TimeReportQuery {
+            billability,
+            ..query()
+        };
+        let page = read(&pool, ids.org_id, ids.user_id, &query).await.unwrap();
+        assert_eq!(page.entries.len(), count as usize);
+        assert_totals(&page, count, actual, rounded, 0);
+        let last = page.entries.last().unwrap();
+        query.after = Some(TimeReportCursor {
+            spent_date: last.spent_date,
+            project_name: last.project_name.clone(),
+            task_name: last.task_name.clone(),
+            id: last.id,
+        });
+        let exhausted = read(&pool, ids.org_id, ids.user_id, &query).await.unwrap();
+        assert!(exhausted.entries.is_empty());
+        assert_eq!(exhausted.totals, page.totals);
+    }
 }
 
 #[sqlx::test(migrations = "./migrations")]

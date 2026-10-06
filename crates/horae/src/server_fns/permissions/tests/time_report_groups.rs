@@ -10,6 +10,7 @@ fn query(group_by: TimeReportGrouping) -> TimeReportGroupQuery {
         date_from: "2026-09-01".parse().unwrap(),
         date_to: "2026-09-30".parse().unwrap(),
         active_projects_only: false,
+        billability: Default::default(),
         client_ids: vec![],
         project_ids: vec![],
         user_ids: vec![],
@@ -18,6 +19,50 @@ fn query(group_by: TimeReportGrouping) -> TimeReportGroupQuery {
         group_by,
         after: None,
         expected_requester: None,
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn billability_narrows_every_grouping_before_totals_and_cursor(pool: PgPool) {
+    use crate::models::time_report::TimeReportBillability;
+    let ids = super::time_reports_tests::active_projects_fixture(&pool).await;
+    sqlx::query!(
+        "UPDATE projects SET project_type='non_billable' WHERE id=$1",
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    for dimension in [
+        TimeReportGrouping::Client,
+        TimeReportGrouping::Project,
+        TimeReportGrouping::Task,
+        TimeReportGrouping::Person,
+    ] {
+        for (billability, count, billable) in [
+            (TimeReportBillability::All, 2, 60),
+            (TimeReportBillability::Billable, 1, 60),
+            (TimeReportBillability::NonBillable, 1, 0),
+        ] {
+            let mut query = TimeReportGroupQuery {
+                billability,
+                ..query(dimension)
+            };
+            let page = read(&pool, ids.org_id, ids.user_id, &query).await.unwrap();
+            assert_eq!(page.totals.entry_count, count);
+            assert_eq!(page.totals.rounded_minutes, count * 60);
+            assert_eq!(page.totals.billable_minutes, billable);
+            let last = page.groups.last().unwrap();
+            query.after = Some(TimeReportGroupCursor {
+                group_by: dimension,
+                name: last.name.clone(),
+                id: last.id,
+            });
+            let exhausted = read(&pool, ids.org_id, ids.user_id, &query).await.unwrap();
+            assert!(exhausted.groups.is_empty());
+            assert_eq!(exhausted.totals, page.totals);
+        }
     }
 }
 

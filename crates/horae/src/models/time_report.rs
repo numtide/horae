@@ -6,6 +6,27 @@ use uuid::Uuid;
 
 use super::permission_editor::PermissionRequester;
 
+/// Narrow ordinary report facts without granting financial or invoice access.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TimeReportBillability {
+    #[default]
+    All,
+    Billable,
+    NonBillable,
+}
+
+impl TimeReportBillability {
+    #[cfg(feature = "server")]
+    pub(crate) fn filter(self) -> Option<bool> {
+        match self {
+            Self::All => None,
+            Self::Billable => Some(true),
+            Self::NonBillable => Some(false),
+        }
+    }
+}
+
 /// Presentation mode for one authenticated requester, not reusable authority.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -39,6 +60,8 @@ pub struct TimeReportQuery {
     pub date_to: NaiveDate,
     #[serde(default)]
     pub active_projects_only: bool,
+    #[serde(default)]
+    pub billability: TimeReportBillability,
     pub client_ids: Vec<Uuid>,
     pub project_ids: Vec<Uuid>,
     pub user_ids: Vec<Uuid>,
@@ -109,6 +132,8 @@ pub struct TimeReportGroupQuery {
     pub date_to: NaiveDate,
     #[serde(default)]
     pub active_projects_only: bool,
+    #[serde(default)]
+    pub billability: TimeReportBillability,
     pub client_ids: Vec<Uuid>,
     pub project_ids: Vec<Uuid>,
     pub user_ids: Vec<Uuid>,

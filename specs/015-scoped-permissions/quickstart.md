@@ -1,5 +1,43 @@
 # Permission verification
 
+## Report billability filtering (T235–T236)
+
+`billability=all|billable|non_billable` narrows ordinary time facts without
+granting rates or invoice access. The shared Show selector carries the value
+through detailed/grouped pages, individual contexts, nested breakdowns and
+requester/policy-bound CSV/XLSX links. It uses existing form controls and CSS.
+
+Verification against disposable PostgreSQL and production components:
+
+| Requirement | Runnable evidence |
+| --- | --- |
+| Optional default, closed transport, malformed/empty/repeated rejection | `reports::export_params_tests` and `reports::groups::tests` billability tests; registered HTTP matrix in `authorization_tests/time_reports/export_filters.rs` |
+| Effective flags, invoice-linked history, exact rounding and totals before paging | `detailed_report_billability_preserves_billed_status_and_frozen_minutes_after_configuration_changes`; `billability_narrows_every_grouping_before_totals_and_cursor` |
+| Equivalent detailed/grouped CSV/XLSX source sets and own scope | `billability_matches_effective_rows_totals_and_all_download_sources` |
+| Captured CSV source after flags change; empty results still require active authority | `billability_csv_uses_the_captured_source_after_entry_changes`; `billability_empty_exports_still_require_active_authority` |
+| Both pager resets, stale-response suppression, requester/filter-bound exports | `billability_resets_both_pagers_and_binds_drilldown_and_downloads` in `tests/scoped_reports_ui.rs` |
+| Four nested contexts, late pages, filter propagation into detailed navigation | `nested_breakdowns_bind_all_contexts_and_discard_late_or_mismatched_pages` |
+| Real keyboard selection, effective project flags, four groupings and all download routes | Extended `tests/browser/reports-permissions.cjs`; passed in `7708` |
+
+RED `53040` failed on unfiltered readers/export rows; corrected implementation
+passed the Reports regression batch in `69065` (152 passed, 2 manual measurements
+ignored). Registered HTTP acceptance passed in `20608` after adding the missing
+production grouped handlers to the test router. Consumer RED `9856` failed on
+the missing selector; all 20 component tests passed in `84521` after integration.
+SQLx preparation, offline all-target compilation, strict native/WASM lint and
+both Dioxus build targets passed. Disposable Chromium `7708` exited 0 on the
+extended suite, including actual filtered downloads and policy changes. Desktop
+dark/mobile light captures were inspected in one batch with no follow-up visual
+changes. This is Linux Chromium 148.0.7778.96, not Windows MCP.
+
+Scoped adversarial self-review checked all six source predicates, filter-before-
+limit ordering, strict transport, requester/policy bindings, snapshot/release
+separation and stale nested responses. Spec Kit consistency analysis maps four
+affected obligations (FR-006/008/010/018) to T235–T236 and the evidence above:
+no new ambiguity, duplication, unmapped task or constitution conflict within
+this increment. This does not close T203, full picker/invoiced/financial parity,
+policy activation or independent full-feature review.
+
 ## Task catalog consumer (T234, in progress)
 
 In the Nix shell, with disposable PostgreSQL and all migrations applied:

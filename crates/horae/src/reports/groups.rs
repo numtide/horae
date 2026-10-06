@@ -118,6 +118,38 @@ mod tests {
     }
 
     #[test]
+    fn billability_grouped_transport_is_optional_and_strict() {
+        use crate::models::time_report::TimeReportBillability;
+        let base = "from=2026-09-07&to=2026-09-07&group_by=project";
+        assert_eq!(
+            parse(base).unwrap().filters.billability,
+            TimeReportBillability::All
+        );
+        for (value, expected) in [
+            ("all", TimeReportBillability::All),
+            ("billable", TimeReportBillability::Billable),
+            ("non_billable", TimeReportBillability::NonBillable),
+        ] {
+            assert_eq!(
+                parse(&format!("{base}&billability={value}"))
+                    .unwrap()
+                    .filters
+                    .billability,
+                expected
+            );
+        }
+        for value in [
+            "",
+            "true",
+            "null",
+            "unknown",
+            "billable&billability=non_billable",
+        ] {
+            assert!(parse(&format!("{base}&billability={value}")).is_err());
+        }
+    }
+
+    #[test]
     fn active_projects_only_grouped_transport_is_optional_and_strict() {
         let base = "from=2026-09-07&to=2026-09-07&group_by=project";
         assert!(

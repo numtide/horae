@@ -69,6 +69,8 @@ pub(crate) async fn read(
                  WHERE m.org_id=e.org_id AND m.manager_id=$2 AND m.project_id=e.project_id))))
              AND e.spent_date BETWEEN $6 AND $7
              AND (NOT $16::bool OR p.active)
+             AND ($17::bool IS NULL OR $17 = (e.billable AND (e.invoice_id IS NOT NULL
+               OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable,t.billable_default)))))
              AND (cardinality($8::uuid[])=0 OR p.client_id=ANY($8))
              AND (cardinality($9::uuid[])=0 OR e.project_id=ANY($9))
              AND (cardinality($10::uuid[])=0 OR e.user_id=ANY($10))
@@ -104,6 +106,7 @@ pub(crate) async fn read(
         query.after.as_ref().map(|cursor| cursor.name.as_str()),
         query.after.as_ref().map(|cursor| cursor.id),
         query.active_projects_only,
+        query.billability.filter(),
     ).fetch_all(&mut *tx).await?;
     let stats = rows.first().ok_or(TimeReadError::Unavailable)?;
     let totals = TimeReportTotals {
