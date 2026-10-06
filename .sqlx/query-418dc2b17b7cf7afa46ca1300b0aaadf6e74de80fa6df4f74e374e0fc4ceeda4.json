@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) FROM person_permission_states p JOIN users u ON u.id = p.user_id WHERE p.org_id = $1 AND p.is_administrator AND u.active",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "418dc2b17b7cf7afa46ca1300b0aaadf6e74de80fa6df4f74e374e0fc4ceeda4"
+}
