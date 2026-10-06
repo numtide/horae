@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE horae_outbox SET attempts=6 WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c796e34901301ee0dbeb3a703f1d0ec9a3fb1e9760cbff4d4ceaaa2c37279719"
+}

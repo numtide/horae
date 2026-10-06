@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT failed_at IS NULL AND delivered_at IS NULL AND claim_token=$2 FROM horae_outbox WHERE id=$1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "?column?",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "9b5f84652a7647d69a78d56a4447c8e6a605eaeae6b75c35afc587f41f9d471e"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE horae_outbox SET available_at=clock_timestamp()+interval '25 seconds' WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8e0ef862697d20695708fa8f6950861c2ef83cd9494c357974ff5ea5e755b0d6"
+}
