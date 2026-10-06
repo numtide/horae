@@ -119,6 +119,7 @@ Clients MVP as canonical-permission acceptance.
 | Approval tenant isolation, [#239](https://github.com/numtide/horae/pull/239) | `fix/approval-tenant-isolation`, `.worktrees/approval-tenant-isolation` | Master `1b8fa4f` | Draft at `66a256f`; three source/test files and complete cache patch preserved exactly; 1,124 source-head tests, source review, SQLx, format and offline server/WASM Clippy passed; full current-head local Nix passed |
 | Identity response projections, [#240](https://github.com/numtide/horae/pull/240) | `fix/identity-response-projections`, `.worktrees/identity-response-projections` | Master `1b8fa4f` | Draft at `1ce993f`; 1,122 source-head tests, cache provenance, bounded review and format passed; cache-inclusive server/WASM lint passed; full Nix `16586` running; no activation |
 | Time-writer account activity, [#241](https://github.com/numtide/horae/pull/241) | `fix/time-write-activity`, `.worktrees/time-write-activity` | #228 `0e1e675` | Draft at `7820f8d`; 1,142 tests, cache provenance, bounded review, format and offline server/WASM lint passed; full Nix `85167` running; no delegated writes or activation |
+| Time-entry invoice identity boundary, [#242](https://github.com/numtide/horae/pull/242) | `fix/time-entry-payload`, `.worktrees/time-entry-payload` | Master `1b8fa4f` | Draft at `43337fc`; 1,122 tests, cache/source provenance, bounded review and format passed; offline lints `22698` and full Nix `73808` running; no policy or UI change |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -367,7 +368,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `4c00660` | Document project form permission integration boundaries | specification-history | Held in original backup; extraction pending |
 | `3bb62ac` | Limit session identity responses to display fields | identity-projections | Source/tests together in #240 at `1ce993f`; 1,122 tests, regenerated cache, format and offline lints passed; full Nix running; canonical tests and mixed specification hunks separately preserved |
 | `4ac30fa` | Add scoped time-entry reads without financial metadata | time-readers | Held in original backup; extraction pending |
-| `c80233b` | Keep invoice identities out of time-entry responses | time-readers | Held in original backup; extraction pending |
+| `c80233b` | Keep invoice identities out of time-entry responses | time-entry-payload | Exact final model and independently registered original legacy HTTP assertions in #242 (`43337fc`); 1,122 tests, complete SQLx and format passed; offline lints/full Nix running; canonical fixture remainder and specification hunks separately preserved |
 | `5ec183a` | Fence time-entry writes against account deactivation | time-writer-activity | Source/tests and regenerated cache in #241 (`7820f8d`), original configuration SQL inlined without canonical module; 1,142 tests and both offline lints passed; full Nix running; specification hunks retained |
 | `228e151` | Clarify timesheet context and locked calendar behavior | specification-history | Held in original backup; extraction pending |
 | `4294aa3` | Isolate permission browser fixtures and retain test assets | browser-fixture-tooling | Held in original backup; extraction pending |
@@ -1938,3 +1939,34 @@ with project editing by `2497dbe`. Final models/readers/commands and transaction
 tests must be reviewed together; `PermissionRequester` is a small shared DTO
 absent from the current #234 model. Actual organization-lock and schema dependencies
 must be resolved before extraction. No delegation code was changed or certified.
+
+Time-payload suite/cache `37602` exited zero: 821 app, 180 integration and 121
+core tests (1,122 passed; 11 existing manual tests ignored). Complete SQLx
+regeneration retains all 1,003 base descriptors unchanged and adds three,
+byte-identical to original `c80233b`; 1,006 total, no removals or modified base
+descriptors. Verified the extracted HTTP fixture/legacy loop equals the original
+slice after only the documented import/cookie/comment adaptations. Unsigned cache
+commit `43337fc4180b8a0c590408f5525a2bddf4c7567f`.
+
+Published independent draft [#242](https://github.com/numtide/horae/pull/242) on
+master, six files and 173 additions (three Rust/test files and three generated
+descriptors). Remote inspection confirms the exact head, base, draft flag and
+diff size. No critical/high finding in the bounded payload review; full gates
+are still pending. Offline server/WASM lint `22698` and clean-head Nix `73808`
+are live on `43337fc`. The shared local Cargo target is occupied by `22698`.
+#240 `16586` has completed release compilation and advanced to browser/VM checks;
+#241 `85167` has passed its SQLx and server-Clippy derivations but remains live.
+Neither whole-flake result is inferred from partial success.
+
+Further delegation dependency evidence: the shared requester DTO originated in
+`6bba224`; preserve its exact eight-line definition without importing the entire
+editor. #234 has the receipt/assignment schema and profile/template foundations
+but lacks `db::lock_organization`, so it alone is not a valid base for the final
+composable command. Read the final session wrappers and strict DTOs; subsequent
+whole-file command, transaction/reader/HTTP test and contract review remains
+required before creating that extraction. No new decision or feature is needed.
+
+This iteration is progress: #242 is isolated, source-accounted, suite/cache-verified
+and published. Next collect the four live checks without restarting them, then
+resolve and review the project-delegation boundary. Remaining canonical/UI/spec
+and unpublished Clients groups still require final ownership; goal not complete.
