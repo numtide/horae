@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE permission_templates SET catalog_version = $1, grants = $2 WHERE id = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "TextArray",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e9f05677eb4d14d64bbacfd6aadbe84f53d3e274944ffbd2980f774b70e4386e"
+}

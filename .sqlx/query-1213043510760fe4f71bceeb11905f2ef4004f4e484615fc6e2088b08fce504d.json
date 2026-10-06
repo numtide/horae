@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE person_permission_states SET source = $1, built_in_profile = $2,\n             template_id = $3, applied_template_revision = $4, revision = $5 WHERE user_id = $6",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Uuid",
+        "Int8",
+        "Int8",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1213043510760fe4f71bceeb11905f2ef4004f4e484615fc6e2088b08fce504d"
+}
