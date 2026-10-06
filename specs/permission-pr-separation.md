@@ -114,7 +114,7 @@ Clients MVP as canonical-permission acceptance.
 | Internal person-profile commands, [#234](https://github.com/numtide/horae/pull/234) | `refactor/person-profile-commands`, `.worktrees/person-profile-commands` | Integration base `46f02f7` combining #226/#221 | Draft at `45d219e`; 1,245 tests, schema upgrade, SQLx, offline server/WASM Clippy, format and full local Nix passed; retarget to master after prerequisites, no activation |
 | Harvest connection change authority, [#235](https://github.com/numtide/horae/pull/235) | `fix/harvest-connection-authority`, `.worktrees/harvest-connection-authority` | #228 `0e1e675` | Draft at `2fcecd1`; 1,146 tests, SQLx, offline server/WASM Clippy and format passed; full Nix running; retarget after #227/#228 |
 | Import job command and download authority, [#236](https://github.com/numtide/horae/pull/236) | `fix/import-job-authority`, `.worktrees/import-job-authority` | Integration base `26d6159` combining #235/#231 | Draft at `95bdf4a`; 1,163 tests, SQLx, offline server/WASM Clippy and format passed; full Nix running; retarget to master after #227/#228/#235 and #231, not an integration-base merge |
-| Original import requester provenance, [#237](https://github.com/numtide/horae/pull/237) | `feat/import-job-requester`, `.worktrees/import-job-requester` | Integration base `cfb8240` combining #236/#219/#222 | Draft at `2242361`; 1,218 tests, schema upgrade, SQLx and format passed; offline lints and full Nix pending; retarget after both prerequisite chains, no worker-policy activation |
+| Original import requester provenance, [#237](https://github.com/numtide/horae/pull/237) | `feat/import-job-requester`, `.worktrees/import-job-requester` | Integration base `cfb8240` combining #236/#219/#222 | Draft at `2242361`; 1,218 tests, schema upgrade, SQLx, offline server/WASM Clippy and format passed; full Nix running; retarget after both prerequisite chains, no worker-policy activation |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -328,7 +328,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `4fac6af` | Revalidate import job command and status authority | import-authority | Exact executor-based `jobs::cancel` owned by #231; remaining command/status Rust changes with the subsequent shared guard in #236; specification hunks retained for reconciliation |
 | `b4672a4` | Revalidate authority during import error downloads | import-authority | All eight combined command/download Rust/test files byte-identical in #236, plus eight regenerated SQLx additions matching original; suite/cache/offline lints/format passed, full Nix running; specification hunks retained |
 | `e5fcc5a` | Prepare durable CSV batches before opening transactions | import-transaction-lifecycle | Two exact Rust blobs and regenerated cache in #231; local verification passed, CI pending; specification hunks retained |
-| `482b7c5` | Retain the original requester of import jobs | import-requester-provenance | Seven original source/schema/test paths and exact regenerated cache patch in #237 on combined #236/#222 prerequisites; 1,218 tests, schema order, cache and format passed; lints/full Nix pending; specification hunks retained |
+| `482b7c5` | Retain the original requester of import jobs | import-requester-provenance | Seven original source/schema/test paths and exact regenerated cache patch in #237 on combined #236/#222 prerequisites; 1,218 tests, schema order, cache, offline lints and format passed; full Nix running; specification hunks retained |
 | `e949e4c` | Drain interrupted import transactions before releasing reservations | import-transaction-lifecycle | Production/test/cache hunks in #224; specification hunks retained for reconciliation |
 | `c0cfb8f` | Scope rate permissions to their owning resource | scope-domain | Code/tests in #221; specification hunks retained for reconciliation |
 | `5d51b0e` | Expose the current person's permission snapshot | own-permissions | Held in original backup; extraction pending |
@@ -1520,3 +1520,17 @@ base is authorized; deliver both prerequisite chains, then retarget and rerun CI
 #235's existing Nix run (`72580`) completed its server release build and advanced
 to browser/NixOS checks. #236 (`65754`) completed its Nix test derivation and is
 still running remaining checks. Neither full result is yet claimed successful.
+
+Requester offline server lint (`16577`) and WASM lint (`11771`) passed unchanged.
+#237 now records all local gates passed and full Nix (`63735`) running on the
+published head. Remote verification confirms `2242361`, base `cfb8240`, draft
+status and the bounded 22-file diff. The original tracked snapshot and untracked
+archive were compared again and remain intact.
+
+With the shared local target released, started the independent budget-email
+workspace suite in `57086` using the existing private-PostgreSQL wrapper and
+original local sender stubs. Next collect this suite, regenerate its complete
+SQLx cache, run offline server/WASM lints, full Nix and publish the independent
+draft. Preserve existing Nix sessions `72580` (#235), `65754` (#236) and `63735`
+(#237) until terminal. Specification reconciliation and many other original
+behavior groups remain unassigned; the overall goal is not complete.
