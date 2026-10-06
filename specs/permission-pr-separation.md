@@ -98,7 +98,7 @@ Clients MVP as canonical-permission acceptance.
 | Delivery | Branch/worktree | Base | Status / acceptance |
 | --- | --- | --- | --- |
 | Separation ledger | `docs/permission-pr-separation`, `.worktrees/permission-pr-separation` | `02f7b58` | Inventory recorded; no completed-extraction claim |
-| Legacy report/invoice readers from #217 | `fix/report-reader-authority-master`, `.worktrees/report-reader-authority-master` | `02f7b58` | Empty isolated branch created; implementation and all new-head checks pending |
+| Legacy report/invoice readers from #217 | `fix/report-reader-authority-master`, `.worktrees/report-reader-authority-master` | `02f7b58` | Code and original regression tests extracted locally; first focused run compiling; new-head checks pending |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -397,6 +397,10 @@ original remains untouched, with final duplicate disposition pending delivery.
 
 ## Iteration log and next action
 
+The ledger is published as draft [#218](https://github.com/numtide/horae/pull/218)
+at `c0ce2bd`. Subsequent delivery results will update that same PR; no separate
+tracking documents are needed.
+
 ### 2026-10-06 — Inventory, gate and recoverability
 
 Read-only inventory ran while #216 was queued. The existing watch process
@@ -410,8 +414,33 @@ Targeted `nix fmt` passed. The dev shell does not expose `mdformat` directly;
 the repository formatter was used instead. No Rust extraction tests or
 new-head Nix gates have run yet.
 
-Next: extract the legacy-reader helper/callers/tests into
-`fix/report-reader-authority-master`, preserving #216's client query.
-Review lock dependencies, run the required disposable-data checks, and publish
-a scoped PR only with honest readiness/evidence. Keep this ledger current;
-do not modify the original #212/#217 branches.
+### 2026-10-06 — Legacy-reader extraction started
+
+Extracted the shared manager snapshot and all seven reader regressions plus the
+registered-session test from #217. The three production readers now use that
+snapshot. The #216 invoice query, optional client filter and stable ordering
+remain unchanged. The HTTP harness receives only the exact endpoint matcher
+and the reader cases; no unrelated canonical consumers are copied.
+
+Necessary adaptation: inline the exact organization SHARE query from the
+existing helper into snapshot authorization. The two test fixtures retain the
+original NO KEY UPDATE query directly. This avoids importing unused writer
+modes or modifying master writers merely to support the extracted reader.
+No schema, new dependency, UI, policy activation or ordinary writer changes.
+
+Source review confirms current user revocations acquire the organization lock
+before user rows; the extracted readers take organization then actor SHARE and
+commit before returning. Invoice headers/lines use the same repeatable-read
+transaction. Full adversarial acceptance and runtime results remain pending.
+
+Focused validation is running in session `63131` through the Nix shell, using
+`.scratch/verify-readers.sh` in the extraction worktree. Each invocation starts
+a fresh private PostgreSQL cluster and applies only the base migrations there;
+no existing database is used. It reuses ignored Cargo artifacts, not source
+files, from the existing target directory. No test has been declared passed
+while dependency compilation is still running.
+
+Next: collect the live focused run; verify the authenticated HTTP cases and
+#216 client regressions; regenerate SQLx and run offline/lint/Nix gates.
+Review and publish the scoped PR only with honest readiness/evidence, then
+continue the remaining behavior groups. Do not alter the original branches.
