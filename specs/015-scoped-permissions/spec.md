@@ -83,6 +83,10 @@ confirmed contracts; local tests alone cannot settle contradictory reference fac
 
 - Q: May a responsible person select active participants of their managed projects in Timesheet before those participants have recorded time? → A: Yes (A). Include them while keeping visible time limited to authorized projects. Candidate discovery does not grant access to the person's other time, financial data or editing. This resolves Horae's zero-entry candidate choice, not verified Harvest custom-grant behavior.
 
+### Session 2026-10-05
+
+- Q: What controls existing-project monetary budgets, fixed fees and invoice defaults? → A: A. Require project access plus the corresponding scoped billable-rate Read/Write permission. Hour-only budgets keep ordinary project authority and costs remain independent. This approved Horae choice becomes FR-034; creation-time scope and client-default rates are not decided by it.
+
 ## User Scenarios & Testing
 
 ### User Story 1 - Assign a role that matches a person's responsibilities (Priority: P1)
@@ -287,6 +291,8 @@ An administrator can review how existing roles and project assignments translate
 - **FR-032**: Custom-profile names MUST be nonempty after removing surrounding whitespace, at most 100 characters and unique within the organization without distinguishing letter case. Preserve the chosen display casing. Concurrent equivalent-name creation MUST leave at most one template; return a conflict without changing existing templates or person permissions. Different organizations may use the same name. Enforce the reference limit of 50 reusable profiles per organization. Names are labels, never administrative identity or a substitute for template IDs; do not reserve built-in names without a separate evidenced requirement.
 
 - **FR-033**: The terminal timer-stop recovery exception after loss of tracking eligibility MUST remain limited to the timer owner. A delegated editor MUST retain current write scope over the entry and the selected owner's tracking eligibility; restoring eligibility does not waive organization, activity, task or independent business-state constraints. Neither read nor approval access grants timer-stop authority. The owner-only exception MUST NOT permit creation, restart, reassignment or other edits. Test loss and restoration of eligibility with separate actor/owner identities and both revocation lock orders.
+
+- **FR-034**: For an existing project's monetary budgets, fixed-fee schedules and invoice defaults, require the corresponding billable-rate Read/Write grant in that project's scope in addition to ordinary project access. Invoice defaults include payment terms, purchase order, taxes and discounts. Hour-only budgets remain governed by project access, and cost rates remain independently governed by FR-022. Withheld fields MUST remain absent from disclosed values and ordinary edits MUST preserve them without client echoes. Explicit changes and indirect resets/removals MUST require current write authority. This is the user's confirmed option A on 2026-10-05, not an observed Harvest enforcement rule; it does not decide initial project-manager selection, create-time managed financial scope or client-default-rate ownership.
 
 ### Proposed Built-in Boundaries
 

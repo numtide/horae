@@ -40,10 +40,14 @@ mod client;
 pub mod invoice;
 #[path = "../src/pages/invoices.rs"]
 mod invoices;
+#[path = "../src/models/permission_editor.rs"]
+pub mod permission_editor;
 #[path = "../src/models/project.rs"]
 mod project;
 #[path = "../src/models/project_creation.rs"]
 pub mod project_creation;
+#[path = "../src/models/project_managers.rs"]
+pub mod project_managers;
 #[path = "../src/pages/projects.rs"]
 mod projects;
 #[path = "../src/models/task.rs"]
@@ -57,7 +61,7 @@ mod models {
             Project, ProjectBudgetProgress, ProjectDetails, ProjectTagLink, ProjectTaskRate,
         },
     };
-    pub use super::{invoice, project_creation};
+    pub use super::{invoice, permission_editor, project_creation, project_managers};
 }
 
 type InvoiceResponse = Result<invoice::InvoiceWithLines, ServerFnError>;

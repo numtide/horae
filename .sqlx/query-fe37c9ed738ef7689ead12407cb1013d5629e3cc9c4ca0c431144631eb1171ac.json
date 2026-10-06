@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT budget_cents FROM project_task_settings WHERE project_id=$1 AND task_id IN\n               (SELECT id FROM tasks WHERE org_id=$2 AND name='Retained inactive money')",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "budget_cents",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "fe37c9ed738ef7689ead12407cb1013d5629e3cc9c4ca0c431144631eb1171ac"
+}

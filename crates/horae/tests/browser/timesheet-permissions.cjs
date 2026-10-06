@@ -306,10 +306,14 @@ function assignPerson() {
     assert.equal((await (await shellTimer).json()).id, ownTimer);
     const timerId = sql(`SELECT id FROM time_entries WHERE user_id='${person}' AND is_running`);
     assert.match(timerId, /^[0-9a-f-]{36}$/);
+    // Timer commands use the server's current date, not the sheet's selected date.
+    const timerDay = sql(`SELECT spent_date FROM time_entries WHERE id='${timerId}'`);
+    assert.match(timerDay, /^\d{4}-\d{2}-\d{2}$/);
     assert.equal(sql(`SELECT is_running FROM time_entries WHERE id='${ownTimer}'`), 't');
     await expect(page.locator('.sidebar-timer-wrap').getByRole('button', { name: 'Stop timer', exact: true })).toBeVisible();
     sql(`DELETE FROM assignments WHERE id='${id(13)}'`);
-    await visit('day');
+    const withoutAssignment = await visit('day', person, timerDay);
+    assert.ok(withoutAssignment.entries.some(value => value.id === timerId && value.is_running));
     const runningRow = page.locator('.ts-day-entry').filter({ has: page.getByRole('button', { name: 'Stop', exact: true }) });
     await expect(runningRow.getByRole('button', { name: 'Stop', exact: true })).toBeDisabled();
     const refused = await context.request.post(commandEndpoint, { data: { context: expectedContext(actor), command: { operation: 'stop_timer', entry_id: timerId } } });
@@ -317,7 +321,7 @@ function assignPerson() {
     assert.match(await refused.text(), /The selected person cannot currently track this project\/task/);
     assert.equal(sql(`SELECT is_running FROM time_entries WHERE id='${timerId}'`), 't');
     assignPerson();
-    await visit('day');
+    await visit('day', person, timerDay);
     await mutation('stop_timer', () => runningRow.getByRole('button', { name: 'Stop', exact: true }).click());
     assert.equal(sql(`SELECT is_running FROM time_entries WHERE id='${timerId}'`), 'f');
     await expect(page.locator('.sidebar-timer-wrap').getByRole('button', { name: 'Stop timer', exact: true })).toBeVisible();
@@ -340,7 +344,7 @@ function assignPerson() {
     await owner.waitForURL(`${base}/`);
     await ownerSettled();
     sql(`UPDATE users SET org_role='admin' WHERE id='${actor}'; UPDATE users SET org_role='member' WHERE id='${person}';`);
-    await owner.goto(`${base}/timesheet/day/${day}?span=week`);
+    await owner.goto(`${base}/timesheet/day/${timerDay}?span=week`);
     const ownRow = owner.locator('.ts-day-entry').filter({ has: owner.getByRole('button', { name: 'Stop', exact: true }) });
     await expect(ownRow.getByRole('button', { name: 'Edit', exact: true })).toBeDisabled();
     const stopped = owner.waitForResponse(r => r.url().includes('/api/apply_timesheet_command'));

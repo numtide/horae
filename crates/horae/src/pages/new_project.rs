@@ -7,8 +7,10 @@ use crate::components::icons::NavIcon;
 use crate::components::modal::Modal;
 use crate::models::project_creation::{
     CreationOptions, CreationSearch, EditableProject, ProjectDraft, ProjectEditRequest,
-    ProjectFormField, TaskSource,
+    ProjectEditorContext, ProjectFieldAccess, ProjectFormField, ProjectManagerSelection,
+    ProtectedProjectField, TaskSource,
 };
+use crate::models::project_managers::ProjectManagers;
 use crate::route::Route;
 use crate::server_fns;
 
@@ -16,12 +18,18 @@ use crate::server_fns;
 mod basics;
 #[path = "new_project/billing.rs"]
 mod billing;
+#[path = "new_project/catalog.rs"]
+mod catalog;
 #[path = "new_project/date_field.rs"]
 mod date_field;
 #[path = "new_project/draft.rs"]
 mod draft;
 #[path = "new_project/invoice_defaults.rs"]
 mod invoice_defaults;
+#[path = "new_project/protected.rs"]
+mod protected;
+#[path = "new_project/session.rs"]
+mod session;
 #[path = "new_project/tasks.rs"]
 mod tasks;
 #[path = "new_project/team.rs"]
@@ -92,9 +100,26 @@ pub fn NewProject() -> Element {
 
 #[component]
 pub fn EditProject(id: Uuid) -> Element {
+    // Keyed fragments remount resources and local state when the route changes.
+    rsx! {
+        for project_id in [id] {
+            ProjectEditLoader { key: "{project_id}", id: project_id }
+        }
+    }
+}
+
+#[component]
+fn ProjectEditLoader(id: Uuid) -> Element {
+    let mut generation = use_signal(Uuid::now_v7);
+    let mut unavailable = use_signal(|| false);
     let mut initial = use_resource(use_reactive!(|id| async move {
-        let mut options = server_fns::project_creation_options(CreationSearch::default()).await?;
         let project = server_fns::load_project_editor(id).await?;
+        let mut options =
+            catalog::options(editor_context(&project), CreationSearch::default()).await?;
+        if let Some(access) = &project.access {
+            options.can_edit_private_settings =
+                access.private_notes == ProjectFieldAccess::Editable;
+        }
         options
             .clients
             .retain(|client| client.id != project.client.id);
@@ -109,21 +134,51 @@ pub fn EditProject(id: Uuid) -> Element {
         }
         Ok::<_, ServerFnError>((options, project))
     }));
+    let invalidate = use_callback(move |expected: Uuid| {
+        if expected != *generation.peek() {
+            return;
+        }
+        initial.cancel();
+        initial.clear();
+        generation.set(Uuid::now_v7());
+        unavailable.set(true);
+    });
+    let reload = use_callback(move |_: ()| {
+        generation.set(Uuid::now_v7());
+        initial.clear();
+        unavailable.set(false);
+        initial.restart();
+    });
+    if unavailable() {
+        return rsx! {
+            h1 { class: "text-4xl font-semibold text-strong", "Edit project" }
+            div { class: "alert alert-danger", role: "alert",
+                p { "Your session or project access changed. Reload the project before continuing." }
+                p { "If a save was in progress, check the saved project after reloading." }
+            }
+            button { id: "np-editor-reload", class: "btn btn-secondary", onclick: move |_| reload.call(()), "Reload project" }
+            Link { to: Route::ProjectList {}, class: "btn btn-ghost", "Back to Projects" }
+        };
+    }
     if initial.state()() != UseResourceState::Ready {
         return rsx! { p { role: "status", "Loading project…" } };
     }
     match &*initial.read() {
-        Some(Ok((options, project))) if project.id == id => rsx! {
-            ProjectEditor {
-                key: "{project.id}-{project.revision}",
-                options: options.clone(), draft: None, existing: Some(project.clone()),
-                on_reload: move |_| initial.restart(),
+        Some(Ok((options, project))) if project.id == id => {
+            let key = format!("{}-{}", editor_key(project), generation());
+            rsx! {
+                ProjectEditor {
+                    key: "{key}",
+                    options: options.clone(), draft: None, existing: Some(project.clone()),
+                    generation: generation(), on_unavailable: invalidate,
+                    on_reload: reload,
+                }
             }
-        },
+        }
         Some(Err(error)) => rsx! {
             h1 { class: "text-4xl font-semibold text-strong", "Edit project" }
             div { class: "alert alert-danger", role: "alert", "Could not load project: {error}" }
-            button { class: "btn btn-secondary", onclick: move |_| initial.restart(), "Retry" }
+            button { class: "btn btn-secondary", onclick: move |_| reload.call(()), "Retry" }
             Link { to: Route::ProjectList {}, class: "btn btn-ghost", "Back to Projects" }
         },
         Some(Ok(_)) | None => rsx! { p { role: "status", "Loading project…" } },
@@ -138,15 +193,44 @@ enum Intent {
     Discard,
 }
 
+fn editor_context(project: &EditableProject) -> Option<ProjectEditorContext> {
+    project.access.as_ref().map(|access| ProjectEditorContext {
+        project_id: project.id,
+        requester: access.requester,
+    })
+}
+
+fn editor_key(project: &EditableProject) -> String {
+    let identity = project.access.as_ref().map_or_else(
+        || "legacy".to_owned(),
+        |access| {
+            format!(
+                "{}-{}-{}",
+                access.requester.org_id, access.requester.user_id, access.managers.access_revision
+            )
+        },
+    );
+    format!("{}-{}-{identity}", project.id, project.revision)
+}
+
 #[component]
 fn ProjectEditor(
     options: CreationOptions,
     draft: Option<ProjectDraft>,
     #[props(default)] existing: Option<EditableProject>,
     on_reload: EventHandler<()>,
+    #[props(default)] generation: Uuid,
+    #[props(default)] on_unavailable: EventHandler<Uuid>,
 ) -> Element {
+    let invalidated = use_signal(|| false);
+    use_context_provider(|| session::Boundary {
+        generation,
+        invalidated,
+        on_unavailable,
+    });
     let existing = use_signal(|| existing);
     let editing = existing.read().is_some();
+    let editor_context = existing.read().as_ref().and_then(editor_context);
     let mut state = use_signal(|| DraftState::new(draft));
     let form = use_signal(|| {
         existing.peek().as_ref().map_or_else(
@@ -155,6 +239,13 @@ fn ProjectEditor(
         )
     });
     let options = use_signal(|| options);
+    let managers = use_signal(|| {
+        existing
+            .peek()
+            .as_ref()
+            .and_then(|project| project.access.as_ref())
+            .map(|access| (&access.managers).into())
+    });
     let mut busy = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
     let mut invalid_field = use_signal(|| None::<ProjectFormField>);
@@ -162,15 +253,27 @@ fn ProjectEditor(
     let mut discard_open = use_signal(|| false);
     let mut reload_open = use_signal(|| false);
     let mut pending_edit = use_signal(|| None::<ProjectEditRequest>);
+    let mut edited = use_signal(std::collections::HashSet::<ProtectedProjectField>::new);
+    let on_edit = use_callback(move |field| {
+        edited.write().insert(field);
+    });
     let catalog_busy = use_signal(|| false);
     let navigator = use_navigator();
+    let dirty = use_memo(move || {
+        if let Some(project) = existing.read().as_ref() {
+            project.form != *form.read()
+                || !edited.read().is_empty()
+                || manager_selection_changed(
+                    project.access.as_ref().map(|access| &access.managers),
+                    managers.read().as_ref(),
+                )
+        } else {
+            state.read().is_dirty(&form.read())
+        }
+    });
     let request_intent = use_callback(move |action| {
         if editing && action == Intent::Leave {
-            if existing
-                .peek()
-                .as_ref()
-                .is_some_and(|project| project.form != *form.peek())
-            {
+            if dirty() {
                 discard_open.set(true);
             } else {
                 navigator.push(Route::ProjectList {});
@@ -291,18 +394,29 @@ fn ProjectEditor(
                 id: Uuid::now_v7(),
                 project_id: project.id,
                 expected_revision: project.revision,
+                expected_requester: project.access.as_ref().map(|access| access.requester),
+                managers: managers.peek().clone(),
                 form: form.peek().clone(),
+                unchanged: protected::preserved_fields(
+                    project.access.as_ref(),
+                    &project.form,
+                    &form.peek(),
+                    &edited.peek(),
+                ),
             })
             .clone();
         busy.set(true);
         spawn(async move {
-            match server_fns::save_project_editor(request).await {
+            match session::finish(server_fns::save_project_editor(request).await) {
                 Ok(id) => {
                     pending_edit.set(None);
                     intent.set(None);
                     leave_project_editor(navigator, Route::ProjectDetail { id }).await;
                 }
                 Err(rejection) => {
+                    if session::invalidates(&rejection) {
+                        return;
+                    }
                     if is_definite_rejection(&rejection) {
                         pending_edit.set(None);
                         intent.set(None);
@@ -318,11 +432,7 @@ fn ProjectEditor(
         });
     });
 
-    let dirty = if let Some(project) = existing.read().as_ref() {
-        project.form != *form.read()
-    } else {
-        state.read().is_dirty(&form.read())
-    };
+    let dirty = dirty();
     let locked = intent().is_some() || catalog_busy();
     let unresolved_request = if editing {
         pending_edit.read().is_some()
@@ -365,6 +475,19 @@ fn ProjectEditor(
                         .read()
                         .as_ref()
                         .is_some_and(|project| project.form.client_id == Some(client.id)))
+        });
+    let (billable_access, cost_access, notes_access) = existing
+        .read()
+        .as_ref()
+        .and_then(|project| project.access.as_ref())
+        .map(|access| (access.billable, access.costs, access.private_notes))
+        .unwrap_or_else(|| {
+            let private = if options.read().can_edit_private_settings {
+                ProjectFieldAccess::Editable
+            } else {
+                ProjectFieldAccess::Withheld
+            };
+            (ProjectFieldAccess::Editable, private, private)
         });
 
     rsx! {
@@ -410,6 +533,7 @@ fn ProjectEditor(
                             }
                             div { class: "flex flex-wrap gap-3",
                                 button {
+                                    id: "np-retry",
                                     class: "btn btn-secondary",
                                     r#type: "button",
                                     disabled: busy(),
@@ -435,13 +559,23 @@ fn ProjectEditor(
                         class: "border-0 p-0 m-0 min-w-0",
                         disabled: locked,
                         aria_label: "Project settings",
-                        Basics { form, options, editing, invalid_field: invalid_field(), error_message: error() }
+                        Basics { form, options, editing, editor_context, notes_access, on_edit, invalid_field: invalid_field(), error_message: error() }
                         Visibility { form, legacy: existing.read().as_ref().is_some_and(|project| !project.configured) }
-                        Billing { form, options, invalid_field: invalid_field(), error_message: error() }
-                        Tasks { form, options, inactive_ids: existing.read().as_ref().map(|project| project.inactive_task_ids.clone()).unwrap_or_default(), invalid_field: invalid_field(), error_message: error() }
-                        Team { form, options, busy: catalog_busy, inactive_ids: existing.read().as_ref().map(|project| project.inactive_user_ids.clone()).unwrap_or_default(), invalid_field: invalid_field(), error_message: error() }
+                        Billing { form, options, billable_access, on_edit, invalid_field: invalid_field(), error_message: error() }
+                        Tasks { form, options, editor_context, billable_access, on_edit, inactive_ids: existing.read().as_ref().map(|project| project.inactive_task_ids.clone()).unwrap_or_default(), invalid_field: invalid_field(), error_message: error() }
+                        Team {
+                            form, managers, options, editor_context, billable_access, cost_access, on_edit,
+                            busy: catalog_busy,
+                            retained_managers: existing.read().as_ref().and_then(|project| project.access.as_ref()).map(|access| access.managers.managers.clone()).unwrap_or_default(),
+                            inactive_ids: existing.read().as_ref().map(|project| project.inactive_user_ids.clone()).unwrap_or_default(),
+                            invalid_field: invalid_field(), error_message: error(),
+                        }
                         if existing.read().as_ref().is_none_or(|project| project.configured) {
-                            InvoiceDefaults { form, invalid_field: invalid_field(), error_message: error() }
+                            if billable_access != ProjectFieldAccess::Withheld {
+                                fieldset { class: "border-0 p-0 m-0 min-w-0", disabled: billable_access != ProjectFieldAccess::Editable,
+                                    InvoiceDefaults { form, on_edit, invalid_field: invalid_field(), error_message: error() }
+                                }
+                            }
                         } else {
                             p { class: "form-hint", "This project keeps its existing invoice defaults. Changing to the new billing configuration requires a migration." }
                         }
@@ -450,6 +584,7 @@ fn ProjectEditor(
             }
             footer { class: "np-footer flex flex-none flex-wrap items-center gap-3 py-4 px-project-form bg-cell-empty border-t border-light",
                 button {
+                    id: "np-save",
                     class: "btn btn-primary",
                     r#type: "button",
                     disabled: !can_create || locked || unresolved_request,
@@ -465,6 +600,7 @@ fn ProjectEditor(
                     }
                 }
                 button {
+                    id: "np-cancel",
                     class: "btn btn-secondary",
                     r#type: "button",
                     disabled: locked || unresolved_request,
@@ -520,6 +656,23 @@ fn ProjectEditor(
                 }
             }
         }
+    }
+}
+
+fn manager_selection_changed(
+    saved: Option<&ProjectManagers>,
+    selected: Option<&ProjectManagerSelection>,
+) -> bool {
+    match (saved, selected) {
+        (None, None) => false,
+        (Some(saved), Some(selected)) => {
+            saved.managers.len() != selected.manager_ids.len()
+                || saved
+                    .managers
+                    .iter()
+                    .any(|manager| !selected.manager_ids.contains(&manager.id))
+        }
+        _ => true,
     }
 }
 

@@ -184,14 +184,72 @@ persist assignments, resolve financial projections or activate policy.
 
 ### Project form financial integration (OP10/11/12)
 
-Continue from T157 using `contracts/project-form-permissions.md`. FR-021/022 are
-confirmed; initial designation authority, create-time managed financial scope
-and non-rate fields remain explicit entry gates, not invented defaults.
+Continue from T157 using `contracts/project-form-permissions.md`. FR-021/022 and
+FR-034's project monetary/settings rule are confirmed. Initial designation
+authority, create-time managed financial scope and client-default-rate ownership
+remain separate entry gates; they do not reopen the accepted existing-project
+field rule.
 
 - [x] T158 Trace project form load, catalogs, draft/finalization, full-form saves, association effects and replay; recheck official Harvest sources and record field ownership, preservation hazards and the initial-designation question.
-- [ ] T159 Close remaining field/effect predicates and add failing existing-project tests for withheld/read-only/unchanged/reset/zero input, inherited rates and scoped current authority; reuse the pure rate evaluator.
-- [ ] T160 Integrate typed protected-field intent and authorized projections into the real form/read/save transaction together, preserving legacy mode, revisions, complete-set validation, financial history and replay; never treat a missing client field as authority to clear storage.
+- [x] T159 Close remaining field/effect predicates and add failing existing-project tests for withheld/read-only/unchanged/reset/zero input, inherited rates and scoped current authority; reuse the pure rate evaluator.
+- [x] T160 Integrate typed protected-field intent and authorized projections into the real form/read/save transaction together, preserving legacy mode, revisions, complete-set validation, financial history and replay; never treat a missing client field as authority to clear storage.
 - [ ] T161 Verify the real form, registered session paths, concurrent revocation and browser behavior, SQLx completeness, server/WASM checks and adversarial cross-surface review; retain full activation and Nix gates.
+
+T159 has initial real-editor RED cases in
+`project_creation/editing/tests/canonical_fields.rs`. They separate canonical
+project authority from legacy roles and financial grants, require a true
+project-management designation, and test hidden task rates, explicit cost reads
+and forbidden rate writes. This is reproduction progress, not a completed
+field/effect matrix or passing canonical integration. Keep/read-only/reset/zero,
+catalog and replay coverage still depend on the shared editor transport work.
+
+FR-034's ownership question is now closed. The internal read boundary and
+stale-task-money regression pass. The internal writer now passes the former
+explicit rate-edit denial case plus keep/original-retry, equal-value and
+zero/reset/revoked-retry cases. The complete 76-test project-creation/editor suite
+now also verifies the reviewed alias/persistence fixes and reset from a NULL task
+override, requester binding and legacy wire compatibility. Registered HTTP/session
+tests also passed switched/missing/foreign requester rejection, original retry,
+independent authorized sessions and current-authority revocation. SQLx preparation
+and native/WASM lint passed for that increment. The subsequent manager integration
+passed all 84 project-creation/editor tests, all 32 manager tests (including
+parent commit/rollback and the no-upgrade FK regression), the registered HTTP
+matrix and full SQLx preparation. The real-page manager controls now have RED
+reproductions for complete selection, removal/readdition, dirty navigation and
+original pending save intent. The corrected state passes all 50 new-project
+component tests and all 25 detail-navigation tests; native/all-target and WASM
+lint also passed (`5827`, exit 0). This is not browser acceptance.
+The subsequent context-bound catalog reader passed all 91 editor/creation tests,
+registered HTTP sessions and full SQLx preparation; the strengthened active
+foreign pagination fixture also passed independently. Local initial load,
+client/task searches and identity-only people/Add everyone are now wired;
+all 56 production-page component tests pass, including requester mismatches,
+second-page rejection, 50/51 pagination and 501-person atomic rejection.
+Final native/WASM verification for that increment is recorded in `progress.md`.
+The protected-field and active-budget preservation increments now pass 93
+creation/editor database tests, the registered HTTP/session matrix and full SQLx
+preparation. The local page passes 73 component tests covering protected intent,
+session invalidation, real-link project navigation, pending-response cancellation
+and archived/outside-team manager controls; native/all-target and WASM lint pass.
+Focused manager review found no high/medium issue. The registered load/save
+endpoints now defer policy-aware authorization to their transaction; a failing
+HTTP legacy-Member/canonical-grant case established the former role barrier.
+The updated HTTP matrix and all 93 creation/editor tests pass. The strengthened
+headless Chromium suite passes twice with a canonical editor whose legacy role
+is Member, including active-person cost-read-only controls, explicit cost reset,
+zero/retry, protected storage and revocation/reload. It is registered in the
+default runner; complete default-suite, effect/concurrency review and final Nix
+gates remained open at that checkpoint.
+
+T159/T160 closed on 2026-10-06 after the field/effect review and 99-test
+creation/editor run. The last confirmed gap, erasure of inactive parent money
+by an explicit hour-budget edit, has a failing-then-passing database regression
+and an independent browser reproduction against the old binary. Canonical
+hour-only intent now preserves that money; monetary transitions and their
+replays still require financial authority. Existing form, catalogs, manager
+selection and typed save intent are integrated. T161 remains open for the
+rebuilt browser/full regression and Nix gates; no full-policy activation or
+creation cutover is claimed. See `progress.md` for exact runs and limitations.
 
 ### Invoice writer participation in the organization gate (T039/T040/T042)
 

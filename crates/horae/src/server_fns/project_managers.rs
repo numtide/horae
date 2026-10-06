@@ -28,7 +28,9 @@ async fn requester(expected: Option<PermissionRequester>) -> Result<User, Server
 }
 
 #[cfg(feature = "server")]
-fn map_error(error: permissions::project_management::ProjectManagersError) -> ServerFnError {
+pub(super) fn map_error(
+    error: permissions::project_management::ProjectManagersError,
+) -> ServerFnError {
     use permissions::project_management::ProjectManagersError as Error;
     match error {
         Error::Forbidden => forbidden("Current project editing authority is required"),

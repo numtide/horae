@@ -9,6 +9,9 @@ use std::time::Duration;
 #[path = "project_management_read.rs"]
 mod reader_tests;
 
+#[path = "project_management_transaction.rs"]
+mod transaction_tests;
+
 async fn permissions(pool: &PgPool, org: Uuid, user: Uuid, grants: &[Permission]) {
     let ids: Vec<String> =
         serde_json::from_value(serde_json::to_value(PermissionSelection::new(grants)).unwrap())

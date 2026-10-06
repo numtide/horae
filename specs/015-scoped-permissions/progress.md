@@ -1,5 +1,1116 @@
 # Scoped permissions investigation progress
 
+## 2026-10-06 — Full local regression passed; rebuilt browser verification
+
+- Previous turn made concrete progress by repairing complete offline SQLx
+  generation and recovering Nix source evaluation. Re-polled the existing live
+  handles `75514` and `2994`; no duplicate builds were started.
+- `75514` completed the offline app suite: 1,280 passed, zero failures, 11
+  pre-existing ignored tests (not claimed as executed). All separate test
+  binaries passed too: AdminShell 11, approval labels 3, CLI imports 5, CLI
+  restart 1, detail navigation 25, import jobs UI 35, integration 36, new-project
+  form 73, own permissions 11, audit UI 5, permission editor UI 55, scoped Reports
+  UI 19, timer widget 1 and shared trigger utilities 8. Core's 183 tests passed
+  earlier in this same run. No offline query error remains.
+- The existing chain is now building the corrected Dioxus app before running
+  every default browser suite. The server-test result does not substitute for
+  post-fix browser acceptance. The independent Nix check `2994` has completed
+  its client build and remains live; package/server and all later gates are not
+  yet reported as passed.
+- Read-only GitHub check confirms PR #212 remains OPEN/DRAFT on
+  `feat/scoped-permissions`, published head `de8f9ad839879c35cdec19c0f40888cb4b948df8`.
+  Local editor integration and cache changes remain unpublished. No merge or
+  real-data/policy activation.
+- `75514` exited 0. Complete offline Rust verification, corrected Dioxus build
+  and all 24 default browser suites passed in one chain. The new hours-only
+  budget browser assertion is GREEN against the rebuilt app after RED `54183`
+  against the old binary. Explicit zero/reset, exact response-loss replay,
+  canonical Member access, revocation/reload and historical storage preservation
+  all pass alongside legacy forms, shared controls, Timesheet and Reports.
+- Totals: 183 core + 1,280 app + 288 separate integration/component/CLI tests =
+  1,751 passed. The 11 ignored tests are existing explicit large-volume/manual
+  measurements; none were silently skipped or changed for this increment.
+  `2994` is still running its independent release-package browser suite and
+  later Nix gates. Keep T161 open until those gates are resolved; do not restart
+  the completed local chain.
+
+Next: collect `2994`, resolve any actual Nix failure, then
+publish the verified existing-editor increment without claiming the remaining
+permissions surfaces, creation contracts or full policy activation are complete.
+
+## 2026-10-06 — Full offline build exposed incomplete query metadata
+
+- The previous turn made concrete progress: fixed inactive parent-money loss,
+  verified 99 editor/creation tests and repaired the timer-date browser fixture.
+  Recovered the existing `92817` handle. Core tests passed (183), but the full
+  server build exited 101 with 108 missing-query errors in `tests/integration.rs`.
+  Its chained Dioxus build and full browser run did not execute.
+- This contradicts completeness of the earlier SQLx preparation, not its exit
+  code: `28776` really passed prepare and lint, but fresh offline integration
+  compilation proves those gates were insufficient. There were 94 tracked cache
+  removals, including still-used integration queries. Do not publish that cache
+  or restore unrelated stale descriptors merely to make compilation pass.
+- Inspected the pinned CLI (`sqlx-cli-sqlx 0.9.0`), local SQLx macros (0.8.6),
+  Cargo targets and source timestamps. SQLx is optional behind `server`, while
+  the CLI's [metadata reader](https://github.com/launchbadge/sqlx/blob/v0.9.0/sqlx-cli/src/metadata.rs)
+  does not forward feature flags. Its [selective recompile step](https://github.com/launchbadge/sqlx/blob/v0.9.0/sqlx-cli/src/prepare.rs)
+  discovers macro dependents from that default graph. Unchanged integration
+  targets can stay cached while prepare removes their query descriptors.
+- The scratch verifier now refreshes modification timestamps of the existing
+  app/test roots before the standard all-target, server-feature prepare. No
+  source content, dependency, application behavior or real database is changed
+  by that refresh. It uses a fresh migrated disposable PostgreSQL cluster, then
+  verifies the generated cache through offline core/server tests.
+- New run `75514` is active: full regeneration, complete tests, rebuilt Dioxus
+  binary, then every default browser suite. `92817` is terminal; do not resume or
+  duplicate it. No successful full offline or post-fix browser result is claimed
+  yet. Nix gates and publication remain pending.
+- Default-feature Cargo metadata confirms no SQLx edge for Horae (`70326`,
+  exit 0). Forced preparation completed in `75514`; only the three superseded
+  production-query removals remain, instead of 94. All 183 core tests passed
+  again and the complete offline server test build is compiling.
+- Documented the timestamp precaution in `AGENTS.md` and updated the existing
+  scratch editor verifier so subsequent iterations cannot repeat this omission.
+  Registered the new editor/query files as intent-to-add solely for Nix's source
+  snapshot. No commit or publication. Repository-wide `nix fmt -- --ci` passed
+  before the final documentation update; source formatting is unchanged.
+- Nix's initial no-build evaluation failed on an absent filtered-source store
+  path, including with refresh/evaluation-cache disabled. Materializing
+  `packages.x86_64-linux.default.src.outPath` succeeded (`7476`), without changing
+  Nix definitions. The repeated no-build evaluation then passed every native
+  derivation (`35539`); this proves evaluation only, not the build/tests.
+- Full native Nix check `2994` is now running with `--max-jobs 1 --cores 2`.
+  Dependencies were fetched and package compilation started. Its source snapshot
+  includes all new files through intent-to-add; source implementation is frozen
+  while both verification paths run. `75514` remains the separate offline test,
+  Dioxus rebuild and default-browser chain. Neither has a terminal result yet.
+- Rechecked the next project-read boundary against the current
+  [Harvest permission reference](https://support.getharvest.com/hc/en-us/articles/44171549176077-Permissions)
+  and [budget guide](https://support.getharvest.com/hc/en-us/articles/360048686811-How-to-set-project-budgets).
+  The new guide separates project and rate permissions; the budget guide still
+  describes legacy roles and separately shared member progress. Current
+  `projects_for_viewer`, `fetch_project_details` and tags still consume the legacy
+  `project_read_access` view. Editor verification therefore cannot establish
+  OP08/09 completion or justify activation. No new custom-grant inference or
+  production behavior change was made from this source recheck.
+- `75514` completed the full offline test build in 4m19s and began its 1,291
+  app tests. This verifies compilation of the previously failing integration
+  target against the regenerated cache; test execution and subsequent browser
+  results are still pending. The Nix chain remains independently live.
+
+Next: collect `75514` and `2994`, confirm all offline targets compile/run, then
+complete browser/Nix gates before publishing the
+integrated editor. Preserve the full permissions scope beyond T159/T160.
+
+## 2026-10-06 — Inactive budget preservation and timer test date
+
+- The previous user-facing estimate was a status-only turn (no implementation
+  progress). Revalidated the existing worktree and recovered orchestration cell
+  `5616`: regression `44552` exited 101, reproducing Hours-to-Hours erasure of
+  `Some(0)` parent monetary storage. No process restart was inferred from silence.
+- Canonical non-monetary budget edits now preserve inactive parent cents using
+  the existing monetary-mode predicate. Legacy behavior and authorized monetary
+  transitions are unchanged. Added a fee-to-hours control for denial without
+  financial authority, allowed conversion, exact retry and denied replay after
+  financial revocation. Verifier `28776` is running against a disposable database;
+  its success is not yet claimed.
+- Browser `5435` exited 1 in the delegated timer assertion after passing the
+  earlier suites. The fixture selected PostgreSQL CURRENT_DATE in Europe/Madrid
+  (October 6), while production timer commands use UTC (October 5). The test now
+  reads the timer's actual stored date and opens that sheet, asserting its running
+  entry is present before testing disabled controls and direct-request denial.
+  No timer behavior or permission assertion was relaxed. Continuation `31978`
+  runs Timesheet and remaining permission suites on a new disposable database;
+  its editor binary predates the pending parent-budget fix.
+- Reused the existing read-only reviewer for the parent-money fix and remaining
+  existing-editor field/effect review. No new agents, real-data writes, policy
+  activation, publication or merge.
+- `31978` exited 0: Timesheet (including both delegated denial and owner-only
+  terminal recovery), permission recovery, scoped Reports and canonical editor
+  browser suites passed. The timezone mismatch was confirmed by the same run in
+  the Madrid/UTC date boundary, without changing production timer behavior.
+- The reviewer found no remaining high/critical existing-editor effect defect.
+  `28776` passed the parent-budget regression, all four concurrency tests, the
+  registered HTTP matrix and all 99 creation/editor tests, including the
+  authorized monetary-to-hours/revoked-replay control. Cache/lint gates remain
+  live and are not yet reported as passed.
+- Extended the real editor browser fixture with hidden inactive parent cents
+  and an explicit hours edit. Pre-fix binary run `54183` exited 1 exactly at the
+  storage assertion: expected `86753`, got `null`; earlier form phases passed.
+  This is an intentional additional RED reproduction, not a failure of the new
+  server source. Rebuild and GREEN verification are still required.
+- `28776` exited 0: all 99 editor/creation tests, registered HTTP and concurrency
+  checks, complete SQLx preparation, offline native/all-target and WASM Clippy,
+  and Rust formatting passed. Targeted repository Markdown formatting also
+  passed. T159/T160 are closed for existing-project integration; T161's full
+  regression/browser/Nix verification remains open.
+- Started `92817`: complete core and server tests on a new disposable PostgreSQL
+  cluster, then the existing pinned Dioxus build script, then every default
+  browser suite against that rebuilt binary. It initially waited on the existing
+  verifier's Cargo lock; `28776` has now completed. Keep this handle and inspect
+  its next output rather than launching another build. No full-suite success or
+  post-fix browser success is claimed until it completes.
+
+Next: collect `92817`, resolve any real regression and complete the Nix gates
+before publishing the integrated editor. Keep the full permissions scope open, including creation,
+remaining consumers, approval/lock integration and activation review.
+
+## 2026-10-06 — Concurrency verified; browser regression continuation
+
+- The interrupted goal turn made concrete progress: added both concurrency
+  orderings, corrected reviewer-identified assertion confounds and ran the
+  expanded checks. Recovered the existing `35845` handle rather than restarting:
+  exit 0, all four concurrency tests (12 cases), registered HTTP matrix, all 97
+  creation/editor tests, complete SQLx preparation, offline native/all-target
+  and WASM lint, and Rust formatting. No production change was needed for those
+  race cases; the real transaction protocol passed.
+- Default browser run `55125` exited 1 in `new-project-permissions`: its exact
+  cost-field label still expected `· admins only`, removed by the scoped-cost
+  integration. Confirmed the production control retains its person/currency
+  accessible label. Updated both stale test locators without weakening legacy
+  role visibility, response redaction, draft ownership or mutation assertions.
+- Started the corrected failing suite and every unexecuted successor on a fresh
+  disposable database, using the same verified production build. Earlier default
+  suites passed up to this failure; this continuation is not yet a complete
+  single-run default-suite success. No real data or Harvest mutation.
+- Browser continuation `5435` passed the corrected real-session permission
+  matrix and has progressed through task-error and keyboard/billing branches.
+  It is still live; later suites remain unverified.
+- Existing-editor effect review found one real gap: explicit Hours/None budget
+  intent can clear inactive parent `projects.budget_amount_cents` without a
+  billable write grant. Child cents already have an effect check, but the parent
+  value is neither represented in that intent nor protected by its persistence
+  flag. Added a save/replay regression across Hours/None transitions and
+  NULL/zero/positive parent amounts. RED `44552` is compiling; production is
+  unchanged pending reproduction. The proposed fix preserves inactive parent
+  cents for canonical non-monetary-to-non-monetary intent, while preserving the
+  existing authorized fee-transition semantics and legacy behavior.
+
+Next: collect `44552`, fix the parent-money preservation gap with a fee-transition
+control, and collect `5435` without restarting it. Then finish existing-editor
+field/effect review and the full default/Nix gates. The
+full permissions goal, creation contracts and remaining surfaces stay open.
+
+## 2026-10-05 — Canonical editor revocation races
+
+- Previous goal turn made concrete progress: canonical Member HTTP access was
+  corrected with legacy denial preserved; `77415` passed HTTP, 93 creation/editor
+  tests, native/WASM lint and Rust formatting. Browser `56210` passed twice with
+  disposable fixture cleanup. Revalidated the current worktree and reused it.
+- Added `editing/tests/canonical_concurrency.rs`: read, save and receipt replay
+  each race against project-write grant loss, designation removal and financial
+  access loss. Retaining project-read on write revocation preserves the accepted
+  designation retention rule. Designation loss uses the production composable
+  command; grant fixtures publish their change with the organization revision
+  under the AccessChange gate.
+- Tests observe PostgreSQL blocking with the existing helper, commit revocation,
+  require the old repeatable-read/serializable snapshot to fail, then retry with
+  current authority. Financial-only loss still permits a freshly redacted read;
+  writes and receipt replay must deny. Project rows, task rates and editor
+  receipts must remain unchanged after the rejected operations.
+- `72129` is compiling the nine cases, then HTTP and complete creation/editor
+  regressions, SQLx preparation, offline native/WASM lint and formatting.
+  Requested a focused read-only review from the existing reviewer. No runtime
+  change or passed result is claimed for this increment yet.
+- Review found that project-grant/designation loss could also remove effective
+  financial authority, masking the intended guard. Those branches now retain
+  all-project financial authority; only FinancialAccess removes it. The saved
+  snapshot now includes `project_tasks`, where task rates actually live, as well
+  as settings. Initial `72129` passed the original three tests, then exited 101
+  while compiling this stronger snapshot: `project_tasks` has a composite key,
+  not `id`. Corrected its ordering to `task_id`; no production defect is inferred.
+- Added reverse-order coverage for read/save/replay: hold a project table lock,
+  observe the editor waiting after its org gate, then observe the production
+  designation command waiting on that editor. Releasing the first blocker must
+  let the authorized editor finish before revocation; later access must deny.
+  This uses actual lock dependencies and JoinSet cleanup, not timing sleeps.
+- Reviewer confirmed the authorization/snapshot confounds are fixed and found
+  no confirmed reverse-order defect. `54444` exited 101 before execution because
+  `pg_stat_activity.pid` is nullable in SQLx metadata; the test now explicitly
+  requires the observed blocked backend ID. The corrected full runner is started
+  again; results are pending, not inferred from the earlier three-test snapshot.
+- Complete default browser runner `55125` is live against the already verified
+  production build (only Rust tests changed since that build). Early design,
+  responsive/shared-control and bulk-action suites pass; remaining suites are
+  not yet verified. This adds no browser access to real data or Harvest.
+
+Next: collect the corrected runner, resolve any test/review findings before
+concluding the editor concurrency audit. Full effect review,
+other permission surfaces, creation contracts and activation/Nix gates remain
+open. No publication, merge or real-data changes.
+
+## 2026-10-05 — Browser acceptance and public editor authority
+
+- Previous user-facing turn was an estimate, not implementation progress. The
+  live browser handle `24434` has now been collected: exit 0, including revocation
+  and explicit reload. Build `35638` completed before that run.
+- Adversarial review found a medium test defect: the cost-read-only assertion
+  used an archived teammate, whose fieldset independently disables editing.
+  Added an active retained teammate with a populated cost override, checked its
+  withheld response and disabled read-only control, then an authorized explicit
+  reset alongside a project-rate zero and exact lost-acknowledgement replay.
+- Corrected browser run `80064` passed all four phases against the freshly built
+  server in headless Chromium and a disposable database. Historical records and
+  protected storage comparisons pass. This is not a Windows Chrome/MCP test or
+  evidence for the complete permission matrix.
+- The registered editor endpoints still reject legacy Members before their
+  canonical grants are evaluated. Added public-route coverage for a canonical
+  Member, legacy Member denial/Manager compatibility, anonymous reads and revoked
+  reads, retaining existing requester-switch/retry tests. RED runner `60259`
+  reproduced the canonical Member rejection: exit 101, HTTP 403 with `Manager access required`, after the legacy compatibility checks passed.
+- Replaced only `load_project_editor`/`save_project_editor` public role prechecks
+  with session authentication. `lock_editor_actor` still evaluates legacy roles
+  for policy 0, and current project grants/scope for policy 1 under transaction
+  locks; creation stays unchanged. GREEN `77415` runs the registered HTTP matrix,
+  creation/editor suite, native/WASM lint and formatting. Browser fixture now
+  uses a legacy Member with explicit grants and restores/removes only its
+  disposable fixtures on exit. Fresh build/browser verification is pending.
+  Requested focused read-only review from the existing reviewer. No deployment
+  or real policy activation.
+- `77415` passed the registered HTTP/session matrix and all 93 creation/editor
+  tests; native/WASM lint is still running. The independent reviewer found no
+  confirmed issue in the public guard adjustment or active-cost assertions.
+- Fresh build/browser `65206` passed all four phases with a legacy Member, but
+  exited 1 during fixture cleanup because assignments do not cascade from the
+  project. Corrected teardown to remove only this fixture's assignments first.
+  `56210` then passed the suite twice in the same disposable database, including
+  both teardowns (exit 0). Added this suite to the default browser runner. No
+  complete default-suite or Windows Chrome acceptance is claimed.
+- `77415` completed with exit 0: registered HTTP/session matrix, all 93
+  creation/editor tests, native/all-target and WASM lint, and Rust formatting.
+  Shell syntax and `git diff --check` also pass. No SQL queries or migrations
+  changed in this increment; it reused the previously prepared offline cache.
+- Next audit evidence: `project_creation/locking_tests.rs` currently establishes
+  concurrent legacy role loss, while canonical editor tests establish sequential
+  grant/designation loss. Add explicit canonical grant/designation revocation
+  races for the composite read/save/replay transaction; catalog-only races do
+  not prove that scope. Project list/detail still contain legacy role-based
+  controls and must not be counted as fully integrated by this editor result.
+
+Next: add and run the canonical editor concurrency cases above, then finish the
+effect/cross-surface audit before closing T159/T160/T161. Keep creation predicates
+and full-feature cross-surface/activation/Nix gates open. Work remains local and
+unpublished; no merge or real-data changes.
+
+## 2026-10-05 — Retained responsibility controls
+
+- Previous goal turn made concrete progress: corrected real-link navigation,
+  passed all 69 component tests and started `6246`. Revalidated that same runner
+  as live; it has now passed all 93 creation/editor database tests and the actual
+  registered HTTP/session matrix. SQLx preparation/native/WASM checks remain.
+- Added three production-page regressions for visible/removable outside-team
+  managers, archived in-team manager removal without unlocking tracking fields,
+  and a manager checkbox surviving removal of its tracking membership. These
+  reuse the approved independent-selection contract and existing backend tests;
+  no new eligibility rule, membership promotion or visual redesign is proposed.
+- RED runner `79530` is queued behind `6246` on the shared build directory. The
+  last 69-test success predates these three new cases; do not call them verified.
+- `79530` exited 101 with exactly the three new regressions failing; seven
+  existing manager cases passed. Implemented session-local identity retention,
+  responsibility-only rows in the existing Team panel and a shared toggle that
+  updates canonical selection independently of tracking membership. Unchecking
+  and rechecking remain possible before saving; no new modal, endpoint or CSS.
+- Archived team rows now keep only tracking controls disabled; canonical
+  retained responsibility can be removed or locally restored. Archived people
+  without an original designation remain disabled, including synthetic-event
+  handling; the legacy archived checkbox remains disabled too. Added coverage
+  for that negative case and undo before save.
+- `6246` has passed SQLx preparation and native/all-target lint, and is queued
+  for its final WASM check. `82168` is compiling the manager GREEN component
+  suite. Late changes (negative test, fieldset label) may postdate its snapshot;
+  final verification must cover the complete current tree. Requested a focused
+  read-only review from the existing transaction reviewer, with no new agents.
+- `6246` completed successfully, including WASM lint. `82168` passed all 73
+  component tests, including the archived-negative case. The final current-tree
+  rerun `51876` also passed all 73 tests plus native/all-target and WASM lint.
+  Independent source review found no confirmed high/medium finding; it did not
+  run tests or claim browser evidence. No SQL change was made in this UI increment.
+- Added `tests/browser/project-editor-permissions.cjs` for actual canonical saves
+  in the established isolated runner: withheld/read-only finance, archived/outside
+  manager removal, keyboard/narrow viewport, explicit zero, lost-acknowledgement
+  replay and same-session revocation/explicit reload. It checks protected storage
+  and historical records and refuses non-disposable DBs. Node syntax check passed;
+  runtime acceptance is still pending, and it is not in the default suite yet.
+- Browser build `35638` is live, using the existing `.scratch/build-report-browser.sh`.
+  The last checked server/WASM files predate these changes and must not be used
+  as proof for the new browser suite. 167 GiB is available; no cleanup is needed.
+
+Next: collect `35638`, then run `run-design-checks.sh project-editor-permissions`
+with the freshly built `target/dx/horae/debug/web/server`, pinned Playwright
+`/nix/store/i6xnc927g8yrwq0fws8wbmjvj4y36fq5-playwright-test-1.60.0/lib/node_modules/@playwright/test`
+and browsers `/nix/store/2br1n8v0cx3zlqs4bik69d5fm2qm0z3m-playwright-browsers`.
+Use the Nix shell and a fresh disposable cluster; no preview DB or Harvest writes.
+Full-form browser acceptance, public guard cutover and feature-wide gates stay open.
+
+## 2026-10-05 — Project navigation boundary verification
+
+- Previous turn produced new evidence: `78694` exited 101 with 67/68 component
+  tests passing. Its database/HTTP/cache/lint commands did not execute.
+- Corrected the navigation regression: calling `MemoryHistory::push` directly
+  does not notify the router. The harness now clicks a real `Link` in a test
+  layout. `44238` still reproduced the failure (67/68): the link became current
+  but the previous project's unavailable screen remained. Thus the corrected
+  regression establishes the production defect, unlike the earlier history-only
+  probe.
+- Inspected the pinned Dioxus reconciliation code: identity keys are handled in
+  keyed fragments, not a lone component. `EditProject` now places the loader in
+  a one-element keyed fragment, keeping each project's resources and invalidation
+  state separate without changing shared controls or CSS.
+- Added a second real-link case that navigates while a save response is pending;
+  the old handler must be cancelled and cannot navigate the new form away.
+  `2209` passed the 68-test snapshot before this final added regression.
+- `6246` passed all 69 component tests, including the pending-save navigation
+  case, and is now compiling the disposable-database suite. It also includes
+  the actual registered HTTP/session matrix, all-target SQLx preparation and
+  native/all-target plus WASM lint. Those later stages are not yet verified.
+- No Playwright/browser MCP navigation tools are registered in this turn;
+  component evidence is not browser acceptance. Reuse the documented direct
+  browser client when performing that acceptance rather than assuming a loaded
+  MCP connection.
+
+Next: collect the live `6246` database/session/cache/lint runner without restarting
+it, then finish archived/outside-team manager controls. Existing
+T159/T160/T161 and full-feature activation/review gates remain open. No merge,
+publication, policy activation or real-data mutation.
+
+## 2026-10-05 — Requester-state invalidation and explicit reload
+
+- `51401` finished successfully: 93 creation/editor tests, registered HTTP/session
+  matrix, complete SQLx preparation and native/all-target plus WASM lint. This
+  closes the verified budget-preservation increment, not all form acceptance.
+- `68612` reproduced three UI failures: first/later-page people mismatches and
+  save-time session/access loss kept the prior form visible. The ordinary
+  400/409/500 preservation control passed. Terminal exit 101.
+- Added one shared session-change error reason for backend save/catalog failures
+  and local response mismatch checks. No requester identities are returned.
+  A local editor boundary invalidates on 401/403 or that explicit 409 reason;
+  ordinary conflicts and ambiguous failures keep their existing recovery path.
+- Invalidation cancels/clears the parent resource and unmounts local form,
+  options and pending request state. Reload is explicit; generation-bound
+  callbacks and a local latch prevent stale results crossing the boundary. The
+  message does not claim that an earlier uncertain save failed. No CSS changes.
+- `32544` passed all 65 production-page tests. Review found no confirmed
+  high/medium issue but requested route and delayed-response verification.
+- Added controlled pending-read cancellation and cross-route cases. `39598`
+  passed ten cases, including cancellation, but reproduced a route defect:
+  unavailable state from project A prevented opening B. Keyed the loader itself
+  by project identity. Added delayed-save-response cancellation coverage too;
+  it postdates `39598`. No browser evidence is claimed from these component tests.
+
+Next: collect `78694`, the final component/database/HTTP/cache/native/WASM runner, then
+review the loader boundary and finish archived/outside-team manager controls.
+The full permissions goal remains active; no activation, publication or merge.
+
+## 2026-10-05 — Retained member budget preservation
+
+- Previous iteration made concrete progress: reproduced and patched stale parent
+  budget totals, added boundary/authority tests and obtained independent review.
+  Revalidated `23212` as live; no duplicate runner or restart.
+- Added real-save/replay coverage for a retained inactive member budget during
+  a canonical name-only edit, plus a control proving an explicit hour-budget
+  mode change still clears inactive member budgets. These tests postdate the
+  first compilation in `23212`; its subsequent `project_editor` filter includes
+  both new tests and will compile them before running. The preservation case is
+  expected RED until the member-budget write honors the original keep marker.
+- `23212` passed all 91 creation/editor tests, including the four new parent
+  aggregate regressions and their nonzero/zero/None plus revocation cases. It is
+  now compiling the second filter with the new member preservation/control tests.
+- Corrected the planned verification scope: the `project_editor` filter does not
+  select the registered HTTP matrix; that helper runs inside
+  `job_endpoints_enforce_session_role_and_organization`. The final GREEN runner
+  must select that actual test name explicitly; do not claim HTTP coverage from
+  a matching module filename or the narrower editor filter.
+- `23212` exited 101 after reproducing the exact new failure: the retained
+  budget row was absent instead of 125 minutes. The explicit mode-change control
+  and three other editor-filter cases passed. Cache preparation/lint did not run.
+- Extracted only the existing member-budget write tail and call it after the
+  assignment/cost save when Budget is not kept. Canonical preservation skips that
+  write; explicit edits and legacy requests retain their previous behavior.
+  The member-removal loop and its FK/history/authority checks are unchanged.
+- GREEN runner `51401` is live: complete creation/editor suite, actual registered
+  HTTP/session matrix, all-target SQLx preparation and native/WASM lint.
+- Its 93 creation/editor tests and the registered HTTP/session matrix have now
+  passed. SQLx preparation and lint remain live. Post-patch independent review
+  found no high/medium issue in the member-budget extraction.
+- Began the requester-state gate with production-page regressions: both initial
+  and continuation-page people mismatches must discard the editor, and a failed
+  retry reporting changed session/access must discard the pending request until
+  explicit reload. A control retains input for ordinary 400/409/500 responses.
+  These UI cases are intentionally not implemented yet; RED verification follows
+  the running SQLx preparation. Existing retry-preservation tests remain intact.
+- UI RED runner `68612` is waiting on the same build directory while `51401`
+  prepares SQLx metadata. Keep both handles; do not restart on silent compilation.
+  Error handling review requires one session-change discriminator for both
+  server and locally detected response mismatches, without requester identities
+  in the error. Cancel/clear the parent's cached success and scope invalidation
+  callbacks to a generation; do not just restart into the new account.
+
+Next: collect `51401` and the UI RED runner. Implement typed session-change
+classification, generation-scoped invalidation, parent resource cancel/clear and
+explicit fresh reload; classify Add everyone errors before string conversion.
+Do not discard ordinary conflicts/ambiguous pending intent or let late responses
+cross generations. Complete manager controls remain after requester-state work;
+the full permissions goal is active.
+
+## 2026-10-05 — Protected controls and original edit intent
+
+- Previous goal iteration made concrete progress: context-bound catalogs and
+  identity-only team selection passed 56 component tests and native/WASM lint.
+  No runner was left live; reused the same isolated branch and local changes.
+- Added three actual-page regressions: preservation on save/retry, independent
+  read-only costs without private-note access, and withheld finance with editable
+  hour budgets. `2803` reproduced all three failures (exit 101).
+- Wired separate billable/cost/note metadata through the existing controls.
+  Withheld numeric controls are absent; read-only values and monetary budgets
+  cannot be edited; project type/rate mode/billable controls retain their write
+  boundary. Hour budgets remain independently editable. No CSS changes.
+- Added cost zero/reset, hour-budget payload and monetary task-row preservation
+  tests. `16119` passed all 62 component tests and native/all-target plus WASM
+  lint (exit 0). That binary predates the following review correction.
+- Adversarial review found two medium defects in permission-only preservation:
+  untouched editable blank task rates could become Reset and copy a global
+  default; untouched None/hour budgets could unnecessarily require financial
+  writes for stale stored task money. Both need interaction-based intent.
+- Added a typed edited-field set to the existing editor state. Untouched scalar
+  fields and retained row overrides are preserved regardless of write access;
+  actual same-value/blank/zero input marks explicit intent and makes the editor
+  dirty. New writable row defaults retain the existing addition/inheritance
+  behavior; unwritable new fields remain preserved/unset. The pending request
+  captures this once for exact retries. Search/focus alone is not an edit.
+- Added the untouched-versus-explicit-empty existing-task regression and
+  strengthened the cost reset test to use a retained nonempty override. `76680`
+  passed all 63 component tests and native/all-target plus WASM lint (exit 0).
+- Follow-up review found a remaining medium defect: deleting a budgeted task or
+  person while keeping Budget deletes the child but retains the old parent sum.
+  Marking the whole group edited would clear unrelated inactive amounts. The
+  correction must recalculate only the active affected aggregate while retaining
+  the original preservation intent for settings, retained rows and inactive units.
+- Added three real-save PostgreSQL regressions for per-task hours, per-person
+  hours and per-task fees, including unchanged retries and inactive task money
+  preservation without financial authority. RED runner `1488` exited 101 with
+  all three intended stale-total failures (1500 versus 300 minutes; 2500 versus
+  500 cents). Its binary predates the fix and following strengthened cases.
+- Separated parent active-unit preservation from child/settings preservation.
+  Only removing a populated budget contributor (including zero) releases that
+  active total; a blank/unrelated association removal cannot repair stored money.
+  Strengthened cases cover nonzero/zero/None remainder, fee denial before save
+  and after replay revocation, and untouched stale monetary parent totals.
+  Independent source review found no further high/medium issue; runtime and
+  regenerated SQLx verification remain pending.
+- Adjacent preservation review confirmed a separate medium issue to fix next:
+  `load_members` retains inactive stored hour budgets, but `save_member` deletes
+  them on an ordinary save outside HoursPerPerson even when Budget is kept.
+  Forward the canonical keep decision and skip only that member-budget write
+  block; preserve assignment/cost writes, explicit budget edits, legacy behavior
+  and intentional assignment deletion. Add a real-save/replay regression with
+  an inactive retained member-hour budget. This issue is not fixed or covered by
+  the currently running binary.
+
+Next: collect live runner `23212`: all project creation/editor database tests,
+registered editor/session cases, complete all-target SQLx preparation and
+native/WASM lint. Fix any failures before accepting aggregate preservation.
+Then fix the confirmed inactive member-hour budget preservation gap above.
+Then finish requester-state invalidation and archived/outside-team manager
+controls before browser acceptance and public guard cutover. No publication,
+policy activation, merge or real-data mutation.
+
+## 2026-10-05 — Editor catalog UI integration
+
+- Revalidated runner `46713`: all 91 project creation/editor tests passed,
+  including the seven catalog cases. The registered HTTP matrix and complete
+  all-target SQLx preparation also passed. Its native lint later encountered the
+  newly introduced Dioxus key syntax error; terminal exit 101, no WASM result.
+- The active foreign client/task fixture strengthening postdates the first
+  compilation. Fresh runner `91998` passed its final pagination test and exited
+  0 against disposable PostgreSQL; active foreign and archived local matching
+  candidates are now independently covered at the page boundary.
+- Added production-page regressions for project-first loading, no canonical
+  fallback to creation catalogs, mismatched catalog requester rejection and
+  atomic rejection of Add everyone after a session switch. `34586` could not
+  complete offline because the full cache preparation was still running, but
+  its newly compiled `new_project_screen-5748ffb5af2ca2c6` harness was executable.
+  Running that exact binary reproduced all three intended failures (legacy
+  helper passed). The older `61dda3a91063c6b5` binary selected zero cases and is
+  not evidence. Component tests use controlled responses, not Chrome.
+- Connected project-first loading, client/task refresh, identity-only people and
+  all-page Add everyone to the captured editor context. Each canonical response
+  is checked without falling back to creation catalogs. Retained projections
+  remain separate from new candidate identities; no rates are reconstructed.
+  The editor key now includes requester and access revision. Full stale-state
+  purge and protected-field controls remain pending.
+- Source review found no additional high/medium issue in this increment and
+  recommended second-page requester switching. Added that regression plus
+  50/51 pagination, default-rate absence and 501-person atomic rejection.
+- `9304` stopped on the same RSX key syntax issue (no runtime tests). Corrected
+  the key to the required formatted string. `89444` passed all 56 real-page
+  component tests, including the six new integration cases and legacy controls.
+  Its native/all-target and WASM lint stages also passed; terminal exit 0.
+  Removed now-obsolete WASM dead-code expectations for the project picker types
+  used by the UI. No live runner remains from this iteration.
+
+Next: integrate protected-field controls and original
+unchanged/reset/zero intent together. Separate costs from the legacy private-notes
+flag, protect billing type/rate mode/billable toggles and monetary budgets, retain
+hour-budget editing and revalidate actual save/retry payloads. Complete requester
+state invalidation, archived/outside-team manager controls and Chrome acceptance
+remain open. No publication, policy activation, real-data change or merge.
+
+## 2026-10-05 — Context-bound editor catalogs
+
+- Collected `5827`, terminal exit 0: 25 navigation and 50 real-page component
+  tests passed, followed by native/all-target and WASM Clippy. This verifies the
+  preceding manager-selection increment, not the complete canonical form.
+- Traced the remaining creation-catalog calls. The canonical editor needs its
+  own operation-bound client/task reads; teammate selection already has the
+  identity-only `project_people` contract and must not be folded into a response
+  containing rates or permission metadata.
+- Added strict editor context/search/response models and an authenticated
+  `project_editor_catalog` wrapper. Four database regressions first exercise a
+  temporary legacy-catalog adapter to reproduce financial leakage, legacy-role
+  coupling, absent requester/project binding and implicit legacy fallback.
+  `57477` finished with all four intended failures. Replaced that adapter with
+  the canonical reader and added three scope/pagination/lock-wait cases plus
+  registered HTTP coverage; runtime verification is recorded above.
+- Independent contract review confirmed the proposed separation. In particular,
+  `lock_editor_actor` alone does not prove project existence for an all-project
+  editor: the catalog must explicitly verify tenant/project identity. Both task
+  amount and its currency require global-task rate Read. Client defaults remain
+  withheld under the unresolved separate predicate, including for Administrator.
+
+Independent source review found no high/medium issue in the canonical reader;
+its active foreign pagination fixture suggestion was applied. UI wiring and
+full verification remain separate gates. No deployment, public editor cutover,
+policy activation or publication.
+
+## 2026-10-05 — Independent manager intent in the real editor
+
+- Collected `2482`: all 84 project creation/editor tests, all 32 manager tests
+  and the registered HTTP/session matrix passed. Full all-target SQLx preparation
+  also succeeded. The detail-navigation harness passed all 25 tests.
+
+- Its new-project harness compiled the first local manager-state regressions:
+  46 passed, two deliberately reproduced missing selection updates and missing
+  designation restoration when adding a retained manager. `2482` is terminal
+  exit 101; its subsequent native/WASM Clippy stages did not run. This is not a
+  backend regression or complete form acceptance.
+
+- Began connecting an independent manager selection signal to the existing
+  checkbox, team additions and the original pending edit request. No CSS or
+  layout changes. The selection retains the complete authorized snapshot,
+  including outside-team and archived designations.
+
+- Independent review identified that dirty/leave checks must also inspect this
+  selection: adding, designating and removing a temporary teammate can leave the
+  form unchanged but delegation intent dirty. Added real-page interaction tests
+  for that sequence and exact original-intent retry after an uncertain response.
+  These two page tests postdate `2482`'s binary.
+
+- `43410` reproduced all four intended RED cases: missing manager updates,
+  missing retained designation on addition, clean state for manager-only edits,
+  and incomplete actual save payload. The legacy toggle control passed. Terminal
+  exit 101. The tests drive the production page with controlled responses, not
+  a real browser or database.
+
+- Checkbox updates now retain unrelated designations; additions/readditions use
+  the current independent selection, preserving explicit unchecks as well as
+  retained managers. Dirty display/navigation and Cancel/Back share one memoized
+  check including set-wise manager comparison. The page snapshots current
+  manager intent into the existing pending request without rebuilding retries.
+
+- The cancel regression records the native-dialog open request; merely finding
+  its always-mounted text would be insufficient evidence. Independent source
+  review found no additional defect in this increment, with full acceptance
+  explicitly still pending.
+
+- `5827` finished with exit 0: all 25 detail-navigation and all 50 new-project-screen
+  tests, including the four corrected regressions and native-dialog request
+  verification, followed by native/all-target and WASM lint. These component tests use synthesized Dioxus
+  events and controlled server responses, not Chrome acceptance.
+
+Next: implement requester-keyed reset and
+context-bound catalogs. Protected-field UI intent,
+outside-team/archived manager controls and browser acceptance remain unfinished.
+No public guard cutover, publication, policy activation or merge.
+
+## 2026-10-05 — Canonical managers in the project form transaction
+
+- `8140` ended with successful complete SQLx preparation and native/all-target
+  Clippy, but its zero-test selection is not runtime evidence.
+
+- Corrected `29949` passed all 32 `project_management_tests`, including joint
+  commit/rollback and the held-FK no-upgrade regression. The shell then failed
+  because its ignored verification script was edited while Bash was executing
+  it; its second planned test did not run. The script now passes `bash -n` and
+  accepts additional filters in the same disposable database; do not edit a live
+  script. `29949` is terminal exit 2.
+
+- Separate `72224` reproduced the real editor defect: the legacy Lead checkbox
+  still claimed canonical responsibility despite only an outside-team archived
+  person being designated. The test failed at that assertion, terminal exit 101.
+
+- Added the complete retained manager snapshot to canonical editor metadata and
+  an explicit manager selection/access revision to edit intent. Reads share the
+  form transaction. Internal comparison flags and response flags both use actual
+  designations; canonical membership writes preserve legacy roles independently.
+
+- The form now calls the shared delegation command in its own transaction even
+  when only outside-team managers change. Original form replay precedes the
+  independent delegation-receipt conflict check. Delegation and project receipts
+  commit together, with self-removal last and current authority still required
+  for replay. Missing/stale/duplicate/mismatched selection rejects without a
+  partial project save. Legacy omitted fields retain their wire shape.
+
+- Added form regressions for combined edits, unchanged-form manager changes,
+  historical replay, stale/invalid intent, incompatible receipt reuse, archived
+  retained members, self-removal and failure of the final form receipt. Independent
+  pre-implementation review identified the internal-before flag and unchanged-form
+  hazards; both are included in these cases. Runtime results are pending.
+
+- The page constructor only retains the original manager snapshot. Interactive
+  checkbox/independent selection state, catalogs, financial intent and browser
+  acceptance remain unfinished; no canonical public guard cutover or publication.
+
+- Code review caught an invalid transaction prelude: administration setup queried
+  limits before the editor switched to SERIALIZABLE. Split the limits helper and
+  set SERIALIZABLE, READ WRITE before its first query. The reviewer confirmed the
+  correction and no additional high/medium finding in this integration slice.
+  This correction and the archived-manager removal assertion postdate the initial
+  `25569` compile; collect it, then verify final source rather than treating that
+  run as acceptance of the corrected prelude.
+
+- `25569` ended exit 101: 55 tests passed and 29 writer-dependent cases failed
+  on its pre-correction transaction prelude. Its later manager/HTTP/SQLx/lint
+  stages did not run. The reader reproduction now passed. A fresh combined run
+  on the corrected source includes the archived-manager removal assertion and
+  real-page harnesses; do not restart the terminal `25569`.
+
+Next at that checkpoint (now collected above): collect `2482`, the fresh combined project-creation, manager and registered HTTP runner,
+then its full SQLx/component/native/WASM checks. Correct failures before connecting the
+actual permission-aware form controls. The whole feature remains active.
+
+## 2026-10-05 — Shared manager transaction
+
+- Collected `42587`, terminal exit 0: the corrected registered HTTP/session
+  matrix passed (including project-editor requester binding), complete all-target
+  SQLx preparation succeeded, and native/all-target plus WASM Clippy passed.
+  Only the three previously superseded query descriptors are removed.
+- Extracted the existing delegation command into a transaction-taking operation.
+  The standalone endpoint still owns configuration, commit and explicit rollback;
+  project editing can now compose the same authorization, revision, relationship
+  and audit/receipt writes without a second commit. No new policy or duplicate
+  manager implementation is introduced.
+- Added SERIALIZABLE parent-transaction tests with the real AccessChange gate before
+  project UPDATE. They check joint commit and joint rollback of the
+  project name, manager set, access revision and receipt, plus safe original-intent
+  retry. Runtime verification is pending; this does not yet wire form selection.
+- Independent source review identified a composition precondition: the current
+  editor takes organization NO KEY UPDATE, while delegation requires FOR UPDATE.
+  A follow-up review confirmed that NO KEY UPDATE preserves the required exclusion
+  of permission writers and SHARE readers, while allowing unrelated FK KEY SHARE.
+  Reused the existing AccessChange helper, preserving the missing-org forbidden
+  outcome, and added a held-FK regression against a late lock upgrade. No other
+  extraction defect was reported. Runtime verification of this correction remains
+  pending.
+- `8140` compiled the initial extraction but selected zero tests because its
+  filter was `project_management::` instead of `project_management_tests::`.
+  Do not count this as a passing regression suite. Its later prepare/lint stages
+  may see newer source; a correctly filtered run on the final source is required.
+
+Next: collect live `8140` (SQLx preparation and native lint), run the corrected
+`project_management_tests::` filter on final source, then connect the
+complete retained manager selection and access revision to the existing form's
+read/save transaction. Preserve independent tracking membership and legacy mode;
+do not publish or activate the partially connected canonical editor.
+
+## 2026-10-05 — Existing editor requester binding
+
+- Collected `87545`: 73 project-creation/editor tests passed, followed by native
+  all-target and WASM Clippy, terminal exit 0. That runtime binary predates the
+  extra NULL-task-override reset case; `65212` subsequently passed all 73 tests
+  including that case, terminal exit 0.
+- The next concrete integration boundary is the identity captured by the editor.
+  Added optional `expected_requester` transport using the existing
+  `PermissionRequester` type; legacy requests omit it. Request constructors copy
+  the authorized reader's identity, not a profile or client-supplied grant.
+- Added database regressions for missing/mismatched requester, same-organization
+  switching between two independently authorized people, no write/receipt on
+  rejection, and original-intent replay. Runner `26187` compiled before the
+  server guard and reproduced both actual unwanted writes: 14 existing canonical
+  tests passed and both new tests failed at their denial assertions (exit 101).
+- The save transaction now checks requester binding after current actor/project
+  authorization but before private form loading, validation or receipt replay.
+  Canonical saves require an identity; supplied mismatches also reject in legacy
+  policy. Canonical original intent includes the bound identity. Added a wire
+  roundtrip proving omitted legacy fields remain omitted, and changed the rate
+  denial fixture to open its form under the canonical policy it is testing.
+- `91206` passed all 76 project-creation/editor tests, with no failures or skips:
+  both requester regressions now pass, including their valid save/replay controls,
+  and the legacy wire roundtrip passes. Its real-page harnesses also passed:
+  24 detail-navigation tests and 44 new-project-screen tests. Native/all-target
+  and WASM Clippy both passed; `91206` is terminal, exit 0.
+- Focused independent source review found no high/medium defect in requester
+  binding, original pending retry, legacy wire/receipt compatibility or the
+  new test controls. This is source review only, not HTTP/browser acceptance
+  or approval of the still-unfinished whole form integration.
+- No visual/CSS changes or public canonical guard cutover. The form still needs
+  requester-keyed reset, context-bound catalogs, protected-field intent and
+  canonical manager integration; this increment is not full UI acceptance.
+- Added a registered HTTP-route regression to the existing shared session
+  harness (`authorization_tests/project_editor.rs`): anonymous and switched
+  cookies, missing/foreign requester, unchanged saved state, original retry,
+  independently opened second-session form and current-authority revocation.
+  This source addition postdates `91206`'s binary compilation and needs the full
+  session harness run plus all-target SQLx preparation, not merely component SSR.
+- `54233` reached the new HTTP check: switched/missing/foreign requester denials,
+  unchanged state, both valid sessions and original replay passed. Its last
+  assertion failed because the revocation fixture stored an empty array, which
+  violates the immutable own-work floor and correctly returns sanitized 500,
+  not ordinary 403. Fixed the fixture with `PermissionSelection::new(&[])` and
+  kept an explicit malformed-empty-policy check. `54233` is terminal exit 101;
+  its SQLx/lint stages did not run.
+
+Next: collect corrected live `42587`, running
+`job_endpoints_enforce_session_role_and_organization`, full all-target SQLx
+preparation and offline native/WASM lint for the HTTP addition. Continue requester-keyed form state,
+context-bound catalogs and canonical manager selection. `65212`, `87545` and
+`26187`, `91206` and `54233` are terminal; do not restart them.
+
+## 2026-10-05 — Protected editor write intent and replay
+
+- The preceding goal turn collected new terminal evidence from `47946`: all 26
+  selected read/legacy tests passed, including stale task-money redaction, but
+  all-target SQLx preparation failed because two component harnesses omitted
+  `permission_editor`. Fixed both real-model imports. Its incomplete cache
+  generation must be replaced by a successful complete prepare, not committed
+  as removal of unrelated query descriptors. `47946` is terminal.
+- Added typed `ProjectEditRequest.unchanged` fields. Canonical saves validate
+  original intent, load current field grants under the existing transaction
+  gates, merge protected values from storage, and require write permission for
+  explicit edits even when equal, empty or zero. Costs no longer borrow the
+  actor's legacy Admin role. Legacy empty-intent requests keep their wire shape.
+- Canonical receipts record original input and required write effects, never
+  the merged hidden values. Replay reauthorizes the recorded effects so removal
+  and mode-change permissions cannot vanish merely because the first save
+  already changed the project. The public mutation still returns only a UUID;
+  its full Project is server-side plugin context, not a client payload.
+- Runner `11761` passed all 30 editor tests with no skips, including the former
+  read-only-write failure and new keep/retry, equal-value and zero/reset/revoked
+  retry cases. It is still running full all-target SQLx preparation. No duplicate
+  build is needed while that handle is live.
+- `11761` subsequently exited successfully after complete all-target SQLx
+  preparation (2m27s). The cache recovered: its only three tracked removals are
+  the superseded project UPDATE, settings UPDATE and task-settings UPSERT, each
+  replaced by the new preservation-aware query. No unrelated cache deletion
+  remains. Both component harnesses now compile in the all-target prepare.
+- Independent source review then identified two additional defects: an inline
+  New task alias could resolve to a retained task after authorization, and
+  validation normalization could clear inactive-mode values despite keep intent.
+  Rejected that alias in canonical saves; persistence now preserves project
+  rate/budget, fee/invoice settings and milestones explicitly. Added the alias
+  regression and expanded keep/retry coverage with inactive rate/fee/milestone,
+  second-tax and stale task-cents values. The reviewer accepted these specific
+  fixes and withdrew the alleged response leak after tracing the UUID wrapper.
+  Those final changes postdate the 30-test binary and still need runtime tests.
+- A further source check found explicit reset of an already-empty task override
+  could be skipped by whole-form equality. Canonical active task resets now
+  execute their default-copy semantics even when raw input equals the loaded
+  form; the zero/reset/revoked-retry test now begins from a NULL override with a
+  populated task default. This change postdates the `87545` test compilation;
+  collect that runner before starting a final runtime check of the added case.
+- No CSS, schema, dependency, public guard cutover, publication, merge or real
+  database mutation. The page constructor only supplies the legacy default
+  empty keep list; actual permission-aware UI/catalog/manager integration is
+  still required, not silently replaced by this internal transaction increment.
+
+Next: collect live final runner `87545`: all project-creation/editor regressions
+on the reviewed final source, then offline native/all-target and WASM Clippy.
+`11761` is terminal and must not be polled or restarted. Then wire permission-aware form state,
+context-bound catalogs and canonical manager selections. The actual EditProject
+still loads the legacy catalog first, and its session/requester binding and
+canonical manager access revision must be connected as part of that cutover.
+Add remaining indirect
+effect/concurrency/session/browser cases before publishing the combined form.
+The goal and T159/T160/T161 remain incomplete; no product answer is needed for
+this existing-project step.
+
+## 2026-10-05 — Existing-project financial ownership approved
+
+- The user answered A. FR-034 now requires project access plus the applicable
+  project-scoped billable Read/Write grant for monetary budgets, fixed fees and
+  invoice defaults. Hour-only budgets and independent cost grants are unchanged.
+  This is an approved Horae rule, not verified Harvest enforcement. The historical
+  dependency stops below no longer block this existing-project work.
+- The internal editor now reuses canonical project authorization and projects
+  rate, cost, private-note and monetary-setting visibility independently. Added
+  explicit withheld/read-only/editable response metadata. Public form/catalog
+  integration and protected write intent remain unfinished; do not publish or
+  activate this partial path.
+- The monetary-visibility regression failed at its intended assertion in runner
+  `13869` before the projection change. Its refined fixture now establishes
+  monetary settings through the real legacy save transaction. Current source
+  needs fresh verification; earlier legacy checks do not verify this increment.
+- Runner `49520` exposed an invalid fixture, not a product failure: FixedFee
+  does not support TotalFees budgets. Split the setup into TimeAndMaterials
+  monetary budgets and FixedFee hourly budgets/fees, using real saves in both.
+  `22403` then passed 25 editor tests (17 legacy and 8 canonical reads/scope
+  cases); the sole failure remains explicit rate-write authorization. It still
+  accepts the forbidden write, so this is not a green canonical editor suite.
+- Read tests now cover withheld/read-only/editable financial metadata, ordinary
+  hour-budget visibility, independent costs/notes and actual managed-project
+  designation without disclosure of global task defaults. Internal snapshot
+  inclusion uses an explicit private-field flag, not a synthetic Admin actor.
+- Independent source review found stale task cents could be formatted under a
+  nonmonetary parent budget mode. Made task-budget loading unit/mode-aware and
+  added `canonical_editor_never_projects_stale_task_money_as_hours`. The reviewer
+  accepted the source fix; `22403` predates it and does not verify this regression.
+- Final runner `47946` is live: editor regressions including the stale-money
+  case, then complete all-target SQLx preparation in disposable PostgreSQL.
+  Its explicitly named `editor-read-boundary` mode excludes only the known
+  unfinished write-denial test, not any read or legacy test. The failing test
+  remains enabled in source and must pass before completion/publication. Do not
+  rerun `22403`, which is terminal, or claim the live runner has passed.
+
+Next: collect `47946`, then implement original protected-field
+intent and transactional preservation/authorization before wiring the actual
+form and catalogs. Preserve revision/replay semantics and test indirect effects.
+Creation designation and client-default ownership remain separate open contracts.
+No merge, policy activation or real database mutation is authorized here.
+
+## 2026-10-05 — Integration dependency revalidation
+
+- The preceding goal turn completed verification: `94881` passed 56 legacy
+  project-creation/editor tests and native/WASM Clippy; final gate `81837` passed
+  formatting and `git diff --check`. All named runners are terminal. Repeating
+  these checks without implementation changes is not the next action.
+- Rechecked the worktree, plan readiness table and open integration contracts.
+  T159/T160 still require a decision on project non-rate monetary fields. The
+  approved hourly-rate/cost predicates and the six canonical failing fixtures
+  are unchanged; legacy compatibility is not the requested final state.
+- Checked a distinct implementation alternative: the person-management writer.
+  FR-027/028/029/031 and its pure prerequisites are implemented, but
+  `contracts/person-management-validation.md` explicitly leaves the activity of
+  new relationship endpoints unanswered. The project-manager active-addition
+  rule does not settle that person-management choice. Do not copy it silently.
+- Full report candidate integration also retains its documented pending choice;
+  company-lock scheduling and migration retain their own open contracts.
+  No new independent ready implementation was established by this review.
+  Further speculative intent helpers would not complete the blocked real form.
+
+Next: obtain the pending project-field choice first, one decision at a time:
+either project access plus existing scoped billable-rate Read/Write controls
+monetary budgets, fixed fees and project invoice defaults, or project Read/Write
+alone controls those fields. Hours-only budgets remain project-governed and
+costs remain independent in both options. Neither option is approved or claimed
+as verified Harvest enforcement. Then implement the actual reader/editor/save
+contract together and rerun the six RED cases against the changed implementation.
+This is the first dependency-only stop after the completed compatibility work;
+the goal remains active and incomplete, with no new build, merge or publication.
+
+Second consecutive dependency-only review: the worktree and pending contracts
+are unchanged and no product answer has arrived. The preceding dependency review
+did not implement functionality; do not count its log update as implementation
+progress. There is no live verification to poll or new evidence warranting an
+identical test/reference run. Keep the goal active at this second stop; obtain
+the existing field-ownership answer rather than inventing a default or another
+compatibility-only increment.
+
+Third consecutive dependency-only review: no intervening product answer or
+implementation change resolves the same blocker. The previous turn was no
+implementation progress, not a verified wait. Revalidated the worktree and the
+existing-project, person-management and report-candidate entry gates; no safe
+independent ready implementation has emerged. Mark the goal blocked, not
+complete. Preserve all local work and the open canonical acceptance cases.
+Resume from the field-ownership decision above when the user supplies it;
+do not rerun already-terminal builds or infer consent from automatic continuation.
+
+## 2026-10-05 — Rate-intent compatibility and final verification
+
+- The preceding user-requested cleanup reclaimed 3.94 GiB of unused build
+  artifacts in two old worktrees. It preserved source, worktrees, databases and
+  the active compilation. The observed free space afterward was 179 GiB in WSL;
+  storage is not the current implementation blocker.
+- Resumed `89497`, without duplicating its live build. It completed successfully:
+  all 17 legacy editor tests passed, including zero/reset/default preservation,
+  followed by complete all-target SQLx preparation. The seven new descriptors
+  correspond to the editor regression and canonical RED fixtures; no existing
+  descriptor was deleted. This is not a passing canonical editor or full suite.
+- Independent review found no material change to legacy behavior and recommended
+  removing the redundant write-authorization call after role-based intent
+  construction. That simplification is applied. Core authorization remains for
+  independently supplied intent/authority, not as a claim of enforced canonical
+  form permissions. No wire, schema, dependency or CSS changes were introduced.
+- The simplification landed while the earlier runtime build was in flight, so
+  its test result alone is not claimed as verification of the final dispatcher.
+  Session `94881` passed all 56 tests in the wider project-creation regression
+  group on the final source in disposable PostgreSQL (5m02s build, 7.46s tests).
+  It explicitly excluded the same six canonical RED cases. Offline native/
+  all-target Clippy then passed with warnings denied (3m53s), followed by WASM
+  Clippy (37.87s). The session exited successfully; neither it nor `89497` remains
+  live. Format gate `15241` passed with 567 unchanged files before this result-only
+  documentation update. No identical compatibility run needs restarting.
+- Rechecked the dispatcher against its original implementation and actual
+  parser/validation path: no dependency, amount parsing, SQL mutation or caller
+  authority change beyond representing the same three legacy cost outcomes.
+  Wider tests retain draft, finalization, catalog, import and revocation checks.
+  This verifies the internal preparation, not a protected canonical wire form.
+
+Next: implement the complete protected-field projection/original-intent merge
+and actual form integration under T159/T160 after settling the pending non-rate
+monetary-field ownership; internal work on approved rate semantics does not waive
+that decision. Retain the six canonical failures as open acceptance work. Do not
+reopen confirmed rate rules or publish/activate a partial canonical form. No
+merge, real data mutation or new publication occurred in this iteration.
+
+## 2026-10-05 — Internal explicit rate intent
+
+- The previous turn confirmed the reviewed RED run, not an implemented form.
+  Continued independent intent preparation rather than repeating those failures
+  or treating the unanswered financial-field question as consent.
+- Added three pure tests first; `40125` failed compilation on the missing
+  `RateEdit`/`RateEditDenied` symbols. Implemented the narrow parsed intent in the
+  existing core rates module: Unchanged, Reset, Set(minor units), with explicit
+  edits requiring a server-derived field-write decision even for equal values
+  or zero. This is not currency validation or full operation authorization.
+- Wired the intent to the actual member-cost save dispatcher while preserving
+  the existing legacy role, parser and SQL behavior. No public payload, route,
+  schema or policy change. Added a real-editor regression for zero versus reset
+  that also checks the person's default cost is untouched; the existing hidden
+  private-cost preservation/removal test remains the unchanged-intent baseline.
+- `34148` passed all 183 core tests and core all-target Clippy with warnings
+  denied. Disposable session `89497` now runs the legacy editor regression suite
+  and complete SQLx preparation. Its explicitly named `legacy-editor` mode skips
+  the six known canonical RED cases for this compatibility check only; they are
+  not ignored in source or removed from full tests, and remain incomplete work.
+- Requested independent read-only review of the core intent, actual dispatcher
+  and new legacy regression. No new agent or publication. Poll `89497` next;
+  the pure-test/lint run is terminal, with no duplicate build to start.
+
+Next: finish compatibility/cache verification and review, then connect original
+intent to the complete protected-field editor transaction once its pending field
+ownership is resolved. Do not claim the legacy-preserving internal step fixes
+the six canonical failures or finishes T159/T160, policy activation or the goal.
+
+## 2026-10-05 — Reviewed editor RED confirmed
+
+- Resumed `55014` rather than starting another build. It terminated with all
+  six intended failures after 2m52s compilation and 1.55s tests. This is the
+  final reviewed fixture, including coherent designation state, populated task
+  defaults, retained task identity and the additional write/receipt assertions.
+  No compiler or fixture-setup error occurred. Assertions after an initial RED
+  failure are compiled but not executed; their success is not claimed.
+- Rechecked actual load/save and catalog call paths. `load_editable_project`
+  loads a repeatable-read snapshot through the legacy actor guard; saving uses
+  the same raw-string form with complete-set comparison and stored replay
+  payloads. A reader-only redaction would turn withheld rates into ambiguous
+  empty edits. Do not wire that partial change into the public form.
+- The shared project-people reader already implements the approved exact-project
+  operation predicate; reuse its current grant/designation logic in the eventual
+  editor authority boundary. Core rate predicates remain the approved financial
+  rules. No new policy behavior or wire type was introduced in this iteration.
+- The monetary-field product question is still unanswered. The recommended
+  option is not consent. No further identical RED execution is useful before
+  implementation changes. All test runners from these reproductions are now
+  terminal; no build or database-test session remains to monitor.
+
+Next: resolve the pending financial-field ownership before public form cutover;
+internal projection/explicit intent preparation and unrelated closed-contract
+work remain possible. Preserve the six RED cases and original replay intent;
+do not hide failures, claim T159/T160 done, or publish a partial canonical form.
+No merge, real data mutation, activation or additional publication occurred.
+
+## 2026-10-05 — Canonical editor operation and field boundary
+
+- Previous goal turn made progress: published the verified report filter and
+  reproduced three actual editor failures. Resumed live `98783`, which then
+  completed with the same three intended RED failures after the refined fixture
+  (2m19s compilation, 1.74s tests); no production implementation is claimed.
+- Tightened the read-only-rate case again: clear private notes in stored fixture
+  state before loading the original revision, rather than sending a note clear
+  alongside the rate change. This prevents an unrelated private-note denial
+  from satisfying the financial-write oracle in a future implementation.
+- Added operation-boundary cases: canonical project editor with legacy Member
+  role is allowed; financial-only grants with legacy Admin role are denied;
+  managed project editing requires an actual canonical designation, not a
+  tracking-lead assignment. All reuse the real configured project/editor path.
+- Session `83496` formats and executes these six cases in disposable PostgreSQL.
+  It is confirmed live compiling; poll that handle rather than rebuilding.
+  Reused the existing read-only transaction reviewer for adversarial fixture
+  review. No new agent, schema, real migration, policy activation or publication.
+- Current official rate/project/budget references still do not specify custom
+  permission ownership for all non-rate form fields. Asked one product decision:
+  A would gate monetary budgets, fixed fees and project invoice defaults with
+  the existing billable-rate read/write grant in project scope, in addition to
+  project access; B would use project read/write alone for those fields.
+  Hour budgets remain project-governed and costs independent in either option.
+  Clarified the exact existing grant in commentary. Neither choice is accepted
+  yet; do not infer A from its recommended/preselected presentation.
+- `83496` completed with six intended RED failures (2m58s compilation, 1.87s
+  tests), including wrong legacy-role acceptance/denial and missing canonical
+  project designation enforcement. This run precedes the final review fixes.
+- Independent review identified three fixture weaknesses. The rate-write test
+  now requires unchanged revision/no receipt on denial and a successful retry
+  after adding only billable-write authority; it also seeds the existing manager
+  designation so the unchanged form does not implicitly add one. The withheld
+  test retains the task identity and checks a populated global task default,
+  rather than relying only on a serialized string search. No runtime changes.
+- The reviewer confirmed canonical grant normalization and non-admin custom
+  identity are coherent. Internal rate projection/intent work can proceed on
+  approved FR-021/022; publishing the composite form wire contract remains gated
+  on unresolved field authority and complete consumer integration.
+- Final reviewed-fixture check `55014` is running formatting and the focused
+  disposable-database tests. Poll this exact handle next; `83496` is terminal.
+  Uncommitted work is still tests and contracts only, with no new publication.
+
+Next: confirm the final reviewed fixtures, then implement the internal protected
+rate projection/intent path without publishing a partial form wire contract.
+Retain RED cases until actual reader/editor/save integration passes them.
+Non-rate field authority and creation decisions remain explicit
+gates; the report-candidate question is also still unanswered. Continue safe
+independent work without activating or publishing a partial canonical form.
+
+## 2026-10-05 — Published report filter; project financial-form reproduction
+
+- Cleanup revalidation found 179 GiB free in WSL and 432 GiB on Windows;
+  no further removal was necessary. This verified the storage constraint but
+  did not change application behavior.
+- Resumed publication handle `28542`: it had stopped on a Markdown-only format
+  correction, before creating a commit. Confirmed the exact diff, accepted the
+  formatter output and reran the gate. `71048` passed with 566 unchanged files
+  and created unsigned `de8f9ad`. Push `27516` succeeded; remote `64950` verifies
+  #212 OPEN/DRAFT on that exact head. No merge or full-feature acceptance.
+- Returned to T159's existing-project cases, independent of report candidates
+  and unresolved creation predicates. Reopened current Harvest permission and
+  budget guides; they still do not settle custom fee-budget write authority.
+  The approved FR-021/022 rate/cost rules remain the test oracle, not a new
+  restricted-account observation. Spec Kit prerequisites pass; unavailable
+  command skills are not claimed as executed.
+- Added three real-editor tests under `editing/tests/canonical_fields.rs`,
+  reusing `configured_fixture`: withheld stored task rate, custom cost reader
+  without legacy Administrator, and rejected task-rate update with read-only
+  billable authority. They exercise existing load/save transactions rather
+  than a new disconnected evaluator. No production policy or wire change.
+- Disposable PostgreSQL test session `51844` is live compiling the RED cases.
+  Its final read-only-write case was refined after launch to omit protected
+  notes, avoiding an unrelated denial oracle; if that source was already read
+  by rustc, rerun the focused command after the handle terminates. Do not restart
+  a live build. These uncommitted tests are not published as passing coverage.
+- `51844` terminated with the intended three RED failures (2m38s compilation,
+  0.59s tests): stored task rate appears in the editor payload, authorized custom
+  cost read returns empty, and the read-only task-rate mutation succeeds.
+  This confirms missing canonical integration in the actual transactions, not
+  a compile error or a claim about deployed policy. Recheck the refined write
+  fixture after formatting; retain all three as failing acceptance cases.
+- Confirmation session `98783` runs formatting followed by the same focused
+  disposable-database command against the refined fixture. Poll this exact
+  handle next; the earlier `51844` is terminal. The verified report increment
+  remains published separately, while the project tests/contracts are local.
+
+Next: finish the refined RED confirmation, then integrate explicit protected-field
+intent and current rate predicates with the actual editor/read/save path as
+required by T159/T160. Keep unsettled non-rate/create predicates explicit;
+do not activate a partial canonical form or infer unanswered product choices.
+Full feature 015, cross-surface gates and the implementation goal remain open.
+
 ## 2026-10-05 — Report candidates and active-project filtering
 
 - Previous iteration is published as `ecac66b`; remote #212 is OPEN/DRAFT at

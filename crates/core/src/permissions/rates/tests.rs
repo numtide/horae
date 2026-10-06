@@ -7,6 +7,33 @@ const PERSON: Uuid = Uuid::from_u128(3);
 const PROJECT: Uuid = Uuid::from_u128(4);
 const OTHER: Uuid = Uuid::from_u128(5);
 
+#[test]
+fn unchanged_rate_edit_requires_no_financial_write_grant() {
+    assert_eq!(
+        RateEdit::Unchanged.authorize(false),
+        Ok(RateEdit::Unchanged)
+    );
+}
+
+#[test]
+fn explicit_rate_edits_require_write_even_for_zero_or_an_equal_value() {
+    for edit in [RateEdit::Reset, RateEdit::Set(0), RateEdit::Set(2500)] {
+        assert_eq!(edit.authorize(false), Err(RateEditDenied));
+        assert_eq!(edit.authorize(true), Ok(edit));
+    }
+}
+
+#[test]
+fn read_only_cost_grant_cannot_authorize_an_explicit_rate_edit() {
+    let read_only = PermissionSelection::new(&[Permission::CostRateReadAll]);
+    let may_write = cost_rate_access(&read_only, RateAction::Write, &actor(), ORG);
+    assert_eq!(RateEdit::Reset.authorize(may_write), Err(RateEditDenied));
+    assert_eq!(
+        RateEdit::Unchanged.authorize(may_write),
+        Ok(RateEdit::Unchanged)
+    );
+}
+
 fn actor() -> Actor {
     Actor {
         id: ACTOR,

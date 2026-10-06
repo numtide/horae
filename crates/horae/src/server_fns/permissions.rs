@@ -26,6 +26,13 @@ pub(super) async fn configure_administration(
     sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED, READ WRITE")
         .execute(&mut *connection)
         .await?;
+    configure_transaction_limits(connection).await
+}
+
+/// Set local limits only after the caller selects its transaction isolation.
+pub(super) async fn configure_transaction_limits(
+    connection: &mut PgConnection,
+) -> Result<(), sqlx::Error> {
     sqlx::query!(
         "SELECT set_config(name,
             (CASE WHEN setting::bigint = 0 THEN limits.milliseconds

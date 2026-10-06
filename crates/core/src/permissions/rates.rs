@@ -18,6 +18,41 @@ pub enum RateAction {
     Write,
 }
 
+/// Parsed intent for one rate field, distinct from its current stored value.
+/// Amount validation and the field's currency remain the caller's responsibility.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RateEdit {
+    /// Retain storage without reading or echoing the protected value.
+    Unchanged,
+    /// Remove the override, using the field's own inheritance rules.
+    Reset,
+    /// An explicit amount in the field's currency's minor units, including zero.
+    Set(i64),
+}
+
+/// An explicit rate mutation lacks current field-write authority.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("Current rate editing authority is required")]
+pub struct RateEditDenied;
+
+impl RateEdit {
+    /// Check a server-derived field-write decision without comparing stored data.
+    ///
+    /// Resource authority, currency/amount validation and state locks remain
+    /// independent. Keeping a field unchanged does not authorize the operation.
+    ///
+    /// # Errors
+    /// Rejects every explicit edit without write authority, even a reset of an
+    /// absent override or a value equal to storage.
+    pub fn authorize(self, may_write: bool) -> Result<Self, RateEditDenied> {
+        if matches!(self, Self::Unchanged) || may_write {
+            Ok(self)
+        } else {
+            Err(RateEditDenied)
+        }
+    }
+}
+
 /// The owner of the requested billable field, established by the server.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BillableRateOwner {

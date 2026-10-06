@@ -20,20 +20,32 @@ pub(crate) async fn read(
 ) -> Result<ProjectManagers, ProjectManagersError> {
     let mut tx = pool.begin().await?;
     super::configure_administration(&mut tx).await?;
+    let result = read_in_transaction(&mut tx, org_id, actor_id, project_id).await?;
+    tx.commit().await?;
+    Ok(result)
+}
+
+/// Read delegation in the same authorized snapshot as the rest of the editor.
+pub(crate) async fn read_in_transaction(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    org_id: Uuid,
+    actor_id: Uuid,
+    project_id: Uuid,
+) -> Result<ProjectManagers, ProjectManagersError> {
     let org = sqlx::query!(
         "SELECT permission_policy_version, access_revision FROM organizations WHERE id=$1 FOR SHARE",
         org_id
-    ).fetch_optional(&mut *tx).await?.ok_or(ProjectManagersError::Forbidden)?;
+    ).fetch_optional(&mut **tx).await?.ok_or(ProjectManagersError::Forbidden)?;
     if org.permission_policy_version != 1 {
         return Err(ProjectManagersError::Forbidden);
     }
-    authorize_actor(&mut tx, org_id, actor_id, project_id).await?;
+    authorize_actor(tx, org_id, actor_id, project_id).await?;
     sqlx::query_scalar!(
         "SELECT id FROM projects WHERE org_id=$1 AND id=$2",
         org_id,
         project_id
     )
-    .fetch_optional(&mut *tx)
+    .fetch_optional(&mut **tx)
     .await?
     .ok_or(ProjectManagersError::NotFound)?;
     let managers = sqlx::query_as!(
@@ -44,9 +56,8 @@ pub(crate) async fn read(
         org_id,
         project_id
     )
-    .fetch_all(&mut *tx)
+    .fetch_all(&mut **tx)
     .await?;
-    tx.commit().await?;
     Ok(ProjectManagers {
         requester: PermissionRequester {
             org_id,
@@ -59,12 +70,12 @@ pub(crate) async fn read(
 }
 
 /// The caller holds the organization gate before checking current project authority.
-async fn authorize_actor(
+pub(crate) async fn authorize_actor(
     connection: &mut PgConnection,
     org_id: Uuid,
     actor_id: Uuid,
     project_id: Uuid,
-) -> Result<(), ProjectManagersError> {
+) -> Result<crate::models::permissions::PersonPermissions, ProjectManagersError> {
     let active = sqlx::query_scalar!(
         "SELECT active FROM users WHERE org_id = $1 AND id = $2 FOR SHARE",
         org_id,
@@ -95,7 +106,7 @@ async fn authorize_actor(
             return Err(ProjectManagersError::Forbidden);
         }
     }
-    Ok(())
+    Ok(actor)
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -157,14 +168,45 @@ pub(crate) async fn execute(
 ) -> Result<ProjectManagersOutcome, ProjectManagersError> {
     let mut tx = pool.begin().await?;
     super::configure_administration(&mut tx).await?;
+    match execute_in_transaction(&mut tx, org_id, actor_id, request).await {
+        Ok(result) => {
+            tx.commit().await?;
+            Ok(result)
+        }
+        Err(error) => {
+            tx.rollback().await?;
+            Err(error)
+        }
+    }
+}
+
+/// Compose delegation with project edits without committing either independently.
+/// The caller configures transaction limits and must roll back on any error.
+/// Acquire the AccessChange organization gate before actor/project locks in the
+/// caller. Reacquiring that same mode here preserves foreign-key compatibility.
+pub(crate) async fn execute_in_transaction(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    org_id: Uuid,
+    actor_id: Uuid,
+    request: &ProjectManagersCommand,
+) -> Result<ProjectManagersOutcome, ProjectManagersError> {
+    crate::db::lock_organization(tx, org_id, crate::db::OrganizationLock::AccessChange)
+        .await
+        .map_err(|error| match error {
+            sqlx::Error::RowNotFound => ProjectManagersError::Forbidden,
+            error => ProjectManagersError::Database(error),
+        })?;
     let org = sqlx::query!(
-        "SELECT permission_policy_version, access_revision FROM organizations WHERE id = $1 FOR UPDATE",
+        "SELECT permission_policy_version, access_revision FROM organizations WHERE id = $1",
         org_id
-    ).fetch_optional(&mut *tx).await?.ok_or(ProjectManagersError::Forbidden)?;
+    )
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or(ProjectManagersError::Forbidden)?;
     if org.permission_policy_version != 1 {
         return Err(ProjectManagersError::Forbidden);
     }
-    authorize_actor(&mut tx, org_id, actor_id, request.project_id).await?;
+    authorize_actor(tx, org_id, actor_id, request.project_id).await?;
     let mut intent = request.clone();
     intent.manager_ids.sort_unstable();
     if intent.manager_ids.windows(2).any(|pair| pair[0] == pair[1]) {
@@ -178,7 +220,7 @@ pub(crate) async fn execute(
         actor_id,
         intent.request_id
     )
-    .fetch_optional(&mut *tx)
+    .fetch_optional(&mut **tx)
     .await?
     {
         if receipt.format_version != 1 {
@@ -187,9 +229,7 @@ pub(crate) async fn execute(
         if receipt.intent != intent_json {
             return Err(ProjectManagersError::RequestConflict);
         }
-        let outcome = serde_json::from_value(receipt.result)?;
-        tx.commit().await?;
-        return Ok(outcome);
+        return Ok(serde_json::from_value(receipt.result)?);
     }
     if intent.expected_access_revision != org.access_revision {
         return Err(ProjectManagersError::Stale);
@@ -201,11 +241,10 @@ pub(crate) async fn execute(
         org_id,
         intent.project_id
     )
-    .fetch_optional(&mut *tx)
+    .fetch_optional(&mut **tx)
     .await;
     match project {
         Err(sqlx::Error::Database(error)) if error.code().as_deref() == Some("55P03") => {
-            tx.rollback().await?;
             return Err(ProjectManagersError::Busy);
         }
         result => {
@@ -219,7 +258,7 @@ pub(crate) async fn execute(
         org_id,
         intent.project_id
     )
-    .fetch_all(&mut *tx)
+    .fetch_all(&mut **tx)
     .await?;
     let mut added = Vec::new();
     for manager_id in &intent.manager_ids {
@@ -234,12 +273,12 @@ pub(crate) async fn execute(
             org_id,
             manager_id
         )
-        .fetch_optional(&mut *tx)
+        .fetch_optional(&mut **tx)
         .await?;
         if active != Some(true) {
             return Err(ProjectManagersError::Ineligible);
         }
-        let target = load_person_permissions(&mut tx, org_id, *manager_id)
+        let target = load_person_permissions(tx, org_id, *manager_id)
             .await?
             .ok_or(ProjectManagersError::Ineligible)?;
         if !target.grants.contains(Permission::ProjectReadManaged)
@@ -270,7 +309,7 @@ pub(crate) async fn execute(
         sqlx::query!(
             "DELETE FROM project_management_assignments WHERE org_id = $1 AND project_id = $2 AND id = ANY($3)",
             org_id, intent.project_id, &removed_ids
-        ).execute(&mut *tx).await?;
+        ).execute(&mut **tx).await?;
         for row in &added {
             sqlx::query!(
                 "INSERT INTO project_management_assignments (id, org_id, project_id, manager_id)
@@ -280,7 +319,7 @@ pub(crate) async fn execute(
                 intent.project_id,
                 row.manager_id
             )
-            .execute(&mut *tx)
+            .execute(&mut **tx)
             .await?;
         }
         sqlx::query!(
@@ -288,7 +327,7 @@ pub(crate) async fn execute(
             org_id,
             access_revision
         )
-        .execute(&mut *tx)
+        .execute(&mut **tx)
         .await?;
     }
     let result = ProjectManagersOutcome {
@@ -314,8 +353,7 @@ pub(crate) async fn execute(
         serde_json::to_value(&result)?,
         serde_json::to_value(&audit)?
     )
-    .execute(&mut *tx)
+    .execute(&mut **tx)
     .await?;
-    tx.commit().await?;
     Ok(result)
 }

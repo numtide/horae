@@ -92,7 +92,9 @@ management relationships. Operation/state constraints remain additional gates.
 | Global task default | `BillableRateOwner::GlobalTask`, requiring all-rate authority |
 | Person or project-specific cost rate | Explicit all-cost Read/Write; no managed-cost or Administrator-name shortcut |
 | Existing `admin_notes` | Retain feature 011's Administrator-only field boundary, independently of cost grants; configurable Harvest project-note visibility is a separate reconciliation gap |
-| Fee budgets, fixed-fee schedules, taxes/discounts, client default rate | Do not silently classify these as ordinary project hourly rates; remaining operation/field rules need evidence |
+| Monetary budgets, fixed-fee schedules and project invoice defaults (terms, purchase order, taxes and discount) | User-confirmed option A, 2026-10-05 (FR-034): the corresponding project-scoped billable-rate Read/Write grant, in addition to project operation authority |
+| Hour-only budgets | Ordinary project authority, without an added financial grant |
+| Client default rate | Independent catalog ownership remains unresolved; FR-034 does not authorize client-default reads or writes |
 
 An authorized effective inherited value is not permission to expose every default
 in the catalog. Source resolution must match actual project billing mode and
@@ -116,6 +118,98 @@ authority flags or a general patch framework. Do not yet change the legacy wire
 contract piecemeal: reader, editor state and save must agree on that distinction.
 Existing raw draft validation remains necessary for incomplete authorized input.
 
+Internal parsed intent is `horae_core::permissions::rates::RateEdit`:
+`Unchanged` performs no field write, `Reset` removes the field's override, and
+`Set` carries exact minor units in the already-validated field currency.
+`authorize` accepts only a server-derived write decision; explicit edits require
+it without comparing storage, so equal-value writes and zero are not exemptions.
+This helper does not grant resource access, validate currency/amounts or encode a
+public wire payload. It dispatches member-cost saves with explicit preservation,
+reset and set outcomes. Canonical saves evaluate current field-specific grants;
+legacy saves retain their existing role rules.
+
+The internal existing-project transaction now transports a bounded, duplicate-free
+`ProjectEditRequest.unchanged` list of `ProtectedProjectField` identities. A kept
+field is restored from current storage; every other protected field is explicit
+intent requiring current write permission, including an equal value or empty
+reset. Row markers must refer to submitted task/person identities. A canonical
+inline New task cannot alias a retained project task after authorization.
+Legacy requests use an empty list and retain their original receipt shape.
+
+Canonical receipt version 1 stores original form/normalized keep-list intent and
+the required protected-write effects. Retries compare that original intent and
+reauthorize recorded effects, including associations removed by the first save.
+Never compare a receipt against a newly merged privileged form. Persistence must
+honor keep flags directly where validation ignores inactive fields: project
+rates, budget settings, fee/invoice defaults and stored milestones. These backend
+changes do not yet close the actual form/catalog/manager integration below.
+
+The canonical `pages/new_project.rs::EditProject` consumer now resolves the
+project before its context-bound catalog reads; team search and Add everyone use
+the separately authorized identity-only picker. Creation and legacy editors keep
+their existing paths. A redacted editor response alone does not establish the
+financial payload boundary: each refresh must retain the operation context.
+The existing `pending_edit` snapshot retains the original request identity and
+form across ambiguous failures; preserve that retry behavior for explicit field
+intent instead of reconstructing an updated request from server-merged values.
+
+The UI must preserve untouched editable fields too, not just fields it cannot
+write. Otherwise a blank stored task override becomes an accidental reset/copy
+on a name-only save. Track actual protected-control interactions separately from
+value comparison: entering the same value, clearing and zero are explicit intent;
+focus and picker search are not. Keep untouched None/hour budgets as well, so
+unrelated edits preserve legacy inactive monetary values. An actual hour-budget
+edit omits that marker without requiring a financial grant for the hour values.
+When both the previous and requested budget modes are non-monetary, that edit
+must also preserve any inactive parent monetary amount, including zero. It is
+not intent to clear money that the form does not represent. A transition into
+or out of a monetary mode still requires billable write authority on both save
+and receipt replay and retains its authorized unit-conversion cleanup.
+Keep original intent in the pending request; a retry must not reconstruct it.
+
+Preserving Budget retains settings and each retained row's stored values, not a
+deleted row's contribution to the active total. When removing a populated
+per-task or per-person budget, persist the validated remaining aggregate in its
+active unit only. Keep `None` distinct from an explicit zero. Monetary removals
+still require billable write authority, including receipt replay; hours-only
+removals do not clear unrelated inactive money. Removing an unbudgeted row or an
+unrelated association must not silently repair a stale monetary parent total.
+Retained member-hour budget rows are also covered by preservation when another
+budget mode is active: a name or assignment-field edit must not delete/recreate
+them. Skip only the budget write, not assignment or cost persistence. Explicit
+budget edits retain their mode-change cleanup semantics, and authorized member
+removal still removes that member's dependent budget through the existing FK.
+
+Canonical edit requests must also carry `expected_requester`, copied from the
+authorized editor read. Compare both organization and user with the authenticated
+session before materializing protected fields or resolving replay. Missing or
+different identity requires reload without writes or a consumed request ID, even
+when the new session independently has project-edit authority. This binding is
+not authority: current activity, scope and field grants are still checked under
+the transaction gates. Preserve it in the pending request across ambiguous
+failures; do not substitute a freshly observed identity into an old form. Legacy
+policy retains omitted-identity compatibility, but cannot accept a supplied
+identity that differs from the authenticated session.
+
+Session-mismatch responses use conflict status with error details
+`{"reason":"project_editor_session_changed"}`; the reason never contains the
+previous or current requester identity. The UI uses the same reason for a
+locally detected catalog/people response mismatch. Unauthorized/forbidden
+responses and that explicit reason discard the editor, unlike ordinary
+validation errors, revision conflicts or ambiguous network/server failures.
+
+The loader is keyed by project identity. Invalidation cancels and clears its
+cached resource and unmounts the form and its scoped pending work. A generation
+argument rejects callbacks from an earlier instance; a local invalidation latch
+rejects late results before applying them. Require explicit reload, with a fresh
+form/request identity even if server revisions are unchanged. Navigation to a
+different project starts its own loader through a keyed fragment; a key on a lone
+component does not remount its state in the pinned Dioxus version. Real-link
+component tests cover navigation after access loss and while a save response is
+pending, including cancellation of the old response handler. Do not assert that an uncertain save
+failed merely because its response handler was cancelled: the newly loaded
+saved project is authoritative.
+
 Current authority must be loaded under the organization/actor gates before
 protected effects, including replay. Preserve project revision checks and atomic
 validation of the full requested association set. Identity choices are neither
@@ -124,11 +218,90 @@ must be included in the effect review; they can change money without posting a
 numeric field. Do not publish a canonical form that only guards numeric inputs.
 
 Review `project_edit_requests` replay payloads before changing serialization.
+
+### Existing-project manager selection
+
+The canonical editor must return the complete `ProjectManagers` snapshot in its
+access metadata under the same transaction as the form: current requester,
+project ID, access revision and ID/name/activity for every retained designation.
+Team manager checkboxes project that canonical set, not `assignments.role`.
+People outside the tracking team and archived retained managers must not be lost.
+
+Within the existing Team panel, retained responsibility-only identities remain
+visible with the same manager checkbox and a tracking-membership distinction.
+Keep the identities locally through uncheck/recheck and tracking removal so
+the user can undo unsaved designation changes. This local list is display state,
+not an eligibility or authority grant. Archived retained designations can be
+removed or restored within the same unsaved edit; do not enable new archived
+designations or unlock their tracking/rate/budget controls. Legacy archived rows
+keep their previous read-only behavior. No additional manager page or modal is
+introduced. The server remains authoritative for additions, scope and replay.
+
+Canonical save intent includes a required manager selection with the original
+access revision and complete manager IDs; legacy requests omit it. Reject
+duplicates and disagreement between submitted team checkboxes and the independent
+selection. Tracking removal alone must not imply designation removal. Canonical
+membership writes preserve existing legacy roles and never create a Lead from a
+manager checkbox; new tracking assignments use the ordinary membership role.
+
+Reuse the delegation command in the same project transaction, after full-form
+validation, with the existing AccessChange organization gate. Failure rolls back
+project fields, relationships and both receipts. The form request ID also
+identifies the delegation receipt, but an independently completed delegation
+receipt must not be accepted as a fresh project save. Resolve original form replay
+first under current authority; otherwise reject an already consumed delegation
+ID. Save original manager intent with the form's protected-field intent; exact
+replay never reapplies a subsequently changed manager set. Managed-only self-removal
+may commit, but cannot subsequently reload or replay without current authority.
 Keep original explicit intent distinct from its server-merged form: a retry must
 not become different intent merely because protected current values were loaded.
 Do not replay historical authority or reveal withheld values in mutation results.
 
 ## Required evidence and remaining entry gates
+
+### Existing-editor catalog boundary
+
+An existing editor uses `ProjectEditorContext` (project ID plus its captured
+requester) for every client/task catalog search. The dedicated reader is
+canonical-policy-only: current project-edit authority, active authenticated actor,
+tenant/project existence and the matching requester are checked under the shared
+organization/actor gates before any catalog is materialized. There is no legacy
+role fallback. Context is binding, not authority, and every refresh reauthorizes.
+
+Return bounded active client/task candidates in the same organization. Archived
+retained identities still come from the saved editor, not a new-assignment search.
+Preserve literal case-insensitive search and the existing client/task offset
+bounds (50 candidates, an extra row only to establish continuation, offset at
+most 10000). Do not return previous project codes or people in this response.
+Person identity selection remains the separately reviewed `project_people` API.
+
+Client choices carry name/currency/activity but never their default rate while
+client-default ownership is unresolved. Task choices carry name/billable state;
+their global default amount and currency both require the existing pure
+`GlobalTask` billable Read decision. Project-managed rate Read alone is not that
+authority. This reader grants no inline client/task mutation, designation,
+financial write or final project-save authority.
+
+The browser must load the project before requesting these catalogs, bind all
+responses to the same context and discard prior requester state on mismatch.
+The local editor now loads the project first and uses these catalogs for initial
+options and client/task searches. People search and Add everyone use the
+identity-only reader, check each response requester and collect all pages before
+changing the team. New identity choices cannot populate financial defaults;
+retained selected values come from the authorized editor projection. Creation
+and legacy editors keep their own catalog path, with no error-triggered fallback
+from the canonical path. Local integration now includes protected-control intent
+and requester-state invalidation, with archived/outside-team manager controls.
+Component and registered-session checks are recorded in `progress.md`. The
+registered load/save endpoints authenticate the session and leave policy-aware
+authorization to the transaction: legacy Members remain denied, while canonical
+project editors are not rejected solely by their old role. Creation endpoints
+remain separate. Headless Chromium now verifies withheld/read-only financial
+fields, explicit zero/reset and exact retries, retained manager removal and
+revocation/reload with a legacy Member holding explicit grants. The fixture is
+disposable and passes twice with teardown between runs. Complete effect and
+cross-surface/concurrency verification, default-suite and final Nix gates remain
+open; this is not real policy activation.
 
 Existing `project_creation/editing/tests.rs` supplies reusable legacy regression
 cases, not canonical acceptance:
@@ -146,6 +319,14 @@ cases, not canonical acceptance:
 Reuse these baselines rather than duplicate them. Add the following canonical
 cross-product and effect tests when integrating the actual reader and writer:
 
+T159 starts with the real-transaction reproductions in
+`editing/tests/canonical_fields.rs`: absent-rate-read serialization, explicit
+cost-read with a non-Administrator legacy role, and forbidden task-rate writes
+under billable-read-only grants. Their configured fixture is built under legacy
+policy before installing canonical permission state in its disposable database.
+These are initial RED cases, not acceptance for unchanged intent, all field
+owners, catalogs, replay or the complete form cutover.
+
 - Existing-project read/write cross-product: project management versus person
   management; no grant, read-only and write; custom cost grants without Admin.
 - Exact serialized payloads with populated hidden values; read-only and withheld
@@ -160,8 +341,11 @@ cross-product and effect tests when integrating the actual reader and writer:
   preserve withheld state, read-only displays cannot submit edits, and switching
   people or reloading cannot carry a former requester's financial state forward.
 
-Before implementing the complete form cutover, settle initial designation scope,
-create-time managed financial scope, and non-rate monetary/settings ownership.
+The user answered A on 2026-10-05: non-rate project monetary/settings ownership
+is now settled by FR-034. Apply it to existing-project reads and all direct or
+indirect save effects, without presenting it as verified Harvest enforcement.
+Before the creation cutover, settle initial designation scope and create-time
+managed financial scope separately.
 Creation authority must remain useful without silently granting rates or forcing
 an invented non-billable-only product. These open predicates do not reopen the
 already-approved FR-021/022 rules or block independent existing-project tests.

@@ -7,7 +7,8 @@ use crate::db::{OrganizationLock, lock_organization};
 use crate::models::project_creation::TaskAccess;
 use crate::models::project_creation::{
     CreationClient, CreationOptions, CreationSearch, CreationSelection, DraftSaved,
-    EditableProject, ProjectDraft, ProjectEditRequest, ProjectForm,
+    EditableProject, ProjectDraft, ProjectEditRequest, ProjectEditorCatalog,
+    ProjectEditorCatalogSearch, ProjectEditorContext, ProjectForm,
 };
 use crate::models::project_people::{
     ProjectPeopleContext, ProjectPeopleQuery, ProjectPeopleResult,
@@ -69,17 +70,44 @@ pub async fn project_people(
         })
 }
 
+/// Read catalogs for the canonical editor under its current operation authority.
+#[server]
+pub async fn project_editor_catalog(
+    context: ProjectEditorContext,
+    search: ProjectEditorCatalogSearch,
+) -> Result<ProjectEditorCatalog, ServerFnError> {
+    let actor = require_user().await.map_err(|error| match error {
+        error @ ServerFnError::ServerError {
+            code: UNAUTHORIZED, ..
+        } => error,
+        error => {
+            tracing::error!(%error, "Unable to authenticate project catalog request");
+            server_err("Project catalogs are unavailable")
+        }
+    })?;
+    let state = crate::state::global_state().await;
+    editing::catalog::read(
+        &state.db,
+        actor.id,
+        actor.org_id,
+        context,
+        &search,
+        state.mail.is_some(),
+    )
+    .await
+}
+
 /// Load the existing project into the same form used for creation.
 #[server]
 pub async fn load_project_editor(project_id: uuid::Uuid) -> Result<EditableProject, ServerFnError> {
-    let actor = require_manager().await?;
+    let actor = require_user().await?;
     let state = crate::state::global_state().await;
     editing::load_editable_project(&state.db, actor.id, actor.org_id, project_id).await
 }
 
 #[server]
 pub async fn save_project_editor(request: ProjectEditRequest) -> Result<uuid::Uuid, ServerFnError> {
-    let actor = require_manager().await?;
+    let actor = require_user().await?;
     let state = crate::state::global_state().await;
     let (project, changed) = editing::save_editable_project(
         &state.db,

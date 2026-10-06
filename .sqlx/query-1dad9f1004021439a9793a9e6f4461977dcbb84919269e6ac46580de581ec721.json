@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE project_private_settings SET admin_notes='' WHERE project_id=$1 AND org_id=$2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1dad9f1004021439a9793a9e6f4461977dcbb84919269e6ac46580de581ec721"
+}

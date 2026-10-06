@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE project_settings SET fee_mode='monthly', fee_amount_cents=987654, monthly_day='last',\n         terms_days=47, tax2_name='Private tax', tax2_bps=375 WHERE project_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "78380eb4b321bcda21457756eeabdcfbc1b238e81327511c86d4788c2d92be78"
+}

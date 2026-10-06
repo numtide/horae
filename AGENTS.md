@@ -89,9 +89,16 @@ At compile time, macros need either `DATABASE_URL` pointing to a live DB with mi
 After changing any `query!`/`query_as!`/`query_scalar!` macro or migration, regenerate the cache:
 
 ```sh
+touch crates/horae/src/main.rs crates/horae/tests/*.rs
 cargo sqlx prepare --workspace -- --features server --all-targets   # requires live DB with migrations applied
 git add .sqlx/                                        # commit the updated cache
 ```
+
+The timestamp refresh is necessary for repeated preparations: SQLx's selective
+recompile discovery uses default-feature metadata, which omits this app's optional
+SQLx dependency. Otherwise cached test targets can be skipped while their query
+descriptors are removed. `touch` changes no source contents. Verify the resulting
+cache with the offline full test build, not the prepare exit code alone.
 
 **Important:** the `--features server` flag is required because all sqlx query macros live behind `#[cfg(feature = "server")]`. Without it, `cargo sqlx prepare` finds zero queries and **deletes** the entire cache.
 

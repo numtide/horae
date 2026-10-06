@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "ALTER TABLE project_edit_requests ADD CONSTRAINT reject_form_receipt CHECK (false) NOT VALID",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "594ab20ff343c6f139161f9fb6624ed667d3b15f3fd8f9ba1ceda917ca899abe"
+}

@@ -75,7 +75,8 @@ inactive-target lifecycle remains unresolved and outside this command.
 
 Use the existing administration setup: READ COMMITTED, READ WRITE and local
 statement/idle limits of at most 5/10 seconds, preserving stricter inherited
-limits without changing session defaults. Lock organization FOR UPDATE, then
+limits without changing session defaults. Take the shared `AccessChange` helper's
+organization FOR NO KEY UPDATE gate, then
 read actor activity FOR SHARE and validate policy version/current authority.
 Hold actor SHARE through receipt lookup or commit. Exact canonical receipt replay requires that same current
 project authority, including after self-removal; then precedes stale-revision
@@ -101,6 +102,29 @@ checking overflow first. Exact no-op preserves revisions and writes an unchanged
 receipt, not a fabricated change. Audit added/removed IDs, managers and revisions
 with the same commit; any audit failure rolls everything back. All future access
 writers must participate in this organization gate/revision protocol.
+
+### Composition with an existing project transaction
+
+`execute_in_transaction` reuses the same command and authorization logic without
+committing or changing the caller's isolation level. The enclosing editor must
+configure bounded transactions, acquire the AccessChange gate before actor or
+project locks, and roll back the entire transaction on any error, including
+busy, validation and subsequent project-write failures. A successful return is
+not a commit: relationships, access revision and audit/receipt stay invisible
+until the enclosing transaction commits. The standalone `execute` retains its
+READ COMMITTED setup and owns explicit commit/rollback.
+
+The helper reacquires the editor's existing NO KEY UPDATE mode, never upgrades it
+to UPDATE. This gate excludes SHARE readers and UPDATE/NO KEY UPDATE writers
+while remaining compatible with unrelated KEY SHARE foreign-key checks. Revision
+updates do not change organization keys. Actor/recipient SHARE and project KEY
+SHARE NOWAIT protections remain unchanged. Missing organizations retain the
+non-disclosing forbidden outcome from the standalone command.
+
+This is a composition boundary, not completed editor integration. The editor
+must still bind the full retained selection and expected access revision to its
+original request, prevent reuse of an independently completed delegation receipt
+as a fresh form save, preserve membership independence and reauthorize replay.
 
 ## Required production-command tests
 

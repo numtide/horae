@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE project_settings SET rate_mode=$3,\n         budget_scope=CASE WHEN $19 THEN budget_scope ELSE $4 END,\n         monthly_reset=CASE WHEN $19 THEN monthly_reset ELSE $5 END,\n         include_nonbillable=CASE WHEN $19 THEN include_nonbillable ELSE $6 END,\n         alert_enabled=CASE WHEN $19 THEN alert_enabled ELSE $7 END,\n         alert_threshold=CASE WHEN $19 THEN alert_threshold ELSE $8 END,\n         report_visibility=$9,\n         fee_mode=CASE WHEN $20 THEN fee_mode ELSE $10 END,\n         fee_amount_cents=CASE WHEN $20 THEN fee_amount_cents ELSE $11 END,\n         monthly_day=CASE WHEN $20 THEN monthly_day ELSE $12 END,\n         terms_days=CASE WHEN $21 THEN terms_days ELSE $13 END,\n         po_number=CASE WHEN $21 THEN po_number ELSE $14 END,\n         discount_bps=CASE WHEN $21 THEN discount_bps ELSE $15 END,\n         tax1_bps=CASE WHEN $21 THEN tax1_bps ELSE $16 END,\n         tax2_name=CASE WHEN $21 THEN tax2_name ELSE $17 END,\n         tax2_bps=CASE WHEN $21 THEN tax2_bps ELSE $18 END\n         WHERE project_id=$1 AND org_id=$2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Int2",
+        "Text",
+        "Text",
+        "Int8",
+        "Text",
+        "Int2",
+        "Text",
+        "Int2",
+        "Int2",
+        "Text",
+        "Int2",
+        "Bool",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "81d9407a477fced713f72a8e8e588613542c5dbef93893b5f13d29f6acfdbd11"
+}
