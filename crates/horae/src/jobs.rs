@@ -496,7 +496,11 @@ pub async fn list(
         .collect())
 }
 
-pub async fn cancel(pool: &sqlx::PgPool, org_id: Uuid, id: Uuid) -> anyhow::Result<bool> {
+pub async fn cancel<'e, E: sqlx::PgExecutor<'e>>(
+    exec: E,
+    org_id: Uuid,
+    id: Uuid,
+) -> anyhow::Result<bool> {
     let result = sqlx::query!(
         r#"UPDATE horae_jobs
               SET cancellation_requested = true,
@@ -509,7 +513,7 @@ pub async fn cancel(pool: &sqlx::PgPool, org_id: Uuid, id: Uuid) -> anyhow::Resu
         id,
         org_id,
     )
-    .execute(pool)
+    .execute(exec)
     .await?;
     Ok(result.rows_affected() == 1)
 }

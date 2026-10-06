@@ -1,5 +1,6 @@
 //! Bridge the async request body to the blocking CSV parser with a one-row queue.
 
+use std::collections::VecDeque;
 use std::future::poll_fn;
 use std::io::{self, Read};
 use std::sync::Arc;
@@ -34,6 +35,25 @@ struct Checkpoint {
 #[derive(Debug, thiserror::Error)]
 #[error("CSV upload ended before completion")]
 struct IncompleteUpload;
+
+async fn read_batch(
+    receive: &mut mpsc::Receiver<Record>,
+    durable: bool,
+) -> Result<VecDeque<Record>, IncompleteUpload> {
+    let mut batch = VecDeque::new();
+    loop {
+        let record = receive.recv().await.ok_or(IncompleteUpload)?;
+        let boundary = match &record {
+            Record::Row(_, position) => position.record.is_multiple_of(BATCH_ROWS),
+            _ => true,
+        };
+        batch.push_back(record);
+        // Never await row 501 or EOF before publishing a complete checkpoint.
+        if !durable || boundary {
+            return Ok(batch);
+        }
+    }
+}
 
 struct BodyReader<'a> {
     body: Body,
@@ -155,7 +175,8 @@ pub(crate) async fn import_body_with_lease(
             return Err(IncompleteUpload.into());
         };
         checkpoint.cursor.headers = headers;
-        let first = receive.recv().await.ok_or(IncompleteUpload)?;
+        let mut batch = read_batch(&mut receive, lease.is_some()).await?;
+        let first = batch.pop_front().ok_or(IncompleteUpload)?;
         let mut connection = session.lock().await;
         let mut tx = connection.begin().await?;
         if let Some(preview) = &checkpoint.preview {
@@ -216,12 +237,17 @@ pub(crate) async fn import_body_with_lease(
                     )
                     .await?;
                 tx.commit().await?;
+                batch = read_batch(&mut receive, true).await?;
                 tx = connection.begin().await?;
                 if let Some(preview) = &checkpoint.preview {
                     preview.restore(&mut tx, org_id).await?;
                 }
             }
-            next = receive.recv().await.ok_or(IncompleteUpload)?;
+            next = match batch.pop_front() {
+                Some(record) => record,
+                None if lease.is_none() => receive.recv().await.ok_or(IncompleteUpload)?,
+                None => return Err(IncompleteUpload.into()),
+            };
         }
         anyhow::ensure!(matches!(next, Record::Complete), "unexpected CSV headers");
         debug_assert!(checkpoint.report.reconciles());
