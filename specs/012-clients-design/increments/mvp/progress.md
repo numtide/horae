@@ -865,3 +865,16 @@ work remains paused. This addresses MVP-003 without activating feature 015.
   locally for this follow-up; the new full Nix CI remains required.
 - Next: publish one unsigned correction commit to PR #216 and require its new
   CI result before merge. Earlier green checks do not validate this follow-up.
+
+## 2026-10-06 — Disambiguate project links in browser context checks
+
+CI run `37450259457` failed because the project name and its `View` action both
+matched the same href. The four positive context assertions now select the
+existing `.proj-namelink` together with the exact project ID. Foreign-project
+absence assertions still reject every matching link; no `.first()`, skipped
+assertion, retry or application change was introduced.
+
+A focused Chromium DOM reproduction failed with the original selector and
+passed all four corrected selectors. It also verified exclusion and that
+duplicate project-name links still fail strict matching. This is selector
+evidence, not a rerun of the full application flow; the new full CI is required.

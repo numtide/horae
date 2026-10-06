@@ -45,17 +45,17 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
       await discard();
     }
     await page.goto(`${base}/projects`);
-    await expect(page.locator(`a[href="/projects/${acmeProject}"]`)).toBeVisible();
-    await expect(page.locator(`a[href="/projects/${techProject}"]`)).toBeVisible();
+    await expect(page.locator(`a.proj-namelink[href="/projects/${acmeProject}"]`)).toBeVisible();
+    await expect(page.locator(`a.proj-namelink[href="/projects/${techProject}"]`)).toBeVisible();
     await page.goto(`${base}/clients/${acme}`);
     await page.getByRole('link', { name: 'View in Projects', exact: true }).click();
     await expect(page).toHaveURL(`${base}/projects/client/${acme}`);
-    await expect(page.locator(`a[href="/projects/${acmeProject}"]`)).toBeVisible();
+    await expect(page.locator(`a.proj-namelink[href="/projects/${acmeProject}"]`)).toBeVisible();
     await expect(page.locator(`a[href="/projects/${techProject}"]`)).toHaveCount(0);
     await page.goto(`${base}/clients/${tech}`);
     await page.getByRole('link', { name: 'View in Projects', exact: true }).click();
     await expect(page).toHaveURL(`${base}/projects/client/${tech}`);
-    await expect(page.locator(`a[href="/projects/${techProject}"]`)).toBeVisible();
+    await expect(page.locator(`a.proj-namelink[href="/projects/${techProject}"]`)).toBeVisible();
     await expect(page.locator(`a[href="/projects/${acmeProject}"]`)).toHaveCount(0);
     await page.goto(`${base}/clients/${acme}`);
     await page.getByRole('link', { name: 'New project', exact: true }).click();
