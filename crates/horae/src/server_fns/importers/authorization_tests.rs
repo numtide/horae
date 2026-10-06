@@ -40,6 +40,7 @@ mod project_reads;
 mod scoped_time;
 mod session_identity;
 mod task_reads;
+mod task_writes;
 mod time_reports;
 mod user_directory;
 
@@ -362,6 +363,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     project_editor::check(&pool, &api).await;
     project_reads::check(&pool, &api).await;
     task_reads::check(&pool, &api).await;
+    task_writes::check(&pool, &api).await;
     scoped_time::check(&pool, &api).await;
     time_reports::check(&pool, &api).await;
     delegated_time::check(&pool, &api).await;

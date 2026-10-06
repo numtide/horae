@@ -172,3 +172,57 @@ Activity commands require the separately documented timer and project-link
 effects above. Do not mark this integration complete with global creation alone:
 edits, lifecycle, association effects, real-session tests, catalog controls and
 the final transition gates remain required by T230.
+
+### Creation implementation boundary
+
+The direct creation helper now checks policy and current task authority after
+taking the organization gate and active actor lock. Optional project creation
+uses the access-changing gate from the outset and the editor's current
+`ProjectWriteAll` or `ProjectWriteManaged` plus designation predicate. It then
+uses the existing link validator, so archived/missing/foreign projects or clients
+roll back both the task and link. This does not authorize the separately retained
+existing-task link endpoint, which remains part of T230.
+
+New tasks have no default financial rate, and their new project links have no
+rate override. In canonical nonbillable projects the link is nonbillable while
+the explicitly supplied global catalog default remains unchanged. No existing
+project association, rate or historical entry is rewritten. Policy zero retains
+its prior billing/default behavior. No migration or activation is introduced.
+
+Eleven production-helper creation tests passed in `4964`, covering combined
+all/managed grants, unavailable actor state, destination rollback, nonbillable
+links, unknown policy and grant/designation revocation across a real lock wait.
+The same run exited 0 with all 134 project tests, 29 compatibility tests and the
+registered-session matrix, including creation, foreign destinations, revocation
+and inactive cookies. All-target SQLx preparation, offline test compilation and
+strict native/WASM lint also passed on this snapshot. Scoped adversarial
+self-review found no additional defect in this creation increment; it is not an
+independent sign-off or full-feature acceptance. Browser task management,
+requester-bound canonical controls and remaining writes stay open. No UI/CSS
+changed in this increment, and no new browser run or full Nix gate is claimed.
+
+### Next edit checks against the retained implementation
+
+The current `update_task_record` has no actor argument, locks the task before any
+organization gate, and treats `None` as a rate reset. Its no-op comparison cannot
+distinguish preserving a hidden rate from explicitly writing an equal value.
+`update_task` has no current UI caller; the legacy task section only creates and
+lists tasks. Replace that endpoint's ambiguous rate transport before wiring the
+canonical editor, and adapt its existing mutation tests rather than maintaining
+a second unchecked mutation helper.
+
+Reuse the pure `RateEdit` authorization rules through a serializable explicit
+transport. Preserve must retain both amount and stored currency, including an
+unknown legacy denomination. Set must validate nonnegative integer minor units
+and the current denomination under the organization lock; an explicitly supplied
+stale currency cannot silently relabel an amount. Clear removes amount and
+denomination. Clear/set require global rate-write permission even for absent,
+zero or equal stored values. Task authority and active-actor/policy checks remain
+independent, and the response must omit a rate without current all-rate read.
+
+Required regressions include a name-only editor with hidden rates, managed-only
+rate grants, report-only grants, global rate grants without task write, revoked
+grants after lock waits, unknown denomination preservation, explicit equal/zero
+writes, foreign tasks, and unchanged project overrides/time history. Preserve
+the existing no-op/row-version and serialized activation/edit tests. A passing
+creation test is not evidence for any of these still-unimplemented edit cases.

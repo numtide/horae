@@ -1,5 +1,58 @@
 # Scoped permissions investigation progress
 
+## 2026-10-06 — Current task-creation authority
+
+- The preceding estimate reply made no implementation progress. Revalidated the
+  existing scoped-permissions worktree and resumed its unfinished creation
+  increment without creating another branch or restarting a verifier.
+- The earlier failing-first run `44017` exited 101 with all four intended
+  regressions: canonical Member denied, legacy Administrator inherited authority,
+  unknown policy accepted, and task authority alone permitted a project link.
+  The working correction replaces the wrapper's legacy role guard with an
+  authenticated actor and checks current stored policy/grants inside the existing
+  transaction. Composite creation also reuses project edit scope; its exclusive
+  organization gate precedes actor/resource locks. Policy-zero behavior remains.
+- Expanded coverage for all/managed project authority, absent designation,
+  project authority without task creation, nonbillable project defaults,
+  archived/missing/foreign destinations, corrupt client parents, unavailable
+  actor state, and task/designation revocation across a real organization wait.
+  Added real registered-function session coverage for allowed/denied creation,
+  foreign project IDs, current grant loss, inactive sessions, response privacy
+  and rollback. Fixtures are disposable; no live policy or business data changed.
+- Verification `4964` is running the complete task-read runner against the new
+  snapshot: compatibility/project/session tests, SQLx preparation, offline test
+  compilation, native/WASM lint. Keep Rust unchanged until its terminal result;
+  the newly added cases are not yet claimed as passed.
+- `4964` has now passed all 29 compatibility and 134 project tests (including
+  all eleven creation cases), plus the complete registered-function session
+  matrix with the new task writes. SQLx/cache/native/WASM checks remain running.
+  Source review confirms no new financial default or plugin event on a rolled
+  back creation; events are dispatched only after the existing helper commits.
+- SQLx preparation completed with the expected replacement of the project-link
+  query descriptor and new creation/test queries. Offline all-target test
+  compilation passed (3m13s). Native/WASM lint is the remaining live stage.
+- Scoped adversarial self-review checked strict stored state, the active actor,
+  organization-before-actor/resource locking, managed designation versus legacy
+  role, destination parent isolation, atomic rollback, nonbillable link defaults,
+  rate-free responses and post-commit plugin dispatch. No additional defect was
+  identified in this creation increment. This is not independent review or
+  approval of the still-unintegrated update/activity/link endpoints and canonical
+  catalog UI. Rust/testing/concurrency guidance led to real database lock-wait
+  tests and reuse of existing authorization/transaction helpers, without new
+  dependencies or a parallel task service.
+- Recorded the retained edit helper's concrete gaps and required explicit-rate
+  regression cases in the task contract. Rate editing, lifecycle, UI binding and
+  activation remain open; the creation increment is not substituted for T230.
+- `4964` exited 0. Strict all-target native Clippy (1m43s) and WASM Clippy
+  (15.68s) passed after the successful source/session/cache/offline stages.
+  This snapshot is ready for formatting checks and publication. No new browser
+  acceptance is claimed because this increment changed no UI/CSS consumer.
+
+Next: publish the verified creation increment after formatting/diff checks.
+Continue explicit rate-edit intent, task lifecycle, project
+association effects and actual catalog controls under T230. No full permissions
+completion, activation, merge or full Nix acceptance is claimed.
+
 ## 2026-10-06 — Task read acceptance and write integration
 
 - Previous turn made progress: added source/browser coverage, corrected the
@@ -7,20 +60,34 @@
   Revalidated `93182` without restarting it. It exited 0: 29 API tests, 123 project
   tests, registered-session matrix, all-target SQLx preparation, offline test
   compilation and strict native/WASM Clippy passed on the final Rust snapshot.
+
 - Completed the scoped adversarial self-review against the actual task reader,
   compatibility query, session tests, actor fences and consumer wiring. No
   additional high/critical finding remains identified for this read increment;
   this is not independent review or acceptance of unimplemented writers.
+
 - T228/T229 are complete. The contract now separates historical baseline,
   accepted reads and remaining write/UI requirements. Recorded the next concrete
   write sequence: ordinary global creation, composite project checks, explicit
   preserve/clear/set rate intent, response redaction and separate lifecycle
   effects. Existing editor and global-default semantics remain authoritative.
 
-Next: publish the verified read increment after formatting, then reproduce
-canonical task-creation authorization failures in the existing mutation path.
-T230, full permissions activation and complete Nix acceptance remain open. No
-merge or real-data changes.
+- Published unsigned commit `f6e8bf1` after formatting and diff checks. Push
+  succeeded; GitHub confirms #212 remains OPEN/DRAFT at that exact commit.
+
+- Added four failing-first creation regressions against the existing production
+  helper: canonical Member with TaskWriteAll, legacy Administrator without it,
+  unknown policy, and global-task authority without destination project authority.
+  They reuse the existing canonical fixture and verify denied requests leave no
+  task. `44017` is compiling/running them on disposable PostgreSQL; no RED result
+  or implementation is claimed until its terminal output is collected. Keep
+  Rust unchanged while this verification snapshot is running.
+
+Next: collect `44017`, then implement the reviewed task-creation checks and
+registered-session coverage. Reconcile composite linking with the editor before
+enabling its canonical branch; do not bypass project/field checks to make a
+negative test green. T230, full permissions activation and complete Nix acceptance
+remain open. No merge or real-data changes.
 
 ## 2026-10-06 — Task browser delivery and adversarial checks
 

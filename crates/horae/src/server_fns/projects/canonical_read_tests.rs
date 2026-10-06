@@ -12,7 +12,7 @@ mod spend;
 mod tasks;
 mod team;
 
-async fn fixture(
+pub(super) async fn fixture(
     pool: &PgPool,
     legacy_role: OrgRole,
     grants: PermissionSelection,
