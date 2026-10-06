@@ -108,6 +108,7 @@ Clients MVP as canonical-permission acceptance.
 | Internal reusable-profile commands, [#226](https://github.com/numtide/horae/pull/226) | `refactor/permission-template-commands`, `.worktrees/permission-template-commands` | #222 `e9695fd` | Draft at `82d15f3`; 1,189 tests, SQLx, offline server/WASM Clippy, format and full local Flake Check passed; CI required after retargeting; no endpoints or activation |
 | Current authority for user creation/role/activity, [#227](https://github.com/numtide/horae/pull/227) | `fix/user-mutation-authority`, `.worktrees/user-mutation-authority` | `02f7b58` | Draft at `142eda1`; 1,127 tests, SQLx, offline server/WASM Clippy and format passed; required CI pending |
 | Assignment authority and project writer coordination, [#228](https://github.com/numtide/horae/pull/228) | `fix/project-access-lock-order`, `.worktrees/project-access-lock-order` | #227 `142eda1` | Draft at `0e1e675`; 1,137 tests, SQLx, offline server/WASM Clippy and format passed; full local Flake Check pending |
+| Durable CSV preparation outside SQL transactions, [#231](https://github.com/numtide/horae/pull/231) | `fix/csv-batch-transaction-boundary`, `.worktrees/csv-batch-transaction-boundary` | `02f7b58` | Draft at `e9898ed`; 1,122 tests, SQLx, offline server/WASM Clippy and format passed; required CI pending |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -318,9 +319,9 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `3ae8e08` | Coordinate project access changes before locking resources | legacy-access-writers | Rust/test/cache changes in #228; organization SHARE query also reused in #220; specification hunks retained |
 | `907bc88` | Recheck authority when saving organization branding | branding-authority | Source/test/cache hunks in #225; specification hunks retained for reconciliation |
 | `d7a5a21` | Revalidate administrator authority for Harvest connection changes | import-authority | Held in original backup; extraction pending |
-| `4fac6af` | Revalidate import job command and status authority | import-authority | Exact executor-based `jobs::cancel` isolated with CSV preparation; other command/status and specification hunks retained |
+| `4fac6af` | Revalidate import job command and status authority | import-authority | Exact executor-based `jobs::cancel` in #231 with CSV preparation; other command/status and specification hunks retained |
 | `b4672a4` | Revalidate authority during import error downloads | import-authority | Held in original backup; extraction pending |
-| `e5fcc5a` | Prepare durable CSV batches before opening transactions | import-transaction-lifecycle | Two exact Rust blobs isolated in `fix/csv-batch-transaction-boundary`; verification pending; specification hunks retained |
+| `e5fcc5a` | Prepare durable CSV batches before opening transactions | import-transaction-lifecycle | Two exact Rust blobs and regenerated cache in #231; local verification passed, CI pending; specification hunks retained |
 | `482b7c5` | Retain the original requester of import jobs | import-requester-provenance | Held in original backup; extraction pending |
 | `e949e4c` | Drain interrupted import transactions before releasing reservations | import-transaction-lifecycle | Production/test/cache hunks in #224; specification hunks retained for reconciliation |
 | `c0cfb8f` | Scope rate permissions to their owning resource | scope-domain | Code/tests in #221; specification hunks retained for reconciliation |
@@ -988,3 +989,15 @@ Offline all-target workspace/server Clippy is running in `17809`; WASM lint
 and publication remain next. #228's original full Nix check is still live in
 `1662`, without a restart. The unfinished invoice worktree is preserved and
 must wait for its genuine financial-preview dependency before runtime checks.
+
+Offline server Clippy passed (`17809`), followed by WASM Clippy (`15392`), with
+warnings/performance lints denied and no source changes. Published commit
+`e9898edbbe53d64a16ab77f9bca9961ff520a4a8` as independent draft #231 on master
+(five files, 257 insertions and 10 deletions). Required current-head CI is
+running in [37490375038](https://github.com/numtide/horae/actions/runs/37490375038).
+The next safe source boundary is the retained financial snapshot consumers from
+`22ffdab`/`15c82ef`, reusing #220's helper and preserving #216 queries. Resolve
+their dependencies before completing the staged invoice writer extraction.
+Keep #228's verified-live Nix handle `1662`; no merge or original-PR closure is
+authorized or performed. Newly observed #229/#230 concern Darwin CI/platform
+support, not this extraction; they remain untouched.
