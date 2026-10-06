@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT p.user_id, u.name FROM person_permission_states p\n         JOIN users u ON u.org_id=p.org_id AND u.id=p.user_id\n         WHERE p.org_id=$1 AND p.template_id=$2 ORDER BY p.user_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "e99869ea38d27ac8abacc12848fb4b55c973417008b2a001957a08790a0b5b8a"
+}
