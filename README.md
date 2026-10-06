@@ -106,6 +106,12 @@ cd crates/horae && DEV_LOGIN=1 dx serve               # dev server on :8080, hot
 
 ## Configuration
 
+PostgreSQL 15 or newer with ICU support is required. The bundled Nix PostgreSQL
+includes ICU; externally managed databases must provide it too. Permission-profile
+names use a fixed Unicode collation so case-insensitive uniqueness does not change
+with the database locale. Migration 0047 stops without modifying profiles if existing
+names collide under that comparison; resolve those names explicitly before retrying.
+
 Horae is configured through environment variables. [.env.example](.env.example) lists
 the supported settings for local development; the binary does not load `.env` files
 automatically. Export the variables in your shell or configure them in your service manager.
