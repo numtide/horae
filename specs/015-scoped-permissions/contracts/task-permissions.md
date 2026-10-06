@@ -530,3 +530,28 @@ creation-dialog captures were inspected without further visual changes. This
 completes the initial-rate creation path, not T234's project-editor lifecycle,
 full task-management parity or activation. Independent full-feature review and
 final Nix gates remain outstanding.
+
+### Project-editor lifecycle consumer
+
+The task-management reference was rechecked on 2026-10-06: project-specific
+archive uses the X in the Tasks section and project save; restore uses the same
+section and save. The shared New Project handoff supplies the row layout, while
+the existing editor and documented lifecycle supply retained-row behavior.
+Do not interpret the creation prototype's removal of unsaved rows as deletion
+of saved project associations.
+
+The canonical editor now retains saved rows while staging project activity in a
+separate local set. Save derives only differences from the loaded association
+states and includes them in its existing requester/revision-bound receipt.
+Undo, dirty-navigation confirmation, definite rejection and uncertain retry use
+the existing editor lifecycle. Policy-zero editors and creation drafts retain
+their current transport; no new persisted draft field is introduced.
+
+Disabled row fields and bulk billing controls must not change archived tasks.
+Project restoration is unavailable while the global task remains inactive.
+The server remains authoritative for current project access, global activity,
+running timers, conflicts and protected-field preservation. Browser acceptance
+uses the production editor and registered save against disposable PostgreSQL,
+not a synthetic permission implementation. See `quickstart.md` for the bounded
+browser/native/WASM evidence; this does not activate policy or close the complete
+permissions feature.

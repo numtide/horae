@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::models::project_creation::ProtectedProjectField;
 use dioxus::prelude::*;
 use horae_core::money::format_cents_plain;
@@ -22,6 +24,8 @@ pub(super) fn Tasks(
     billable_access: ProjectFieldAccess,
     on_edit: EventHandler<ProtectedProjectField>,
     #[props(default)] inactive_ids: Vec<Uuid>,
+    archived_ids: Signal<HashSet<Uuid>>,
+    retained_ids: Vec<Uuid>,
     #[props(default)] invalid_field: Option<ProjectFormField>,
     #[props(default)] error_message: Option<String>,
 ) -> Element {
@@ -116,8 +120,8 @@ pub(super) fn Tasks(
                 if billable_project && billable_access == ProjectFieldAccess::Editable {
                     div { class: "flex items-center gap-2 ml-auto",
                         span { class: "text-xs text-label", "Billable" }
-                        button { r#type: "button", class: "btn btn-ghost btn-sm", onclick: move |_| { for task in &mut form.write().tasks { if !matches!(task.source, TaskSource::Existing { task_id } if inactive_ids.read().contains(&task_id)) { task.billable = true; } } }, "All" }
-                        button { r#type: "button", class: "btn btn-ghost btn-sm", onclick: move |_| { for task in &mut form.write().tasks { if !matches!(task.source, TaskSource::Existing { task_id } if inactive_ids.read().contains(&task_id)) { task.billable = false; } } }, "None" }
+                        button { r#type: "button", class: "btn btn-ghost btn-sm", onclick: move |_| { for task in &mut form.write().tasks { if !matches!(task.source, TaskSource::Existing { task_id } if inactive_ids.read().contains(&task_id) || archived_ids.read().contains(&task_id)) { task.billable = true; } } }, "All" }
+                        button { r#type: "button", class: "btn btn-ghost btn-sm", onclick: move |_| { for task in &mut form.write().tasks { if !matches!(task.source, TaskSource::Existing { task_id } if inactive_ids.read().contains(&task_id) || archived_ids.read().contains(&task_id)) { task.billable = false; } } }, "None" }
                     }
                 }
             }
@@ -126,7 +130,7 @@ pub(super) fn Tasks(
                 span { "Everyone on the project can track to unrestricted tasks. Open a task's access settings to limit who can." }
             }
             for task in form.read().tasks.clone() {
-                TaskRow { key: "{task.id}", form, options, billable_access, on_edit, id: task.id, inactive: matches!(task.source, TaskSource::Existing { task_id } if inactive_ids.read().contains(&task_id)), invalid_field, error_message: error_message.clone(), on_access: move |id| editing_access.set(Some(id)) }
+                TaskRow { key: "{task.id}", form, options, billable_access, on_edit, id: task.id, archived_ids, retained: retained_ids.contains(&task.id), inactive: matches!(task.source, TaskSource::Existing { task_id } if inactive_ids.read().contains(&task_id)), invalid_field, error_message: error_message.clone(), on_access: move |id| editing_access.set(Some(id)) }
             }
             if form.read().tasks.is_empty() { p { class: "text-sm text-subtle px-5", "No tasks selected yet." } }
             div { class: "px-5 py-3",
@@ -185,6 +189,8 @@ fn TaskRow(
     billable_access: ProjectFieldAccess,
     on_edit: EventHandler<ProtectedProjectField>,
     id: Uuid,
+    mut archived_ids: Signal<HashSet<Uuid>>,
+    retained: bool,
     #[props(default)] inactive: bool,
     on_access: EventHandler<Uuid>,
     invalid_field: Option<ProjectFormField>,
@@ -213,6 +219,17 @@ fn TaskRow(
         TaskAccess::Everyone => "Everyone".to_string(),
         TaskAccess::Restricted { user_ids } => format!("Restricted ({})", user_ids.len()),
     };
+    let saved_task_id = match task.source {
+        TaskSource::Existing { task_id } if retained => Some(task_id),
+        _ => None,
+    };
+    let archived = saved_task_id.is_some_and(|task_id| archived_ids.read().contains(&task_id));
+    let read_only = inactive || archived;
+    let remove_label = if retained {
+        format!("Archive task {name}")
+    } else {
+        format!("Remove task {name}")
+    };
     let currency = form
         .read()
         .currency
@@ -240,14 +257,17 @@ fn TaskRow(
         None => "Inherit".into(),
     };
     rsx! {
-        fieldset { class: "np-assignment-row grid items-center gap-4 px-5 py-3 border-0 border-b border-light m-0 min-w-0", disabled: inactive,
-            Checkbox { checked: task.billable && billable_project, compact: true, disabled: !billable_project || billable_access != ProjectFieldAccess::Editable, label: "{name} is billable", onclick: move |_| { if let Some(task) = form.write().tasks.iter_mut().find(|task| task.id == id) { task.billable = !task.billable; } } }
-            span { class: "text-sm text-strong truncate", title: "{name}", "{name}" if inactive { span { class: "block text-xs text-subtle", "Archived · read only" } } }
+        div { class: "np-assignment-row grid items-center gap-4 px-5 py-3 border-0 border-b border-light m-0 min-w-0",
+            Checkbox { checked: task.billable && billable_project, compact: true, disabled: read_only || !billable_project || billable_access != ProjectFieldAccess::Editable, label: "{name} is billable", onclick: move |_| { if let Some(task) = form.write().tasks.iter_mut().find(|task| task.id == id) { task.billable = !task.billable; } } }
+            div { class: "min-w-0 text-sm text-strong",
+                span { class: "block truncate", title: "{name}", "{name}" }
+                if read_only { span { class: "block text-xs text-subtle", if inactive { "Archived in task catalog" } else { "Archived on this project" } } }
+            }
             div { class: "np-row-controls flex flex-wrap items-center gap-4 min-w-0",
                 if billable_access != ProjectFieldAccess::Withheld && ((form.read().project_type == ProjectType::TimeAndMaterials && form.read().rate_mode == RateMode::Task) || form.read().rate_mode == RateMode::Legacy) {
                     label { class: "flex items-center gap-2 text-xs text-subtle", r#for: "np-task-rate-{id}", oninput: move |_| on_edit.call(ProtectedProjectField::TaskRate(id)),
                         "rate"
-                        Input { class: "w-30 max-w-full font-mono text-right", id: "np-task-rate-{id}", disabled: billable_access != ProjectFieldAccess::Editable, label: "Hourly rate for {name} ({currency})", value: task.rate,
+                        Input { class: "w-30 max-w-full font-mono text-right", id: "np-task-rate-{id}", disabled: read_only || billable_access != ProjectFieldAccess::Editable, label: "Hourly rate for {name} ({currency})", value: task.rate,
                             error_id: (invalid_field == Some(ProjectFormField::TaskRate(id))).then(|| format!("np-task-error-{id}")),
                             placeholder: rate_placeholder,
                             oninput: move |event: FormEvent| { if let Some(task) = form.write().tasks.iter_mut().find(|task| task.id == id) { task.rate = event.value(); } }
@@ -259,24 +279,41 @@ fn TaskRow(
                     label { class: "flex items-center gap-2 text-xs text-subtle", r#for: "np-task-budget-{id}", oninput: move |_| on_edit.call(ProtectedProjectField::Budget),
                         "budget"
                         Input { class: "w-30 max-w-full font-mono text-right", id: "np-task-budget-{id}", label: if form.read().budget_mode == BudgetMode::FeesPerTask { format!("Budget for {name} ({currency})") } else { format!("Budget hours for {name}") }, value: task.budget,
-                            disabled: form.read().budget_mode == BudgetMode::FeesPerTask && billable_access != ProjectFieldAccess::Editable,
+                            disabled: read_only || (form.read().budget_mode == BudgetMode::FeesPerTask && billable_access != ProjectFieldAccess::Editable),
                             error_id: (invalid_field == Some(ProjectFormField::TaskBudget(id))).then(|| format!("np-task-error-{id}")),
                             oninput: move |event: FormEvent| { if let Some(task) = form.write().tasks.iter_mut().find(|task| task.id == id) { task.budget = event.value(); } } }
                         if form.read().budget_mode == BudgetMode::FeesPerTask { "{currency}" } else { "h" }
                     }
                 }
                 button { id: "np-task-access-{id}", r#type: "button", class: "btn btn-ghost btn-sm", aria_label: "Access for {name}: {access_label}",
+                    disabled: read_only,
                     aria_invalid: (invalid_field == Some(ProjectFormField::TaskAccess(id))).then_some("true"),
                     aria_describedby: (invalid_field == Some(ProjectFormField::TaskAccess(id))).then(|| format!("np-task-error-{id}")),
                     onclick: move |_| on_access.call(id), "{access_label}" }
+                if retained && read_only {
+                    button { id: "np-task-restore-{id}", r#type: "button", class: "btn btn-ghost btn-sm", aria_label: "Restore task {name}", disabled: inactive,
+                        onclick: move |_| {
+                            if let Some(task_id) = saved_task_id { archived_ids.write().remove(&task_id); }
+                            document::eval(&format!("requestAnimationFrame(() => document.getElementById('np-task-remove-{id}')?.focus())"));
+                        }, "Restore" }
+                    if inactive { span { class: "text-xs text-subtle", "Restore in the task catalog first." } }
+                }
             }
-            button { id: "np-task-remove-{id}", r#type: "button", class: "np-row-remove btn btn-ghost p-0 size-8 text-label", aria_label: "Remove task {name}",
+            if !retained || !read_only {
+            button { id: "np-task-remove-{id}", r#type: "button", class: "np-row-remove btn btn-ghost p-0 size-8 text-label", aria_label: remove_label,
+                disabled: inactive,
                 aria_invalid: matches!(invalid_field, Some(ProjectFormField::TaskName(row) | ProjectFormField::Task(row)) if row == id).then_some("true"),
                 aria_describedby: matches!(invalid_field, Some(ProjectFormField::TaskName(row) | ProjectFormField::Task(row)) if row == id).then(|| format!("np-task-error-{id}")),
                 onclick: move |_| {
-                    form.write().tasks.retain(|task| task.id != id);
-                    document::eval("document.getElementById('np-task-search')?.focus()");
+                    if let Some(task_id) = saved_task_id {
+                        archived_ids.write().insert(task_id);
+                        document::eval(&format!("requestAnimationFrame(() => document.getElementById('np-task-restore-{id}')?.focus())"));
+                    } else {
+                        form.write().tasks.retain(|task| task.id != id);
+                        document::eval("document.getElementById('np-task-search')?.focus()");
+                    }
                 }, "×" }
+            }
         }
         if matches!(invalid_field, Some(ProjectFormField::Task(row) | ProjectFormField::TaskName(row) | ProjectFormField::TaskAccess(row) | ProjectFormField::TaskRate(row) | ProjectFormField::TaskBudget(row)) if row == id) {
             p { id: "np-task-error-{id}", class: "text-sm text-danger px-5",

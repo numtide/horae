@@ -1,5 +1,61 @@
 # Scoped permissions investigation progress
 
+## 2026-10-06 — Project task lifecycle consumer
+
+- Previous turn was a status-only answer (no progress). Revalidated `dcadcee`
+  and the remaining T234 gap; no live verifier was assumed. Spec Kit prerequisites
+  identify feature 015. The seven local checklists pass 7/7; full requirements
+  remain 12/16, under the existing authorization for closed increments.
+- Extended the disposable `project-editor-permissions` browser fixture with
+  retained active, project-archived and globally archived tasks. Corrected two
+  fixture mistakes (the association has a composite key, and cleanup must remove
+  its rows before the project). Corrected RED `9221` exited 1 on the missing
+  Restore control; existing ordinary-save preservation passed first.
+- The editor now stages project-link activity separately from its saved form,
+  includes only changed retained links in its existing receipt-bound save,
+  tracks dirty/cancel state and preserves the original request for uncertain
+  retries. Global archive remains distinct, and new unsaved rows still remove.
+  Archived rows disable field editing; bulk billable controls skip them.
+  No draft payload, server contract, SQL, dependency or shared CSS changed.
+
+Next: verify the current build and extended browser regression, then strict
+native/WASM lint and focused tests. T234/T230 remain open pending evidence;
+full permissions integration, review and activation gates remain unchanged.
+
+- Both build targets passed in `89298`. Its browser run passed lifecycle,
+  undo/cancel, lost-ack replay and revoked save, then rejected the old hours-only
+  test because the added fixture contained dormant task money: the server
+  correctly requires financial authority before clearing those values. Changed
+  the added task fixture to integer hour budgets, keeping the existing dormant
+  project-money test intact; no authorization predicate was weakened.
+- Corrected `7595` exited 0 across `project-editor-permissions`, `project-edit`,
+  `new-project-task-errors` and `project-task-rates`. Native/all-target and WASM
+  strict lint `22206` exited 0. Desktop dark/mobile light captures were inspected
+  in one batch; no further visual edit. This is Linux Chromium, not Windows MCP.
+- Added a real running timer before the archive save: require rejection with
+  input and lifecycle intent preserved, then successful save after removing only
+  that disposable test timer. Focused run `45830` is in progress. The actual PR
+  query `77347` confirms #212 remains open/draft on the expected branch.
+
+Next: obtain `45830`, format and publish this increment unsigned without merging.
+Review covered canonical versus legacy state, saved versus new row identities,
+independent global activity, dirty/undo, field preservation, pending receipts,
+keyboard focus and current-access rejection. This is scoped self-review, not
+independent full-feature acceptance. Remaining reports, approvals, lock/inventory,
+activation and full Nix gates still prevent completing the goal.
+
+- `45830` exited 0, including running-timer rejection/recovery and all preceding
+  canonical editor assertions. No SQL or migration changed, so no new SQLx
+  preparation was required. No verifier remains live. Formatting/publication
+  remain the immediate next steps before returning to remaining integration.
+
+- Formatting and formatting-CI `60949` exited 0 with zero changes; diff checks
+  and the inline-style/hardcoded-color sweep passed. Publish the six scoped files
+  to existing draft #212. Next substantive integration: T203 report-filter
+  candidate discovery, beginning with the unresolved universe recorded in
+  `contracts/people-directory.md` and `contracts/time-reports.md`; do not infer
+  eligible people from existing report rows or expose a whole directory.
+
 ## 2026-10-06 — Catalog creation form
 
 - Previous goal turn made progress: atomic initial-rate creation and its real-
@@ -56,6 +112,16 @@ suite. Keep Rust stable while the current compile runs.
 Next: format and publish this verified creation increment to the existing draft
 PR #212 without merging. Then wire explicit project task archive/restore into
 the existing project editor; T234, T230 and the full permissions goal stay open.
+
+- Formatting and formatting-CI `30758` passed. Published unsigned commit
+  `dcadcee` (`Add atomic task creation to the task catalog`); push `41853` exited
+  0 on `feat/scoped-permissions`. Worktree was clean before this publication note.
+  No merge, real data change, policy activation or running verifier remains.
+- Next concrete consumer gap: `new_project` still builds `ProjectEditRequest`
+  with empty `task_activity` and passes only global `inactive_task_ids` to its
+  Tasks section. Connect retained project-link activity to explicit controls and
+  the existing save/revision/recovery flow, preserving hidden configuration and
+  saved drafts. Do not implement a competing Project Detail management panel.
 
 ## 2026-10-06 — Atomic task creation
 

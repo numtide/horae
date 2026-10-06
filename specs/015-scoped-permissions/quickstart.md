@@ -43,7 +43,26 @@ checks passed too. The new creation-dialog captures were inspected in one batch;
 no further visual changes were needed. This is Linux Chromium, not Windows Chrome
 or a full browser-suite run.
 
-Project association controls and full T234 acceptance remain open. The mobile table stays horizontally scrollable and task names wrap
+The existing canonical project editor now stages archive/restore for retained
+task links, independently of draft fields. An unchanged save sends no lifecycle
+intent; toggling back to the saved state clears the dirty state. New unsaved
+associations still remove locally. Global archive disables project restoration
+with an explanation to restore the catalog task first. Archived rows and bulk
+billable actions preserve their settings. Receipt retries retain the original
+activity list, requester and revision.
+
+Verifier `7595` passed the extended `project-editor-permissions` fixture plus
+`project-edit`, `new-project-task-errors` and `project-task-rates`. This covers
+keyboard focus, undo/cancel, hidden rates and retained restrictions, unrelated
+saves, lost acknowledgements, revoked authority, new unsaved associations and
+bulk billable exclusion, together with legacy creation/edit regressions. Native
+and WASM strict lint passed in `22206`. The 1440px dark and 390px light task-section
+captures were inspected together; no visual correction or shared CSS change was
+needed. Focused confirmation `45830` also passed actual running-timer rejection:
+the form keeps its pending activity and settings, storage remains unchanged,
+and saving succeeds once the test timer is removed.
+
+Full T234 acceptance remains open. The mobile catalog table stays horizontally scrollable and task names wrap
 narrowly; the two-pass visual review is not a claim of final mobile design parity.
 No Windows Chrome, policy activation or full task-management parity is claimed.
 
