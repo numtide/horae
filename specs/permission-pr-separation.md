@@ -106,7 +106,7 @@ Clients MVP as canonical-permission acceptance.
 | Interrupted import session cleanup, [#224](https://github.com/numtide/horae/pull/224) | `fix/import-session-cleanup`, `.worktrees/import-session-cleanup` | `02f7b58` | Draft at `be57f0e`; 1,123 tests passed, 11 existing ignored; SQLx, offline server/WASM lint format and current-head GitHub Flake Check passed; Nixbot pending |
 | Current authority for organization branding writes, [#225](https://github.com/numtide/horae/pull/225) | `fix/branding-current-authority`, `.worktrees/branding-current-authority` | `02f7b58` | Draft at `f2d6bd4`; full suite, SQLx, offline server/WASM lint format and current-head GitHub Flake Check passed; Nixbot pending |
 | Internal reusable-profile commands, [#226](https://github.com/numtide/horae/pull/226) | `refactor/permission-template-commands`, `.worktrees/permission-template-commands` | #222 `e9695fd` | Draft at `82d15f3`; 1,189 tests, SQLx, offline server/WASM Clippy, format and full local Flake Check passed; CI required after retargeting; no endpoints or activation |
-| Current authority for user creation/role/activity, [#227](https://github.com/numtide/horae/pull/227) | `fix/user-mutation-authority`, `.worktrees/user-mutation-authority` | `02f7b58` | Draft at `142eda1`; 1,127 tests, SQLx, offline server/WASM Clippy and format passed; required CI pending |
+| Current authority for user creation/role/activity, [#227](https://github.com/numtide/horae/pull/227) | `fix/user-mutation-authority`, `.worktrees/user-mutation-authority` | `02f7b58` | Draft at `142eda1`; 1,127 tests, SQLx, offline server/WASM Clippy, format and current-head GitHub Flake Check passed; Nixbot build pending |
 | Assignment authority and project writer coordination, [#228](https://github.com/numtide/horae/pull/228) | `fix/project-access-lock-order`, `.worktrees/project-access-lock-order` | #227 `142eda1` | Draft at `0e1e675`; 1,137 tests, SQLx, offline server/WASM Clippy, format and full local Flake Check passed; master-targeted CI required after retargeting |
 | Durable CSV preparation outside SQL transactions, [#231](https://github.com/numtide/horae/pull/231) | `fix/csv-batch-transaction-boundary`, `.worktrees/csv-batch-transaction-boundary` | `02f7b58` | Draft at `e9898ed`; 1,122 tests, SQLx, offline server/WASM Clippy and format passed; required CI pending |
 | Financial snapshot reader authority, [#232](https://github.com/numtide/horae/pull/232) | `fix/financial-snapshot-authority`, `.worktrees/financial-snapshot-authority` | #220 `bc0c7a0` | Draft at `0bb5721`; 1,141 tests, SQLx, offline server/WASM Clippy and format passed; full local Nix running; required CI after retargeting |
@@ -1145,3 +1145,9 @@ retain migration 0044 and current profile behavior, and account separately for
 later editor/subject/directory tests. This is inspected dependency evidence,
 not a completed extraction. Keep Nix handles `80170` (#232) and `1215` (#233)
 without restarting them. The overall original-change reconciliation is incomplete.
+
+Remote verification confirms #233 is draft on the intended review base, head
+`8a6cb2a`, with exactly the 13-file writer diff. #227's unchanged `142eda1` now
+has successful GitHub Flake Check and Format in run `37486457726`; Nixbot build
+is still pending. #231's `e9898ed` remains on the original live Flake Check run
+`37490375038` with Format passed; no rerun or repeated polling was requested.
