@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (SELECT count(*) FROM invoices WHERE org_id=$1) AS invoices,\n             (SELECT count(*) FROM invoice_generation_requests WHERE org_id=$1) AS requests",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "invoices",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "requests",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "6f1eb2c8c705cbfbd1e626ccb61ee1b91597726fa0e668039260d3e891079741"
+}
