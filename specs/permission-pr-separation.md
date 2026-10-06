@@ -98,7 +98,7 @@ Clients MVP as canonical-permission acceptance.
 | Delivery | Branch/worktree | Base | Status / acceptance |
 | --- | --- | --- | --- |
 | Separation ledger | `docs/permission-pr-separation`, `.worktrees/permission-pr-separation` | `02f7b58` | Inventory recorded; no completed-extraction claim |
-| Legacy report/invoice readers from #217 | `fix/report-reader-authority-master`, `.worktrees/report-reader-authority-master` | `02f7b58` | Full workspace suite passed: 1,127 tests, 11 pre-existing ignored scale/stress cases; SQLx/lint/Nix checks pending |
+| Legacy report/invoice readers from #217, [#220](https://github.com/numtide/horae/pull/220) | `fix/report-reader-authority-master`, `.worktrees/report-reader-authority-master` | `02f7b58` | Draft at `bc0c7a0`; 1,127 tests passed, 11 existing ignored; SQLx, offline server/WASM lint and formatting passed; CI pending |
 | Pure record scopes and grant catalog, [#219](https://github.com/numtide/horae/pull/219) | `refactor/permission-domain-foundation`, `.worktrees/permission-domain-foundation` | `02f7b58` | Draft at `ec7ddbd`; 158 core tests, core Clippy and formatting passed; full CI pending; no runtime integration |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
@@ -132,12 +132,13 @@ Dependencies verified by source inspection:
 - Include all helper/query SQLx descriptors and regenerate/verify the extracted
   cache, not only the eight descriptors in #217's own commit.
 
-Acceptance pending on the new head: all seven reader regressions, authenticated
+Acceptance scope on the new head: all seven reader regressions, authenticated
 HTTP cases, tenant/filter/not-found behavior, direct and gated revocation in
 both orders, coherent invoice data, cancellation, inherited settings, #216
 client-invoice regressions, cross-writer lock review, full server/core tests,
 offline SQLx compilation, server/WASM lint, formatting and required Nix gates.
-Historical tests on `5faed76` do not prove this extraction.
+All local checks above passed as recorded below; required CI/Nix gates remain
+pending. Historical tests on `5faed76` do not prove this extraction.
 
 ### Shared foundations and migration constraints
 
@@ -306,7 +307,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `9a7e05d` | Add audited project manager delegation | project-manager-delegation | Held in original backup; extraction pending |
 | `fc85231` | Add administrator-only permission audit lookup | permission-audit | Held in original backup; extraction pending |
 | `c3d17cb` | Prevent deadlocks during legacy import report conversion | import-transaction-lifecycle | Held in original backup; extraction pending |
-| `3ae8e08` | Coordinate project access changes before locking resources | legacy-access-writers | Held in original backup; extraction pending |
+| `3ae8e08` | Coordinate project access changes before locking resources | legacy-access-writers | Organization SHARE query reused in #220; writer/helper consumers and remaining hunks retained |
 | `907bc88` | Recheck authority when saving organization branding | branding-authority | Held in original backup; extraction pending |
 | `d7a5a21` | Revalidate administrator authority for Harvest connection changes | import-authority | Held in original backup; extraction pending |
 | `4fac6af` | Revalidate import job command and status authority | import-authority | Held in original backup; extraction pending |
@@ -316,7 +317,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `e949e4c` | Drain interrupted import transactions before releasing reservations | import-transaction-lifecycle | Held in original backup; extraction pending |
 | `c0cfb8f` | Scope rate permissions to their owning resource | scope-domain | Held in original backup; extraction pending |
 | `5d51b0e` | Expose the current person's permission snapshot | own-permissions | Held in original backup; extraction pending |
-| `22ffdab` | Recheck manager access for financial snapshots | manager-snapshot-consumers | Held in original backup; extraction pending |
+| `22ffdab` | Recheck manager access for financial snapshots | manager-snapshot-consumers | Shared snapshot helper/queries in #220; original financial consumers and remaining hunks retained |
 | `15c82ef` | Recheck manager access in invoice editor snapshots | manager-snapshot-consumers | Held in original backup; extraction pending |
 | `dc822a0` | Recheck manager authority before delivering exports | export-authority | Held in original backup; extraction pending |
 | `108594e` | Revalidate project scope before delivering exports | export-authority | Held in original backup; extraction pending |
@@ -401,8 +402,13 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `8c1bf9b` | Add task archive and restore controls to project editing | task-consumers | Held in original backup; extraction pending |
 | `db3935d` | Filter time reports and downloads by billability | time-report-consumer | Held in original backup; extraction pending |
 
-Additional original #217 commit `dd141c5`: assigned to the first extraction;
-original remains untouched, with final duplicate disposition pending delivery.
+Additional original #217 commit `dd141c5`: replaced by #220 for delivery, with
+its original branch left untouched and open. All production/test changes are
+carried with the documented #216 adaptation. Its existing feature record is
+preserved with historical evidence explicitly separated from new-head results.
+Seven of its eight added SQLx descriptors are emitted by the new preparation;
+`query-7d5c8693570ee23f36fdb48ff0c4412ba250383ee2fa399d94fefe9d16767381.json`
+already exists in `02f7b58`. Do not merge both #217 and #220 as separate fixes.
 
 ## Iteration log and next action
 
@@ -510,3 +516,24 @@ Next: collect SQLx preparation, verify offline all-target compilation and lint,
 then publish the reader extraction. Collect #219's own CI before accepting it.
 Continue the remaining source groups and specification-hunk reconciliation;
 the original PRs remain open and unchanged.
+
+### 2026-10-06 — Independent reader PR published
+
+SQLx session `84393` passed, preserving all 1,003 existing descriptors byte for
+byte and adding 18. Offline server Clippy with all targets passed in `85490`;
+WASM Clippy passed in `53119`, both with warnings denied, performance lints and
+`DATABASE_URL` unset. Final `nix fmt -- --ci` passed in `59584`.
+No Rust source changed after the full test run; only generated SQLx metadata
+and the carried feature verification record were added afterward.
+
+Unsigned commit `bc0c7a0bf2822c1e61568a95b53df651fe40e7c4` is published as draft
+#220. Its 27 paths comprise eight Rust source/test paths, 18 SQLx descriptors
+and the existing feature record. Adversarial review found no high/critical
+issue in the extracted source; that is not a replacement for the pending
+required Flake Check. #219 and #220 are independent deliveries from the same
+#216 base, so neither requires the other to merge.
+
+Next: collect the exact-head CI outcomes for #219/#220 without frequent polling.
+Continue with domain-dependent rules and storage extraction, keeping storage
+policy at zero and carrying the complete relevant tests. Reconcile the remaining
+specification hunks and every source group; the overall separation is unfinished.
