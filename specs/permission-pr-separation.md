@@ -123,9 +123,10 @@ Clients MVP as canonical-permission acceptance.
 | Session-bound project-manager delegation, [#243](https://github.com/numtide/horae/pull/243) | `feat/project-manager-delegation`, `.worktrees/project-manager-delegation` | Review base `e44433e` combining #234/#228 | Draft at `3404c85`; suite/cache, final WASM lint and full local Nix passed (cached result confirmed in `10972`); final server gate closed; no form wiring or activation |
 | Own-permission explanation and Settings, [#244](https://github.com/numtide/horae/pull/244) | `feat/own-permission-settings`, `.worktrees/own-permission-settings` | #234 `45d219e` | Draft at `6c4e4d1`; 1,273 Rust tests, SQLx, provenance, review/Spec Kit/format/detector, offline server/WASM lint and isolated Chromium passed; desktop/mobile captures inspected; full local Nix passed (cached result confirmed in `30710`); no activation |
 | Permission audit history, [#245](https://github.com/numtide/horae/pull/245) | `feat/permission-audit-history`, `.worktrees/permission-audit-history` | Review base `59d2798` combining #243 `3404c85` and #244 `6c4e4d1` | Draft at `14ad9ca`; source suite/cache/lints passed; `93f230d` Nix failed on seed-vs-session actor fixture mismatch; corrected actual-session fixture passed after New Project permission suite; final Nix `56923` running; older gates remain historical evidence |
-| Read-only legacy permission diagnostics, [#246](https://github.com/numtide/horae/pull/246) | `feat/permission-preflight`, `.worktrees/permission-preflight` | Review base `61c90bc` combining #237 `2242361` and #226 `82d15f3` | Draft at `ff482c8`; 1,244 tests, full SQLx generation/provenance (1,138 descriptors), source preservation, bounded review/Spec Kit/format and offline native/WASM lint `86929` passed; full Nix `99711` running; no endpoint, UI, migration or activation |
+| Read-only legacy permission diagnostics, [#246](https://github.com/numtide/horae/pull/246) | `feat/permission-preflight`, `.worktrees/permission-preflight` | Review base `61c90bc` combining #237 `2242361` and #226 `82d15f3` | Draft at `ff482c8`; suite/cache/lints passed; full Nix `99711` failed on inherited editor loading timeout; unchanged focused transport/editor sequence passed, root cause unproven; full unchanged-head rerun `41382` running; no endpoint, UI, migration or activation |
 | Materialized XLSX/PDF authorization, [#247](https://github.com/numtide/horae/pull/247) | `fix/materialized-export-authority`, `.worktrees/materialized-export-authority` | Review base `3edc0b8` combining existing `0046dad` (#227/#228 + #220/#232) and #222 `e9695fd` | Draft at `d9717e7`; 1,229 tests, full SQLx/provenance (1,135 descriptors), source review/Spec Kit/format and offline native/WASM lint passed; full final-head Nix `32625` running; no policy activation |
-| CSV delivery authorization, not yet published | `fix/csv-export-authority`, `.worktrees/csv-export-authority` | Exact #247 head `d9717e7` | Source `9f2994d`; historical `dcf4ac8` extraction, migration 0046 and complete original tests; format/source review/scoped analysis passed, suite/cache `47215` running; offline/full gates and publication pending |
+| CSV delivery authorization, not yet published | `fix/csv-export-authority`, `.worktrees/csv-export-authority` | Exact #247 head `d9717e7` | Source `9f2994d`; 1,245 tests passed, format/source review/scoped analysis passed; complete SQLx preparation `47215` running; cache provenance, offline/full gates and publication pending |
+| Existing permission specification and history, [#248](https://github.com/numtide/horae/pull/248) | `docs/permission-specification`, `.worktrees/permission-specification` | Master `1b8fa4f` | Draft at `c77abf9`; all 54 original feature documents preserved, six contextualized; all 43 requirements/criteria and 236 task lines unchanged; original New Project transition applied over current expenses spec; provenance/format passed, full checks and final reconciliation pending; no code or governance adoption |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -280,52 +281,63 @@ below assign a candidate responsibility, not yet a final destination PR.
 Mixed commits may supply multiple deliveries; record exact adaptations and
 avoid duplicate shared helpers/queries when finalizing them.
 
+Documentation ownership now applies across all mixed commits as well as the 50
+documentation-only rows: final committed `specs/015-scoped-permissions/` content
+is preserved in #248. All intermediate versions remain in the original refs.
+Original `specs/011-new-project-screen/spec.md` permission-transition hunks also
+belong to #248, composed over master's newer expense requirements. The original
+constitution 1.1.0 proposal remains unadopted work in #212 and its backup ref;
+the obsolete feature-selector change is retained historically, not reapplied
+over feature 016. Original README migration prerequisites and AGENTS cache
+guidance still need their respective documentation ownership actions. Unpublished
+Clients documents are separate and are not silently included in #248.
+
 | Source | Original change | Candidate responsibility | Disposition |
 | --- | --- | --- | --- |
-| `05448a8` | Specify scoped roles and permissions | specification-history | Held in original backup; extraction pending |
-| `1d45191` | Require Harvest parity for permissions and scoped approvals | specification-history | Held in original backup; extraction pending |
+| `05448a8` | Specify scoped roles and permissions | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance; obsolete feature-selector change retained historically, not reapplied over feature 016 |
+| `1d45191` | Require Harvest parity for permissions and scoped approvals | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `a7727f1` | Add record scope evaluation for permissions | scope-domain | Code/tests in #219; specification hunks retained for reconciliation |
 | `2abce9a` | Enforce approval isolation and record permission boundaries | approval-isolation | Three Rust/test files and original cache patch in independent #239 (`66a256f`); 1,124 tests, source review, SQLx, format and offline server/WASM lints passed; full local Nix passed; mixed specification hunks retained |
 | `757f43d` | Enforce tenant and administrator boundaries for assignments | legacy-access-writers | Rust/test/cache changes in #228 with subsequent coordination repair; specification hunks retained |
-| `d3a4ff3` | Document profile reapplication and import permission boundaries | specification-history | Held in original backup; extraction pending |
-| `dcf21ef` | Specify permission migration safeguards and rate-scope verification | specification-history | Held in original backup; extraction pending |
-| `b3ee8da` | Align authorization governance with scoped permission profiles | specification-history | Held in original backup; extraction pending |
-| `b569c75` | Extend permission specification to confirmed web domains | specification-history | Held in original backup; extraction pending |
-| `f5cf02d` | Record expense scope defaults and lifecycle permission gaps | specification-history | Held in original backup; extraction pending |
-| `6ce9071` | Document expense action scope and independent lock states | specification-history | Held in original backup; extraction pending |
-| `b8b105e` | Document current-account permission research and evidence gaps | specification-history | Held in original backup; extraction pending |
-| `6443d56` | Record current Harvest permission evidence and reference conflicts | specification-history | Held in original backup; extraction pending |
+| `d3a4ff3` | Document profile reapplication and import permission boundaries | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
+| `dcf21ef` | Specify permission migration safeguards and rate-scope verification | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
+| `b3ee8da` | Align authorization governance with scoped permission profiles | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance; constitution 1.1.0 remains a separately preserved, unadopted proposal in original #212 |
+| `b569c75` | Extend permission specification to confirmed web domains | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
+| `f5cf02d` | Record expense scope defaults and lifecycle permission gaps | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
+| `6ce9071` | Document expense action scope and independent lock states | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
+| `b8b105e` | Document current-account permission research and evidence gaps | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
+| `6443d56` | Record current Harvest permission evidence and reference conflicts | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `e8dcb77` | Add typed permission catalog and built-in profile selections | scope-domain | Code/tests in #219; specification hunks retained for reconciliation |
 | `b80f8ab` | Recheck administrator authority during user access changes | legacy-access-writers | Three exact Rust blobs and regenerated cache in #227; specification hunks retained for reconciliation |
-| `b7e730c` | Define permission persistence and transactional access contracts | specification-history | Held in original backup; extraction pending |
-| `412035d` | Map permission operations and transaction constraints | specification-history | Held in original backup; extraction pending |
-| `324084c` | Clarify permission boundaries for jobs and authentication | specification-history | Held in original backup; extraction pending |
-| `5fb78a7` | Specify permission preservation when deleting templates | specification-history | Held in original backup; extraction pending |
-| `f17fafa` | Clarify report-specific financial access | specification-history | Held in original backup; extraction pending |
-| `8455740` | Document resource-specific managed rate proposal | specification-history | Held in original backup; extraction pending |
-| `168d536` | Specify resource-scoped billable rate permissions | specification-history | Held in original backup; extraction pending |
-| `5bf841d` | Specify explicit cost rate permissions | specification-history | Held in original backup; extraction pending |
-| `ece40f5` | Clarify company lock scheduling and approval boundaries | specification-history | Held in original backup; extraction pending |
-| `7bcb3e2` | Require full record visibility for combined approvals | specification-history | Held in original backup; extraction pending |
-| `0fe8f56` | Document project manager assignment retention evidence | specification-history | Held in original backup; extraction pending |
-| `a1cc799` | Specify project manager retention with read access | specification-history | Held in original backup; extraction pending |
-| `9c07d60` | Clarify delegation evidence and approval history boundaries | specification-history | Held in original backup; extraction pending |
-| `ab9b1a4` | Define project-editor delegation and cross-feature permission contracts | specification-history | Held in original backup; extraction pending |
-| `80e2e42` | Track person delegation and project lifecycle permission gaps | specification-history | Held in original backup; extraction pending |
-| `eb85bc1` | Specify migration preservation checks for assignment dependencies | specification-history | Held in original backup; extraction pending |
-| `b8a1ef5` | Record pending person-management policy decision | specification-history | Held in original backup; extraction pending |
-| `3cc9afe` | Restrict person-management assignment changes to administrators | specification-history | Held in original backup; extraction pending |
+| `b7e730c` | Define permission persistence and transactional access contracts | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
+| `412035d` | Map permission operations and transaction constraints | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
+| `324084c` | Clarify permission boundaries for jobs and authentication | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
+| `5fb78a7` | Specify permission preservation when deleting templates | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
+| `f17fafa` | Clarify report-specific financial access | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
+| `8455740` | Document resource-specific managed rate proposal | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
+| `168d536` | Specify resource-scoped billable rate permissions | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
+| `5bf841d` | Specify explicit cost rate permissions | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
+| `ece40f5` | Clarify company lock scheduling and approval boundaries | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
+| `7bcb3e2` | Require full record visibility for combined approvals | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
+| `0fe8f56` | Document project manager assignment retention evidence | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
+| `a1cc799` | Specify project manager retention with read access | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
+| `9c07d60` | Clarify delegation evidence and approval history boundaries | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
+| `ab9b1a4` | Define project-editor delegation and cross-feature permission contracts | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance; original New Project transition hunks applied over current expense requirements |
+| `80e2e42` | Track person delegation and project lifecycle permission gaps | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
+| `eb85bc1` | Specify migration preservation checks for assignment dependencies | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
+| `b8a1ef5` | Record pending person-management policy decision | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
+| `3cc9afe` | Restrict person-management assignment changes to administrators | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `524c29e` | Reject malformed stored permission selections | scope-domain | Code/tests in #219; specification hunks retained for reconciliation |
-| `ec9408b` | Record pending person-assignment eligibility decision | specification-history | Held in original backup; extraction pending |
-| `d965718` | Require compatible grants for new person-management assignments | specification-history | Held in original backup; extraction pending |
-| `0c56dc6` | Document managed-person removal on Harvest role downgrade | specification-history | Held in original backup; extraction pending |
-| `6474382` | Confirm person-assignment removal after permission loss | specification-history | Held in original backup; extraction pending |
-| `3a19a26` | Specify explicit project-access retention choice | specification-history | Held in original backup; extraction pending |
-| `91f7cc3` | Distinguish profile selection from unchanged permission saves | specification-history | Held in original backup; extraction pending |
-| `602b04f` | Separate displayed permission profiles from assignment provenance | specification-history | Held in original backup; extraction pending |
-| `1105b75` | Record remaining permission decision gates | specification-history | Held in original backup; extraction pending |
-| `cf5d635` | Define rejection of person-management self-assignments | specification-history | Held in original backup; extraction pending |
-| `804b1d8` | Separate permission increment readiness from activation gates | specification-history | Held in original backup; extraction pending |
+| `ec9408b` | Record pending person-assignment eligibility decision | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
+| `d965718` | Require compatible grants for new person-management assignments | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
+| `0c56dc6` | Document managed-person removal on Harvest role downgrade | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
+| `6474382` | Confirm person-assignment removal after permission loss | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
+| `3a19a26` | Specify explicit project-access retention choice | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
+| `91f7cc3` | Distinguish profile selection from unchanged permission saves | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
+| `602b04f` | Separate displayed permission profiles from assignment provenance | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
+| `1105b75` | Record remaining permission decision gates | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
+| `cf5d635` | Define rejection of person-management self-assignments | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
+| `804b1d8` | Separate permission increment readiness from activation gates | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `6e61593` | Validate person-management grant compatibility and self-links | scope-domain | Code/tests in #221; specification hunks retained for reconciliation |
 | `ec35446` | Store versioned permission profiles without activating new policy | permission-storage | Storage/schema/name-validator code/tests in #222; specification hunks retained for reconciliation |
 | `d50c979` | Add audited permission template commands | permission-profile-transactions | Command/test/receipt/cache hunks in #226 with later hardening; specification hunks retained for reconciliation |
@@ -353,9 +365,9 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `8c15bfe` | Show own permissions in Settings | own-permissions | Complete original component, shared descriptions, SSR and resource tests in #244 (`6c4e4d1`); suite/cache, isolated browser and full local Nix passed; no full T018 claim; specification hunks retained |
 | `300d1e9` | Expose administrator permission history | permission-audit | Complete historical DTO/HTTP/fencing tests in #245 (`533922a`); suite, complete cache provenance and offline lints passed; full Nix/browser pending; specification hunks retained |
 | `03e90b1` | Connect permission editor previews and commands | permission-editor | Template DTOs, hardening/tests and administration helpers in #226; profile DTOs, shared calculation and command hardening/tests in #234; editor/session/remaining hunks retained |
-| `7f7fd1c` | Record permission editor delivery and UI follow-up | specification-history | Held in original backup; extraction pending |
+| `7f7fd1c` | Record permission editor delivery and UI follow-up | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `98b1692` | Add reviewed person permission editing | permission-editor | Held in original backup; extraction pending |
-| `9e6d8bd` | Record person editor delivery and template follow-up | specification-history | Held in original backup; extraction pending |
+| `9e6d8bd` | Record person editor delivery and template follow-up | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `0f97cb2` | Add custom permission profile controls | permission-editor | Held in original backup; extraction pending |
 | `8db19ba` | Show affected names in permission reviews | permission-editor | Profile command's historical relationship-type reuse in #234; display names, editor/UI/tests and specification hunks retained |
 | `e7d8a36` | Protect permission drafts during navigation and dismissal | permission-editor | Held in original backup; extraction pending |
@@ -364,22 +376,22 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `c88ca6d` | Exercise permission recovery in a real browser | permission-editor | Held in original backup; extraction pending |
 | `202ee96` | Protect project delegation against concurrent deactivation | project-manager-delegation | Complete final command/activity tests in #243 (`3404c85`); suite/cache/format, final WASM lint and full local Nix passed; specification hunks preserved separately |
 | `3f45b7c` | Validate combined approval record coverage | scope-domain | Code/tests in #221; specification hunks retained for reconciliation |
-| `eb56af3` | Define scoped approval transaction and coverage gates | specification-history | Held in original backup; extraction pending |
+| `eb56af3` | Define scoped approval transaction and coverage gates | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `8d49421` | Add authorized permission editor subject discovery | permission-editor | Held in original backup; extraction pending |
 | `b735b3a` | Add safe person switching to permission editor | permission-editor | Held in original backup; extraction pending |
 | `7f14e4b` | Limit user directory responses to consumed fields | identity-projections | Source/tests together in #240 at `1ce993f`; 1,122 tests, regenerated cache, format and offline lints passed; full Nix running; canonical tests and mixed specification hunks separately preserved |
 | `1eb13ec` | Add scoped people directory reads | people-directory | Held in original backup; extraction pending |
 | `981d0e3` | Resolve approval names without directory access | identity-projections | Source/tests together in #240 at `1ce993f`; 1,122 tests, regenerated cache, format and offline lints passed; full Nix running; canonical tests and mixed specification hunks separately preserved |
 | `6b5dbae` | Authorize identity-only project team choices | project-team-choices | Held in original backup; extraction pending |
-| `4c00660` | Document project form permission integration boundaries | specification-history | Held in original backup; extraction pending |
+| `4c00660` | Document project form permission integration boundaries | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `3bb62ac` | Limit session identity responses to display fields | identity-projections | Source/tests together in #240 at `1ce993f`; 1,122 tests, regenerated cache, format and offline lints passed; full Nix running; canonical tests and mixed specification hunks separately preserved |
 | `4ac30fa` | Add scoped time-entry reads without financial metadata | time-readers | Held in original backup; extraction pending |
 | `c80233b` | Keep invoice identities out of time-entry responses | time-entry-payload | Exact final model and independently registered original legacy HTTP assertions in #242 (`43337fc`); 1,122 tests, complete SQLx, format, offline lints and full Nix passed; canonical fixture remainder and specification hunks separately preserved |
 | `5ec183a` | Fence time-entry writes against account deactivation | time-writer-activity | Source/tests and regenerated cache in #241 (`7820f8d`), original configuration SQL inlined without canonical module; 1,142 tests, both offline lints and full Nix passed; specification hunks retained |
-| `228e151` | Clarify timesheet context and locked calendar behavior | specification-history | Held in original backup; extraction pending |
+| `228e151` | Clarify timesheet context and locked calendar behavior | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `4294aa3` | Isolate permission browser fixtures and retain test assets | browser-fixture-tooling | Held in original backup; extraction pending |
 | `3308926` | Keep permission profile name uniqueness independent of database locale | permission-storage | Migration/storage regressions in #222; command lookup changes remain with template commands |
-| `8af562e` | Record passing permission regression gates | specification-history | Held in original backup; extraction pending |
+| `8af562e` | Record passing permission regression gates | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `9b53182` | Verify profile capacity and confirm timesheet discovery | permission-editor, specification-history, time-readers | Held in original backup; extraction pending |
 | `60f60f9` | Add scoped Timesheet person discovery | time-readers | Held in original backup; extraction pending |
 | `5faed76` | Bind Timesheet page reads to requester and subject | time-readers | Held in original backup; extraction pending |
@@ -389,19 +401,19 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `a0632a8` | Bind Timesheet navigation and actions to the selected person | timesheet-consumer-commands | Held in original backup; extraction pending |
 | `b8b1c60` | Bind weekly submission to the active Timesheet context | timesheet-consumer-commands | Held in original backup; extraction pending |
 | `8722320` | Add browsable permission change history | permission-audit | Own-reader authentication-error sanitization in #244 (`6c4e4d1`); audit reader/UI/navigation, Settings link, profile labels and shell tests extracted in `c96d787`; original editor-dependent browser assertions retained for verification reconciliation; specification hunks retained |
-| `2078a13` | Format permission history verification notes | specification-history | Held in original backup; extraction pending |
+| `2078a13` | Format permission history verification notes | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `2f5357f` | Verify permission history and scoped Timesheet browser flows | browser-fixture-tooling, permission-audit, timesheet-consumer-commands, permission-editor | Held in original backup; extraction pending |
 | `68bbaae` | Fix Timesheet modal focus and long-label layout | timesheet-consumer-commands | Held in original backup; extraction pending |
 | `e29f4d8` | Reload Timesheet state when switching people | timesheet-consumer-commands | Held in original backup; extraction pending |
 | `5f7895c` | Preserve selected dates and drag offsets in Timesheet | timesheet-consumer-commands | Held in original backup; extraction pending |
 | `84d5352` | Expose authenticated project manager delegation | project-manager-delegation | DTOs, session wrappers, reader and tests in #243 (`3404c85`); one web-only DTO lint expectation is the recorded extraction adaptation; HTTP audit-visibility block and audit-fixture adaptation remain owned by permission-audit delivery; specification hunks retained |
-| `c4e83c8` | Record project delegation verification and next integration gate | specification-history | Held in original backup; extraction pending |
+| `c4e83c8` | Record project delegation verification and next integration gate | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `a25e544` | Serialize invoice writes before user revocation | legacy-access-writers | Five Rust/test changes and eight SQLx additions in #233 on integrated #220/#227/#228/#232 prerequisites; suite/cache/offline lints/full Nix passed; specification hunks retained |
-| `774f60a` | Record invoice revocation verification and next integration gates | specification-history | Held in original backup; extraction pending |
+| `774f60a` | Record invoice revocation verification and next integration gates | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `1879b8a` | Preserve requester identity when reloading permission editors | permission-editor | Held in original backup; extraction pending |
-| `dab6885` | Record editor reload verification and remaining directory integration | specification-history | Held in original backup; extraction pending |
+| `dab6885` | Record editor reload verification and remaining directory integration | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `ee16165` | Connect scoped People directory and requester-bound editing | people-directory | Held in original backup; extraction pending |
-| `1b41033` | Record People integration verification and remaining report scope | specification-history | Held in original backup; extraction pending |
+| `1b41033` | Record People integration verification and remaining report scope | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `75f13a1` | Add scoped detailed time report reads | time-report-readers | Held in original backup; extraction pending |
 | `cbc78a8` | Apply scoped permissions to time report spreadsheets | time-report-exports | Held in original backup; extraction pending |
 | `09bd15f` | Apply scoped permissions to streamed time exports | time-report-exports | Native stored-row decoder in #222; streamed exports and remaining hunks retained |
@@ -416,7 +428,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `de8f9ad` | Filter time reports to active projects | time-report-consumer | Held in original backup; extraction pending |
 | `2497dbe` | Enforce scoped permissions in the project editor | project-editor-permissions | Pure RateEdit code/tests in #221; composable delegation and its transaction tests in `be787ca`; project editor and remaining hunks retained |
 | `2631186` | Enforce scoped project reads across pages and exports | project-read-permissions | Held in original backup; extraction pending |
-| `1b81680` | Record project permission delivery acceptance | specification-history | Held in original backup; extraction pending |
+| `1b81680` | Record project permission delivery acceptance | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `f6e8bf1` | Enforce task catalog and tracking read permissions | task-permissions-lifecycle | Held in original backup; extraction pending |
 | `8dd61d4` | Enforce current task creation and project scope permissions | task-permissions-lifecycle | Held in original backup; extraction pending |
 | `facfb49` | Protect task rate edits with explicit intent and current permissions | task-permissions-lifecycle | Held in original backup; extraction pending |
@@ -2767,3 +2779,86 @@ with exact evidence and its dependency on #247. Collect the four existing Nix
 handles at reasonable intervals. Documentation ownership, canonical consumers,
 editor/UI and unpublished Clients remain required. This iteration is PROGRESS;
 the overall goal remains incomplete.
+
+### Specification preservation published; preflight browser timeout isolated
+
+The previous goal turn was PROGRESS: source CSV extraction, provenance review,
+scoped analysis and the ledger were committed. Re-read the saved objective and
+confirmed `47215`, `99785`, `56923`, `99711` and `32625` live. CSV `47215` has
+finished compilation and is executing its 916-test app binary; no final suite
+or cache result is claimed yet. The shared local Cargo target remains occupied.
+
+Created documentation-only worktree `.worktrees/permission-specification`,
+branch `docs/permission-specification`, on master `1b8fa4f`. Preservation commit
+`c47199296c755be19023e1c2de8a38c0d148ebe3` contains all 54 original committed
+feature-015 documents byte-for-byte from `db3935d` (21,814 existing lines,
+including historical research and verification records). No original worktree
+or dirty Clients file was copied over or cleared.
+
+Read the Spec Kit analyze instructions and ran the feature-015 prerequisite
+script in its original worktree, with no hooks or feature-selector changes.
+The extracted committed artifacts, not that worktree's newer unpublished
+Clients edits, are the documentation source. Bounded extraction review found
+two contextual risks: the absent proposed constitution could be mistaken for
+the authoritative version, and historical task/test statements could be mistaken
+for current-head verification. These are documentation-provenance findings, not
+new product decisions or a claim of full-feature analysis completion.
+
+Follow-up `c77abf9edd5ba7a924ce934b114961af920a5fa4` clarifies the spec, plan,
+tasks, research, progress and quickstart. It leaves the full requirement and
+task statements unchanged, explicitly keeps constitution 1.0.0 authoritative,
+and identifies #218 as the only current separation record. Original logs remain
+historical; process IDs in them are not live handles or new next actions.
+Applied only the original New Project permission-transition hunks on top of
+master's file: new expense inclusion, expense/time currency distinctions and
+FR-026 remain intact. No code, schema, cache, design, README, AGENTS or selector
+change is included.
+
+Read-only verifier `27861` passed: all 54 preservation blobs match, 48 documents
+are still unchanged, six have contextual notes, all 43 functional requirements
+and success criteria are identical, and all 236 unique task lines retain text
+and state (208 checked historically, 28 open). The exact three original New
+Project diff hunks compose over current master, with no other edit. There are
+55 changed Markdown paths and zero application/governance changes. Formatting
+`56406` passed unchanged; diff whitespace checks passed. Published draft
+[#248](https://github.com/numtide/horae/pull/248), confirmed by `54903` exit zero.
+Full flake/remote checks and final cross-PR reconciliation remain pending. No
+fresh Harvest verification or completed permission implementation is claimed.
+
+All 50 documentation-only commit rows now name #248 for their final feature
+document state. The general ownership rule also covers specification hunks in
+mixed commits. Original history and discarded intermediate wording remain
+recoverable in the verified refs/bundle. Governance/selector exceptions and
+the still-unpublished Clients documents are explicit, not silently omitted.
+
+#246 full Nix `99711` exited 1 on `ff482c8`. Its complete browser log at
+`/nix/store/2xkgr1s2wbiqpqsfcxlyr50lnc2kz992-horae-browser-checks.drv` shows the
+preceding suites passing, then inherited `project-edit.cjs` timing out after
+five seconds while reloading the saved project at 390px. The ARIA snapshot is
+`Loading project…`, not a denied or wrong-value result. This observation does
+not establish the timeout's cause.
+
+Read the full editor test and disposable runner. Unchanged focused sequence
+`new-project-transport project-edit`, handle `97035`, passed on the exact failed
+package `/nix/store/y6alrw4vmcill044y7r0vj2bz18niw7s-horae-0.1.0/bin/horae`.
+It verified 390/768/1440px edit/save/reload, original history and identity,
+configured monetary values, dirty-navigation protection, acknowledgement-loss
+replay and concurrent-edit recovery. No source, assertion or timeout changed.
+Started one complete unchanged-head rerun `41382`; the original failure stays
+recorded, its root cause remains unproven, and no full pass is claimed. #246's
+PR body now records both results and the pending rerun.
+
+Next collect CSV `47215` and complete its prepared cache-provenance/offline/full
+gates before publishing. Collect #246 rerun `41382` and existing final-head
+Nix `99785`/#240, `56923`/#245 and `32625`/#247 without restarts. Finish #248's
+required checks and reconcile remaining README/AGENTS/governance ownership.
+Canonical consumers/editor/UI and unpublished Clients still need disposition.
+This iteration is PROGRESS; no merge, original closure or real-data change.
+
+CSV `47215` subsequently completed its workspace suite successfully on source
+`9f2994d`: 905 app, 180 integration and 160 core tests passed (1,245 total),
+with the same 11 existing manual tests ignored. Complete SQLx preparation is
+now running in that same handle/private database. No failure or assertion
+weakening occurred. Do not start local offline lint or validate a partial cache
+until preparation exits. Ledger formatting `49784` passed unchanged; #246 body
+update `78194` exited zero.
