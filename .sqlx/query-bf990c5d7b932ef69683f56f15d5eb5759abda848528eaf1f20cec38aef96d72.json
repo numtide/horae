@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "LOCK TABLE organizations IN SHARE MODE",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "bf990c5d7b932ef69683f56f15d5eb5759abda848528eaf1f20cec38aef96d72"
+}
