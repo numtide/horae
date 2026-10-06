@@ -1,0 +1,60 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id,actor_user_id,operator_id,operator_command,format_version,audit,\n                  created_at AS \"created_at: DateTime<Utc>\"\n           FROM permission_change_receipts\n           WHERE org_id=$1\n             AND ($2::timestamptz IS NULL OR (created_at,id)<($2,$3))\n           ORDER BY created_at DESC,id DESC LIMIT 26",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "actor_user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "operator_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "operator_command",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "format_version",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "audit",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "d63ed3c69fa8ccf74a25f750c899495339e32d63e558481a04f2e0fcf8293c95"
+}

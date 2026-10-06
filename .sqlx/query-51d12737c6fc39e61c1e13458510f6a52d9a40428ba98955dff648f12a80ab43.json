@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE permission_change_receipts SET audit='{}'::jsonb WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "51d12737c6fc39e61c1e13458510f6a52d9a40428ba98955dff648f12a80ab43"
+}
