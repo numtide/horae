@@ -119,9 +119,9 @@ Clients MVP as canonical-permission acceptance.
 | Approval tenant isolation, [#239](https://github.com/numtide/horae/pull/239) | `fix/approval-tenant-isolation`, `.worktrees/approval-tenant-isolation` | Master `1b8fa4f` | Draft at `66a256f`; three source/test files and complete cache patch preserved exactly; 1,124 source-head tests, source review, SQLx, format and offline server/WASM Clippy passed; full current-head local Nix passed |
 | Identity response projections, [#240](https://github.com/numtide/horae/pull/240) | `fix/identity-response-projections`, `.worktrees/identity-response-projections` | Master `1b8fa4f` | Draft at `1ce993f`; 1,122 source-head tests, cache provenance, bounded review and format passed; cache-inclusive server/WASM lint passed; full Nix `16586` running; no activation |
 | Time-writer account activity, [#241](https://github.com/numtide/horae/pull/241) | `fix/time-write-activity`, `.worktrees/time-write-activity` | #228 `0e1e675` | Draft at `7820f8d`; 1,142 tests, cache provenance, bounded review, format, offline server/WASM lint and full Nix `85167` passed; prerequisite integration/retarget/current-head CI still required; no delegated writes or activation |
-| Time-entry invoice identity boundary, [#242](https://github.com/numtide/horae/pull/242) | `fix/time-entry-payload`, `.worktrees/time-entry-payload` | Master `1b8fa4f` | Draft at `43337fc`; 1,122 tests, cache/source provenance, bounded review, format and offline server/WASM lint passed; full Nix `73808` running; no policy or UI change |
+| Time-entry invoice identity boundary, [#242](https://github.com/numtide/horae/pull/242) | `fix/time-entry-payload`, `.worktrees/time-entry-payload` | Master `1b8fa4f` | Draft at `43337fc`; 1,122 tests, cache/source provenance, bounded review, format, offline server/WASM lint and full Nix `73808` passed; current-head GitHub checks/delivery review remain; no policy or UI change |
 | Session-bound project-manager delegation, [#243](https://github.com/numtide/horae/pull/243) | `feat/project-manager-delegation`, `.worktrees/project-manager-delegation` | Review base `e44433e` combining #234/#228 | Draft at `3404c85`; 1,295 tests/cache passed before web-only lint adaptation; final WASM lint passed, current-head full Nix `87574` running; last offline server pass `9c6b121`, final-head server check pending; no form wiring or activation |
-| Own-permission explanation and Settings | `feat/own-permission-settings`, `.worktrees/own-permission-settings` | #234 `45d219e` | Local source `0b0da87`; eight complete original files preserved, scoped review/Spec Kit analysis/format/detector passed; disposable suite/cache `50483` running; PR and browser verification pending; no activation |
+| Own-permission explanation and Settings, [#244](https://github.com/numtide/horae/pull/244) | `feat/own-permission-settings`, `.worktrees/own-permission-settings` | #234 `45d219e` | Draft at `6c4e4d1`; 1,273 Rust tests, complete SQLx provenance, eight original-file comparisons, scoped review/Spec Kit analysis/format/detector passed; offline lint `53333` and full Nix `19313` running, new isolated browser coverage pending; no activation |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -338,7 +338,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `482b7c5` | Retain the original requester of import jobs | import-requester-provenance | Seven original source/schema/test paths and exact regenerated cache patch in #237 on combined #236/#222 prerequisites; 1,218 tests, schema order, cache, offline lints and format passed; full Nix passed on unchanged diagnostic rerun; initial inherited-menu failure retained; specification hunks retained |
 | `e949e4c` | Drain interrupted import transactions before releasing reservations | import-transaction-lifecycle | Production/test/cache hunks in #224; specification hunks retained for reconciliation |
 | `c0cfb8f` | Scope rate permissions to their owning resource | scope-domain | Code/tests in #221; specification hunks retained for reconciliation |
-| `5d51b0e` | Expose the current person's permission snapshot | own-permissions | Reader, DTO, complete DB/HTTP tests and registrations extracted in local `0b0da87` on #234; suite/cache running, PR pending; specification hunks retained |
+| `5d51b0e` | Expose the current person's permission snapshot | own-permissions | Reader, DTO, complete DB/HTTP tests and registrations in #244 (`6c4e4d1`) on #234; 1,273 Rust tests and cache provenance passed, lints/Nix running; specification hunks retained |
 | `22ffdab` | Recheck manager access for financial snapshots | manager-snapshot-consumers | Shared helper/queries in #220; consumer/tests/cache in #232, local suite, both target lints and full Nix passed; specification hunks retained |
 | `15c82ef` | Recheck manager access in invoice editor snapshots | manager-snapshot-consumers | Consumer/tests/cache in #232; fixture adaptations documented, local suite, both target lints and full Nix passed; specification hunks retained |
 | `dc822a0` | Recheck manager authority before delivering exports | export-authority | Held in original backup; extraction pending |
@@ -346,7 +346,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `dcf4ac8` | Recheck current permissions during CSV downloads | export-authority | Held in original backup; extraction pending |
 | `0793ce7` | Revalidate budget email authority before delivery | budget-email-authority | Four source/test files byte-identical in #238 (`7a7cede`) on master `1b8fa4f`; 1,133 tests, SQLx, format and offline server/WASM lints passed; full local Nix passed; specification hunks retained |
 | `8aac739` | Add read-only permission migration diagnostics | permission-preflight | Held in original backup; extraction pending |
-| `8c15bfe` | Show own permissions in Settings | own-permissions | Complete original component, shared descriptions, SSR and resource tests extracted in local `0b0da87`; suite/cache and visual verification pending, no full T018 claim; specification hunks retained |
+| `8c15bfe` | Show own permissions in Settings | own-permissions | Complete original component, shared descriptions, SSR and resource tests in #244 (`6c4e4d1`); suite/cache passed, new isolated browser verification pending, no full T018 claim; specification hunks retained |
 | `300d1e9` | Expose administrator permission history | permission-audit | Held in original backup; extraction pending |
 | `03e90b1` | Connect permission editor previews and commands | permission-editor | Template DTOs, hardening/tests and administration helpers in #226; profile DTOs, shared calculation and command hardening/tests in #234; editor/session/remaining hunks retained |
 | `7f7fd1c` | Record permission editor delivery and UI follow-up | specification-history | Held in original backup; extraction pending |
@@ -370,7 +370,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `4c00660` | Document project form permission integration boundaries | specification-history | Held in original backup; extraction pending |
 | `3bb62ac` | Limit session identity responses to display fields | identity-projections | Source/tests together in #240 at `1ce993f`; 1,122 tests, regenerated cache, format and offline lints passed; full Nix running; canonical tests and mixed specification hunks separately preserved |
 | `4ac30fa` | Add scoped time-entry reads without financial metadata | time-readers | Held in original backup; extraction pending |
-| `c80233b` | Keep invoice identities out of time-entry responses | time-entry-payload | Exact final model and independently registered original legacy HTTP assertions in #242 (`43337fc`); 1,122 tests, complete SQLx, format and offline lints passed; full Nix running; canonical fixture remainder and specification hunks separately preserved |
+| `c80233b` | Keep invoice identities out of time-entry responses | time-entry-payload | Exact final model and independently registered original legacy HTTP assertions in #242 (`43337fc`); 1,122 tests, complete SQLx, format, offline lints and full Nix passed; canonical fixture remainder and specification hunks separately preserved |
 | `5ec183a` | Fence time-entry writes against account deactivation | time-writer-activity | Source/tests and regenerated cache in #241 (`7820f8d`), original configuration SQL inlined without canonical module; 1,142 tests, both offline lints and full Nix passed; specification hunks retained |
 | `228e151` | Clarify timesheet context and locked calendar behavior | specification-history | Held in original backup; extraction pending |
 | `4294aa3` | Isolate permission browser fixtures and retain test assets | browser-fixture-tooling | Held in original backup; extraction pending |
@@ -384,7 +384,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `02c4245` | Authorize person-bound Timesheet commands atomically | timesheet-consumer-commands | Held in original backup; extraction pending |
 | `a0632a8` | Bind Timesheet navigation and actions to the selected person | timesheet-consumer-commands | Held in original backup; extraction pending |
 | `b8b1c60` | Bind weekly submission to the active Timesheet context | timesheet-consumer-commands | Held in original backup; extraction pending |
-| `8722320` | Add browsable permission change history | permission-audit | Own-reader authentication-error sanitization extracted in `0b0da87`; audit reader/UI/navigation, Settings audit link and shared profile labels preserved for audit delivery; specification hunks retained |
+| `8722320` | Add browsable permission change history | permission-audit | Own-reader authentication-error sanitization in #244 (`6c4e4d1`); audit reader/UI/navigation, Settings audit link and shared profile labels preserved for audit delivery; specification hunks retained |
 | `2078a13` | Format permission history verification notes | specification-history | Held in original backup; extraction pending |
 | `2f5357f` | Verify permission history and scoped Timesheet browser flows | browser-fixture-tooling, permission-audit, timesheet-consumer-commands, permission-editor | Held in original backup; extraction pending |
 | `68bbaae` | Fix Timesheet modal focus and long-label layout | timesheet-consumer-commands | Held in original backup; extraction pending |
@@ -2146,3 +2146,59 @@ verify cache provenance, run offline lints and full Nix, then publish a scoped
 draft with explicit browser limitations. Continue with audit history afterwards,
 restoring #243's deferred audit-denial assertions. This iteration is PROGRESS;
 the overall separation is still incomplete. No merges or original closures.
+
+### Own-permission delivery published; isolated browser verification added
+
+Previous iteration is PROGRESS: the original own-permission flow was extracted
+and the delegation lint boundary corrected. This iteration revalidated #216 as
+merged and polled the existing live handles without restarting them. #242 full
+Nix `73808` exited zero on `43337fc`, including browser and VM gates; its PR body
+now records the confirmed result. #240 `16586` remains live and quiet. A read-only
+diagnostic retrieved an empty current browser-derivation log; that supplies no
+failure diagnosis or reason to restart the live check.
+
+Own-permission suite/cache `50483` exited zero: 893 app + 191 integration + 189
+core = 1,273 tests; 11 existing manual tests ignored. Source under test is
+`0b0da87`; browser-only follow-up `12cac34` does not alter that Rust source.
+Complete regeneration retains all 1,098 base SQLx descriptors byte-for-byte and
+adds 26 identical to final original `db3935d`, 1,124 total, no removals or modified
+descriptors. Unsigned cache commit `6c4e4d134b9c2924085e56d504c3a684752fb7c4`.
+
+Inspection of the original browser suite found its Settings visit only exercises
+the later audit link, not this independent own-permission consumer. Added the
+bounded `own-permissions.cjs` verification and registered it in the existing
+disposable runner (`12cac34`, 113 additions/one deletion, no production edits).
+The test validates the private test socket/URL before fixture writes, exercises
+real session reads, legacy-to-canonical explanation, exact grants, independent
+administrator identity, native keyboard refresh, pending-content suppression,
+invalid-state recovery and deactivation. Geometry checks cover both themes,
+320/390/768/1440 widths, a short viewport and CSS zoom 2. This last case is not
+native text zoom. Optional two-theme screenshots are available for inspection.
+Fixtures are restored before the runner stops its temporary PostgreSQL.
+
+Node syntax `7136` and formatting `32758` passed; no rendered-browser pass is
+claimed yet. This is verification of preserved functionality, not a new feature.
+The original files, legacy controls and CSS remain unchanged. The broader T018
+Workspace/native text-zoom/full visual acceptance is still separate.
+
+Published draft [#244](https://github.com/numtide/horae/pull/244), stacked on #234's
+`refactor/person-profile-commands` (`45d219e`), head `6c4e4d1`: 42 files (16
+source/test/registration files plus 26 SQLx), 1,674 additions and one deletion.
+Offline server/WASM lint `53333` and full clean-head Nix `19313` are running on
+that exact head. The full gate includes the new isolated browser test. The shared
+local Cargo target is occupied by `53333`; do not overlap another local build.
+
+Next collect those results and inspect the optional Settings captures using the
+built package once available. Continue the coherent audit-history extraction on
+#243 + #244: source inventory confirms its backend/UI derive from `fc85231`,
+`300d1e9` and `8722320`. The `8722320` admin-shell revision gates only Audit with
+own canonical identity and preserves the incumbent People/Importers guards;
+later People/Tasks shell changes must retain their separate ownership. Restore
+the deferred Settings audit link, profile labels and #243 audit-denial assertions
+with those endpoints. No audit implementation is claimed in this iteration.
+
+This iteration is PROGRESS: #244 is published with full Rust/cache evidence and
+explicit browser/lint/Nix limitations; #242's full gate is now confirmed. #243
+current-head Nix `87574` and #240 `16586` remain live. Original tracked backup
+comparison still passes. No merges, original closures, policy activation or real
+data changes; the overall separation remains incomplete.
