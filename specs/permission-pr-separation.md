@@ -115,8 +115,8 @@ Clients MVP as canonical-permission acceptance.
 | Harvest connection change authority, [#235](https://github.com/numtide/horae/pull/235) | `fix/harvest-connection-authority`, `.worktrees/harvest-connection-authority` | #228 `0e1e675` | Draft at `2fcecd1`; 1,146 tests, SQLx, offline server/WASM Clippy, format and full local Nix passed; retarget after #227/#228 |
 | Import job command and download authority, [#236](https://github.com/numtide/horae/pull/236) | `fix/import-job-authority`, `.worktrees/import-job-authority` | Integration base `26d6159` combining #235/#231 | Draft at `95bdf4a`; 1,163 tests, SQLx, offline server/WASM Clippy and format passed; full Nix running; retarget to master after #227/#228/#235 and #231, not an integration-base merge |
 | Original import requester provenance, [#237](https://github.com/numtide/horae/pull/237) | `feat/import-job-requester`, `.worktrees/import-job-requester` | Integration base `cfb8240` combining #236/#219/#222 | Draft at `2242361`; 1,218 tests, schema upgrade, SQLx, offline server/WASM Clippy and format passed; full Nix running; retarget after both prerequisite chains, no worker-policy activation |
-| Budget email preparation authority, [#238](https://github.com/numtide/horae/pull/238) | `fix/budget-email-authority`, `.worktrees/budget-email-authority` | Master `1b8fa4f` | Draft at `7a7cede`; 1,133 source-head tests, SQLx and format passed; offline lints and full current-head Nix pending; no real mail or policy activation |
-| Approval tenant isolation | `fix/approval-tenant-isolation`, `.worktrees/approval-tenant-isolation` | Master `1b8fa4f` | Local unsigned `d72b830`; three source/test files preserved exactly, source review and format passed; runtime/cache/lints/publication pending |
+| Budget email preparation authority, [#238](https://github.com/numtide/horae/pull/238) | `fix/budget-email-authority`, `.worktrees/budget-email-authority` | Master `1b8fa4f` | Draft at `7a7cede`; 1,133 source-head tests, SQLx, format and cache-inclusive server/WASM Clippy passed; full current-head Nix running; no real mail or policy activation |
+| Approval tenant isolation | `fix/approval-tenant-isolation`, `.worktrees/approval-tenant-isolation` | Master `1b8fa4f` | Local unsigned `d72b830`; three source/test files preserved exactly, source review and format passed; runtime/cache running, lints/publication pending |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -339,7 +339,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `dc822a0` | Recheck manager authority before delivering exports | export-authority | Held in original backup; extraction pending |
 | `108594e` | Revalidate project scope before delivering exports | export-authority | Held in original backup; extraction pending |
 | `dcf4ac8` | Recheck current permissions during CSV downloads | export-authority | Held in original backup; extraction pending |
-| `0793ce7` | Revalidate budget email authority before delivery | budget-email-authority | Four source/test files byte-identical in #238 (`7a7cede`) on master `1b8fa4f`; 1,133 tests, SQLx and format passed; offline lints/full Nix pending; specification hunks retained |
+| `0793ce7` | Revalidate budget email authority before delivery | budget-email-authority | Four source/test files byte-identical in #238 (`7a7cede`) on master `1b8fa4f`; 1,133 tests, SQLx, format and offline server/WASM lints passed; full Nix running; specification hunks retained |
 | `8aac739` | Add read-only permission migration diagnostics | permission-preflight | Held in original backup; extraction pending |
 | `8c15bfe` | Show own permissions in Settings | own-permissions | Held in original backup; extraction pending |
 | `300d1e9` | Expose administrator permission history | permission-audit | Held in original backup; extraction pending |
@@ -1628,3 +1628,17 @@ once notification lints release the shared local target.
 
 Recompared the original tracked backup and untracked archive: both remain intact.
 No merges, original PR closures, production-data changes or real emails occurred.
+
+Notification offline server lint (`98267`, 3m35s) and WASM lint (`43884`, 57s)
+passed on cache-inclusive `7a7cede` without source changes. Updated #238's body;
+remote inspection confirms draft status, master base, exact head
+`7a7cede9d9ad8457e7bd78f049830d3144b468ac` and the bounded 58-file diff. Its full
+Nix handle `24069` remains live, alongside #236 `65754` and #237 `63735`.
+
+Released the shared local target and started approval isolation suite followed
+by complete SQLx regeneration in `78215`, using the existing disposable-database
+wrapper. Next: collect that run, verify cache provenance, run offline lints,
+commit generated metadata unsigned, publish an independent draft and start its
+clean-head Nix gate. Do not start another local Cargo process before `78215`
+terminates. The original branches/backups and remaining specification/UI/domain
+groups are not changed or declared complete by this progress.
