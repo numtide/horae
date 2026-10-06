@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users SET active=false, oidc_subject='private-subject',cost_rate_cents=12345,billable_rate_cents=54321 WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c8320eb042c75c566dc4ce0b9da2769be62fd19fcadee99f73c9d8dbe008f86c"
+}
