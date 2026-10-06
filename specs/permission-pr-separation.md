@@ -1868,3 +1868,28 @@ all assertions when registering it independently in the existing singleton
 HTTP harness. Current-master time UI uses state, not `invoice_id`; invoice
 recovery and the Harvest compatibility API use distinct models. No payload
 extraction has been created yet and this consumer inventory is not runtime proof.
+
+Time suite/cache `64428` exited zero: 841 app, 180 integration and 121 core tests
+(1,142 passed; 11 existing manual tests ignored). All five extracted regressions
+and existing submission, task-revocation, user-access and invoice tests pass on
+source `3ea235fa271d9caf3de9674cba949b9c7fb4e118`. Full SQLx regeneration
+retains all 1,031 base descriptors unchanged and adds 11, each byte-identical to
+`5ec183a`; six were already present in its original parent. No removals or
+modified base descriptors. Unsigned cache commit
+`7820f8da64ef52169c23e2967a3c16a1a74070a8`.
+
+Published draft [#241](https://github.com/numtide/horae/pull/241), stacked on
+`fix/project-access-lock-order` (#228). Its 15-file diff contains four source/test
+files and 11 generated descriptors, 614 insertions and 22 deletions. Required
+integration order is #227 → #228 → #241; retarget and revalidate after prerequisites
+land. Combined offline server/WASM lint `74243` and clean-head full Nix `85167`
+are live on `7820f8d`, not counted as passed. The shared local Cargo target is
+owned by `74243`. #240 full Nix `16586` remains live, with its test derivation
+passed but no whole-flake completion yet.
+
+This iteration is progress: original time-writer work is now isolated, published,
+source-accounted and suite/cache-verified; #238/#239 full local Nix results are
+recorded in their PRs. Next collect the live gates and continue the separately
+inventoried time-entry payload boundary without importing canonical reader setup.
+Remaining original feature/UI/specification/governance hunks and unfinished local
+Clients work still prevent completion of the overall separation goal.
