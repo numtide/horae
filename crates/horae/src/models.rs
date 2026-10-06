@@ -6,12 +6,12 @@ mod jobs;
 pub mod organization;
 #[cfg(feature = "server")]
 pub(crate) mod permission_audit;
-#[cfg(feature = "server")]
 pub(crate) mod permission_editor;
 #[cfg(feature = "server")]
 pub(crate) mod permissions;
 pub mod project;
 pub mod project_creation;
+pub mod project_managers;
 pub mod task;
 pub mod time_entry;
 pub mod user;
