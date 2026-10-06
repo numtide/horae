@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT pid FROM pg_stat_activity WHERE datname = current_database()\n         AND $1 = ANY(pg_blocking_pids(pid))",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pid",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "0bb70599ad08a40d4e8d21fa62c6a5deb350dfaecf909f192e85126ea3366ddb"
+}

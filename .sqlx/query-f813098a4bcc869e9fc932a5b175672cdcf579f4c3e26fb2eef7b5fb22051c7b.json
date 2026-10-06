@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id FROM permission_change_receipts WHERE org_id=$1 ORDER BY created_at DESC,id DESC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f813098a4bcc869e9fc932a5b175672cdcf579f4c3e26fb2eef7b5fb22051c7b"
+}

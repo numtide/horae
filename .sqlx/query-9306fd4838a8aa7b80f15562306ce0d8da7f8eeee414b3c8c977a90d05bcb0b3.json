@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT pg_cancel_backend(pid) FROM pg_stat_activity WHERE datname=current_database() AND $1 = ANY(pg_blocking_pids(pid))",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pg_cancel_backend",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "9306fd4838a8aa7b80f15562306ce0d8da7f8eeee414b3c8c977a90d05bcb0b3"
+}
