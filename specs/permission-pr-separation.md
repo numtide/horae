@@ -98,7 +98,8 @@ Clients MVP as canonical-permission acceptance.
 | Delivery | Branch/worktree | Base | Status / acceptance |
 | --- | --- | --- | --- |
 | Separation ledger | `docs/permission-pr-separation`, `.worktrees/permission-pr-separation` | `02f7b58` | Inventory recorded; no completed-extraction claim |
-| Legacy report/invoice readers from #217 | `fix/report-reader-authority-master`, `.worktrees/report-reader-authority-master` | `02f7b58` | Code and original regression tests extracted locally; first focused run compiling; new-head checks pending |
+| Legacy report/invoice readers from #217 | `fix/report-reader-authority-master`, `.worktrees/report-reader-authority-master` | `02f7b58` | Full workspace suite passed: 1,127 tests, 11 pre-existing ignored scale/stress cases; SQLx/lint/Nix checks pending |
+| Pure record scopes and grant catalog, [#219](https://github.com/numtide/horae/pull/219) | `refactor/permission-domain-foundation`, `.worktrees/permission-domain-foundation` | `02f7b58` | Draft at `ec7ddbd`; 158 core tests, core Clippy and formatting passed; full CI pending; no runtime integration |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -140,6 +141,14 @@ Historical tests on `5faed76` do not prove this extraction.
 
 ### Shared foundations and migration constraints
 
+- First domain delivery contains `AccessScope`, the grant catalog, built-in
+  selections and strict restoration of saved selections. Its five new files
+  match `524c29e` exactly; the only adaptation is adding `pub mod permissions`
+  to the current core root while preserving #216's `client` module.
+  This accounts for the code/test hunks of `a7727f1`, `e8dcb77` and `524c29e`;
+  their specification hunks remain preserved for specification reconciliation.
+  The later profile-name validator from `ec35446` stays with profile storage;
+  person-management, rates and approval coverage are separate dependants.
 - Pure scope/catalog/rate/approval-record rules can be evaluated separately
   from runtime policy activation.
 - Storage and command receipts/assignment models precede canonical consumers.
@@ -248,7 +257,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | --- | --- | --- | --- |
 | `05448a8` | Specify scoped roles and permissions | specification-history | Held in original backup; extraction pending |
 | `1d45191` | Require Harvest parity for permissions and scoped approvals | specification-history | Held in original backup; extraction pending |
-| `a7727f1` | Add record scope evaluation for permissions | scope-domain | Held in original backup; extraction pending |
+| `a7727f1` | Add record scope evaluation for permissions | scope-domain | Code/tests in #219; specification hunks retained for reconciliation |
 | `2abce9a` | Enforce approval isolation and record permission boundaries | approval-isolation | Held in original backup; extraction pending |
 | `757f43d` | Enforce tenant and administrator boundaries for assignments | legacy-access-writers | Held in original backup; extraction pending |
 | `d3a4ff3` | Document profile reapplication and import permission boundaries | specification-history | Held in original backup; extraction pending |
@@ -259,7 +268,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `6ce9071` | Document expense action scope and independent lock states | specification-history | Held in original backup; extraction pending |
 | `b8b105e` | Document current-account permission research and evidence gaps | specification-history | Held in original backup; extraction pending |
 | `6443d56` | Record current Harvest permission evidence and reference conflicts | specification-history | Held in original backup; extraction pending |
-| `e8dcb77` | Add typed permission catalog and built-in profile selections | scope-domain | Held in original backup; extraction pending |
+| `e8dcb77` | Add typed permission catalog and built-in profile selections | scope-domain | Code/tests in #219; specification hunks retained for reconciliation |
 | `b80f8ab` | Recheck administrator authority during user access changes | legacy-access-writers | Held in original backup; extraction pending |
 | `b7e730c` | Define permission persistence and transactional access contracts | specification-history | Held in original backup; extraction pending |
 | `412035d` | Map permission operations and transaction constraints | specification-history | Held in original backup; extraction pending |
@@ -279,7 +288,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `eb85bc1` | Specify migration preservation checks for assignment dependencies | specification-history | Held in original backup; extraction pending |
 | `b8a1ef5` | Record pending person-management policy decision | specification-history | Held in original backup; extraction pending |
 | `3cc9afe` | Restrict person-management assignment changes to administrators | specification-history | Held in original backup; extraction pending |
-| `524c29e` | Reject malformed stored permission selections | scope-domain | Held in original backup; extraction pending |
+| `524c29e` | Reject malformed stored permission selections | scope-domain | Code/tests in #219; specification hunks retained for reconciliation |
 | `ec9408b` | Record pending person-assignment eligibility decision | specification-history | Held in original backup; extraction pending |
 | `d965718` | Require compatible grants for new person-management assignments | specification-history | Held in original backup; extraction pending |
 | `0c56dc6` | Document managed-person removal on Harvest role downgrade | specification-history | Held in original backup; extraction pending |
@@ -440,7 +449,64 @@ no existing database is used. It reuses ignored Cargo artifacts, not source
 files, from the existing target directory. No test has been declared passed
 while dependency compilation is still running.
 
-Next: collect the live focused run; verify the authenticated HTTP cases and
-#216 client regressions; regenerate SQLx and run offline/lint/Nix gates.
+### 2026-10-06 — Focused reader regressions passed
+
+Session `63131` completed successfully: all seven snapshot reader tests passed
+(2.96 seconds after the initial 10m57s build). They exercise all three readers,
+both revocation orders, direct and organization-gated writers, tenant/filter/
+not-found behavior, coherent invoice headers/lines, cancellation and inherited
+connection settings. Other test binaries were filtered, not verified by this run.
+
+`nix fmt` completed successfully, changing only the new snapshot module's
+formatting. The post-format full workspace server/core suite is running in
+session `71462`, through the same disposable-database wrapper. This includes
+the registered HTTP harness and #216's client regressions; no result is claimed
+until it finishes. No original source worktree was changed.
+
+Next: collect the full suite, regenerate SQLx and run offline/lint/Nix gates.
 Review and publish the scoped PR only with honest readiness/evidence, then
-continue the remaining behavior groups. Do not alter the original branches.
+continue the remaining behavior groups. The next foundation candidate is the
+pure scope/catalog code: retain master’s new `client` module when adding
+`permissions`, and leave rates/approval/person-management consumers with their
+actual dependencies. Do not copy the old core module root wholesale.
+
+### 2026-10-06 — Pure scope/catalog extraction started
+
+Created `refactor/permission-domain-foundation` independently from `02f7b58`.
+Reused the existing source and tests without changing their semantics. Reviewed
+the existing `record-scope.md` and `grant-catalog.md` contracts: coverage denies
+inactive/foreign/misattributed facts, assignments alone grant nothing, saved
+selections reject missing prerequisites rather than adding authority, and an
+Administrator selection does not prove Administrator identity. There are no
+runtime callers in this delivery and no legacy role conversion or activation.
+
+Core tests run in session `34224` with a separate temporary Cargo target, so
+the reader suite's binaries and artifact lock are not disturbed. Formatting
+check is session `29855`. Results and the resulting PR are still pending.
+
+### 2026-10-06 — Full reader suite and foundation delivery
+
+Reader session `71462` finished with exit zero: 826 app-unit tests, 180 tests
+across the nine integration binaries and 121 core tests passed (1,127 total).
+The 11 existing ignored scale/stress tests remain unchanged, not counted as passed.
+This includes the authenticated reader cases, all seven snapshot regressions
+and all 35 Clients tests from #216. No Rust source changed after this run.
+SQLx preparation now runs in session `84393` against another private database,
+with `--workspace -- --features server --all-targets`. All test entry points
+were touched before preparation to avoid losing cached test-query metadata.
+
+Foundation sessions `34224`, `29855` and `11685` finished successfully:
+158 core tests (37 extracted plus 121 existing), `nix fmt -- --ci`, and core
+Clippy with all targets, warnings denied and performance lints. All five new
+source blobs match `524c29e` exactly; the sixth file adds only the module export.
+Unsigned commit `ec7ddbd` is published in draft #219. It is independent of the
+reader extraction and does not change app behavior. Full Flake Check remains
+pending; local core checks alone do not make it ready to merge.
+Its head was confirmed as `ec7ddbd1f1271db523abc35d75a82d8b6fc3bb29`;
+CI run [37474017234](https://github.com/numtide/horae/actions/runs/37474017234)
+started Flake Check and Format. No outcome is assumed from their running state.
+
+Next: collect SQLx preparation, verify offline all-target compilation and lint,
+then publish the reader extraction. Collect #219's own CI before accepting it.
+Continue the remaining source groups and specification-hunk reconciliation;
+the original PRs remain open and unchanged.
