@@ -1001,3 +1001,41 @@ their dependencies before completing the staged invoice writer extraction.
 Keep #228's verified-live Nix handle `1662`; no merge or original-PR closure is
 authorized or performed. Newly observed #229/#230 concern Darwin CI/platform
 support, not this extraction; they remain untouched.
+
+### 2026-10-06 — Financial snapshot consumer extraction
+
+The preceding turn made progress: #231 was published with all local gates
+passed and the ledger was pushed. Reconfirmed #216's merge, read the saved
+objective and resumed #228's original Nix handle `1662`; server/client release
+builds passed and Clippy continues. No process was restarted.
+
+Created `fix/financial-snapshot-authority` in
+`.worktrees/financial-snapshot-authority` on #220 `bc0c7a0`. Extracted the
+consumer/test hunks of `22ffdab` and `15c82ef` together, reusing #220's existing
+manager-snapshot helper without copying or changing it. This covers original
+T098–T103: project fee balances, invoice preview and invoice editor load/review.
+The original HTTP matrix is wired into the existing real-cookie harness beside
+the retained legacy-reader checks. #216 invoice filtering remains intact;
+there is no schema, UI, writer-policy or dependency change.
+
+Necessary fixture adaptations avoid importing unrelated permission storage or
+project writer commands: existing organization-gate helpers are expanded to
+their exact `FOR NO KEY UPDATE` SQL, as already done by #220's reader tests.
+The original revision-zero assertion becomes an unchanged PostgreSQL `xmin`
+assertion before/after actor revocation (the organization tuple must not change
+at all). The separate organization-revision refresh case uses `SET name=name`
+to create a new tuple version without changing business values. Both cases
+still observe real blocked readers, require fresh authorization/business
+snapshots and retain all original assertions about denied access, amounts,
+invoice revisions, cancellation and business-row preservation. Test names
+describe tuple changes rather than a permission column absent from master.
+The canonical revision-specific originals remain preserved for later integration.
+
+Formatting passed (`8739`, only the two adapted test files changed). The full
+workspace suite is running in `49719` on a fresh private PostgreSQL cluster;
+core/app/test entrypoints were touched to avoid stale shared-target artifacts,
+without content changes. No other local Cargo check shares that target.
+Next: review exact source/fixture differences, collect the suite, regenerate
+SQLx, verify offline server/WASM and publish with #220 as its real dependency.
+The prepared invoice writer worktree remains untouched until this dependency
+can be composed without duplicating PR contents. The overall goal is incomplete.
