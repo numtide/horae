@@ -650,6 +650,22 @@ mod project {
 mod task {
     use super::*;
 
+    async fn activity(
+        pool: &PgPool,
+        org_id: uuid::Uuid,
+        actor_id: uuid::Uuid,
+        task_id: uuid::Uuid,
+        active: bool,
+    ) -> Result<(Task, Option<ActiveTransition>), ServerFnError> {
+        let (task, event) = set_task_active_record(pool, org_id, actor_id, task_id, active).await?;
+        let transition = event.map(|event| match event {
+            crate::plugin::AppEvent::TaskReactivated { .. } => ActiveTransition::Reactivated,
+            crate::plugin::AppEvent::TaskDeactivated { .. } => ActiveTransition::Deactivated,
+            other => panic!("unexpected task activity event: {other:?}"),
+        });
+        Ok((task, transition))
+    }
+
     fn rate_edit(amount: Option<i64>) -> TaskRateEdit {
         amount.map_or(TaskRateEdit::Clear {}, |amount_cents| TaskRateEdit::Set {
             amount_cents,
@@ -699,7 +715,7 @@ mod task {
     #[sqlx::test(migrations = "./migrations")]
     async fn each_detail_field_changes_once_and_preserves_inactive_status(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Admin).await;
-        let (mut expected, _) = set_task_active_record(&pool, ids.org_id, ids.task_id, false)
+        let (mut expected, _) = activity(&pool, ids.org_id, ids.user_id, ids.task_id, false)
             .await
             .unwrap();
         for (name, billable, rate) in [
@@ -782,7 +798,7 @@ mod task {
     async fn unchanged_activation_preserves_the_row(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Admin).await;
         let before = version(&pool, ids.task_id).await;
-        let (returned, transition) = set_task_active_record(&pool, ids.org_id, ids.task_id, true)
+        let (returned, transition) = activity(&pool, ids.org_id, ids.user_id, ids.task_id, true)
             .await
             .unwrap();
         let after = version(&pool, ids.task_id).await;
@@ -843,7 +859,7 @@ mod task {
         let run_pool = pool.clone();
         let mut run = tokio::task::JoinSet::new();
         run.spawn(async move {
-            set_task_active_record(&run_pool, ids.org_id, ids.task_id, active).await
+            activity(&run_pool, ids.org_id, ids.user_id, ids.task_id, active).await
         });
         wait_for_blocked(pool, blocker).await;
         first.commit().await.unwrap();
@@ -902,7 +918,7 @@ mod task {
                     ..
                 }
             ));
-            let error = set_task_active_record(&pool, org_id, id, true)
+            let error = activity(&pool, org_id, actor_id, id, true)
                 .await
                 .unwrap_err();
             assert!(matches!(
@@ -925,12 +941,12 @@ mod task {
             (true, ActiveTransition::Reactivated),
         ] {
             expected.active = active;
-            let (updated, actual) = set_task_active_record(&pool, ids.org_id, ids.task_id, active)
+            let (updated, actual) = activity(&pool, ids.org_id, ids.user_id, ids.task_id, active)
                 .await
                 .unwrap();
             assert_eq!((actual, updated), (Some(transition), expected.clone()));
             let before = version(&pool, ids.task_id).await;
-            let (updated, actual) = set_task_active_record(&pool, ids.org_id, ids.task_id, active)
+            let (updated, actual) = activity(&pool, ids.org_id, ids.user_id, ids.task_id, active)
                 .await
                 .unwrap();
             let after = version(&pool, ids.task_id).await;
@@ -956,7 +972,7 @@ mod task {
             let mut run = tokio::task::JoinSet::new();
             run.spawn(async move {
                 if activation {
-                    set_task_active_record(&run_pool, ids.org_id, ids.task_id, true)
+                    activity(&run_pool, ids.org_id, ids.user_id, ids.task_id, true)
                         .await
                         .map(|_| ())
                 } else {

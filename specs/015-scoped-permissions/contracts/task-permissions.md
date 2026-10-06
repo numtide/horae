@@ -294,3 +294,67 @@ Global archive changes tracking eligibility, so it needs the access-changing
 organization gate from the outset and a reviewed project/task lock order before
 the link-trigger writes. Current schema/UI do not implement this yet; adding a
 grant guard alone does not complete lifecycle acceptance.
+
+The first lifecycle correction reuses the current task-write loader and requires
+the authenticated requester on the registered activity endpoint. Acquire the
+access-changing organization gate before actor or task locks, including restores
+and repeated requests. Canonical archival must reject any same-organization
+running entry for this task before mutation; do not filter the guard to entries
+the actor can read. Return a generic conflict without entry, person or project
+identifiers. Interactive timer starts already hold the conflicting shared gate,
+so a committed start is observed before archival and a completed archive is
+observed before a subsequent start. This must be tested across real lock waits.
+
+Activity responses follow the same independent global-rate read rule as detail
+edits, including no-ops. Existing bounded plugin events retain their internal
+payload, are produced only for an actual transition and are dispatched only
+after commit. Current policy and actor checks precede no-op detection. Preserve
+the policy-zero business behavior until cutover; accepting this boundary does
+not accept legacy lifecycle semantics as the canonical end state.
+
+This activity-authority correction is now implemented in the existing endpoint
+and transaction helper. Five new helper tests cover strict state and no-op
+authorization, event/session projection, history preservation, revocation after
+a real wait and both sides of the tracking-writer gate. Registered-session tests
+cover allowed/denied roles, protected rates, foreign and changed requester IDs,
+anonymous access, real timer start/stop/archive/start denial and repeated restore
+responses. Existing task no-op, transition and deletion-race tests remain intact.
+
+The original session regressions failed as expected (`40406`). The first corrected
+run passed its source suites but found a missing required column in the new HTTP
+fixture (`33965`); the fixture was corrected without relaxing assertions or rules.
+Final verification `16237` exited 0: 29 compatibility tests, two rate-transport
+tests, 147 project tests, 56 time-entry tests, the full registered-session matrix,
+SQLx preparation, offline all-target test compilation and strict native/WASM
+lint. Scoped adversarial self-review found no further high/critical issue in
+this correction; no independent sign-off, new browser run, full Nix gate or
+complete lifecycle acceptance is claimed. No schema or policy activation changed.
+
+### Retained-link integration checklist
+
+Source inspection identifies these coupled changes for the remainder of T233:
+
+- `ProjectTaskInput` and persisted project drafts currently have no link activity
+  field. Add an explicit representation with compatible decoding of older saved
+  drafts; do not interpret omission as an instruction to restore an archived link.
+- `editing::save_tasks` currently deletes an omitted link without time and rejects
+  one with time. Keep archive distinct from destructive removal. Retain billable,
+  rate, restriction, member and budget settings across archive/restore, including
+  values withheld from the editor. Do not let a settings save restore activity as
+  an incidental upsert default.
+- The project edit revision triggers already cover `project_tasks` updates. Global
+  archive must lock linked parent projects in stable order before updating links
+  so open editors become stale without a child-to-parent lock inversion. Keep the
+  organization access gate first; review imports and existing link helpers too.
+- Both tracking sources must require active global task and active project link;
+  historical reads and the confirmed owner-only terminal timer recovery must not
+  inherit that new-entry predicate.
+- Global restore must leave link state unchanged. A project restore must be an
+  explicit project-authorized command, never an implied global task mutation or
+  a side effect of merely re-selecting a catalog identity. Reconcile its exact
+  behavior while the global task remains archived before exposing that control.
+
+The task guide still documents the two restoration levels, but does not settle
+that last order-of-restoration edge case. No browser observation is available
+from the loaded tools in this pass. These are remaining acceptance requirements,
+not a claim that the schema/editor migration is implemented or reviewed.

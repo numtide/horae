@@ -45,6 +45,9 @@ mod task_write_tests;
 #[cfg(all(test, feature = "server"))]
 mod task_edit_tests;
 
+#[cfg(all(test, feature = "server"))]
+mod task_activity_tests;
+
 // ── Projects ─────────────────────────────────────────────────────────────────
 
 #[server]
@@ -926,15 +929,11 @@ async fn authorize_task_write(
     org_id: uuid::Uuid,
     actor_id: uuid::Uuid,
     project_id: Option<uuid::Uuid>,
+    gate: OrganizationLock,
 ) -> Result<Option<crate::models::permissions::PersonPermissions>, ServerFnError> {
     use crate::server_fns::permissions::{configure_administration, load_person_permissions};
 
     configure_administration(tx).await.map_err(server_err)?;
-    let gate = if project_id.is_some() {
-        OrganizationLock::AccessChange
-    } else {
-        OrganizationLock::Shared
-    };
     lock_organization(tx, org_id, gate)
         .await
         .map_err(server_err)?;
@@ -994,7 +993,12 @@ async fn create_task_for_project(
         return Err(conflict("Task name cannot be empty"));
     }
     let mut tx = db.begin().await.map_err(server_err)?;
-    authorize_task_write(&mut tx, org_id, actor_id, project_id).await?;
+    let gate = if project_id.is_some() {
+        OrganizationLock::AccessChange
+    } else {
+        OrganizationLock::Shared
+    };
+    authorize_task_write(&mut tx, org_id, actor_id, project_id, gate).await?;
     let id = uuid::Uuid::now_v7();
     let task = sqlx::query_as!(
         Task,
@@ -1069,7 +1073,8 @@ async fn update_task_record(
         return Err(conflict("Task name cannot be empty"));
     }
     let mut tx = db.begin().await.map_err(server_err)?;
-    let permissions = authorize_task_write(&mut tx, org_id, actor_id, None).await?;
+    let permissions =
+        authorize_task_write(&mut tx, org_id, actor_id, None, OrganizationLock::Shared).await?;
     let intent = match rate {
         TaskRateEdit::Preserve {} => RateEdit::Unchanged,
         TaskRateEdit::Clear {} => RateEdit::Reset,
@@ -1153,31 +1158,20 @@ async fn update_task_record(
 /// Activate or deactivate an org-level task. Deactivated tasks are hidden from
 /// new-entry pickers but stay attached to existing time entries (FR-011).
 #[server]
-pub async fn set_task_active(task_id: String, active: bool) -> Result<Task, ServerFnError> {
-    let manager = require_manager().await?;
+pub async fn set_task_active(
+    task_id: String,
+    active: bool,
+    expected_requester: PermissionRequester,
+) -> Result<Task, ServerFnError> {
+    let actor = require_user().await?;
+    project_requester(&actor, Some(expected_requester))
+        .map_err(|_| forbidden("Task requester has changed"))?;
     let state = crate::state::global_state().await;
     let task_id = parse_uuid(&task_id, "task_id")?;
-    let (task, transition) =
-        set_task_active_record(&state.db, manager.org_id, task_id, active).await?;
-    if let Some(t) = transition {
-        let occurred_at = chrono::Utc::now();
-        let task = task_payload(&task);
-        state.plugins.dispatch(match t {
-            crate::plugin::event::ActiveTransition::Reactivated => {
-                crate::plugin::AppEvent::TaskReactivated {
-                    occurred_at,
-                    org_id: manager.org_id,
-                    task,
-                }
-            }
-            crate::plugin::event::ActiveTransition::Deactivated => {
-                crate::plugin::AppEvent::TaskDeactivated {
-                    occurred_at,
-                    org_id: manager.org_id,
-                    task,
-                }
-            }
-        });
+    let (task, event) =
+        set_task_active_record(&state.db, actor.org_id, actor.id, task_id, active).await?;
+    if let Some(event) = event {
+        state.plugins.dispatch(event);
     }
     Ok(task)
 }
@@ -1186,11 +1180,37 @@ pub async fn set_task_active(task_id: String, active: bool) -> Result<Task, Serv
 async fn set_task_active_record(
     db: &sqlx::PgPool,
     org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
     task_id: uuid::Uuid,
     active: bool,
-) -> Result<(Task, Option<crate::plugin::event::ActiveTransition>), ServerFnError> {
+) -> Result<(Task, Option<crate::plugin::AppEvent>), ServerFnError> {
     let mut tx = db.begin().await.map_err(server_err)?;
+    // Tracking writers hold the shared gate through entry insertion.
+    let permissions = authorize_task_write(
+        &mut tx,
+        org_id,
+        actor_id,
+        None,
+        OrganizationLock::AccessChange,
+    )
+    .await?;
     let before = lock_task(&mut tx, org_id, task_id).await?;
+
+    if permissions.is_some() && !active {
+        let running = sqlx::query_scalar!(
+            r#"SELECT EXISTS(SELECT 1 FROM time_entries
+                WHERE org_id=$1 AND task_id=$2 AND is_running) AS "running!""#,
+            org_id,
+            task_id,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(server_err)?;
+        if running {
+            // Do not reveal an entry or its owner to a task-only administrator.
+            return Err(conflict("A running timer prevents archiving this task"));
+        }
+    }
 
     let task = sqlx::query_as!(
         Task,
@@ -1209,8 +1229,35 @@ async fn set_task_active_record(
     let transition = task.as_ref().and_then(|updated| {
         crate::plugin::event::active_transition(Some(before.active), updated.active)
     });
+    let mut task = task.unwrap_or(before);
+    let event = transition.map(|transition| {
+        let occurred_at = chrono::Utc::now();
+        let task = task_payload(&task);
+        match transition {
+            crate::plugin::event::ActiveTransition::Reactivated => {
+                crate::plugin::AppEvent::TaskReactivated {
+                    occurred_at,
+                    org_id,
+                    task,
+                }
+            }
+            crate::plugin::event::ActiveTransition::Deactivated => {
+                crate::plugin::AppEvent::TaskDeactivated {
+                    occurred_at,
+                    org_id,
+                    task,
+                }
+            }
+        }
+    });
+    if permissions
+        .as_ref()
+        .is_some_and(|p| !p.grants.contains(Permission::BillableRateReadAll))
+    {
+        task.default_rate_cents = None;
+    }
     tx.commit().await.map_err(server_err)?;
-    Ok((task.unwrap_or(before), transition))
+    Ok((task, event))
 }
 
 #[cfg(feature = "server")]

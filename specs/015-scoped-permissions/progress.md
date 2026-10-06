@@ -1,5 +1,62 @@
 # Scoped permissions investigation progress
 
+## 2026-10-06 — Task activity authority and timer exclusion
+
+- The preceding estimate reply made no implementation progress. Revalidated
+  `facfb49` and the existing worktree; only its publication log was dirty.
+- Added registered-session regressions for canonical task writers with legacy
+  Member roles, legacy administrators without task grants, independent rate
+  projection and rejection of archival while a timer is running. The isolated
+  verifier `40406` is running against the unchanged lifecycle implementation.
+- T233 remains the full lifecycle integration: independent retained project-task
+  state, explicit project restoration, editor/tracking integration, existing-task
+  linking and races. The activity authority boundary alone does not close it.
+- `40406` exited 101 with the intended session failures: canonical Member denied,
+  legacy Admin accepted without grants, protected rates returned, and a running
+  task archived. Replaced the legacy wrapper with authenticated requester binding
+  and current transactional task authority. The activity path takes the exclusive
+  access gate from the outset; create/edit retain their existing gate modes.
+- Canonical archival rejects running entries without returning their identities.
+  Session rate projection is independent from the bounded service-event payload,
+  and events are dispatched only after a committed actual transition. No schema,
+  UI, live policy or business-data change. Policy-zero behavior is preserved.
+- Added five production-helper cases covering strict state and no-op authorization,
+  full events versus redacted responses, preserved history/rates, revocation after
+  a real lock wait, both sides of the tracking-writer gate and a committed timer.
+  Session coverage includes anonymous/mismatched/foreign requests, real timer
+  start/stop/archive/start rejection, restore and repeated-response redaction.
+- `33965` is running compatibility, project, time-entry and registered-session
+  regressions, followed by SQLx preparation, offline all-target compilation and
+  strict native/WASM lint. Rust is frozen until the verifier terminates.
+- `33965` passed 29 compatibility tests, both rate-transport tests, all 147 project
+  tests and all 56 time-entry tests. It then exited 101 because the new HTTP test
+  fixture omitted the required `project_tasks.billable` column. Corrected that
+  fixture to create an explicitly billable link; no production rule or assertion
+  was weakened. Cache and lint stages had not run.
+- Corrected run `16237` passed the compatibility/transport/project/time-entry
+  suites and the full registered-session matrix, including the new real timer
+  workflow. SQLx preparation and offline/native/WASM gates are still running.
+- Adversarial self-review checked actor/requester binding, strict policy before
+  no-ops, independent rate projection, internal events after commit, tenant-scoped
+  generic timer conflicts and final gate acquisition before task locks. Both
+  interactive timer paths hold the conflicting shared organization gate; imports
+  insert historical entries without running state. No additional high/critical
+  issue is identified in this limited boundary. This is not independent review
+  or acceptance of the unfinished retained-link restoration/UI work.
+- Recorded the remaining editor/draft, retained configuration, sorted parent
+  locks, revision invalidation and dual tracking-source integration checklist.
+  Harvest documentation confirms the two restoration levels; the edge case of
+  restoring a project link while its global task is still archived remains to
+  reconcile before exposing that control. No loaded browser tools were available.
+- `16237` exited 0. All-target SQLx preparation, offline test compilation (3m23s),
+  strict native/all-target Clippy (1m46s) and WASM Clippy (15.78s) passed after the
+  source/session suites. No new browser or full Nix check is claimed. T233 and
+  T230 remain open; this verifies the activity authority/timer boundary only.
+
+Next: collect verification and review the activity boundary, then complete the
+retained-link state and editor/tracking integration still required by T233.
+No real-data mutation, policy activation or merge.
+
 ## 2026-10-06 — Explicit task-rate editing
 
 - Previous goal turn made progress: published and verified creation increment
@@ -67,9 +124,12 @@
   semantics were unchanged by its conditional lint annotation. T232 is accepted
   with the recorded source/session/transport/cache/native evidence; T230 remains
   open for lifecycle and real consumer delivery.
+- Format, CI-format and diff checks passed without source changes. Published
+  unsigned commit `facfb49`; push exited 0 and GitHub confirmed #212 OPEN/DRAFT
+  at `facfb4914fd9f3480d93315841b6108846989c8c`. No merge occurred.
 
-Next: format/check and publish the reviewed edit increment, then finalize the
-retained-link lifecycle contract and its failing tests under T233. Existing-task
+Next: finalize the retained-link lifecycle contract and its failing tests under
+T233. Existing-task
 linking, bound catalog UI and full permission/Nix gates remain required.
 No merge or real-data mutation.
 
