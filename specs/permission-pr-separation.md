@@ -125,6 +125,7 @@ Clients MVP as canonical-permission acceptance.
 | Permission audit history, [#245](https://github.com/numtide/horae/pull/245) | `feat/permission-audit-history`, `.worktrees/permission-audit-history` | Review base `59d2798` combining #243 `3404c85` and #244 `6c4e4d1` | Draft at `14ad9ca`; source suite/cache/lints passed; `93f230d` Nix failed on seed-vs-session actor fixture mismatch; corrected actual-session fixture passed after New Project permission suite; final Nix `56923` running; older gates remain historical evidence |
 | Read-only legacy permission diagnostics, [#246](https://github.com/numtide/horae/pull/246) | `feat/permission-preflight`, `.worktrees/permission-preflight` | Review base `61c90bc` combining #237 `2242361` and #226 `82d15f3` | Draft at `ff482c8`; 1,244 tests, full SQLx generation/provenance (1,138 descriptors), source preservation, bounded review/Spec Kit/format and offline native/WASM lint `86929` passed; full Nix `99711` running; no endpoint, UI, migration or activation |
 | Materialized XLSX/PDF authorization, [#247](https://github.com/numtide/horae/pull/247) | `fix/materialized-export-authority`, `.worktrees/materialized-export-authority` | Review base `3edc0b8` combining existing `0046dad` (#227/#228 + #220/#232) and #222 `e9695fd` | Draft at `d9717e7`; 1,229 tests, full SQLx/provenance (1,135 descriptors), source review/Spec Kit/format and offline native/WASM lint passed; full final-head Nix `32625` running; no policy activation |
+| CSV delivery authorization, not yet published | `fix/csv-export-authority`, `.worktrees/csv-export-authority` | Exact #247 head `d9717e7` | Source `9f2994d`; historical `dcf4ac8` extraction, migration 0046 and complete original tests; format/source review/scoped analysis passed, suite/cache `47215` running; offline/full gates and publication pending |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -346,7 +347,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `15c82ef` | Recheck manager access in invoice editor snapshots | manager-snapshot-consumers | Consumer/tests/cache in #232; fixture adaptations documented, local suite, both target lints and full Nix passed; specification hunks retained |
 | `dc822a0` | Recheck manager authority before delivering exports | export-authority | Materialized XLSX/PDF source/tests and regenerated original cache in #247 (`d9717e7`); shared helper already in #220; 1,229 tests, complete cache, offline lints/format passed; full Nix pending; mixed specification hunks retained |
 | `108594e` | Revalidate project scope before delivering exports | export-authority | Historical project reader and complete original DB/HTTP tests in #247 (`d9717e7`); suite/cache/lints passed, full Nix pending; later canonical changes and mixed specification hunks separately retained |
-| `dcf4ac8` | Recheck current permissions during CSV downloads | export-authority | Planned as dependent legacy CSV cursor/batch-release delivery with migration 0046; do not pull later canonical stream tests into this legacy boundary; original preserved, extraction pending |
+| `dcf4ac8` | Recheck current permissions during CSV downloads | export-authority | Legacy CSV cursor/batch-release source, migration 0046 and original tests extracted at `9f2994d` on #247; suite/cache `47215` running, publication pending; later canonical stream changes and mixed specification hunks retained separately |
 | `0793ce7` | Revalidate budget email authority before delivery | budget-email-authority | Four source/test files byte-identical in #238 (`7a7cede`) on master `1b8fa4f`; 1,133 tests, SQLx, format and offline server/WASM lints passed; full local Nix passed; specification hunks retained |
 | `8aac739` | Add read-only permission migration diagnostics | permission-preflight | Reader and all seven tests byte-preserved in #246 (`ff482c8`) on #237/#226 review base; 1,244 tests, full cache/provenance and offline lints passed; final Nix running; specification hunks retained |
 | `8c15bfe` | Show own permissions in Settings | own-permissions | Complete original component, shared descriptions, SSR and resource tests in #244 (`6c4e4d1`); suite/cache, isolated browser and full local Nix passed; no full T018 claim; specification hunks retained |
@@ -2684,3 +2685,85 @@ Next collect final-head `99785`, `56923`, `99711` and `32625`, and continue the
 dependent legacy CSV boundary with migration 0046. Remaining canonical
 consumers/editor and documentation ownership are still required. The goal is
 incomplete; this iteration is PROGRESS, with no original closure or real-data write.
+
+### Legacy CSV boundary extracted on materialized exports
+
+The intervening prompt-only response did not advance repository state (NO
+PROGRESS). Re-read the actual saved objective, AGENTS and constitution 1.0.0,
+verified #216 is merged as `02f7b58`, inspected current worktrees/ledger, and
+resumed the next safe extraction. Specific final-head Nix handles `99785`,
+`56923`, `99711` and `32625` were confirmed live; none was restarted. #246 is
+still in its browser matrix, the other three are compiling. These are pending,
+not passing gates.
+
+Created `fix/csv-export-authority` in `.worktrees/csv-export-authority` directly
+from #247 `d9717e7ed9e9982e01668ee611a9e7aef950c358`. Unsigned source commit
+`9f2994d` extracts historical `dcf4ac8`: 13 files, 1,571 additions and 113
+deletions, including the complete 815-line database authorization module and
+68-line session-authenticated project CSV module. Eleven files match that
+historical source byte-for-byte. `reports.rs` additionally preserves #220's
+removal of the old global invoice loader; the HTTP harness gains only the nine
+CSV route registration lines, retaining its existing legacy-reader and importer
+boundaries. Later canonical time/project/grouped export changes are not pulled
+into this slice. No dependency, policy activation, UI or business-state write
+was added.
+
+Reviewed all production cursor/delivery paths, migration 0046, the complete new
+authorization tests, HTTP CSV tests and changed invoice snapshot fixture.
+Preserved one reserved close-on-drop connection, explicit READ COMMITTED READ
+WRITE, initial authorization before cursor declaration, and a frozen source
+snapshot. Each nonempty block reserves output capacity before fresh
+organization/actor checks; project blocks sort/deduplicate captured parent IDs
+and query access separately after parent-lock waits. Successful rollback and
+savepoint release precede synchronous send with no intervening await. A later
+denial propagates as body failure rather than successful truncated EOF.
+
+Native input limits remain 1 initial row, then at most 128 rows or the
+64 KiB logical-payload crossing row. Output independently flushes first/128/64
+KiB records; one oversized record is intentionally allowed, not claimed as a
+whole-process memory ceiling. The invoker-only fixed-cursor helper keeps PUBLIC
+execution revoked; separate migration owners must explicitly grant their
+runtime role. The invoice LEFT JOIN sentinel preserves empty/missing distinction,
+nullable fee quantities, stored integer totals and original filename/metadata
+across source changes. Error, timeout and cancellation preserve admission and
+connection cleanup. No critical/high source finding identified; executable
+verification remains pending.
+
+Applied the Rust, async, testing and minimal-change skills. Formatting `10571`
+passed with zero changed files; `git diff --check` passed. Suite and complete
+SQLx preparation `47215` are running against the helper's fresh private
+PostgreSQL cluster, with no TCP listener or real data. The shared local Cargo
+target is occupied until that handle finishes; do not launch competing local
+Cargo work.
+
+Scoped Spec Kit analyze ran the original feature-015 prerequisite script
+(`--json --require-tasks --include-tasks`); required artifacts exist and there
+are no extension hooks. Read the relevant current spec/plan/tasks and both
+historical and evolved CSV contracts. This extraction uses the T110–T113
+legacy boundary only; canonical refinements remain separate original work.
+
+| Requirement | Tasks | Bounded coverage |
+| --- | --- | --- |
+| FR-006 | T110/T111/T112 | Tenant, active actor and captured-project access |
+| FR-007 | T110/T111/T112 | All three CSV source and delivery paths |
+| FR-010 | T110/T111/T112 | Fresh post-wait/block checks and revocation |
+| FR-017 | T111/T112 | Frozen source, integer values, no business mutation |
+| FR-018 | T110/T112/T113 | Negative/race/native/HTTP and regression gates |
+
+Five requirements and four tasks mapped, 100% bounded task coverage, zero
+unmapped tasks, ambiguities, duplications or critical/high specification
+findings in this slice. SC-006 is a regression subset, not full acceptance.
+The unchanged constitution 1.0.0 remains authoritative; the original 1.1.0
+proposal and full US3/canonical activation gates are not adopted or completed.
+No remediation or original artifact edit was needed by this scoped analysis.
+
+Next collect `47215`, then run `.scratch/verify-cache.mjs` in the CSV worktree
+to prove the regenerated cache retains every base descriptor except the two
+replaced invoice snapshot-fixture UPDATE queries (`548235…`, `560550…`) and
+matches historical `dcf4ac8` for additions. The verifier is prepared but has not
+run; expected removals are a hypothesis until verified. Commit the proven
+cache, run offline native/WASM and final-head Nix, then publish a scoped draft
+with exact evidence and its dependency on #247. Collect the four existing Nix
+handles at reasonable intervals. Documentation ownership, canonical consumers,
+editor/UI and unpublished Clients remain required. This iteration is PROGRESS;
+the overall goal remains incomplete.
