@@ -98,13 +98,14 @@ Clients MVP as canonical-permission acceptance.
 | Delivery | Branch/worktree | Base | Status / acceptance |
 | --- | --- | --- | --- |
 | Separation ledger | `docs/permission-pr-separation`, `.worktrees/permission-pr-separation` | `02f7b58` | Inventory recorded; no completed-extraction claim |
-| Legacy report/invoice readers from #217, [#220](https://github.com/numtide/horae/pull/220) | `fix/report-reader-authority-master`, `.worktrees/report-reader-authority-master` | `02f7b58` | Draft at `bc0c7a0`; 1,127 tests passed, 11 existing ignored; SQLx, offline server/WASM lint and formatting passed; CI pending |
-| Pure record scopes and grant catalog, [#219](https://github.com/numtide/horae/pull/219) | `refactor/permission-domain-foundation`, `.worktrees/permission-domain-foundation` | `02f7b58` | Draft at `ec7ddbd`; 158 core tests, core Clippy and formatting passed; full CI pending; no runtime integration |
-| Pure rate/management/approval rules, [#221](https://github.com/numtide/horae/pull/221) | `refactor/permission-domain-gates`, `.worktrees/permission-domain-gates` | #219 `ec7ddbd` | Draft at `539316c`; 187 core tests, core Clippy and formatting passed; full local Flake Check running |
+| Legacy report/invoice readers from #217, [#220](https://github.com/numtide/horae/pull/220) | `fix/report-reader-authority-master`, `.worktrees/report-reader-authority-master` | `02f7b58` | Draft at `bc0c7a0`; 1,127 tests passed, 11 existing ignored; SQLx, offline server/WASM lint, formatting and GitHub Flake Check passed; Nixbot build pending |
+| Pure record scopes and grant catalog, [#219](https://github.com/numtide/horae/pull/219) | `refactor/permission-domain-foundation`, `.worktrees/permission-domain-foundation` | `02f7b58` | Draft at `ec7ddbd`; 158 core tests, core Clippy, formatting and GitHub Flake Check passed; Nixbot build pending; no runtime integration |
+| Pure rate/management/approval rules, [#221](https://github.com/numtide/horae/pull/221) | `refactor/permission-domain-gates`, `.worktrees/permission-domain-gates` | #219 `ec7ddbd` | Draft at `539316c`; 187 core tests, core Clippy, formatting and full local Flake Check passed; CI required after retargeting |
 | Non-activating permission storage, [#222](https://github.com/numtide/horae/pull/222) | `refactor/permission-storage-foundation`, `.worktrees/permission-storage-foundation` | #219 `ec7ddbd` | Draft at `e9695fd`; 1,170 tests passed, 11 existing ignored; SQLx, offline server/WASM lint and formatting passed; full local Flake Check running |
 | Legacy import report conversion lock order, [#223](https://github.com/numtide/horae/pull/223) | `fix/import-report-lock-order`, `.worktrees/import-report-lock-order` | `02f7b58` | Draft at `c8f95ac`; 1,125 tests passed, 11 existing ignored; SQLx, offline server/WASM lint and format passed; CI pending |
-| Interrupted import session cleanup | `fix/import-session-cleanup`, `.worktrees/import-session-cleanup` | `02f7b58` | Original `e949e4c` production/test hunks extracted locally; 1,123 tests passed, 11 existing ignored; format passed; SQLx/offline/lint pending |
-| Current authority for organization branding writes | `fix/branding-current-authority`, `.worktrees/branding-current-authority` | `02f7b58` | Both source/test files match `907bc88`; format passed; runtime verification pending |
+| Interrupted import session cleanup, [#224](https://github.com/numtide/horae/pull/224) | `fix/import-session-cleanup`, `.worktrees/import-session-cleanup` | `02f7b58` | Draft at `be57f0e`; 1,123 tests passed, 11 existing ignored; SQLx, offline server/WASM lint and format passed; CI pending |
+| Current authority for organization branding writes | `fix/branding-current-authority`, `.worktrees/branding-current-authority` | `02f7b58` | Both source/test files match `907bc88`; format passed; full runtime suite running |
+| Internal reusable-profile commands | `refactor/permission-template-commands`, `.worktrees/permission-template-commands` | #222 `e9695fd` | Source, all 19 tests and receipt migration extracted; format passed; runtime/SQLx/lint verification pending; no endpoints or activation |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -307,7 +308,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `804b1d8` | Separate permission increment readiness from activation gates | specification-history | Held in original backup; extraction pending |
 | `6e61593` | Validate person-management grant compatibility and self-links | scope-domain | Code/tests in #221; specification hunks retained for reconciliation |
 | `ec35446` | Store versioned permission profiles without activating new policy | permission-storage | Storage/schema/name-validator code/tests in #222; specification hunks retained for reconciliation |
-| `d50c979` | Add audited permission template commands | permission-profile-transactions | Held in original backup; extraction pending |
+| `d50c979` | Add audited permission template commands | permission-profile-transactions | Command/test/receipt hunks extracted locally with later hardening; verification and specification reconciliation pending |
 | `f5e0dde` | Apply permission profiles with atomic scope changes | permission-profile-transactions | Model serialization in #222; profile commands and remaining hunks retained |
 | `9a7e05d` | Add audited project manager delegation | project-manager-delegation | Held in original backup; extraction pending |
 | `fc85231` | Add administrator-only permission audit lookup | permission-audit | Held in original backup; extraction pending |
@@ -319,7 +320,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `b4672a4` | Revalidate authority during import error downloads | import-authority | Held in original backup; extraction pending |
 | `e5fcc5a` | Prepare durable CSV batches before opening transactions | import-transaction-lifecycle | Held in original backup; extraction pending |
 | `482b7c5` | Retain the original requester of import jobs | import-requester-provenance | Held in original backup; extraction pending |
-| `e949e4c` | Drain interrupted import transactions before releasing reservations | import-transaction-lifecycle | Production/test hunks extracted locally; runtime verification and specification reconciliation pending |
+| `e949e4c` | Drain interrupted import transactions before releasing reservations | import-transaction-lifecycle | Production/test/cache hunks in #224; specification hunks retained for reconciliation |
 | `c0cfb8f` | Scope rate permissions to their owning resource | scope-domain | Code/tests in #221; specification hunks retained for reconciliation |
 | `5d51b0e` | Expose the current person's permission snapshot | own-permissions | Held in original backup; extraction pending |
 | `22ffdab` | Recheck manager access for financial snapshots | manager-snapshot-consumers | Shared snapshot helper/queries in #220; original financial consumers and remaining hunks retained |
@@ -684,3 +685,45 @@ has Format/nix-eval passed, with Flake Check/nix-build in progress.
 Keep collecting the live #221/#222 local
 Flake Checks (`98201`/`50374`) without restarting them. All remaining source and
 specification groups still require final mapping and verification.
+
+### 2026-10-06 — Cleanup published; completed foundation gates
+
+The preceding response supplied the requested goal text but made no repository
+progress. Resumed the existing live processes rather than restarting them.
+Session `22335` completed SQLx preparation successfully: all 1,003 existing
+descriptors are unchanged and seven additions match `e949e4c` exactly. Offline
+all-target server/workspace Clippy (`37045`) and WASM Clippy (`77529`) passed with
+warnings denied and performance lints enabled. The source/test patch still has
+the original stable patch ID. Unsigned commit
+`be57f0e5ebf449f446aed69ad62a84e9ee5583b2` is published as draft #224, independent
+on master. Required CI is pending; no original branch was changed.
+
+Session `98201` completed `nix flake check -L --max-jobs 1 --cores 2` with
+`all checks passed!` on clean #221 head `539316c`, including its #219 dependency.
+This covers the compatible x86_64-linux checks, not the omitted incompatible
+systems. The PR description now records the result; master-targeted Actions
+must still run when the PR is retargeted. #222's existing full check (`50374`)
+is still live and has passed its release build and progressed through browser
+checks. It was not restarted.
+
+Exact-head GitHub checks were queried once after new results became available:
+#219 run [37474017234](https://github.com/numtide/horae/actions/runs/37474017234)
+and #220 run [37475284999](https://github.com/numtide/horae/actions/runs/37475284999)
+both passed Flake Check and Format. Their separate Nixbot builds were still in
+progress; do not report every remote check green. #212/#217/#208 heads remain
+the preserved originals.
+
+Branding verification is running in session `45526` on a fresh private database,
+reusing the existing ignored verification wrapper. No Rust changes were made
+after the original-blob comparison. The next shared extraction is now isolated
+on #222: receipt migration 0043, the complete template-command implementation and
+all 19 original tests match `db3935d`. It also carries the exact three command DTOs
+from `permission_editor.rs`, the existing bounded administration helpers and
+module registration. Only those DTOs are server-gated at this stage; editor
+screens, endpoints, profile application and policy activation are not included.
+Formatting passed unchanged (`42874`). Tests and SQLx are not yet accepted.
+
+Next: finish branding runtime/SQLx/offline/lint gates and publish its scoped PR;
+then verify the template commands together with #222. Continue collecting the
+live storage check. Reconcile remaining shared writers, consumers and all
+specification hunks before claiming this separation complete.
