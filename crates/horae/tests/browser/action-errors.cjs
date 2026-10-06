@@ -13,6 +13,7 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated, seeded test instance');
   });
   const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
   const page = await context.newPage();
+  page.setDefaultTimeout(30_000);
   const failures = [];
   const pageErrors = [];
   page.on('pageerror', error => pageErrors.push(error.message));
