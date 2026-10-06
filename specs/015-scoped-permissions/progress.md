@@ -5,6 +5,7 @@
 - The preceding estimate-only turn was no implementation progress. Revalidated
   the existing worktree and `2497dbe` base; no verifier is being resumed or
   restarted from a stale handle.
+
 - Completed the scoped adversarial self-review across ordinary project reads,
   current-authority transactions, source/release export checks, compatibility
   count/page projection and actual list/detail consumers. Checked the financial
@@ -12,18 +13,35 @@
   requester continuity and pending/error focus behavior against their code.
   No additional high/critical defect was identified; this is not an independent
   reviewer sign-off or evidence for unimplemented canonical consumers.
+
 - Clarified the read contract's historical baseline versus current acceptance
   and added reproducible verification commands and snapshot limitations to
   `quickstart.md`. T226 is complete with the prior recorded test/browser/lint
   evidence and this review; full activation and Nix gates remain open.
+
 - Final `nix fmt -- --ci` passed without changes and `git diff --check` passed.
   The removed SQLx descriptors belong to replaced queries; prior all-target
   offline compilation verified the regenerated cache. No migration, dependency
   or shared stylesheet was changed in this increment.
 
-Next: final formatting/diff checks, unsigned commit and publication to existing
-draft #212, without merge or real-data activation. Then continue the remaining
-canonical consumers and cross-command integration gates.
+- Published unsigned commit `2631186` to `feat/scoped-permissions`; GitHub
+  confirms #212 remains OPEN/DRAFT at that exact head. No merge or real-data
+  activation. The normal sandbox denied the Git index write; the authorized
+  escalated commit/push succeeded.
+
+- Reconciled stale T161 bookkeeping with the existing editor evidence: `2994`
+  had failed the mail test, but its exact frozen-source repeat `52467` passed
+  all 1,751 tests and source/cache identity was checked before `2497dbe` was
+  published. Its browser, lint, SQLx, formatting and both VM gates had passed.
+  T161 is therefore complete for the existing editor. This does not claim
+  the transient mail failure was fixed or full Nix acceptance of `2631186`.
+  No new verification was started merely because the old handle is gone.
+
+Next: inventory OP14/15 task catalog reads and direct mutations against the
+existing editor/identity paths, then implement the settled global task and
+independent financial predicates with regression tests. Keep project linking,
+membership effects and any unresolved lifecycle/creation rules explicit; do
+not infer answers to pending product questions. Full activation remains open.
 
 ## 2026-10-06 — Detail regression suite and fee-session acceptance
 

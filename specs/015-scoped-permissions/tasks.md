@@ -193,7 +193,7 @@ field rule.
 - [x] T158 Trace project form load, catalogs, draft/finalization, full-form saves, association effects and replay; recheck official Harvest sources and record field ownership, preservation hazards and the initial-designation question.
 - [x] T159 Close remaining field/effect predicates and add failing existing-project tests for withheld/read-only/unchanged/reset/zero input, inherited rates and scoped current authority; reuse the pure rate evaluator.
 - [x] T160 Integrate typed protected-field intent and authorized projections into the real form/read/save transaction together, preserving legacy mode, revisions, complete-set validation, financial history and replay; never treat a missing client field as authority to clear storage.
-- [ ] T161 Verify the real form, registered session paths, concurrent revocation and browser behavior, SQLx completeness, server/WASM checks and adversarial cross-surface review; retain full activation and Nix gates.
+- [x] T161 Verify the real form, registered session paths, concurrent revocation and browser behavior, SQLx completeness, server/WASM checks and adversarial cross-surface review; retain full activation and Nix gates.
 
 T159 has initial real-editor RED cases in
 `project_creation/editing/tests/canonical_fields.rs`. They separate canonical
