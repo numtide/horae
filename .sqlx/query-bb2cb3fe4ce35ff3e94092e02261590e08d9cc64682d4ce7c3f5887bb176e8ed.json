@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE projects SET name=repeat('界',10923) WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bb2cb3fe4ce35ff3e94092e02261590e08d9cc64682d4ce7c3f5887bb176e8ed"
+}

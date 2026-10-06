@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users SET org_role=$2, active=true WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "org_role",
+            "kind": {
+              "Enum": [
+                "admin",
+                "manager",
+                "member"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ac89c32889ed4d6521b244d37968c87df8cb562789408b893f1b6f4f6df20be2"
+}
