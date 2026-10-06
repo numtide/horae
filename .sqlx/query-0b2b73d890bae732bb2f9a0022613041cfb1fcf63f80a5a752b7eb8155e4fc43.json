@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "ALTER TABLE permission_change_receipts ADD CONSTRAINT injected_failure CHECK (false) NOT VALID",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "0b2b73d890bae732bb2f9a0022613041cfb1fcf63f80a5a752b7eb8155e4fc43"
+}

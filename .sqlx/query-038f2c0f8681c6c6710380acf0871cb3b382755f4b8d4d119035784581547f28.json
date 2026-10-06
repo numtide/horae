@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT jsonb_build_object('users', (SELECT jsonb_agg(u ORDER BY id) FROM users u),\n         'assignments', (SELECT jsonb_agg(a ORDER BY id) FROM assignments a),\n         'clients', (SELECT jsonb_agg(c ORDER BY id) FROM clients c),\n         'projects', (SELECT jsonb_agg(p ORDER BY id) FROM projects p),\n         'tasks', (SELECT jsonb_agg(t ORDER BY id) FROM tasks t))",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "jsonb_build_object",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "038f2c0f8681c6c6710380acf0871cb3b382755f4b8d4d119035784581547f28"
+}

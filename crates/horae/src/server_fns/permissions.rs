@@ -1,4 +1,4 @@
-//! Strict internal storage reads, not authorization checks or mutation endpoints.
+//! Strict permission storage and internal commands; policy activation is separate.
 
 use horae_core::permissions::catalog::{Permission, PermissionSelection, StoredPermissionError};
 use serde::{Deserialize, de::IntoDeserializer};
@@ -6,6 +6,36 @@ use sqlx::PgConnection;
 use uuid::Uuid;
 
 use crate::models::permissions::{PermissionSource, PermissionTemplate, PersonPermissions};
+
+pub(crate) mod templates;
+
+/// Bound authorization transactions independently of pooled connection defaults.
+pub(super) async fn configure_administration(
+    connection: &mut PgConnection,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED, READ WRITE")
+        .execute(&mut *connection)
+        .await?;
+    configure_transaction_limits(connection).await
+}
+
+/// Set local limits only after the caller selects its transaction isolation.
+pub(super) async fn configure_transaction_limits(
+    connection: &mut PgConnection,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "SELECT set_config(name,
+            (CASE WHEN setting::bigint = 0 THEN limits.milliseconds
+             ELSE LEAST(setting::bigint, limits.milliseconds) END)::text, true)
+         FROM pg_settings
+         JOIN (VALUES ('statement_timeout', 5000::bigint),
+                      ('idle_in_transaction_session_timeout', 10000::bigint))
+              AS limits(setting_name, milliseconds) ON name = limits.setting_name"
+    )
+    .fetch_all(connection)
+    .await?;
+    Ok(())
+}
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum PermissionStorageError {
@@ -125,3 +155,7 @@ pub(crate) async fn load_permission_template(
 #[cfg(test)]
 #[path = "permissions/tests/storage.rs"]
 mod storage_tests;
+
+#[cfg(test)]
+#[path = "permissions/tests/templates.rs"]
+mod template_tests;

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT permission_policy_version, access_revision FROM organizations WHERE id = $1 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "permission_policy_version",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "access_revision",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "6cb1975b0fc57e994c0b8ab7e39b8599ad62756d4859e4c94cebd41dfafdde9f"
+}
