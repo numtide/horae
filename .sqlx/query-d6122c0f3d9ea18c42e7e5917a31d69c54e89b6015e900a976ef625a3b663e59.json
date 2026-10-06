@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM project_management_assignments WHERE org_id = $1 AND project_id = $2 AND id = ANY($3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d6122c0f3d9ea18c42e7e5917a31d69c54e89b6015e900a976ef625a3b663e59"
+}
