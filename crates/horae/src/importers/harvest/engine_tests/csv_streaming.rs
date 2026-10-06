@@ -15,6 +15,162 @@ const HEADER: &str = "Date,Client,Project,Task,Hours,Email,Notes\n";
 const ROW: &str = "2026-01-15,Acme,Website,Design,1,dev@acme.com,kickoff\n";
 
 #[sqlx::test(migrations = "./migrations")]
+async fn durable_csv_waits_for_input_without_an_open_transaction(pool: PgPool) {
+    use super::super::csv_source::import_body_with_lease;
+    use crate::jobs;
+    use futures_util::StreamExt;
+
+    for completed in [0, 500] {
+        for mode in [ImportMode::Commit, ImportMode::DryRun] {
+            let org = seed_org(&pool).await;
+            let email = format!("stalled-{org}@acme.com");
+            seed_user(&pool, org, &email).await;
+            let source = format!(
+                "{HEADER}{}",
+                ROW.replace("dev@acme.com", &email).repeat(completed + 3)
+            );
+            jobs::enqueue_csv(
+                &pool,
+                org,
+                mode,
+                source.clone().into_bytes(),
+                "stalled-input",
+                Default::default(),
+            )
+            .await
+            .unwrap();
+            let (lease, stop) = jobs::claim_lease_for_test(&pool).await;
+            let single = sqlx::postgres::PgPoolOptions::new()
+                .max_connections(1)
+                .connect_with((*pool.connect_options()).clone())
+                .await
+                .unwrap();
+            let pid = sqlx::query_scalar!("SELECT pg_backend_pid()")
+                .fetch_one(&single)
+                .await
+                .unwrap()
+                .unwrap();
+            let waiting = Arc::new(Notify::new());
+            let observed = waiting.clone();
+            // Requesting another frame follows at least two consumed rows in
+            // this batch: the parser cannot enqueue all three into a size-one channel.
+            let body = Body::from_stream(
+                futures_util::stream::once(
+                    async move { Ok::<_, std::io::Error>(Bytes::from(source)) },
+                )
+                .chain(futures_util::stream::once(async move {
+                    observed.notify_one();
+                    std::future::pending::<std::io::Result<Bytes>>().await
+                })),
+            );
+            let db = single.clone();
+            let mut running = tokio::task::JoinSet::new();
+            running.spawn(async move {
+                import_body_with_lease(&db, org, "USD", body, mode, Some(&lease)).await
+            });
+            tokio::time::timeout(Duration::from_secs(10), waiting.notified())
+                .await
+                .unwrap();
+            let outside_transaction = sqlx::query_scalar!(
+                "SELECT xact_start IS NULL AS \"outside_transaction!\" FROM pg_stat_activity WHERE pid = $1",
+                pid,
+            ).fetch_one(&pool).await.unwrap();
+            stop.send_replace(true);
+            let error = tokio::time::timeout(Duration::from_secs(5), running.join_next())
+                .await
+                .unwrap()
+                .unwrap()
+                .unwrap()
+                .unwrap_err();
+            single.close().await;
+            assert!(
+                outside_transaction,
+                "{mode:?}, after {completed} checkpointed rows: SQL transaction spans parser wait"
+            );
+            assert!(error.to_string().contains("interrupted"), "{error}");
+            assert_eq!(
+                entry_count(&pool, org).await,
+                if mode == ImportMode::Commit {
+                    completed as i64
+                } else {
+                    0
+                }
+            );
+        }
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn durable_csv_discards_incomplete_preparation_and_resumes_its_checkpoint(pool: PgPool) {
+    use super::super::csv_source::import_body_with_lease;
+    use crate::jobs;
+
+    for completed in [0, 500] {
+        for mode in [ImportMode::Commit, ImportMode::DryRun] {
+            let org = seed_org(&pool).await;
+            let email = format!("broken-{org}@acme.com");
+            seed_user(&pool, org, &email).await;
+            let source = format!(
+                "{HEADER}{}",
+                ROW.replace("dev@acme.com", &email).repeat(completed + 3)
+            );
+            let id = jobs::enqueue_csv(
+                &pool,
+                org,
+                mode,
+                source.clone().into_bytes(),
+                "broken-input",
+                Default::default(),
+            )
+            .await
+            .unwrap();
+            let (lease, _stop) = jobs::claim_lease_for_test(&pool).await;
+            let body = Body::from_stream(futures_util::stream::iter([
+                Ok(Bytes::from(source.clone())),
+                Err(std::io::Error::other("upload connection lost")),
+            ]));
+            let error = import_body_with_lease(&pool, org, "USD", body, mode, Some(&lease))
+                .await
+                .unwrap_err();
+            assert!(
+                error.to_string().contains("upload connection lost"),
+                "{error}"
+            );
+            assert_eq!(
+                entry_count(&pool, org).await,
+                if mode == ImportMode::Commit {
+                    completed as i64
+                } else {
+                    0
+                }
+            );
+            let job = jobs::status(&pool, org, id).await.unwrap().unwrap();
+            assert_eq!(job.status, "running");
+            assert_eq!(job.processed_count, if completed == 0 { 0 } else { 503 });
+
+            let report =
+                import_body_with_lease(&pool, org, "USD", Body::from(source), mode, Some(&lease))
+                    .await
+                    .unwrap();
+            assert!(report.reconciles());
+            assert_eq!(report.summary.time_entries.created, (completed + 3) as u64);
+            assert_eq!(
+                entry_count(&pool, org).await,
+                if mode == ImportMode::Commit {
+                    (completed + 3) as i64
+                } else {
+                    0
+                }
+            );
+            assert_eq!(
+                jobs::status(&pool, org, id).await.unwrap().unwrap().status,
+                "succeeded"
+            );
+        }
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn durable_csv_report_metadata_is_bounded_after_recovery(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@acme.com").await;
@@ -614,7 +770,10 @@ async fn durable_csv_cancel_joins_parser_and_preserves_committed_rows(pool: PgPo
     )
     .await
     .unwrap();
-    let csv = format!("{HEADER}{}", ROW.replace("2026-01-15", "2026-01-16"));
+    let csv = format!(
+        "{HEADER}{}",
+        ROW.replace("2026-01-15", "2026-01-16").repeat(500)
+    );
     let id = jobs::enqueue_csv(
         &pool,
         org,
@@ -626,6 +785,13 @@ async fn durable_csv_cancel_joins_parser_and_preserves_committed_rows(pool: PgPo
     .await
     .unwrap();
     let (lease, stop) = jobs::claim_lease_for_test(&pool).await;
+    // Let SQL apply the prepared batch, but prevent its publication until
+    // cancellation is recorded. The parser remains waiting for source EOF.
+    let mut barrier = pool.begin().await.unwrap();
+    sqlx::query!("SELECT id FROM horae_jobs WHERE id = $1 FOR UPDATE", id)
+        .fetch_one(&mut *barrier)
+        .await
+        .unwrap();
     let (send, body) = upload_channel();
     let applied = Applied::default();
     let _registration = tracing::Dispatch::new(tracing_subscriber::registry());
@@ -653,7 +819,8 @@ async fn durable_csv_cancel_joins_parser_and_preserves_committed_rows(pool: PgPo
     tokio::time::timeout(Duration::from_secs(10), applied.0.notified())
         .await
         .unwrap();
-    assert!(jobs::cancel(&pool, org, id).await.unwrap());
+    assert!(jobs::cancel(&mut *barrier, org, id).await.unwrap());
+    barrier.commit().await.unwrap();
     tokio::time::timeout(Duration::from_secs(10), run)
         .await
         .unwrap()
@@ -686,7 +853,7 @@ async fn durable_csv_cancel_joins_parser_and_preserves_committed_rows(pool: PgPo
     })
     .await
     .unwrap();
-    assert_eq!(entry_count(&pool, org).await, 2);
+    assert_eq!(entry_count(&pool, org).await, 501);
     let completed = jobs::status(&pool, org, id).await.unwrap().unwrap();
     assert_eq!(completed.status, "succeeded");
     assert!(completed.report.is_some());
@@ -711,6 +878,11 @@ async fn durable_csv_stale_commit_is_fenced_without_a_heartbeat(pool: PgPool) {
     .await
     .unwrap();
     let (old, _stop) = jobs::claim_lease_for_test(&pool).await;
+    let mut barrier = pool.begin().await.unwrap();
+    sqlx::query!("SELECT id FROM horae_jobs WHERE id = $1 FOR UPDATE", id)
+        .fetch_one(&mut *barrier)
+        .await
+        .unwrap();
     let (send, body) = upload_channel();
     let applied = Applied::default();
     let _registration = tracing::Dispatch::new(tracing_subscriber::registry());
@@ -726,6 +898,7 @@ async fn durable_csv_stale_commit_is_fenced_without_a_heartbeat(pool: PgPool) {
         .with_subscriber(collector),
     );
     send.send(Ok(Bytes::from(csv.clone()))).await.unwrap();
+    drop(send);
     tokio::time::timeout(Duration::from_secs(10), applied.0.notified())
         .await
         .unwrap();
@@ -733,11 +906,10 @@ async fn durable_csv_stale_commit_is_fenced_without_a_heartbeat(pool: PgPool) {
         "UPDATE horae_jobs SET lease_until = clock_timestamp() WHERE id = $1",
         id
     )
-    .execute(&pool)
+    .execute(&mut *barrier)
     .await
     .unwrap();
-    let (current, _stop_current) = jobs::claim_lease_for_test(&pool).await;
-    drop(send);
+    barrier.commit().await.unwrap();
     let error = tokio::time::timeout(Duration::from_secs(10), run)
         .await
         .unwrap()
@@ -759,6 +931,7 @@ async fn durable_csv_stale_commit_is_fenced_without_a_heartbeat(pool: PgPool) {
         pending.report,
         Some(serde_json::to_value(ImportReport::new(SourceKind::Csv, ImportMode::Commit)).unwrap())
     );
+    let (current, _stop_current) = jobs::claim_lease_for_test(&pool).await;
     import_body_with_lease(
         &pool,
         org,
