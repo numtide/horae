@@ -30,6 +30,7 @@ mod project_managers;
 mod scoped_directory;
 mod scoped_time;
 mod time_reports;
+mod financial_snapshots;
 mod legacy_readers;
 
 #[cfg(target_os = "linux")]
@@ -293,6 +294,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     scoped_time::check(&pool, &api).await;
     time_reports::check(&pool, &api).await;
     legacy_readers::check(&pool, &api).await;
+    financial_snapshots::check(&pool, &api).await;
     let admin = api.cookie(owner.user_id).await;
     let expired = api.cookie(owner.user_id).await;
     assert_eq!(

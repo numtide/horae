@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT set_config('default_transaction_isolation', $1, false) AS isolation, set_config('default_transaction_read_only', 'on', false) AS read_only, set_config('lock_timeout', $2, false) AS timeout",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "isolation",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "read_only",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "timeout",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "6dca61d479e9287d7310cc7450ce5a20644eb9ffa56b7859c59f0cd954581dea"
+}
