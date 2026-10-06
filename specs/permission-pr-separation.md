@@ -117,14 +117,14 @@ Clients MVP as canonical-permission acceptance.
 | Original import requester provenance, [#237](https://github.com/numtide/horae/pull/237) | `feat/import-job-requester`, `.worktrees/import-job-requester` | Integration base `cfb8240` combining #236/#219/#222 | Draft at `2242361`; 1,218 tests, schema upgrade, SQLx, offline server/WASM Clippy and format passed; full Nix passed on unchanged diagnostic rerun; initial inherited-menu failure retained; retarget after both prerequisite chains, no worker-policy activation |
 | Budget email preparation authority, [#238](https://github.com/numtide/horae/pull/238) | `fix/budget-email-authority`, `.worktrees/budget-email-authority` | Master `1b8fa4f` | Draft at `7a7cede`; 1,133 source-head tests, SQLx, format and cache-inclusive server/WASM Clippy passed; full current-head local Nix passed; no real mail or policy activation |
 | Approval tenant isolation, [#239](https://github.com/numtide/horae/pull/239) | `fix/approval-tenant-isolation`, `.worktrees/approval-tenant-isolation` | Master `1b8fa4f` | Draft at `66a256f`; three source/test files and complete cache patch preserved exactly; 1,124 source-head tests, source review, SQLx, format and offline server/WASM Clippy passed; full current-head local Nix passed |
-| Identity response projections, [#240](https://github.com/numtide/horae/pull/240) | `fix/identity-response-projections`, `.worktrees/identity-response-projections` | Master `1b8fa4f` | Draft at `d2da193`; source suite/cache/lints passed on `1ce993f`; its Nix run was interrupted after a confirmed unbounded browser wait; diagnostic reproduction and exact bounded suite passed; final Nix `79480` running; no activation |
+| Identity response projections, [#240](https://github.com/numtide/horae/pull/240) | `fix/identity-response-projections`, `.worktrees/identity-response-projections` | Master `1b8fa4f` | Draft at `a19ea63`; source suite/cache/lints passed; final `d2da193` Nix failed on stale Clients `get_me.active` assertion; exact identity projection/activity fixture adaptation and complete focused Clients browser passed; new final Nix `99785` running; no activation |
 | Time-writer account activity, [#241](https://github.com/numtide/horae/pull/241) | `fix/time-write-activity`, `.worktrees/time-write-activity` | #228 `0e1e675` | Draft at `7820f8d`; 1,142 tests, cache provenance, bounded review, format, offline server/WASM lint and full Nix `85167` passed; prerequisite integration/retarget/current-head CI still required; no delegated writes or activation |
 | Time-entry invoice identity boundary, [#242](https://github.com/numtide/horae/pull/242) | `fix/time-entry-payload`, `.worktrees/time-entry-payload` | Master `1b8fa4f` | Draft at `43337fc`; 1,122 tests, cache/source provenance, bounded review, format, offline server/WASM lint and full Nix `73808` passed; current-head GitHub checks/delivery review remain; no policy or UI change |
 | Session-bound project-manager delegation, [#243](https://github.com/numtide/horae/pull/243) | `feat/project-manager-delegation`, `.worktrees/project-manager-delegation` | Review base `e44433e` combining #234/#228 | Draft at `3404c85`; suite/cache, final WASM lint and full local Nix passed (cached result confirmed in `10972`); final server gate closed; no form wiring or activation |
 | Own-permission explanation and Settings, [#244](https://github.com/numtide/horae/pull/244) | `feat/own-permission-settings`, `.worktrees/own-permission-settings` | #234 `45d219e` | Draft at `6c4e4d1`; 1,273 Rust tests, SQLx, provenance, review/Spec Kit/format/detector, offline server/WASM lint and isolated Chromium passed; desktop/mobile captures inspected; full local Nix passed (cached result confirmed in `30710`); no activation |
-| Permission audit history, [#245](https://github.com/numtide/horae/pull/245) | `feat/permission-audit-history`, `.worktrees/permission-audit-history` | Review base `59d2798` combining #243 `3404c85` and #244 `6c4e4d1` | Draft at `93f230d`; production/cache head `533922a` has 1,356 Rust tests, SQLx, review, Spec Kit, format/detector and offline lints passed; independent Chromium suite and desktop/mobile capture review passed with final test; full final-head Nix `9966` running; older Nix `61137` remains historical evidence |
+| Permission audit history, [#245](https://github.com/numtide/horae/pull/245) | `feat/permission-audit-history`, `.worktrees/permission-audit-history` | Review base `59d2798` combining #243 `3404c85` and #244 `6c4e4d1` | Draft at `14ad9ca`; source suite/cache/lints passed; `93f230d` Nix failed on seed-vs-session actor fixture mismatch; corrected actual-session fixture passed after New Project permission suite; final Nix `56923` running; older gates remain historical evidence |
 | Read-only legacy permission diagnostics, [#246](https://github.com/numtide/horae/pull/246) | `feat/permission-preflight`, `.worktrees/permission-preflight` | Review base `61c90bc` combining #237 `2242361` and #226 `82d15f3` | Draft at `ff482c8`; 1,244 tests, full SQLx generation/provenance (1,138 descriptors), source preservation, bounded review/Spec Kit/format and offline native/WASM lint `86929` passed; full Nix `99711` running; no endpoint, UI, migration or activation |
-| Materialized XLSX/PDF authorization | `fix/materialized-export-authority`, `.worktrees/materialized-export-authority` | Review base `3edc0b8` combining existing `0046dad` (#227/#228 + #220/#232) and #222 `e9695fd` | Local source `abdda60`; seven complete files exactly match historical `108594e`; corrected disposable suite/cache `20984` running; not yet published or verified |
+| Materialized XLSX/PDF authorization, [#247](https://github.com/numtide/horae/pull/247) | `fix/materialized-export-authority`, `.worktrees/materialized-export-authority` | Review base `3edc0b8` combining existing `0046dad` (#227/#228 + #220/#232) and #222 `e9695fd` | Draft at `d9717e7`; 1,229 tests, full SQLx/provenance (1,135 descriptors), source review/Spec Kit/format and offline native/WASM lint passed; full final-head Nix `32625` running; no policy activation |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -344,11 +344,11 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `5d51b0e` | Expose the current person's permission snapshot | own-permissions | Reader, DTO, complete DB/HTTP tests and registrations in #244 (`6c4e4d1`) on #234; suite, cache, offline lints, isolated browser and full local Nix passed; specification hunks retained |
 | `22ffdab` | Recheck manager access for financial snapshots | manager-snapshot-consumers | Shared helper/queries in #220; consumer/tests/cache in #232, local suite, both target lints and full Nix passed; specification hunks retained |
 | `15c82ef` | Recheck manager access in invoice editor snapshots | manager-snapshot-consumers | Consumer/tests/cache in #232; fixture adaptations documented, local suite, both target lints and full Nix passed; specification hunks retained |
-| `dc822a0` | Recheck manager authority before delivering exports | export-authority | Planned with `108594e` as legacy materialized XLSX/PDF release authorization; shared snapshot visibility must be reconciled with #220's existing helper; original preserved, extraction pending |
-| `108594e` | Revalidate project scope before delivering exports | export-authority | Planned with `dc822a0` as legacy materialized XLSX/PDF delivery; preserve historical authorization and project HTTP tests, later canonical changes remain separately owned; extraction pending |
+| `dc822a0` | Recheck manager authority before delivering exports | export-authority | Materialized XLSX/PDF source/tests and regenerated original cache in #247 (`d9717e7`); shared helper already in #220; 1,229 tests, complete cache, offline lints/format passed; full Nix pending; mixed specification hunks retained |
+| `108594e` | Revalidate project scope before delivering exports | export-authority | Historical project reader and complete original DB/HTTP tests in #247 (`d9717e7`); suite/cache/lints passed, full Nix pending; later canonical changes and mixed specification hunks separately retained |
 | `dcf4ac8` | Recheck current permissions during CSV downloads | export-authority | Planned as dependent legacy CSV cursor/batch-release delivery with migration 0046; do not pull later canonical stream tests into this legacy boundary; original preserved, extraction pending |
 | `0793ce7` | Revalidate budget email authority before delivery | budget-email-authority | Four source/test files byte-identical in #238 (`7a7cede`) on master `1b8fa4f`; 1,133 tests, SQLx, format and offline server/WASM lints passed; full local Nix passed; specification hunks retained |
-| `8aac739` | Add read-only permission migration diagnostics | permission-preflight | Reader and all seven tests byte-preserved in #246 (`ff482c8`) on #237/#226 review base; 1,244 tests and full cache/provenance passed; offline/final Nix gates running; specification hunks retained |
+| `8aac739` | Add read-only permission migration diagnostics | permission-preflight | Reader and all seven tests byte-preserved in #246 (`ff482c8`) on #237/#226 review base; 1,244 tests, full cache/provenance and offline lints passed; final Nix running; specification hunks retained |
 | `8c15bfe` | Show own permissions in Settings | own-permissions | Complete original component, shared descriptions, SSR and resource tests in #244 (`6c4e4d1`); suite/cache, isolated browser and full local Nix passed; no full T018 claim; specification hunks retained |
 | `300d1e9` | Expose administrator permission history | permission-audit | Complete historical DTO/HTTP/fencing tests in #245 (`533922a`); suite, complete cache provenance and offline lints passed; full Nix/browser pending; specification hunks retained |
 | `03e90b1` | Connect permission editor previews and commands | permission-editor | Template DTOs, hardening/tests and administration helpers in #226; profile DTOs, shared calculation and command hardening/tests in #234; editor/session/remaining hunks retained |
@@ -2607,3 +2607,80 @@ publishing the scoped draft. Collect `99711`/#246, `9966`/#245 and `79480`/#240
 without restarting live handles. The original tracked unpublished work still
 exactly matches its backup snapshot; original branches, #208 and real data are
 unchanged. This iteration is PROGRESS; the overall goal remains incomplete.
+
+### Materialized exports published; final browser failures corrected
+
+The previous iteration was PROGRESS. Re-read the objective and polled the four
+specific live handles; no process was restarted because of an observation timeout.
+Corrected XLSX/PDF suite/cache `20984` exited zero: 889 app, 180 integration and
+160 core tests, 1,229 passed total with 11 existing manual tests ignored. The
+complete SQLx preparation succeeded after all targets were invalidated.
+
+Read-only provenance check `23074` confirmed 1,088 base descriptors: 1,086
+unchanged, two removed, zero modified; 49 additions match historical `108594e`
+exactly, 1,135 total, zero unmatched. The two removed descriptors are the old
+separate project size query (`717614…`) and the project-row projection without
+private IDs (`57eb29…`); the single bounded materialization and ID-bearing
+projection replace them. No unrelated query was discarded.
+
+Unsigned cache head `d9717e7ed9e9982e01668ee611a9e7aef950c358` is clean and
+pushed with review base `3edc0b8`. Opened draft
+[#247](https://github.com/numtide/horae/pull/247). Formatting `48059` passed
+unchanged. Offline native/all-target and WASM lint `49167` passed on that exact
+head, warnings and performance lints denied. Full Nix `32625` is live. The PR
+records successful source/cache/lint checks separately from its pending full
+gate. No GitHub merge or policy activation occurred.
+
+Two previously live final-head Nix gates exited 1; neither is certified green:
+
+- #240 `79480` on `d2da193` failed in inherited `clients-access.cjs` at its
+  `actor.active === true` assertion. `get_me` intentionally no longer returns
+  activity. Test-only `a19ea63857dd149a64fc3519a19b3cab7a0489b8` now asserts the
+  exact five public identity keys and verifies current activity from the
+  disposable actor/tenant row. This strengthens the payload check without
+  deleting any role/scope/inactive/anonymous assertion. Focused Chromium run
+  `59611` passed all four role/scope scenarios and negative write/session cases
+  using the exact failed-head package. Formatting `51138` passed. The fix is
+  pushed; full Nix `99785` is running on the new head. The older unbounded
+  action-errors interruption remains recorded separately.
+- #245 `9966` on `93f230d` failed at the empty-history assertion. Its ARIA
+  snapshot showed `Other draft owner` authenticated, while the fixture had
+  installed canonical state for `admin@example.com`. The preceding New Project
+  permission suite creates the additional Administrator; dev login does not
+  promise the seed account. Test-only `14ad9ca` obtains the actual session's
+  `get_me` endpoint from the exact built server, validates its IDs, legacy
+  Administrator role and DB activity, and creates/cleans that actor's fixture
+  only. All history assertions and zero-state preconditions remain. Combined
+  browser run `84853` passed `new-project-permissions permission-history` against
+  the failed-head package; this exercises the additional-admin prerequisite,
+  not just an isolated seed login. Formatting `33741` passed. The fix is pushed;
+  full Nix `56923` is live on its new head. Earlier isolated-browser and old-head
+  Nix passes do not substitute for this pending complete gate.
+
+#246 final Nix `99711` remains live and has reached browser/deployment tests;
+do not restart it. #247's local Cargo lint has finished, so the shared target is
+free for the next extraction, independently of the Nix sandbox builds.
+
+Documentation ownership inspection identified exactly 59 changed non-cache
+Markdown/JSON paths in original #212: 54 new feature-015 documents, the feature
+selector, constitution, New Project spec, AGENTS and README. Feature 015 is not
+present in recorded master. Keep these as existing artifacts, not a new specify
+exercise. Three histories own the governance/selection/New Project deltas:
+`05448a8`, `b3ee8da` and `ab9b1a4`. The constitution remains 1.0.0 on master;
+original 1.1.0 is preserved proposal material, not adopted by these extractions.
+
+Master's feature selector now points to 016, and its New Project spec has newer
+expense-budget/currency acceptance (including FR-026). A whole-file replacement
+from #212 would erase that work. Carry the original permission-transition hunks
+onto the newer spec without changing those expense requirements; preserve the
+old selector as historical work rather than resetting the current feature.
+AGENTS' original SQLx timestamp guidance belongs to cache-preparation hygiene;
+README's ICU/name-collision prerequisite belongs to #222's migration deployment
+documentation. These paths are inventoried, not yet extracted/reviewed deliveries.
+Original progress/quickstart are historical evidence, never proof that an
+extracted head passed. Unpublished Clients documents/code remain separate.
+
+Next collect final-head `99785`, `56923`, `99711` and `32625`, and continue the
+dependent legacy CSV boundary with migration 0046. Remaining canonical
+consumers/editor and documentation ownership are still required. The goal is
+incomplete; this iteration is PROGRESS, with no original closure or real-data write.
