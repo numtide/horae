@@ -1151,3 +1151,41 @@ Remote verification confirms #233 is draft on the intended review base, head
 has successful GitHub Flake Check and Format in run `37486457726`; Nixbot build
 is still pending. #231's `e9898ed` remains on the original live Flake Check run
 `37490375038` with Format passed; no rerun or repeated polling was requested.
+
+### 2026-10-06 — Person-profile command extraction
+
+The preceding iteration made progress: #233 was published, its combined tests
+and offline checks passed, and current #227/#228 evidence was recorded and
+pushed. Re-read the saved objective and confirmed #216 remains merged before
+editing. Existing Nix handles `80170` and `1215` were both verified live; no
+restarts. No original branch or unfinished work was changed.
+
+Created `integration/profile-command-prerequisites` in its isolated worktree
+at `46f02f7`: #226 `82d15f3` plus the exact #221 domain patch, replayed without
+conflicts. This is a review/test base, not a separate delivery or merge target.
+Created `refactor/person-profile-commands` in `.worktrees/person-profile-commands`
+on that base. It carries original migration 0044, byte-identical final
+`profiles.rs` from `db3935d`, and all 27 profile-command PostgreSQL tests from
+`03e90b1`. The only removed test-file lines wire the separately retained editor
+child module; no profile assertion or helper was changed. Later additions to
+this test root only wire other consumer modules and remain separately accounted.
+
+The four needed profile DTOs and historical `RemovedRelationship` retain their
+exact original fields and serde attributes. They extend #226's existing
+server-only command models without including unrelated UI/audit reader DTOs.
+Template commands/tests and their shared transaction prelude are unchanged.
+This preserves the later actor/target/survivor SHARE locks, bounded local
+transaction settings, strict identity and replay checks, exact relationship
+confirmation, audit rollback and last-administrator protection. Commands stay
+internal and refuse policies 0/future; no endpoint, UI, backfill or activation.
+
+Read the current person-profile and editor contracts and original T056–T058 /
+T126–T129 task hunks. This extraction covers the internal command boundary and
+its later hardening, not the separately retained editor/session/UI acceptance.
+The combined core permission modules match the final original exactly.
+Formatting passed unchanged (`1025`); the complete workspace suite is running
+in `7729` on private PostgreSQL. A separate disposable migration-upgrade check
+`59932` starts from the prerequisite schema including 0047 and then applies the
+retained 0044, to verify actual delivery order without renumbering migrations.
+Next: collect both checks, regenerate SQLx, run offline server/WASM gates,
+review/publish the bounded draft and continue the remaining original accounting.
