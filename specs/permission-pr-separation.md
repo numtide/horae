@@ -101,7 +101,8 @@ Clients MVP as canonical-permission acceptance.
 | Legacy report/invoice readers from #217, [#220](https://github.com/numtide/horae/pull/220) | `fix/report-reader-authority-master`, `.worktrees/report-reader-authority-master` | `02f7b58` | Draft at `bc0c7a0`; 1,127 tests passed, 11 existing ignored; SQLx, offline server/WASM lint and formatting passed; CI pending |
 | Pure record scopes and grant catalog, [#219](https://github.com/numtide/horae/pull/219) | `refactor/permission-domain-foundation`, `.worktrees/permission-domain-foundation` | `02f7b58` | Draft at `ec7ddbd`; 158 core tests, core Clippy and formatting passed; full CI pending; no runtime integration |
 | Pure rate/management/approval rules, [#221](https://github.com/numtide/horae/pull/221) | `refactor/permission-domain-gates`, `.worktrees/permission-domain-gates` | #219 `ec7ddbd` | Draft at `539316c`; 187 core tests, core Clippy and formatting passed; full local Flake Check running |
-| Non-activating permission storage | `refactor/permission-storage-foundation`, `.worktrees/permission-storage-foundation` | #219 `ec7ddbd` | Extracted locally; full tests running; no runtime activation or new endpoints |
+| Non-activating permission storage, [#222](https://github.com/numtide/horae/pull/222) | `refactor/permission-storage-foundation`, `.worktrees/permission-storage-foundation` | #219 `ec7ddbd` | Draft at `e9695fd`; 1,170 tests passed, 11 existing ignored; SQLx, offline server/WASM lint and formatting passed; full local Flake Check running |
+| Legacy import report conversion lock order | `fix/import-report-lock-order`, `.worktrees/import-report-lock-order` | `02f7b58` | Source/tests extracted locally from `c3d17cb`; full tests running; no schema or permission dependency |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -303,12 +304,12 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `cf5d635` | Define rejection of person-management self-assignments | specification-history | Held in original backup; extraction pending |
 | `804b1d8` | Separate permission increment readiness from activation gates | specification-history | Held in original backup; extraction pending |
 | `6e61593` | Validate person-management grant compatibility and self-links | scope-domain | Code/tests in #221; specification hunks retained for reconciliation |
-| `ec35446` | Store versioned permission profiles without activating new policy | permission-storage | Storage/schema/name-validator hunks extracted locally; verification and specification reconciliation pending |
+| `ec35446` | Store versioned permission profiles without activating new policy | permission-storage | Storage/schema/name-validator code/tests in #222; specification hunks retained for reconciliation |
 | `d50c979` | Add audited permission template commands | permission-profile-transactions | Held in original backup; extraction pending |
-| `f5e0dde` | Apply permission profiles with atomic scope changes | permission-profile-transactions | Held in original backup; extraction pending |
+| `f5e0dde` | Apply permission profiles with atomic scope changes | permission-profile-transactions | Model serialization in #222; profile commands and remaining hunks retained |
 | `9a7e05d` | Add audited project manager delegation | project-manager-delegation | Held in original backup; extraction pending |
 | `fc85231` | Add administrator-only permission audit lookup | permission-audit | Held in original backup; extraction pending |
-| `c3d17cb` | Prevent deadlocks during legacy import report conversion | import-transaction-lifecycle | Held in original backup; extraction pending |
+| `c3d17cb` | Prevent deadlocks during legacy import report conversion | import-transaction-lifecycle | Conversion source/tests extracted locally; verification, SQLx and specification reconciliation pending |
 | `3ae8e08` | Coordinate project access changes before locking resources | legacy-access-writers | Organization SHARE query reused in #220; writer/helper consumers and remaining hunks retained |
 | `907bc88` | Recheck authority when saving organization branding | branding-authority | Held in original backup; extraction pending |
 | `d7a5a21` | Revalidate administrator authority for Harvest connection changes | import-authority | Held in original backup; extraction pending |
@@ -354,7 +355,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `5ec183a` | Fence time-entry writes against account deactivation | time-writer-activity | Held in original backup; extraction pending |
 | `228e151` | Clarify timesheet context and locked calendar behavior | specification-history | Held in original backup; extraction pending |
 | `4294aa3` | Isolate permission browser fixtures and retain test assets | browser-fixture-tooling | Held in original backup; extraction pending |
-| `3308926` | Keep permission profile name uniqueness independent of database locale | permission-storage | Migration/storage regressions extracted locally; command lookup changes remain with template commands |
+| `3308926` | Keep permission profile name uniqueness independent of database locale | permission-storage | Migration/storage regressions in #222; command lookup changes remain with template commands |
 | `8af562e` | Record passing permission regression gates | specification-history | Held in original backup; extraction pending |
 | `9b53182` | Verify profile capacity and confirm timesheet discovery | permission-editor, specification-history, time-readers | Held in original backup; extraction pending |
 | `60f60f9` | Add scoped Timesheet person discovery | time-readers | Held in original backup; extraction pending |
@@ -380,7 +381,7 @@ avoid duplicate shared helpers/queries when finalizing them.
 | `1b41033` | Record People integration verification and remaining report scope | specification-history | Held in original backup; extraction pending |
 | `75f13a1` | Add scoped detailed time report reads | time-report-readers | Held in original backup; extraction pending |
 | `cbc78a8` | Apply scoped permissions to time report spreadsheets | time-report-exports | Held in original backup; extraction pending |
-| `09bd15f` | Apply scoped permissions to streamed time exports | time-report-exports | Held in original backup; extraction pending |
+| `09bd15f` | Apply scoped permissions to streamed time exports | time-report-exports | Native stored-row decoder in #222; streamed exports and remaining hunks retained |
 | `93aaa68` | Support multi-selection filters in time downloads | time-report-exports | Held in original backup; extraction pending |
 | `a23804f` | Include full-period totals in scoped time reports | time-report-readers | Held in original backup; extraction pending |
 | `7266abb` | Connect scoped time reports with bound downloads | time-report-consumer | Held in original backup; extraction pending |
@@ -579,3 +580,44 @@ for storage remains pending, and no storage PR has been published yet.
 Next: collect storage tests, regenerate its SQLx cache and verify offline/lint;
 collect the live local #221 Flake Check without restarting it. Then publish the
 storage extraction and continue command/read-consumer groups and spec reconciliation.
+
+### 2026-10-06 — Storage published; independent conversion repair started
+
+Storage session `96597` finished successfully: 830 app tests, 180 integration
+tests and 160 core tests passed (1,170 total), with the 11 pre-existing manual
+scale/stress tests still ignored. This includes all 11 original storage tests
+and both original name-validation tests. No Rust source changed after that run.
+SQLx preparation passed in `31386`: all 1,003 base descriptors are unchanged;
+the 19 additional descriptors match the original `db3935d` blobs exactly.
+Offline all-target server Clippy (`2494`), WASM Clippy (`92443`) and final
+formatting (`39928`) passed, with warnings denied and no format changes.
+
+Unsigned commit `e9695fda224d1f8bc22e8e7fb7e8fc0a43fa4625` is published in
+draft #222. Its 28 paths comprise nine Rust/schema paths and 19 query descriptors.
+Storage review checked composite tenant FKs, exact restoration without inference,
+restricted template deletion, non-activation, Unicode collision rollback and
+the absence of endpoints/callers. No high/critical finding within that boundary;
+future command authorization, profile capacity and cutover remain out of scope.
+The two migrations, models, storage tests and final catalog files match the
+preserved final source. Full local Flake Check is running on this committed head
+in session `50374`; master-only Actions filtering still requires later CI.
+
+The existing #221 local Flake Check (`98201`) remains live: release server/WASM
+build completed and browser checks are progressing. This is not a terminal pass.
+The latest GitHub observations still show #219/#220 Flake Check and nix-build
+running, with Format and nix-eval successful. No check was restarted or bypassed.
+
+Created an independent `fix/import-report-lock-order` worktree from `02f7b58`.
+Its two source/test files match `c3d17cb` exactly: discovery without the job lock,
+organization SHARE before job UPDATE, READ COMMITTED revalidation and rediscovery
+after another worker/converter changes the candidate. All five original races
+are retained. Existing size-one pool, archived-error and state-preservation tests
+remain intact. The later `482b7c5` requester-provenance assertions stay with that
+schema/feature, not this extraction. No original worktree was modified.
+Full workspace server/core tests are running on a private database in `58270`.
+
+Next: collect conversion tests, regenerate its SQLx cache, complete adversarial
+and offline/lint checks, and publish its independent draft PR. Collect the live
+#221/#222 Nix outcomes without restarting either process. Continue the remaining
+behavior groups and specification-hunk mapping; the overall separation is not
+complete and no merges or original-PR closures have been performed.
