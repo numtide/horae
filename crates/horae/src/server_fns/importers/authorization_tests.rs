@@ -23,7 +23,10 @@ use uuid::Uuid;
 
 use super::*;
 
+mod approval_labels;
 mod cli;
+mod session_identity;
+mod user_directory;
 
 #[cfg(target_os = "linux")]
 mod report_stress;
@@ -275,6 +278,9 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     };
     let mut server = tokio::task::JoinSet::new();
     server.spawn(async move { axum::serve(listener, router).await.unwrap() });
+    session_identity::check(&pool, &api).await;
+    user_directory::check(&pool, &api).await;
+    approval_labels::check(&pool, &api).await;
     let admin = api.cookie(owner.user_id).await;
     let expired = api.cookie(owner.user_id).await;
     assert_eq!(
