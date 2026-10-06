@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE permission_templates SET catalog_version = 2 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "07de8e12eb9c9d55562901a6b332f45ce55612b71876cbe9b64d73fbfc625490"
+}

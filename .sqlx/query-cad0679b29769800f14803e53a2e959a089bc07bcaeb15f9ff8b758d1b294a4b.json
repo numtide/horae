@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO permission_change_receipts\n         (id, org_id, actor_user_id, operator_id, operator_command, request_id, format_version, intent, result, audit)\n         VALUES ($1, $2, $3, $4, $5, $6, 1, '{}', '{}', '{}')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cad0679b29769800f14803e53a2e959a089bc07bcaeb15f9ff8b758d1b294a4b"
+}
