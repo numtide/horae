@@ -149,10 +149,11 @@ Clients MVP as canonical-permission acceptance.
 | Scoped Reports screen, [#268](https://github.com/numtide/horae/pull/268) | `feat/scoped-time-report-ui`, `.worktrees/scoped-time-report-ui` | #267 `e029a89`, inherited report access/readers and all four export routes | Draft at `aef180f`; original components,15 component tests and538-line isolated Chromium fixture. Format/source/provenance/syntax pass; gate50800 failed on two test-only user DTO references; minimal API-matching fix published and new full gate64831 running. No CSS/SQL/schema/activation; full T203 remains open |
 | Cross-PR Reports/Timesheet/People verification only | `integration/reports-permission-check`, `.worktrees/reports-permission-integration` | Combines verified `1a87961` with #268 `810ce57` and its report/export foundations | Local integration merge `b7836d7`, not a delivery PR or GitHub merge. Both HTTP registration sets and all30 unique browser suites retained; dedicated source/test blobs unchanged. Format/syntax/source comparison pass; full native gate25958 running |
 | Scoped project editor, [#269](https://github.com/numtide/horae/pull/269) | `feat/scoped-project-editor`, `.worktrees/scoped-project-editor` | `integration/permission-readers-editor-check` | Draft at `a9ba27b`; canonical fields, preserved hidden values and manager edits extracted. Lost-acknowledgement fixture failed in the full gate but passes isolated; failure remains unresolved. No activation |
-| Scoped project overview/detail, [#270](https://github.com/numtide/horae/pull/270) | `feat/scoped-project-reads`, `.worktrees/scoped-project-reads` | `integration/project-read-prerequisites` | Draft at `4a5c7d9`; current reader, budgets and bound UI extracted. Three fixture corrections and full browser10797 pass; full native51216 running. ARM readiness and repeated-import failures remain open |
-| Scoped project CSV/XLSX delivery, [#271](https://github.com/numtide/horae/pull/271) | `feat/scoped-project-exports`, `.worktrees/scoped-project-exports` | `integration/project-delivery-prerequisites`, combining #270 and #267 | Draft at `255aa94`; requester and financial release guards plus original DB/HTTP tests extracted. Full browser gate failed the inherited fixed project-count assertion; #270 corrections not yet propagated |
-| Scoped Harvest-compatible project reads, [#272](https://github.com/numtide/horae/pull/272) | `feat/scoped-harvest-projects`, `.worktrees/scoped-harvest-projects` | #270 | Draft at `abe5aa0`; original list/count/direct-ID boundary and race tests extracted. Full acceptance pending; fresh Nixbot215 reports ARM and browser failures. Parent fixture corrections not yet propagated |
-| Scoped task catalog/tracking reads, [#273](https://github.com/numtide/horae/pull/273) | `feat/scoped-task-reads`, `.worktrees/scoped-task-reads` | #272 | Draft at `5a04f89`; original readers, DB/HTTP/browser tests and sidebar interaction correction extracted. Inherited filter-count failure remains until parent correction propagates. Task lifecycle and catalog-management UI are still separate retained work |
+| Scoped project overview/detail, [#270](https://github.com/numtide/horae/pull/270) | `feat/scoped-project-reads`, `.worktrees/scoped-project-reads` | `integration/project-read-prerequisites` | Draft at `4a5c7d9`; full browser10797 and complete native51216 pass. Fresh Nixbot266 remains running; ARM readiness and repeated-import failures are not yet closed |
+| Scoped project CSV/XLSX delivery, [#271](https://github.com/numtide/horae/pull/271) | `feat/scoped-project-exports`, `.worktrees/scoped-project-exports` | `integration/project-delivery-prerequisites` at375e9bd, combining #270 and #267 | Draft at `d61bfd3`; parent browser corrections propagated with exact expected tree. Full native81807 running; no fresh-head acceptance yet |
+| Scoped Harvest-compatible project reads, [#272](https://github.com/numtide/horae/pull/272) | `feat/scoped-harvest-projects`, `.worktrees/scoped-harvest-projects` | #270 | Draft at `fd91c3d`; parent browser corrections propagated with exact expected tree. Its integration in #273 is being checked by76300; own fresh-head acceptance remains pending |
+| Scoped task catalog/tracking reads, [#273](https://github.com/numtide/horae/pull/273) | `feat/scoped-task-reads`, `.worktrees/scoped-task-reads` | #272 | Draft at `4b2c87d`; parent browser corrections propagated with exact expected tree. Full native76300 running. Task lifecycle and catalog-management UI remain separate retained work |
+| Current task creation and explicit rate edits, [#275](https://github.com/numtide/horae/pull/275) | `feat/scoped-task-writes`, `.worktrees/scoped-task-writes` | #2734b2c87d | Draft at `9548cdd`; original8dd61d4/facfb49 commands, tests and contract extracted. Source provenance, formatting and whitespace pass; Nix tests/SQLx53475 running. No lifecycle, catalog UI, later atomic rate creation or activation |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
 Combine or subdivide only after tracing code and test dependencies. Prefer
@@ -455,8 +456,8 @@ Clients documents are separate and are not silently included in #248.
 | `2631186` | Enforce scoped project reads across pages and exports | project-read-permissions | Ordinary readers, budgets, minimal labels and bound overview/detail UI in #270; CSV/XLSX release boundaries in #271; Harvest-compatible project list/count/direct-ID readers in #272. Shared export helpers compose over earlier export PRs. Tests and original descriptors retained; fixture adaptations and failing gates recorded below. Final shared-file hunk audit and complete acceptance remain pending; specifications owned by #248 |
 | `1b81680` | Record project permission delivery acceptance | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `f6e8bf1` | Enforce task catalog and tracking read permissions | task-permissions-lifecycle | Task catalog/tracking and Harvest-compatible readers, DB/HTTP/browser fixtures, original descriptors and sidebar interaction correction extracted in #273. Full acceptance remains pending; later task creation, editing, activity and linking commands are still retained separately. Specifications owned by #248 |
-| `8dd61d4` | Enforce current task creation and project scope permissions | task-permissions-lifecycle | Held in original backup; extraction pending |
-| `facfb49` | Protect task rate edits with explicit intent and current permissions | task-permissions-lifecycle | Held in original backup; extraction pending |
+| `8dd61d4` | Enforce current task creation and project scope permissions | task-permissions-lifecycle | Creation commands and original DB/HTTP tests extracted into draft #275; current-head verification pending. Later atomic creation changes remain owned by dcadcee's pending extraction |
+| `facfb49` | Protect task rate edits with explicit intent and current permissions | task-permissions-lifecycle | Explicit rate transport, commands, original mutation/DB/HTTP tests and contract extracted into draft #275; current-head verification pending |
 | `ac4c90c` | Authorize task activity changes and guard running timers | task-permissions-lifecycle | Held in original backup; extraction pending |
 | `0591407` | Preserve project task archival across restores and imports | task-permissions-lifecycle | Held in original backup; extraction pending |
 | `979a594` | Enforce scoped project task linking and rate currency | task-permissions-lifecycle | Held in original backup; extraction pending |
@@ -5344,3 +5345,65 @@ remote is still f6e29c8. Do not claim these local ledger commits are published.
 Next collect51216 without restarting it, then propagate the verified fixture
 commits to dependent stacks and publish the retained ledger updates once GitHub
 accepts writes. The unresolved ARM and sibling-editor gates remain separate.
+
+### Verified project parent, propagated stacks and task commands — 2026-10-07
+
+The preceding goal turn made progress: published browser contract correction,
+passing focused/full browser checks and explicit original SQLx deletion owners.
+Reconfirmed #216 merged and original #212 still at db3935d with the same 18 dirty
+paths before continuing. No original or #208 files were changed.
+
+Full native gate 51216 completed with exit 0 on published #270 4a5c7d9: all
+x86_64 checks passed, including the full browser runner, SQLx, server/WASM,
+lint, tests and deployment/OIDC checks. Its application unit suite reports
+1,066 passed, zero failed and 11 inherited ignored; component/integration suites
+also passed. The command explicitly omits incompatible ARM/Darwin systems, so
+this is not ARM acceptance. Current Nixbot 266 is still running on that head.
+
+Propagated only the three verified browser-file changes through the existing
+dependent stacks, with expected trees calculated by `git merge-tree` before
+updating any branch and compared exactly afterward:
+
+| Branch / delivery | Before | After |
+| --- | --- | --- |
+| #272 `feat/scoped-harvest-projects` | abe5aa0 | fd91c3d |
+| #273 `feat/scoped-task-reads` | 5a04f89 | 4b2c87d |
+| `integration/project-delivery-prerequisites` | 8cd7a32 | 375e9bd |
+| #271 `feat/scoped-project-exports` | 255aa94 | d61bfd3 |
+
+The prerequisite branch uses a local composition commit; no GitHub PR was
+merged. All four refs were published atomically with exact old-head leases.
+The manifest is `.scratch/project-browser-propagation.json`; original heads
+are preserved under `backup/project-browser-20261007/`. The global Git
+`rebase.updateRefs` option initially moved three newly created backup branches;
+they were restored using compare-and-swap to the manifest's original hashes
+and reverified before publication. The scratch propagation script now disables
+that option. No original work was lost or rewritten. Fresh full native checks
+76300 (#273, including #272) and 81807 (#271) are running; old passes are not
+counted for these new heads.
+
+Draft #275 at 9548cdd owns the existing creation and direct-edit commands from
+8dd61d4/facfb49 on #273 4b2c87d. Its 33 paths preserve 11 creation tests, eight
+edit tests, strict transport tests, legacy mutation regressions and both real
+session matrices. Six complete source files, the task command/mutation-test
+sections and 22 query descriptors match facfb49 exactly; descriptor SHA-256
+hashes were verified. The shared project mutation fixture deliberately retains
+this base's editor request shape instead of importing #269's separate fields.
+HTTP registrations were unioned and formatted in the existing harness.
+
+The original task contract is retained with its historical source-snapshot
+acceptance records, not claimed as a new test result. This extraction preserves
+policy-zero behavior and adds no activation, migration, UI, dependency or real
+data change. It replaces one obsolete task-link cache descriptor only in this
+new worktree; the descriptor remains recoverable in the parent/original history.
+Formatting and whitespace pass. Fresh tests and live-schema SQLx validation
+are running in Nix session 53475. Full gates and final adversarial review remain
+pending, and the PR is explicitly a draft.
+
+The later original task activity/import work, existing-task links, catalog UI,
+atomic creation with a rate/requester and project-editor archive/restore remain
+separate pending extractions; #275 does not claim to deliver them. Next collect
+76300, 81807 and 53475 without restarting live checks, complete #275's gates and
+review, reconcile the remote descriptions/ledger after the publication errors,
+then continue those remaining task boundaries and full hunk accounting. No
+extraction merge, #212/#217 closure or policy activation is authorized.
