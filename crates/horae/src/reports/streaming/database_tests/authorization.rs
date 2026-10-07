@@ -433,8 +433,8 @@ async fn streamed_compressible_unicode_payload_bounds_native_prefetch(pool: PgPo
     cursor::declare_entries(
         &mut tx,
         ids.org_id,
-        ("2026-09-07".parse().unwrap(), "2026-09-07".parse().unwrap()),
-        params().filters(),
+        ids.user_id,
+        &params().time_query().unwrap(),
     )
     .await
     .unwrap();
@@ -589,7 +589,7 @@ async fn streamed_project_release_refreshes_scope_after_parent_wait(pool: PgPool
             purpose: Purpose::Projects,
         };
         authority.begin(&mut tx).await?;
-        authority.check(&mut tx, &[ids.project_id]).await
+        authority.check(&mut tx, &[ids.project_id], &[]).await
     });
     wait_for_blocked(&pool, pid).await;
     sqlx::query!(
@@ -631,7 +631,7 @@ async fn streamed_authority_releases_successful_locks_and_overrides_inherited_se
     };
     authority.begin(&mut tx).await.unwrap();
     for _ in 0..10 {
-        authority.check(&mut tx, &[]).await.unwrap();
+        authority.check(&mut tx, &[], &[]).await.unwrap();
     }
     let settings=sqlx::query!("SELECT current_setting('transaction_isolation') isolation,current_setting('transaction_read_only') read_only,
         current_setting('lock_timeout') lock_timeout,current_setting('statement_timeout') statement_timeout,current_setting('idle_in_transaction_session_timeout') idle_timeout")
