@@ -106,14 +106,15 @@ implementation remains incomplete. Do not treat
 Shared CI prerequisite, distinct from the58 original-work extractions:
 [#282](https://github.com/numtide/horae/pull/282), `test/import-recovery-checks`
 at `e39f033a`, is a draft over master containing only the two existing recovery
-test files. Fresh CI is pending. It is not another feature extraction. The
+test files. Current-head Nixbot317 and GitHub Actions37676457227 passed. It is
+not another feature extraction. The
 CSV fixture patch is now inherited by #224 from this base, not duplicated in its
 review delta. The two VM follow-ups remain in #270 pending its dependency refresh.
 
 This snapshot supersedes the commit/status labels in the historical delivery
 table below. All59 delivery PRs remain drafts; all remote heads match the local
-branches. The refreshed snapshot has12 successful heads,28 failed heads,10 running
-builds and9 new heads without a build aggregate yet. A success
+branches. The refreshed snapshot has14 successful heads,24 failed heads,14 running
+builds and7 new heads without a build aggregate yet. A success
 is not completion of the cross-stack review; a failure is not necessarily a new
 functional defect. Failure classes and exact-head local evidence are recorded
 in the iteration sections. No PR is approved for merging by this inventory.
@@ -125,25 +126,25 @@ in the iteration sections. No PR is approved for merging by this inventory.
 | #221 | cc474e87 | Running |
 | #222 | 1fef1a24 | Running |
 | #223 | bc74af8d | Awaiting fresh build result |
-| #224 | c374710a | Awaiting fresh build result |
+| #224 | c374710a | Passed |
 | #225 | 34a32928 | Running |
 | #226 | 1f9d20e8 | Running |
 | #227 | 8f3a7e64 | Running |
-| #228 | 951baf9d | Awaiting fresh build result |
+| #228 | 951baf9d | Running |
 | #231 | 110b365a | Running |
 | #232 | c90aa898 | Running |
-| #233 | 26bbda2f | Awaiting fresh build result |
-| #234 | 6b524f70 | Awaiting fresh build result |
-| #235 | 7331d30b | Awaiting fresh build result |
-| #236 | 5f0c619c | Awaiting fresh build result |
+| #233 | 26bbda2f | Running |
+| #234 | 6b524f70 | Running |
+| #235 | 7331d30b | Running |
+| #236 | 5f0c619c | Running |
 | #237 | 7c7d9d6c | Failed |
 | #238 | 24aca30d | Running |
 | #239 | f4cea603 | Running |
-| #240 | 68a0fad8 | Failed |
-| #241 | 5feaa950 | Failed |
-| #242 | 0abace6f | Failed |
+| #240 | 1066cf1a | Awaiting fresh build result |
+| #241 | f6b86759 | Awaiting fresh build result |
+| #242 | 893219a9 | Awaiting fresh build result |
 | #243 | dde4a8a9 | Failed |
-| #244 | a0b3ee4e | Failed |
+| #244 | 7972e987 | Awaiting fresh build result |
 | #245 | 7dc76ed3 | Failed |
 | #246 | af7bc6fd | Failed |
 | #247 | 4c6d0110 | Passed |
@@ -178,11 +179,10 @@ in the iteration sections. No PR is approved for merging by this inventory.
 | #279 | 9fcc0a09 | Failed |
 | #280 | 24c5d0e1 | Failed |
 | #281 | cd8d1db7 | Passed |
-| #282 | e39f033a | Running |
+| #282 | e39f033a | Passed |
 
-#219/#220/#223/#224/#225/#227/#231/#238/#239 now depend only on shared CI #282.
-Direct-base ancestry is stale for six PRs: #241 needs the updated #228 and
-#244 needs the updated #234;
+#219/#220/#223/#224/#225/#227/#231/#238/#239/#240/#242 now depend only on shared CI #282.
+Direct-base ancestry is stale for four PRs:
 #272 lacks the newer #270 cache/ARM test changes;
 #273/#281 lack #272's latest cache deletions; #275 lacks #273's latest cache
 deletion. This is not an exhaustive transitive-base audit: named integration
@@ -6803,3 +6803,75 @@ failures, then propagate reviewed fixes and run the complete gate. No local full
 gate is currently running. Continue independent dependency refresh while focused
 diagnostics run; do not restart the failed whole subset merely hoping for green.
 No original-source edit, policy activation, real-data mutation, merge or closure.
+
+### Focused failure reproduction and independent refresh — 2026-10-07
+
+Previous iteration made progress through eight preserved branch refreshes and
+the terminal74548 result. Reconfirmed #216 merged. Created isolated local-only
+branch `test/integration-failure-diagnostics`, worktree
+`.worktrees/integration-failure-diagnostics`, from exact failing5c43f24a. Diagnostic
+commitc7e5f739d65f733f236a33fc52608f02fd2013bf retains all original assertions and
+adds only test-mode CSV send-error output without its URL, plus reader/cancel
+context to the original failing organization-lock assertion. No delivery branch
+or original source was instrumented, and this branch has not been pushed.
+
+Scratch `.scratch/focused-integration-repro.nix` reuses the existing Nix test
+derivation, dependency artifacts and disposable PostgreSQL setup. It runs only
+the two exact failed tests, up to20 independent invocations each, stopping a
+case on its first failure while still attempting the other. This is diagnostic
+reproduction, not retries to declare a required gate green. It neither changes
+registered CI nor certifies the full suite. Session10979 is live, compiling the
+app test binary; keep the diagnostic worktree frozen. Log:
+`.scratch/focused-integration-repro.log`. No root cause or repair is yet verified.
+
+While that build ran, refreshed four clean branches without functional changes:
+
+| PR | Previous head | Published head | Parent |
+| --- | --- | --- | --- |
+| #240 | 68a0fad8 | 1066cf1aef919c8fe4f8da01cff4a8df5bbf3f0a | #282 e39f033a |
+| #241 | 5feaa950 | f6b867597836a0ca83a347f6fabdced1095c5125 | #228 951baf9d |
+| #242 | 0abace6f | 893219a94f2514c69046bbd160cf904a8d514622 | #282 e39f033a |
+| #244 | a0b3ee4e | 7972e98705edd34f4d7dde81d2b16fb61bc61765 | #234 6b524f70 |
+
+All11 replayed commits are identical by range-diff; each resulting tree matches
+the precomputed old-parent composition. Old/new files are identical except the
+two inherited CI files and #244's inherited six-line README note, all exactly
+matching their new parent. No manual conflict resolution or source rewrite.
+updateRefs/signing disabled. Formatting65889/42079/2939/49225 and whitespace
+checks passed without changes. Atomic publication84528 used exact old-head
+leases; GitHub confirms all four heads/bases/drafts. #240/#242 now target #282;
+the two dependent base names are unchanged. Bodies require fresh CI and retain
+the unresolved cross-stack failure caveat.
+
+Recovery refs under `backup/shared-ci-projections-time-settings-20261007/` use
+worktree basenames. Complete-history bundle
+`.scratch/shared-ci-projections-time-settings-20261007.bundle` verified, SHA-256
+`4a92d7b35ea01dc9c6b9c7038acede0b90d1e3900f55c8dc5b37a59eecfeb7fe`.
+Inventory83754 finds59 drafts, no local/remote mismatches,14 successful heads,
+24 failed heads,14 running aggregates and7 awaiting aggregates. Directly stale
+bases are #272/#273/#275/#281; remaining named compositions are not certified
+transitively fresh. No code delivery remains directly based on master except
+the shared CI prerequisite; #248 remains the separate documentation root.
+
+New exact-head completed evidence, not historical-head substitution:
+
+- #282e39f033a: Nixbot317 SUCCESS. All20 registered attributes cover both Linux
+  architectures;16 executed (browser, Clippy, e2e, OIDC, package, SQLx, tests and
+  treefmt on each),4 unchanged devshell/formatter derivations were already built.
+  GitHub Actions37676457227 also completed Flake Check and Format successfully.
+- #224c374710a: Nixbot319 SUCCESS. E2e and treefmt executed on both Linux
+  architectures;16 identical derivations were already built, including both
+  platforms' browser, Clippy, SQLx and tests. This is current derivation coverage,
+  not a claim that every test reran. Draft retained for final reconciliation.
+
+Receipts are `.scratch/nixbot-{317,319}-final.html`, `-final-succeeded.html` and
+`-final-cached.html`; each succeeded/cached union contains20 unique attributes.
+These passes do not certify the failed broader composition.
+
+Next: collect10979 without restarting it on silence; use its error/context
+evidence to choose and verify the smallest correct fix in the owning delivery.
+Do not weaken the NOWAIT, authorization or preserved-row assertions. Then carry
+reviewed fixes into the complete composition and run its full gate. Independent
+refresh can continue through import requester and audit/delegation prerequisite
+compositions, retaining exact backups and patch accounting. No full local gate,
+policy activation, real-data change, merge or original PR closure occurred.
