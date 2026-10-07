@@ -3,6 +3,7 @@
 // compatibility matrix in specs/001-time-tracking-invoicing/contracts/harvest-api.md.
 
 mod auth;
+mod client_reads;
 mod project_reads;
 mod task_reads;
 mod types;
@@ -559,7 +560,7 @@ async fn get_project(
 
 // ── Clients ─────────────────────────────────────────────────────────────────
 
-#[derive(Deserialize)]
+#[derive(Default, Deserialize)]
 pub struct ClientFilters {
     pub is_active: Option<bool>,
     pub page: Option<i64>,
@@ -597,39 +598,7 @@ async fn list_clients(
 ) -> ApiResult<HarvestPagination<HarvestClient>> {
     let (page, per_page, offset) = page_window(filters.page, filters.per_page)?;
 
-    let total = sqlx::query_scalar!(
-        "SELECT COUNT(*) FROM clients
-         WHERE org_id = $1
-           AND ($2::bool IS NULL OR active = $2)
-           AND ($3::timestamptz IS NULL OR created_at >= $3::timestamptz)",
-        user.org_id,
-        filters.is_active,
-        filters.updated_since as Option<DateTime<Utc>>,
-    )
-    .fetch_one(&db)
-    .await
-    .map_err(internal)?
-    .unwrap_or(0);
-
-    let rows = sqlx::query_as!(
-        ClientRow,
-        r#"SELECT id, name, active, address, currency,
-         created_at as "created_at: chrono::DateTime<chrono::Utc>"
-         FROM clients
-         WHERE org_id = $1
-           AND ($2::bool IS NULL OR active = $2)
-           AND ($3::timestamptz IS NULL OR created_at >= $3::timestamptz)
-         ORDER BY name, id
-         LIMIT $4 OFFSET $5"#,
-        user.org_id,
-        filters.is_active,
-        filters.updated_since as Option<DateTime<Utc>>,
-        per_page,
-        offset,
-    )
-    .fetch_all(&db)
-    .await
-    .map_err(internal)?;
+    let (total, rows) = client_reads::read(&db, &user, &filters, None, per_page, offset).await?;
 
     let items: Vec<HarvestClient> = rows.iter().map(client_row_to_harvest).collect();
 
@@ -651,20 +620,11 @@ async fn get_client(
     State(db): State<PgPool>,
     Path(id): Path<Uuid>,
 ) -> ApiResult<HarvestClient> {
-    let row = sqlx::query_as!(
-        ClientRow,
-        r#"SELECT id, name, active, address, currency,
-         created_at as "created_at: chrono::DateTime<chrono::Utc>"
-         FROM clients WHERE id = $1 AND org_id = $2"#,
-        id,
-        user.org_id,
-    )
-    .fetch_optional(&db)
-    .await
-    .map_err(internal)?
-    .ok_or_else(not_found)?;
+    let (_, rows) =
+        client_reads::read(&db, &user, &ClientFilters::default(), Some(id), 1, 0).await?;
+    let row = rows.first().ok_or_else(not_found)?;
 
-    Ok(Json(client_row_to_harvest(&row)))
+    Ok(Json(client_row_to_harvest(row)))
 }
 
 // ── Tasks ───────────────────────────────────────────────────────────────────
