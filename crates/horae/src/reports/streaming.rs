@@ -124,8 +124,16 @@ pub(super) async fn entries(
     actor_id: Uuid,
     params: ExportParams,
 ) -> Result<Response, StatusCode> {
-    let from = params.from.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
-    let to = params.to.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
+    let query = params.time_query()?;
+    if query.date_from > query.date_to || query.after.is_some() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if query
+        .expected_requester
+        .is_some_and(|expected| expected.org_id != org_id || expected.user_id != actor_id)
+    {
+        return Err(StatusCode::FORBIDDEN);
+    }
     response(
         &EXPORTS,
         DOWNLOAD_TIMEOUT,
@@ -135,25 +143,29 @@ pub(super) async fn entries(
             // pool. SQLx retains its pool slot while closing it on cancellation.
             connection.close_on_drop();
             let mut tx = connection.begin().await.map_err(database_error)?;
-            let authority = Authority {
-                org_id,
-                actor_id,
-                purpose: Purpose::Manager,
-            };
-            authority.begin(&mut tx).await?;
-            cursor::declare_entries(&mut tx, org_id, (from, to), params.filters()).await?;
+            let (authority, policy) = Authority::time(&mut tx, org_id, actor_id).await?;
+            cursor::declare_entries(&mut tx, org_id, actor_id, &query).await?;
             let _ = filename.send("timesheet.csv".to_owned());
             let mut output = CsvBuffer::new(&super::ENTRY_EXPORT_HEADERS)?;
+            let mut source_checked = false;
             loop {
                 let rows = cursor::entries(&mut tx, output.fetch_limit()).await?;
                 if rows.is_empty() {
                     break;
                 }
                 for row in rows {
-                    super::write_entry_csv(&mut output.writer, &row)
+                    let entry = row.into_entry(policy)?;
+                    source_checked = true;
+                    let Some(entry) = entry else { continue };
+                    super::write_entry_csv(&mut output.writer, &entry.row)
                         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-                    output.record(&sender, &mut tx, &authority, None).await?;
+                    output
+                        .time_record(&sender, &mut tx, &authority, entry.context)
+                        .await?;
                 }
+            }
+            if !source_checked {
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
             output.flush(&sender, &mut tx, &authority).await?;
             tx.commit().await.map_err(database_error)

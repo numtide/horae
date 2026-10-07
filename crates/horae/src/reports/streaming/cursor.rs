@@ -2,60 +2,10 @@ use chrono::NaiveDate;
 use sqlx::PgConnection;
 
 use super::*;
-use crate::models::DetailedReportRow;
-use crate::reports::{ProjectExportRow, ReportFilters};
+use crate::reports::ProjectExportRow;
 
-pub(super) async fn declare_entries(
-    connection: &mut PgConnection,
-    org_id: Uuid,
-    period: (NaiveDate, NaiveDate),
-    filters: ReportFilters,
-) -> Result<(), StatusCode> {
-    sqlx::query!(
-        "DECLARE horae_csv NO SCROLL CURSOR FOR
-         SELECT te.spent_date, p.name, t.name, u.name, te.minutes,
-                effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir),
-                (te.billable AND (te.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable, t.billable_default)))), te.notes,
-                128::bigint + octet_length(p.name)::bigint + octet_length(t.name)::bigint
-                  + octet_length(u.name)::bigint + COALESCE(octet_length(te.notes),0)::bigint AS export_bytes
-         FROM time_entries te
-         JOIN projects p ON te.project_id=p.id
-         JOIN tasks t ON te.task_id=t.id
-         LEFT JOIN project_tasks pt ON pt.project_id=te.project_id AND pt.task_id=te.task_id
-         JOIN users u ON te.user_id=u.id
-         JOIN organizations o ON o.id=te.org_id
-         WHERE te.org_id=$6 AND te.spent_date BETWEEN $1 AND $2
-           AND ($3::uuid IS NULL OR p.client_id=$3)
-           AND ($4::uuid IS NULL OR te.project_id=$4)
-           AND ($5::uuid IS NULL OR te.user_id=$5)
-           AND ($7::uuid IS NULL OR EXISTS (
-             SELECT 1 FROM project_tag_links l
-             WHERE l.org_id=te.org_id AND l.project_id=te.project_id AND l.tag_id=$7))
-         ORDER BY te.spent_date,p.name,t.name,te.id",
-        period.0 as NaiveDate, period.1 as NaiveDate,
-        filters.client_id, filters.project_id, filters.user_id, org_id, filters.tag_id,
-    ).execute(connection).await.map_err(database_error)?;
-    Ok(())
-}
-
-pub(super) async fn entries(
-    connection: &mut PgConnection,
-    limit: i32,
-) -> Result<Vec<DetailedReportRow>, StatusCode> {
-    sqlx::query_as!(
-        DetailedReportRow,
-        r#"SELECT spent_date AS "spent_date!: NaiveDate", project_name AS "project_name!",
-            task_name AS "task_name!", user_name AS "user_name!", minutes AS "minutes!",
-            rounded_minutes, billable AS "billable!", notes
-         FROM fetch_csv_export_rows($1) AS source(spent_date date,project_name text,
-            task_name text,user_name text,minutes integer,rounded_minutes integer,
-            billable boolean,notes text,export_bytes bigint)"#,
-        limit,
-    )
-    .fetch_all(connection)
-    .await
-    .map_err(database_error)
-}
+mod time;
+pub(super) use time::{declare_entries, entries};
 
 pub(super) async fn declare_projects(
     connection: &mut PgConnection,

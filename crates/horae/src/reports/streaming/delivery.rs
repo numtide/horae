@@ -1,3 +1,5 @@
+use crate::models::permission_editor::PermissionRequester;
+use crate::reports::limits::time::{authorize_current, authorize_rows};
 use horae_core::types::OrgRole;
 
 use super::*;
@@ -5,6 +7,7 @@ use super::*;
 pub(super) enum Purpose {
     Manager,
     Projects,
+    Time(i32),
 }
 
 pub(super) struct Authority {
@@ -14,24 +17,62 @@ pub(super) struct Authority {
 }
 
 impl Authority {
-    pub async fn begin(&self, connection: &mut PgConnection) -> Result<(), StatusCode> {
-        sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED, READ WRITE")
+    pub async fn time(
+        connection: &mut PgConnection,
+        org_id: Uuid,
+        actor_id: Uuid,
+    ) -> Result<(Self, i32), StatusCode> {
+        configure(connection).await?;
+        sqlx::query!("SAVEPOINT csv_authority")
             .execute(&mut *connection)
             .await
             .map_err(database_error)?;
-        configure_deadlines(connection).await?;
-        self.check(connection, &[]).await
+        let (policy, _) = authorize_current(
+            connection,
+            PermissionRequester {
+                org_id,
+                user_id: actor_id,
+            },
+        )
+        .await?;
+        release_authority(connection).await?;
+        Ok((
+            Self {
+                org_id,
+                actor_id,
+                purpose: Purpose::Time(policy),
+            },
+            policy,
+        ))
+    }
+
+    pub async fn begin(&self, connection: &mut PgConnection) -> Result<(), StatusCode> {
+        configure(connection).await?;
+        self.check(connection, &[], &[]).await
     }
 
     pub async fn check(
         &self,
         connection: &mut PgConnection,
         project_ids: &[Uuid],
+        contexts: &[(Uuid, Uuid)],
     ) -> Result<(), StatusCode> {
         sqlx::query!("SAVEPOINT csv_authority")
             .execute(&mut *connection)
             .await
             .map_err(database_error)?;
+        if let Purpose::Time(expected_policy) = self.purpose {
+            let requester = PermissionRequester {
+                org_id: self.org_id,
+                user_id: self.actor_id,
+            };
+            let (policy, grants) = authorize_current(connection, requester).await?;
+            if policy != expected_policy {
+                return Err(StatusCode::FORBIDDEN);
+            }
+            authorize_rows(connection, requester, &grants, contexts).await?;
+            return release_authority(connection).await;
+        }
         sqlx::query_scalar!(
             "SELECT id FROM organizations WHERE id=$1 FOR SHARE",
             self.org_id
@@ -45,38 +86,50 @@ impl Authority {
             self.actor_id, self.org_id,
         ).fetch_optional(&mut *connection).await.map_err(database_error)?
             .ok_or(StatusCode::FORBIDDEN)?;
-        match self.purpose {
-            Purpose::Manager if !matches!(role, OrgRole::Manager | OrgRole::Admin) => {
-                return Err(StatusCode::FORBIDDEN);
-            }
-            Purpose::Projects => {
-                crate::reports::limits::authorize_project_rows(
-                    connection,
-                    self.org_id,
-                    self.actor_id,
-                    project_ids,
-                )
-                .await?
-            }
-            Purpose::Manager => {}
+        if matches!(self.purpose, Purpose::Manager)
+            && !matches!(role, OrgRole::Manager | OrgRole::Admin)
+        {
+            return Err(StatusCode::FORBIDDEN);
         }
-        // Rollback releases row locks without destroying the outer source cursor.
-        // RELEASE also removes the savepoint frame on arbitrarily long exports.
-        sqlx::query!("ROLLBACK TO SAVEPOINT csv_authority")
-            .execute(&mut *connection)
-            .await
-            .map_err(database_error)?;
-        sqlx::query!("RELEASE SAVEPOINT csv_authority")
-            .execute(connection)
-            .await
-            .map_err(database_error)?;
-        Ok(())
+        if matches!(self.purpose, Purpose::Projects) {
+            crate::reports::limits::authorize_project_rows(
+                connection,
+                self.org_id,
+                self.actor_id,
+                project_ids,
+            )
+            .await?
+        }
+        release_authority(connection).await
     }
+}
+
+async fn configure(connection: &mut PgConnection) -> Result<(), StatusCode> {
+    sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED, READ WRITE")
+        .execute(&mut *connection)
+        .await
+        .map_err(database_error)?;
+    configure_deadlines(connection).await
+}
+
+async fn release_authority(connection: &mut PgConnection) -> Result<(), StatusCode> {
+    // Rollback releases row locks without destroying the outer source cursor.
+    // RELEASE also removes the savepoint frame on arbitrarily long exports.
+    sqlx::query!("ROLLBACK TO SAVEPOINT csv_authority")
+        .execute(&mut *connection)
+        .await
+        .map_err(database_error)?;
+    sqlx::query!("RELEASE SAVEPOINT csv_authority")
+        .execute(connection)
+        .await
+        .map_err(database_error)?;
+    Ok(())
 }
 
 pub(super) struct CsvBuffer {
     pub writer: csv::Writer<Vec<u8>>,
     project_ids: Vec<Uuid>,
+    contexts: Vec<(Uuid, Uuid)>,
     records: usize,
     first: bool,
 }
@@ -90,6 +143,7 @@ impl CsvBuffer {
         Ok(Self {
             writer,
             project_ids: Vec::new(),
+            contexts: Vec::new(),
             records: 0,
             first: true,
         })
@@ -97,6 +151,17 @@ impl CsvBuffer {
 
     pub fn fetch_limit(&self) -> i32 {
         if self.first { 1 } else { CHUNK_ROWS as i32 }
+    }
+
+    pub async fn time_record(
+        &mut self,
+        sender: &mpsc::Sender<Vec<u8>>,
+        connection: &mut PgConnection,
+        authority: &Authority,
+        context: (Uuid, Uuid),
+    ) -> Result<(), StatusCode> {
+        self.contexts.push(context);
+        self.record(sender, connection, authority, None).await
     }
 
     pub async fn record(
@@ -137,14 +202,19 @@ impl CsvBuffer {
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         self.project_ids.sort_unstable();
         self.project_ids.dedup();
+        self.contexts.sort_unstable();
+        self.contexts.dedup();
         // Backpressure must not retain authority locks or reuse a pre-wait check.
         let permit = sender
             .reserve()
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-        authority.check(connection, &self.project_ids).await?;
+        authority
+            .check(connection, &self.project_ids, &self.contexts)
+            .await?;
         permit.send(bytes);
         self.project_ids.clear();
+        self.contexts.clear();
         self.records = 0;
         self.first = false;
         Ok(())
