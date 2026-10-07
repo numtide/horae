@@ -8221,3 +8221,27 @@ No assertion, timeout, branch, dependency or original file was changed.
 Next: collect14504 and the402/404 VM results. Keep the propagation preview
 intact and do not publish rewritten extraction heads until their shared base
 has adequate verification. The goal remains active, not complete or blocked.
+
+### Recovery checkpoint before CI propagation — 2026-10-08
+
+The preceding iteration made progress through exact-head ARM test acceptance
+and published ledgerd710a8a9. Confirmed composition14504 and remote402/404 live;
+the combined server suite continues through permission transaction tests.
+ARM VMs are building guest dependencies, not reporting completed boot checks.
+
+Before any refresh, revalidated every one of the75 preview branches against
+its current local head, actual remote ref and clean worktree. Created recovery
+refs atomically under `backup/ci-propagation-20261008/`, retaining each complete
+branch suffix. No implementation ref moved. Created and verified
+`.scratch/ci-propagation-before-20261008.bundle` (5.4MiB), SHA-256
+`256d3b1be04bd4e246f691a90e6fc9bed32a6030334c5cdc36dfffeb28301954`.
+Its75 heads match the preview manifest exactly. Restored the bundle into
+separate bare repository `.scratch/ci-propagation-restore-20261008`; full
+`git fsck` passed. The earlier original #212/#217/unpublished backups remain
+unchanged. No source files, migrations, PR bases or remote branches changed.
+
+Next: finish composition14504 and remote402/404. When the prerequisite base
+is verified, use the saved expected trees and recovery refs for the bounded
+refresh, with rebase.updateRefs disabled and explicit remote leases. Revalidate
+all heads before writing; a recovery checkpoint is not permission to overwrite
+subsequent user changes or a substitute for final-head tests.
