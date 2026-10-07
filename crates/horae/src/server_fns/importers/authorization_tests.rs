@@ -32,6 +32,7 @@ mod own_permissions;
 mod permission_audit;
 mod permission_editor;
 mod project_managers;
+mod scoped_directory;
 mod session_identity;
 mod time_entry_payload;
 mod user_directory;
@@ -363,6 +364,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     own_permissions::check(&pool, &api).await;
     permission_audit::check(&pool, &api).await;
     permission_editor::check(&pool, &api).await;
+    scoped_directory::check(&pool, &api).await;
     let admin = api.cookie(owner.user_id).await;
     let expired = api.cookie(owner.user_id).await;
     assert_eq!(

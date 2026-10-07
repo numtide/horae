@@ -1,9 +1,43 @@
 //! User server functions.
 
 use super::*;
+use crate::models::people::{PeopleActivity, PeopleCursor, PeoplePage};
 use crate::models::user::UserListItem;
 
 // ── Users ─────────────────────────────────────────────────────────────────────
+
+/// Read a bounded people-directory page under current canonical permissions.
+/// This is not a report/approval identity resolver or project assignment picker.
+#[server]
+pub async fn list_people(
+    activity: PeopleActivity,
+    after: Option<PeopleCursor>,
+) -> Result<PeoplePage, ServerFnError> {
+    let user = require_user().await.map_err(|error| match error {
+        error @ ServerFnError::ServerError {
+            code: UNAUTHORIZED, ..
+        } => error,
+        error => {
+            tracing::error!(%error, "Unable to authenticate directory request");
+            server_err("People directory is unavailable")
+        }
+    })?;
+    let state = crate::state::global_state().await;
+    permissions::directory::read(&state.db, user.org_id, user.id, activity, after.as_ref())
+        .await
+        .map_err(|error| match error {
+            permissions::directory::DirectoryError::Forbidden => {
+                forbidden("Current people-read authority is required")
+            }
+            permissions::directory::DirectoryError::InvalidCursor => {
+                err(BAD_REQUEST, "Invalid directory cursor")
+            }
+            error => {
+                tracing::error!(%error, "People directory read failed");
+                server_err("People directory is unavailable")
+            }
+        })
+}
 
 /// List identities for the current directory and workflow consumers, without
 /// financial or authentication metadata. Any active user can list active people;
