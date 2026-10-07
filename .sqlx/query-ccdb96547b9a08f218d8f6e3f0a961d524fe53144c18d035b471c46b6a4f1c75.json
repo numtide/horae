@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT jsonb_agg(to_jsonb(e) ORDER BY id) FROM time_entries e WHERE org_id=$1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "jsonb_agg",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ccdb96547b9a08f218d8f6e3f0a961d524fe53144c18d035b471c46b6a4f1c75"
+}

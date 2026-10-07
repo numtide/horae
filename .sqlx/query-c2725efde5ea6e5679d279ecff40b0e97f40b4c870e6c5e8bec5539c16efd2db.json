@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id FROM approvals WHERE org_id=$1 AND user_id=$2\n         AND EXISTS (SELECT 1 FROM unnest($3::date[]) d WHERE d BETWEEN period_start AND period_end)\n         ORDER BY id FOR SHARE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "DateArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c2725efde5ea6e5679d279ecff40b0e97f40b4c870e6c5e8bec5539c16efd2db"
+}

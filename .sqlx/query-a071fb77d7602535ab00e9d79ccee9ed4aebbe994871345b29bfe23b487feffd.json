@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO time_entries (id,org_id,user_id,project_id,task_id,spent_date,minutes,notes,billable,start_minute,is_running,started_at)\n         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,CASE WHEN $11 THEN now() END)\n         ON CONFLICT (user_id) WHERE is_running DO NOTHING RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Date",
+        "Int4",
+        "Text",
+        "Bool",
+        "Int4",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a071fb77d7602535ab00e9d79ccee9ed4aebbe994871345b29bfe23b487feffd"
+}

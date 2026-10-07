@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO approvals (id,org_id,user_id,period_start,period_end,state) VALUES ($1,$2,$3,'2026-09-07','2026-09-13','submitted')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6889d5c28ce79d6d423a547c948714918b2dc8ae6b351fe209ebc8d2bd6bf551"
+}

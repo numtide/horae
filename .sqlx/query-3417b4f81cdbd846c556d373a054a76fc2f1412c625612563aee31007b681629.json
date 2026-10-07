@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT pg_advisory_xact_lock(hashtextextended('horae.timesheet:' || $1::uuid::text,0)) AS \"lock!: ()\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "lock!: ()",
+        "type_info": "Void"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "3417b4f81cdbd846c556d373a054a76fc2f1412c625612563aee31007b681629"
+}

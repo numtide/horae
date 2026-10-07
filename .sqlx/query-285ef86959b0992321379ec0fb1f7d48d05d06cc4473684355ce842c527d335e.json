@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT project_id FROM project_management_assignments WHERE org_id=$1 AND manager_id=$2 ORDER BY project_id FOR SHARE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "project_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "285ef86959b0992321379ec0fb1f7d48d05d06cc4473684355ce842c527d335e"
+}
