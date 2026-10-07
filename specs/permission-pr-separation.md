@@ -127,7 +127,7 @@ Clients MVP as canonical-permission acceptance.
 | Materialized XLSX/PDF authorization, [#247](https://github.com/numtide/horae/pull/247) | `fix/materialized-export-authority`, `.worktrees/materialized-export-authority` | Review base `3edc0b8` combining existing `0046dad` (#227/#228 + #220/#232) and #222 `e9695fd` | Draft at `d9717e7`; 1,229 tests, full SQLx/provenance (1,135 descriptors), source review/Spec Kit/format, offline native/WASM lint and complete local Nix `32625` passed; remote Nixbot failures, prerequisite integration and retargeted gates remain open; no policy activation |
 | CSV delivery authorization, [#249](https://github.com/numtide/horae/pull/249) | `fix/csv-export-authority`, `.worktrees/csv-export-authority` | Exact #247 head `d9717e7` | Draft at `71232dc`; 1,245 source-head tests, full SQLx/provenance (1,174 descriptors), format/source review/scoped analysis and final-head offline native/WASM lint passed; complete local Nix `72947` passed; retargeted required checks remain; no canonical activation |
 | Existing permission specification and history, [#248](https://github.com/numtide/horae/pull/248) | `docs/permission-specification`, `.worktrees/permission-specification` | Master `1b8fa4f` | Draft at `49843b2`; all 54 original feature documents preserved, six contextualized; all 43 requirements/criteria and 236 task lines unchanged; original New Project transition and AGENTS cache guidance preserved; provenance/format passed, full local Nix `51945` and required GitHub checks passed; final reconciliation pending; no code or constitution adoption |
-| Requester-bound editor API, [#250](https://github.com/numtide/horae/pull/250) | `feat/permission-editor-api`, `.worktrees/permission-editor-api` | Exact #245 head `14ad9ca` | Draft at `c82a5b3`; full source suite, 1,239-descriptor cache/provenance, format and strict native/WASM lints passed; nine historical per-type web expectations restored; final Nix `90520` running; no UI or activation |
+| Requester-bound editor API, [#250](https://github.com/numtide/horae/pull/250) | `feat/permission-editor-api`, `.worktrees/permission-editor-api` | Exact #245 head `14ad9ca` | Draft at `c82a5b3`; full source suite, 1,239-descriptor cache/provenance, format and strict native/WASM lints passed; nine historical per-type web expectations restored; final Nix `90520` failed New Project budget selector assertion; unresolved, no UI or activation |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -3164,3 +3164,28 @@ two own Crane commits onto updated master (preserving the published head with a
 lease), retarget #252, and run its required final checks before its authorized
 merge. Only then resume the original separation goal. Preserve the measured
 binary/bundle size trade-off and avoid an unsupported benchmark percentage.
+
+### Dependency-only WASM packaging correction
+
+The previous priority iteration was PROGRESS: #251 passed full local gates and
+entered the protected automatic-merge workflow; #252 was published with separate
+dependency caches and a verified source-change key probe. At continuation #251
+is still open with remote Flake Check and Nixbot build explicitly in progress.
+
+#252 full gate `10968` on `8b4c69d` failed, not timed out: Dioxus compiled the
+minimal source but wasm-bindgen could not find `clone_ref` intrinsics in its
+empty WASM program. This then caused the missing `_bg.wasm` packaging error.
+Published unsigned `6a05046` adds a web-only Dioxus entry point solely to the
+generated dependency source. The real application source is unchanged. It does
+not ignore the bundling failure or skip final application compilation. Formatting
+passed; corrected full gate `45037` is confirmed live. Cold vendor preparation
+is already cached. Actual artifact reuse remains to be verified after it passes.
+
+Separately, original editor gate `90520` terminated with failure in the unchanged
+New Project browser test: `chooseField` expected `Hours per person` but received
+`Total project hours` after 5 seconds (`new-project.cjs`, scenario near line625).
+Its test suite, native Clippy and SQLx phases passed, but this is not a complete
+gate pass. The browser test and Projects/select paths have no diff against the
+exact #245 base. Cause remains unproven; do not label the failure fixed or exempt
+the test. Keep #250 draft and revisit the browser evidence after the build
+priority. Exact-master Fat LTO control `91392` is still live.
