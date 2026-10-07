@@ -6180,3 +6180,49 @@ Next: collect71277 and ARM302–304 results; propagate the verified #224 barrier
 and cache deletions into the existing dependency/composition chain without
 dropping registrations. Resolve remaining distinct CI failures, then complete
 the cross-stack conservation review and current-head delivery inventory.
+
+### Cross-stack verification composition — 2026-10-07
+
+The intervening estimate-only response was not progress. This iteration
+reconfirmed #216 merged and continued the unfinished local composition in
+`.worktrees/permission-split-integration`, branch
+`integration/permission-split-check`. No delivery branch was rewritten, pushed,
+merged or closed on GitHub.
+
+Local composition af7c35dc includes Reports09878591, catalog9fcc0a09 and the
+published heads #2681be11e74, #26953183702, #2700b4fd421, #2728b8b0c0b,
+#27365c4aa23, #2715beac2e1, #28024c5d0e1, #281cd8d1db7 and #2242afe25e3.
+Conflict resolutions preserve snapshot visibility, both HTTP registration sets,
+the Projects/Timesheet resource names, all browser suites and both existing
+task-contract sections. This branch is a verification fixture, not a proposed
+delivery PR or a permission-policy activation.
+
+The reusable composition audit now accepts explicit parent heads. At615119fa
+it accounted for988 exact paths,85 shared paths requiring semantic review and
+three replaced SQLx entries; no unaccounted single-owner path remained. All34
+browser suites and24 HTTP matrices are retained once. The three cache exceptions
+require absence of the old entry and exact preservation of its replacing
+Projects/time-command source from an owning parent. Inspected removals cover
+task activity and link-rate currency, not missing query metadata. These counts
+are conservation evidence, not a claim that shared code or the feature is done.
+
+Review found Reports' isolated test doubles still using the standalone branch's
+old user types and zero-argument tag reader. Local af7c35dc adjusts only those
+three signatures to the composed CurrentUser/UserListItem/requester contracts;
+production and assertions are unchanged. Carry this adaptation into #268 when
+its dependency base is updated; do not apply the new signature to its old base.
+
+Formatting and shell/JavaScript syntax checks88256/5426 passed; final Rust
+formatting77380 passed. Node42847 passed all19 navigation/recovery-storage
+regressions. Full composed compilation, SQLx, browser and deployment verification
+remain pending; no previous parent result substitutes for them. #224's sole
+full local run71277 remains live, with client and server package builds completed.
+ARM302 advanced to19/20 attributes done; e2e remains building. No restart was
+requested. Disk has98GB available. Original #212 tracked changes still match
+the saved snapshot exactly, with its18 dirty paths preserved.
+
+Next: collect71277, then run the full serial gate on af7c35dc (or its explicitly
+recorded successor). Finish the shared-file semantic review and publish necessary
+integration adaptations on the appropriate dependency PRs after verification.
+Collect ARM302's diagnostic result and resolve the distinct remaining CI failures;
+reconcile the final delivery inventory without treating this fixture as shipped.
