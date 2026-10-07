@@ -18,7 +18,8 @@ pkgs.testers.nixosTest {
     server.start()
     # TCG boots on ARM can exceed the driver's fixed five-minute shell timeout.
     # Wait for the guest's serial readiness signal before connecting to its shell.
-    server.wait_for_console_text(r"connecting to host\.\.\.", timeout=900)
+    # Read the complete log: wait_for_console_text drains only one line per second.
+    retry(lambda _: "connecting to host..." in server.get_console_log(), timeout_seconds=900)
     server.wait_for_unit("postgresql.service")
     server.wait_for_unit("horae.service")
     server.wait_for_open_port(3000)
