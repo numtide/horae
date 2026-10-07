@@ -101,7 +101,22 @@ implementation remains incomplete. Do not treat
 | `??` | `crates/horae/src/harvest/pagination_tests/client_permissions.rs` |
 | `??` | `specs/015-scoped-permissions/contracts/client-permissions.md` |
 
-## Current remote heads — 2026-10-07, inventory refresh
+## Current verification follow-ups — 2026-10-07
+
+- #263 at34341049 releases denied export authority before pool cleanup. The
+  deterministic regression failed before the fix;43 bounded-export tests passed
+  on its own branch and54 on the diagnostic composition. Nixbot350 was running
+  at the last check. The PR remains draft.
+- [#283](https://github.com/numtide/horae/pull/283), `fix/csv-upload-framing`,
+  at8d83b853, is a separate draft over #282. One Content-Length header preserves
+  streamed CSV framing;63 test lines cover immediate denials and byte integrity.
+  Diagnostic CLI tests and ten original endpoint runs passed; its own focused
+  verification80585 and required CI remain pending. Integrate #282 before #283.
+- Local complete compositiond5c34851 contains both corrections without diagnostic
+  logging. Its full gate has not run. Dependent export refresh and remaining
+  shared-CI rebases are still required; neither fix completes the split goal.
+
+## Remote heads snapshot — 2026-10-07, before the follow-ups above
 
 Shared CI prerequisite, distinct from the58 original-work extractions:
 [#282](https://github.com/numtide/horae/pull/282), `test/import-recovery-checks`
@@ -111,9 +126,10 @@ not another feature extraction. The
 CSV fixture patch is now inherited by #224 from this base, not duplicated in its
 review delta. The two VM follow-ups remain in #270 pending its dependency refresh.
 
-This snapshot supersedes the commit/status labels in the historical delivery
-table below. All59 delivery PRs remain drafts; all remote heads match the local
-branches. The refreshed snapshot has14 successful heads,24 failed heads,14 running
+This earlier snapshot superseded the commit/status labels in the historical
+delivery table below; subsequent head changes are recorded above and in the log.
+At that snapshot all59 delivery PRs were drafts and remote heads matched local
+branches. It had14 successful heads,24 failed heads,14 running
 builds and7 new heads without a build aggregate yet. A success
 is not completion of the cross-stack review; a failure is not necessarily a new
 functional defect. Failure classes and exact-head local evidence are recorded
@@ -6979,3 +6995,97 @@ No local diagnostic/full gate is running. The diagnostic branch remains local
 and retains only its instrumentation plus this fix/regression; do not deliver
 the instrumentation. Originals #212/#217/#208 remain untouched. No merge,
 closure, policy activation or real-data mutation occurred. Goal incomplete.
+
+### Complete-composition cleanup and isolated CSV rejection — 2026-10-07
+
+Previous iteration made progress by reproducing and fixing export denial cleanup,
+verifying both dependency contexts and publishing #263. Reconfirmed #216 merged.
+Carried only the regression/fix commits into the clean local complete composition:
+efae7522 ->843c8bad ->b775c14c3b360cb39d806b7d28e6b459f0987dab. Both commits are
+identical by range-diff to d112409e/efd83523; only the time-export reader and its
+regression changed. The CLI diagnostic logging and the original failure-context
+instrumentation were not carried. Backup ref
+`backup/export-denial-fix-20261007/permission-delivery-complete` preserves efae7522.
+Formatting23688 and whitespace passed. This branch remains local-only and has
+not received a full gate; the older conservation audit remains historical with
+these two explicitly owned #263 changes as an addendum.
+
+Added a focused CLI regression on the local diagnostic branch at b40f52f2:
+`small_csv_upload_preserves_immediate_authorization_rejections` sends a small
+regular CSV to local HTTP handlers returning401/403 without consuming its body.
+It checks each response, up to256 requests per status, failing immediately on a
+lost status. No retries of failed assertions, real imports or production transport
+changes. The check separates the HTTP upload from sessions, database and job
+state. Formatting41790 corrected the test layout; the follow-up49110 passed.
+
+Session18465 runs this regression using the existing Nix test derivation;
+log `.scratch/csv-rejection-repro-red.log`. Keep the diagnostic worktree frozen
+until terminal. The earlier full endpoint failure remains authoritative even if
+this narrower regression does not reproduce it. Investigated the pinned Hyper
+early-body-rejection paths and upstream
+[issue2384](https://github.com/hyperium/hyper/issues/2384); the issue concerns
+similar connection closure but is not proof of this failure's exact cause or
+a justified dependency upgrade. Preserve server rejection-before-body-reading,
+the CLI's conservative indeterminate result for actual network failure, and all
+original authorization assertions. Next: collect18465 and use that result to
+choose the smallest supported transport correction; refresh dependent export
+branches without losing the verified cleanup. No full local gate is running.
+
+Regression18465 finished exit1 on b40f52f2: attempt9 lost the401 response with
+the same Hyper `BodyWrite` / OS32 `Broken pipe`; the isolated test failed in0.02s
+after compilation. Exact red derivation:
+`/nix/store/i7pg9vwqkc6lidg3sgh471k22scc1fx2-horae-csv-rejection-repro-0.1.0.drv`.
+This reproduces the failure independently of permission storage or job state.
+
+Testing a minimal hypothesis on diagnostic86a7e13d55284c25e15b1f72b7c4eb2ee17fb80e:
+declare Content-Length from the already validated open file metadata rather than
+use chunked framing. The streaming reader,50MiB limit, authorization and
+indeterminate-error mapping remain unchanged. Added byte-integrity checks at1,
+65535,65536,65537 and262144 bytes; they compare the received length and every byte.
+Formatting88902 and whitespace passed. No production delivery is published yet;
+do not infer that this one-header hypothesis fixes the failure before testing.
+
+Session58365 runs all CLI import unit tests, then ten fail-fast invocations of
+the unchanged real authorization endpoint test on disposable PostgreSQL.
+Log `.scratch/csv-known-length-check.log`. Keep the diagnostic worktree frozen.
+The entire sample must pass; a failure is not retried into success. Transport
+files otherwise match master/#282 apart from diagnostic-only error logging,
+so a successful fix can be delivered independently without pulling in permissions.
+GitHub #263 at34341049 has fresh Nixbot350 evaluation SUCCESS and build IN_PROGRESS;
+no completion claimed. #282 is still open at e39f033a. Next: collect58365; review
+file-length/error semantics before extracting a successful correction, or reject
+the hypothesis if the regression still fails.
+
+Check58365 completed exit0 on86a7e13d. All20 CLI import tests passed, including
+512 immediate401/403 rejections and all five byte-integrity sizes. All ten
+invocations of the original real endpoint authorization test passed, with no
+failed invocation retried. Exact derivation:
+`/nix/store/d1qrbr1236ml6gjjvrhrfjjzdsm9j7a1-horae-csv-known-length-check-0.1.0.drv`.
+This is focused evidence, not the complete application gate. Reviewed credential
+handling, bounds, unchanged streaming/error semantics, no automatic retries and
+server rejection before body consumption. As before, resubmission requires
+identical input; this does not introduce a concurrent-file-mutation guarantee.
+
+Extracted the two byte-equivalent commits onto #282e39f033a in isolated
+`.worktrees/csv-upload-framing`, branch `fix/csv-upload-framing`:
+08019ef1 and8d83b8534026cfe4a7e72c4d8ed5f06f9d0ddc16. Range-diff shows both equal
+to b40f52f2/86a7e13d. Delivery delta is exactly two files: one production header
+and63 test lines. Diagnostic logging and all permission changes are excluded.
+Formatting68752 and whitespace passed. Publication37300 completed successfully
+after SSH tried alternative configured keys; GitHub confirms draft #283 with
+that head and #282 as base. No authentication blocker remains.
+
+Session80585 is checking this exact independent branch's CLI tests and real
+authorization endpoint using disposable Nix PostgreSQL. Log:
+`.scratch/csv-upload-framing-check.log`. Keep its worktree frozen until terminal.
+The PR description labels this and required CI pending, distinguishing the wider
+composition's passing tests from exact-branch evidence.
+
+Carried the same two commits into complete compositionb775c14c as5a753110 and
+d5c348516443e5279c551ed018433a6e58dfbc72. Both are identical by range-diff;
+backup `backup/csv-upload-framing-20261007/permission-delivery-complete` preserves
+the parent. Formatting62236 and whitespace passed. No instrumentation was copied.
+Next: collect80585; if it passes, run the sole complete-composition full gate at
+d5c34851, keeping that worktree frozen. Continue independent prerequisite refresh
+without dropping either correction, then reconcile current-head CI and provenance.
+No merge, closure, real-data mutation or policy activation. Goal incomplete.
