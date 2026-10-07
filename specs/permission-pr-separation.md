@@ -3252,3 +3252,31 @@ Next collect both local runs and the existing #251 required-check watcher.
 After actual #251 merge, rebase all five own Crane commits and retarget #252 to
 master, then require final-head checks before its authorized merge. Original
 extraction work remains deferred until these build-priority PRs are handled.
+
+### Crane final local gates passed; release profile in merge queue
+
+Original full Crane run `2967` completed successfully on `6ef7bec`. More
+importantly, corrected full run `68290` passed on exact published `774966e`,
+including browser, deployment VM and OIDC VM checks. Package derivation
+`59mnq73q7hz4qssknzpc9h3pp7njyf5z` produces
+`rbikx1qa8bihgqmcwv38dx200jmih142-horae-0.1.0`. The real build took 3m19s,
+WASM31.42s (indicative timing, not controlled). Explicit assertions passed:
+both stub asset names absent, real WASM/server present. Only one real JS/WASM
+pair ships. Store-reference query returns only glibc, not compiler/cache outputs.
+
+Release/development dependency keys remain `41y1cd29z5bzp58s0anfijd1kvlr0gbx`
+and `2h9fc5lh0vsbff5yfy09ad77gsr3ngm9`. Final Clippy, tests and SQLx derivations
+are identical to those already verified in `2967`, so their Nix reuse is valid.
+The changed package/browser/VM checks were rebuilt/retested. #252 is now ready
+for review, with explicit prohibition on merge until rebased master CI passes.
+
+#251 required PR checks passed (Flake Check35m54s, Format44s). Its protected
+merge-group run `37552522194` is live, watched every120s by session `37872`.
+Format passed; Flake Check remains pending. This is queue entry, not a merge.
+The old PR-check watcher `56175` has finished successfully. Both local Crane
+gate handles are complete and must not be restarted.
+
+Next collect the merge-group result, confirm actual #251 merge, fetch master,
+rebase the five own Crane commits with unsigned commits/known-head lease, and
+retarget #252. Verify final-head required CI and preserved local derivations
+before requesting its protected merge. Resume the original goal only afterwards.
