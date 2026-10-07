@@ -120,7 +120,9 @@ implementation remains incomplete. Do not treat
 - [#284](https://github.com/numtide/horae/pull/284), `test/vm-store-image`,
   at93b3fbaa, is a ten-line draft over #283. Both complete native VM checks and
   full local flake check passed, including explicit Nix store registration.
-  Fresh Nixbot402 started on this exact head; ARM benefit remains unproven.
+  Nixbot402 now confirms exact-head ARM OIDC success (444.68s test script).
+  ARM deployment/recovery has passed boot and is exercising import restart
+  checks; its final result and full-build acceptance remain pending.
 - [#285](https://github.com/numtide/horae/pull/285), `test/nix-test-parallelism`,
   at15d9ab5b, makes both Rust runners respect NIX_BUILD_CORES. A sandbox probe
   measured2 allocated cores versus32 default Rust test threads. All121 core
@@ -8381,3 +8383,36 @@ would include shared CI corrections. All other extraction review-base names
 remain unchanged. Do not retarget #283, whose real prerequisite remains #282,
 or change the shared-fix chain. This is a pending publication step, not an
 already-applied base change.
+
+### Prepared bounded propagation and first ARM VM acceptance — 2026-10-08
+
+The preceding iteration made progress through the complete #286 propagation
+preview and recorded root-base updates, published ascc7e961f. This iteration
+kept the same91786/85532 builds running. #286's native Clippy passed; browser
+checks continue. The full composition has completed its app build and started
+Clippy. Neither full gate has a terminal result yet.
+
+Adapted the existing bounded rebase procedure into the private
+.scratch/ci-cancellation-propagation.mjs with a scoped post-rewrite hook. Syntax
+checks and read-only audit passed:75 exact local/remote heads, clean worktrees,
+matching backups, zero rewritten branches. It disables rebase.updateRefs,
+reuses the shared-commit mapping, verifies each resulting tree against the new
+preview and stops at conflicts. Additional guards reject switched worktrees or
+a changed shared target; the continuation mode retains the rewrite hook after
+manual conflict resolution. No run-one/continue/publication operation was run.
+Its audit is not evidence that the future rebases or their tests already passed.
+
+Nixbot402's ARM deployment VM reached Horae listening at guest289s and proceeded
+through import restart checks; it is no longer merely constructing the image or
+waiting for the guest shell. Separately, the exact-head ARM OIDC test finished
+successfully in444.68s; the log ends with successful artifact upload and the
+succeeded attribute endpoint confirms checks.aarch64-linux.e2e-oidc. Its total
+build duration was32m31s, including dependencies, distinct from test runtime.
+Evidence: .scratch/nixbot-402-arm-oidc-summary.json and its public source URLs.
+The ARM deployment/recovery result, full402/404/413 builds and both local gates
+remain pending. No timeout or assertion was changed to obtain this result.
+
+Next: collect those existing handles. After the prerequisite base and composition
+are verified, use the prepared one-branch-at-a-time procedure, verify each exact
+tree and preserve review-base bindings before publication. Do not restart builds
+or rewrite the extraction branches while their shared candidate remains pending.
