@@ -36,8 +36,8 @@ mod project_people;
 mod project_reads;
 mod scoped_directory;
 mod scoped_time;
-mod time_reports;
 mod session_identity;
+mod time_reports;
 mod user_directory;
 
 #[cfg(target_os = "linux")]
