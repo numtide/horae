@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO tasks (id,org_id,name,billable_default)\n        VALUES ($1,$4,'Default off',false),($2,$4,'Override off',true),($3,$4,'Override on',false)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "db88f78685666b0d783f992947880ab9a59b5fe3d6fca4eb54f98dc04f67dac6"
+}
