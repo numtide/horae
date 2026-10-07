@@ -3580,3 +3580,29 @@ prerequisite composition so its review diff stays scoped. Then continue the
 inventoried reader/editor/consumer groups and final hunk-level ownership plus
 cross-PR integration audit. Do not treat build optimization as completion of
 permission separation, activation or Harvest parity.
+
+### Editor API verification on the merged build base
+
+Revalidated #216 as merged and #250 as open/draft at `c82a5b3` with a clean
+worktree. Preserved that exact head as
+`backup/permission-editor-api-before-build-base`. Created review-only base
+`integration/permission-editor-build-prerequisites` at `0117991`, combining
+master `ed558f6` and prerequisite #245 `14ad9ca` without conflicts. Relative to
+#245 it changes only nine inherited build/CI/browser-helper files (116 additions,
+39 deletions); no permission source was replaced. This branch is a verification
+composition, not a delivery target or authorization to merge its prerequisites.
+
+Rebased only the four editor API commits with `--no-update-refs`; new head is
+`c727bc80608a61dc5e138c39a2fc389c452425b5`. All four entries in `git range-diff`
+are equivalent. The review diff remains 24 files, 2359 additions and 16 deletions.
+Published the prerequisite branch and the owned rebase with an exact old-head
+lease, then retargeted #250; push/retarget handle `5584` completed successfully.
+No extraction PR was merged, no original source was edited, and no policy was
+activated.
+
+Full current-head `nix flake check -L --cores 2 --max-jobs 1` is running in the
+editor API worktree as session `46207`. Its result is pending: old-head passes
+do not certify this composition, and the merged select-helper repair has not
+yet been proven to close #250's browser failure. Next collect this gate and
+reconcile the result, retaining the draft until verified; continue the existing
+reader/editor/consumer inventory without expanding product scope.
