@@ -4412,3 +4412,46 @@ and extract matching exports/access/consumer next. Original4294aa3's New Project
 dev-login isolation hunk stays with project-editor fixture ownership alongside
 later permission-label changes. Reports, project/task lifecycle/UI, unpublished
 Clients and complete hunk reconciliation remain open. No extraction merge.
+
+### Combined UI and report-reader verification
+
+Reconfirmed #216 merged before changes. Priority #251/#252 are merged at
+35dc414/ed558f6; no extraction PR was merged or closed. Original #212 remains
+db3935d with the same18 dirty paths, preserved without edits.
+
+Local verification branch `integration/timesheet-permission-check` now contains
+#2594ce0919, #26098857cf and #261/#26266dbf0b on verified015dcd1. Integration
+commits89d6377,be9e898,1a879615f35b285d29f3e7e9d60abc84e09c6fbc preserve
+both parents; no original branch was rebased or rewritten. Composition proceeded
+while remaining standalone gates ran, without treating those gates as passed.
+
+Three UI conflicts were resolved by retaining all five navigation kinds and
+both original scroll-coordinate scenarios. Tests now exercise13 navigation
+cases plus6 recovery-storage cases: pinned Nix run17002 passed19/19. The
+subsequent indentation-only adjustment is included in the fresh full gate.
+The runner retains the union of all29 suites, no duplicate or missing names;
+permission recovery remains before database-mutating legacy browser fixtures.
+Timesheet `user` route props survive in shell, sidebar and shell-test stubs.
+The report HTTP registration conflict retains every check call from both
+parents; no assertion body was removed or weakened.
+
+Owned Timesheet modules/DTO/browser fixtures, People editor modules/browser/
+component tests, and report reader/DTO/DB/HTTP fixtures match their respective
+extraction heads exactly. Only shared integration points changed. Format31039
+passed with zero changes; whitespace passed. The targeted Impeccable shell
+detector returned exit0 without diagnostics, not a visual or accessibility
+certification. Full native Nix88592 runs on exact1a879615; not yet a pass.
+
+Standalone #26066677 terminated exit0, all checks passed on98857cf: release,
+strict core/server Clippy, complete browser, SQLx,1011 application tests (zero
+failed,11 inherited ignored), remaining component suites and deployment/OIDC.
+#25975088 passed release/Clippy/browser/SQLx,1032 application tests (zero failed,
+11 ignored) and remaining suites; deployment checks now run. #26137229 passed
+release/Clippy/browser/SQLx and starts application tests. #26279456 passed
+release/Clippy and continues browser checks. Only #260 is a complete new pass.
+
+Next collect75088,37229,79456 and88592 without duplicate builds; record
+terminal results against these exact heads. Continue the original report export/
+access/consumer extraction, then project/task and unpublished Clients ownership,
+and finish hunk reconciliation. The combined branch is only a verification
+artifact, not a proposed broad delivery PR or authorization to activate policy.
