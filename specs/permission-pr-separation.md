@@ -101,7 +101,93 @@ implementation remains incomplete. Do not treat
 | `??` | `crates/horae/src/harvest/pagination_tests/client_permissions.rs` |
 | `??` | `specs/015-scoped-permissions/contracts/client-permissions.md` |
 
-## Extraction order and current deliveries
+## Current remote heads — 2026-10-07, inventory refresh
+
+This snapshot supersedes the commit/status labels in the historical delivery
+table below. All58 extraction PRs remain drafts; all remote heads match the local
+branches. Nixbot reports15 successes,41 failures and2 running checks. A success
+is not completion of the cross-stack review; a failure is not necessarily a new
+functional defect. Failure classes and exact-head local evidence are recorded
+in the iteration sections. No PR is approved for merging by this inventory.
+
+| PR | Current head | Nixbot aggregate |
+| --- | --- | --- |
+| #219 | 94a5d606 | Failed |
+| #220 | ae152748 | Passed |
+| #221 | 7866b97f | Failed |
+| #222 | 23f258b7 | Failed |
+| #223 | 1dc4b6bc | Failed |
+| #224 | 2afe25e3 | Running |
+| #225 | ac723cb6 | Failed |
+| #226 | 5a617c68 | Passed |
+| #227 | 25d75c4e | Failed |
+| #228 | 6c67247e | Failed |
+| #231 | 2e4bbf9d | Failed |
+| #232 | 6bf2fbcf | Failed |
+| #233 | c30b8c41 | Passed |
+| #234 | 7afbe764 | Failed |
+| #235 | 082fa032 | Failed |
+| #236 | 526a8ba9 | Failed |
+| #237 | 7c7d9d6c | Failed |
+| #238 | fbaf7a43 | Passed |
+| #239 | 3aab2bfa | Failed |
+| #240 | 68a0fad8 | Failed |
+| #241 | 5feaa950 | Failed |
+| #242 | 0abace6f | Failed |
+| #243 | dde4a8a9 | Failed |
+| #244 | a0b3ee4e | Failed |
+| #245 | 7dc76ed3 | Failed |
+| #246 | af7bc6fd | Failed |
+| #247 | 4c6d0110 | Passed |
+| #248 | b6e13979 | Failed |
+| #249 | c808b46c | Failed |
+| #250 | 202532b8 | Failed |
+| #253 | 80058039 | Failed |
+| #254 | b9b47c09 | Failed |
+| #255 | e16978a9 | Failed |
+| #256 | 5a95766b | Failed |
+| #257 | 657bf8ed | Passed |
+| #258 | e1525af4 | Passed |
+| #259 | b94f2fb5 | Failed |
+| #260 | f00d8f08 | Failed |
+| #261 | 46c0b1c9 | Passed |
+| #262 | 91832917 | Passed |
+| #263 | 15bda5cc | Failed |
+| #264 | 6747c051 | Failed |
+| #265 | cec16d16 | Failed |
+| #266 | ae53be44 | Failed |
+| #267 | 79798acf | Failed |
+| #268 | 1be11e74 | Failed |
+| #269 | 53183702 | Failed |
+| #270 | b480f9d2 | Running |
+| #271 | 5beac2e1 | Passed |
+| #272 | 8b8b0c0b | Passed |
+| #273 | 65c4aa23 | Passed |
+| #275 | f8c1477b | Failed |
+| #276 | 7e883eb5 | Passed |
+| #277 | d1ab5224 | Failed |
+| #278 | 812a870f | Passed |
+| #279 | 9fcc0a09 | Failed |
+| #280 | 24c5d0e1 | Failed |
+| #281 | cd8d1db7 | Passed |
+
+Direct-base ancestry is stale for five PRs: #226 lacks #222's six-line README
+database-requirements note; #272 lacks the newer #270 cache/ARM test changes;
+#273/#281 lack #272's latest cache deletions; #275 lacks #273's latest cache
+deletion. This is not an exhaustive transitive-base audit: named integration
+bases also need their own input-head reconciliation. Do not treat green children
+as containing newer parent repairs. Remote master and origin/master both resolve
+to8b3cc257. Keep #208/#212/#217 outside this refresh.
+
+Evidence: `.scratch/permission-delivery-current.json` (single GitHub snapshot)
+and `.scratch/permission-delivery-audit.json` (exact refs, URLs and ancestry).
+Refresh only after new results or changes, not on a polling loop.
+
+## Extraction order, scopes and historical verification
+
+The scope/dependency descriptions below retain the delivery history. Their
+older head labels and check receipts certify only those named commits, not the
+current heads above. Later iteration entries record subsequent verification.
 
 | Delivery | Branch/worktree | Base | Status / acceptance |
 | --- | --- | --- | --- |
