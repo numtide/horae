@@ -2,50 +2,12 @@ use chrono::NaiveDate;
 use sqlx::PgConnection;
 
 use super::*;
-use crate::reports::ProjectExportRow;
 
 pub(super) mod groups;
+mod project;
 mod time;
+pub(super) use project::{declare_projects, projects};
 pub(super) use time::{declare_entries, entries};
-
-pub(super) async fn declare_projects(
-    connection: &mut PgConnection,
-    org_id: Uuid,
-    actor_id: Uuid,
-    scope: &str,
-) -> Result<(), StatusCode> {
-    sqlx::query!(
-        "DECLARE horae_csv NO SCROLL CURSOR FOR
-         SELECT p.id,c.name,p.code,p.name,p.project_type,p.currency::text,
-                p.budget_kind,p.budget_amount_cents,p.budget_minutes,p.active,
-                128::bigint + octet_length(c.name)::bigint + COALESCE(octet_length(p.code),0)::bigint
-                  + octet_length(p.name)::bigint + octet_length(p.currency::text)::bigint AS export_bytes
-         FROM projects p JOIN clients c ON c.id=p.client_id
-         JOIN project_read_access a ON a.project_id=p.id AND a.org_id=p.org_id
-         WHERE p.org_id=$1 AND a.user_id=$2 AND a.can_view_progress AND CASE $3
-           WHEN 'budgeted' THEN p.active AND p.budget_kind <> 'none'
-           WHEN 'archived' THEN NOT p.active ELSE p.active END
-         ORDER BY c.name,p.name,p.id",
-        org_id, actor_id, scope,
-    ).execute(connection).await.map_err(database_error)?;
-    Ok(())
-}
-
-pub(super) async fn projects(
-    connection: &mut PgConnection,
-    limit: i32,
-) -> Result<Vec<ProjectExportRow>, StatusCode> {
-    sqlx::query_as!(ProjectExportRow,
-        r#"SELECT id AS "id!",client_name AS "client_name!",code,name AS "name!",
-            project_type AS "project_type!: horae_core::types::ProjectType",currency AS "currency!",
-            budget_kind AS "budget_kind!: horae_core::types::BudgetKind",budget_amount_cents,
-            budget_minutes,active AS "active!"
-         FROM fetch_csv_export_rows($1) AS source(id uuid,client_name text,code text,name text,
-            project_type project_type,currency text,budget_kind budget_kind,budget_amount_cents bigint,
-            budget_minutes bigint,active boolean,export_bytes bigint)"#,
-        limit,
-    ).fetch_all(connection).await.map_err(database_error)
-}
 
 pub(super) struct InvoiceRow {
     pub number: String,

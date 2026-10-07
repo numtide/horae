@@ -33,6 +33,7 @@ async fn csv_rows(pool: &PgPool, ids: &SeedIds, scope: &str) -> Vec<csv::StringR
         ids.user_id,
         ProjectsExportParams {
             scope: Some(scope.into()),
+            ..Default::default()
         },
     )
     .await

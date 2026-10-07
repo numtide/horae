@@ -279,7 +279,7 @@ async fn project_exports_refresh_release_scope_after_parent_wait(pool: PgPool) {
         let pending = {
             let pool = pool.clone();
             tokio::spawn(async move {
-                authorize_projects(&pool, ids.org_id, ids.user_id, &[ids.project_id]).await
+                authorize_projects(&pool, ids.org_id, ids.user_id, &[ids.project_id], &[]).await
             })
         };
         wait_for_blocked(&pool, pid).await;
@@ -325,6 +325,7 @@ async fn project_exports_release_every_captured_project_without_render_locks(poo
                     org,
                     actor,
                     rows.iter().map(|row| row.id).collect(),
+                    Vec::new(),
                     move || {
                         started.send(()).unwrap();
                         wait.recv_timeout(Duration::from_secs(5)).unwrap();
@@ -612,6 +613,7 @@ async fn project_exports_release_cancelled_and_timed_out_checks(pool: PgPool) {
                     org,
                     actor,
                     vec![project],
+                    Vec::new(),
                     || Ok(b"rendered".to_vec()),
                 )
                 .await
@@ -663,11 +665,18 @@ async fn project_exports_reject_missing_foreign_and_unreadable_captured_ids(pool
     let foreign = seed(&pool, OrgRole::Admin).await;
     for project in [Uuid::now_v7(), foreign.project_id] {
         assert_eq!(
-            authorize_projects(&pool, ids.org_id, ids.user_id, &[ids.project_id, project]).await,
+            authorize_projects(
+                &pool,
+                ids.org_id,
+                ids.user_id,
+                &[ids.project_id, project],
+                &[]
+            )
+            .await,
             Err(StatusCode::FORBIDDEN)
         );
     }
-    authorize_projects(&pool, ids.org_id, ids.user_id, &[])
+    authorize_projects(&pool, ids.org_id, ids.user_id, &[], &[])
         .await
         .unwrap();
     sqlx::query!(
@@ -678,7 +687,7 @@ async fn project_exports_reject_missing_foreign_and_unreadable_captured_ids(pool
     .await
     .unwrap();
     assert_eq!(
-        authorize_projects(&pool, ids.org_id, ids.user_id, &[ids.project_id]).await,
+        authorize_projects(&pool, ids.org_id, ids.user_id, &[ids.project_id], &[]).await,
         Err(StatusCode::FORBIDDEN)
     );
     sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
@@ -686,7 +695,7 @@ async fn project_exports_reject_missing_foreign_and_unreadable_captured_ids(pool
         .await
         .unwrap();
     assert_eq!(
-        authorize_projects(&pool, ids.org_id, ids.user_id, &[]).await,
+        authorize_projects(&pool, ids.org_id, ids.user_id, &[], &[]).await,
         Err(StatusCode::FORBIDDEN)
     );
 }
@@ -709,7 +718,14 @@ async fn project_exports_retain_parent_authority_until_release_check_finishes(po
     let pending = {
         let reader_pool = reader_pool.clone();
         tokio::spawn(async move {
-            authorize_projects(&reader_pool, ids.org_id, ids.user_id, &[ids.project_id]).await
+            authorize_projects(
+                &reader_pool,
+                ids.org_id,
+                ids.user_id,
+                &[ids.project_id],
+                &[],
+            )
+            .await
         })
     };
     wait_for_blocked(&pool, pid).await;
@@ -739,7 +755,14 @@ async fn project_exports_retain_parent_authority_until_release_check_finishes(po
     pending.await.unwrap().unwrap();
     assert_eq!(writer.await.unwrap(), 1);
     assert_eq!(
-        authorize_projects(&reader_pool, ids.org_id, ids.user_id, &[ids.project_id]).await,
+        authorize_projects(
+            &reader_pool,
+            ids.org_id,
+            ids.user_id,
+            &[ids.project_id],
+            &[]
+        )
+        .await,
         Err(StatusCode::FORBIDDEN)
     );
     reader_pool.close().await;

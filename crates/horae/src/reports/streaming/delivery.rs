@@ -49,13 +49,14 @@ impl Authority {
 
     pub async fn begin(&self, connection: &mut PgConnection) -> Result<(), StatusCode> {
         configure(connection).await?;
-        self.check(connection, &[], &[]).await
+        self.check(connection, &[], &[], &[]).await
     }
 
     pub async fn check(
         &self,
         connection: &mut PgConnection,
         project_ids: &[Uuid],
+        monetary_project_ids: &[Uuid],
         contexts: &[(Uuid, Uuid)],
     ) -> Result<(), StatusCode> {
         if matches!(self.purpose, Purpose::Time(_)) {
@@ -76,6 +77,17 @@ impl Authority {
             .execute(&mut *connection)
             .await
             .map_err(database_error)?;
+        if matches!(self.purpose, Purpose::Projects) {
+            crate::reports::limits::authorize_project_rows(
+                connection,
+                self.org_id,
+                self.actor_id,
+                project_ids,
+                monetary_project_ids,
+            )
+            .await?;
+            return release_authority(connection).await;
+        }
         sqlx::query_scalar!(
             "SELECT id FROM organizations WHERE id=$1 FOR SHARE",
             self.org_id
@@ -93,15 +105,6 @@ impl Authority {
             && !matches!(role, OrgRole::Manager | OrgRole::Admin)
         {
             return Err(StatusCode::FORBIDDEN);
-        }
-        if matches!(self.purpose, Purpose::Projects) {
-            crate::reports::limits::authorize_project_rows(
-                connection,
-                self.org_id,
-                self.actor_id,
-                project_ids,
-            )
-            .await?
         }
         release_authority(connection).await
     }
@@ -158,6 +161,7 @@ pub(super) async fn release_authority(connection: &mut PgConnection) -> Result<(
 pub(super) struct CsvBuffer {
     pub writer: csv::Writer<Vec<u8>>,
     project_ids: Vec<Uuid>,
+    monetary_project_ids: Vec<Uuid>,
     contexts: Vec<(Uuid, Uuid)>,
     records: usize,
     first: bool,
@@ -172,6 +176,7 @@ impl CsvBuffer {
         Ok(Self {
             writer,
             project_ids: Vec::new(),
+            monetary_project_ids: Vec::new(),
             contexts: Vec::new(),
             records: 0,
             first: true,
@@ -191,6 +196,20 @@ impl CsvBuffer {
     ) -> Result<(), StatusCode> {
         self.contexts.push(context);
         self.record(sender, connection, authority, None).await
+    }
+
+    pub async fn project_record(
+        &mut self,
+        sender: &mpsc::Sender<Vec<u8>>,
+        connection: &mut PgConnection,
+        authority: &Authority,
+        row: &crate::reports::ProjectExportRow,
+    ) -> Result<(), StatusCode> {
+        if row.has_monetary_budget() {
+            self.monetary_project_ids.push(row.id);
+        }
+        self.record(sender, connection, authority, Some(row.id))
+            .await
     }
 
     pub async fn record(
@@ -231,6 +250,8 @@ impl CsvBuffer {
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         self.project_ids.sort_unstable();
         self.project_ids.dedup();
+        self.monetary_project_ids.sort_unstable();
+        self.monetary_project_ids.dedup();
         self.contexts.sort_unstable();
         self.contexts.dedup();
         // Backpressure must not retain authority locks or reuse a pre-wait check.
@@ -239,10 +260,16 @@ impl CsvBuffer {
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         authority
-            .check(connection, &self.project_ids, &self.contexts)
+            .check(
+                connection,
+                &self.project_ids,
+                &self.monetary_project_ids,
+                &self.contexts,
+            )
             .await?;
         permit.send(bytes);
         self.project_ids.clear();
+        self.monetary_project_ids.clear();
         self.contexts.clear();
         self.records = 0;
         self.first = false;
