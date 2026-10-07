@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id,name FROM users WHERE org_id=$1 AND active\n                 AND strpos(lower(name),lower($2)) > 0\n                 AND ($3::text IS NULL OR (name,id)>($3::text,$4::uuid))\n                 ORDER BY name,id LIMIT 51",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "98ec9a875404fa0686ddc6f7252e46f2e7ee1e095110d58285385c2d8080980a"
+}

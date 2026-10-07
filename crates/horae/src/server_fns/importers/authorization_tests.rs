@@ -30,6 +30,7 @@ mod legacy_readers;
 mod own_permissions;
 mod permission_audit;
 mod project_managers;
+mod project_people;
 mod scoped_directory;
 mod scoped_time;
 mod time_reports;
@@ -321,6 +322,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     own_permissions::check(&pool, &api).await;
     permission_audit::check(&pool, &api).await;
     project_managers::check(&pool, &api).await;
+    project_people::check(&pool, &api).await;
     scoped_directory::check(&pool, &api).await;
     scoped_time::check(&pool, &api).await;
     time_reports::check(&pool, &api).await;
