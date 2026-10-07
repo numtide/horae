@@ -127,13 +127,13 @@ Clients MVP as canonical-permission acceptance.
 | Materialized XLSX/PDF authorization, [#247](https://github.com/numtide/horae/pull/247) | `fix/materialized-export-authority`, `.worktrees/materialized-export-authority` | Review base `3edc0b8` combining existing `0046dad` (#227/#228 + #220/#232) and #222 `e9695fd` | Draft at `d9717e7`; 1,229 tests, full SQLx/provenance (1,135 descriptors), source review/Spec Kit/format, offline native/WASM lint and complete local Nix `32625` passed; remote Nixbot failures, prerequisite integration and retargeted gates remain open; no policy activation |
 | CSV delivery authorization, [#249](https://github.com/numtide/horae/pull/249) | `fix/csv-export-authority`, `.worktrees/csv-export-authority` | Exact #247 head `d9717e7` | Draft at `71232dc`; 1,245 source-head tests, full SQLx/provenance (1,174 descriptors), format/source review/scoped analysis and final-head offline native/WASM lint passed; complete local Nix `72947` passed; retargeted required checks remain; no canonical activation |
 | Existing permission specification and history, [#248](https://github.com/numtide/horae/pull/248) | `docs/permission-specification`, `.worktrees/permission-specification` | Master `1b8fa4f` | Draft at `49843b2`; all 54 original feature documents preserved, six contextualized; all 43 requirements/criteria and 236 task lines unchanged; original New Project transition and AGENTS cache guidance preserved; provenance/format passed, full local Nix `51945` and required GitHub checks passed; final reconciliation pending; no code or constitution adoption |
-| Requester-bound editor API, [#250](https://github.com/numtide/horae/pull/250) | `feat/permission-editor-api`, `.worktrees/permission-editor-api` | Review base `0117991` combining merged master `ed558f6` and #245 `14ad9ca` | Draft at `c727bc8`; four owned commits patch-equivalent to preserved `c82a5b3`; full native Nix `46207` PASSED, including complete browser/deployment/OIDC. Old `90520` selector failure retained; corrected helper inherited from merged master. Combined tests/Clippy/SQLx passed; combined browser/deployment remains pending; no UI or activation |
-| Scoped people directory, [#253](https://github.com/numtide/horae/pull/253) | `feat/scoped-people-directory`, `.worktrees/scoped-people-directory` | Review base `0117991`, independent of #250 editor operations and #240 legacy projections | Draft at `3a37538`; original reader/DTO/endpoint and seven DB/HTTP tests preserved; tests/Clippy/live SQLx `18891` and full local Nix `2803` passed. Exact browser/e2e/OIDC outputs explicitly materialized from signed cache; cross-PR integration and retargeted gates remain pending; no UI or activation |
-| Identity-only project-team choices, [#254](https://github.com/numtide/horae/pull/254) | `feat/project-people-picker`, `.worktrees/project-people-picker` | #253 `3a37538`, for shared `PeopleCursor` and inherited foundations | Draft at `f498c3f`; original reader/DTO/endpoint, nine DB tests and HTTP assertions preserved; full native Nix `81722` PASSED, including complete browser/deployment/OIDC and exact cache reuse where available. Combined browser/deployment remains pending; no picker UI, assignment writes or activation |
+| Requester-bound editor API, [#250](https://github.com/numtide/horae/pull/250) | `feat/permission-editor-api`, `.worktrees/permission-editor-api` | Review base `0117991` combining merged master `ed558f6` and #245 `14ad9ca` | Draft at `c727bc8`; four owned commits patch-equivalent to preserved `c82a5b3`; full native Nix `46207` PASSED, including complete browser/deployment/OIDC. Old `90520` selector failure retained; corrected helper inherited from merged master. Combined full native Nix `16434` passed on `7a2d61c`; retargeted gates remain; no UI or activation |
+| Scoped people directory, [#253](https://github.com/numtide/horae/pull/253) | `feat/scoped-people-directory`, `.worktrees/scoped-people-directory` | Review base `0117991`, independent of #250 editor operations and #240 legacy projections | Draft at `3a37538`; original reader/DTO/endpoint and seven DB/HTTP tests preserved; tests/Clippy/live SQLx `18891` and full local Nix `2803` passed. Exact browser/e2e/OIDC outputs explicitly materialized from signed cache; combined full native Nix `16434` passed on `7a2d61c`; later reader composition and retargeted gates remain; no UI or activation |
+| Identity-only project-team choices, [#254](https://github.com/numtide/horae/pull/254) | `feat/project-people-picker`, `.worktrees/project-people-picker` | #253 `3a37538`, for shared `PeopleCursor` and inherited foundations | Draft at `f498c3f`; original reader/DTO/endpoint, nine DB tests and HTTP assertions preserved; full native Nix `81722` PASSED, including complete browser/deployment/OIDC and exact cache reuse where available. Combined full native Nix `16434` passed on `7a2d61c`; retargeted gates remain; no picker UI, assignment writes or activation |
 | Scoped time-entry reader, [#255](https://github.com/numtide/horae/pull/255) | `feat/scoped-time-reader`, `.worktrees/scoped-time-reader` | Review base `0117991`, independent of directory, project-team choices and editor operations | Draft at `d93e1af`; original `4ac30fa` DTO/reader/eight DB tests/HTTP assertions and endpoint preserved; 23 original SQLx descriptors, module registrations adapted only. Formatting/provenance passed; full native Nix `40092` running; no Timesheet UI, subject discovery, commands or activation |
-| Timesheet person discovery, [#256](https://github.com/numtide/horae/pull/256) | `feat/timesheet-people-discovery`, `.worktrees/timesheet-people-discovery` | Review base `40102ae`, combining #255 `d93e1af` admission reader and #253 `3a37538` shared `PeopleCursor` | Draft at `1552fdb`; original `60f60f9` DTO/reader/eight DB tests, endpoint/HTTP additions and five SQLx descriptors preserved. Formatting/provenance/static61-query inventory passed; tests/Clippy/live SQLx `61768` running; full native Nix and wider integration pending; no UI, context-page contract, commands or activation |
+| Timesheet person discovery, [#256](https://github.com/numtide/horae/pull/256) | `feat/timesheet-people-discovery`, `.worktrees/timesheet-people-discovery` | Review base `40102ae`, combining #255 `d93e1af` admission reader and #253 `3a37538` shared `PeopleCursor` | Draft at `1552fdb`; original `60f60f9` DTO/reader/eight DB tests, endpoint/HTTP additions and five SQLx descriptors preserved. Tests/Clippy/live SQLx `61768` PASSED; application992 passed, zero failed,11 inherited ignored. Full native Nix `37414` running; wider integration pending; no UI, context-page contract, commands or activation |
 | Requester-bound Timesheet page context, [#257](https://github.com/numtide/horae/pull/257) | `feat/timesheet-page-context`, `.worktrees/timesheet-page-context` | #256 `1552fdb`, for subject discovery and shared read admission | Draft at `8e09e60`; original `5faed76` DTO/reader/six DB tests and endpoint/HTTP additions preserved, no new SQL descriptors. Formatting/provenance/static37-query inventory passed; tests/Clippy/live SQLx `63162` running; full native Nix and wider integration pending; no UI, commands or activation |
-| Cross-PR reader/editor verification only | `integration/permission-readers-editor-check`, `.worktrees/permission-readers-editor-check` | Combines #240 `a19ea63`, #250 `c727bc8`, #253 `3a37538` and #254 `f498c3f` | Published at `7a2d61c`, no delivery PR or merge target; registration conflicts resolved preserving both sides, dedicated source/test blobs unchanged, original combined users module restored exactly. Format, tests, Clippy and SQLx `24884` PASSED; combined full native Nix running; #255 not yet composed |
+| Cross-PR reader/editor verification only | `integration/permission-readers-editor-check`, `.worktrees/permission-readers-editor-check` | Combines #240 `a19ea63`, #250 `c727bc8`, #253 `3a37538` and #254 `f498c3f` | Published at `7a2d61c`, no delivery PR or merge target; registration conflicts resolved preserving both sides, dedicated source/test blobs unchanged, original combined users module restored exactly. Tests/Clippy/SQLx `24884` and full native Nix `16434` PASSED; exact browser/deployment/OIDC outputs and logs verified after original process terminated. Later #255–#257 not included |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -3988,3 +3988,62 @@ standalone and cross-PR full gates, then extract the original connected Timeshee
 consumer (`e1ddd9a` plus its relevant later fixes) and editor/UI groups. Retain
 the original14-line removal of two DTO lint expectations with their real consumer. Original-hunk
 accounting remains incomplete; no extraction/original PR was merged or closed.
+
+### Combined reader/editor verification closed and preservation audit refreshed
+
+Previous iteration was progress: published #257 and preserved its original
+contracts/tests. This iteration performed read-only verification and inventory;
+no runtime code or original worktree changed. Revalidated all35 extraction PRs
+#219–#257 (excluding #229/#230 and merged priority #251/#252): all remain open
+and draft at their recorded heads. Original #212 still has the same18 unpublished
+paths; original recovery refs remain intact.
+
+#256 `61768` completed with exit0 on exact `1552fdb`: tests, Clippy and live SQLx
+passed. Application unit result:992 passed, zero failed,11 inherited ignored;
+all additional test binaries passed. Started full native Nix `37414` on the same
+head; it remains pending. #257 `63162` passed Clippy/live SQLx and core189 tests
+and continues the application suite. #255 `40092` remains live in browser checks.
+These partial results do not certify either remaining full gate.
+
+The original combined full-check process1004924 terminated. Its exact browser
+output was then valid; on unchanged clean `7a2d61c`, full native Nix `16434`
+completed with exit0, reporting zero rebuilds and all checks passed. Verified
+the browser/e2e/OIDC output paths against their expected derivations and read
+their terminal logs: browser finishes permission history, deployment script
+finished in80.80s and OIDC in26.01s. This closes that combination's full-gate
+evidence without claiming the cache-verification invocation reran those tests.
+#250/#253/#254 descriptions now reflect the completed integration; retargeted
+gates and later #255–#257 composition remain separate requirements.
+
+Read-only conservation comparison used the35 live GitHub PR heads and merged
+master `ed558f6`, against original `db3935d` from `9301112`. At the same path,
+106 ordinary files,520 SQLx descriptors and48 specification files have exact
+final original blobs in at least one extraction or master. The212 ordinary,
+301 SQLx and7 specification files without exact matches still require original
+hunk accounting or pending extraction; intentional adaptations are not losses.
+Compared with the earlier extraction set, #253–#257 add eight exact final
+source/test files and40 exact final SQLx descriptors. These are conservation
+lower bounds, not completion percentages or integration/behavior proof.
+
+The audit disabled rename detection to include both sides of replacements:
+1,240 physical changed paths include46 removed SQLx paths. Confirmed Git's
+rename-aware view still has1,214 changes, with26 SQLx rename pairs and20 unpaired
+deletions, explaining the count difference exactly. Preserve old-query removal
+and new-query adoption together during the final cache reconciliation; no cache
+was deleted or rewritten by this inventory.
+
+Timesheet history establishes the next delivery order: `48a6533` and `02c4245`
+define/implement person-bound commands before the final navigation/action
+consumer `a0632a8` and weekly submission `b8b1c60`. The initial read consumer
+`e1ddd9a` and later focus/person-switch/date-offset fixes (`68bbaae`, `e29f4d8`,
+`5f7895c`) belong with the corresponding connected UI, not the server command
+PR. Browser fixture changes from `2497dbe` cross the project editor and must be
+accounted separately. The preserved delegated-command branch `a0ea691` already
+contains patch-equivalent command commits; do not extract a second copy from it.
+
+Next collect `40092`, `37414` and `63162`, finish #257's full native gate, then
+compose the later readers and extract original person-bound commands before
+their final UI consumer. This refines the preceding next-action order based on
+actual commit boundaries; it does not reduce scope. Full hunk accounting and
+remaining original editor/report/project/task/UI groups remain open. No merge,
+closure, activation or real-data change occurred.
