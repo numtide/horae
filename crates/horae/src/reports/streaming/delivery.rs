@@ -1,5 +1,6 @@
 use crate::models::permission_editor::PermissionRequester;
 use crate::reports::limits::time::{authorize_current, authorize_rows};
+use horae_core::permissions::catalog::PermissionSelection;
 use horae_core::types::OrgRole;
 
 use super::*;
@@ -57,22 +58,24 @@ impl Authority {
         project_ids: &[Uuid],
         contexts: &[(Uuid, Uuid)],
     ) -> Result<(), StatusCode> {
+        if matches!(self.purpose, Purpose::Time(_)) {
+            let grants = self.hold_time(connection).await?;
+            authorize_rows(
+                connection,
+                PermissionRequester {
+                    org_id: self.org_id,
+                    user_id: self.actor_id,
+                },
+                &grants,
+                contexts,
+            )
+            .await?;
+            return release_authority(connection).await;
+        }
         sqlx::query!("SAVEPOINT csv_authority")
             .execute(&mut *connection)
             .await
             .map_err(database_error)?;
-        if let Purpose::Time(expected_policy) = self.purpose {
-            let requester = PermissionRequester {
-                org_id: self.org_id,
-                user_id: self.actor_id,
-            };
-            let (policy, grants) = authorize_current(connection, requester).await?;
-            if policy != expected_policy {
-                return Err(StatusCode::FORBIDDEN);
-            }
-            authorize_rows(connection, requester, &grants, contexts).await?;
-            return release_authority(connection).await;
-        }
         sqlx::query_scalar!(
             "SELECT id FROM organizations WHERE id=$1 FOR SHARE",
             self.org_id
@@ -102,6 +105,32 @@ impl Authority {
         }
         release_authority(connection).await
     }
+
+    /// Keep the same current authority across every fragment of one group.
+    pub async fn hold_time(
+        &self,
+        connection: &mut PgConnection,
+    ) -> Result<PermissionSelection, StatusCode> {
+        let Purpose::Time(expected_policy) = self.purpose else {
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        };
+        sqlx::query!("SAVEPOINT csv_authority")
+            .execute(&mut *connection)
+            .await
+            .map_err(database_error)?;
+        let (policy, grants) = authorize_current(
+            connection,
+            PermissionRequester {
+                org_id: self.org_id,
+                user_id: self.actor_id,
+            },
+        )
+        .await?;
+        if policy != expected_policy {
+            return Err(StatusCode::FORBIDDEN);
+        }
+        Ok(grants)
+    }
 }
 
 async fn configure(connection: &mut PgConnection) -> Result<(), StatusCode> {
@@ -112,7 +141,7 @@ async fn configure(connection: &mut PgConnection) -> Result<(), StatusCode> {
     configure_deadlines(connection).await
 }
 
-async fn release_authority(connection: &mut PgConnection) -> Result<(), StatusCode> {
+pub(super) async fn release_authority(connection: &mut PgConnection) -> Result<(), StatusCode> {
     // Rollback releases row locks without destroying the outer source cursor.
     // RELEASE also removes the savepoint frame on arbitrarily long exports.
     sqlx::query!("ROLLBACK TO SAVEPOINT csv_authority")

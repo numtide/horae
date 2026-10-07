@@ -11,6 +11,8 @@ use crate::models::time_report::{TimeReportAccess, TimeReportPolicy};
 use crate::reports::bounded::ExportPermit;
 use crate::server_fns::{PermissionStorageError, load_person_permissions};
 
+pub(in crate::reports) mod groups;
+
 pub(in crate::reports) struct TimeExport {
     pub rows: Vec<DetailedReportRow>,
     pub scope: TimeExportScope,
