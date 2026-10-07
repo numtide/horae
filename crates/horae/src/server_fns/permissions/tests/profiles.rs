@@ -12,6 +12,9 @@ mod directory_tests;
 #[path = "editor.rs"]
 mod editor_tests;
 
+#[path = "project_people.rs"]
+mod project_people_tests;
+
 #[path = "subjects.rs"]
 mod subjects_tests;
 
