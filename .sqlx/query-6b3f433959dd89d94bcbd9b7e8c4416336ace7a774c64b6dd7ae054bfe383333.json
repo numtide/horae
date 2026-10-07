@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE projects SET project_type='non_billable' WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6b3f433959dd89d94bcbd9b7e8c4416336ace7a774c64b6dd7ae054bfe383333"
+}
